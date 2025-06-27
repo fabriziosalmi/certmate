@@ -285,6 +285,124 @@ sudo systemctl start certmate
 
 > 📖 **Detailed Instructions**: See [INSTALLATION.md](INSTALLATION.md) for complete setup guides for each method.
 
+## 🔧 Setting Up CertMate as a Systemd Service
+
+For production deployments on Linux systems, you can set up CertMate as a systemd service that starts automatically on boot and restarts if it crashes.
+
+### 📝 Service Configuration File
+
+Create a systemd service file with the following configuration:
+
+```ini
+[Unit]
+Description=Certmate Service
+After=network.target
+
+[Service]
+User=certmate
+Group=certmate
+WorkingDirectory=/opt/certmate
+ExecStart=/usr/bin/python3 /opt/certmate/app.py
+Restart=always
+Environment="API_BEARER_TOKEN=your_secret_token"
+
+[Install]
+WantedBy=multi-user.target
+```
+
+### 🚀 Step-by-Step Setup Instructions
+
+#### 1. Create a Dedicated User
+
+Create a system user for running CertMate securely:
+
+```bash
+sudo adduser --system --group certmate
+```
+
+#### 2. Move Application to /opt
+
+Move the CertMate application to the standard system location:
+
+```bash
+sudo mv certmate /opt/
+```
+
+#### 3. Set Proper Permissions
+
+Ensure the certmate user owns the application directory:
+
+```bash
+sudo chown -R certmate:certmate /opt/certmate
+```
+
+#### 4. Create the Service File
+
+Create the systemd service file:
+
+```bash
+sudo nano /etc/systemd/system/certmate.service
+```
+
+Paste the service configuration shown above into the file, then save and exit.
+
+#### 5. Configure Environment
+
+Edit the `Environment` line in the service file to replace `your_secret_token` with your actual API bearer token:
+
+```ini
+Environment="API_BEARER_TOKEN=your_actual_secret_token_here"
+```
+
+> 💡 **Security Tip**: You can also use `EnvironmentFile=/etc/certmate/environment` to store sensitive environment variables in a separate file with restricted permissions.
+
+#### 6. Enable and Start the Service
+
+Enable the service to start automatically on boot and start it immediately:
+
+```bash
+sudo systemctl enable certmate.service
+sudo systemctl start certmate.service
+```
+
+#### 7. Check Service Status
+
+Verify that the service is running correctly:
+
+```bash
+sudo systemctl status certmate.service
+```
+
+### ✅ Benefits of Systemd Service
+
+This setup provides a robust systemd service that:
+
+- **🔄 Auto-starts** - CertMate starts automatically when the system boots
+- **🛡️ Auto-restarts** - Service restarts automatically if it crashes
+- **📊 Monitoring** - Easy to monitor status with `systemctl status`
+- **📝 Logging** - Logs available through `journalctl -u certmate.service`
+- **🔒 Security** - Runs under dedicated user account with minimal privileges
+- **⚙️ Management** - Standard systemctl commands for start/stop/restart operations
+
+### 🔍 Service Management Commands
+
+```bash
+# Check service status
+sudo systemctl status certmate.service
+
+# View service logs
+sudo journalctl -u certmate.service -f
+
+# Restart the service
+sudo systemctl restart certmate.service
+
+# Stop the service
+sudo systemctl stop certmate.service
+
+# Disable auto-start
+sudo systemctl disable certmate.service
+```
+
 ## 📊 API Usage
 
 CertMate provides a comprehensive REST API for programmatic certificate management. All endpoints require Bearer token authentication.
