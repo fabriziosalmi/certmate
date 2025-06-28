@@ -64,3 +64,6 @@ Thumbs.db
 # Backup files
 *_old.*
 *_backup.*
+
+# Planning and development documents
+NEXT_FEATURES.md
