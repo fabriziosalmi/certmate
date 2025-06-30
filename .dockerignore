@@ -1,0 +1,64 @@
+# Exclude sensitive environment files
+.env
+.env.*
+*.env
+
+# Exclude development files
+.git
+.gitignore
+.github
+.vscode
+.idea
+
+# Exclude documentation and metadata
+README.md
+*.md
+screenshot_*.png
+CODE_OF_CONDUCT.md
+CONTRIBUTING.md
+DNS_PROVIDERS.md
+INSTALLATION.md
+LICENSE
+
+# Exclude Python cache and temporary files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+.pytest_cache
+.coverage
+.tox
+.cache
+
+# Exclude local development data
+certificates/
+data/
+letsencrypt/
+logs/
+
+# Exclude Docker and deployment files
+docker-compose.yml
+Dockerfile
+.dockerignore
+
+# Exclude test files
+test_*.py
+*_test.py
+
+# Exclude setup and validation scripts
+setup.sh
+start.sh
+validate_dependencies.py
+api_client_example.py
+
+# Exclude any backup files
+*.bak
+*.backup
+*.old
+*.orig
+
+# Exclude OS specific files
+.DS_Store
+Thumbs.db

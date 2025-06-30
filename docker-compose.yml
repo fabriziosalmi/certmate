@@ -2,6 +2,9 @@
 services:
   certmate:
     build: .
+    # Uncomment to use pre-built multi-platform image instead of building locally:
+    # image: YOUR_DOCKERHUB_USERNAME/certmate:latest
+    # platform: linux/amd64  # Optional: force specific platform (linux/amd64, linux/arm64)
     container_name: certmate
     ports:
       - "8000:8000"

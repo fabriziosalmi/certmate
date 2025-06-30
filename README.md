@@ -207,7 +207,7 @@ curl -X POST "http://localhost:8000/api/certificates/create" \
 Choose the installation method that best fits your environment:
 
 ### 🐳 Docker (Recommended)
-Perfect for production deployments with isolation and easy scaling.
+Perfect for production deployments with isolation and easy scaling. **Supports multiple architectures**: AMD64 (Intel/AMD), ARM64 (Apple Silicon, ARM servers), and ARM v7 (Raspberry Pi).
 
 ```bash
 # Quick start with Docker Compose
@@ -217,6 +217,20 @@ cp .env.example .env
 # Edit .env with your configuration
 docker-compose up -d
 ```
+
+**Multi-Platform Support:**
+```bash
+# Build for multiple architectures (ARM64 + AMD64)
+./build-multiplatform.sh
+
+# Build and push to Docker Hub for all platforms
+./build-multiplatform.sh -r YOUR_DOCKERHUB_USERNAME -p
+
+# Use pre-built multi-platform image
+docker run --platform linux/arm64 -d --name certmate --env-file .env -p 8000:8000 USERNAME/certmate:latest
+```
+
+> 📚 **Multi-Platform Guide**: See [DOCKER_MULTIPLATFORM.md](DOCKER_MULTIPLATFORM.md) for comprehensive multi-architecture setup instructions.
 
 ### 🐍 Python Virtual Environment
 Ideal for development and testing environments.
