@@ -61,22 +61,6 @@ make test-watch
 make check
 ```
 
-### Pre-commit Script
-
-Run the comprehensive pre-commit check:
-
-```bash
-./test-before-commit.sh
-```
-
-This script runs:
-- Dependency installation
-- Code linting
-- Security checks
-- Full test suite
-- Coverage reporting
-- TODO/FIXME detection
-
 ## Test Categories
 
 Tests are organized with pytest markers:

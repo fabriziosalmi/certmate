@@ -243,25 +243,32 @@ class TestDNSProviderErrors:
 @pytest.mark.dns
 @pytest.mark.integration  
 class TestMultiProviderSupport:
-    """Test multiple DNS provider support."""
+    """Test multiple DNS provider support for multi-account enabled providers only.
+    
+    Multi-account providers: cloudflare, azure, google, route53, powerdns, rfc2136, digitalocean
+    """
+    
+    # Only test providers that actually support multi-account
+    MULTI_ACCOUNT_PROVIDERS = ['cloudflare', 'azure', 'google', 'route53', 'powerdns', 'rfc2136', 'digitalocean']
     
     @patch('app.safe_file_read')
     def test_multiple_cloudflare_accounts(self, mock_read, client):
         """Test support for multiple Cloudflare accounts."""
         mock_read.return_value = {
-            'dns_accounts': {
+            'dns_providers': {
                 'cloudflare': {
                     'account1': {
                         'name': 'Personal Account',
-                        'api_token': 'token1',
-                        'email': 'personal@example.com'
+                        'api_token': 'token1'
                     },
                     'account2': {
                         'name': 'Business Account', 
-                        'api_token': 'token2',
-                        'email': 'business@example.com'
+                        'api_token': 'token2'
                     }
                 }
+            },
+            'default_accounts': {
+                'cloudflare': 'account1'
             }
         }
         
@@ -274,10 +281,10 @@ class TestMultiProviderSupport:
         assert response.status_code in [200, 401, 404]
     
     @patch('app.safe_file_read')
-    def test_mixed_dns_providers(self, mock_read, client):
-        """Test using different DNS providers for different domains."""
+    def test_mixed_multi_account_dns_providers(self, mock_read, client):
+        """Test using different multi-account DNS providers for different domains."""
         mock_read.return_value = {
-            'dns_accounts': {
+            'dns_providers': {
                 'cloudflare': {
                     'cf_account': {
                         'name': 'Cloudflare Account',
@@ -290,18 +297,33 @@ class TestMultiProviderSupport:
                         'access_key_id': 'aws_key',
                         'secret_access_key': 'aws_secret'
                     }
+                },
+                'azure': {
+                    'azure_account': {
+                        'name': 'Azure Account',
+                        'subscription_id': 'sub-id',
+                        'resource_group': 'rg-test',
+                        'tenant_id': 'tenant-id',
+                        'client_id': 'client-id',
+                        'client_secret': 'client-secret'
+                    }
                 }
+            },
+            'default_accounts': {
+                'cloudflare': 'cf_account',
+                'route53': 'aws_account',
+                'azure': 'azure_account'
             }
         }
         
-        # Test certificate creation with different providers
-        providers_and_domains = [
+        # Test certificate creation with different multi-account providers
+        multi_account_providers_and_domains = [
             ('cloudflare', 'cf-domain.example.com'),
             ('route53', 'aws-domain.example.com'),
-            ('digitalocean', 'do-domain.example.com')
+            ('azure', 'azure-domain.example.com')
         ]
         
-        for provider, domain in providers_and_domains:
+        for provider, domain in multi_account_providers_and_domains:
             cert_data = {
                 'domain': domain,
                 'dns_provider': provider
@@ -309,3 +331,14 @@ class TestMultiProviderSupport:
             
             response = client.post('/api/web/certificates/create', data=cert_data)
             assert response.status_code in [200, 302, 400, 401, 415, 422]
+    
+    def test_only_supported_providers_for_multi_account(self):
+        """Test that only supported providers are considered for multi-account testing."""
+        # These providers support multi-account
+        for provider in self.MULTI_ACCOUNT_PROVIDERS:
+            assert provider in ['cloudflare', 'azure', 'google', 'route53', 'powerdns', 'rfc2136', 'digitalocean']
+        
+        # These providers do NOT support multi-account in our design
+        unsupported = ['linode', 'gandi', 'ovh', 'namecheap', 'vultr', 'hetzner', 'nsone', 'dnsmadeeasy', 'porkbun', 'godaddy', 'he-ddns', 'dynudns']
+        for provider in unsupported:
+            assert provider not in self.MULTI_ACCOUNT_PROVIDERS

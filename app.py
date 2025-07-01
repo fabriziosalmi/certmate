@@ -138,8 +138,8 @@ def validate_api_token(token):
     
     token = token.strip()
     
-    if len(token) < 16:
-        return False, "API token too short (minimum 16 characters)"
+    if len(token) < 32:
+        return False, "API token must be at least 32 characters long"
     
     if len(token) > 500:
         return False, "API token too long"
@@ -309,34 +309,40 @@ def require_auth(f):
     """Enhanced decorator to require bearer token authentication"""
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        auth_header = request.headers.get('Authorization')
-        if not auth_header:
-            return {'error': 'Authorization header required', 'code': 'AUTH_HEADER_MISSING'}, 401
-        
         try:
-            scheme, token = auth_header.split(' ', 1)
-            if scheme.lower() != 'bearer':
-                return {'error': 'Invalid authorization scheme. Use Bearer token', 'code': 'INVALID_AUTH_SCHEME'}, 401
-        except ValueError:
-            return {'error': 'Invalid authorization header format. Use: Bearer <token>', 'code': 'INVALID_AUTH_FORMAT'}, 401
-        
-        settings = load_settings()
-        expected_token = settings.get('api_bearer_token')
-        
-        if not expected_token:
-            return {'error': 'Server configuration error: no API token configured', 'code': 'SERVER_CONFIG_ERROR'}, 500
+            auth_header = request.headers.get('Authorization')
+            if not auth_header:
+                return {'error': 'Authorization header required', 'code': 'AUTH_HEADER_MISSING'}, 401
             
-        # Validate token strength
-        is_valid, validation_error = validate_api_token(expected_token)
-        if not is_valid:
-            logger.error(f"Server has weak API token: {validation_error}")
-            return {'error': 'Server security configuration error', 'code': 'WEAK_SERVER_TOKEN'}, 500
-        
-        if not secrets.compare_digest(token, expected_token):
-            logger.warning(f"Invalid token attempt from {request.remote_addr}")
-            return {'error': 'Invalid or expired token', 'code': 'INVALID_TOKEN'}, 401
-        
-        return f(*args, **kwargs)
+            try:
+                scheme, token = auth_header.split(' ', 1)
+                if scheme.lower() != 'bearer':
+                    return {'error': 'Invalid authorization scheme. Use Bearer token', 'code': 'INVALID_AUTH_SCHEME'}, 401
+                if not token.strip():
+                    return {'error': 'Invalid authorization header format. Use: Bearer <token>', 'code': 'INVALID_AUTH_FORMAT'}, 401
+            except ValueError:
+                return {'error': 'Invalid authorization header format. Use: Bearer <token>', 'code': 'INVALID_AUTH_FORMAT'}, 401
+            
+            settings = load_settings()
+            expected_token = settings.get('api_bearer_token')
+            
+            if not expected_token:
+                return {'error': 'Server configuration error: no API token configured', 'code': 'SERVER_CONFIG_ERROR'}, 500
+                
+            # Validate token strength
+            is_valid, validation_error = validate_api_token(expected_token)
+            if not is_valid:
+                logger.error(f"Server has weak API token: {validation_error}")
+                return {'error': 'Server security configuration error', 'code': 'WEAK_SERVER_TOKEN'}, 500
+            
+            if not secrets.compare_digest(token, expected_token):
+                logger.warning(f"Invalid token attempt from {request.remote_addr}")
+                return {'error': 'Invalid or expired token', 'code': 'INVALID_TOKEN'}, 401
+            
+            return f(*args, **kwargs)
+        except Exception as e:
+            logger.error(f"Authentication error: {e}")
+            return {'error': 'Authentication failed', 'code': 'AUTH_ERROR'}, 401
     return decorated_function
 
 def create_cloudflare_config(token):
@@ -610,6 +616,9 @@ def create_multi_provider_config(provider, config_data):
     return config_file
 def get_certificate_info(domain):
     """Get certificate information for a domain"""
+    if not domain:
+        return None
+    
     cert_path = CERT_DIR / domain
     if not cert_path.exists():
         return {
@@ -683,7 +692,7 @@ def get_certificate_info(domain):
         'dns_provider': dns_provider
     }
 
-def create_certificate(domain, email, dns_provider=None, dns_config=None, account_id=None):
+def create_certificate(domain, email, dns_provider=None, dns_config=None, account_id=None, staging=False):
     """Create SSL certificate using Let's Encrypt with configurable DNS challenge
     
     Args:
@@ -692,6 +701,7 @@ def create_certificate(domain, email, dns_provider=None, dns_config=None, accoun
         dns_provider: DNS provider name (e.g., 'cloudflare')
         dns_config: Explicit DNS configuration (overrides account lookup)
         account_id: Specific account ID to use for the DNS provider
+        staging: Use Let's Encrypt staging environment for testing
     """
     try:
         # Enhanced input validation
@@ -888,6 +898,10 @@ def create_certificate(domain, email, dns_provider=None, dns_config=None, accoun
             '-d', f'*.{domain}'  # Include wildcard
         ]
         
+        # Add staging flag if requested
+        if staging:
+            cmd.append('--staging')
+        
         logger.info(f"Creating certificate for {domain} using {dns_provider} DNS provider")
         result = subprocess.run(cmd, capture_output=True, text=True)
         
@@ -944,13 +958,15 @@ def renew_certificate(domain):
                         dest.write(src.read())
             
             logger.info(f"Certificate renewed successfully for {domain}")
-            return True
+            return True, "Certificate renewed successfully"
         else:
-            logger.error(f"Certificate renewal failed for {domain}: {result.stderr}")
-            return False
+            error_msg = result.stderr or "Renewal failed: Certificate not found"
+            logger.error(f"Certificate renewal failed for {domain}: {error_msg}")
+            return False, f"Renewal failed: {error_msg}"
     except Exception as e:
-        logger.error(f"Exception during certificate renewal for {domain}: {e}")
-        return False
+        error_msg = str(e)
+        logger.error(f"Exception during certificate renewal for {domain}: {error_msg}")
+        return False, f"Exception: {error_msg}"
 
 def check_renewals():
     """Check and renew certificates that are about to expire"""
@@ -976,7 +992,7 @@ def check_renewals():
             cert_info = get_certificate_info(domain)
             if cert_info and cert_info['needs_renewal']:
                 logger.info(f"Renewing certificate for {domain}")
-                renew_certificate(domain)
+                success, message = renew_certificate(domain)
 
 # Schedule renewal check every day at 2 AM (only if scheduler is available)
 if scheduler:
@@ -1536,7 +1552,7 @@ class RenewCertificate(Resource):
         
         # Renew certificate in background
         def renew_cert_async():
-            success = renew_certificate(domain)
+            success, message = renew_certificate(domain)
             logger.info(f"Certificate renewal for {domain}: {'Success' if success else 'Failed'}")
         
         thread = threading.Thread(target=renew_cert_async)
@@ -2098,7 +2114,7 @@ def web_renew_certificate(domain):
     
     # Renew certificate in background
     def renew_cert_async():
-        success = renew_certificate(domain)
+        success, message = renew_certificate(domain)
         logger.info(f"Certificate renewal for {domain}: {'Success' if success else 'Failed'}")
     
     thread = threading.Thread(target=renew_cert_async)
@@ -2376,7 +2392,10 @@ def migrate_dns_providers_to_multi_account(settings):
     dns_providers = settings['dns_providers']
     
     for provider, config in dns_providers.items():
-        if isinstance(config, dict) and any(key in config for key in ['api_token', 'access_key_id', 'api_key', 'api_url']):
+        if isinstance(config, dict) and any(key in config for key in [
+            'api_token', 'access_key_id', 'secret_access_key', 'api_key', 'api_url',
+            'subscription_id', 'project_id', 'username', 'token', 'secret'
+        ]):
             # This is old single-account format
             needs_migration = True
             break
