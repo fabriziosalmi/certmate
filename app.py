@@ -220,6 +220,18 @@ def load_settings():
         'api_bearer_token': os.getenv('API_BEARER_TOKEN') or generate_secure_token(),
         'setup_completed': False,  # Track if initial setup is done
         'dns_provider': 'cloudflare',
+        'dns_providers': {}  # Start with empty DNS providers - only add what's actually configured
+    }
+    
+    # Only create full template for first-time setup
+    first_time_template = {
+        'cloudflare_token': '',
+        'domains': [],
+        'email': '',
+        'auto_renew': True,
+        'api_bearer_token': os.getenv('API_BEARER_TOKEN') or generate_secure_token(),
+        'setup_completed': False,
+        'dns_provider': 'cloudflare',
         'dns_providers': {
             'cloudflare': {'api_token': ''},
             'route53': {'access_key_id': '', 'secret_access_key': '', 'region': 'us-east-1'},
@@ -235,10 +247,10 @@ def load_settings():
     }
     
     if not SETTINGS_FILE.exists():
-        # First time setup - create with secure defaults
-        logger.info("Creating initial settings file with secure defaults")
-        save_settings(default_settings)
-        return default_settings
+        # First time setup - create with full template for web UI
+        logger.info("Creating initial settings file with full provider template for first-time setup")
+        save_settings(first_time_template)
+        return first_time_template
     
     try:
         settings = safe_file_read(SETTINGS_FILE, is_json=True)
@@ -246,10 +258,15 @@ def load_settings():
             logger.warning("Failed to read settings, using defaults")
             return default_settings
             
-        # Validate and merge with defaults
-        for key, default_value in default_settings.items():
+        # Only merge essential missing keys, NOT the full dns_providers template
+        essential_keys = ['cloudflare_token', 'domains', 'email', 'auto_renew', 'api_bearer_token', 'setup_completed', 'dns_provider']
+        for key in essential_keys:
             if key not in settings:
-                settings[key] = default_value
+                settings[key] = default_settings[key]
+        
+        # Ensure dns_providers exists but don't overwrite with empty template
+        if 'dns_providers' not in settings:
+            settings['dns_providers'] = {}
                 
         # Validate critical settings
         if settings.get('api_bearer_token') in ['change-this-token', 'certmate-api-token-12345', '']:
