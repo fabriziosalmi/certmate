@@ -38,13 +38,16 @@ CertMate solves the complexity of SSL certificate management in modern distribut
 - **Certificate Validation** - Real-time SSL certificate status checking
 
 ### 🌐 **Multi-DNS Provider Support**
-- **Cloudflare** - Global CDN with edge locations worldwide
-- **AWS Route53** - Amazon's scalable DNS service
-- **Azure DNS** - Microsoft's cloud DNS solution
-- **Google Cloud DNS** - Google's high-performance DNS
-- **PowerDNS** - Open-source DNS server with REST API
+- **Multi-Account Support** - Manage multiple accounts per provider for enterprise environments
+- **Cloudflare** - Global CDN with edge locations worldwide (✨ Multi-Account)
+- **AWS Route53** - Amazon's scalable DNS service (✨ Multi-Account)
+- **Azure DNS** - Microsoft's cloud DNS solution (✨ Multi-Account)
+- **Google Cloud DNS** - Google's high-performance DNS (✨ Multi-Account)
+- **DigitalOcean** - Cloud infrastructure DNS (✨ Multi-Account)
+- **PowerDNS** - Open-source DNS server with REST API (✨ Multi-Account)
 
 ### 🚀 **Enterprise Features**
+- **Multi-Account Management** - Support multiple accounts per DNS provider for enterprise workflows
 - **REST API** - Complete programmatic control with Swagger/OpenAPI docs
 - **Web Dashboard** - Modern, responsive UI built with Tailwind CSS
 - **Docker Ready** - Full containerization with Docker Compose
@@ -68,32 +71,33 @@ CertMate solves the complexity of SSL certificate management in modern distribut
 
 ## 🌐 Supported DNS Providers
 
-CertMate supports **19 DNS providers** through Let's Encrypt DNS-01 challenge via individual certbot plugins that provide reliable, well-tested DNS challenge support:
+CertMate supports **19 DNS providers** through Let's Encrypt DNS-01 challenge via individual certbot plugins that provide reliable, well-tested DNS challenge support. **Multi-account support** is available for major providers, enabling enterprise-grade deployments with separate accounts for production, staging, and disaster recovery.
 
-| Provider | Credentials Required | Use Case | Status |
-|----------|---------------------|----------|---------|
-| **🔶 Cloudflare** | API Token | Global CDN, Free tier available | ✅ **Stable** |
-| **🟠 AWS Route53** | Access Key, Secret Key | AWS infrastructure, Enterprise | ✅ **Stable** |
-| **🔵 Azure DNS** | Service Principal credentials | Microsoft ecosystem | ✅ **Stable** |
-| **🟢 Google Cloud DNS** | Service Account JSON | Google Cloud Platform | ✅ **Stable** |
-| **⚫ PowerDNS** | API URL, API Key | Self-hosted, On-premises | ✅ **Stable** |
-| **🔷 DigitalOcean** | API Token | Cloud infrastructure | ✅ **Stable** |
-| **🟣 Linode** | API Key | Cloud hosting | ✅ **Stable** |
-| **🟡 Gandi** | API Token | Domain registrar | ✅ **Stable** |
-| **🔴 OVH** | API Credentials | European hosting | ✅ **Stable** |
-| **🟢 Namecheap** | Username, API Key | Domain registrar | ✅ **Stable** |
-| **🟦 Vultr** | API Key | Global cloud infrastructure | ✅ **Stable** |
-| **🔺 DNS Made Easy** | API Key, Secret Key | Enterprise DNS management | ✅ **Stable** |
-| **🟣 NS1** | API Key | Intelligent DNS platform | ✅ **Stable** |
-| **🔷 RFC2136** | Nameserver, TSIG Key/Secret | Standard DNS update protocol | ✅ **Stable** |
-| **🟠 Hetzner** | API Token | European cloud hosting | ✅ **Stable** |
-| **🟡 Porkbun** | API Key, Secret Key | Domain registrar with DNS | ✅ **Stable** |
-| **🟢 GoDaddy** | API Key, Secret | Popular domain registrar | ✅ **Stable** |
-| **🔵 Hurricane Electric** | Username, Password | Free DNS hosting | ✅ **Stable** |
-| **🔶 Dynu** | API Token | Dynamic DNS service | ✅ **Stable** |
+| Provider | Credentials Required | Multi-Account | Use Case | Status |
+|----------|---------------------|---------------|----------|---------|
+| **🔶 Cloudflare** | API Token | ✅ **Yes** | Global CDN, Free tier available | ✅ **Stable** |
+| **🟠 AWS Route53** | Access Key, Secret Key | ✅ **Yes** | AWS infrastructure, Enterprise | ✅ **Stable** |
+| **🔵 Azure DNS** | Service Principal credentials | ✅ **Yes** | Microsoft ecosystem | ✅ **Stable** |
+| **🟢 Google Cloud DNS** | Service Account JSON | ✅ **Yes** | Google Cloud Platform | ✅ **Stable** |
+| **🔷 DigitalOcean** | API Token | ✅ **Yes** | Cloud infrastructure | ✅ **Stable** |
+| **⚫ PowerDNS** | API URL, API Key | ✅ **Yes** | Self-hosted, On-premises | ✅ **Stable** |
+| **🔷 RFC2136** | Nameserver, TSIG Key/Secret | ✅ **Yes** | Standard DNS update protocol | ✅ **Stable** |
+| **🟣 Linode** | API Key | ➖ Single | Cloud hosting | ✅ **Stable** |
+| **🟡 Gandi** | API Token | ➖ Single | Domain registrar | ✅ **Stable** |
+| **🔴 OVH** | API Credentials | ➖ Single | European hosting | ✅ **Stable** |
+| **🟢 Namecheap** | Username, API Key | ➖ Single | Domain registrar | ✅ **Stable** |
+| **🟦 Vultr** | API Key | ➖ Single | Global cloud infrastructure | ✅ **Stable** |
+| **🔺 DNS Made Easy** | API Key, Secret Key | ➖ Single | Enterprise DNS management | ✅ **Stable** |
+| **🟣 NS1** | API Key | ➖ Single | Intelligent DNS platform | ✅ **Stable** |
+| ** Hetzner** | API Token | ➖ Single | European cloud hosting | ✅ **Stable** |
+| **🟡 Porkbun** | API Key, Secret Key | ➖ Single | Domain registrar with DNS | ✅ **Stable** |
+| **🟢 GoDaddy** | API Key, Secret | ➖ Single | Popular domain registrar | ✅ **Stable** |
+| **🔵 Hurricane Electric** | Username, Password | ➖ Single | Free DNS hosting | ✅ **Stable** |
+| **🔶 Dynu** | API Token | ➖ Single | Dynamic DNS service | ✅ **Stable** |
 
 ### 🌟 Provider Categories
 
+- **Enterprise Multi-Account**: Cloudflare, AWS Route53, Azure DNS, Google Cloud DNS, DigitalOcean, PowerDNS, RFC2136
 - **Cloud Providers**: AWS Route53, Azure DNS, Google Cloud DNS, DigitalOcean, Linode, Vultr, Hetzner
 - **Enterprise DNS**: Cloudflare, DNS Made Easy, NS1, PowerDNS
 - **Domain Registrars**: Gandi, OVH, Namecheap, Porkbun, GoDaddy  
@@ -101,8 +105,19 @@ CertMate supports **19 DNS providers** through Let's Encrypt DNS-01 challenge vi
 - **Free Services**: Hurricane Electric, Dynu
 - **Standard Protocols**: RFC2136 (for BIND and compatible servers)
 
+### 🏢 Multi-Account Benefits
+
+For supported providers, you can configure multiple accounts to enable:
+
+- **Environment Separation**: Different accounts for production, staging, and development
+- **Multi-Region Management**: Separate accounts for different geographical regions
+- **Team Isolation**: Department-specific accounts with tailored permissions
+- **Disaster Recovery**: Backup accounts for high-availability scenarios
+- **Permission Scoping**: Accounts with minimal required permissions for security
+
 > 📚 **Detailed Setup Instructions**: See [DNS_PROVIDERS.md](DNS_PROVIDERS.md) for provider-specific configuration.  
-> 🔧 **Step-by-Step Installation**: See [INSTALLATION.md](INSTALLATION.md) for complete setup guide.
+> 🔧 **Step-by-Step Installation**: See [INSTALLATION.md](INSTALLATION.md) for complete setup guide.  
+> 🏢 **Multi-Account Examples**: See [MULTI_ACCOUNT_EXAMPLES.md](MULTI_ACCOUNT_EXAMPLES.md) for enterprise configuration examples.
 
 ## 🚀 Quick Start with Docker
 
@@ -541,7 +556,19 @@ Content-Type: application/json
 
 {
   "domain": "example.com",
-  "dns_provider": "cloudflare"  # Optional, uses default from settings
+  "dns_provider": "cloudflare",  # Optional, uses default from settings
+  "account_id": "production"     # Optional, specify which account to use
+}
+
+# Create certificate with specific account
+POST /api/certificates/create
+Authorization: Bearer your_token_here
+Content-Type: application/json
+
+{
+  "domain": "staging.example.com",
+  "dns_provider": "cloudflare",
+  "account_id": "staging"
 }
 
 # Renew certificate
@@ -555,6 +582,49 @@ Authorization: Bearer your_token_here
 # Check certificate deployment status
 GET /api/certificates/example.com/deployment-status
 Authorization: Bearer your_token_here
+```
+
+#### Multi-Account Management
+```bash
+# Add multiple accounts for a provider
+POST /api/settings/dns-providers/cloudflare/accounts
+Authorization: Bearer your_token_here
+Content-Type: application/json
+
+{
+  "account_id": "production",
+  "config": {
+    "name": "Production Environment",
+    "description": "Main production Cloudflare account",
+    "api_token": "your_production_token_here"
+  }
+}
+
+# List all accounts for a provider
+GET /api/settings/dns-providers/cloudflare/accounts
+Authorization: Bearer your_token_here
+
+# Set default account for a provider
+PUT /api/settings/dns-providers/cloudflare/default-account
+Authorization: Bearer your_token_here
+Content-Type: application/json
+
+{
+  "account_id": "production"
+}
+
+# Update account configuration
+PUT /api/settings/dns-providers/cloudflare/accounts/staging
+Authorization: Bearer your_token_here
+Content-Type: application/json
+
+{
+  "config": {
+    "name": "Staging & Testing",
+    "description": "Updated staging environment",
+    "api_token": "new_staging_token_here"
+  }
+}
 ```
 
 ### 🎯 Automation-Friendly Download URL
@@ -636,16 +706,80 @@ class CertMateClient:
         response.raise_for_status()
         return response.json()
 
+class CertMateClient:
+    def __init__(self, base_url, token):
+        self.base_url = base_url
+        self.token = token
+        self.headers = {"Authorization": f"Bearer {token}"}
+    
+    def create_certificate(self, domain, dns_provider=None, account_id=None):
+        """Create a new certificate with optional account specification"""
+        data = {"domain": domain}
+        if dns_provider:
+            data["dns_provider"] = dns_provider
+        if account_id:
+            data["account_id"] = account_id
+        
+        response = requests.post(
+            f"{self.base_url}/api/certificates/create",
+            headers=self.headers,
+            json=data
+        )
+        return response.json()
+    
+    def add_dns_account(self, provider, account_id, config):
+        """Add a new DNS provider account"""
+        response = requests.post(
+            f"{self.base_url}/api/settings/dns-providers/{provider}/accounts",
+            headers=self.headers,
+            json={"account_id": account_id, "config": config}
+        )
+        return response.json()
+    
+    def list_dns_accounts(self, provider):
+        """List all accounts for a DNS provider"""
+        response = requests.get(
+            f"{self.base_url}/api/settings/dns-providers/{provider}/accounts",
+            headers=self.headers
+        )
+        return response.json()
+    
+    def download_certificate(self, domain, extract_to=None):
+        """Download certificate as ZIP file"""
+        response = requests.get(
+            f"{self.base_url}/{domain}/tls",
+            headers=self.headers
+        )
+        
+        if extract_to and response.status_code == 200:
+            with zipfile.ZipFile(io.BytesIO(response.content)) as zip_file:
+                zip_file.extractall(extract_to)
+                print(f"Certificate extracted to {extract_to}")
+        
+        return response
+
 # Usage example
 client = CertMateClient("https://certmate.company.com", "your_token_here")
 
+# Add multiple Cloudflare accounts
+client.add_dns_account("cloudflare", "production", {
+    "name": "Production Environment",
+    "description": "Main production account",
+    "api_token": "prod_token_here"
+})
+
+client.add_dns_account("cloudflare", "staging", {
+    "name": "Staging Environment", 
+    "description": "Development and testing",
+    "api_token": "staging_token_here"
+})
+
+# Create certificates with specific accounts
+client.create_certificate("api.company.com", "cloudflare", "production")
+client.create_certificate("staging.company.com", "cloudflare", "staging")
+
 # Download certificate
 client.download_certificate("api.company.com", extract_to="/etc/ssl/certs/api/")
-
-# List all certificates
-certs = client.list_certificates()
-for cert in certs:
-    print(f"Domain: {cert['domain']}, Expires: {cert['expiry_date']}")
 ```
 
 #### Infrastructure as Code Examples
@@ -667,15 +801,23 @@ provider "certmate" {
   token    = var.certmate_token
 }
 
-# Create certificates for multiple domains
+# Create certificates for multiple domains with different accounts
 resource "certmate_certificate" "api" {
   domain       = "api.company.com"
   dns_provider = "cloudflare"
+  account_id   = "production"
 }
 
 resource "certmate_certificate" "web" {
   domain       = "web.company.com" 
   dns_provider = "route53"
+  account_id   = "main-aws"
+}
+
+resource "certmate_certificate" "staging" {
+  domain       = "staging.company.com"
+  dns_provider = "cloudflare"
+  account_id   = "staging"
 }
 
 # Download certificates to local files
@@ -787,8 +929,82 @@ main "$@"
 **Advanced Ansible Playbook:**
 ```yaml
 ---
-- name: Manage SSL certificates with CertMate
+- name: Manage SSL certificates with CertMate multi-account support
   hosts: web_servers
+  vars:
+    certmate_url: "https://certmate.company.com"
+    certmate_token: "{{ vault_certmate_token }}"
+  
+  tasks:
+    - name: Configure Cloudflare accounts
+      uri:
+        url: "{{ certmate_url }}/api/settings/dns-providers/cloudflare/accounts"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ certmate_token }}"
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          account_id: "{{ item.account_id }}"
+          config:
+            name: "{{ item.name }}"
+            description: "{{ item.description }}"
+            api_token: "{{ item.api_token }}"
+      loop:
+        - account_id: "production"
+          name: "Production Environment"
+          description: "Main production Cloudflare account"
+          api_token: "{{ vault_cloudflare_prod_token }}"
+        - account_id: "staging"
+          name: "Staging Environment"
+          description: "Development and testing account"
+          api_token: "{{ vault_cloudflare_staging_token }}"
+    
+    - name: Create certificates with specific accounts
+      uri:
+        url: "{{ certmate_url }}/api/certificates/create"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ certmate_token }}"
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          domain: "{{ item.domain }}"
+          dns_provider: "{{ item.provider }}"
+          account_id: "{{ item.account_id }}"
+      loop:
+        - domain: "api.company.com"
+          provider: "cloudflare"
+          account_id: "production"
+        - domain: "staging.company.com"
+          provider: "cloudflare"
+          account_id: "staging"
+        - domain: "test.company.com"
+          provider: "route53"
+          account_id: "backup-aws"
+    
+    - name: Download and deploy certificates
+      block:
+        - name: Download certificate
+          uri:
+            url: "{{ certmate_url }}/{{ item }}/tls"
+            headers:
+              Authorization: "Bearer {{ certmate_token }}"
+            dest: "/tmp/{{ item }}-tls.zip"
+        
+        - name: Extract certificate
+          unarchive:
+            src: "/tmp/{{ item }}-tls.zip"
+            dest: "/etc/ssl/certs/{{ item }}/"
+            remote_src: yes
+            owner: root
+            group: ssl-cert
+            mode: '0640'
+      loop:
+        - "api.company.com"
+        - "staging.company.com"
+        - "test.company.com"
+```
   become: yes
   vars:
     certmate_url: "https://certmate.company.com"
