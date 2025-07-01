@@ -646,6 +646,52 @@
                 const isExpiringSoon = cert.days_until_expiry <= 30;
                 const isExpired = cert.days_until_expiry <= 0;
                 
+                // Check if we have cached deployment status for this domain
+                const cachedStatus = deploymentCache.get(cert.domain);
+                let deploymentHtml = '';
+                
+                if (cachedStatus) {
+                    // Use cached deployment status
+                    const isDeployed = cachedStatus.deployed;
+                    const isReachable = cachedStatus.reachable;
+                    const certificateMatch = cachedStatus.certificate_match;
+                    
+                    let statusClass, statusIcon, statusText;
+                    
+                    if (isDeployed && certificateMatch) {
+                        statusClass = 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400';
+                        statusIcon = 'fa-check-circle';
+                        statusText = 'Deployed';
+                    } else if (isReachable && !certificateMatch) {
+                        statusClass = 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400';
+                        statusIcon = 'fa-exclamation-triangle';
+                        statusText = 'Wrong Cert';
+                    } else if (!isReachable) {
+                        statusClass = 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400';
+                        statusIcon = 'fa-times-circle';
+                        statusText = 'Not Deployed';
+                    } else {
+                        statusClass = 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300';
+                        statusIcon = 'fa-question-circle';
+                        statusText = 'Unknown';
+                    }
+                    
+                    deploymentHtml = `
+                        <span id="deployment-status-${cert.domain.replace(/\./g, '-')}" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusClass}">
+                            <i class="fas ${statusIcon} mr-1"></i>
+                            ${statusText}
+                        </span>
+                    `;
+                } else {
+                    // No cached status, show checking state
+                    deploymentHtml = `
+                        <span id="deployment-status-${cert.domain.replace(/\./g, '-')}" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+                            <i class="fas fa-spinner fa-spin mr-1"></i>
+                            Checking...
+                        </span>
+                    `;
+                }
+                
                 return `
                     <div class="px-6 py-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors duration-200">
                         <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-3 lg:space-y-0 lg:space-x-4">
@@ -667,10 +713,7 @@
                                             <i class="fas ${isExpired ? 'fa-times-circle' : isExpiringSoon ? 'fa-exclamation-triangle' : 'fa-check-circle'} mr-1"></i>
                                             ${isExpired ? 'Expired' : isExpiringSoon ? 'Expiring Soon' : 'Valid'}
                                         </span>
-                                        <span id="deployment-status-${cert.domain.replace(/\./g, '-')}" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
-                                            <i class="fas fa-spinner fa-spin mr-1"></i>
-                                            Checking...
-                                        </span>
+                                        ${deploymentHtml}
                                     </div>
                                 </div>
                             </div>
@@ -745,6 +788,15 @@
                     </div>
                 `;
             }).join('');
+            
+            // After displaying, trigger deployment checks only for certificates that don't have cached status
+            setTimeout(() => {
+                certificates.filter(cert => cert.exists).forEach(cert => {
+                    if (!deploymentCache.get(cert.domain)) {
+                        checkDeploymentStatus(cert.domain);
+                    }
+                });
+            }, 100);
         }
 
         // Debug console functions
