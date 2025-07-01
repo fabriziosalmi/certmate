@@ -719,11 +719,6 @@
                                     <i class="fas fa-sync-alt mr-1 text-green-600"></i>
                                     Renew
                                 </button>
-                                <button onclick="checkDeploymentStatus('${cert.domain}')" 
-                                        class="inline-flex items-center px-3 py-1.5 border border-indigo-300 dark:border-indigo-600 shadow-sm text-xs font-medium rounded-md text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/30 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200">
-                                    <i class="fas fa-globe mr-1"></i>
-                                    Check
-                                </button>
                                 <button onclick="downloadCertificate('${cert.domain}')" 
                                         class="inline-flex items-center px-3 py-1.5 border border-gray-300 dark:border-gray-600 shadow-sm text-xs font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors duration-200">
                                     <i class="fas fa-download mr-1 text-blue-600"></i>
@@ -1348,6 +1343,148 @@
                 hideLoadingModal(progressInterval);
             }
         });
+
+        // Certificate action functions
+        async function downloadCertificate(domain) {
+            try {
+                const response = await fetch(`/api/web/certificates/${domain}/download`, {
+                    method: 'GET'
+                });
+                
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${domain}-certificates.zip`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(url);
+                    showMessage(`Certificate downloaded for ${domain}`, 'success');
+                } else {
+                    const errorData = await response.json();
+                    showMessage(errorData.error || 'Failed to download certificate', 'error');
+                }
+            } catch (error) {
+                console.error('Error downloading certificate:', error);
+                showMessage('Failed to download certificate', 'error');
+            }
+        }
+
+        async function renewCertificate(domain) {
+            const progressInterval = showLoadingModal(
+                `Renewing Certificate for ${domain}`, 
+                'This may take a few minutes...'
+            );
+            
+            try {
+                const response = await fetch(`/api/web/certificates/${domain}/renew`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showMessage(`Certificate renewal started for ${domain}!`, 'success');
+                    // Reload certificates after a short delay to show updated info
+                    setTimeout(() => {
+                        loadCertificates();
+                    }, 2000);
+                } else {
+                    showMessage(result.message || 'Failed to renew certificate', 'error');
+                }
+            } catch (error) {
+                console.error('Error renewing certificate:', error);
+                showMessage('Failed to renew certificate. Please try again.', 'error');
+            } finally {
+                hideLoadingModal(progressInterval);
+            }
+        }
+
+        // Copy curl command modal functions
+        function copyCurlCommand(domain) {
+            const curlCommand = `curl -H "Authorization: Bearer YOUR_API_TOKEN" \\
+     -o ${domain}-tls.zip \\
+     ${window.location.origin}/${domain}/tls`;
+            
+            document.getElementById('curlCommandText').textContent = curlCommand;
+            document.getElementById('curlModal').classList.remove('hidden');
+        }
+
+        function closeCurlModal() {
+            document.getElementById('curlModal').classList.add('hidden');
+        }
+
+        function copyFromModal() {
+            const commandText = document.getElementById('curlCommandText').textContent;
+            
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(commandText).then(() => {
+                    showMessage('Curl command copied to clipboard!', 'success');
+                }).catch(err => {
+                    console.error('Failed to copy: ', err);
+                    // Fallback for older browsers
+                    fallbackCopyTextToClipboard(commandText);
+                });
+            } else {
+                // Fallback for older browsers
+                fallbackCopyTextToClipboard(commandText);
+            }
+        }
+
+        function fallbackCopyTextToClipboard(text) {
+            const textArea = document.createElement("textarea");
+            textArea.value = text;
+            textArea.style.top = "0";
+            textArea.style.left = "0";
+            textArea.style.position = "fixed";
+            
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            
+            try {
+                const successful = document.execCommand('copy');
+                if (successful) {
+                    showMessage('Curl command copied to clipboard!', 'success');
+                } else {
+                    showMessage('Failed to copy command', 'error');
+                }
+            } catch (err) {
+                showMessage('Failed to copy command', 'error');
+            }
+            
+            document.body.removeChild(textArea);
+        }
+
+        function fallbackCopyTextToClipboard(text) {
+            const textArea = document.createElement("textarea");
+            textArea.value = text;
+            textArea.style.top = "0";
+            textArea.style.left = "0";
+            textArea.style.position = "fixed";
+            
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            
+            try {
+                const successful = document.execCommand('copy');
+                if (successful) {
+                    showMessage('Curl command copied to clipboard!', 'success');
+                } else {
+                    showMessage('Failed to copy command', 'error');
+                }
+            } catch (err) {
+                showMessage('Failed to copy command', 'error');
+            }
+            
+            document.body.removeChild(textArea);
+        }
 
         // Initialize on page load
         document.addEventListener('DOMContentLoaded', function() {
