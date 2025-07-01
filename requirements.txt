@@ -12,7 +12,7 @@ certbot-dns-route53==2.11.0
 certbot-dns-digitalocean==2.11.0
 
 # DNS provider plugins (cloud providers)
-certbot-dns-azure==2.11.0
+certbot-dns-azure==2.6.1
 certbot-dns-google==2.11.0
 
 # DNS provider plugins (additional providers, install on demand)

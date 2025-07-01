@@ -1,0 +1,9 @@
+pytest
+pytest-cov
+pytest-mock
+pytest-asyncio
+pytest-flask
+pytest-xdist
+coverage
+requests-mock
+freezegun
