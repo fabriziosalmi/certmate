@@ -678,19 +678,25 @@
                             <!-- Certificate Details (Compact) -->
                             <div class="flex flex-wrap items-center gap-4 lg:gap-6">
                                 <div class="flex items-center space-x-2">
-                                    <i class="fas fa-calendar text-gray-400 text-sm"></i>
-                                    <div>
-                                        <p class="text-xs text-gray-500 dark:text-gray-400">Expires</p>
-                                        <p class="text-sm font-medium text-gray-900 dark:text-white">${expiryDate.toLocaleDateString()}</p>
-                                    </div>
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                        isExpired ? 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400' : 
+                                        isExpiringSoon ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400' : 
+                                        'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400'
+                                    }">
+                                        <i class="fas fa-calendar mr-1"></i>
+                                        ${expiryDate.toLocaleDateString()}
+                                    </span>
                                 </div>
                                 
                                 <div class="flex items-center space-x-2">
-                                    <i class="fas fa-clock ${isExpired ? 'text-red-600 dark:text-red-400' : isExpiringSoon ? 'text-yellow-600 dark:text-yellow-400' : 'text-green-600 dark:text-green-400'} text-sm"></i>
-                                    <div>
-                                        <p class="text-xs text-gray-500 dark:text-gray-400">Days Left</p>
-                                        <p class="text-sm font-medium ${isExpired ? 'text-red-600 dark:text-red-400' : isExpiringSoon ? 'text-yellow-600 dark:text-yellow-400' : 'text-green-600 dark:text-green-400'}">${cert.days_until_expiry}</p>
-                                    </div>
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                        isExpired ? 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400' : 
+                                        isExpiringSoon ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400' : 
+                                        'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400'
+                                    }">
+                                        <i class="fas fa-clock mr-1"></i>
+                                        ${cert.days_until_expiry} days
+                                    </span>
                                 </div>
                                 
                                 ${cert.dns_provider ? `
@@ -702,14 +708,6 @@
                                         </div>
                                     </div>
                                 ` : ''}
-                                
-                                <div class="flex items-center space-x-2">
-                                    <i class="fas fa-globe text-indigo-600 dark:text-indigo-400 text-sm"></i>
-                                    <div>
-                                        <p class="text-xs text-gray-500 dark:text-gray-400">Deployment</p>
-                                        <p id="deployment-text-${cert.domain.replace(/\./g, '-')}" class="text-sm font-medium text-gray-600 dark:text-gray-300">Checking...</p>
-                                    </div>
-                                </div>
                             </div>
                             
                             <!-- Action Buttons (Compact) -->
