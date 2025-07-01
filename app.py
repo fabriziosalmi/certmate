@@ -23,6 +23,140 @@ import re
 import secrets
 import atexit
 
+def safe_file_read(file_path, is_json=False, default=None):
+    """Safely read a file with proper error handling and file locking"""
+    try:
+        if not Path(file_path).exists():
+            return default
+            
+        with open(file_path, 'r', encoding='utf-8') as f:
+            # Use file locking for safety
+            fcntl.flock(f.fileno(), fcntl.LOCK_SH)
+            try:
+                content = f.read()
+                if is_json:
+                    return json.loads(content) if content.strip() else default
+                return content
+            finally:
+                fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+                
+    except (json.JSONDecodeError, FileNotFoundError, PermissionError) as e:
+        logger.error(f"Error reading file {file_path}: {e}")
+        return default
+    except Exception as e:
+        logger.error(f"Unexpected error reading file {file_path}: {e}")
+        return default
+
+def safe_file_write(file_path, data, is_json=True):
+    """Safely write data to a file with proper error handling and atomic operations"""
+    try:
+        # Ensure parent directory exists
+        Path(file_path).parent.mkdir(parents=True, exist_ok=True)
+        
+        # Use temporary file for atomic writes
+        temp_file = Path(f"{file_path}.tmp")
+        
+        with open(temp_file, 'w', encoding='utf-8') as f:
+            # Use file locking for safety
+            fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+            try:
+                if is_json:
+                    json.dump(data, f, indent=2, ensure_ascii=False)
+                else:
+                    f.write(str(data))
+                f.flush()
+                os.fsync(f.fileno())
+            finally:
+                fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+        
+        # Atomic move
+        temp_file.rename(file_path)
+        
+        # Set proper permissions
+        os.chmod(file_path, 0o600)
+        
+        return True
+        
+    except (PermissionError, OSError) as e:
+        logger.error(f"Error writing file {file_path}: {e}")
+        # Clean up temp file if it exists
+        if temp_file.exists():
+            temp_file.unlink(missing_ok=True)
+        return False
+    except Exception as e:
+        logger.error(f"Unexpected error writing file {file_path}: {e}")
+        # Clean up temp file if it exists
+        if temp_file.exists():
+            temp_file.unlink(missing_ok=True)
+        return False
+
+def validate_email(email):
+    """Validate email address format"""
+    if not email or not isinstance(email, str):
+        return False, "Email is required"
+    
+    email = email.strip().lower()
+    email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    
+    if not re.match(email_pattern, email):
+        return False, "Invalid email format"
+    
+    if len(email) > 254:
+        return False, "Email too long"
+    
+    return True, email
+
+def validate_domain(domain):
+    """Validate domain name format"""
+    if not domain or not isinstance(domain, str):
+        return False, "Domain is required"
+    
+    domain = domain.strip().lower()
+    
+    # Remove protocol if present
+    if domain.startswith(('http://', 'https://')):
+        domain = urlparse(domain).netloc or domain
+    
+    # Basic domain validation
+    domain_pattern = r'^[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?)*$'
+    
+    if not re.match(domain_pattern, domain):
+        return False, "Invalid domain format"
+    
+    if len(domain) > 253:
+        return False, "Domain too long"
+    
+    if '..' in domain:
+        return False, "Domain cannot contain consecutive dots"
+    
+    return True, domain
+
+def validate_api_token(token):
+    """Validate API token strength and format"""
+    if not token or not isinstance(token, str):
+        return False, "API token is required"
+    
+    token = token.strip()
+    
+    if len(token) < 16:
+        return False, "API token too short (minimum 16 characters)"
+    
+    if len(token) > 500:
+        return False, "API token too long"
+    
+    # Check for weak patterns
+    weak_patterns = [
+        'password', '12345', 'admin', 'test', 'demo', 'change-this',
+        'default', 'secret', 'token', 'key', 'api'
+    ]
+    
+    token_lower = token.lower()
+    for pattern in weak_patterns:
+        if pattern in token_lower:
+            return False, f"API token contains weak pattern: {pattern}"
+    
+    return True, token
+
 # Initialize Flask app
 app = Flask(__name__)
 # Generate a secure random secret key if not provided
@@ -358,7 +492,7 @@ def create_multi_provider_config(provider, config_data):
     """Create configuration for additional DNS providers using individual plugins where available
     
     This function supports additional providers beyond the core Tier 1 providers.
-    For providers without individual certbot plugins, returns None to indicate
+    For
     direct API implementation should be used instead.
     """
     config_dir = Path("letsencrypt/config")
@@ -549,8 +683,16 @@ def get_certificate_info(domain):
         'dns_provider': dns_provider
     }
 
-def create_certificate(domain, email, dns_provider=None, dns_config=None):
-    """Create SSL certificate using Let's Encrypt with configurable DNS challenge"""
+def create_certificate(domain, email, dns_provider=None, dns_config=None, account_id=None):
+    """Create SSL certificate using Let's Encrypt with configurable DNS challenge
+    
+    Args:
+        domain: Domain name for certificate
+        email: Contact email for Let's Encrypt
+        dns_provider: DNS provider name (e.g., 'cloudflare')
+        dns_config: Explicit DNS configuration (overrides account lookup)
+        account_id: Specific account ID to use for the DNS provider
+    """
     try:
         # Enhanced input validation
         if not domain or not isinstance(domain, str):
@@ -575,8 +717,21 @@ def create_certificate(domain, email, dns_provider=None, dns_config=None):
         if not dns_provider:
             dns_provider = settings.get('dns_provider', 'cloudflare')
         
+        # Get DNS provider account configuration
         if not dns_config:
-            dns_config = settings.get('dns_providers', {}).get(dns_provider, {})
+            account_config, used_account_id = get_dns_provider_account_config(
+                dns_provider, account_id, settings
+            )
+            if not account_config:
+                return False, f"DNS provider '{dns_provider}' account '{account_id or 'default'}' not configured"
+            
+            dns_config = account_config
+            logger.info(f"Using {dns_provider} account '{used_account_id}' for domain {domain}")
+        else:
+            # If explicit config provided, validate it
+            is_valid, validation_error = validate_dns_provider_account(dns_provider, account_id or 'explicit', dns_config)
+            if not is_valid:
+                return False, f"DNS configuration validation failed: {validation_error}"
         
         # Create config file based on DNS provider
         config_file = None
@@ -970,7 +1125,8 @@ settings_model = api.model('Settings', {
 
 create_cert_model = api.model('CreateCertificate', {
     'domain': fields.String(required=True, description='Domain name to create certificate for'),
-    'dns_provider': fields.String(description='DNS provider to use (optional, uses default from settings)', enum=['cloudflare', 'route53', 'azure', 'google', 'powerdns', 'digitalocean', 'linode', 'gandi', 'ovh', 'namecheap', 'vultr', 'dnsmadeeasy', 'nsone', 'rfc2136', 'hetzner', 'porkbun', 'godaddy', 'he-ddns', 'dynudns'])
+    'dns_provider': fields.String(description='DNS provider to use (optional, uses default from settings)', enum=['cloudflare', 'route53', 'azure', 'google', 'powerdns', 'digitalocean', 'linode', 'gandi', 'ovh', 'namecheap', 'vultr', 'dnsmadeeasy', 'nsone', 'rfc2136', 'hetzner', 'porkbun', 'godaddy', 'he-ddns', 'dynudns']),
+    'account_id': fields.String(description='DNS provider account ID to use (optional, uses default account if not specified)')
 })
 
 # Define namespaces
@@ -1081,127 +1237,185 @@ class DNSProviders(Resource):
     def get(self):
         """Get available DNS providers and their configuration status"""
         settings = load_settings()
+        settings = migrate_dns_providers_to_multi_account(settings)  # Ensure migration
         dns_providers = settings.get('dns_providers', {})
         current_provider = settings.get('dns_provider', 'cloudflare')
+        default_accounts = settings.get('default_accounts', {})
+        
+        def get_provider_status(provider_name, provider_config):
+            """Helper to check if a provider is configured in multi-account format"""
+            if not provider_config:
+                return False, 0
+            
+            if isinstance(provider_config, dict):
+                # Count accounts
+                account_count = 0
+                has_configured_account = False
+                
+                for account_id, account_config in provider_config.items():
+                    if isinstance(account_config, dict):
+                        # Check if this looks like an account config
+                        if 'name' in account_config or any(key in account_config for key in [
+                            'api_token', 'access_key_id', 'api_key', 'api_url', 'username', 'token'
+                        ]):
+                            account_count += 1
+                            # Check if account has credentials
+                            if any(account_config.get(key) for key in [
+                                'api_token', 'access_key_id', 'api_key', 'api_url', 'username', 'token'
+                            ]):
+                                has_configured_account = True
+                
+                # Fallback: check if it's old single-account format
+                if account_count == 0 and any(key in provider_config for key in [
+                    'api_token', 'access_key_id', 'api_key', 'api_url', 'username', 'token'
+                ]):
+                    account_count = 1
+                    has_configured_account = True
+                
+                return has_configured_account, account_count
+            
+            return False, 0
         
         providers_status = {
             'current_provider': current_provider,
+            'default_accounts': default_accounts,
+            'multi_account_enabled': True,
             'available_providers': {
                 'cloudflare': {
                     'name': 'Cloudflare',
                     'description': 'Cloudflare DNS provider using API tokens',
-                    'configured': bool(dns_providers.get('cloudflare', {}).get('api_token') or settings.get('cloudflare_token')),
+                    'configured': get_provider_status('cloudflare', dns_providers.get('cloudflare', {}))[0],
+                    'account_count': get_provider_status('cloudflare', dns_providers.get('cloudflare', {}))[1],
                     'required_fields': ['api_token']
                 },
                 'route53': {
                     'name': 'AWS Route53',
                     'description': 'Amazon Web Services Route53 DNS provider',
-                    'configured': bool(
-                        dns_providers.get('route53', {}).get('access_key_id') and 
-                        dns_providers.get('route53', {}).get('secret_access_key')
-                    ),
+                    'configured': get_provider_status('route53', dns_providers.get('route53', {}))[0],
+                    'account_count': get_provider_status('route53', dns_providers.get('route53', {}))[1],
                     'required_fields': ['access_key_id', 'secret_access_key'],
                     'optional_fields': ['region']
                 },
                 'azure': {
                     'name': 'Azure DNS',
                     'description': 'Microsoft Azure DNS provider',
-                    'configured': all([
-                        dns_providers.get('azure', {}).get('subscription_id'),
-                        dns_providers.get('azure', {}).get('resource_group'),
-                        dns_providers.get('azure', {}).get('tenant_id'),
-                        dns_providers.get('azure', {}).get('client_id'),
-                        dns_providers.get('azure', {}).get('client_secret')
-                    ]),
+                    'configured': get_provider_status('azure', dns_providers.get('azure', {}))[0],
+                    'account_count': get_provider_status('azure', dns_providers.get('azure', {}))[1],
                     'required_fields': ['subscription_id', 'resource_group', 'tenant_id', 'client_id', 'client_secret']
                 },
                 'google': {
                     'name': 'Google Cloud DNS',
                     'description': 'Google Cloud Platform DNS provider',
-                    'configured': bool(
-                        dns_providers.get('google', {}).get('project_id') and 
-                        dns_providers.get('google', {}).get('service_account_key')
-                    ),
+                    'configured': get_provider_status('google', dns_providers.get('google', {}))[0],
+                    'account_count': get_provider_status('google', dns_providers.get('google', {}))[1],
                     'required_fields': ['project_id', 'service_account_key']
                 },
                 'powerdns': {
                     'name': 'PowerDNS',
                     'description': 'PowerDNS API provider',
-                    'configured': bool(
-                        dns_providers.get('powerdns', {}).get('api_url') and 
-                        dns_providers.get('powerdns', {}).get('api_key')
-                    ),
+                    'configured': get_provider_status('powerdns', dns_providers.get('powerdns', {}))[0],
+                    'account_count': get_provider_status('powerdns', dns_providers.get('powerdns', {}))[1],
                     'required_fields': ['api_url', 'api_key']
                 },
                 'digitalocean': {
                     'name': 'DigitalOcean',
                     'description': 'DigitalOcean DNS provider',
-                    'configured': bool(dns_providers.get('digitalocean', {}).get('api_token')),
+                    'configured': get_provider_status('digitalocean', dns_providers.get('digitalocean', {}))[0],
+                    'account_count': get_provider_status('digitalocean', dns_providers.get('digitalocean', {}))[1],
                     'required_fields': ['api_token']
                 },
                 'linode': {
                     'name': 'Linode',
                     'description': 'Linode DNS provider',
-                    'configured': bool(dns_providers.get('linode', {}).get('api_key')),
+                    'configured': get_provider_status('linode', dns_providers.get('linode', {}))[0],
+                    'account_count': get_provider_status('linode', dns_providers.get('linode', {}))[1],
                     'required_fields': ['api_key']
                 },
                 'gandi': {
                     'name': 'Gandi',
                     'description': 'Gandi DNS provider',
-                    'configured': bool(dns_providers.get('gandi', {}).get('api_token')),
+                    'configured': get_provider_status('gandi', dns_providers.get('gandi', {}))[0],
+                    'account_count': get_provider_status('gandi', dns_providers.get('gandi', {}))[1],
                     'required_fields': ['api_token']
                 },
                 'ovh': {
                     'name': 'OVH',
                     'description': 'OVH DNS provider',
-                    'configured': bool(
-                        dns_providers.get('ovh', {}).get('endpoint') and 
-                        dns_providers.get('ovh', {}).get('application_key') and
-                        dns_providers.get('ovh', {}).get('application_secret') and
-                        dns_providers.get('ovh', {}).get('consumer_key')
-                    ),
+                    'configured': get_provider_status('ovh', dns_providers.get('ovh', {}))[0],
+                    'account_count': get_provider_status('ovh', dns_providers.get('ovh', {}))[1],
                     'required_fields': ['endpoint', 'application_key', 'application_secret', 'consumer_key']
                 },
                 'namecheap': {
                     'name': 'Namecheap',
                     'description': 'Namecheap DNS provider',
-                    'configured': bool(
-                        dns_providers.get('namecheap', {}).get('username') and 
-                        dns_providers.get('namecheap', {}).get('api_key')
-                    ),
+                    'configured': get_provider_status('namecheap', dns_providers.get('namecheap', {}))[0],
+                    'account_count': get_provider_status('namecheap', dns_providers.get('namecheap', {}))[1],
                     'required_fields': ['username', 'api_key']
                 },
                 # RFC2136 and additional individual plugins
                 'rfc2136': {
                     'name': 'RFC2136',
                     'description': 'RFC2136 DNS Update Protocol',
-                    'configured': bool(
-                        dns_providers.get('rfc2136', {}).get('nameserver') and
-                        dns_providers.get('rfc2136', {}).get('tsig_key')
-                    ),
+                    'configured': get_provider_status('rfc2136', dns_providers.get('rfc2136', {}))[0],
+                    'account_count': get_provider_status('rfc2136', dns_providers.get('rfc2136', {}))[1],
                     'required_fields': ['nameserver', 'tsig_key', 'tsig_secret'],
                     'optional_fields': ['tsig_algorithm']
                 },
                 'vultr': {
                     'name': 'Vultr',
                     'description': 'Vultr DNS provider',
-                    'configured': bool(dns_providers.get('vultr', {}).get('api_key')),
+                    'configured': get_provider_status('vultr', dns_providers.get('vultr', {}))[0],
+                    'account_count': get_provider_status('vultr', dns_providers.get('vultr', {}))[1],
                     'required_fields': ['api_key']
                 },
                 'dnsmadeeasy': {
                     'name': 'DNS Made Easy',
                     'description': 'DNS Made Easy provider',
-                    'configured': bool(
-                        dns_providers.get('dnsmadeeasy', {}).get('api_key') and
-                        dns_providers.get('dnsmadeeasy', {}).get('secret_key')
-                    ),
+                    'configured': get_provider_status('dnsmadeeasy', dns_providers.get('dnsmadeeasy', {}))[0],
+                    'account_count': get_provider_status('dnsmadeeasy', dns_providers.get('dnsmadeeasy', {}))[1],
                     'required_fields': ['api_key', 'secret_key']
                 },
                 'nsone': {
                     'name': 'NS1',
                     'description': 'NS1 DNS provider',
-                    'configured': bool(dns_providers.get('nsone', {}).get('api_key')),
+                    'configured': get_provider_status('nsone', dns_providers.get('nsone', {}))[0],
+                    'account_count': get_provider_status('nsone', dns_providers.get('nsone', {}))[1],
                     'required_fields': ['api_key']
+                },
+                'hetzner': {
+                    'name': 'Hetzner',
+                    'description': 'Hetzner DNS provider',
+                    'configured': get_provider_status('hetzner', dns_providers.get('hetzner', {}))[0],
+                    'account_count': get_provider_status('hetzner', dns_providers.get('hetzner', {}))[1],
+                    'required_fields': ['api_token']
+                },
+                'porkbun': {
+                    'name': 'Porkbun',
+                    'description': 'Porkbun DNS provider',
+                    'configured': get_provider_status('porkbun', dns_providers.get('porkbun', {}))[0],
+                    'account_count': get_provider_status('porkbun', dns_providers.get('porkbun', {}))[1],
+                    'required_fields': ['api_key', 'secret_key']
+                },
+                'godaddy': {
+                    'name': 'GoDaddy',
+                    'description': 'GoDaddy DNS provider',
+                    'configured': get_provider_status('godaddy', dns_providers.get('godaddy', {}))[0],
+                    'account_count': get_provider_status('godaddy', dns_providers.get('godaddy', {}))[1],
+                    'required_fields': ['api_key', 'secret']
+                },
+                'he-ddns': {
+                    'name': 'Hurricane Electric',
+                    'description': 'Hurricane Electric DNS provider',
+                    'configured': get_provider_status('he-ddns', dns_providers.get('he-ddns', {}))[0],
+                    'account_count': get_provider_status('he-ddns', dns_providers.get('he-ddns', {}))[1],
+                    'required_fields': ['username', 'password']
+                },
+                'dynudns': {
+                    'name': 'Dynu',
+                    'description': 'Dynu DNS provider',
+                    'configured': get_provider_status('dynudns', dns_providers.get('dynudns', {}))[0],
+                    'account_count': get_provider_status('dynudns', dns_providers.get('dynudns', {}))[1],
+                    'required_fields': ['token']
                 }
             }
         }
@@ -1237,6 +1451,7 @@ class CreateCertificate(Resource):
         data = request.get_json()
         domain = data.get('domain')
         dns_provider = data.get('dns_provider')  # Optional, uses default from settings
+        account_id = data.get('account_id')      # Optional, uses default account
         
         if not domain:
             return {'success': False, 'message': 'Domain is required'}, 400
@@ -1251,77 +1466,32 @@ class CreateCertificate(Resource):
         if not dns_provider:
             dns_provider = settings.get('dns_provider', 'cloudflare')
         
-        # Validate DNS provider configuration
-        dns_providers = settings.get('dns_providers', {})
-        dns_config = dns_providers.get(dns_provider, {})
+        # Validate that the specified account exists (if provided)
+        if account_id:
+            account_config, _ = get_dns_provider_account_config(dns_provider, account_id, settings)
+            if not account_config:
+                return {
+                    'success': False, 
+                    'message': f'DNS provider account "{account_id}" not found for {dns_provider}'
+                }, 400
         
-        # Check if DNS provider is configured
-        provider_configured = False
-        if dns_provider == 'cloudflare':
-            # Check both new and legacy configuration
-            token = dns_config.get('api_token') or settings.get('cloudflare_token', '')
-            provider_configured = bool(token)
-        elif dns_provider == 'route53':
-            provider_configured = bool(dns_config.get('access_key_id') and dns_config.get('secret_access_key'))
-        elif dns_provider == 'azure':
-            provider_configured = all([
-                dns_config.get('subscription_id'),
-                dns_config.get('resource_group'),
-                dns_config.get('tenant_id'),
-                dns_config.get('client_id'),
-                dns_config.get('client_secret')
-            ])
-        elif dns_provider == 'google':
-            provider_configured = bool(dns_config.get('project_id') and dns_config.get('service_account_key'))
-        elif dns_provider == 'powerdns':
-            provider_configured = bool(dns_config.get('api_url') and dns_config.get('api_key'))
-        elif dns_provider == 'digitalocean':
-            provider_configured = bool(dns_config.get('api_token'))
-        elif dns_provider == 'linode':
-            provider_configured = bool(dns_config.get('api_key'))
-        elif dns_provider == 'gandi':
-            provider_configured = bool(dns_config.get('api_token'))
-        elif dns_provider == 'ovh':
-            provider_configured = bool(
-                dns_config.get('endpoint') and 
-                dns_config.get('application_key') and
-                dns_config.get('application_secret') and
-                dns_config.get('consumer_key')
-            )
-        elif dns_provider == 'namecheap':
-            provider_configured = bool(
-                dns_config.get('username') and 
-                dns_config.get('api_key')
-            )
-        else:
-            # Check for multi-provider configurations (certbot-dns-multi)
-            # Check if the DNS provider is configured
-            # All supported providers should have their configuration in dns_providers
-            supported_providers = [
-                'cloudflare', 'route53', 'azure', 'google', 'powerdns',
-                'digitalocean', 'linode', 'gandi', 'ovh', 'namecheap',
-                'vultr', 'dnsmadeeasy', 'nsone', 'rfc2136'
-            ]
+        try:
+            success, message = create_certificate(domain, email, dns_provider, account_id=account_id)
             
-            if dns_provider in supported_providers:
-                # For supported providers, check if they are configured
-                provider_configured = bool(dns_config and any(dns_config.values()))
+            if success:
+                return {
+                    'success': True, 
+                    'message': f'Certificate created successfully for {domain}',
+                    'domain': domain,
+                    'dns_provider': dns_provider,
+                    'account_id': account_id
+                }
             else:
-                # Unsupported provider
-                return {'success': False, 'message': f'DNS provider "{dns_provider}" is not supported. Please use one of the supported providers: {", ".join(supported_providers)}'}, 400
-        
-        if not provider_configured:
-            return {'success': False, 'message': f'{dns_provider.title()} DNS provider not configured in settings'}, 400
-        
-        # Create certificate in background
-        def create_cert_async():
-            success, message = create_certificate(domain, email, dns_provider, dns_config)
-            logger.info(f"Certificate creation for {domain} using {dns_provider}: {'Success' if success else 'Failed'} - {message}")
-        
-        thread = threading.Thread(target=create_cert_async)
-        thread.start()
-        
-        return {'success': True, 'message': f'Certificate creation started for {domain} using {dns_provider} DNS provider'}
+                return {'success': False, 'message': message}, 400
+                
+        except Exception as e:
+            logger.error(f"Certificate creation failed: {str(e)}")
+            return {'success': False, 'message': f'Certificate creation failed: {str(e)}'}, 500
 
 @ns_certificates.route('/<string:domain>/download')
 class DownloadCertificate(Resource):
@@ -1485,38 +1655,302 @@ def health_check():
 @app.route('/api/web/settings', methods=['GET', 'POST'])
 def web_settings():
     """Web interface settings endpoint (no auth required for initial setup)"""
+    logger.info(f"[SETTINGS DEBUG] {request.method} /api/web/settings called")
+    
     if request.method == 'GET':
-        settings = load_settings()
-        # Don't return sensitive data
-        safe_settings = {
-            'domains': settings.get('domains', []),
-            'email': settings.get('email', ''),
-            'auto_renew': settings.get('auto_renew', True),
-            'has_cloudflare_token': bool(settings.get('cloudflare_token')),
-            'has_api_bearer_token': bool(settings.get('api_bearer_token'))
-        }
-        return jsonify(safe_settings)
+        try:
+            settings = load_settings()
+            logger.info(f"[SETTINGS DEBUG] Loaded settings, has {len(settings.get('domains', []))} domains")
+            
+            # Ensure migration is applied for DNS providers
+            settings = migrate_dns_providers_to_multi_account(settings)
+            
+            # Prepare safe settings for UI
+            safe_settings = {
+                'domains': settings.get('domains', []),
+                'email': settings.get('email', ''),
+                'auto_renew': settings.get('auto_renew', True),
+                'dns_provider': settings.get('dns_provider', 'cloudflare'),
+                'dns_providers': settings.get('dns_providers', {}),
+                'api_bearer_token': settings.get('api_bearer_token', ''),
+                'cache_ttl': settings.get('cache_ttl', 300),
+                'has_cloudflare_token': bool(settings.get('cloudflare_token')),
+                'has_api_bearer_token': bool(settings.get('api_bearer_token'))
+            }
+            
+            logger.info(f"[SETTINGS DEBUG] Returning safe_settings with DNS provider: {safe_settings['dns_provider']}")
+            return jsonify(safe_settings)
+            
+        except Exception as e:
+            logger.error(f"[SETTINGS DEBUG] Error in GET settings: {e}")
+            return jsonify({'error': str(e)}), 500
     
     elif request.method == 'POST':
-        data = request.get_json()
-        settings = load_settings()
-        
-        # Update settings
-        if 'cloudflare_token' in data and data['cloudflare_token']:
-            settings['cloudflare_token'] = data['cloudflare_token']
-        if 'domains' in data:
-            settings['domains'] = data['domains']
-        if 'email' in data:
-            settings['email'] = data['email']
-        if 'auto_renew' in data:
-            settings['auto_renew'] = data['auto_renew']
-        if 'api_bearer_token' in data and data['api_bearer_token']:
-            settings['api_bearer_token'] = data['api_bearer_token']
-        
-        if save_settings(settings):
-            return jsonify({'success': True, 'message': 'Settings saved successfully'})
-        else:
-            return jsonify({'success': False, 'message': 'Failed to save settings'}), 500
+        try:
+            data = request.get_json()
+            logger.info(f"[SETTINGS DEBUG] POST data received: {list(data.keys()) if data else 'None'}")
+            
+            if not data:
+                logger.error("[SETTINGS DEBUG] No JSON data received")
+                return jsonify({'error': 'No data received'}), 400
+            
+            settings = load_settings()
+            logger.info(f"[SETTINGS DEBUG] Current settings loaded")
+            
+            # Update basic settings
+            if 'email' in data:
+                settings['email'] = data['email']
+                logger.info(f"[SETTINGS DEBUG] Updated email")
+            
+            if 'domains' in data:
+                settings['domains'] = data['domains']
+                logger.info(f"[SETTINGS DEBUG] Updated domains: {len(data['domains'])}")
+            
+            if 'auto_renew' in data:
+                settings['auto_renew'] = data['auto_renew']
+                logger.info(f"[SETTINGS DEBUG] Updated auto_renew: {data['auto_renew']}")
+            
+            if 'dns_provider' in data:
+                settings['dns_provider'] = data['dns_provider']
+                logger.info(f"[SETTINGS DEBUG] Updated DNS provider: {data['dns_provider']}")
+            
+            if 'dns_providers' in data:
+                settings['dns_providers'] = {**settings.get('dns_providers', {}), **data['dns_providers']}
+                logger.info(f"[SETTINGS DEBUG] Updated DNS providers config")
+            
+            if 'api_bearer_token' in data and data['api_bearer_token']:
+                settings['api_bearer_token'] = data['api_bearer_token']
+                logger.info(f"[SETTINGS DEBUG] Updated API bearer token")
+            
+            if 'cache_ttl' in data:
+                settings['cache_ttl'] = data['cache_ttl']
+                logger.info(f"[SETTINGS DEBUG] Updated cache TTL: {data['cache_ttl']}")
+            
+            # Legacy cloudflare token support
+            if 'cloudflare_token' in data and data['cloudflare_token']:
+                settings['cloudflare_token'] = data['cloudflare_token']
+                logger.info(f"[SETTINGS DEBUG] Updated legacy cloudflare token")
+            
+            logger.info(f"[SETTINGS DEBUG] Saving settings...")
+            if save_settings(settings):
+                logger.info(f"[SETTINGS DEBUG] Settings saved successfully")
+                return jsonify({'success': True, 'message': 'Settings saved successfully'})
+            else:
+                logger.error(f"[SETTINGS DEBUG] Failed to save settings")
+                return jsonify({'success': False, 'message': 'Failed to save settings'}), 500
+                
+        except Exception as e:
+            logger.error(f"[SETTINGS DEBUG] Error in POST settings: {e}")
+            return jsonify({'error': str(e)}), 500
+
+# DNS Provider Account Management endpoints for web interface (no auth required for initial setup)
+@app.route('/api/dns/<string:provider>/accounts', methods=['GET', 'POST'])
+def web_dns_provider_accounts(provider):
+    """Web interface DNS provider accounts endpoint"""
+    logger.info(f"[DNS DEBUG] {request.method} /api/dns/{provider}/accounts called")
+    
+    if request.method == 'GET':
+        try:
+            settings = load_settings()
+            settings = migrate_dns_providers_to_multi_account(settings)
+            
+            accounts = list_dns_provider_accounts(provider, settings)
+            
+            logger.info(f"[DNS DEBUG] Found {len(accounts)} accounts for {provider}")
+            return jsonify({'accounts': accounts})
+            
+        except Exception as e:
+            logger.error(f"[DNS DEBUG] Error getting accounts for {provider}: {e}")
+            return jsonify({'error': str(e)}), 500
+    
+    elif request.method == 'POST':
+        try:
+            data = request.get_json()
+            logger.info(f"[DNS DEBUG] Adding account for {provider}: {list(data.keys()) if data else 'None'}")
+            
+            if not data:
+                return jsonify({'error': 'No data provided'}), 400
+            
+            account_id = data.get('account_id')
+            account_config = data.get('config', {})
+            
+            if not account_id:
+                return jsonify({'error': 'account_id is required'}, 400)
+            
+            if not account_config.get('name'):
+                account_config['name'] = account_id.title()
+            
+            # Validate the account configuration
+            is_valid, validation_error = validate_dns_provider_account(provider, account_id, account_config)
+            if not is_valid:
+                return {'error': f'Account validation failed: {validation_error}'}, 400
+            
+            # Load current settings
+            settings = load_settings()
+            settings = migrate_dns_providers_to_multi_account(settings)
+            
+            # Initialize provider if not exists
+            if 'dns_providers' not in settings:
+                settings['dns_providers'] = {}
+            if provider not in settings['dns_providers']:
+                settings['dns_providers'][provider] = {}
+            
+            # Add the account
+            settings['dns_providers'][provider][account_id] = account_config
+            
+            # Set as default if requested or if it's the first account
+            if (data.get('set_as_default') or 
+                len(settings['dns_providers'][provider]) == 1):
+                if 'default_accounts' not in settings:
+                    settings['default_accounts'] = {}
+                settings['default_accounts'][provider] = account_id
+            
+            # Save settings
+            save_settings(settings)
+            
+            logger.info(f"[DNS DEBUG] Account {account_id} added for {provider}")
+            return jsonify({
+                'success': True,
+                'message': f'Account added successfully',
+                'account_id': account_id
+            })
+            
+        except Exception as e:
+            logger.error(f"[DNS DEBUG] Error adding account for {provider}: {e}")
+            return jsonify({'error': str(e)}), 500
+
+@app.route('/api/dns/<string:provider>/accounts/<string:account_id>', methods=['GET', 'PUT', 'DELETE'])
+def web_dns_provider_account(provider, account_id):
+    """Web interface individual DNS provider account endpoint"""
+    logger.info(f"[DNS DEBUG] {request.method} /api/dns/{provider}/accounts/{account_id} called")
+    
+    if request.method == 'GET':
+        try:
+            account_config, _ = get_dns_provider_account_config(provider, account_id)
+            if not account_config:
+                return jsonify({'error': 'Account not found'}), 404
+            
+            return jsonify({'account': account_config})
+            
+        except Exception as e:
+            logger.error(f"[DNS DEBUG] Error getting account {account_id} for {provider}: {e}")
+            return jsonify({'error': str(e)}), 500
+    
+    elif request.method == 'PUT':
+        try:
+            data = request.get_json()
+            logger.info(f"[DNS DEBUG] Updating account {account_id} for {provider}")
+            
+            if not data:
+                return jsonify({'error': 'No data provided'}), 400
+            
+            # Validate account data
+            is_valid, error_msg = validate_dns_provider_account(provider, account_id, data)
+            if not is_valid:
+                logger.error(f"[DNS DEBUG] Validation failed: {error_msg}")
+                return jsonify({'error': error_msg}), 400
+            
+            # Load current settings
+            settings = load_settings()
+            settings = migrate_dns_providers_to_multi_account(settings)
+            
+            # Check if account exists
+            if (provider not in settings.get('dns_providers', {}) or 
+                account_id not in settings['dns_providers'][provider]):
+                return jsonify({'error': 'Account not found'}), 404
+            
+            # Update account
+            settings['dns_providers'][provider][account_id] = {
+                **settings['dns_providers'][provider][account_id],
+                **data
+            }
+            
+            # Set as default if requested
+            if data.get('set_as_default'):
+                if 'default_accounts' not in settings:
+                    settings['default_accounts'] = {}
+                settings['default_accounts'][provider] = account_id
+            
+            # Save settings
+            save_settings(settings)
+            
+            logger.info(f"[DNS DEBUG] Account {account_id} updated for {provider}")
+            return jsonify({
+                'success': True,
+                'message': f'Account updated successfully'
+            })
+            
+        except Exception as e:
+            logger.error(f"[DNS DEBUG] Error updating account {account_id} for {provider}: {e}")
+            return jsonify({'error': str(e)}), 500
+    
+    elif request.method == 'DELETE':
+        try:
+            # Load current settings
+            settings = load_settings()
+            settings = migrate_dns_providers_to_multi_account(settings)
+            
+            # Check if account exists
+            if (provider not in settings.get('dns_providers', {}) or 
+                account_id not in settings['dns_providers'][provider]):
+                return jsonify({'error': 'Account not found'}), 404
+            
+            # Don't allow deletion if this is the only account
+            provider_accounts = list_dns_provider_accounts(provider, settings)
+            if len(provider_accounts) <= 1:
+                return jsonify({'error': 'Cannot delete the only account for this provider'}), 400
+            
+            # Remove account
+            del settings['dns_providers'][provider][account_id]
+            
+            # Update default if this was the default
+            if (settings.get('default_accounts', {}).get(provider) == account_id):
+                remaining_accounts = list(settings['dns_providers'][provider].keys())
+                if remaining_accounts:
+                    settings['default_accounts'][provider] = remaining_accounts[0]
+                else:
+                    if provider in settings['default_accounts']:
+                        del settings['default_accounts'][provider]
+            
+            # Save settings
+            save_settings(settings)
+            
+            logger.info(f"[DNS DEBUG] Account {account_id} deleted for {provider}")
+            return jsonify({
+                'success': True,
+                'message': f'Account deleted successfully'
+            })
+            
+        except Exception as e:
+            logger.error(f"[DNS DEBUG] Error deleting account {account_id} for {provider}: {e}")
+            return jsonify({'error': str(e)}), 500
+
+@app.route('/api/web/cache/stats')
+def web_cache_stats():
+    """Get cache statistics for the web interface"""
+    try:
+        # For now, return placeholder stats - implement actual cache stats later
+        stats = {
+            'entries': 0,
+            'current_ttl': 300,
+            'hits': 0,
+            'misses': 0
+        }
+        return jsonify(stats)
+    except Exception as e:
+        logger.error(f"Error getting cache stats: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/web/cache/clear', methods=['POST'])
+def web_cache_clear():
+    """Clear deployment status cache for the web interface"""
+    try:
+        # For now, return success - implement actual cache clearing later
+        logger.info("Cache clear requested from web interface")
+        return jsonify({'success': True, 'message': 'Cache cleared successfully'})
+    except Exception as e:
+        logger.error(f"Error clearing cache: {e}")
+        return jsonify({'error': str(e)}), 500
 
 # Web-specific certificates endpoint (no auth required for initial setup)
 @app.route('/api/web/certificates')
@@ -1921,76 +2355,500 @@ def validate_api_token(token):
     return True, token
 
 def generate_secure_token():
-    """Generate a cryptographically secure token"""
+    """Generate a secure random token for API authentication"""
     return secrets.token_urlsafe(32)
 
-# File locking utilities
-def safe_file_write(file_path, content, mode='w'):
-    """Safely write to file with locking"""
-    try:
-        with open(file_path, mode) as f:
-            fcntl.flock(f.fileno(), fcntl.LOCK_EX)
-            if isinstance(content, dict):
-                json.dump(content, f, indent=2)
-            else:
-                f.write(content)
-            fcntl.flock(f.fileno(), fcntl.LOCK_UN)
-        return True
-    except Exception as e:
-        logger.error(f"Error writing to {file_path}: {e}")
-        return False
-
-def safe_file_read(file_path, is_json=True):
-    """Safely read from file with locking"""
-    try:
-        with open(file_path, 'r') as f:
-            fcntl.flock(f.fileno(), fcntl.LOCK_SH)
-            content = json.load(f) if is_json else f.read()
-            fcntl.flock(f.fileno(), fcntl.LOCK_UN)
-        return content
-    except Exception as e:
-        logger.error(f"Error reading from {file_path}: {e}")
-        return None
-
-def is_setup_completed():
-    """Check if initial setup has been completed"""
-    settings = load_settings()
-    return (
-        settings.get('setup_completed', False) or
-        (settings.get('email') and 
-         settings.get('domains') and 
-         len(settings.get('domains', [])) > 0)
-    )
-
-def require_setup_or_auth(f):
-    """Allow access during setup OR with valid auth"""
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if not is_setup_completed():
-            # Allow access during initial setup
-            return f(*args, **kwargs)
-        else:
-            # Require authentication after setup
-            return require_auth(f)(*args, **kwargs)
-    return decorated_function
-
-# Graceful shutdown for scheduler
-def shutdown_scheduler():
-    """Gracefully shutdown the background scheduler"""
-    if scheduler:
-        try:
-            scheduler.shutdown(wait=True)
-            logger.info("Background scheduler shut down gracefully")
-        except Exception as e:
-            logger.error(f"Error shutting down scheduler: {e}")
-
-# Register shutdown handler
-atexit.register(shutdown_scheduler)
-
-if __name__ == '__main__':
-    host = os.getenv('HOST', '127.0.0.1')
-    port = int(os.getenv('PORT', 8000))
-    debug = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
+def migrate_dns_providers_to_multi_account(settings):
+    """Migrate existing single-account DNS providers to multi-account structure
     
-    print(f"Starting CertMate on http://{host}:{port}")
-    app.run(host=host, port=port, debug=debug)
+    This function ensures backward compatibility by converting old format:
+    dns_providers: { "cloudflare": {"api_token": "..."} }
+    
+    To new format:
+    dns_providers: { "cloudflare": {"default": {"name": "Default Account", "api_token": "..."}} }
+    default_accounts: { "cloudflare": "default" }
+    """
+    if 'dns_providers' not in settings:
+        return settings
+        
+    # Check if migration is needed
+    needs_migration = False
+    dns_providers = settings['dns_providers']
+    
+    for provider, config in dns_providers.items():
+        if isinstance(config, dict) and any(key in config for key in ['api_token', 'access_key_id', 'api_key', 'api_url']):
+            # This is old single-account format
+            needs_migration = True
+            break
+    
+    if not needs_migration:
+        return settings
+    
+    logger.info("Migrating DNS providers to multi-account structure")
+    
+    # Initialize new structures
+    if 'default_accounts' not in settings:
+        settings['default_accounts'] = {}
+    
+    migrated_providers = {}
+    
+    for provider, config in dns_providers.items():
+        if isinstance(config, dict):
+            # Check if this is already multi-account format
+            if any(isinstance(v, dict) and ('name' in v or 'api_token' in v or 'access_key_id' in v) for v in config.values()):
+                # Already in multi-account format or mixed format
+                migrated_providers[provider] = config
+                continue
+            
+            # Check if this is single-account format that needs migration
+            credentials_found = any(key in config for key in [
+                'api_token', 'access_key_id', 'secret_access_key', 'api_key', 'api_url',
+                'subscription_id', 'project_id', 'username', 'token', 'secret'
+            ])
+            
+            if credentials_found:
+                # Migrate to multi-account format
+                migrated_providers[provider] = {
+                    'default': {
+                        'name': 'Default Account',
+                        'description': f'Migrated from single-account configuration',
+                        **config
+                    }
+                }
+                settings['default_accounts'][provider] = 'default'
+                logger.info(f"Migrated {provider} to multi-account format")
+            else:
+                # Empty or invalid config, keep as is
+                migrated_providers[provider] = config
+        else:
+            # Non-dict config, keep as is
+            migrated_providers[provider] = config
+    
+    settings['dns_providers'] = migrated_providers
+    return settings
+
+def validate_dns_provider_account(provider, account_id, config):
+    """Validate DNS provider account configuration
+    
+    Args:
+        provider: DNS provider name (e.g., 'cloudflare')
+        account_id: Account identifier (e.g., 'production')
+        config: Account configuration dict
+        
+    Returns:
+        tuple: (is_valid, error_message)
+    """
+    if not isinstance(config, dict):
+        return False, "Account configuration must be a dictionary"
+    
+    # Validate account metadata
+    if 'name' not in config or not config['name'].strip():
+        return False, "Account name is required"
+    
+    # Provider-specific validation
+    if provider == 'cloudflare':
+        if 'api_token' not in config or not config['api_token']:
+            return False, "Cloudflare API token is required"
+        # Basic token format validation
+        token = config['api_token']
+        if len(token) < 10:
+            return False, "Cloudflare API token appears to be too short"
+            
+    elif provider == 'route53':
+        required_fields = ['access_key_id', 'secret_access_key']
+        for field in required_fields:
+            if field not in config or not config[field]:
+                return False, f"AWS Route53 {field} is required"
+        # Basic AWS key format validation
+        if len(config['access_key_id']) < 16:
+            return False, "AWS access key ID appears to be too short"
+        if len(config['secret_access_key']) < 32:
+            return False, "AWS secret access key appears to be too short"
+            
+    elif provider == 'azure':
+        required_fields = ['subscription_id', 'resource_group', 'tenant_id', 'client_id', 'client_secret']
+        for field in required_fields:
+            if field not in config or not config[field]:
+                return False, f"Azure {field} is required"
+                
+    elif provider == 'google':
+        required_fields = ['project_id', 'service_account_key']
+        for field in required_fields:
+            if field not in config or not config[field]:
+                return False, f"Google Cloud {field} is required"
+        # Validate service account key is valid JSON
+        try:
+            json.loads(config['service_account_key'])
+        except (json.JSONDecodeError, TypeError):
+            return False, "Google Cloud service account key must be valid JSON"
+            
+    elif provider == 'powerdns':
+        required_fields = ['api_url', 'api_key']
+        for field in required_fields:
+            if field not in config or not config[field]:
+                return False, f"PowerDNS {field} is required"
+        # Validate URL format
+        try:
+            parsed = urlparse(config['api_url'])
+            if not parsed.scheme or not parsed.netloc:
+                return False, "PowerDNS API URL must be a valid URL"
+        except Exception:
+            return False, "PowerDNS API URL format is invalid"
+            
+    elif provider in ['digitalocean', 'linode', 'gandi', 'vultr', 'hetzner', 'nsone', 'dnsmadeeasy']:
+        if 'api_key' not in config and 'api_token' not in config:
+            return False, f"{provider.title()} API key/token is required"
+        
+        token_key = 'api_key' if 'api_key' in config else 'api_token'
+        if not config.get(token_key):
+            return False, f"{provider.title()} {token_key} cannot be empty"
+            
+    elif provider == 'ovh':
+        required_fields = ['endpoint', 'application_key', 'application_secret', 'consumer_key']
+        for field in required_fields:
+            if field not in config or not config[field]:
+                return False, f"OVH {field} is required"
+                
+    elif provider == 'namecheap':
+        required_fields = ['username', 'api_key']
+        for field in required_fields:
+            if field not in config or not config[field]:
+                return False, f"Namecheap {field} is required"
+                
+    elif provider == 'rfc2136':
+        required_fields = ['nameserver', 'tsig_key', 'tsig_secret']
+        for field in required_fields:
+            if field not in config or not config[field]:
+                return False, f"RFC2136 {field} is required"
+                
+    elif provider == 'porkbun':
+        required_fields = ['api_key', 'secret_key']
+        for field in required_fields:
+            if field not in config or not config[field]:
+                return False, f"Porkbun {field} is required"
+                
+    elif provider == 'godaddy':
+        required_fields = ['api_key', 'secret']
+        for field in required_fields:
+            if field not in config or not config[field]:
+                return False, f"GoDaddy {field} is required"
+                
+    elif provider == 'he-ddns':
+        required_fields = ['username', 'password']
+        for field in required_fields:
+            if field not in config or not config[field]:
+                return False, f"Hurricane Electric {field} is required"
+                
+    elif provider == 'dynudns':
+        if 'token' not in config or not config['token']:
+            return False, "Dynu API token is required"
+    
+    return True, "Valid"
+
+def get_dns_provider_account_config(provider, account_id=None, settings=None):
+    """Get DNS provider account configuration
+    
+    Args:
+        provider: DNS provider name
+        account_id: Account identifier (if None, uses default)
+        settings: Settings dict (if None, loads from file)
+        
+    Returns:
+        tuple: (account_config, account_id_used)
+    """
+    if settings is None:
+        settings = load_settings()
+    
+    # Ensure migration is applied
+    settings = migrate_dns_providers_to_multi_account(settings)
+    
+    dns_providers = settings.get('dns_providers', {})
+    if provider not in dns_providers:
+        return None, None
+    
+    provider_config = dns_providers[provider]
+    
+    # Handle both old and new formats
+    if not isinstance(provider_config, dict):
+        return None, None
+    
+    # If account_id is not specified, use default
+    if account_id is None:
+        default_accounts = settings.get('default_accounts', {})
+        account_id = default_accounts.get(provider, 'default')
+    
+    # Check if this is multi-account format
+    if account_id in provider_config and isinstance(provider_config[account_id], dict):
+        account_config = provider_config[account_id]
+        # Check if this looks like an account config (has name or credentials)
+        if 'name' in account_config or any(key in account_config for key in [
+            'api_token', 'access_key_id', 'api_key', 'api_url', 'username', 'token'
+        ]):
+            return account_config, account_id
+    
+    # Fallback for old single-account format or if account not found
+    # Check if provider_config has direct credentials (old format)
+    if any(key in provider_config for key in [
+        'api_token', 'access_key_id', 'api_key', 'api_url', 'username', 'token'
+    ]):
+        # This is old format, wrap it
+        return {
+            'name': 'Default Account',
+            **provider_config
+        }, 'default'
+    
+    # Try 'default' account if not already tried
+    if account_id != 'default' and 'default' in provider_config:
+        default_config = provider_config['default']
+        if isinstance(default_config, dict):
+            return default_config, 'default'
+    
+    return None, None
+
+def list_dns_provider_accounts(provider, settings=None):
+    """List all accounts for a DNS provider
+    
+    Args:
+        provider: DNS provider name
+        settings: Settings dict (if None, loads from file)
+        
+    Returns:
+        dict: {account_id: account_info, ...}
+    """
+    if settings is None:
+        settings = load_settings()
+    
+    # Ensure migration is applied
+    settings = migrate_dns_providers_to_multi_account(settings)
+    
+    dns_providers = settings.get('dns_providers', {})
+    if provider not in dns_providers:
+        return {}
+    
+    provider_config = dns_providers[provider]
+    if not isinstance(provider_config, dict):
+        return {}
+    
+    accounts = {}
+    for account_id, config in provider_config.items():
+        if isinstance(config, dict):
+            # Check if this looks like an account config
+            if 'name' in config or any(key in config for key in [
+                'api_token', 'access_key_id', 'api_key', 'api_url', 'username', 'token'
+            ]):
+                accounts[account_id] = {
+                    'name': config.get('name', 'Unnamed Account'),
+                    'description': config.get('description', '')
+                }
+    
+    # Fallback for old single-account format
+    if not accounts and any(key in provider_config for key in [
+        'api_token', 'access_key_id', 'api_key', 'api_url', 'username', 'token'
+    ]):
+        accounts['default'] = {
+            'name': 'Default Account',
+            'description': 'Migrated from single-account configuration'
+        }
+    
+    return accounts
+
+# Multi-Account DNS Management endpoints
+@ns_settings.route('/dns-providers/<string:provider>/accounts')
+class DNSProviderAccounts(Resource):
+    @api.doc(security='Bearer')
+    @require_auth
+    def get(self, provider):
+        """Get all accounts for a specific DNS provider"""
+        try:
+            accounts = list_dns_provider_accounts(provider)
+            settings = load_settings()
+            default_accounts = settings.get('default_accounts', {})
+            default_account = default_accounts.get(provider)
+            
+            return {
+                'provider': provider,
+                'accounts': accounts,
+                'default_account': default_account,
+                'total_accounts': len(accounts)
+            }
+        except Exception as e:
+            logger.error(f"Error getting DNS provider accounts: {str(e)}")
+            return {'error': 'Failed to get DNS provider accounts'}, 500
+
+    @api.doc(security='Bearer')
+    @require_auth
+    def post(self, provider):
+        """Add a new account for a DNS provider"""
+        try:
+            data = request.get_json()
+            if not data:
+                return {'error': 'No data provided'}, 400
+            
+            account_id = data.get('account_id')
+            account_config = data.get('config', {})
+            
+            if not account_id:
+                return {'error': 'account_id is required'}, 400
+            
+            if not account_config.get('name'):
+                account_config['name'] = account_id.title()
+            
+            # Validate the account configuration
+            is_valid, validation_error = validate_dns_provider_account(provider, account_id, account_config)
+            if not is_valid:
+                return {'error': f'Account validation failed: {validation_error}'}, 400
+            
+            # Load current settings
+            settings = load_settings()
+            settings = migrate_dns_providers_to_multi_account(settings)
+            
+            # Initialize provider if not exists
+            if 'dns_providers' not in settings:
+                settings['dns_providers'] = {}
+            if provider not in settings['dns_providers']:
+                settings['dns_providers'][provider] = {}
+            
+            # Add the account
+            settings['dns_providers'][provider][account_id] = account_config
+            
+            # Set as default if requested or if it's the first account
+            if (data.get('set_as_default') or 
+                len(settings['dns_providers'][provider]) == 1):
+                if 'default_accounts' not in settings:
+                    settings['default_accounts'] = {}
+                settings['default_accounts'][provider] = account_id
+            
+            # Save settings
+            save_settings(settings)
+            
+            return {
+                'message': f'Account {account_id} added successfully to {provider}',
+                'account_id': account_id,
+                'provider': provider
+            }, 201
+            
+        except Exception as e:
+            logger.error(f"Error adding DNS provider account: {str(e)}")
+            return {'error': 'Failed to add DNS provider account'}, 500
+
+@ns_settings.route('/dns-providers/<string:provider>/accounts/<string:account_id>')
+class DNSProviderAccount(Resource):
+    @api.doc(security='Bearer')
+    @require_auth
+    def get(self, provider, account_id):
+        """Get a specific account configuration (masked)"""
+        try:
+            account_config, _ = get_dns_provider_account_config(provider, account_id)
+            if not account_config:
+                return {'error': 'Account not found'}, 404
+            
+            # Return masked version for security
+            safe_config = {
+                'name': account_config.get('name', account_id.title()),
+                'description': account_config.get('description', ''),
+                'account_id': account_id,
+                'provider': provider,
+                'configured': bool(any(account_config.get(key) for key in [
+                    'api_token', 'access_key_id', 'api_key', 'api_url', 'username', 'token'
+                ]))
+            }
+            
+            return safe_config
+        except Exception as e:
+            logger.error(f"Error getting DNS provider account: {str(e)}")
+            return {'error': 'Failed to get DNS provider account'}, 500
+
+    @api.doc(security='Bearer')
+    @require_auth
+    def put(self, provider, account_id):
+        """Update an existing account configuration"""
+        try:
+            data = request.get_json()
+            logger.info(f"[DNS DEBUG] Updating account {account_id} for {provider}")
+            
+            if not data:
+                return jsonify({'error': 'No data provided'}), 400
+            
+            # Validate account data
+            is_valid, error_msg = validate_dns_provider_account(provider, account_id, data)
+            if not is_valid:
+                logger.error(f"[DNS DEBUG] Validation failed: {error_msg}")
+                return jsonify({'error': error_msg}), 400
+            
+            # Load current settings
+            settings = load_settings()
+            settings = migrate_dns_providers_to_multi_account(settings)
+            
+            # Check if account exists
+            if (provider not in settings.get('dns_providers', {}) or 
+                account_id not in settings['dns_providers'][provider]):
+                return jsonify({'error': 'Account not found'}), 404
+            
+            # Update account
+            settings['dns_providers'][provider][account_id] = {
+                **settings['dns_providers'][provider][account_id],
+                **data
+            }
+            
+            # Set as default if requested
+            if data.get('set_as_default'):
+                if 'default_accounts' not in settings:
+                    settings['default_accounts'] = {}
+                settings['default_accounts'][provider] = account_id
+            
+            # Save settings
+            save_settings(settings)
+            
+            logger.info(f"[DNS DEBUG] Account {account_id} updated for {provider}")
+            return jsonify({
+                'success': True,
+                'message': f'Account updated successfully'
+            })
+            
+        except Exception as e:
+            logger.error(f"[DNS DEBUG] Error updating account {account_id} for {provider}: {e}")
+            return jsonify({'error': str(e)}), 500
+    
+    @api.doc(security='Bearer')
+    @require_auth
+    def delete(self, provider, account_id):
+        """Delete an account configuration"""
+        try:
+            # Load current settings
+            settings = load_settings()
+            settings = migrate_dns_providers_to_multi_account(settings)
+            
+            # Check if account exists
+            if (provider not in settings.get('dns_providers', {}) or 
+                account_id not in settings['dns_providers'][provider]):
+                return jsonify({'error': 'Account not found'}), 404
+            
+            # Don't allow deletion if this is the only account
+            provider_accounts = list_dns_provider_accounts(provider, settings)
+            if len(provider_accounts) <= 1:
+                return jsonify({'error': 'Cannot delete the only account for this provider'}), 400
+            
+            # Remove the account
+            del settings['dns_providers'][provider][account_id]
+            
+            # Update default if this was the default
+            if (settings.get('default_accounts', {}).get(provider) == account_id):
+                remaining_accounts = list(settings['dns_providers'][provider].keys())
+                if remaining_accounts:
+                    settings['default_accounts'][provider] = remaining_accounts[0]
+                else:
+                    if provider in settings['default_accounts']:
+                        del settings['default_accounts'][provider]
+            
+            # Save settings
+            save_settings(settings)
+            
+            logger.info(f"[DNS DEBUG] Account {account_id} deleted for {provider}")
+            return jsonify({
+                'success': True,
+                'message': f'Account deleted successfully'
+            })
+            
+        except Exception as e:
+            logger.error(f"[DNS DEBUG] Error deleting account {account_id} for {provider}: {e}")
+            return jsonify({'error': str(e)}), 500

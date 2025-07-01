@@ -93,199 +93,254 @@
                     <div class="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3" id="dns-provider-label">
                             <i class="fas fa-server mr-1"></i>
-                            DNS Provider
+                            DNS Providers
                         </label>
-                        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-2" role="radiogroup" aria-labelledby="dns-provider-label">
-                            <label class="relative">
-                                <input type="radio" name="dns_provider" value="cloudflare" class="sr-only peer">
-                                <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
-                                    <div class="text-center">
-                                        <i class="fab fa-cloudflare text-lg text-orange-500 mb-1"></i>
-                                        <div class="text-xs font-medium dark:text-white">Cloudflare</div>
-                                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="cloudflare-status">Not configured</div>
+                        
+                        <!-- Multi-Account Providers -->
+                        <div class="mb-6">
+                            <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center">
+                                <i class="fas fa-users mr-2 text-blue-500"></i>
+                                Multi-Account Support
+                                <span class="ml-2 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 px-2 py-0.5 rounded-full">Advanced</span>
+                            </h4>
+                            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-7 gap-2 mb-4" role="radiogroup" aria-labelledby="dns-provider-label">
+                                <label class="relative">
+                                    <input type="radio" name="dns_provider" value="cloudflare" class="sr-only peer">
+                                    <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                        <div class="text-center">
+                                            <i class="fab fa-cloudflare text-lg text-orange-500 mb-1"></i>
+                                            <div class="text-xs font-medium dark:text-white">Cloudflare</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="cloudflare-status">Not configured</div>
+                                            <!-- Multi-account indicator -->
+                                            <div class="text-xs text-blue-600 dark:text-blue-400 mt-1 hidden" id="cloudflare-accounts">
+                                                <i class="fas fa-users text-xs mr-1"></i>
+                                                <span id="cloudflare-account-count">0</span> accounts
+                                            </div>
+                                        </div>
                                     </div>
-                                </div>
-                            </label>
-                            <label class="relative">
-                                <input type="radio" name="dns_provider" value="route53" class="sr-only peer">
-                                <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
-                                    <div class="text-center">
-                                        <i class="fab fa-aws text-lg text-orange-400 mb-1"></i>
-                                        <div class="text-xs font-medium dark:text-white">Route53</div>
-                                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="route53-status">Not configured</div>
+                                </label>
+                                <label class="relative">
+                                    <input type="radio" name="dns_provider" value="route53" class="sr-only peer">
+                                    <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                        <div class="text-center">
+                                            <i class="fab fa-aws text-lg text-orange-400 mb-1"></i>
+                                            <div class="text-xs font-medium dark:text-white">Route53</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="route53-status">Not configured</div>
+                                            <!-- Multi-account indicator -->
+                                            <div class="text-xs text-blue-600 dark:text-blue-400 mt-1 hidden" id="route53-accounts">
+                                                <i class="fas fa-users text-xs mr-1"></i>
+                                                <span id="route53-account-count">0</span> accounts
+                                            </div>
+                                        </div>
                                     </div>
-                                </div>
-                            </label>
-                            <label class="relative">
-                                <input type="radio" name="dns_provider" value="digitalocean" class="sr-only peer">
-                                <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
-                                    <div class="text-center">
-                                        <i class="fab fa-digital-ocean text-lg text-blue-600 mb-1"></i>
-                                        <div class="text-xs font-medium dark:text-white">DigitalOcean</div>
-                                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="digitalocean-status">Not configured</div>
+                                </label>
+                                <label class="relative">
+                                    <input type="radio" name="dns_provider" value="digitalocean" class="sr-only peer">
+                                    <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                        <div class="text-center">
+                                            <i class="fab fa-digital-ocean text-lg text-blue-600 mb-1"></i>
+                                            <div class="text-xs font-medium dark:text-white">DigitalOcean</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="digitalocean-status">Not configured</div>
+                                            <!-- Multi-account indicator -->
+                                            <div class="text-xs text-blue-600 dark:text-blue-400 mt-1 hidden" id="digitalocean-accounts">
+                                                <i class="fas fa-users text-xs mr-1"></i>
+                                                <span id="digitalocean-account-count">0</span> accounts
+                                            </div>
+                                        </div>
                                     </div>
-                                </div>
-                            </label>
-                            <label class="relative">
-                                <input type="radio" name="dns_provider" value="azure" class="sr-only peer">
-                                <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
-                                    <div class="text-center">
-                                        <i class="fab fa-microsoft text-lg text-blue-600 mb-1"></i>
-                                        <div class="text-xs font-medium dark:text-white">Azure DNS</div>
-                                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="azure-status">Not configured</div>
+                                </label>
+                                <label class="relative">
+                                    <input type="radio" name="dns_provider" value="azure" class="sr-only peer">
+                                    <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                        <div class="text-center">
+                                            <i class="fab fa-microsoft text-lg text-blue-600 mb-1"></i>
+                                            <div class="text-xs font-medium dark:text-white">Azure DNS</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="azure-status">Not configured</div>
+                                            <!-- Multi-account indicator -->
+                                            <div class="text-xs text-blue-600 dark:text-blue-400 mt-1 hidden" id="azure-accounts">
+                                                <i class="fas fa-users text-xs mr-1"></i>
+                                                <span id="azure-account-count">0</span> accounts
+                                            </div>
+                                        </div>
                                     </div>
-                                </div>
-                            </label>
-                            <label class="relative">
-                                <input type="radio" name="dns_provider" value="google" class="sr-only peer">
-                                <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
-                                    <div class="text-center">
-                                        <i class="fab fa-google text-lg text-blue-500 mb-1"></i>
-                                        <div class="text-xs font-medium dark:text-white">Google DNS</div>
-                                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="google-status">Not configured</div>
+                                </label>
+                                <label class="relative">
+                                    <input type="radio" name="dns_provider" value="google" class="sr-only peer">
+                                    <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                        <div class="text-center">
+                                            <i class="fab fa-google text-lg text-blue-500 mb-1"></i>
+                                            <div class="text-xs font-medium dark:text-white">Google DNS</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="google-status">Not configured</div>
+                                            <!-- Multi-account indicator -->
+                                            <div class="text-xs text-blue-600 dark:text-blue-400 mt-1 hidden" id="google-accounts">
+                                                <i class="fas fa-users text-xs mr-1"></i>
+                                                <span id="google-account-count">0</span> accounts
+                                            </div>
+                                        </div>
                                     </div>
-                                </div>
-                            </label>
-                            <label class="relative">
-                                <input type="radio" name="dns_provider" value="powerdns" class="sr-only peer">
-                                <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
-                                    <div class="text-center">
-                                        <i class="fas fa-server text-lg text-gray-600 dark:text-gray-400 mb-1"></i>
-                                        <div class="text-xs font-medium dark:text-white">PowerDNS</div>
-                                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="powerdns-status">Not configured</div>
+                                </label>
+                                <label class="relative">
+                                    <input type="radio" name="dns_provider" value="powerdns" class="sr-only peer">
+                                    <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                        <div class="text-center">
+                                            <i class="fas fa-server text-lg text-gray-600 dark:text-gray-400 mb-1"></i>
+                                            <div class="text-xs font-medium dark:text-white">PowerDNS</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="powerdns-status">Not configured</div>
+                                            <!-- Multi-account indicator -->
+                                            <div class="text-xs text-blue-600 dark:text-blue-400 mt-1 hidden" id="powerdns-accounts">
+                                                <i class="fas fa-users text-xs mr-1"></i>
+                                                <span id="powerdns-account-count">0</span> accounts
+                                            </div>
+                                        </div>
                                     </div>
-                                </div>
-                            </label>
-                            <label class="relative">
-                                <input type="radio" name="dns_provider" value="rfc2136" class="sr-only peer">
-                                <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
-                                    <div class="text-center">
-                                        <i class="fas fa-exchange-alt text-lg text-gray-600 dark:text-gray-400 mb-1"></i>
-                                        <div class="text-xs font-medium dark:text-white">RFC2136</div>
-                                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="rfc2136-status">Not configured</div>
+                                </label>
+                                <label class="relative">
+                                    <input type="radio" name="dns_provider" value="rfc2136" class="sr-only peer">
+                                    <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                        <div class="text-center">
+                                            <i class="fas fa-exchange-alt text-lg text-gray-600 dark:text-gray-400 mb-1"></i>
+                                            <div class="text-xs font-medium dark:text-white">RFC2136</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="rfc2136-status">Not configured</div>
+                                            <!-- Multi-account indicator -->
+                                            <div class="text-xs text-blue-600 dark:text-blue-400 mt-1 hidden" id="rfc2136-accounts">
+                                                <i class="fas fa-users text-xs mr-1"></i>
+                                                <span id="rfc2136-account-count">0</span> accounts
+                                            </div>
+                                        </div>
                                     </div>
-                                </div>
-                            </label>
-                            <label class="relative">
-                                <input type="radio" name="dns_provider" value="linode" class="sr-only peer">
-                                <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
-                                    <div class="text-center">
-                                        <i class="fas fa-cloud text-lg text-green-600 mb-1"></i>
-                                        <div class="text-xs font-medium dark:text-white">Linode</div>
-                                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="linode-status">Not configured</div>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <!-- Single-Account Providers -->
+                        <div>
+                            <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center">
+                                <i class="fas fa-user mr-2 text-gray-500"></i>
+                                Single Account Providers
+                                <span class="ml-2 text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-2 py-0.5 rounded-full">Standard</span>
+                            </h4>
+                            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-2" role="radiogroup" aria-labelledby="dns-provider-label">
+                                <label class="relative">
+                                    <input type="radio" name="dns_provider" value="linode" class="sr-only peer">
+                                    <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                        <div class="text-center">
+                                            <i class="fas fa-cloud text-lg text-green-600 mb-1"></i>
+                                            <div class="text-xs font-medium dark:text-white">Linode</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="linode-status">Not configured</div>
+                                        </div>
                                     </div>
-                                </div>
-                            </label>
-                            <label class="relative">
-                                <input type="radio" name="dns_provider" value="vultr" class="sr-only peer">
-                                <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
-                                    <div class="text-center">
-                                        <i class="fas fa-cloud text-lg text-blue-600 mb-1"></i>
-                                        <div class="text-xs font-medium dark:text-white">Vultr</div>
-                                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="vultr-status">Not configured</div>
+                                </label>
+                                <label class="relative">
+                                    <input type="radio" name="dns_provider" value="vultr" class="sr-only peer">
+                                    <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                        <div class="text-center">
+                                            <i class="fas fa-cloud text-lg text-blue-600 mb-1"></i>
+                                            <div class="text-xs font-medium dark:text-white">Vultr</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="vultr-status">Not configured</div>
+                                        </div>
                                     </div>
-                                </div>
-                            </label>
-                            <label class="relative">
-                                <input type="radio" name="dns_provider" value="hetzner" class="sr-only peer">
-                                <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
-                                    <div class="text-center">
-                                        <i class="fas fa-server text-lg text-red-600 mb-1"></i>
-                                        <div class="text-xs font-medium dark:text-white">Hetzner</div>
-                                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="hetzner-status">Not configured</div>
+                                </label>
+                                <label class="relative">
+                                    <input type="radio" name="dns_provider" value="hetzner" class="sr-only peer">
+                                    <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                        <div class="text-center">
+                                            <i class="fas fa-server text-lg text-red-600 mb-1"></i>
+                                            <div class="text-xs font-medium dark:text-white">Hetzner</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="hetzner-status">Not configured</div>
+                                        </div>
                                     </div>
-                                </div>
-                            </label>
-                            <label class="relative">
-                                <input type="radio" name="dns_provider" value="gandi" class="sr-only peer">
-                                <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
-                                    <div class="text-center">
-                                        <i class="fas fa-globe text-lg text-orange-600 mb-1"></i>
-                                        <div class="text-xs font-medium dark:text-white">Gandi</div>
-                                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="gandi-status">Not configured</div>
+                                </label>
+                                <label class="relative">
+                                    <input type="radio" name="dns_provider" value="gandi" class="sr-only peer">
+                                    <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                        <div class="text-center">
+                                            <i class="fas fa-globe text-lg text-orange-600 mb-1"></i>
+                                            <div class="text-xs font-medium dark:text-white">Gandi</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="gandi-status">Not configured</div>
+                                        </div>
                                     </div>
-                                </div>
-                            </label>
-                            <label class="relative">
-                                <input type="radio" name="dns_provider" value="ovh" class="sr-only peer">
-                                <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
-                                    <div class="text-center">
-                                        <i class="fas fa-server text-lg text-purple-600 mb-1"></i>
-                                        <div class="text-xs font-medium dark:text-white">OVH</div>
-                                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="ovh-status">Not configured</div>
+                                </label>
+                                <label class="relative">
+                                    <input type="radio" name="dns_provider" value="ovh" class="sr-only peer">
+                                    <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                        <div class="text-center">
+                                            <i class="fas fa-server text-lg text-purple-600 mb-1"></i>
+                                            <div class="text-xs font-medium dark:text-white">OVH</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="ovh-status">Not configured</div>
+                                        </div>
                                     </div>
-                                </div>
-                            </label>
-                            <label class="relative">
-                                <input type="radio" name="dns_provider" value="namecheap" class="sr-only peer">
-                                <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
-                                    <div class="text-center">
-                                        <i class="fas fa-shopping-cart text-lg text-red-600 mb-1"></i>
-                                        <div class="text-xs font-medium dark:text-white">Namecheap</div>
-                                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="namecheap-status">Not configured</div>
+                                </label>
+                                <label class="relative">
+                                    <input type="radio" name="dns_provider" value="namecheap" class="sr-only peer">
+                                    <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                        <div class="text-center">
+                                            <i class="fas fa-shopping-cart text-lg text-red-600 mb-1"></i>
+                                            <div class="text-xs font-medium dark:text-white">Namecheap</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="namecheap-status">Not configured</div>
+                                        </div>
                                     </div>
-                                </div>
-                            </label>
-                            <label class="relative">
-                                <input type="radio" name="dns_provider" value="porkbun" class="sr-only peer">
-                                <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
-                                    <div class="text-center">
-                                        <i class="fas fa-paw text-lg text-pink-600 mb-1"></i>
-                                        <div class="text-xs font-medium dark:text-white">Porkbun</div>
-                                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="porkbun-status">Not configured</div>
+                                </label>
+                                <label class="relative">
+                                    <input type="radio" name="dns_provider" value="porkbun" class="sr-only peer">
+                                    <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                        <div class="text-center">
+                                            <i class="fas fa-paw text-lg text-pink-600 mb-1"></i>
+                                            <div class="text-xs font-medium dark:text-white">Porkbun</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="porkbun-status">Not configured</div>
+                                        </div>
                                     </div>
-                                </div>
-                            </label>
-                            <label class="relative">
-                                <input type="radio" name="dns_provider" value="godaddy" class="sr-only peer">
-                                <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
-                                    <div class="text-center">
-                                        <i class="fas fa-globe text-lg text-green-600 mb-1"></i>
-                                        <div class="text-xs font-medium dark:text-white">GoDaddy</div>
-                                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="godaddy-status">Not configured</div>
+                                </label>
+                                <label class="relative">
+                                    <input type="radio" name="dns_provider" value="godaddy" class="sr-only peer">
+                                    <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                        <div class="text-center">
+                                            <i class="fas fa-globe text-lg text-green-600 mb-1"></i>
+                                            <div class="text-xs font-medium dark:text-white">GoDaddy</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="godaddy-status">Not configured</div>
+                                        </div>
                                     </div>
-                                </div>
-                            </label>
-                            <label class="relative">
-                                <input type="radio" name="dns_provider" value="dnsmadeeasy" class="sr-only peer">
-                                <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
-                                    <div class="text-center">
-                                        <i class="fas fa-cogs text-lg text-green-600 mb-1"></i>
-                                        <div class="text-xs font-medium dark:text-white">DNS Made Easy</div>
-                                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="dnsmadeeasy-status">Not configured</div>
+                                </label>
+                                <label class="relative">
+                                    <input type="radio" name="dns_provider" value="dnsmadeeasy" class="sr-only peer">
+                                    <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                        <div class="text-center">
+                                            <i class="fas fa-cogs text-lg text-green-600 mb-1"></i>
+                                            <div class="text-xs font-medium dark:text-white">DNS Made Easy</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="dnsmadeeasy-status">Not configured</div>
+                                        </div>
                                     </div>
-                                </div>
-                            </label>
-                            <label class="relative">
-                                <input type="radio" name="dns_provider" value="nsone" class="sr-only peer">
-                                <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
-                                    <div class="text-center">
-                                        <i class="fas fa-network-wired text-lg text-indigo-600 mb-1"></i>
-                                        <div class="text-xs font-medium dark:text-white">NS1</div>
-                                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="nsone-status">Not configured</div>
+                                </label>
+                                <label class="relative">
+                                    <input type="radio" name="dns_provider" value="nsone" class="sr-only peer">
+                                    <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                        <div class="text-center">
+                                            <i class="fas fa-network-wired text-lg text-indigo-600 mb-1"></i>
+                                            <div class="text-xs font-medium dark:text-white">NS1</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="nsone-status">Not configured</div>
+                                        </div>
                                     </div>
-                                </div>
-                            </label>
-                            <label class="relative">
-                                <input type="radio" name="dns_provider" value="he-ddns" class="sr-only peer">
-                                <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
-                                    <div class="text-center">
-                                        <i class="fas fa-bolt text-lg text-yellow-600 mb-1"></i>
-                                        <div class="text-xs font-medium dark:text-white">Hurricane Electric</div>
-                                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="he-ddns-status">Not configured</div>
+                                </label>
+                                <label class="relative">
+                                    <input type="radio" name="dns_provider" value="he-ddns" class="sr-only peer">
+                                    <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                        <div class="text-center">
+                                            <i class="fas fa-bolt text-lg text-yellow-600 mb-1"></i>
+                                            <div class="text-xs font-medium dark:text-white">Hurricane Electric</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="he-ddns-status">Not configured</div>
+                                        </div>
                                     </div>
-                                </div>
-                            </label>
-                            <label class="relative">
-                                <input type="radio" name="dns_provider" value="dynudns" class="sr-only peer">
-                                <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
-                                    <div class="text-center">
-                                        <i class="fas fa-sync-alt text-lg text-purple-600 mb-1"></i>
-                                        <div class="text-xs font-medium dark:text-white">Dynu</div>
-                                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="dynudns-status">Not configured</div>
+                                </label>
+                                <label class="relative">
+                                    <input type="radio" name="dns_provider" value="dynudns" class="sr-only peer">
+                                    <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                        <div class="text-center">
+                                            <i class="fas fa-sync-alt text-lg text-purple-600 mb-1"></i>
+                                            <div class="text-xs font-medium dark:text-white">Dynu</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="dynudns-status">Not configured</div>
+                                        </div>
                                     </div>
-                                </div>
-                            </label>
+                                </label>
+                            </div>
                         </div>
                     </div>
 
@@ -293,11 +348,25 @@
                     <!-- Cloudflare Configuration -->
                     <div id="cloudflare-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
-                            <h4 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
-                                <i class="fab fa-cloudflare mr-2 text-orange-500"></i>
-                                Cloudflare Configuration
-                            </h4>
-                            <div>
+                            <div class="flex items-center justify-between mb-4">
+                                <h4 class="text-lg font-medium text-gray-900 dark:text-white">
+                                    <i class="fab fa-cloudflare mr-2 text-orange-500"></i>
+                                    Cloudflare Configuration
+                                </h4>
+                                <button type="button" id="cloudflare-add-account" onclick="showAddAccountModal('cloudflare')" 
+                                        class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-primary hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                                    <i class="fas fa-plus mr-1"></i>
+                                    Add Account
+                                </button>
+                            </div>
+                            
+                            <!-- Account Management List -->
+                            <div id="cloudflare-accounts-list" class="space-y-3 mb-4">
+                                <!-- Accounts will be populated here -->
+                            </div>
+                            
+                            <!-- Legacy single account fields (hidden when multi-account mode is active) -->
+                            <div id="cloudflare-legacy-config">
                                 <label for="cloudflare_api_token" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
                                     API Token
                                 </label>
@@ -316,179 +385,296 @@
                     <!-- AWS Route53 Configuration -->
                     <div id="route53-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
-                            <h4 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
-                                <i class="fab fa-aws mr-2 text-orange-400"></i>
-                                AWS Route53 Configuration
-                            </h4>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label for="route53_access_key_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                        Access Key ID
-                                    </label>
-                                    <input type="password" id="route53_access_key_id" name="route53_access_key_id" 
-                                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
-                                           placeholder="AKIAIOSFODNN7EXAMPLE">
-                                </div>
-                                <div>
-                                    <label for="route53_secret_access_key" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                        Secret Access Key
-                                    </label>
-                                    <input type="password" id="route53_secret_access_key" name="route53_secret_access_key" 
-                                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
-                                           placeholder="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY">
-                                </div>
-                                <div>
-                                    <label for="route53_region" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                        Region (Optional)
-                                    </label>
-                                    <input type="text" id="route53_region" name="route53_region" 
-                                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
-                                           placeholder="us-east-1" value="us-east-1">
-                                </div>
+                            <div class="flex items-center justify-between mb-4">
+                                <h4 class="text-lg font-medium text-gray-900 dark:text-white">
+                                    <i class="fab fa-aws mr-2 text-orange-400"></i>
+                                    AWS Route53 Configuration
+                                </h4>
+                                <button type="button" id="route53-add-account" onclick="showAddAccountModal('route53')" 
+                                        class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-primary hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                                    <i class="fas fa-plus mr-1"></i>
+                                    Add Account
+                                </button>
                             </div>
-                            <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
-                                Create IAM credentials with <strong>Route53FullAccess</strong> policy or a custom policy with Route53 DNS permissions.
-                            </p>
+                            
+                            <!-- Account Management List -->
+                            <div id="route53-accounts-list" class="space-y-3 mb-4">
+                                <!-- Accounts will be populated here -->
+                            </div>
+                            
+                            <!-- Legacy single account fields (hidden when multi-account mode is active) -->
+                            <div id="route53-legacy-config">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label for="route53_access_key_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            Access Key ID
+                                        </label>
+                                        <input type="password" id="route53_access_key_id" name="route53_access_key_id" 
+                                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                               placeholder="AKIAIOSFODNN7EXAMPLE">
+                                    </div>
+                                    <div>
+                                        <label for="route53_secret_access_key" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            Secret Access Key
+                                        </label>
+                                        <input type="password" id="route53_secret_access_key" name="route53_secret_access_key" 
+                                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                               placeholder="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY">
+                                    </div>
+                                    <div>
+                                        <label for="route53_region" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            Region (Optional)
+                                        </label>
+                                        <input type="text" id="route53_region" name="route53_region" 
+                                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                               placeholder="us-east-1" value="us-east-1">
+                                    </div>
+                                </div>
+                                <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                                    Create IAM credentials with <strong>Route53FullAccess</strong> policy or a custom policy with Route53 DNS permissions.
+                                </p>
+                            </div>
                         </div>
                     </div>
 
                     <!-- Azure DNS Configuration -->
                     <div id="azure-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
-                            <h4 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
-                                <i class="fab fa-microsoft mr-2 text-blue-600"></i>
-                                Azure DNS Configuration
-                            </h4>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label for="azure_subscription_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                        Subscription ID
-                                    </label>
-                                    <input type="text" id="azure_subscription_id" name="azure_subscription_id" 
-                                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
-                                           placeholder="12345678-1234-1234-1234-123456789012">
-                                </div>
-                                <div>
-                                    <label for="azure_resource_group" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                        Resource Group
-                                    </label>
-                                    <input type="text" id="azure_resource_group" name="azure_resource_group" 
-                                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
-                                           placeholder="my-dns-resource-group">
-                                </div>
-                                <div>
-                                    <label for="azure_tenant_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                        Tenant ID
-                                    </label>
-                                    <input type="text" id="azure_tenant_id" name="azure_tenant_id" 
-                                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
-                                           placeholder="12345678-1234-1234-1234-123456789012">
-                                </div>
-                                <div>
-                                    <label for="azure_client_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                        Client ID
-                                    </label>
-                                    <input type="text" id="azure_client_id" name="azure_client_id" 
-                                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
-                                           placeholder="12345678-1234-1234-1234-123456789012">
-                                </div>
-                                <div class="md:col-span-2">
-                                    <label for="azure_client_secret" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                        Client Secret
-                                    </label>
-                                    <input type="password" id="azure_client_secret" name="azure_client_secret" 
-                                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
-                                           placeholder="Your Azure client secret">
-                                </div>
+                            <div class="flex items-center justify-between mb-4">
+                                <h4 class="text-lg font-medium text-gray-900 dark:text-white">
+                                    <i class="fab fa-microsoft mr-2 text-blue-600"></i>
+                                    Azure DNS Configuration
+                                </h4>
+                                <button type="button" id="azure-add-account" onclick="showAddAccountModal('azure')" 
+                                        class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-primary hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                                    <i class="fas fa-plus mr-1"></i>
+                                    Add Account
+                                </button>
                             </div>
-                            <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
-                                Create a Service Principal with <strong>DNS Zone Contributor</strong> role for your DNS zones.
-                            </p>
+                            
+                            <!-- Account Management List -->
+                            <div id="azure-accounts-list" class="space-y-3 mb-4">
+                                <!-- Accounts will be populated here -->
+                            </div>
+                            
+                            <!-- Legacy single account fields (hidden when multi-account mode is active) -->
+                            <div id="azure-legacy-config">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label for="azure_subscription_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            Subscription ID
+                                        </label>
+                                        <input type="text" id="azure_subscription_id" name="azure_subscription_id" 
+                                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                               placeholder="12345678-1234-1234-1234-123456789012">
+                                    </div>
+                                    <div>
+                                        <label for="azure_resource_group" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            Resource Group
+                                        </label>
+                                        <input type="text" id="azure_resource_group" name="azure_resource_group" 
+                                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                               placeholder="my-dns-resource-group">
+                                    </div>
+                                    <div>
+                                        <label for="azure_tenant_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            Tenant ID
+                                        </label>
+                                        <input type="text" id="azure_tenant_id" name="azure_tenant_id" 
+                                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                               placeholder="12345678-1234-1234-1234-123456789012">
+                                    </div>
+                                    <div>
+                                        <label for="azure_client_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            Client ID
+                                        </label>
+                                        <input type="text" id="azure_client_id" name="azure_client_id" 
+                                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                               placeholder="12345678-1234-1234-1234-123456789012">
+                                    </div>
+                                    <div class="md:col-span-2">
+                                        <label for="azure_client_secret" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            Client Secret
+                                        </label>
+                                        <input type="password" id="azure_client_secret" name="azure_client_secret" 
+                                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                               placeholder="Your Azure client secret">
+                                    </div>
+                                </div>
+                                <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                                    Create a Service Principal with <strong>DNS Zone Contributor</strong> role for your DNS zones.
+                                </p>
+                            </div>
                         </div>
                     </div>
 
                     <!-- Google Cloud DNS Configuration -->
                     <div id="google-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
-                            <h4 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
-                                <i class="fab fa-google mr-2 text-blue-500"></i>
-                                Google Cloud DNS Configuration
-                            </h4>
-                            <div class="space-y-4">
-                                <div>
-                                    <label for="google_project_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                        Project ID
-                                    </label>
-                                    <input type="text" id="google_project_id" name="google_project_id" 
-                                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
-                                           placeholder="my-gcp-project-123456">
-                                </div>
-                                <div>
-                                    <label for="google_service_account_key" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                        Service Account JSON Key
-                                    </label>
-                                    <textarea id="google_service_account_key" name="google_service_account_key" rows="4"
-                                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
-                                           placeholder='{"type": "service_account", "project_id": "...", ...}'></textarea>
-                                </div>
+                            <div class="flex items-center justify-between mb-4">
+                                <h4 class="text-lg font-medium text-gray-900 dark:text-white">
+                                    <i class="fab fa-google mr-2 text-blue-500"></i>
+                                    Google Cloud DNS Configuration
+                                </h4>
+                                <button type="button" id="google-add-account" onclick="showAddAccountModal('google')" 
+                                        class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-primary hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                                    <i class="fas fa-plus mr-1"></i>
+                                    Add Account
+                                </button>
                             </div>
-                            <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
-                                Create a Service Account with <strong>DNS Administrator</strong> role and download the JSON key file.
-                            </p>
+                            
+                            <!-- Account Management List -->
+                            <div id="google-accounts-list" class="space-y-3 mb-4">
+                                <!-- Accounts will be populated here -->
+                            </div>
+                            
+                            <!-- Legacy single account fields (hidden when multi-account mode is active) -->
+                            <div id="google-legacy-config">
+                                <div class="space-y-4">
+                                    <div>
+                                        <label for="google_project_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            Project ID
+                                        </label>
+                                        <input type="text" id="google_project_id" name="google_project_id" 
+                                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                               placeholder="my-gcp-project-123456">
+                                    </div>
+                                    <div>
+                                        <label for="google_service_account_key" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            Service Account JSON Key
+                                        </label>
+                                        <textarea id="google_service_account_key" name="google_service_account_key" rows="4"
+                                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                               placeholder='{"type": "service_account", "project_id": "...", ...}'></textarea>
+                                    </div>
+                                </div>
+                                <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                                    Create a Service Account with <strong>DNS Administrator</strong> role and download the JSON key file.
+                                </p>
+                            </div>
                         </div>
                     </div>
 
                     <!-- PowerDNS Configuration -->
                     <div id="powerdns-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
-                            <h4 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
-                                <i class="fas fa-server mr-2 text-gray-600"></i>
-                                PowerDNS Configuration
-                            </h4>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label for="powerdns_api_url" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                        API URL
-                                    </label>
-                                    <input type="url" id="powerdns_api_url" name="powerdns_api_url" 
-                                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
-                                           placeholder="https://powerdns.example.com:8081">
-                                </div>
-                                <div>
-                                    <label for="powerdns_api_key" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                        API Key
-                                    </label>
-                                    <input type="password" id="powerdns_api_key" name="powerdns_api_key" 
-                                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
-                                           placeholder="Your PowerDNS API key">
-                                </div>
+                            <div class="flex items-center justify-between mb-4">
+                                <h4 class="text-lg font-medium text-gray-900 dark:text-white">
+                                    <i class="fas fa-server mr-2 text-gray-600"></i>
+                                    PowerDNS Configuration
+                                </h4>
+                                <button type="button" id="powerdns-add-account" onclick="showAddAccountModal('powerdns')" 
+                                        class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-primary hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                                    <i class="fas fa-plus mr-1"></i>
+                                    Add Account
+                                </button>
                             </div>
-                            <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
-                                Configure your PowerDNS server with API access enabled and provide the API endpoint and key.
-                            </p>
+                            
+                            <!-- Account Management List -->
+                            <div id="powerdns-accounts-list" class="space-y-3 mb-4">
+                                <!-- Accounts will be populated here -->
+                            </div>
+                            
+                            <!-- Legacy single account fields (hidden when multi-account mode is active) -->
+                            <div id="powerdns-legacy-config">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label for="powerdns_api_url" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            API URL
+                                        </label>
+                                        <input type="url" id="powerdns_api_url" name="powerdns_api_url" 
+                                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                               placeholder="https://powerdns.example.com:8081">
+                                    </div>
+                                    <div>
+                                        <label for="powerdns_api_key" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            API Key
+                                        </label>
+                                        <input type="password" id="powerdns_api_key" name="powerdns_api_key" 
+                                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                               placeholder="Your PowerDNS API key">
+                                    </div>
+                                </div>
+                                <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                                    Configure your PowerDNS server with API access enabled and provide the API endpoint and key.
+                                </p>
+                            </div>
                         </div>
                     </div>
 
                     <!-- DigitalOcean Configuration -->
                     <div id="digitalocean-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
-                            <h4 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
-                                <i class="fab fa-digital-ocean mr-2 text-blue-600"></i>
-                                DigitalOcean DNS Configuration
-                            </h4>
-                            <div class="grid grid-cols-1 gap-4">
-                                <div>
-                                    <label for="digitalocean_api_token" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                        API Token
-                                    </label>
-                                    <input type="password" id="digitalocean_api_token" name="digitalocean_api_token" 
-                                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
-                                           placeholder="Your DigitalOcean API token">
-                                </div>
+                            <div class="flex items-center justify-between mb-4">
+                                <h4 class="text-lg font-medium text-gray-900 dark:text-white">
+                                    <i class="fab fa-digital-ocean mr-2 text-blue-600"></i>
+                                    DigitalOcean DNS Configuration
+                                </h4>
+                                <button type="button" id="digitalocean-add-account" onclick="showAddAccountModal('digitalocean')" 
+                                        class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-primary hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                                    <i class="fas fa-plus mr-1"></i>
+                                    Add Account
+                                </button>
                             </div>
-                            <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
-                                Generate a personal access token from your DigitalOcean control panel with read/write permissions for DNS.
-                            </p>
+                            
+                            <!-- Account Management List -->
+                            <div id="digitalocean-accounts-list" class="space-y-3 mb-4">
+                                <!-- Accounts will be populated here -->
+                            </div>
+                            
+                            <!-- Legacy single account fields (hidden when multi-account mode is active) -->
+                            <div id="digitalocean-legacy-config">
+                                <div class="grid grid-cols-1 gap-4">
+                                    <div>
+                                        <label for="digitalocean_api_token" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            API Token
+                                        </label>
+                                        <input type="password" id="digitalocean_api_token" name="digitalocean_api_token" 
+                                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                               placeholder="Your DigitalOcean API token">
+                                    </div>
+                                </div>
+                                <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                                    Generate a personal access token from your DigitalOcean control panel with read/write permissions for DNS.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Vultr Configuration -->
+                    <div id="vultr-config" class="dns-config hidden">
+                        <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
+                            <div class="flex items-center justify-between mb-4">
+                                <h4 class="text-lg font-medium text-gray-900 dark:text-white">
+                                    <i class="fas fa-cloud mr-2 text-blue-600"></i>
+                                    Vultr DNS Configuration
+                                </h4>
+                                <button type="button" id="vultr-add-account" onclick="showAddAccountModal('vultr')" 
+                                        class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-primary hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                                    <i class="fas fa-plus mr-1"></i>
+                                    Add Account
+                                </button>
+                            </div>
+                            
+                            <!-- Account Management List -->
+                            <div id="vultr-accounts-list" class="space-y-3 mb-4">
+                                <!-- Accounts will be populated here -->
+                            </div>
+                            
+                            <!-- Legacy single account fields (hidden when multi-account mode is active) -->
+                            <div id="vultr-legacy-config">
+                                <label for="vultr_api_key" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    API Key
+                                </label>
+                                <div class="mt-1">
+                                    <input type="password" id="vultr_api_key" name="vultr_api_key" 
+                                           class="block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                           placeholder="Enter your Vultr API key">
+                                </div>
+                                <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                                    Generate an API key from your Vultr control panel with DNS permissions.
+                                </p>
+                            </div>
                         </div>
                     </div>
 
@@ -627,54 +813,70 @@
                     <!-- RFC2136 Configuration -->
                     <div id="rfc2136-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
-                            <h4 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
-                                <i class="fas fa-exchange-alt mr-2 text-gray-600"></i>
-                                RFC2136 DNS Configuration
-                            </h4>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label for="rfc2136_nameserver" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                        Nameserver
-                                    </label>
-                                    <input type="text" id="rfc2136_nameserver" name="rfc2136_nameserver" 
-                                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
-                                           placeholder="ns.example.com">
-                                </div>
-                                <div>
-                                    <label for="rfc2136_tsig_key" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                        TSIG Key Name
-                                    </label>
-                                    <input type="text" id="rfc2136_tsig_key" name="rfc2136_tsig_key" 
-                                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
-                                           placeholder="mykey">
-                                </div>
-                                <div>
-                                    <label for="rfc2136_tsig_secret" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                        TSIG Secret
-                                    </label>
-                                    <input type="password" id="rfc2136_tsig_secret" name="rfc2136_tsig_secret" 
-                                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
-                                           placeholder="Base64-encoded secret">
-                                </div>
-                                <div>
-                                    <label for="rfc2136_tsig_algorithm" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                        TSIG Algorithm (Optional)
-                                    </label>
-                                    <select id="rfc2136_tsig_algorithm" name="rfc2136_tsig_algorithm" 
-                                            class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary">
-                                        <option value="">Default (HMAC-MD5)</option>
-                                        <option value="HMAC-MD5">HMAC-MD5</option>
-                                        <option value="HMAC-SHA1">HMAC-SHA1</option>
-                                        <option value="HMAC-SHA224">HMAC-SHA224</option>
-                                        <option value="HMAC-SHA256">HMAC-SHA256</option>
-                                        <option value="HMAC-SHA384">HMAC-SHA384</option>
-                                        <option value="HMAC-SHA512">HMAC-SHA512</option>
-                                    </select>
-                                </div>
+                            <div class="flex items-center justify-between mb-4">
+                                <h4 class="text-lg font-medium text-gray-900 dark:text-white">
+                                    <i class="fas fa-exchange-alt mr-2 text-gray-600"></i>
+                                    RFC2136 DNS Configuration
+                                </h4>
+                                <button type="button" id="rfc2136-add-account" onclick="showAddAccountModal('rfc2136')" 
+                                        class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-primary hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                                    <i class="fas fa-plus mr-1"></i>
+                                    Add Server
+                                </button>
                             </div>
-                            <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
-                                Configure RFC2136 dynamic DNS updates for BIND or compatible DNS servers.
-                            </p>
+                            
+                            <!-- Account Management List -->
+                            <div id="rfc2136-accounts-list" class="space-y-3 mb-4">
+                                <!-- Accounts will be populated here -->
+                            </div>
+                            
+                            <!-- Legacy single account fields (hidden when multi-account mode is active) -->
+                            <div id="rfc2136-legacy-config">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label for="rfc2136_nameserver" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            Nameserver
+                                        </label>
+                                        <input type="text" id="rfc2136_nameserver" name="rfc2136_nameserver" 
+                                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                               placeholder="ns.example.com">
+                                    </div>
+                                    <div>
+                                        <label for="rfc2136_tsig_key" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            TSIG Key Name
+                                        </label>
+                                        <input type="text" id="rfc2136_tsig_key" name="rfc2136_tsig_key" 
+                                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                               placeholder="mykey">
+                                    </div>
+                                    <div>
+                                        <label for="rfc2136_tsig_secret" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            TSIG Secret
+                                        </label>
+                                        <input type="password" id="rfc2136_tsig_secret" name="rfc2136_tsig_secret" 
+                                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                               placeholder="Base64-encoded secret">
+                                    </div>
+                                    <div>
+                                        <label for="rfc2136_tsig_algorithm" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            TSIG Algorithm (Optional)
+                                        </label>
+                                        <select id="rfc2136_tsig_algorithm" name="rfc2136_tsig_algorithm" 
+                                                class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary">
+                                            <option value="">Default (HMAC-MD5)</option>
+                                            <option value="HMAC-MD5">HMAC-MD5</option>
+                                            <option value="HMAC-SHA1">HMAC-SHA1</option>
+                                            <option value="HMAC-SHA224">HMAC-SHA224</option>
+                                            <option value="HMAC-SHA256">HMAC-SHA256</option>
+                                            <option value="HMAC-SHA384">HMAC-SHA384</option>
+                                            <option value="HMAC-SHA512">HMAC-SHA512</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                                    Configure RFC2136 dynamic DNS updates for BIND or compatible DNS servers.
+                                </p>
+                            </div>
                         </div>
                     </div>
 
@@ -868,8 +1070,11 @@
                     </div>
 
                     <!-- Basic Settings -->
-                    <div class="border-t pt-6">
-                        <h4 class="text-lg font-medium text-gray-900 dark:text-white mb-4">Basic Settings</h4>
+                    <div class="bg-gray-50 dark:bg-gray-700/50 p-6 rounded-lg">
+                        <h4 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
+                            <i class="fas fa-cog mr-2 text-gray-500"></i>
+                            Basic Settings
+                        </h4>
                         
                         <!-- Email -->
                         <div class="mb-6">
@@ -908,7 +1113,7 @@
                             <div class="flex items-center">
                                 <input type="checkbox" id="auto_renew" name="auto_renew" 
                                        class="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded">
-                                <label for="auto_renew" class="ml-2 block text-sm text-gray-900">
+                                <label for="auto_renew" class="ml-2 block text-sm text-gray-900 dark:text-gray-300">
                                     Enable automatic certificate renewal
                                 </label>
                             </div>
@@ -1017,6 +1222,139 @@
         <div id="statusMessage" class="mt-4 hidden"></div>
     </div>
 
+    <!-- Add Account Modal -->
+    <div id="addAccountModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 hidden">
+        <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white dark:bg-gray-800">
+            <div class="mt-3">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-white" id="modal-title">
+                        Add Account
+                    </h3>
+                    <button type="button" onclick="closeAddAccountModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <form id="addAccountForm" class="space-y-4">
+                    <div>
+                        <label for="account-name" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                            Account Name *
+                        </label>
+                        <input type="text" id="account-name" name="name" required
+                               class="mt-1 block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                               placeholder="e.g., Production, Development, Client-A">
+                    </div>
+                    
+                    <div>
+                        <label for="account-description" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                            Description (optional)
+                        </label>
+                        <input type="text" id="account-description" name="description"
+                               class="mt-1 block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                               placeholder="Brief description of this account">
+                    </div>
+                    
+                    <!-- Dynamic fields will be populated here based on provider -->
+                    <div id="modal-provider-fields"></div>
+                    
+                    <div class="flex items-center">
+                        <input type="checkbox" id="set-as-default" name="set_as_default" 
+                               class="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded">
+                        <label for="set-as-default" class="ml-2 block text-sm text-gray-700 dark:text-gray-300">
+                            Set as default account
+                        </label>
+                    </div>
+                    
+                    <div class="flex justify-end space-x-3 pt-4">
+                        <button type="button" onclick="closeAddAccountModal()" 
+                                class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">
+                            Cancel
+                        </button>
+                        <button type="button" onclick="saveAccount()" 
+                                class="px-4 py-2 bg-primary text-white rounded-md hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                            Add Account
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Account Modal -->
+    <div id="editAccountModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 hidden">
+        <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white dark:bg-gray-800">
+            <div class="mt-3">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                        Edit Account
+                    </h3>
+                    <button type="button" onclick="closeEditAccountModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <form id="editAccountForm" class="space-y-4">
+                    <input type="hidden" id="edit-account-id" name="edit-account-id">
+                    <input type="hidden" id="edit-provider-name" name="edit-provider-name">
+                    
+                    <div>
+                        <label for="edit-account-name" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                            Account Name *
+                        </label>
+                        <input type="text" id="edit-account-name" name="name" required
+                               class="mt-1 block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary">
+                    </div>
+                    
+                    <div>
+                        <label for="edit-account-description" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                            Description (optional)
+                        </label>
+                        <input type="text" id="edit-account-description" name="description"
+                               class="mt-1 block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary">
+                    </div>
+                    
+                    <!-- Dynamic fields will be populated here based on provider -->
+                    <div id="edit-modal-provider-fields"></div>
+                    
+                    <div class="flex items-center">
+                        <input type="checkbox" id="edit-set-as-default" name="set_as_default" 
+                               class="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded">
+                        <label for="edit-set-as-default" class="ml-2 block text-sm text-gray-700 dark:text-gray-300">
+                            Set as default account
+                        </label>
+                    </div>
+                    
+                    <div class="flex justify-end space-x-3 pt-4">
+                        <button type="button" onclick="closeEditAccountModal()" 
+                                class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">
+                            Cancel
+                        </button>
+                        <button type="button" onclick="saveEditAccount()" 
+                                class="px-4 py-2 bg-primary text-white rounded-md hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                            Update Account
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Debug Console -->
+    <div id="debugConsole" class="fixed bottom-4 left-4 right-4 bg-black text-green-400 font-mono text-xs rounded-lg shadow-lg border border-gray-600 hidden z-40">
+        <div class="flex justify-between items-center px-3 py-2 border-b border-gray-700">
+            <span class="text-white font-semibold">Settings Debug Console</span>
+            <button onclick="clearDebugConsole()" class="text-yellow-400 hover:text-yellow-300" title="Clear console">
+                <i class="fas fa-eraser"></i>
+            </button>
+            <button onclick="toggleDebugConsole()" class="text-gray-400 hover:text-white ml-2" title="Close console">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div id="debugOutput" class="p-3 max-h-64 overflow-y-auto">
+            <div class="text-gray-500">Debug console ready. All settings actions will be logged here...</div>
+        </div>
+    </div>
+    <button onclick="toggleDebugConsole()" class="fixed bottom-4 right-4 bg-gray-800 text-white px-3 py-2 rounded-full shadow-lg z-50 hover:bg-primary">
+        <i class="fas fa-bug"></i> Debug
+    </button>
     <script>
         // API Configuration
         const API_TOKEN = '{{ api_token }}';
@@ -1035,736 +1373,1032 @@
         const saveBtn = document.getElementById('saveBtn');
         const statusMessage = document.getElementById('statusMessage');
 
-        // Validation functions
-        function validateEmail(email) {
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            return emailRegex.test(email);
+        // Debug console functions
+        function toggleDebugConsole() {
+            const consoleDiv = document.getElementById('debugConsole');
+            if (consoleDiv.classList.contains('hidden')) {
+                consoleDiv.classList.remove('hidden');
+            } else {
+                consoleDiv.classList.add('hidden');
+            }
+        }
+        
+        function clearDebugConsole() {
+            document.getElementById('debugOutput').innerHTML = '<div class="text-gray-500">Debug console cleared. All settings actions will be logged here...</div>';
+        }
+        
+        function addDebugLog(message, type = 'info') {
+            const output = document.getElementById('debugOutput');
+            const color = type === 'error' ? 'text-red-400' : type === 'warn' ? 'text-yellow-400' : 'text-green-400';
+            const time = new Date().toLocaleTimeString();
+            output.innerHTML += `<div class="${color}">[${time}] ${type.toUpperCase()}: ${message}</div>`;
+            output.scrollTop = output.scrollHeight;
         }
 
-        function validateDomain(domain) {
-            const domainRegex = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
-            return domainRegex.test(domain) && domain.length <= 253;
-        }
-
-        function validateApiToken(token, provider) {
-            if (!token || token.trim().length === 0) return false;
+        // Message display function
+        function showMessage(message, type = 'info') {
+            console.log(`${type.toUpperCase()}: ${message}`);
+            addDebugLog(message, type);
             
-            // Provider-specific validation
-            switch(provider) {
-                case 'cloudflare':
-                    return token.length >= 40; // Cloudflare tokens are typically 40 chars
-                case 'route53':
-                    return token.length >= 16; // AWS access keys
-                case 'digitalocean':
-                    return token.length >= 64; // DO tokens are 64 chars
-                default:
-                    return token.length >= 8; // Minimum length for any API token
+            if (statusMessage) {
+                statusMessage.textContent = message;
+                statusMessage.className = `mt-4 p-3 rounded-md text-sm ${
+                    type === 'success' ? 'bg-green-100 text-green-700 border border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-600' :
+                    type === 'error' ? 'bg-red-100 text-red-700 border border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-600' :
+                    type === 'warning' ? 'bg-yellow-100 text-yellow-700 border border-yellow-200 dark:bg-yellow-900/20 dark:text-yellow-400 dark:border-yellow-600' :
+                    'bg-blue-100 text-blue-700 border border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-600'
+                }`;
+                statusMessage.classList.remove('hidden');
+                
+                // Auto-hide success messages after 5 seconds
+                if (type === 'success') {
+                    setTimeout(() => {
+                        if (statusMessage) {
+                            statusMessage.classList.add('hidden');
+                        }
+                    }, 5000);
+                }
             }
         }
 
-        function validateForm() {
-            const errors = [];
+        // DNS provider configuration functions
+        function showDNSConfig(provider) {
+            // Hide all DNS config sections
+            document.querySelectorAll('.dns-config').forEach(config => {
+                config.classList.add('hidden');
+            });
             
-            // Validate email
-            const email = document.getElementById('email').value;
-            if (!email) {
-                errors.push('Email address is required');
-            } else if (!validateEmail(email)) {
-                errors.push('Please enter a valid email address');
+            // Show the selected provider's config
+            const configSection = document.getElementById(`${provider}-config`);
+            if (configSection) {
+                configSection.classList.remove('hidden');
+                addDebugLog(`Showing DNS config for ${provider}`, 'info');
+            } else {
+                addDebugLog(`No config section found for ${provider}`, 'warn');
             }
+        }
 
-            // Validate domains
-            const domainsText = document.getElementById('domains').value;
-            if (domainsText) {
-                const domains = domainsText.split('\n').filter(d => d.trim());
-                for (const domain of domains) {
-                    if (!validateDomain(domain.trim())) {
-                        errors.push(`Invalid domain format: ${domain}`);
+        // Add event listeners for DNS provider selection
+        document.addEventListener('DOMContentLoaded', function() {
+            addDebugLog('DOM loaded, initializing settings page', 'info');
+            
+            // Add radio button listeners
+            document.querySelectorAll('input[name="dns_provider"]').forEach(radio => {
+                radio.addEventListener('change', function() {
+                    if (this.checked) {
+                        showDNSConfig(this.value);
+                        addDebugLog(`DNS provider changed to: ${this.value}`, 'info');
+                    }
+                });
+            });
+
+            // Load settings on page load
+            loadSettings();
+            
+            // Refresh cache stats on load
+            refreshCacheStats();
+        });
+
+        // Add debug logs to form actions
+        if (form) {
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                addDebugLog('Settings form submitted', 'info');
+                saveSettings();
+            });
+        }
+
+        // Save main settings function
+        async function saveSettings() {
+            try {
+                if (isLoading) return;
+                isLoading = true;
+                
+                if (saveBtn) {
+                    saveBtn.disabled = true;
+                    saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving...';
+                }
+                
+                addDebugLog('Saving main settings...', 'info');
+                
+                const formData = new FormData(form);
+                const settings = {
+                    email: formData.get('email')?.trim(),
+                    domains: formData.get('domains')?.split('\n').map(d => d.trim()).filter(d => d),
+                    auto_renew: formData.get('auto_renew') === 'on',
+                    dns_provider: formData.get('dns_provider'),
+                    api_bearer_token: formData.get('api_bearer_token')?.trim(),
+                    cache_ttl: parseInt(formData.get('cache_ttl')) || 300
+                };
+                
+                // Validate required fields
+                if (!settings.email) {
+                    throw new Error('Email address is required');
+                }
+                
+                if (!settings.dns_provider) {
+                    throw new Error('DNS provider must be selected');
+                }
+                
+                if (!settings.api_bearer_token) {
+                    throw new Error('API Bearer Token is required');
+                }
+                
+                // Add legacy DNS provider configurations from form fields
+                const legacyConfig = {};
+                
+                // Get legacy fields for the selected provider
+                const provider = settings.dns_provider;
+                const legacyFields = getLegacyFieldsForProvider(provider);
+                
+                legacyFields.forEach(fieldName => {
+                    const value = formData.get(fieldName);
+                    if (value && value.trim()) {
+                        const configKey = fieldName.replace(`${provider}_`, '');
+                        legacyConfig[configKey] = value.trim();
+                    }
+                });
+                
+                // Only include legacy config if we have some values and no multi-account data
+                if (Object.keys(legacyConfig).length > 0) {
+                    if (!settings.dns_providers) settings.dns_providers = {};
+                    if (!settings.dns_providers[provider]) settings.dns_providers[provider] = {};
+                    
+                    // Check if we already have multi-account data
+                    const hasMultiAccount = Object.values(settings.dns_providers[provider]).some(val => 
+                        typeof val === 'object' && val.name
+                    );
+                    
+                    if (!hasMultiAccount) {
+                        Object.assign(settings.dns_providers[provider], legacyConfig);
                     }
                 }
-            }
-
-            // Validate selected DNS provider configuration
-            const selectedProvider = document.querySelector('input[name="dns_provider"]:checked');
-            if (selectedProvider) {
-                const provider = selectedProvider.value;
-                const isConfigValid = validateProviderConfig(provider);
-                if (!isConfigValid) {
-                    errors.push(`Please configure ${provider} DNS provider settings`);
+                
+                addDebugLog(`Settings to save: ${JSON.stringify(settings, null, 2)}`, 'info');
+                
+                const response = await fetch('/api/web/settings', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(settings)
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorData}`);
+                }
+                
+                const result = await response.json();
+                addDebugLog('Settings saved successfully', 'info');
+                showMessage('Settings saved successfully', 'success');
+                
+                // Reload settings to refresh the UI
+                await loadSettings();
+                
+            } catch (error) {
+                addDebugLog(`Error saving settings: ${error.message}`, 'error');
+                showMessage(`Error saving settings: ${error.message}`, 'error');
+            } finally {
+                isLoading = false;
+                if (saveBtn) {
+                    saveBtn.disabled = false;
+                    saveBtn.innerHTML = '<i class="fas fa-save mr-2"></i>Save Settings';
                 }
             }
-
-            return errors;
         }
 
-        function validateProviderConfig(provider) {
-            switch(provider) {
-                case 'cloudflare':
-                    const cfToken = document.getElementById('cloudflare_api_token').value;
-                    return validateApiToken(cfToken, 'cloudflare');
-                case 'route53':
-                    const accessKey = document.getElementById('route53_access_key_id').value;
-                    const secretKey = document.getElementById('route53_secret_access_key').value;
-                    return accessKey && secretKey && accessKey.length >= 16 && secretKey.length >= 32;
-                case 'azure':
-                    const subId = document.getElementById('azure_subscription_id').value;
-                    const resGroup = document.getElementById('azure_resource_group').value;
-                    const tenantId = document.getElementById('azure_tenant_id').value;
-                    const clientId = document.getElementById('azure_client_id').value;
-                    const clientSecret = document.getElementById('azure_client_secret').value;
-                    return subId && resGroup && tenantId && clientId && clientSecret;
-                case 'google':
-                    const projectId = document.getElementById('google_project_id').value;
-                    const serviceKey = document.getElementById('google_service_account_key').value;
-                    return projectId && serviceKey && isValidJSON(serviceKey);
-                case 'digitalocean':
-                    const doToken = document.getElementById('digitalocean_api_token').value;
-                    return validateApiToken(doToken, 'digitalocean');
-                case 'linode':
-                    const linodeKey = document.getElementById('linode_api_key').value;
-                    return validateApiToken(linodeKey, 'linode');
-                case 'gandi':
-                    const gandiToken = document.getElementById('gandi_api_token').value;
-                    return validateApiToken(gandiToken, 'gandi');
-                case 'ovh':
-                    const ovhAppKey = document.getElementById('ovh_application_key').value;
-                    const ovhAppSecret = document.getElementById('ovh_application_secret').value;
-                    const ovhConsumerKey = document.getElementById('ovh_consumer_key').value;
-                    return ovhAppKey && ovhAppSecret && ovhConsumerKey;
-                case 'namecheap':
-                    const namecheapUser = document.getElementById('namecheap_username').value;
-                    const namecheapApiKey = document.getElementById('namecheap_api_key').value;
-                    return namecheapUser && namecheapApiKey;
-                case 'vultr':
-                    const vultrKey = document.getElementById('vultr_api_key').value;
-                    return validateApiToken(vultrKey, 'vultr');
-                case 'nsone':
-                    const nsoneKey = document.getElementById('nsone_api_key').value;
-                    return validateApiToken(nsoneKey, 'nsone');
-                case 'rfc2136':
-                    const rfcNameserver = document.getElementById('rfc2136_nameserver').value;
-                    const rfcTsigKey = document.getElementById('rfc2136_tsig_key').value;
-                    const rfcTsigSecret = document.getElementById('rfc2136_tsig_secret').value;
-                    return rfcNameserver && rfcTsigKey && rfcTsigSecret;
-                case 'hetzner':
-                    const hetznerToken = document.getElementById('hetzner_api_token').value;
-                    return validateApiToken(hetznerToken, 'hetzner');
-                case 'porkbun':
-                    const porkbunApiKey = document.getElementById('porkbun_api_key').value;
-                    const porkbunSecretKey = document.getElementById('porkbun_secret_key').value;
-                    return porkbunApiKey && porkbunSecretKey;
-                case 'godaddy':
-                    const godaddyApiKey = document.getElementById('godaddy_api_key').value;
-                    const godaddySecret = document.getElementById('godaddy_secret').value;
-                    return godaddyApiKey && godaddySecret;
-                case 'he-ddns':
-                    const heUsername = document.getElementById('he_ddns_username').value;
-                    const hePassword = document.getElementById('he_ddns_password').value;
-                    return heUsername && hePassword;
-                case 'dynudns':
-                    const dynudnsToken = document.getElementById('dynudns_token').value;
-                    return validateApiToken(dynudnsToken, 'dynudns');
-                default:
-                    return true; // Assume valid for providers without specific validation
-            }
+        function getLegacyFieldsForProvider(provider) {
+            const fieldMappings = {
+                'cloudflare': ['cloudflare_api_token'],
+                'route53': ['route53_access_key_id', 'route53_secret_access_key', 'route53_region'],
+                'azure': ['azure_subscription_id', 'azure_resource_group', 'azure_tenant_id', 'azure_client_id', 'azure_client_secret'],
+                'google': ['google_project_id', 'google_service_account_key'],
+                'powerdns': ['powerdns_api_url', 'powerdns_api_key'],
+                'digitalocean': ['digitalocean_api_token'],
+                'linode': ['linode_api_key'],
+                'gandi': ['gandi_api_token'],
+                'ovh': ['ovh_endpoint', 'ovh_application_key', 'ovh_application_secret', 'ovh_consumer_key'],
+                'namecheap': ['namecheap_username', 'namecheap_api_key'],
+                'rfc2136': ['rfc2136_nameserver', 'rfc2136_tsig_key', 'rfc2136_tsig_secret', 'rfc2136_tsig_algorithm'],
+                'hetzner': ['hetzner_api_token'],
+                'porkbun': ['porkbun_api_key', 'porkbun_secret_key'],
+                'godaddy': ['godaddy_api_key', 'godaddy_secret'],
+                'he-ddns': ['he_ddns_username', 'he_ddns_password'],
+                'dynudns': ['dynudns_token'],
+                'dnsmadeeasy': ['dnsmadeeasy_api_key', 'dnsmadeeasy_secret_key'],
+                'nsone': ['nsone_api_key']
+            };
+            
+            return fieldMappings[provider] || [];
         }
-
-        function isValidJSON(str) {
+    
+        // Cache management functions
+        async function refreshCacheStats() {
             try {
-                JSON.parse(str);
-                return true;
-            } catch (e) {
-                return false;
+                addDebugLog('Refreshing cache stats...', 'info');
+                
+                const response = await fetch('/api/web/cache/stats');
+                if (response.ok) {
+                    const stats = await response.json();
+                    
+                    const entriesEl = document.getElementById('cache-entries');
+                    const ttlEl = document.getElementById('cache-current-ttl');
+                    
+                    if (entriesEl) entriesEl.textContent = stats.entries || 0;
+                    if (ttlEl) ttlEl.textContent = `${stats.current_ttl || 300}s`;
+                    
+                    addDebugLog(`Cache stats refreshed: ${stats.entries} entries, ${stats.current_ttl}s TTL`, 'info');
+                } else {
+                    addDebugLog('Failed to refresh cache stats', 'warn');
+                }
+            } catch (error) {
+                addDebugLog(`Error refreshing cache stats: ${error.message}`, 'error');
             }
         }
-
-        // Enhanced error handling
-        function handleApiError(error, fallbackMessage = 'An error occurred') {
-            console.error('API Error:', error);
-            
-            if (error.name === 'TypeError' && error.message.includes('fetch')) {
-                return 'Network error: Please check your connection and try again';
+        
+        async function clearDeploymentCache() {
+            try {
+                addDebugLog('Clearing deployment cache...', 'info');
+                
+                const response = await fetch('/api/web/cache/clear', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    addDebugLog('Cache cleared successfully', 'info');
+                    showMessage('Cache cleared successfully', 'success');
+                    await refreshCacheStats();
+                } else {
+                    addDebugLog('Failed to clear cache', 'warn');
+                    showMessage('Failed to clear cache', 'error');
+                }
+            } catch (error) {
+                addDebugLog(`Error clearing cache: ${error.message}`, 'error');
+                showMessage('Error clearing cache', 'error');
             }
-            
-            if (error.message.includes('HTTP 401')) {
-                return 'Authentication failed: Please check your API token';
-            }
-            
-            if (error.message.includes('HTTP 403')) {
-                return 'Permission denied: Insufficient privileges';
-            }
-            
-            if (error.message.includes('HTTP 429')) {
-                return 'Rate limit exceeded: Please wait and try again';
-            }
-            
-            return error.message || fallbackMessage;
         }
 
         // Load settings on page load
-        document.addEventListener('DOMContentLoaded', function() {
-            // Prevent race conditions by loading sequentially
-            initializeApp();
-        });
-
-        async function initializeApp() {
-            try {
-                isLoading = true;
-                await loadSettings();
-                await loadDNSProviders();
-                setupEventListeners();
-            } catch (error) {
-                showMessage(handleApiError(error, 'Failed to initialize application'), 'error');
-            } finally {
-                isLoading = false;
-            }
-        }
-
-        function setupEventListeners() {
-            // DNS provider selection
-            document.querySelectorAll('input[name="dns_provider"]').forEach(radio => {
-                radio.addEventListener('change', function() {
-                    showDNSConfig(this.value);
-                });
-            });
-
-            // Form submission with validation
-            form.addEventListener('submit', function(e) {
-                e.preventDefault();
-                
-                if (isLoading) {
-                    showMessage('Please wait for the current operation to complete', 'warning');
-                    return;
-                }
-
-                const validationErrors = validateForm();
-                if (validationErrors.length > 0) {
-                    showMessage('Validation errors: ' + validationErrors.join(', '), 'error');
-                    return;
-                }
-
-                saveSettings();
-            });
-
-            // Real-time validation for email
-            const emailField = document.getElementById('email');
-            if (emailField) {
-                emailField.addEventListener('blur', function() {
-                    if (this.value && !validateEmail(this.value)) {
-                        this.classList.add('border-red-500');
-                        this.title = 'Please enter a valid email address';
-                    } else {
-                        this.classList.remove('border-red-500');
-                        this.title = '';
-                    }
-                });
-            }
-
-            // Real-time validation for domains
-            const domainsField = document.getElementById('domains');
-            if (domainsField) {
-                domainsField.addEventListener('blur', function() {
-                    const domains = this.value.split('\n').filter(d => d.trim());
-                    let hasInvalid = false;
-                    
-                    for (const domain of domains) {
-                        if (domain.trim() && !validateDomain(domain.trim())) {
-                            hasInvalid = true;
-                            break;
-                        }
-                    }
-                    
-                    if (hasInvalid) {
-                        this.classList.add('border-red-500');
-                        this.title = 'One or more domains have invalid format';
-                    } else {
-                        this.classList.remove('border-red-500');
-                        this.title = '';
-                    }
-                });
-            }
-
-            // Global error handler
-            window.addEventListener('error', function(e) {
-                console.error('Global error caught:', e.error);
-                showMessage('An unexpected error occurred. Please refresh the page.', 'error');
-            });
-        }
-
-        function showDNSConfig(provider) {
-            // Hide all DNS config sections
-            document.querySelectorAll('.dns-config').forEach(section => {
-                section.classList.add('hidden');
-            });
-
-            // Show selected provider config
-            const configSection = document.getElementById(provider + '-config');
-            if (configSection) {
-                configSection.classList.remove('hidden');
-            }
-        }
-
         async function loadSettings() {
             try {
-                const response = await fetch('/api/settings', {
-                    headers: API_HEADERS
-                });
+                addDebugLog('Loading settings from backend...', 'info');
                 
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
-                
-                const data = await response.json();
-                console.log('Settings loaded successfully:', data);
-                currentSettings = data;
-                populateForm(data);
-                
-            } catch (error) {
-                const errorMessage = handleApiError(error, 'Failed to load settings');
-                console.error('Error loading settings:', error);
-                showMessage(errorMessage, 'error');
-                
-                // Try to populate form with empty data to prevent further errors
-                populateForm({});
-                throw error; // Re-throw to be caught by initializeApp
-            }
-        }
-
-        async function loadDNSProviders() {
-            try {
-                const response = await fetch('/api/settings/dns-providers', {
-                    headers: API_HEADERS
-                });
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
-                
-                const data = await response.json();
-                dnsProviders = data;
-                updateProviderStatus(data);
-                
-            } catch (error) {
-                const errorMessage = handleApiError(error, 'Failed to load DNS providers');
-                console.error('Error loading DNS providers:', error);
-                showMessage(errorMessage, 'warning');
-            }
-        }
-
-        function updateProviderStatus(providersData) {
-            const providers = providersData.available_providers || {};
-            
-            Object.keys(providers).forEach(provider => {
-                const statusElement = document.getElementById(provider + '-status');
-                if (statusElement) {
-                    const configured = providers[provider].configured;
-                    statusElement.textContent = configured ? 'Configured' : 'Not configured';
-                    statusElement.className = configured ? 'text-xs text-green-600 mt-1' : 'text-xs text-gray-500 mt-1';
-                }
-            });
-        }
-
-        function populateForm(data) {
-            // Add null/undefined check at the beginning
-            if (!data) {
-                console.warn('Settings data is null or undefined, using defaults');
-                data = {};
-            }
-
-            // Basic settings
-            document.getElementById('email').value = data.email || '';
-            document.getElementById('domains').value = (data.domains || []).join('\n');
-            document.getElementById('auto_renew').checked = data.auto_renew !== false;
-
-            // DNS Provider
-            const dnsProvider = data.dns_provider || 'cloudflare';
-            const providerRadio = document.querySelector(`input[name="dns_provider"][value="${dnsProvider}"]`);
-            if (providerRadio) {
-                providerRadio.checked = true;
-                showDNSConfig(dnsProvider);
-            }
-
-            // DNS Provider configurations - add safety checks
-            const dnsProviders = data.dns_providers || {};
-            
-            // Cloudflare (backward compatibility)
-            if (data.has_cloudflare_token || (dnsProviders.cloudflare && dnsProviders.cloudflare.api_token)) {
-                const cloudflareField = document.getElementById('cloudflare_api_token');
-                if (cloudflareField) {
-                    cloudflareField.placeholder = 'Token configured (hidden)';
-                }
-            }
-
-            // Populate DNS provider fields - add safety checks
-            if (dnsProviders && typeof dnsProviders === 'object') {
-                Object.keys(dnsProviders).forEach(provider => {
-                    const config = dnsProviders[provider];
-                    if (config && typeof config === 'object') {
-                        Object.keys(config).forEach(key => {
-                            const fieldId = provider + '_' + key;
-                            const field = document.getElementById(fieldId);
-                            if (field) {
-                                if (config[key] === '***masked***') {
-                                    field.placeholder = 'Value configured (hidden)';
-                                } else if (config[key]) {
-                                    field.value = config[key];
-                                }
-                            }
-                        });
+                const response = await fetch('/api/web/settings', {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json'
                     }
                 });
-            }
-
-            // API Bearer Token
-            if (data.has_api_bearer_token) {
-                const tokenField = document.getElementById('api_bearer_token');
-                if (tokenField) {
-                    tokenField.placeholder = 'Token configured (hidden)';
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
+                
+                const settings = await response.json();
+                addDebugLog(`Settings loaded: ${Object.keys(settings).join(', ')}`, 'info');
+                
+                currentSettings = settings;
+                populateForm(settings);
+                
+                // Load DNS provider configurations and status
+                await loadDNSProviders();
+                
+                addDebugLog('Settings loaded and form populated successfully', 'info');
+                
+            } catch (error) {
+                addDebugLog(`Failed to load settings: ${error.message}`, 'error');
+                console.error('Error loading settings:', error);
+                showMessage(`Failed to load settings: ${error.message}`, 'error');
             }
-            
-            // Cache settings
-            loadCacheSettings();
-            
-            // Update connection status
-            updateConnectionStatus(data);
         }
         
-        function updateConnectionStatus(data) {
-            // Add null/undefined check
-            if (!data) {
-                console.warn('Connection status data is null or undefined');
-                data = {};
+        // Load DNS provider configurations and account info
+        async function loadDNSProviders() {
+            try {
+                addDebugLog('Loading DNS provider configurations...', 'info');
+                dnsProviders = {};
+                
+                // Load provider configurations from current settings
+                if (currentSettings && currentSettings.dns_providers) {
+                    for (const [provider, config] of Object.entries(currentSettings.dns_providers)) {
+                        try {
+                            dnsProviders[provider] = {
+                                configured: false,
+                                accounts: []
+                            };
+                            
+                            if (config && typeof config === 'object') {
+                                // Check if this is multi-account format
+                                if (Object.values(config).some(val => typeof val === 'object' && 'name' in val)) {
+                                    // Multi-account format
+                                    for (const [accountId, accountConfig] of Object.entries(config)) {
+                                        if (typeof accountConfig === 'object' && accountConfig.name) {
+                                            dnsProviders[provider].accounts.push({
+                                                id: accountId,
+                                                name: accountConfig.name,
+                                                description: accountConfig.description || '',
+                                                ...accountConfig
+                                            });
+                                        }
+                                    }
+                                    dnsProviders[provider].configured = dnsProviders[provider].accounts.length > 0;
+                                } else {
+                                    // Legacy single-account format
+                                    const hasCredentials = Object.values(config).some(val => val && val.trim && val.trim().length > 0);
+                                    dnsProviders[provider].configured = hasCredentials;
+                                    
+                                    if (hasCredentials) {
+                                        dnsProviders[provider].accounts.push({
+                                            id: 'default',
+                                            name: 'Default Account',
+                                            description: 'Legacy configuration',
+                                            ...config
+                                        });
+                                    }
+                                }
+                            }
+                            
+                            addDebugLog(`${provider}: ${dnsProviders[provider].configured ? 'configured' : 'not configured'} (${dnsProviders[provider].accounts.length} accounts)`, 'info');
+                            
+                        } catch (error) {
+                            addDebugLog(`Error processing ${provider}: ${error.message}`, 'warn');
+                        }
+                    }
+                }
+                
+                // Update provider status indicators
+                updateProviderStatusIndicators();
+                
+                // Update account lists in DNS config sections
+                updateAccountLists();
+                
+                addDebugLog('DNS provider configurations loaded', 'info');
+                
+            } catch (error) {
+                addDebugLog(`Failed to load DNS providers: ${error.message}`, 'error');
+                console.error('Error loading DNS providers:', error);
             }
-
-            const connectionStatus = document.getElementById('connectionStatus');
-            const partialStatus = document.getElementById('partialStatus');
-            const disconnectedStatus = document.getElementById('disconnectedStatus');
+        }
+        
+        // Update DNS provider status indicators in the UI
+        function updateProviderStatusIndicators() {
+            const providers = [
+                'cloudflare', 'route53', 'azure', 'google', 'powerdns', 
+                'digitalocean', 'linode', 'gandi', 'ovh', 'namecheap',
+                'vultr', 'dnsmadeeasy', 'nsone', 'rfc2136', 'hetzner',
+                'porkbun', 'godaddy', 'he-ddns', 'dynudns'
+            ];
             
-            // Hide all status indicators
-            [connectionStatus, partialStatus, disconnectedStatus].forEach(el => {
-                if (el) {
-                    el.style.display = 'none';
+            providers.forEach(provider => {
+                const statusEl = document.getElementById(`${provider}-status`);
+                const accountsEl = document.getElementById(`${provider}-accounts`);
+                const countEl = document.getElementById(`${provider}-account-count`);
+                
+                if (statusEl) {
+                    const providerData = dnsProviders[provider];
+                    if (providerData && providerData.configured) {
+                        statusEl.textContent = 'Configured';
+                        statusEl.className = 'text-xs text-green-600 dark:text-green-400 mt-1';
+                        
+                        if (accountsEl && countEl) {
+                            countEl.textContent = providerData.accounts.length;
+                            accountsEl.classList.remove('hidden');
+                        }
+                    } else {
+                        statusEl.textContent = 'Not configured';
+                        statusEl.className = 'text-xs text-gray-500 dark:text-gray-400 mt-1';
+                        
+                        if (accountsEl) {
+                            accountsEl.classList.add('hidden');
+                        }
+                    }
                 }
             });
+        }
+
+        // Fix form validation function
+        function validateDNSProvider(provider) {
+            const providerData = dnsProviders[provider];
+            if (!providerData) return false;
             
-            // Check configuration completeness with safe null checks
-            const hasEmail = data.email && data.email.length > 0;
-            const hasDomains = data.domains && Array.isArray(data.domains) && data.domains.length > 0;
-            const hasApiToken = data.has_api_bearer_token;
-            
-            // Safe check for DNS provider configuration
-            let hasDnsProvider = false;
-            if (data.dns_provider && data.dns_providers && typeof data.dns_providers === 'object') {
-                const providerConfig = data.dns_providers[data.dns_provider];
-                if (providerConfig && typeof providerConfig === 'object') {
-                    hasDnsProvider = Object.keys(providerConfig).length > 0;
+            // Check if provider has at least one configured account
+            return providerData.configured && providerData.accounts.length > 0;
+        }
+
+        // Form population function
+        function populateForm(data) {
+            try {
+                addDebugLog('Populating form with settings data...', 'info');
+                
+                // Basic settings
+                if (data.email) {
+                    const emailField = document.getElementById('email');
+                    if (emailField) {
+                        emailField.value = data.email;
+                        addDebugLog('Email field populated', 'info');
+                    }
                 }
+                
+                if (data.domains && Array.isArray(data.domains)) {
+                    const domainsField = document.getElementById('domains');
+                    if (domainsField) {
+                        // Handle both string and object formats
+                        const domainStrings = data.domains.map(d => 
+                            typeof d === 'string' ? d : (d.domain || '')
+                        ).filter(d => d);
+                        domainsField.value = domainStrings.join('\n');
+                        addDebugLog(`Domains field populated with ${domainStrings.length} domains`, 'info');
+                    }
+                }
+                
+                if (data.auto_renew !== undefined) {
+                    const autoRenewField = document.getElementById('auto_renew');
+                    if (autoRenewField) {
+                        autoRenewField.checked = data.auto_renew;
+                        addDebugLog(`Auto-renewal set to ${data.auto_renew}`, 'info');
+                    }
+                }
+                
+                if (data.api_bearer_token) {
+                    const tokenField = document.getElementById('api_bearer_token');
+                    if (tokenField) {
+                        tokenField.value = data.api_bearer_token;
+                        addDebugLog('API bearer token field populated', 'info');
+                    }
+                }
+                
+                if (data.cache_ttl) {
+                    const cacheField = document.getElementById('cache_ttl');
+                    if (cacheField) {
+                        cacheField.value = data.cache_ttl;
+                        addDebugLog(`Cache TTL set to ${data.cache_ttl}`, 'info');
+                    }
+                }
+                
+                // DNS provider selection
+                if (data.dns_provider) {
+                    const providerRadio = document.querySelector(`input[name="dns_provider"][value="${data.dns_provider}"]`);
+                    if (providerRadio) {
+                        providerRadio.checked = true;
+                        showDNSConfig(data.dns_provider);
+                        addDebugLog(`DNS provider set to ${data.dns_provider}`, 'info');
+                    }
+                }
+                
+                // DNS provider configurations (legacy fields)
+                const dnsProviders = data.dns_providers || {};
+                for (const [provider, config] of Object.entries(dnsProviders)) {
+                    if (typeof config === 'object' && config !== null) {
+                        // Check if this is old single-account format
+                        if (config.api_token || config.access_key_id || config.api_key) {
+                            populateLegacyProviderFields(provider, config);
+                        }
+                    }
+                }
+                
+                addDebugLog('Form populated successfully', 'info');
+            } catch (error) {
+                addDebugLog(`Error populating form: ${error.message}`, 'error');
+                console.error('Error populating form:', error);
+            }
+        }
+        
+        // Legacy provider field population
+        function populateLegacyProviderFields(provider, config) {
+            try {
+                addDebugLog(`Populating legacy fields for ${provider}`, 'info');
+                
+                const fieldMappings = {
+                    'cloudflare': [
+                        { field: 'cloudflare_api_token', config: 'api_token' }
+                    ],
+                    'route53': [
+                        { field: 'route53_access_key_id', config: 'access_key_id' },
+                        { field: 'route53_secret_access_key', config: 'secret_access_key' },
+                        { field: 'route53_region', config: 'region' }
+                    ],
+                    'digitalocean': [
+                        { field: 'digitalocean_api_token', config: 'api_token' }
+                    ],
+                    'azure': [
+                        { field: 'azure_subscription_id', config: 'subscription_id' },
+                        { field: 'azure_resource_group', config: 'resource_group' },
+                        { field: 'azure_tenant_id', config: 'tenant_id' },
+                        { field: 'azure_client_id', config: 'client_id' },
+                        { field: 'azure_client_secret', config: 'client_secret' }
+                    ],
+                    'google': [
+                        { field: 'google_project_id', config: 'project_id' },
+                        { field: 'google_service_account_key', config: 'service_account_key' }
+                    ],
+                    'powerdns': [
+                        { field: 'powerdns_api_url', config: 'api_url' },
+                        { field: 'powerdns_api_key', config: 'api_key' }
+                    ]
+                };
+                
+                const mappings = fieldMappings[provider] || [];
+                mappings.forEach(mapping => {
+                    const field = document.getElementById(mapping.field);
+                    if (field && config[mapping.config]) {
+                        field.value = config[mapping.config];
+                        addDebugLog(`Field ${mapping.field} populated`, 'info');
+                    }
+                });
+            } catch (error) {
+                addDebugLog(`Error populating legacy fields for ${provider}: ${error.message}`, 'warn');
+            }
+        }
+        
+        // Modal management functions
+        function showAddAccountModal(provider) {
+            addDebugLog(`Opening add account modal for ${provider}`, 'info');
+            
+            const modal = document.getElementById('addAccountModal');
+            const modalTitle = document.getElementById('modal-title');
+            const providerFields = document.getElementById('modal-provider-fields');
+            const accountNameField = document.getElementById('account-name');
+            const accountDescField = document.getElementById('account-description');
+            const setDefaultCheckbox = document.getElementById('set-as-default');
+            
+            if (!modal || !modalTitle || !providerFields) {
+                addDebugLog('Modal elements not found', 'error');
+                return;
             }
             
-            const completeness = [hasEmail, hasDomains, hasApiToken, hasDnsProvider].filter(Boolean).length;
+            // Set modal title
+            const providerNames = {
+                'cloudflare': 'Cloudflare',
+                'route53': 'AWS Route53',
+                'azure': 'Azure DNS',
+                'google': 'Google Cloud DNS',
+                'powerdns': 'PowerDNS',
+                'digitalocean': 'DigitalOcean',
+                'linode': 'Linode',
+                'gandi': 'Gandi',
+                'ovh': 'OVH',
+                'namecheap': 'Namecheap',
+                'rfc2136': 'RFC2136',
+                'hetzner': 'Hetzner',
+                'porkbun': 'Porkbun',
+                'godaddy': 'GoDaddy',
+                'he-ddns': 'Hurricane Electric',
+                'dynudns': 'Dynu',
+                'dnsmadeeasy': 'DNS Made Easy',
+                'nsone': 'NS1'
+            };
+            modalTitle.textContent = `Add ${providerNames[provider] || provider} Account`;
             
-            if (completeness === 4 && connectionStatus) {
-                connectionStatus.style.display = 'flex';
-            } else if (completeness > 0 && partialStatus) {
-                partialStatus.style.display = 'flex';
-            } else if (disconnectedStatus) {
-                disconnectedStatus.style.display = 'flex';
+            // Clear previous fields
+            providerFields.innerHTML = '';
+            if (accountNameField) accountNameField.value = '';
+            if (accountDescField) accountDescField.value = '';
+            if (setDefaultCheckbox) setDefaultCheckbox.checked = false;
+            
+            // Generate provider-specific fields
+            const fields = getProviderFields(provider);
+            providerFields.innerHTML = fields;
+            
+            // Store current provider
+            modal.dataset.provider = provider;
+            
+            // Show modal
+            modal.classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeAddAccountModal() {
+            const modal = document.getElementById('addAccountModal');
+            if (modal) {
+                modal.classList.add('hidden');
+                document.body.style.overflow = '';
+                
+                // Clear form
+                document.getElementById('addAccountForm').reset();
+                document.getElementById('modal-provider-fields').innerHTML = '';
             }
         }
 
-        // Enhanced message display function
-        function showMessage(message, type = 'success') {
-            const messageDiv = document.getElementById('statusMessage');
-            if (!messageDiv) return;
+        function showEditAccountModal(provider, accountId) {
+            addDebugLog(`Opening edit account modal for ${provider}:${accountId}`, 'info');
+            
+            const modal = document.getElementById('editAccountModal');
+            const editAccountIdField = document.getElementById('edit-account-id');
+            const editProviderField = document.getElementById('edit-provider-name');
+            const editProviderFields = document.getElementById('edit-modal-provider-fields');
+            const editAccountNameField = document.getElementById('edit-account-name');
+            const editAccountDescField = document.getElementById('edit-account-description');
+            const editSetDefaultCheckbox = document.getElementById('edit-set-as-default');
+            
+            if (!modal || !editAccountIdField || !editProviderField) {
+                addDebugLog('Edit modal elements not found', 'error');
+                return;
+            }
+            
+            // Set hidden fields
+            editAccountIdField.value = accountId;
+            editProviderField.value = provider;
+            
+            // Get account data
+            const providerData = dnsProviders[provider];
+            const account = providerData?.accounts.find(acc => acc.id === accountId);
+            
+            if (!account) {
+                addDebugLog(`Account ${accountId} not found for provider ${provider}`, 'error');
+                showMessage('Account not found', 'error');
+                return;
+            }
+            
+            // Populate basic fields
+            if (editAccountNameField) editAccountNameField.value = account.name || '';
+            if (editAccountDescField) editAccountDescField.value = account.description || '';
+            if (editSetDefaultCheckbox) {
+                editSetDefaultCheckbox.checked = currentSettings.default_accounts?.[provider] === accountId;
+            }
+            
+            // Generate provider-specific fields with current values
+            const fields = getProviderFields(provider, account);
+            editProviderFields.innerHTML = fields;
+            
+            // Show modal
+            modal.classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+        }
 
-            const icons = {
-                success: 'fa-check-circle',
-                error: 'fa-times-circle',
-                warning: 'fa-exclamation-triangle',
-                info: 'fa-info-circle'
+        function closeEditAccountModal() {
+            const modal = document.getElementById('editAccountModal');
+            if (modal) {
+                modal.classList.add('hidden');
+                document.body.style.overflow = '';
+                
+                // Clear form
+                document.getElementById('editAccountForm').reset();
+                document.getElementById('edit-modal-provider-fields').innerHTML = '';
+            }
+        }
+
+        function getProviderFields(provider, existingData = {}) {
+            const fieldMappings = {
+                'cloudflare': [
+                    { name: 'api_token', label: 'API Token', type: 'password', placeholder: 'Enter your Cloudflare API token', required: true }
+                ],
+                'route53': [
+                    { name: 'access_key_id', label: 'Access Key ID', type: 'password', placeholder: 'AKIAIOSFODNN7EXAMPLE', required: true },
+                    { name: 'secret_access_key', label: 'Secret Access Key', type: 'password', placeholder: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY', required: true },
+                    { name: 'region', label: 'Region', type: 'text', placeholder: 'us-east-1', defaultValue: 'us-east-1', required: false }
+                ],
+                'azure': [
+                    { name: 'subscription_id', label: 'Subscription ID', type: 'text', placeholder: '12345678-1234-1234-1234-123456789012', required: true },
+                    { name: 'resource_group', label: 'Resource Group', type: 'text', placeholder: 'my-dns-resource-group', required: true },
+                    { name: 'tenant_id', label: 'Tenant ID', type: 'text', placeholder: '12345678-1234-1234-1234-123456789012', required: true },
+                    { name: 'client_id', label: 'Client ID', type: 'text', placeholder: '12345678-1234-1234-1234-123456789012', required: true },
+                    { name: 'client_secret', label: 'Client Secret', type: 'password', placeholder: 'Your Azure client secret', required: true }
+                ],
+                'google': [
+                    { name: 'project_id', label: 'Project ID', type: 'text', placeholder: 'my-gcp-project-123456', required: true },
+                    { name: 'service_account_key', label: 'Service Account JSON Key', type: 'textarea', placeholder: '{"type": "service_account", "project_id": "...", ...}', required: true }
+                ],
+                'powerdns': [
+                    { name: 'api_url', label: 'API URL', type: 'url', placeholder: 'https://powerdns.example.com:8081', required: true },
+                    { name: 'api_key', label: 'API Key', type: 'password', placeholder: 'Your PowerDNS API key', required: true }
+                ],
+                'digitalocean': [
+                    { name: 'api_token', label: 'API Token', type: 'password', placeholder: 'Your DigitalOcean API token', required: true }
+                ],
+                'linode': [
+                    { name: 'api_key', label: 'API Key', type: 'password', placeholder: 'Your Linode API key', required: true }
+                ],
+                'gandi': [
+                    { name: 'api_token', label: 'API Token', type: 'password', placeholder: 'Your Gandi LiveDNS API token', required: true }
+                ],
+                'ovh': [
+                    { name: 'endpoint', label: 'Endpoint', type: 'select', options: [
+                        { value: 'ovh-eu', label: 'ovh-eu (Europe)' },
+                        { value: 'ovh-us', label: 'ovh-us (US)' },
+                        { value: 'ovh-ca', label: 'ovh-ca (Canada)' },
+                        { value: 'kimsufi-eu', label: 'kimsufi-eu' },
+                        { value: 'kimsufi-ca', label: 'kimsufi-ca' },
+                        { value: 'soyoustart-eu', label: 'soyoustart-eu' },
+                        { value: 'soyoustart-ca', label: 'soyoustart-ca' }
+                    ], required: true },
+                    { name: 'application_key', label: 'Application Key', type: 'password', placeholder: 'Your application key', required: true },
+                    { name: 'application_secret', label: 'Application Secret', type: 'password', placeholder: 'Your application secret', required: true },
+                    { name: 'consumer_key', label: 'Consumer Key', type: 'password', placeholder: 'Your consumer key', required: true }
+                ],
+                'namecheap': [
+                    { name: 'username', label: 'Username', type: 'text', placeholder: 'Your Namecheap username', required: true },
+                    { name: 'api_key', label: 'API Key', type: 'password', placeholder: 'Your Namecheap API key', required: true }
+                ],
+                'rfc2136': [
+                    { name: 'nameserver', label: 'Nameserver', type: 'text', placeholder: 'ns.example.com', required: true },
+                    { name: 'tsig_key', label: 'TSIG Key Name', type: 'text', placeholder: 'mykey', required: true },
+                    { name: 'tsig_secret', label: 'TSIG Secret', type: 'password', placeholder: 'Base64-encoded secret', required: true },
+                    { name: 'tsig_algorithm', label: 'TSIG Algorithm', type: 'select', options: [
+                        { value: 'HMAC-MD5', label: 'HMAC-MD5' },
+                        { value: 'HMAC-SHA1', label: 'HMAC-SHA1' },
+                        { value: 'HMAC-SHA224', label: 'HMAC-SHA224' },
+                        { value: 'HMAC-SHA256', label: 'HMAC-SHA256' },
+                        { value: 'HMAC-SHA384', label: 'HMAC-SHA384' },
+                        { value: 'HMAC-SHA512', label: 'HMAC-SHA512' }
+                    ], defaultValue: 'HMAC-SHA256', required: false }
+                ],
+                'hetzner': [
+                    { name: 'api_token', label: 'API Token', type: 'password', placeholder: 'Your Hetzner DNS API token', required: true }
+                ],
+                'porkbun': [
+                    { name: 'api_key', label: 'API Key', type: 'password', placeholder: 'Your Porkbun API key', required: true },
+                    { name: 'secret_key', label: 'Secret Key', type: 'password', placeholder: 'Your Porkbun secret key', required: true }
+                ],
+                'godaddy': [
+                    { name: 'api_key', label: 'API Key', type: 'password', placeholder: 'Your GoDaddy API key', required: true },
+                    { name: 'secret', label: 'API Secret', type: 'password', placeholder: 'Your GoDaddy API secret', required: true }
+                ],
+                'he-ddns': [
+                    { name: 'username', label: 'Username', type: 'text', placeholder: 'Your Hurricane Electric username', required: true },
+                    { name: 'password', label: 'Password', type: 'password', placeholder: 'Your Hurricane Electric password', required: true }
+                ],
+                'dynudns': [
+                    { name: 'token', label: 'API Token', type: 'password', placeholder: 'Your Dynu API token', required: true }
+                ],
+                'dnsmadeeasy': [
+                    { name: 'api_token', label: 'API Token', type: 'password', placeholder: 'Your DNS Made Easy API token', required: true }
+                ],
+                'nsone': [
+                    { name: 'api_token', label: 'API Token', type: 'password', placeholder: 'Your NS1 API token', required: true }
+                ]
             };
+            
+            const fields = fieldMappings[provider] || [];
+            let html = '';
+            
+            fields.forEach(field => {
+                const value = existingData[field.name] || field.defaultValue || '';
+                const fieldId = `modal-${field.name}`;
+                
+                html += `<div class="mb-4">`;
+                html += `<label for="${fieldId}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">`;
+                html += `${field.label}${field.required ? ' *' : ''}`;
+                html += `</label>`;
+                
+                if (field.type === 'select') {
+                    html += `<select id="${fieldId}" name="${field.name}" class="mt-1 block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary" ${field.required ? 'required' : ''}>`;
+                    if (!field.required) {
+                        html += `<option value="">Select ${field.label.toLowerCase()}</option>`;
+                    }
+                    field.options.forEach(option => {
+                        const selected = value === option.value ? 'selected' : '';
+                        html += `<option value="${option.value}" ${selected}>${option.label}</option>`;
+                    });
+                    html += `</select>`;
+                } else if (field.type === 'textarea') {
+                    html += `<textarea id="${fieldId}" name="${field.name}" rows="4" class="mt-1 block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary" placeholder="${field.placeholder}" ${field.required ? 'required' : ''}>${value}</textarea>`;
+                } else {
+                    html += `<input type="${field.type}" id="${fieldId}" name="${field.name}" class="mt-1 block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary" placeholder="${field.placeholder}" value="${value}" ${field.required ? 'required' : ''}>`;
+                }
+                
+                html += `</div>`;
+            });
+            
+            return html;
+        }
 
-            const colors = {
-                success: 'bg-green-100 border-green-400 text-green-700 dark:bg-green-900/20 dark:border-green-600 dark:text-green-400',
-                error: 'bg-red-100 border-red-400 text-red-700 dark:bg-red-900/20 dark:border-red-600 dark:text-red-400',
-                warning: 'bg-yellow-100 border-yellow-400 text-yellow-700 dark:bg-yellow-900/20 dark:border-yellow-600 dark:text-yellow-400',
-                info: 'bg-blue-100 border-blue-400 text-blue-700 dark:bg-blue-900/20 dark:border-blue-600 dark:text-blue-400'
-            };
+        async function saveAccount() {
+            try {
+                addDebugLog('Saving new account...', 'info');
+                
+                const modal = document.getElementById('addAccountModal');
+                const provider = modal.dataset.provider;
+                const form = document.getElementById('addAccountForm');
+                const formData = new FormData(form);
+                
+                if (!provider) {
+                    throw new Error('Provider not specified');
+                }
+                
+                // Generate a unique account ID
+                const accountName = formData.get('name') || 'Untitled Account';
+                const accountId = accountName.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_').trim('_') || 'account_' + Date.now();
+                
+                // Build account configuration
+                const accountConfig = {
+                    name: accountName,
+                    description: formData.get('description') || ''
+                };
+                
+                // Add provider-specific fields
+                const providerFieldsContainer = document.getElementById('modal-provider-fields');
+                const providerFields = providerFieldsContainer.querySelectorAll('input, select, textarea');
+                
+                providerFields.forEach(field => {
+                    if (field.name && field.value) {
+                        accountConfig[field.name] = field.value;
+                    }
+                });
+                
+                // Check if any required provider fields are empty
+                const requiredFields = providerFieldsContainer.querySelectorAll('input[required], select[required], textarea[required]');
+                for (const field of requiredFields) {
+                    if (!field.value || !field.value.trim()) {
+                        throw new Error(`${field.placeholder || field.name} is required`);
+                    }
+                }
+                
+                const payload = {
+                    account_id: accountId,
+                    config: accountConfig,
+                    set_as_default: formData.get('set_as_default') === 'on'
+                };
+                
+                addDebugLog(`Account payload: ${JSON.stringify(payload, null, 2)}`, 'info');
+                
+                // Send to backend
+                const response = await fetch(`/api/dns/${provider}/accounts`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorData}`);
+                }
+                
+                const result = await response.json();
+                addDebugLog(`Account created: ${result.account_id}`, 'info');
+                showMessage(`Account "${accountName}" created successfully`, 'success');
+                
+                // Refresh settings and close modal
+                await loadSettings();
+                closeAddAccountModal();
+                
+            } catch (error) {
+                addDebugLog(`Error saving account: ${error.message}`, 'error');
+                showMessage(`Error saving account: ${error.message}`, 'error');
+            }
+        }
 
-            messageDiv.className = `mt-4 p-4 border rounded-md ${colors[type] || colors.info}`;
-            messageDiv.innerHTML = `
-                <div class="flex">
-                    <div class="flex-shrink-0">
-                        <i class="fas ${icons[type] || icons.info}"></i>
+        async function saveEditAccount() {
+            try {
+                addDebugLog('Saving account changes...', 'info');
+                
+                const form = document.getElementById('editAccountForm');
+                const formData = new FormData(form);
+                const provider = formData.get('edit-provider-name');
+                const accountId = formData.get('edit-account-id');
+                
+                if (!provider || !accountId) {
+                    throw new Error('Provider or account ID not specified');
+                }
+                
+                // Build account data
+                const accountData = {
+                    name: formData.get('name') || 'Untitled Account',
+                    description: formData.get('description') || '',
+                    set_as_default: formData.get('set_as_default') === 'on'
+                };
+                
+                // Add provider-specific fields
+                const providerFieldsContainer = document.getElementById('edit-modal-provider-fields');
+                const providerFields = providerFieldsContainer.querySelectorAll('input, select, textarea');
+                
+                providerFields.forEach(field => {
+                    if (field.name && field.value) {
+                        accountData[field.name] = field.value;
+                    }
+                });
+                
+                addDebugLog(`Updated account data: ${JSON.stringify(accountData, null, 2)}`, 'info');
+                
+                // Send to backend
+                const response = await fetch(`/api/dns/${provider}/accounts/${accountId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(accountData)
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorData}`);
+                }
+                
+                const result = await response.json();
+                addDebugLog(`Account updated: ${accountId}`, 'info');
+                showMessage(`Account "${accountData.name}" updated successfully`, 'success');
+                
+                // Refresh settings and close modal
+                await loadSettings();
+                closeEditAccountModal();
+                
+            } catch (error) {
+                addDebugLog(`Error updating account: ${error.message}`, 'error');
+                showMessage(`Error updating account: ${error.message}`, 'error');
+            }
+        }
+
+        async function deleteAccount(provider, accountId) {
+            if (!confirm('Are you sure you want to delete this account? This action cannot be undone.')) {
+                return;
+            }
+            
+            try {
+                addDebugLog(`Deleting account ${provider}:${accountId}`, 'info');
+                
+                const response = await fetch(`/api/dns/${provider}/accounts/${accountId}`, {
+                    method: 'DELETE'
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorData}`);
+                }
+                
+                addDebugLog(`Account deleted: ${accountId}`, 'info');
+                showMessage('Account deleted successfully', 'success');
+                
+                // Refresh settings
+                await loadSettings();
+                
+            } catch (error) {
+                addDebugLog(`Error deleting account: ${error.message}`, 'error');
+                showMessage(`Error deleting account: ${error.message}`, 'error');
+            }
+        }
+
+        // Update account lists in the DNS config sections
+        function updateAccountLists() {
+            const providers = Object.keys(dnsProviders);
+            
+            providers.forEach(provider => {
+                const accountsListContainer = document.getElementById(`${provider}-accounts-list`);
+                const legacyConfigContainer = document.getElementById(`${provider}-legacy-config`);
+                
+                if (!accountsListContainer) return;
+                
+                const providerData = dnsProviders[provider];
+                
+                if (providerData && providerData.accounts && providerData.accounts.length > 0) {
+                    // Show multi-account interface
+                    accountsListContainer.innerHTML = '';
+                    
+                    providerData.accounts.forEach(account => {
+                        const isDefault = currentSettings.default_accounts?.[provider] === account.id;
+                        const accountCard = createAccountCard(provider, account, isDefault);
+                        accountsListContainer.appendChild(accountCard);
+                    });
+                    
+                    // Hide legacy config if we have multi-account data
+                    if (legacyConfigContainer && providerData.accounts.some(acc => acc.id !== 'default')) {
+                        legacyConfigContainer.style.display = 'none';
+                    }
+                } else {
+                    // Show legacy config for backward compatibility
+                    accountsListContainer.innerHTML = '<div class="text-sm text-gray-500 dark:text-gray-400">No accounts configured yet.</div>';
+                    if (legacyConfigContainer) {
+                        legacyConfigContainer.style.display = 'block';
+                    }
+                }
+            });
+        }
+
+        function createAccountCard(provider, account, isDefault) {
+            const card = document.createElement('div');
+            card.className = 'bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg p-4';
+            
+            card.innerHTML = `
+                <div class="flex items-center justify-between">
+                    <div class="flex-1">
+                        <div class="flex items-center space-x-2">
+                            <h5 class="text-sm font-medium text-gray-900 dark:text-white">${account.name}</h5>
+                            ${isDefault ? '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400"><i class="fas fa-star mr-1"></i>Default</span>' : ''}
+                        </div>
+                        ${account.description ? `<p class="text-xs text-gray-500 dark:text-gray-400 mt-1">${account.description}</p>` : ''}
+                        <div class="text-xs text-gray-400 dark:text-gray-500 mt-1">ID: ${account.id}</div>
                     </div>
-                    <div class="ml-3">
-                        <p class="text-sm font-medium">${message}</p>
+                    <div class="flex items-center space-x-2">
+                        <button type="button" onclick="showEditAccountModal('${provider}', '${account.id}')" 
+                                class="inline-flex items-center px-2 py-1 border border-gray-300 dark:border-gray-600 shadow-sm text-xs font-medium rounded text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-600 hover:bg-gray-50 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                            <i class="fas fa-edit mr-1"></i>
+                            Edit
+                        </button>
+                        <button type="button" onclick="deleteAccount('${provider}', '${account.id}')" 
+                                class="inline-flex items-center px-2 py-1 border border-red-300 shadow-sm text-xs font-medium rounded text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+                            <i class="fas fa-trash mr-1"></i>
+                            Delete
+                        </button>
                     </div>
                 </div>
             `;
-            messageDiv.classList.remove('hidden');
-
-            // Auto-hide success messages after 5 seconds
-            if (type === 'success') {
-                setTimeout(() => {
-                    messageDiv.classList.add('hidden');
-                }, 5000);
-            }
-
-            // Add ARIA live region for screen readers
-            messageDiv.setAttribute('role', 'alert');
-            messageDiv.setAttribute('aria-live', 'polite');
-        }
-
-        // Enhanced save function with comprehensive error handling
-        async function saveSettings() {
-            if (isLoading) {
-                showMessage('Save operation already in progress', 'warning');
-                return;
-            }
-
-            try {
-                isLoading = true;
-                saveBtn.disabled = true;
-                saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving...';
-
-                // Validate form before sending
-                const validationErrors = validateForm();
-                if (validationErrors.length > 0) {
-                    throw new Error('Validation failed: ' + validationErrors.join(', '));
-                }
-
-                // Collect form data
-                const formData = new FormData(form);
-                const settings = {
-                    email: formData.get('email'),
-                    domains: formData.get('domains').split('\n').filter(d => d.trim()),
-                    auto_renew: formData.has('auto_renew'),
-                    dns_provider: formData.get('dns_provider'),
-                    dns_providers: {}
-                };
-
-                // Collect DNS provider configurations
-                const providers = [
-                    'cloudflare', 'route53', 'azure', 'google', 'powerdns', 'digitalocean',
-                    'linode', 'gandi', 'ovh', 'namecheap', 'rfc2136', 'vultr', 'dnsmadeeasy', 
-                    'nsone', 'hetzner', 'porkbun', 'godaddy', 'he-ddns', 'dynudns'
-                ];
-
-                providers.forEach(provider => {
-                    settings.dns_providers[provider] = {};
-                    
-                    if (provider === 'cloudflare') {
-                        const token = formData.get('cloudflare_api_token');
-                        if (token) settings.dns_providers[provider].api_token = token;
-                    } else if (provider === 'route53') {
-                        const accessKey = formData.get('route53_access_key_id');
-                        const secretKey = formData.get('route53_secret_access_key');
-                        const region = formData.get('route53_region');
-                        if (accessKey) settings.dns_providers[provider].access_key_id = accessKey;
-                        if (secretKey) settings.dns_providers[provider].secret_access_key = secretKey;
-                        if (region) settings.dns_providers[provider].region = region;
-                    } else if (provider === 'azure') {
-                        const fields = ['subscription_id', 'resource_group', 'tenant_id', 'client_id', 'client_secret'];
-                        fields.forEach(field => {
-                            const value = formData.get(`azure_${field}`);
-                            if (value) settings.dns_providers[provider][field] = value;
-                        });
-                    } else if (provider === 'google') {
-                        const projectId = formData.get('google_project_id');
-                        const serviceKey = formData.get('google_service_account_key');
-                        if (projectId) settings.dns_providers[provider].project_id = projectId;
-                        if (serviceKey) settings.dns_providers[provider].service_account_key = serviceKey;
-                    } else if (provider === 'powerdns') {
-                        const apiUrl = formData.get('powerdns_api_url');
-                        const apiKey = formData.get('powerdns_api_key');
-                        if (apiUrl) settings.dns_providers[provider].api_url = apiUrl;
-                        if (apiKey) settings.dns_providers[provider].api_key = apiKey;
-                    } else if (provider === 'digitalocean') {
-                        const token = formData.get('digitalocean_api_token');
-                        if (token) settings.dns_providers[provider].api_token = token;
-                    } else if (provider === 'linode') {
-                        const key = formData.get('linode_api_key');
-                        if (key) settings.dns_providers[provider].api_key = key;
-                    } else if (provider === 'gandi') {
-                        const token = formData.get('gandi_api_token');
-                        if (token) settings.dns_providers[provider].api_token = token;
-                    } else if (provider === 'ovh') {
-                        const endpoint = formData.get('ovh_endpoint');
-                        const appKey = formData.get('ovh_application_key');
-                        const appSecret = formData.get('ovh_application_secret');
-                        const consumerKey = formData.get('ovh_consumer_key');
-                        if (endpoint) settings.dns_providers[provider].endpoint = endpoint;
-                        if (appKey) settings.dns_providers[provider].application_key = appKey;
-                        if (appSecret) settings.dns_providers[provider].application_secret = appSecret;
-                        if (consumerKey) settings.dns_providers[provider].consumer_key = consumerKey;
-                    } else if (provider === 'namecheap') {
-                        const username = formData.get('namecheap_username');
-                        const apiKey = formData.get('namecheap_api_key');
-                        if (username) settings.dns_providers[provider].username = username;
-                        if (apiKey) settings.dns_providers[provider].api_key = apiKey;
-                    } else if (provider === 'rfc2136') {
-                        const nameserver = formData.get('rfc2136_nameserver');
-                        const tsigKey = formData.get('rfc2136_tsig_key');
-                        const tsigSecret = formData.get('rfc2136_tsig_secret');
-                        const tsigAlgorithm = formData.get('rfc2136_tsig_algorithm');
-                        if (nameserver) settings.dns_providers[provider].nameserver = nameserver;
-                        if (tsigKey) settings.dns_providers[provider].tsig_key = tsigKey;
-                        if (tsigSecret) settings.dns_providers[provider].tsig_secret = tsigSecret;
-                        if (tsigAlgorithm) settings.dns_providers[provider].tsig_algorithm = tsigAlgorithm;
-                    } else if (provider === 'hetzner') {
-                        const token = formData.get('hetzner_api_token');
-                        if (token) settings.dns_providers[provider].api_token = token;
-                    } else if (provider === 'porkbun') {
-                        const apiKey = formData.get('porkbun_api_key');
-                        const secretKey = formData.get('porkbun_secret_key');
-                        if (apiKey) settings.dns_providers[provider].api_key = apiKey;
-                        if (secretKey) settings.dns_providers[provider].secret_key = secretKey;
-                    } else if (provider === 'godaddy') {
-                        const apiKey = formData.get('godaddy_api_key');
-                        const secret = formData.get('godaddy_secret');
-                        if (apiKey) settings.dns_providers[provider].api_key = apiKey;
-                        if (secret) settings.dns_providers[provider].secret = secret;
-                    } else if (provider === 'he-ddns') {
-                        const username = formData.get('he_ddns_username');
-                        const password = formData.get('he_ddns_password');
-                        if (username) settings.dns_providers[provider].username = username;
-                        if (password) settings.dns_providers[provider].password = password;
-                    } else if (provider === 'dynudns') {
-                        const token = formData.get('dynudns_token');
-                        if (token) settings.dns_providers[provider].token = token;
-                    } else if (provider === 'dnsmadeeasy') {
-                        const apiKey = formData.get('dnsmadeeasy_api_key');
-                        const secretKey = formData.get('dnsmadeeasy_secret_key');
-                        if (apiKey) settings.dns_providers[provider].api_key = apiKey;
-                        if (secretKey) settings.dns_providers[provider].secret_key = secretKey;
-                    } else if (provider === 'nsone') {
-                        const key = formData.get('nsone_api_key');
-                        if (key) settings.dns_providers[provider].api_key = key;
-                    }
-                });
-
-                // API Bearer Token
-                const apiToken = formData.get('api_bearer_token');
-                if (apiToken) {
-                    settings.api_bearer_token = apiToken;
-                }
-
-                // Save cache settings separately
-                saveCacheSettings();
-
-                // Backward compatibility for Cloudflare
-                if (settings.dns_providers.cloudflare?.api_token) {
-                    settings.cloudflare_token = settings.dns_providers.cloudflare.api_token;
-                }
-
-                const response = await fetch('/api/settings', {
-                    method: 'POST',
-                    headers: API_HEADERS,
-                    body: JSON.stringify(settings)
-                });
-
-                if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({}));
-                    throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
-                }
-
-                const data = await response.json();
-                
-                if (data.success) {
-                    showMessage('Settings saved successfully!', 'success');
-                    currentSettings = settings; // Update cached settings
-                    await loadDNSProviders(); // Refresh provider status
-                } else {
-                    throw new Error(data.message || 'Failed to save settings');
-                }
-
-            } catch (error) {
-                const errorMessage = handleApiError(error, 'Failed to save settings');
-                console.error('Error saving settings:', error);
-                showMessage(errorMessage, 'error');
-            } finally {
-                isLoading = false;
-                saveBtn.disabled = false;
-                saveBtn.innerHTML = '<i class="fas fa-save mr-2"></i>Save Settings';
-            }
-        }
-
-        // Cache Management Functions
-        function loadCacheSettings() {
-            try {
-                const savedSettings = localStorage.getItem('deployment-cache-settings');
-                if (savedSettings) {
-                    const settings = JSON.parse(savedSettings);
-                    const ttlSeconds = Math.round((settings.ttl || 300000) / 1000);
-                    document.getElementById('cache_ttl').value = ttlSeconds;
-                } else {
-                    document.getElementById('cache_ttl').value = 300; // 5 minutes default
-                }
-                refreshCacheStats();
-            } catch (error) {
-                console.error('Error loading cache settings:', error);
-                document.getElementById('cache_ttl').value = 300; // 5 minutes default
-            }
-        }
-
-        function saveCacheSettings() {
-            const ttlSeconds = parseInt(document.getElementById('cache_ttl').value) || 300;
-            const ttlMs = ttlSeconds * 1000;
             
-            try {
-                // Save to localStorage (this will be picked up by the cache system on the main page)
-                localStorage.setItem('deployment-cache-settings', JSON.stringify({ ttl: ttlMs }));
-                
-                // Also notify any open main pages to update their cache settings
-                localStorage.setItem('cache-settings-updated', Date.now().toString());
-                
-                showMessage(`Cache TTL updated to ${ttlSeconds} seconds`, 'success');
-                setTimeout(refreshCacheStats, 500);
-            } catch (error) {
-                console.error('Error saving cache settings:', error);
-                showMessage('Error saving cache settings', 'error');
-            }
-        }
-
-        function refreshCacheStats() {
-            try {
-                const savedSettings = localStorage.getItem('deployment-cache-settings');
-                let ttlSeconds = 300; // default
-                
-                if (savedSettings) {
-                    const settings = JSON.parse(savedSettings);
-                    ttlSeconds = Math.round((settings.ttl || 300000) / 1000);
-                }
-                
-                // We can't directly access the cache from the settings page,
-                // but we can show the configured TTL
-                document.getElementById('cache-entries').textContent = 'N/A (main page only)';
-                document.getElementById('cache-current-ttl').textContent = `${ttlSeconds}s`;
-                
-                // If there's a way to get cache stats from the main page via postMessage or similar,
-                // we could implement that here. For now, we show what we can.
-                
-            } catch (error) {
-                console.error('Error refreshing cache stats:', error);
-                document.getElementById('cache-entries').textContent = 'Error';
-                document.getElementById('cache-current-ttl').textContent = 'Error';
-            }
-        }
-
-        function clearDeploymentCache() {
-            if (confirm('Are you sure you want to clear the deployment status cache? This will force a refresh of all certificate deployment statuses.')) {
-                try {
-                    // Signal main page to clear cache
-                    localStorage.setItem('clear-deployment-cache', Date.now().toString());
-                    showMessage('Cache clear signal sent. Refresh the main page to see the effect.', 'info');
-                    setTimeout(refreshCacheStats, 500);
-                } catch (error) {
-                    console.error('Error clearing cache:', error);
-                    showMessage('Error clearing cache', 'error');
-                }
-            }
+            return card;
         }
     </script>
 </body>

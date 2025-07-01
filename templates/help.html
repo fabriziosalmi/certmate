@@ -118,6 +118,15 @@
                     </div>
                 </div>
             </a>
+            <a href="#multi-account" class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow hover:shadow-md transition-shadow">
+                <div class="flex items-center">
+                    <i class="fas fa-users text-green-600 text-xl mr-3"></i>
+                    <div>
+                        <h3 class="font-medium text-gray-900 dark:text-white">Multi-Account Support</h3>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">Multiple accounts per provider</p>
+                    </div>
+                </div>
+            </a>
         </div>
 
         <!-- Content Sections -->
@@ -559,6 +568,108 @@
                                     <li>• Environment variable credential storage</li>
                                     <li>• Audit logging for all operations</li>
                                 </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Multi-Account Support -->
+            <div id="multi-account" class="bg-white dark:bg-gray-800 shadow rounded-lg">
+                <div class="px-6 py-6">
+                    <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+                        <i class="fas fa-users text-green-600 mr-2"></i>
+                        Multi-Account DNS Provider Support
+                    </h3>
+                    <p class="text-gray-600 dark:text-gray-300 mb-6">
+                        Configure multiple accounts for the same DNS provider to support enterprise environments, 
+                        permission separation, and multi-tenant setups.
+                    </p>
+                    
+                    <div class="space-y-6">
+                        <!-- Benefits -->
+                        <div class="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border border-green-200 dark:border-green-800">
+                            <h4 class="font-medium text-green-900 dark:text-green-100 mb-3">
+                                <i class="fas fa-check-circle mr-2"></i>
+                                Benefits
+                            </h4>
+                            <ul class="text-sm text-green-800 dark:text-green-200 space-y-1">
+                                <li>• <strong>Organization Separation:</strong> Different accounts for production, staging, and development</li>
+                                <li>• <strong>Client Management:</strong> Separate Cloudflare accounts for different clients</li>
+                                <li>• <strong>Permission Isolation:</strong> Limit API token scope to specific domains or zones</li>
+                                <li>• <strong>Team Collaboration:</strong> Multiple team members with their own credentials</li>
+                                <li>• <strong>Backup Redundancy:</strong> Fallback accounts for high availability</li>
+                            </ul>
+                        </div>
+
+                        <!-- How to Use -->
+                        <div>
+                            <h4 class="font-medium text-gray-900 dark:text-white mb-3">
+                                <i class="fas fa-cog mr-2"></i>
+                                How to Configure Multiple Accounts
+                            </h4>
+                            <div class="space-y-4">
+                                <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                                    <h5 class="font-medium text-gray-900 dark:text-white mb-2">1. Add New Account</h5>
+                                    <ul class="text-sm text-gray-600 dark:text-gray-300 space-y-1">
+                                        <li>• Go to Settings and select your DNS provider</li>
+                                        <li>• Click the "Add Account" button</li>
+                                        <li>• Enter account name, credentials, and optional description</li>
+                                        <li>• Choose whether to set as default account</li>
+                                    </ul>
+                                </div>
+                                
+                                <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                                    <h5 class="font-medium text-gray-900 dark:text-white mb-2">2. Manage Accounts</h5>
+                                    <ul class="text-sm text-gray-600 dark:text-gray-300 space-y-1">
+                                        <li>• Edit account details and credentials</li>
+                                        <li>• Set or change the default account</li>
+                                        <li>• Delete unused accounts</li>
+                                        <li>• View account count indicator</li>
+                                    </ul>
+                                </div>
+                                
+                                <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                                    <h5 class="font-medium text-gray-900 dark:text-white mb-2">3. Use During Certificate Creation</h5>
+                                    <ul class="text-sm text-gray-600 dark:text-gray-300 space-y-1">
+                                        <li>• Select DNS provider in certificate creation form</li>
+                                        <li>• Choose specific account or leave blank for default</li>
+                                        <li>• Account selection appears automatically for multi-account providers</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Backward Compatibility -->
+                        <div class="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
+                            <h4 class="font-medium text-blue-900 dark:text-blue-100 mb-2">
+                                <i class="fas fa-shield-alt mr-2"></i>
+                                Backward Compatibility
+                            </h4>
+                            <p class="text-sm text-blue-800 dark:text-blue-200">
+                                Existing single-account configurations continue to work unchanged. The system automatically 
+                                migrates them to multi-account format when you add additional accounts.
+                            </p>
+                        </div>
+
+                        <!-- API Support -->
+                        <div>
+                            <h4 class="font-medium text-gray-900 dark:text-white mb-3">
+                                <i class="fas fa-code mr-2"></i>
+                                API Support
+                            </h4>
+                            <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                                <p class="text-sm text-gray-600 dark:text-gray-300 mb-2">
+                                    Certificate creation with specific account:
+                                </p>
+                                <code class="block bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 p-3 rounded text-sm">
+POST /api/certificates/create
+{
+  "domain": "example.com",
+  "dns_provider": "cloudflare",
+  "account_id": "production"
+}
+                                </code>
                             </div>
                         </div>
                     </div>

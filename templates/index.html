@@ -99,13 +99,14 @@
                                    class="block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg shadow-sm py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-shadow duration-200"
                                    placeholder="example.com" required>
                         </div>
-                        <div class="lg:col-span-5">
+                        <div class="lg:col-span-3">
                             <label for="dns_provider_select" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                 <i class="fas fa-server mr-1 text-gray-400"></i>
                                 DNS Provider (Optional)
                             </label>
                             <select id="dns_provider_select" name="dns_provider" 
-                                    class="block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg shadow-sm py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-shadow duration-200">
+                                    class="block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg shadow-sm py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-shadow duration-200"
+                                    onchange="updateAccountSelection()">
                                 <option value="">Use default from settings</option>
                                 <option value="cloudflare">Cloudflare</option>
                                 <option value="route53">AWS Route53</option>
@@ -126,6 +127,16 @@
                                 <option value="nsone">NS1</option>
                                 <option value="he-ddns">Hurricane Electric</option>
                                 <option value="dynudns">Dynu</option>
+                            </select>
+                        </div>
+                        <div class="lg:col-span-2" id="account-selection-container" style="display: none;">
+                            <label for="account_select" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                <i class="fas fa-user mr-1 text-gray-400"></i>
+                                Account (Optional)
+                            </label>
+                            <select id="account_select" name="account_id" 
+                                    class="block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg shadow-sm py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-shadow duration-200">
+                                <option value="">Use default account</option>
                             </select>
                         </div>
                         <div class="lg:col-span-3">
@@ -1229,12 +1240,69 @@
             }, 2000); // Check every 2 seconds
         }
 
+        // Multi-account support functions
+        let providerAccounts = {};
+
+        async function loadProviderAccounts() {
+            const providers = ['cloudflare', 'route53', 'digitalocean', 'azure', 'google', 'powerdns', 'rfc2136'];
+            
+            for (const provider of providers) {
+                try {
+                    const response = await fetch(`/api/settings/dns-providers/${provider}/accounts`, {
+                        headers: API_HEADERS
+                    });
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        // Convert accounts object to array for compatibility
+                        const accounts = data.accounts || {};
+                        const accountsArray = Object.keys(accounts).map(accountId => ({
+                            account_id: accountId,
+                            ...accounts[accountId]
+                        }));
+                        providerAccounts[provider] = accountsArray;
+                    }
+                } catch (error) {
+                    console.log(`No accounts found for ${provider}`);
+                    providerAccounts[provider] = [];
+                }
+            }
+        }
+
+        function updateAccountSelection() {
+            const providerSelect = document.getElementById('dns_provider_select');
+            const accountContainer = document.getElementById('account-selection-container');
+            const accountSelect = document.getElementById('account_select');
+            
+            const selectedProvider = providerSelect.value;
+            
+            if (selectedProvider && providerAccounts[selectedProvider] && providerAccounts[selectedProvider].length > 0) {
+                // Show account selection
+                accountContainer.style.display = 'block';
+                
+                // Clear and populate account options
+                accountSelect.innerHTML = '<option value="">Use default account</option>';
+                
+                providerAccounts[selectedProvider].forEach(account => {
+                    const option = document.createElement('option');
+                    option.value = account.account_id;
+                    option.textContent = account.name || account.account_id;
+                    accountSelect.appendChild(option);
+                });
+            } else {
+                // Hide account selection
+                accountContainer.style.display = 'none';
+                accountSelect.innerHTML = '<option value="">Use default account</option>';
+            }
+        }
+
         // Create certificate
         document.getElementById('createCertForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             
             const domain = document.getElementById('domain').value;
             const dnsProvider = document.getElementById('dns_provider_select').value;
+            const accountId = document.getElementById('account_select').value;
             
             if (!domain) {
                 showMessage('Please enter a domain', 'error');
@@ -1250,6 +1318,9 @@
             if (dnsProvider) {
                 requestBody.dns_provider = dnsProvider;
             }
+            if (accountId) {
+                requestBody.account_id = accountId;
+            }
             
             try {
                 const response = await fetch('/api/certificates/create', {
@@ -1264,108 +1335,33 @@
                     showMessage(`Certificate created successfully for ${domain}!`);
                     document.getElementById('domain').value = '';
                     document.getElementById('dns_provider_select').value = '';
+                    document.getElementById('account_select').value = '';
+                    updateAccountSelection(); // Hide account selector
                     loadCertificates();
                 } else {
                     showMessage(result.message || 'Failed to create certificate', 'error');
                 }
             } catch (error) {
-                showMessage('Failed to create certificate', 'error');
+                console.error('Error creating certificate:', error);
+                showMessage('Failed to create certificate. Please try again.', 'error');
             } finally {
                 hideLoadingModal(progressInterval);
             }
         });
 
-        // Renew certificate
-        async function renewCertificate(domain) {
-            if (!confirm(`Are you sure you want to renew the certificate for ${domain}?`)) {
-                return;
-            }
-            
-            const progressInterval = showLoadingModal(
-                `Renewing Certificate for ${domain}`, 
-                'Requesting new certificate from Let\'s Encrypt...'
-            );
-            
-            try {
-                const response = await fetch(`/api/certificates/${domain}/renew`, {
-                    method: 'POST',
-                    headers: API_HEADERS
-                });
-                
-                const result = await response.json();
-                
-                if (result.success) {
-                    showMessage(`Certificate renewed successfully for ${domain}!`);
-                    loadCertificates();
-                } else {
-                    showMessage(result.error || 'Failed to renew certificate', 'error');
-                }
-            } catch (error) {
-                showMessage('Failed to renew certificate', 'error');
-            } finally {
-                hideLoadingModal(progressInterval);
-            }
-        }
-
-        // Download certificate
-        function downloadCertificate(domain) {
-            window.open(`/api/certificates/${domain}/download`, '_blank');
-        }
-
-        // Download private key (use the same download endpoint)
-        function downloadKey(domain) {
-            window.open(`/api/web/certificates/${domain}/download`, '_blank');
-        }
-
-        // Copy curl command for automation
-        function copyCurlCommand(domain) {
-            const curlCommand = `curl -H "Authorization: Bearer YOUR_API_TOKEN" \\
-     -o "${domain}-tls.zip" \\
-     "${window.location.origin}/${domain}/tls"`;
-            
-            // Show modal with the command
-            document.getElementById('curlCommandText').textContent = curlCommand;
-            document.getElementById('curlModal').classList.remove('hidden');
-        }
-
-        // Close curl modal
-        function closeCurlModal() {
-            document.getElementById('curlModal').classList.add('hidden');
-        }
-
-        // Copy command from modal
-        function copyFromModal() {
-            const curlCommand = document.getElementById('curlCommandText').textContent;
-            navigator.clipboard.writeText(curlCommand).then(function() {
-                showMessage('curl command copied to clipboard!');
-                closeCurlModal();
-            }).catch(function(err) {
-                // Fallback for older browsers
-                const textArea = document.createElement('textarea');
-                textArea.value = curlCommand;
-                document.body.appendChild(textArea);
-                textArea.select();
-                document.execCommand('copy');
-                document.body.removeChild(textArea);
-                showMessage('curl command copied to clipboard!');
-                closeCurlModal();
-            });
-        }
-
-        // Load certificates on page load
+        // Initialize on page load
         document.addEventListener('DOMContentLoaded', function() {
             loadCertificates();
-            setupCacheSettingsListener();
-            updateCacheInfo();
+            loadProviderAccounts(); // Load account information
             
-            // Add search and filter event listeners
+            // Initialize search and filters
             document.getElementById('certificateSearch').addEventListener('input', filterCertificates);
             document.getElementById('statusFilter').addEventListener('change', filterCertificates);
             
-            // Close curl modal when clicking outside
+            // Close modal on outside click
             document.getElementById('curlModal').addEventListener('click', function(e) {
                 if (e.target === this) {
-                    closeCurlModal();
+                    this.classList.add('hidden');
                 }
             });
         });
