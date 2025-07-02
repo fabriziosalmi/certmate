@@ -1237,16 +1237,38 @@ create_cert_model = api.model('CreateCertificate', {
     'account_id': fields.String(description='DNS provider account ID to use (optional, uses default account if not specified)')
 })
 
+# Cache models
+cache_entry_model = api.model('CacheEntry', {
+    'domain': fields.String(description='Domain name'),
+    'age': fields.Integer(description='Age of cache entry in seconds'),
+    'remaining': fields.Integer(description='Remaining TTL in seconds'),
+    'status': fields.String(description='Deployment status', enum=['deployed', 'not-deployed'])
+})
+
+cache_stats_model = api.model('CacheStats', {
+    'total_entries': fields.Integer(description='Total number of cached entries'),
+    'current_ttl': fields.Integer(description='Current TTL setting in seconds'),
+    'entries': fields.List(fields.Nested(cache_entry_model), description='List of cached entries')
+})
+
+cache_clear_response_model = api.model('CacheClearResponse', {
+    'success': fields.Boolean(description='Whether cache was cleared successfully'),
+    'message': fields.String(description='Status message'),
+    'cleared_entries': fields.Integer(description='Number of entries that were cleared')
+})
+
 # Define namespaces
 ns_certificates = Namespace('certificates', description='Certificate operations')
 ns_settings = Namespace('settings', description='Settings operations')
 ns_health = Namespace('health', description='Health check')
 ns_backups = Namespace('backups', description='Backup and restore operations')
+ns_cache = Namespace('cache', description='Cache management operations')
 
 api.add_namespace(ns_certificates)
 api.add_namespace(ns_settings)
 api.add_namespace(ns_health)
 api.add_namespace(ns_backups)
+api.add_namespace(ns_cache)
 
 # Health check endpoint
 @ns_health.route('')
@@ -1532,6 +1554,43 @@ class DNSProviders(Resource):
         
         return providers_status
 
+# Cache management endpoints
+@ns_cache.route('/stats')
+class CacheStats(Resource):
+    @api.doc(security='Bearer')
+    @api.marshal_with(cache_stats_model)
+    @require_auth
+    def get(self):
+        """Get cache statistics"""
+        try:
+            stats = deployment_cache.get_stats()
+            return stats
+        except Exception as e:
+            logger.error(f"Error getting cache stats: {e}")
+            return {'message': f'Failed to get cache stats: {str(e)}'}, 500
+
+@ns_cache.route('/clear')
+class CacheClear(Resource):
+    @api.doc(security='Bearer')
+    @api.marshal_with(cache_clear_response_model)
+    @require_auth
+    def post(self):
+        """Clear deployment status cache"""
+        try:
+            cleared_count = deployment_cache.clear()
+            return {
+                'success': True,
+                'message': 'Cache cleared successfully',
+                'cleared_entries': cleared_count
+            }
+        except Exception as e:
+            logger.error(f"Error clearing cache: {e}")
+            return {
+                'success': False,
+                'message': f'Failed to clear cache: {str(e)}',
+                'cleared_entries': 0
+            }, 500
+
 # Certificate endpoints
 @ns_certificates.route('')
 class CertificateList(Resource):
@@ -1810,6 +1869,7 @@ def web_settings():
         try:
             data = request.get_json()
            
+
             logger.info(f"[SETTINGS DEBUG] POST data received: {list(data.keys()) if data else 'None'}")
             
             if not data:
@@ -1847,6 +1907,8 @@ def web_settings():
             if 'cache_ttl' in data:
                 settings['cache_ttl'] = data['cache_ttl']
                 logger.info(f"[SETTINGS DEBUG] Updated cache TTL: {data['cache_ttl']}")
+                # Update the deployment cache TTL
+                deployment_cache.set_ttl(data['cache_ttl'])
             
             # Legacy cloudflare token support
             if 'cloudflare_token' in data and data['cloudflare_token']:
@@ -2604,6 +2666,38 @@ def web_download_backup(backup_type, filename):
         logger.error(f"Error downloading backup via web: {e}")
         return jsonify({'error': f'Failed to download backup: {str(e)}'}), 500
 
+# =============================================
+# WEB INTERFACE CACHE ENDPOINTS
+# =============================================
+
+@app.route('/api/web/cache/stats')
+def web_cache_stats():
+    """Web interface endpoint to get cache statistics"""
+    try:
+        stats = deployment_cache.get_stats()
+        return jsonify(stats)
+    except Exception as e:
+        logger.error(f"Error getting cache stats for web: {e}")
+        return jsonify({'error': 'Failed to get cache statistics'}), 500
+
+@app.route('/api/web/cache/clear', methods=['POST'])
+def web_cache_clear():
+    """Web interface endpoint to clear cache"""
+    try:
+        cleared_count = deployment_cache.clear()
+        return jsonify({
+            'success': True,
+            'message': 'Cache cleared successfully',
+            'cleared_entries': cleared_count
+        })
+    except Exception as e:
+        logger.error(f"Error clearing cache for web: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'Failed to clear cache: {str(e)}',
+            'cleared_entries': 0
+        }), 500
+
 # Web Certificate API Routes (for form-based frontend)
 @app.route('/api/web/certificates')
 @require_auth
@@ -3096,3 +3190,99 @@ def validate_dns_provider_account(provider, account_id, account_config):
     except Exception as e:
         logger.error(f"Error validating DNS provider account: {e}")
         return False, f"Validation error: {str(e)}"
+# =============================================
+# DEPLOYMENT STATUS CACHE SYSTEM
+# =============================================
+
+class DeploymentStatusCache:
+    """Server-side cache for deployment status results to improve performance"""
+    
+    def __init__(self):
+        self.cache = {}
+        self.default_ttl = 300  # 5 minutes default TTL in seconds
+        
+    def get(self, domain):
+        """Get cached deployment status for a domain"""
+        if domain in self.cache:
+            entry = self.cache[domain]
+            current_time = time.time()
+            
+            # Check if entry has expired
+            if current_time <= entry['expires_at']:
+                return entry['result']
+            else:
+                # Entry expired, remove it
+                del self.cache[domain]
+                
+        return None
+        
+    def set(self, domain, result, ttl=None):
+        """Cache deployment status result for a domain"""
+        if ttl is None:
+            ttl = self.default_ttl
+            
+        current_time = time.time()
+        self.cache[domain] = {
+            'result': result,
+            'timestamp': current_time,
+            'expires_at': current_time + ttl,
+            'ttl': ttl
+        }
+        
+    def clear(self):
+        """Clear all cached entries"""
+        cleared_count = len(self.cache)
+        self.cache.clear()
+        return cleared_count
+        
+    def get_stats(self):
+        """Get cache statistics"""
+        current_time = time.time()
+        entries = []
+        expired_keys = []
+        
+        for domain, entry in self.cache.items():
+            if current_time <= entry['expires_at']:
+                age = int(current_time - entry['timestamp'])
+                remaining = int(entry['expires_at'] - current_time)
+                entries.append({
+                    'domain': domain,
+                    'age': age,
+                    'remaining': remaining,
+                    'status': 'deployed' if entry['result'].get('deployed', False) else 'not-deployed'
+                })
+            else:
+                expired_keys.append(domain)
+                
+        # Clean up expired entries
+        for key in expired_keys:
+            del self.cache[key]
+            
+        return {
+            'total_entries': len(self.cache),
+            'current_ttl': self.default_ttl,
+            'entries': entries
+        }
+        
+    def set_ttl(self, ttl):
+        """Set default TTL for new cache entries"""
+        if isinstance(ttl, (int, float)) and 30 <= ttl <= 3600:
+            self.default_ttl = int(ttl)
+            return True
+        return False
+
+# Initialize global deployment cache
+deployment_cache = DeploymentStatusCache()
+
+def update_cache_settings():
+    """Update cache settings from configuration"""
+    try:
+        settings = load_settings()
+        cache_ttl = settings.get('cache_ttl', 300)
+        deployment_cache.set_ttl(cache_ttl)
+        logger.info(f"Updated deployment cache TTL to {cache_ttl} seconds")
+    except Exception as e:
+        logger.error(f"Error updating cache settings: {e}")
+
+# Initialize cache settings
+update_cache_settings()
