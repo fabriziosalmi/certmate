@@ -179,7 +179,8 @@ class TestSettingsManagement:
         
         result = save_settings(settings)
         assert result is True
-        mock_write.assert_called_once()
+        # Function calls safe_file_write twice: once for backup, once for actual save
+        assert mock_write.call_count == 2
     
     @patch('app.validate_email')
     def test_save_settings_invalid_email(self, mock_validate_email):
@@ -245,10 +246,12 @@ class TestDNSProviderMigration:
         expected_structure = {
             'dns_providers': {
                 'cloudflare': {
-                    'default': {
-                        'name': 'Default Account',
-                        'description': 'Migrated from single-account configuration',
-                        'api_token': 'old-single-token'
+                    'accounts': {
+                        'default': {
+                            'name': 'Default Cloudflare Account',
+                            'description': 'Migrated from single-account configuration',
+                            'api_token': 'old-single-token'
+                        }
                     }
                 }
             },
@@ -257,7 +260,7 @@ class TestDNSProviderMigration:
             }
         }
         
-        assert result['dns_providers']['cloudflare']['default']['api_token'] == 'old-single-token'
+        assert result['dns_providers']['cloudflare']['accounts']['default']['api_token'] == 'old-single-token'
         assert result['default_accounts']['cloudflare'] == 'default'
         mock_logger.info.assert_called()
     
@@ -275,7 +278,7 @@ class TestDNSProviderMigration:
         result = migrate_dns_providers_to_multi_account(settings)
         
         # Should be migrated
-        migrated_config = result['dns_providers']['route53']['default']
+        migrated_config = result['dns_providers']['route53']['accounts']['default']
         assert migrated_config['access_key_id'] == 'AKIATEST'
         assert migrated_config['secret_access_key'] == 'secret-key'
         assert result['default_accounts']['route53'] == 'default'
@@ -301,7 +304,8 @@ class TestDNSProviderMigration:
         
         # All should be migrated
         for provider in ['cloudflare', 'route53', 'digitalocean']:
-            assert 'default' in result['dns_providers'][provider]
+            assert 'accounts' in result['dns_providers'][provider]
+            assert 'default' in result['dns_providers'][provider]['accounts']
             assert result['default_accounts'][provider] == 'default'
     
     def test_migrate_dns_providers_empty_config(self):
@@ -349,7 +353,9 @@ class TestDNSProviderMigration:
         result = migrate_dns_providers_to_multi_account(settings)
         
         # Cloudflare should be migrated, Route53 should remain unchanged
-        assert 'default' in result['dns_providers']['cloudflare']
-        assert result['dns_providers']['cloudflare']['default']['api_token'] == 'old-token'
+        assert 'accounts' in result['dns_providers']['cloudflare']
+        assert 'default' in result['dns_providers']['cloudflare']['accounts']
+        default_cf = result['dns_providers']['cloudflare']['accounts']['default']
+        assert default_cf['api_token'] == 'old-token'
         assert 'production' in result['dns_providers']['route53']
         assert result['dns_providers']['route53']['production']['name'] == 'Production'

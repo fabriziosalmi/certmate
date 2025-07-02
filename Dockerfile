@@ -10,7 +10,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
-COPY requirements.txt requirements-minimal.txt ./
+COPY requirements.txt ./
 
 # Create virtual environment and install dependencies
 RUN python -m venv /opt/venv

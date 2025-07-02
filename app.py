@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, send_file
+from flask import Flask, render_template, request, jsonify, send_file, send_from_directory
 from flask_cors import CORS
 from flask_restx import Api, Resource, fields, Namespace
 from functools import wraps
@@ -6,7 +6,9 @@ import os
 import json
 import subprocess
 import tempfile
+import time
 import zipfile
+import shutil
 from datetime import datetime, timedelta
 import threading
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -22,6 +24,11 @@ import fcntl  # For file locking
 import re
 import secrets
 import atexit
+import string
+
+# Backup constants
+BACKUP_RETENTION_DAYS = 30  # Keep backups for 30 days
+MAX_BACKUPS_PER_TYPE = 50   # Maximum number of backups to keep per type
 
 def safe_file_read(file_path, is_json=False, default=None):
     """Safely read a file with proper error handling and file locking"""
@@ -169,7 +176,7 @@ api = Api(
     app,
     version='1.0',
     title='CertMate API',
-    description='SSL Certificate Management API with Cloudflare DNS Challenge',
+    description='SSL Certificate Management API',
     doc='/docs/',
     prefix='/api'
 )
@@ -182,21 +189,31 @@ logger = logging.getLogger(__name__)
 try:
     CERT_DIR = Path("certificates")
     DATA_DIR = Path("data")
-    CERT_DIR.mkdir(exist_ok=True)
-    DATA_DIR.mkdir(exist_ok=True)
+    BACKUP_DIR = Path("backups") # New backup directory
+    LOGS_DIR = Path("logs")
     
-    # Verify directory permissions
-    if not os.access(CERT_DIR, os.W_OK):
-        logger.error(f"No write permission for certificates directory: {CERT_DIR}")
-    if not os.access(DATA_DIR, os.W_OK):
-        logger.error(f"No write permission for data directory: {DATA_DIR}")
+    # Create directories if they don't exist
+    for directory in [CERT_DIR, DATA_DIR, BACKUP_DIR, LOGS_DIR]:
+        directory.mkdir(exist_ok=True)
+        logger.info(f"Ensured directory exists: {directory}")
+    
+    # Create backup subdirectories
+    (BACKUP_DIR / "settings").mkdir(exist_ok=True)
+    (BACKUP_DIR / "certificates").mkdir(exist_ok=True)
+    logger.info(f"Backup directories created: {BACKUP_DIR}")
+    
+    # Test write permissions
+    for directory in [CERT_DIR, DATA_DIR, BACKUP_DIR, LOGS_DIR]:
+        if not os.access(directory, os.W_OK):
+            logger.error(f"No write permission for directory: {directory}")
         
 except Exception as e:
     logger.error(f"Failed to create required directories: {e}")
     # Use temporary directories as fallback
     CERT_DIR = Path(tempfile.mkdtemp(prefix="certmate_certs_"))
     DATA_DIR = Path(tempfile.mkdtemp(prefix="certmate_data_"))
-    logger.warning(f"Using temporary directories - certificates may not persist")
+    BACKUP_DIR = Path(tempfile.mkdtemp(prefix="certmate_backups_"))
+    logger.warning(f"Using temporary directories - data may not persist")
 
 # Settings file
 SETTINGS_FILE = DATA_DIR / "settings.json"
@@ -280,9 +297,15 @@ def load_settings():
         logger.error(f"Error loading settings: {e}")
         return default_settings
 
-def save_settings(settings):
-    """Save settings to file with improved error handling and validation"""
+def save_settings(settings, backup_reason="auto_save"):
+    """Save settings to file with improved error handling, validation, and automatic backup"""
     try:
+        # Create backup before saving if settings file exists
+        if SETTINGS_FILE.exists():
+            current_settings = safe_file_read(SETTINGS_FILE, is_json=True)
+            if current_settings:
+                create_settings_backup(current_settings, backup_reason)
+        
         # Validate critical settings before saving
         if 'email' in settings and settings['email']:
             is_valid, email_or_error = validate_email(settings['email'])
@@ -316,7 +339,13 @@ def save_settings(settings):
                         logger.warning(f"Invalid domain in object skipped: {domain_or_error}")
             settings['domains'] = validated_domains
         
-        return safe_file_write(SETTINGS_FILE, settings)
+        # Save settings
+        result = safe_file_write(SETTINGS_FILE, settings)
+        
+        if result:
+            logger.info(f"Settings saved successfully (backup reason: {backup_reason})")
+        
+        return result
         
     except Exception as e:
         logger.error(f"Error saving settings: {e}")
@@ -720,6 +749,9 @@ def create_certificate(domain, email, dns_provider=None, dns_config=None, accoun
         account_id: Specific account ID to use for the DNS provider
         staging: Use Let's Encrypt staging environment for testing
     """
+    # Track if we set Route53 environment variables for cleanup
+    route53_env_set = False
+    
     try:
         # Enhanced input validation
         if not domain or not isinstance(domain, str):
@@ -776,11 +808,18 @@ def create_certificate(domain, email, dns_provider=None, dns_config=None, accoun
         elif dns_provider == 'route53':
             access_key = dns_config.get('access_key_id', '')
             secret_key = dns_config.get('secret_access_key', '')
+            region = dns_config.get('region', 'us-east-1')  # Default region
             if not access_key or not secret_key:
                 return False, "AWS Route53 credentials not configured"
-            config_file = create_route53_config(access_key, secret_key)
+            
+            # Route53 plugin uses environment variables, not a credentials file
+            os.environ['AWS_ACCESS_KEY_ID'] = access_key
+            os.environ['AWS_SECRET_ACCESS_KEY'] = secret_key
+            os.environ['AWS_DEFAULT_REGION'] = region
+            route53_env_set = True
+            
             dns_plugin = 'route53'
-            dns_args = ['--dns-route53-credentials', str(config_file)]
+            dns_args = []  # Route53 plugin doesn't use credentials file arguments
             
         elif dns_provider == 'azure':
             subscription_id = dns_config.get('subscription_id', '')
@@ -922,6 +961,12 @@ def create_certificate(domain, email, dns_provider=None, dns_config=None, accoun
         logger.info(f"Creating certificate for {domain} using {dns_provider} DNS provider")
         result = subprocess.run(cmd, capture_output=True, text=True)
         
+        # Clean up sensitive environment variables for Route53
+        if route53_env_set:
+            os.environ.pop('AWS_ACCESS_KEY_ID', None)
+            os.environ.pop('AWS_SECRET_ACCESS_KEY', None)
+            os.environ.pop('AWS_DEFAULT_REGION', None)
+        
         if result.returncode == 0:
             # Copy certificates to our directory
             src_dir = config_dir / "live" / domain
@@ -938,6 +983,12 @@ def create_certificate(domain, email, dns_provider=None, dns_config=None, accoun
                         dest.write(src.read())
             
             logger.info(f"Certificate created successfully for {domain}")
+            
+            # Create automatic backup after successful certificate creation
+            backup_path = create_certificates_backup(f"new_cert_{domain}")
+            if backup_path:
+                logger.info(f"Certificate backup created after new certificate for {domain}")
+            
             return True, "Certificate created successfully"
         else:
             error_msg = result.stderr or result.stdout
@@ -945,6 +996,12 @@ def create_certificate(domain, email, dns_provider=None, dns_config=None, accoun
             return False, f"Certificate creation failed: {error_msg}"
     
     except Exception as e:
+        # Clean up sensitive environment variables for Route53 in case of exception
+        if route53_env_set:
+            os.environ.pop('AWS_ACCESS_KEY_ID', None)
+            os.environ.pop('AWS_SECRET_ACCESS_KEY', None)
+            os.environ.pop('AWS_DEFAULT_REGION', None)
+            
         error_msg = str(e)
         logger.error(f"Exception during certificate creation: {error_msg}")
         return False, f"Exception: {error_msg}"
@@ -1166,10 +1223,12 @@ create_cert_model = api.model('CreateCertificate', {
 ns_certificates = Namespace('certificates', description='Certificate operations')
 ns_settings = Namespace('settings', description='Settings operations')
 ns_health = Namespace('health', description='Health check')
+ns_backups = Namespace('backups', description='Backup and restore operations')
 
 api.add_namespace(ns_certificates)
 api.add_namespace(ns_settings)
 api.add_namespace(ns_health)
+api.add_namespace(ns_backups)
 
 # Health check endpoint
 @ns_health.route('')
@@ -1463,16 +1522,22 @@ class CertificateList(Resource):
     @require_auth
     def get(self):
         """Get all certificates"""
-        settings = load_settings()
-        certificates = []
-        
-        for domain_config in settings.get('domains', []):
-            domain_name = domain_config.get('domain') if isinstance(domain_config, dict) else domain_config
-            cert_info = get_certificate_info(domain_name)
-            if cert_info:
-                certificates.append(cert_info)
-        
-        return certificates
+        try:
+            settings = load_settings()
+            certificates = []
+            
+            for domain_config in settings.get('domains', []):
+                domain_name = domain_config.get('domain') if isinstance(domain_config, dict) else domain_config
+                if domain_name:  # Ensure domain_name is not empty
+                    cert_info = get_certificate_info(domain_name)
+                    if cert_info:
+                        certificates.append(cert_info)
+            
+            return certificates
+        except Exception as e:
+            logger.error(f"Error fetching certificates: {e}")
+            # Return empty array on error to ensure frontend compatibility
+            return []
 
 @ns_certificates.route('/create')
 class CreateCertificate(Resource):
@@ -1607,6 +1672,11 @@ api.authorizations = {
 }
 
 # Web interface routes
+@app.route('/favicon.ico')
+def favicon():
+    """Serve favicon"""
+    return send_from_directory(os.path.dirname(os.path.abspath(__file__)), 'favicon.ico')
+
 @app.route('/')
 def index():
     """Main dashboard"""
@@ -1863,921 +1933,6 @@ def web_dns_provider_account(provider, account_id):
             if not account_config:
                 return jsonify({'error': 'Account not found'}), 404
             
-            return jsonify({'account': account_config})
-            
-        except Exception as e:
-            logger.error(f"[DNS DEBUG] Error getting account {account_id} for {provider}: {e}")
-            return jsonify({'error': str(e)}), 500
-    
-    elif request.method == 'PUT':
-        try:
-            data = request.get_json()
-            logger.info(f"[DNS DEBUG] Updating account {account_id} for {provider}")
-            
-            if not data:
-                return jsonify({'error': 'No data provided'}), 400
-            
-            # Validate account data
-            is_valid, error_msg = validate_dns_provider_account(provider, account_id, data)
-            if not is_valid:
-                logger.error(f"[DNS DEBUG] Validation failed: {error_msg}")
-                return jsonify({'error': error_msg}), 400
-            
-            # Load current settings
-            settings = load_settings()
-            settings = migrate_dns_providers_to_multi_account(settings)
-            
-            # Check if account exists
-            if (provider not in settings.get('dns_providers', {}) or 
-                account_id not in settings['dns_providers'][provider]):
-                return jsonify({'error': 'Account not found'}), 404
-            
-            # Update account
-            settings['dns_providers'][provider][account_id] = {
-                **settings['dns_providers'][provider][account_id],
-                **data
-            }
-            
-            # Set as default if requested
-            if data.get('set_as_default'):
-                if 'default_accounts' not in settings:
-                    settings['default_accounts'] = {}
-                settings['default_accounts'][provider] = account_id
-            
-            # Save settings
-            save_settings(settings)
-            
-            logger.info(f"[DNS DEBUG] Account {account_id} updated for {provider}")
-            return jsonify({
-                'success': True,
-                'message': f'Account updated successfully'
-            })
-            
-        except Exception as e:
-            logger.error(f"[DNS DEBUG] Error updating account {account_id} for {provider}: {e}")
-            return jsonify({'error': str(e)}), 500
-    
-    elif request.method == 'DELETE':
-        try:
-            # Load current settings
-            settings = load_settings()
-            settings = migrate_dns_providers_to_multi_account(settings)
-            
-            # Check if account exists
-            if (provider not in settings.get('dns_providers', {}) or 
-                account_id not in settings['dns_providers'][provider]):
-                return jsonify({'error': 'Account not found'}), 404
-            
-            # Don't allow deletion if this is the only account
-            provider_accounts = list_dns_provider_accounts(provider, settings)
-            if len(provider_accounts) <= 1:
-                return jsonify({'error': 'Cannot delete the only account for this provider'}), 400
-            
-            # Remove account
-            del settings['dns_providers'][provider][account_id]
-            
-            # Update default if this was the default
-            if (settings.get('default_accounts', {}).get(provider) == account_id):
-                remaining_accounts = list(settings['dns_providers'][provider].keys())
-                if remaining_accounts:
-                    settings['default_accounts'][provider] = remaining_accounts[0]
-                else:
-                    if provider in settings['default_accounts']:
-                        del settings['default_accounts'][provider]
-            
-            # Save settings
-            save_settings(settings)
-            
-            logger.info(f"[DNS DEBUG] Account {account_id} deleted for {provider}")
-            return jsonify({
-                'success': True,
-                'message': f'Account deleted successfully'
-            })
-            
-        except Exception as e:
-            logger.error(f"[DNS DEBUG] Error deleting account {account_id} for {provider}: {e}")
-            return jsonify({'error': str(e)}), 500
-
-@app.route('/api/web/cache/stats')
-def web_cache_stats():
-    """Get cache statistics for the web interface"""
-    try:
-        # For now, return placeholder stats - implement actual cache stats later
-        stats = {
-            'entries': 0,
-            'current_ttl': 300,
-            'hits': 0,
-            'misses': 0
-        }
-        return jsonify(stats)
-    except Exception as e:
-        logger.error(f"Error getting cache stats: {e}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/web/cache/clear', methods=['POST'])
-def web_cache_clear():
-    """Clear deployment status cache for the web interface"""
-    try:
-        # For now, return success - implement actual cache clearing later
-        logger.info("Cache clear requested from web interface")
-        return jsonify({'success': True, 'message': 'Cache cleared successfully'})
-    except Exception as e:
-        logger.error(f"Error clearing cache: {e}")
-        return jsonify({'error': str(e)}), 500
-
-# Web-specific certificates endpoint (no auth required for initial setup)
-@app.route('/api/web/certificates')
-def web_certificates():
-    """Web interface certificates endpoint (no auth required)"""
-    settings = load_settings()
-    
-    # Migrate settings format if needed
-    settings = migrate_domains_format(settings)
-    
-    certificates = []
-    
-    for domain_entry in settings.get('domains', []):
-        # Handle both old format (string) and new format (object)
-        if isinstance(domain_entry, str):
-            domain = domain_entry
-        elif isinstance(domain_entry, dict):
-            domain = domain_entry.get('domain')
-        else:
-            continue  # Skip invalid entries
-            
-        if domain:
-            cert_info = get_certificate_info(domain)
-            certificates.append(cert_info)
-    
-    return jsonify(certificates)
-
-@app.route('/api/web/certificates/create', methods=['POST'])
-def web_create_certificate():
-    """Web interface create certificate endpoint (no auth required)"""
-    data = request.get_json()
-    domain = data.get('domain')
-    dns_provider_override = data.get('dns_provider')  # Optional DNS provider override
-    
-    if not domain:
-        return jsonify({'success': False, 'message': 'Domain is required'}), 400
-    
-    settings = load_settings()
-    
-    # Migrate settings format if needed
-    settings = migrate_domains_format(settings) 
-    
-    email = settings.get('email')
-    
-    if not email:
-        return jsonify({'success': False, 'message': 'Email not configured in settings'}), 400
-    
-    # Determine DNS provider to use
-    dns_provider = dns_provider_override or settings.get('dns_provider', 'cloudflare')
-    
-    # Validate DNS provider configuration
-    dns_config = settings.get('dns_providers', {}).get(dns_provider, {})
-    
-    if dns_provider == 'cloudflare':
-        # Support legacy cloudflare_token setting
-        token = dns_config.get('api_token') or settings.get('cloudflare_token', '')
-        if not token:
-            return jsonify({'success': False, 'message': f'{dns_provider.title()} token not configured in settings'}), 400
-        dns_config = {'api_token': token}
-    elif dns_provider == 'route53':
-        if not dns_config.get('access_key_id') or not dns_config.get('secret_access_key'):
-            return jsonify({'success': False, 'message': 'AWS Route53 credentials not configured in settings'}), 400
-    elif dns_provider == 'azure':
-        required_fields = ['subscription_id', 'resource_group', 'tenant_id', 'client_id', 'client_secret']
-        if not all(dns_config.get(field) for field in required_fields):
-            return jsonify({'success': False, 'message': 'Azure DNS credentials not configured in settings'}), 400
-    elif dns_provider == 'google':
-        if not dns_config.get('credentials_file') and not dns_config.get('credentials_json'):
-            return jsonify({'success': False, 'message': 'Google Cloud DNS credentials not configured in settings'}), 400
-    elif dns_provider == 'powerdns':
-        if not dns_config.get('api_url') or not dns_config.get('api_key'):
-            return jsonify({'success': False, 'message': 'PowerDNS API credentials not configured in settings'}), 400
-    elif dns_provider == 'digitalocean':
-        if not dns_config.get('api_token'):
-            return jsonify({'success': False, 'message': 'DigitalOcean API token not configured in settings'}), 400
-    elif dns_provider == 'linode':
-        if not dns_config.get('api_key'):
-            return jsonify({'success': False, 'message': 'Linode API key not configured in settings'}), 400
-    elif dns_provider == 'gandi':
-        if not dns_config.get('api_token'):
-            return jsonify({'success': False, 'message': 'Gandi API token not configured in settings'}), 400
-    elif dns_provider == 'ovh':
-        if not all(dns_config.get(field) for field in ['endpoint', 'application_key', 'application_secret', 'consumer_key']):
-            return jsonify({'success': False, 'message': 'OVH credentials not fully configured in settings'}), 400
-    elif dns_provider == 'namecheap':
-        if not all(dns_config.get(field) for field in ['username', 'api_key']):
-            return jsonify({'success': False, 'message': 'Namecheap credentials not fully configured in settings'}), 400
-    
-    # Add domain to settings if not already there (using new format)
-    domains = settings.get('domains', [])
-    domain_exists = False
-    
-    for domain_entry in domains:
-        if isinstance(domain_entry, str):
-            if domain_entry == domain:
-                domain_exists = True
-                break
-        elif isinstance(domain_entry, dict):
-            if domain_entry.get('domain') == domain:
-                domain_exists = True
-                # Update DNS provider if it changed
-                if domain_entry.get('dns_provider') != dns_provider:
-                    domain_entry['dns_provider'] = dns_provider
-                break
-    
-    if not domain_exists:
-        domains.append({
-            'domain': domain,
-            'dns_provider': dns_provider
-        })
-        settings['domains'] = domains
-        save_settings(settings)
-    
-    # Create certificate using new multi-provider function
-    success, message = create_certificate(domain, email, dns_provider, dns_config)
-    logger.info(f"Certificate creation for {domain} using {dns_provider}: {'Success' if success else 'Failed'} - {message}")
-    
-    if success:
-        return jsonify({'success': True, 'message': message})
-    else:
-        return jsonify({'success': False, 'message': message}), 500
-
-@app.route('/api/web/certificates/<domain>/renew', methods=['POST'])
-def web_renew_certificate(domain):
-    """Web interface renew certificate endpoint (no auth required)"""
-    settings = load_settings()
-    
-    # Migrate settings format if needed
-    settings = migrate_domains_format(settings)
-    
-    # Check if domain exists in settings (handle both old and new formats)
-    domain_found = False
-    for domain_entry in settings.get('domains', []):
-        if isinstance(domain_entry, str):
-            if domain_entry == domain:
-                domain_found = True
-                break
-        elif isinstance(domain_entry, dict):
-            if domain_entry.get('domain') == domain:
-                domain_found = True
-                break
-    
-    if not domain_found:
-        return jsonify({'success': False, 'message': 'Domain not found in settings'}), 404
-    
-    # Renew certificate in background
-    def renew_cert_async():
-        success, message = renew_certificate(domain)
-        logger.info(f"Certificate renewal for {domain}: {'Success' if success else 'Failed'}")
-    
-    thread = threading.Thread(target=renew_cert_async)
-    thread.start()
-    
-    return jsonify({'success': True, 'message': f'Certificate renewal started for {domain}'})
-
-@app.route('/api/web/certificates/<domain>/download')
-def web_download_certificate(domain):
-    """Web interface download certificate endpoint (no auth required)"""
-    cert_dir = CERT_DIR / domain
-    if not cert_dir.exists():
-        return jsonify({'error': 'Certificate not found'}), 404
-    
-    # Create temporary ZIP file
-    with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as tmp_file:
-        with zipfile.ZipFile(tmp_file.name, 'w') as zip_file:
-            for file_name in ['cert.pem', 'chain.pem', 'fullchain.pem', 'privkey.pem']:
-                file_path = cert_dir / file_name
-                if file_path.exists():
-                    zip_file.write(file_path, file_name)
-        
-        return send_file(tmp_file.name, as_attachment=True, download_name=f'{domain}-certificates.zip')
-
-def check_ssl_certificate(domain, port=443, timeout=10):
-    """Check SSL certificate for a domain"""
-    try:
-        # Create SSL context
-        context = ssl.create_default_context()
-        
-        # Connect to the domain
-        with socket.create_connection((domain, port), timeout=timeout) as sock:
-            with context.wrap_socket(sock, server_hostname=domain) as ssock:
-                # Get certificate info
-                cert_der = ssock.getpeercert(binary_form=True)
-                cert = x509.load_der_x509_certificate(cert_der, default_backend())
-                
-                # Check if certificate is valid for this domain
-                san_extension = None
-                try:
-                    san_extension = cert.extensions.get_extension_for_oid(x509.oid.ExtensionOID.SUBJECT_ALTERNATIVE_NAME)
-                    san_names = [name.value for name in san_extension.value]
-                except:
-                    san_names = []
-                
-                # Get subject common name
-                subject_cn = None
-                for attribute in cert.subject:
-                    if attribute.oid == x509.oid.NameOID.COMMON_NAME:
-                        subject_cn = attribute.value
-                        break
-                
-                # Check if domain matches certificate
-                certificate_domains = []
-                if subject_cn:
-                    certificate_domains.append(subject_cn)
-                certificate_domains.extend(san_names)
-                
-                domain_match = any(
-                    domain == cert_domain or 
-                    (cert_domain.startswith('*.') and domain.endswith(cert_domain[2:]))
-                    for cert_domain in certificate_domains
-                )
-                
-                return {
-                    'deployed': True,
-                    'reachable': True,
-                    'certificate_match': domain_match,
-                    'certificate_domains': certificate_domains,
-                    'issuer': cert.issuer.rfc4514_string(),
-                    'expires_at': cert.not_valid_after_utc.isoformat(),
-                    'method': 'ssl-direct',
-                    'timestamp': datetime.now().isoformat()
-                }
-                
-    except socket.timeout:
-        return {
-            'deployed': False,
-            'reachable': False,
-            'certificate_match': False,
-            'error': 'timeout',
-            'method': 'ssl-direct',
-            'timestamp': datetime.now().isoformat()
-        }
-    except socket.gaierror:
-        return {
-            'deployed': False,
-            'reachable': False,
-            'certificate_match': False,
-            'error': 'dns_resolution_failed',
-            'method': 'ssl-direct',
-            'timestamp': datetime.now().isoformat()
-        }
-    except ssl.SSLError as e:
-        return {
-            'deployed': False,
-            'reachable': True,
-            'certificate_match': False,
-            'error': f'ssl_error: {str(e)}',
-            'method': 'ssl-direct',
-            'timestamp': datetime.now().isoformat()
-        }
-    except Exception as e:
-        return {
-            'deployed': False,
-            'reachable': False,
-            'certificate_match': False,
-            'error': f'unknown: {str(e)}',
-            'method': 'ssl-direct',
-            'timestamp': datetime.now().isoformat()
-        }
-
-@ns_certificates.route('/<string:domain>/deployment-status')
-class CertificateDeploymentStatus(Resource):
-    def get(self, domain):
-        """Check deployment status of a certificate for a domain"""
-        try:
-            logger.info(f"Checking deployment status for domain: {domain}")
-            
-            # Check SSL certificate deployment
-            deployment_status = check_ssl_certificate(domain)
-            
-            # If we have a certificate for this domain, compare with deployed cert
-            cert_dir = CERT_DIR / domain
-            if cert_dir.exists():
-                cert_file = cert_dir / "cert.pem"
-                if cert_file.exists():
-                    try:
-                        # Load our certificate
-                        with open(cert_file, 'rb') as f:
-                            our_cert = x509.load_pem_x509_certificate(f.read(), default_backend())
-                        
-                        # If the domain has SSL but doesn't match, check if it's our certificate
-                        if deployment_status['reachable'] and not deployment_status['certificate_match']:
-                            # Additional verification - check certificate fingerprints or other identifiers
-                            deployment_status['has_local_cert'] = True
-                            deployment_status['local_cert_expires'] = our_cert.not_valid_after_utc.isoformat()
-                        else:
-                            deployment_status['has_local_cert'] = True
-                            deployment_status['local_cert_expires'] = our_cert.not_valid_after_utc.isoformat()
-                            
-                    except Exception as e:
-                        logger.error(f"Error reading local certificate for {domain}: {e}")
-                        deployment_status['has_local_cert'] = False
-                else:
-                    deployment_status['has_local_cert'] = False
-            else:
-                deployment_status['has_local_cert'] = False
-            
-            return deployment_status
-            
-        except Exception as e:
-            logger.error(f"Error checking deployment status for {domain}: {e}")
-            return {
-                'deployed': False,
-                'reachable': False,
-                'certificate_match': False,
-                'error': f'check_failed: {str(e)}',
-                'method': 'ssl-direct',
-                'timestamp': datetime.now().isoformat()
-            }, 500
-
-def get_domain_dns_provider(domain, settings):
-    """Get the DNS provider used for a specific domain"""
-    domains = settings.get('domains', [])
-    
-    # Handle both old format (list of strings) and new format (list of objects)
-    for domain_entry in domains:
-        if isinstance(domain_entry, str):
-            # Old format - just domain name, use default provider
-            if domain_entry == domain:
-                return settings.get('dns_provider', 'cloudflare')
-        elif isinstance(domain_entry, dict):
-            # New format - domain object with provider info
-            if domain_entry.get('domain') == domain:
-                return domain_entry.get('dns_provider', settings.get('dns_provider', 'cloudflare'))
-    
-    # If domain not found, return default provider
-    return settings.get('dns_provider', 'cloudflare')
-
-def migrate_domains_format(settings):
-    """Migrate domains from old format (list of strings) to new format (list of objects)"""
-    domains = settings.get('domains', [])
-    migrated_domains = []
-    needs_migration = False
-    
-    for domain_entry in domains:
-        if isinstance(domain_entry, str):
-            # Old format - convert to new format
-            migrated_domains.append({
-                'domain': domain_entry,
-                'dns_provider': settings.get('dns_provider', 'cloudflare')
-            })
-            needs_migration = True
-        elif isinstance(domain_entry, dict):
-            # Already new format
-            migrated_domains.append(domain_entry)
-        else:
-            # Invalid format, skip
-            logger.warning(f"Invalid domain entry format: {domain_entry}")
-    
-    if needs_migration:
-        settings['domains'] = migrated_domains
-        save_settings(settings)
-        logger.info("Migrated domains to new format")
-    
-    return settings
-
-# Input validation utilities
-def validate_domain(domain):
-    """Validate domain name format and security"""
-    if not domain or not isinstance(domain, str):
-        return False, "Domain must be a non-empty string"
-    
-    domain = domain.strip().lower()
-    
-    # Basic format validation
-    domain_pattern = r'^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$'
-    if not re.match(domain_pattern, domain):
-        return False, "Invalid domain format"
-    
-    # Length checks
-    if len(domain) > 253:
-        return False, "Domain name too long"
-    
-    # Check for dangerous characters
-    if any(char in domain for char in [' ', '\n', '\r', '\t', ';', '&', '|', '`']):
-        return False, "Domain contains invalid characters"
-    
-    return True, domain
-
-def validate_email(email):
-    """Validate email format"""
-    if not email or not isinstance(email, str):
-        return False, "Email must be a non-empty string"
-    
-    email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-    if not re.match(email_pattern, email.strip()):
-        return False, "Invalid email format"
-    
-    return True, email.strip().lower()
-
-def validate_api_token(token):
-    """Validate API token strength"""
-    if not token or not isinstance(token, str):
-        return False, "Token must be a non-empty string"
-    
-    if len(token) < 32:
-        return False, "Token must be at least 32 characters long"
-    
-    if token in ['change-this-token', 'certmate-api-token-12345']:
-        return False, "Please use a secure, unique token"
-    
-    return True, token
-
-def generate_secure_token():
-    """Generate a secure random token for API authentication"""
-    return secrets.token_urlsafe(32)
-
-def migrate_dns_providers_to_multi_account(settings):
-    """Migrate existing single-account DNS providers to multi-account structure
-    
-    This function ensures backward compatibility by converting old format:
-    dns_providers: { "cloudflare": {"api_token": "..."} }
-    
-    To new format:
-    dns_providers: { "cloudflare": {"default": {"name": "Default Account", "api_token": "..."}} }
-    default_accounts: { "cloudflare": "default" }
-    """
-    if 'dns_providers' not in settings:
-        return settings
-        
-    # Check if migration is needed
-    needs_migration = False
-    dns_providers = settings['dns_providers']
-    
-    for provider, config in dns_providers.items():
-        if isinstance(config, dict) and any(key in config for key in [
-            'api_token', 'access_key_id', 'secret_access_key', 'api_key', 'api_url',
-            'subscription_id', 'project_id', 'username', 'token', 'secret'
-        ]):
-            # This is old single-account format
-            needs_migration = True
-            break
-    
-    if not needs_migration:
-        return settings
-    
-    logger.info("Migrating DNS providers to multi-account structure")
-    
-    # Initialize new structures
-    if 'default_accounts' not in settings:
-        settings['default_accounts'] = {}
-    
-    migrated_providers = {}
-    
-    for provider, config in dns_providers.items():
-        if isinstance(config, dict):
-            # Check if this is already multi-account format
-            if any(isinstance(v, dict) and ('name' in v or 'api_token' in v or 'access_key_id' in v) for v in config.values()):
-                # Already in multi-account format or mixed format
-                migrated_providers[provider] = config
-                continue
-            
-            # Check if this is single-account format that needs migration
-            credentials_found = any(key in config for key in [
-                'api_token', 'access_key_id', 'secret_access_key', 'api_key', 'api_url',
-                'subscription_id', 'project_id', 'username', 'token', 'secret'
-            ])
-            
-            if credentials_found:
-                # Migrate to multi-account format
-                migrated_providers[provider] = {
-                    'default': {
-                        'name': 'Default Account',
-                        'description': f'Migrated from single-account configuration',
-                        **config
-                    }
-                }
-                settings['default_accounts'][provider] = 'default'
-                logger.info(f"Migrated {provider} to multi-account format")
-            else:
-                # Empty or invalid config, keep as is
-                migrated_providers[provider] = config
-        else:
-            # Non-dict config, keep as is
-            migrated_providers[provider] = config
-    
-    settings['dns_providers'] = migrated_providers
-    return settings
-
-def validate_dns_provider_account(provider, account_id, config):
-    """Validate DNS provider account configuration
-    
-    Args:
-        provider: DNS provider name (e.g., 'cloudflare')
-        account_id: Account identifier (e.g., 'production')
-        config: Account configuration dict
-        
-    Returns:
-        tuple: (is_valid, error_message)
-    """
-    if not isinstance(config, dict):
-        return False, "Account configuration must be a dictionary"
-    
-    # Validate account metadata
-    if 'name' not in config or not config['name'].strip():
-        return False, "Account name is required"
-    
-    # Provider-specific validation
-    if provider == 'cloudflare':
-        if 'api_token' not in config or not config['api_token']:
-            return False, "Cloudflare API token is required"
-        # Basic token format validation
-        token = config['api_token']
-        if len(token) < 10:
-            return False, "Cloudflare API token appears to be too short"
-            
-    elif provider == 'route53':
-        required_fields = ['access_key_id', 'secret_access_key']
-        for field in required_fields:
-            if field not in config or not config[field]:
-                return False, f"AWS Route53 {field} is required"
-        # Basic AWS key format validation
-        if len(config['access_key_id']) < 16:
-            return False, "AWS access key ID appears to be too short"
-        if len(config['secret_access_key']) < 32:
-            return False, "AWS secret access key appears to be too short"
-            
-    elif provider == 'azure':
-        required_fields = ['subscription_id', 'resource_group', 'tenant_id', 'client_id', 'client_secret']
-        for field in required_fields:
-            if field not in config or not config[field]:
-                return False, f"Azure {field} is required"
-                
-    elif provider == 'google':
-        required_fields = ['project_id', 'service_account_key']
-        for field in required_fields:
-            if field not in config or not config[field]:
-                return False, f"Google Cloud {field} is required"
-        # Validate service account key is valid JSON
-        try:
-            json.loads(config['service_account_key'])
-        except (json.JSONDecodeError, TypeError):
-            return False, "Google Cloud service account key must be valid JSON"
-            
-    elif provider == 'powerdns':
-        required_fields = ['api_url', 'api_key']
-        for field in required_fields:
-            if field not in config or not config[field]:
-                return False, f"PowerDNS {field} is required"
-        # Validate URL format
-        try:
-            parsed = urlparse(config['api_url'])
-            if not parsed.scheme or not parsed.netloc:
-                return False, "PowerDNS API URL must be a valid URL"
-        except Exception:
-            return False, "PowerDNS API URL format is invalid"
-            
-    elif provider in ['digitalocean', 'linode', 'gandi', 'vultr', 'hetzner', 'nsone', 'dnsmadeeasy']:
-        if 'api_key' not in config and 'api_token' not in config:
-            return False, f"{provider.title()} API key/token is required"
-        
-        token_key = 'api_key' if 'api_key' in config else 'api_token'
-        if not config.get(token_key):
-            return False, f"{provider.title()} {token_key} cannot be empty"
-            
-    elif provider == 'ovh':
-        required_fields = ['endpoint', 'application_key', 'application_secret', 'consumer_key']
-        for field in required_fields:
-            if field not in config or not config[field]:
-                return False, f"OVH {field} is required"
-                
-    elif provider == 'namecheap':
-        required_fields = ['username', 'api_key']
-        for field in required_fields:
-            if field not in config or not config[field]:
-                return False, f"Namecheap {field} is required"
-                
-    elif provider == 'rfc2136':
-        required_fields = ['nameserver', 'tsig_key', 'tsig_secret']
-        for field in required_fields:
-            if field not in config or not config[field]:
-                return False, f"RFC2136 {field} is required"
-                
-    elif provider == 'porkbun':
-        required_fields = ['api_key', 'secret_key']
-        for field in required_fields:
-            if field not in config or not config[field]:
-                return False, f"Porkbun {field} is required"
-                
-    elif provider == 'godaddy':
-        required_fields = ['api_key', 'secret']
-        for field in required_fields:
-            if field not in config or not config[field]:
-                return False, f"GoDaddy {field} is required"
-                
-    elif provider == 'he-ddns':
-        required_fields = ['username', 'password']
-        for field in required_fields:
-            if field not in config or not config[field]:
-                return False, f"Hurricane Electric {field} is required"
-                
-    elif provider == 'dynudns':
-        if 'token' not in config or not config['token']:
-            return False, "Dynu API token is required"
-    
-    return True, "Valid"
-
-def get_dns_provider_account_config(provider, account_id=None, settings=None):
-    """Get DNS provider account configuration
-    
-    Args:
-        provider: DNS provider name
-        account_id: Account identifier (if None, uses default)
-        settings: Settings dict (if None, loads from file)
-        
-    Returns:
-        tuple: (account_config, account_id_used)
-    """
-    if settings is None:
-        settings = load_settings()
-    
-    # Ensure migration is applied
-    settings = migrate_dns_providers_to_multi_account(settings)
-    
-    dns_providers = settings.get('dns_providers', {})
-    if provider not in dns_providers:
-        return None, None
-    
-    provider_config = dns_providers[provider]
-    
-    # Handle both old and new formats
-    if not isinstance(provider_config, dict):
-        return None, None
-    
-    # If account_id is not specified, use default
-    if account_id is None:
-        default_accounts = settings.get('default_accounts', {})
-        account_id = default_accounts.get(provider, 'default')
-    
-    # Check if this is multi-account format
-    if account_id in provider_config and isinstance(provider_config[account_id], dict):
-        account_config = provider_config[account_id]
-        # Check if this looks like an account config (has name or credentials)
-        if 'name' in account_config or any(key in account_config for key in [
-            'api_token', 'access_key_id', 'api_key', 'api_url', 'username', 'token'
-        ]):
-            return account_config, account_id
-    
-    # Fallback for old single-account format or if account not found
-    # Check if provider_config has direct credentials (old format)
-    if any(key in provider_config for key in [
-        'api_token', 'access_key_id', 'api_key', 'api_url', 'username', 'token'
-    ]):
-        # This is old format, wrap it
-        return {
-            'name': 'Default Account',
-            **provider_config
-        }, 'default'
-    
-    # Try 'default' account if not already tried
-    if account_id != 'default' and 'default' in provider_config:
-        default_config = provider_config['default']
-        if isinstance(default_config, dict):
-            return default_config, 'default'
-    
-    return None, None
-
-def list_dns_provider_accounts(provider, settings=None):
-    """List all accounts for a DNS provider
-    
-    Args:
-        provider: DNS provider name
-        settings: Settings dict (if None, loads from file)
-        
-    Returns:
-        dict: {account_id: account_info, ...}
-    """
-    if settings is None:
-        settings = load_settings()
-    
-    # Ensure migration is applied
-    settings = migrate_dns_providers_to_multi_account(settings)
-    
-    dns_providers = settings.get('dns_providers', {})
-    if provider not in dns_providers:
-        return {}
-    
-    provider_config = dns_providers[provider]
-    if not isinstance(provider_config, dict):
-        return {}
-    
-    accounts = {}
-    for account_id, config in provider_config.items():
-        if isinstance(config, dict):
-            # Check if this looks like an account config
-            if 'name' in config or any(key in config for key in [
-                'api_token', 'access_key_id', 'api_key', 'api_url', 'username', 'token'
-            ]):
-                accounts[account_id] = {
-                    'name': config.get('name', 'Unnamed Account'),
-                    'description': config.get('description', '')
-                }
-    
-    # Fallback for old single-account format
-    if not accounts and any(key in provider_config for key in [
-        'api_token', 'access_key_id', 'api_key', 'api_url', 'username', 'token'
-    ]):
-        accounts['default'] = {
-            'name': 'Default Account',
-            'description': 'Migrated from single-account configuration'
-        }
-    
-    return accounts
-
-# Multi-Account DNS Management endpoints
-@ns_settings.route('/dns-providers/<string:provider>/accounts')
-class DNSProviderAccounts(Resource):
-    @api.doc(security='Bearer')
-    @require_auth
-    def get(self, provider):
-        """Get all accounts for a specific DNS provider"""
-        try:
-            accounts = list_dns_provider_accounts(provider)
-            settings = load_settings()
-            default_accounts = settings.get('default_accounts', {})
-            default_account = default_accounts.get(provider)
-            
-            return {
-                'provider': provider,
-                'accounts': accounts,
-                'default_account': default_account,
-                'total_accounts': len(accounts)
-            }
-        except Exception as e:
-            logger.error(f"Error getting DNS provider accounts: {str(e)}")
-            return {'error': 'Failed to get DNS provider accounts'}, 500
-
-    @api.doc(security='Bearer')
-    @require_auth
-    def post(self, provider):
-        """Add a new account for a DNS provider"""
-        try:
-            data = request.get_json()
-            if not data:
-                return {'error': 'No data provided'}, 400
-            
-            account_id = data.get('account_id')
-            account_config = data.get('config', {})
-            
-            if not account_id:
-                return {'error': 'account_id is required'}, 400
-            
-            if not account_config.get('name'):
-                account_config['name'] = account_id.title()
-            
-            # Validate the account configuration
-            is_valid, validation_error = validate_dns_provider_account(provider, account_id, account_config)
-            if not is_valid:
-                return {'error': f'Account validation failed: {validation_error}'}, 400
-            
-            # Load current settings
-            settings = load_settings()
-            settings = migrate_dns_providers_to_multi_account(settings)
-            
-            # Initialize provider if not exists
-            if 'dns_providers' not in settings:
-                settings['dns_providers'] = {}
-            if provider not in settings['dns_providers']:
-                settings['dns_providers'][provider] = {}
-            
-            # Add the account
-            settings['dns_providers'][provider][account_id] = account_config
-            
-            # Set as default if requested or if it's the first account
-            if (data.get('set_as_default') or 
-                len(settings['dns_providers'][provider]) == 1):
-                if 'default_accounts' not in settings:
-                    settings['default_accounts'] = {}
-                settings['default_accounts'][provider] = account_id
-            
-            # Save settings
-            save_settings(settings)
-            
-            return {
-                'message': f'Account {account_id} added successfully to {provider}',
-                'account_id': account_id,
-                'provider': provider
-            }, 201
-            
-        except Exception as e:
-            logger.error(f"Error adding DNS provider account: {str(e)}")
-            return {'error': 'Failed to add DNS provider account'}, 500
-
-@ns_settings.route('/dns-providers/<string:provider>/accounts/<string:account_id>')
-class DNSProviderAccount(Resource):
-    @api.doc(security='Bearer')
-    @require_auth
-    def get(self, provider, account_id):
-        """Get a specific account configuration (masked)"""
-        try:
-            account_config, _ = get_dns_provider_account_config(provider, account_id)
-            if not account_config:
-                return {'error': 'Account not found'}, 404
-            
             # Return masked version for security
             safe_config = {
                 'name': account_config.get('name', account_id.title()),
@@ -2791,8 +1946,8 @@ class DNSProviderAccount(Resource):
             
             return safe_config
         except Exception as e:
-            logger.error(f"Error getting DNS provider account: {str(e)}")
-            return {'error': 'Failed to get DNS provider account'}, 500
+            logger.error(f"[DNS DEBUG] Error getting account {account_id} for {provider}: {e}")
+            return jsonify({'error': 'Failed to get DNS provider account'}, 500)
 
     @api.doc(security='Bearer')
     @require_auth
@@ -2864,7 +2019,7 @@ class DNSProviderAccount(Resource):
             if len(provider_accounts) <= 1:
                 return jsonify({'error': 'Cannot delete the only account for this provider'}), 400
             
-            # Remove the account
+            # Remove account
             del settings['dns_providers'][provider][account_id]
             
             # Update default if this was the default
@@ -2888,3 +2043,1037 @@ class DNSProviderAccount(Resource):
         except Exception as e:
             logger.error(f"[DNS DEBUG] Error deleting account {account_id} for {provider}: {e}")
             return jsonify({'error': str(e)}), 500
+
+def generate_secure_token():
+    """Generate a secure random token for API authentication"""
+    # Use 40 characters for a good balance of security and usability
+    alphabet = string.ascii_letters + string.digits
+    return ''.join(secrets.choice(alphabet) for _ in range(40))
+
+def create_settings_backup(settings_data, backup_reason="manual"):
+    """Create a backup of settings data with timestamp and metadata"""
+    try:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_filename = f"settings_{timestamp}_{backup_reason}.json"
+        backup_path = BACKUP_DIR / "settings" / backup_filename
+        
+        # Create backup metadata
+        backup_metadata = {
+            "timestamp": timestamp,
+            "datetime": datetime.now().isoformat(),
+            "reason": backup_reason,
+            "original_file": str(SETTINGS_FILE),
+            "backup_version": "1.0"
+        }
+        
+        # Create backup with metadata
+        backup_data = {
+            "metadata": backup_metadata,
+            "settings": settings_data
+        }
+        
+        # Write backup file
+        success = safe_file_write(backup_path, backup_data, is_json=True)
+        
+        if success:
+            logger.info(f"Settings backup created: {backup_filename} (reason: {backup_reason})")
+            
+            # Cleanup old backups
+            cleanup_old_settings_backups()
+            return str(backup_path)
+        else:
+            logger.error(f"Failed to create settings backup: {backup_filename}")
+            return None
+            
+    except Exception as e:
+        logger.error(f"Error creating settings backup: {e}")
+        return None
+
+def create_certificates_backup(backup_reason="manual"):
+    """Create a zip backup of all certificates"""
+    try:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_filename = f"certificates_{timestamp}_{backup_reason}.zip"
+        backup_path = BACKUP_DIR / "certificates" / backup_filename
+        
+        # Only create backup if certificates directory exists and has content
+        if not CERT_DIR.exists() or not any(CERT_DIR.iterdir()):
+            logger.info("No certificates to backup")
+            return None
+            
+        # Create zip file
+        with zipfile.ZipFile(backup_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            # Add all certificate files
+            for cert_dir in CERT_DIR.iterdir():
+                if cert_dir.is_dir():
+                    for cert_file in cert_dir.rglob('*'):
+                        if cert_file.is_file():
+                            # Store with relative path
+                            arcname = cert_file.relative_to(CERT_DIR)
+                            zipf.write(cert_file, arcname)
+            
+            # Add backup metadata
+            metadata = {
+                "timestamp": timestamp,
+                "datetime": datetime.now().isoformat(),
+                "reason": backup_reason,
+                "backup_version": "1.0",
+                "total_domains": len([d for d in CERT_DIR.iterdir() if d.is_dir()])
+            }
+            
+            # Add metadata as a file in the zip
+            zipf.writestr("backup_metadata.json", json.dumps(metadata, indent=2))
+        
+        logger.info(f"Certificates backup created: {backup_filename} (reason: {backup_reason})")
+        
+        # Cleanup old backups
+        cleanup_old_certificate_backups()
+        return str(backup_path)
+        
+    except Exception as e:
+        logger.error(f"Error creating certificates backup: {e}")
+        return None
+
+def cleanup_old_settings_backups():
+    """Remove old settings backups based on retention policy"""
+    try:
+        settings_backup_dir = BACKUP_DIR / "settings"
+        if not settings_backup_dir.exists():
+            return
+            
+        # Get all backup files sorted by modification time
+        backup_files = sorted(
+            [f for f in settings_backup_dir.glob("*.json") if f.is_file()],
+            key=lambda x: x.stat().st_mtime,
+            reverse=True
+        )
+        
+        # Remove files older than retention period
+        cutoff_time = time.time() - (BACKUP_RETENTION_DAYS * 24 * 60 * 60)
+        removed_count = 0
+        
+        for backup_file in backup_files:
+            if backup_file.stat().st_mtime < cutoff_time:
+                try:
+                    backup_file.unlink()
+                    removed_count += 1
+                except Exception as e:
+                    logger.warning(f"Failed to remove old backup {backup_file}: {e}")
+        
+        # Also enforce maximum backup count
+        if len(backup_files) > MAX_BACKUPS_PER_TYPE:
+            files_to_remove = backup_files[MAX_BACKUPS_PER_TYPE:]
+            for backup_file in files_to_remove:
+                try:
+                    if backup_file.exists():  # File might have been removed above
+                        backup_file.unlink()
+                        removed_count += 1
+                except Exception as e:
+                    logger.warning(f"Failed to remove excess backup {backup_file}: {e}")
+        
+        if removed_count > 0:
+            logger.info(f"Cleaned up {removed_count} old settings backups")
+            
+    except Exception as e:
+        logger.error(f"Error during settings backup cleanup: {e}")
+
+def cleanup_old_certificate_backups():
+    """Remove old certificate backups based on retention policy"""
+    try:
+        cert_backup_dir = BACKUP_DIR / "certificates"
+        if not cert_backup_dir.exists():
+            return
+            
+        # Get all backup files sorted by modification time
+        backup_files = sorted(
+            [f for f in cert_backup_dir.glob("*.zip") if f.is_file()],
+            key=lambda x: x.stat().st_mtime,
+            reverse=True
+        )
+        
+        # Remove files older than retention period
+        cutoff_time = time.time() - (BACKUP_RETENTION_DAYS * 24 * 60 * 60)
+        removed_count = 0
+        
+        for backup_file in backup_files:
+            if backup_file.stat().st_mtime < cutoff_time:
+                try:
+                    backup_file.unlink()
+                    removed_count += 1
+                except Exception as e:
+                    logger.warning(f"Failed to remove old backup {backup_file}: {e}")
+        
+        # Also enforce maximum backup count
+        if len(backup_files) > MAX_BACKUPS_PER_TYPE:
+            files_to_remove = backup_files[MAX_BACKUPS_PER_TYPE:]
+            for backup_file in files_to_remove:
+                try:
+                    if backup_file.exists():  # File might have been removed above
+                        backup_file.unlink()
+                        removed_count += 1
+                except Exception as e:
+                    logger.warning(f"Failed to remove excess backup {backup_file}: {e}")
+        
+        if removed_count > 0:
+            logger.info(f"Cleaned up {removed_count} old certificate backups")
+            
+    except Exception as e:
+        logger.error(f"Error during certificate backup cleanup: {e}")
+
+def list_backups():
+    """List all available backups with metadata"""
+    try:
+        backups = {
+            "settings": [],
+            "certificates": []
+        }
+        
+        # List settings backups
+        settings_backup_dir = BACKUP_DIR / "settings"
+        if settings_backup_dir.exists():
+            for backup_file in sorted(settings_backup_dir.glob("*.json"), key=lambda x: x.stat().st_mtime, reverse=True):
+                try:
+                    # Try to read metadata from backup
+                    backup_data = safe_file_read(backup_file, is_json=True)
+                    if backup_data and "metadata" in backup_data:
+                        metadata = backup_data["metadata"]
+                    else:
+                        # Fallback metadata from filename and file stats
+                        metadata = {
+                            "timestamp": backup_file.stem.split("_")[1:3],
+                            "reason": backup_file.stem.split("_")[-1] if len(backup_file.stem.split("_")) > 3 else "unknown"
+                        }
+                    
+                    backups["settings"].append({
+                        "filename": backup_file.name,
+                        "path": str(backup_file),
+                        "size": backup_file.stat().st_size,
+                        "created": datetime.fromtimestamp(backup_file.stat().st_mtime).isoformat(),
+                        "metadata": metadata
+                    })
+                except Exception as e:
+                    logger.warning(f"Error processing settings backup {backup_file}: {e}")
+        
+        # List certificate backups
+        cert_backup_dir = BACKUP_DIR / "certificates"
+        if cert_backup_dir.exists():
+            for backup_file in sorted(cert_backup_dir.glob("*.zip"), key=lambda x: x.stat().st_mtime, reverse=True):
+                try:
+                    # Try to read metadata from zip
+                    metadata = {}
+                    try:
+                        with zipfile.ZipFile(backup_file, 'r') as zipf:
+                            if "backup_metadata.json" in zipf.namelist():
+                                metadata = json.loads(zipf.read("backup_metadata.json").decode('utf-8'))
+                    except:
+                        # Fallback metadata
+                        metadata = {
+                            "timestamp": backup_file.stem.split("_")[1:3],
+                            "reason": backup_file.stem.split("_")[-1] if len(backup_file.stem.split("_")) > 3 else "unknown"
+                        }
+                    
+                    backups["certificates"].append({
+                        "filename": backup_file.name,
+                        "path": str(backup_file),
+                        "size": backup_file.stat().st_size,
+                        "created": datetime.fromtimestamp(backup_file.stat().st_mtime).isoformat(),
+                        "metadata": metadata
+                    })
+                except Exception as e:
+                    logger.warning(f"Error processing certificate backup {backup_file}: {e}")
+        
+        return backups
+        
+    except Exception as e:
+        logger.error(f"Error listing backups: {e}")
+        return {"settings": [], "certificates": []}
+
+# =============================================
+# BACKUP MANAGEMENT API ENDPOINTS
+# =============================================
+
+backup_metadata_model = api.model('BackupMetadata', {
+    'filename': fields.String(description='Backup filename'),
+    'size': fields.Integer(description='File size in bytes'),
+    'created': fields.String(description='Creation timestamp'),
+    'metadata': fields.Raw(description='Backup metadata')
+})
+
+backup_list_model = api.model('BackupList', {
+    'settings': fields.List(fields.Nested(backup_metadata_model), description='Settings backups'),
+    'certificates': fields.List(fields.Nested(backup_metadata_model), description='Certificate backups')
+})
+
+@ns_backups.route('')
+class BackupList(Resource):
+    @api.doc(security='Bearer')
+    @api.marshal_with(backup_list_model)
+    @require_auth
+    def get(self):
+        """List all available backups"""
+        try:
+            backups = list_backups()
+            return backups
+        except Exception as e:
+            logger.error(f"Error listing backups: {e}")
+            return {'message': 'Failed to list backups'}, 500
+
+@ns_backups.route('/create')
+class BackupCreate(Resource):
+    @api.doc(security='Bearer')
+    @api.expect(api.model('BackupCreateRequest', {
+        'type': fields.String(required=True, enum=['settings', 'certificates', 'both'], description='Type of backup to create'),
+        'reason': fields.String(description='Reason for backup creation', default='manual')
+    }))
+    @require_auth
+    def post(self):
+        """Create manual backup"""
+        try:
+            data = request.get_json()
+            backup_type = data.get('type', 'both')
+            reason = data.get('reason', 'manual')
+            
+            created_backups = []
+            
+            if backup_type in ['settings', 'both']:
+                # Create settings backup
+                current_settings = load_settings()
+                backup_path = create_settings_backup(current_settings, reason)
+                if backup_path:
+                    created_backups.append({
+                        'type': 'settings',
+                        'path': backup_path,
+                        'filename': Path(backup_path).name
+                    })
+            
+            if backup_type in ['certificates', 'both']:
+                # Create certificates backup
+                backup_path = create_certificates_backup(reason)
+                if backup_path:
+                    created_backups.append({
+                        'type': 'certificates', 
+                        'path': backup_path,
+                        'filename': Path(backup_path).name
+                    })
+            
+            if created_backups:
+                return {
+                    'success': True,
+                    'message': f'Backup(s) created successfully',
+                    'backups': created_backups
+                }
+            else:
+                return {
+                    'success': False,
+                    'message': 'No backups were created'
+                }, 400
+                
+        except Exception as e:
+            logger.error(f"Error creating backup: {e}")
+            return {'success': False, 'message': f'Failed to create backup: {str(e)}'}, 500
+
+@ns_backups.route('/download/<backup_type>/<filename>')
+class BackupDownload(Resource):
+    @api.doc(security='Bearer')
+    @require_auth
+    def get(self, backup_type, filename):
+        """Download a specific backup file"""
+        try:
+            if backup_type not in ['settings', 'certificates']:
+                return {'message': 'Invalid backup type'}, 400
+            
+            backup_path = BACKUP_DIR / backup_type / filename
+            
+            if not backup_path.exists():
+                return {'message': 'Backup file not found'}, 404
+            
+            # Verify file is within backup directory (security check)
+            if not str(backup_path.resolve()).startswith(str(BACKUP_DIR.resolve())):
+                return {'message': 'Access denied'}, 403
+            
+            return send_file(
+                backup_path,
+                as_attachment=True,
+                download_name=filename,
+                mimetype='application/octet-stream'
+            )
+            
+        except Exception as e:
+            logger.error(f"Error downloading backup: {e}")
+            return {'message': f'Failed to download backup: {str(e)}'}, 500
+
+@ns_backups.route('/restore/settings')
+class BackupRestoreSettings(Resource):
+    @api.doc(security='Bearer')
+    @api.expect(api.model('RestoreSettingsRequest', {
+        'filename': fields.String(required=True, description='Settings backup filename to restore'),
+        'create_backup_before_restore': fields.Boolean(description='Create backup before restoring', default=True)
+    }))
+    @require_auth
+    def post(self):
+        """Restore settings from backup"""
+        try:
+            data = request.get_json()
+            filename = data.get('filename')
+            create_backup = data.get('create_backup_before_restore', True)
+            
+            if not filename:
+                return {'message': 'Filename is required'}, 400
+            
+            backup_path = BACKUP_DIR / "settings" / filename
+            
+            if not backup_path.exists():
+                return {'message': 'Backup file not found'}, 404
+            
+            # Verify file is within backup directory (security check)
+            if not str(backup_path.resolve()).startswith(str((BACKUP_DIR / "settings").resolve())):
+                return {'message': 'Access denied'}, 403
+            
+            # Create backup of current settings before restore
+            if create_backup:
+                current_settings = load_settings()
+                backup_path_current = create_settings_backup(current_settings, f"before_restore_{filename}")
+                if backup_path_current:
+                    logger.info(f"Created backup before restore: {backup_path_current}")
+            
+            # Load backup data
+            backup_data = safe_file_read(backup_path, is_json=True)
+            if not backup_data:
+                return {'message': 'Failed to read backup file'}, 500
+            
+            # Extract settings from backup data
+            if 'settings' in backup_data:
+                restored_settings = backup_data['settings']
+            else:
+                # Assume the entire file is settings (for older backups)
+                restored_settings = backup_data
+            
+            # Validate and save restored settings
+            if save_settings(restored_settings, f"restore_from_{filename}"):
+                logger.info(f"Settings restored from backup: {filename}")
+                return {
+                    'success': True,
+                    'message': 'Settings restored successfully',
+                    'restored_from': filename
+                }
+            else:
+                return {'message': 'Failed to save restored settings'}, 500
+                
+        except Exception as e:
+            logger.error(f"Error restoring settings: {e}")
+            return {'message': f'Failed to restore settings: {str(e)}'}, 500
+
+@ns_backups.route('/cleanup')
+class BackupCleanup(Resource):
+    @api.doc(security='Bearer')
+    @api.expect(api.model('CleanupRequest', {
+        'type': fields.String(enum=['settings', 'certificates', 'both'], description='Type of backups to cleanup', default='both'),
+        'force': fields.Boolean(description='Force cleanup even if within retention period', default=False)
+    }))
+    @require_auth
+    def post(self):
+        """Clean up old backups"""
+        try:
+            data = request.get_json() or {}
+            cleanup_type = data.get('type', 'both')
+            force = data.get('force', False)
+            
+            cleaned_files = []
+            
+            if cleanup_type in ['settings', 'both']:
+                cleanup_old_settings_backups()
+                cleaned_files.append('settings')
+            
+            if cleanup_type in ['certificates', 'both']:
+                cleanup_old_certificate_backups()
+                cleaned_files.append('certificates')
+            
+            return {
+                'success': True,
+                'message': f'Cleanup completed for: {", ".join(cleaned_files)}',
+                'cleaned_types': cleaned_files
+            }
+            
+        except Exception as e:
+            logger.error(f"Error during backup cleanup: {e}")
+            return {'message': f'Failed to cleanup backups: {str(e)}'}, 500
+
+# =============================================
+# WEB INTERFACE BACKUP ENDPOINTS
+# =============================================
+
+@app.route('/api/web/backups')
+@require_auth
+def web_list_backups():
+    """Web interface endpoint to list backups"""
+    try:
+        backups = list_backups()
+        return jsonify(backups)
+    except Exception as e:
+        logger.error(f"Error listing backups for web: {e}")
+        return jsonify({'error': 'Failed to list backups'}), 500
+
+@app.route('/api/web/backups/create', methods=['POST'])
+@require_auth
+def web_create_backup():
+    """Web interface endpoint to create backup"""
+    try:
+        data = request.get_json() or {}
+        backup_type = data.get('type', 'both')
+        reason = data.get('reason', 'manual_web')
+        
+        created_backups = []
+        
+        if backup_type in ['settings', 'both']:
+            current_settings = load_settings()
+            backup_path = create_settings_backup(current_settings, reason)
+            if backup_path:
+                created_backups.append({
+                    'type': 'settings',
+                    'filename': Path(backup_path).name
+                })
+        
+        if backup_type in ['certificates', 'both']:
+            backup_path = create_certificates_backup(reason)
+            if backup_path:
+                created_backups.append({
+                    'type': 'certificates',
+                    'filename': Path(backup_path).name
+                })
+        
+        if created_backups:
+            return jsonify({
+                'success': True,
+                'message': 'Backup(s) created successfully',
+                'backups': created_backups
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'No backups were created'
+            }), 400
+            
+    except Exception as e:
+        logger.error(f"Error creating backup via web: {e}")
+        return jsonify({'error': f'Failed to create backup: {str(e)}'}), 500
+
+@app.route('/api/web/backups/download/<backup_type>/<filename>')
+@require_auth
+def web_download_backup(backup_type, filename):
+    """Web interface endpoint to download backup"""
+    try:
+        if backup_type not in ['settings', 'certificates']:
+            return jsonify({'error': 'Invalid backup type'}), 400
+        
+        backup_path = BACKUP_DIR / backup_type / filename
+        
+        if not backup_path.exists():
+            return jsonify({'error': 'Backup file not found'}), 404
+        
+        # Security check
+        if not str(backup_path.resolve()).startswith(str(BACKUP_DIR.resolve())):
+            return jsonify({'error': 'Access denied'}), 403
+        
+        return send_file(
+            backup_path,
+            as_attachment=True,
+            download_name=filename,
+            mimetype='application/octet-stream'
+        )
+        
+    except Exception as e:
+        logger.error(f"Error downloading backup via web: {e}")
+        return jsonify({'error': f'Failed to download backup: {str(e)}'}), 500
+
+# Web Certificate API Routes (for form-based frontend)
+@app.route('/api/web/certificates')
+@require_auth
+def web_list_certificates():
+    """Web interface endpoint to list certificates"""
+    try:
+        settings = load_settings()
+        certificates = []
+        
+        for domain_config in settings.get('domains', []):
+            domain_name = domain_config.get('domain') if isinstance(domain_config, dict) else domain_config
+            cert_info = get_certificate_info(domain_name)
+            if cert_info:
+                certificates.append(cert_info)
+        
+        return jsonify(certificates)
+    except Exception as e:
+        logger.error(f"Error fetching certificates via web: {e}")
+        # Return empty array on error to ensure frontend compatibility
+        return jsonify([])
+
+@app.route('/api/web/certificates/create', methods=['POST'])
+@require_auth
+def web_create_certificate():
+    """Web interface endpoint to create certificate"""
+    try:
+        # Handle both form data and JSON
+        if request.is_json:
+            data = request.get_json()
+        else:
+            data = request.form.to_dict()
+        
+        domain = data.get('domain')
+        dns_provider = data.get('dns_provider')  # Optional, uses default from settings
+        account_id = data.get('account_id')      # Optional, uses default account
+        
+        if not domain:
+            return jsonify({'success': False, 'message': 'Domain is required'}), 400
+        
+        settings = load_settings()
+        email = settings.get('email')
+        
+        if not email:
+            return jsonify({'success': False, 'message': 'Email not configured in settings'}), 400
+        
+        # Determine DNS provider
+        if not dns_provider:
+            dns_provider = settings.get('dns_provider', 'cloudflare')
+        
+        # Validate that the specified account exists (if provided)
+        if account_id:
+            account_config, _ = get_dns_provider_account_config(dns_provider, account_id, settings)
+            if not account_config:
+                return jsonify({
+                    'success': False, 
+                    'message': f'DNS provider account "{account_id}" not found for {dns_provider}'
+                }), 400
+        
+        # Create certificate in background
+        def create_cert_async():
+            success, message = create_certificate(domain, email, dns_provider, account_id=account_id)
+            logger.info(f"Certificate creation for {domain}: {'Success' if success else 'Failed'}")
+        
+        thread = threading.Thread(target=create_cert_async)
+        thread.start()
+        
+        return jsonify({
+            'success': True, 
+            'message': f'Certificate creation started for {domain}',
+            'domain': domain,
+            'dns_provider': dns_provider,
+            'account_id': account_id
+        })
+        
+    except Exception as e:
+        logger.error(f"Certificate creation failed via web: {str(e)}")
+        return jsonify({'success': False, 'message': f'Certificate creation failed: {str(e)}'}), 500
+
+@app.route('/api/web/certificates/<string:domain>/download')
+@require_auth
+def web_download_certificate(domain):
+    """Web interface endpoint to download certificate as ZIP file"""
+    try:
+        cert_dir = CERT_DIR / domain
+        if not cert_dir.exists():
+            return jsonify({'error': 'Certificate not found'}), 404
+        
+        # Create temporary ZIP file
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as tmp_file:
+            with zipfile.ZipFile(tmp_file.name, 'w') as zip_file:
+                for file_name in ['cert.pem', 'chain.pem', 'fullchain.pem', 'privkey.pem']:
+                    file_path = cert_dir / file_name
+                    if file_path.exists():
+                        zip_file.write(file_path, file_name)
+            
+            return send_file(tmp_file.name, as_attachment=True, download_name=f'{domain}-certificates.zip')
+            
+    except Exception as e:
+        logger.error(f"Error downloading certificate via web: {e}")
+        return jsonify({'error': f'Failed to download certificate: {str(e)}'}), 500
+
+@app.route('/api/web/certificates/<string:domain>/renew', methods=['POST'])
+@require_auth
+def web_renew_certificate(domain):
+    """Web interface endpoint to renew certificate"""
+    try:
+        settings = load_settings()
+        
+        # Check if domain exists in settings
+        domain_exists = False
+        for domain_config in settings.get('domains', []):
+            if isinstance(domain_config, dict) and domain_config.get('domain') == domain:
+                domain_exists = True
+                break
+            elif isinstance(domain_config, str) and domain_config == domain:
+                domain_exists = True
+                break
+        
+        if not domain_exists:
+            return jsonify({'success': False, 'message': 'Domain not found in settings'}), 404
+        
+        # Renew certificate in background
+        def renew_cert_async():
+            success, message = renew_certificate(domain)
+            logger.info(f"Certificate renewal for {domain}: {'Success' if success else 'Failed'}")
+        
+        thread = threading.Thread(target=renew_cert_async)
+        thread.start()
+        
+        return jsonify({'success': True, 'message': f'Certificate renewal started for {domain}'})
+        
+    except Exception as e:
+        logger.error(f"Certificate renewal failed via web: {str(e)}")
+        return jsonify({'success': False, 'message': f'Certificate renewal failed: {str(e)}'}), 500
+
+def migrate_domains_format(settings):
+    """Migrate old domain format (string) to new format (object with dns_provider)"""
+    try:
+        if 'domains' not in settings:
+            return settings
+            
+        domains = settings['domains']
+        default_provider = settings.get('dns_provider', 'cloudflare')
+        migrated_domains = []
+        
+        for domain_entry in domains:
+            if isinstance(domain_entry, str):
+                # Old format: just a string
+                migrated_domains.append({
+                    'domain': domain_entry,
+                    'dns_provider': default_provider
+                })
+            elif isinstance(domain_entry, dict):
+                # New format: already an object
+                if 'domain' in domain_entry:
+                    # Ensure dns_provider is set if missing
+                    if 'dns_provider' not in domain_entry:
+                        domain_entry['dns_provider'] = default_provider
+                    migrated_domains.append(domain_entry)
+            else:
+                # Invalid format, skip
+                logger.warning(f"Invalid domain entry format: {domain_entry}")
+                
+        settings['domains'] = migrated_domains
+        return settings
+        
+    except Exception as e:
+        logger.error(f"Error during domain format migration: {e}")
+        return settings
+
+def migrate_dns_providers_to_multi_account(settings):
+    """Migrate old single-account DNS provider configurations to multi-account format"""
+    try:
+        dns_providers = settings.get('dns_providers', {})
+        
+        # Check if migration is needed
+        needs_migration = False
+        for provider_name, provider_config in dns_providers.items():
+            if provider_config and isinstance(provider_config, dict):
+                # Check if this is an old single-account configuration
+                # Look for credential keys that indicate old format
+                old_config_keys = {
+                    'cloudflare': ['api_token'],
+                    'route53': ['access_key_id', 'secret_access_key'],
+                    'azure': ['subscription_id', 'resource_group', 'tenant_id', 'client_id', 'client_secret'],
+                    'google': ['project_id', 'service_account_key'],
+                    'powerdns': ['api_url', 'api_key'],
+                    'digitalocean': ['api_token'],
+                    'linode': ['api_key'],
+                    'gandi': ['api_token'],
+                    'ovh': ['endpoint', 'application_key', 'application_secret', 'consumer_key'],
+                    'namecheap': ['username', 'api_key'],
+                    'rfc2136': ['nameserver', 'tsig_key', 'tsig_secret']
+                }
+                
+                provider_keys = old_config_keys.get(provider_name, ['api_token', 'api_key', 'username'])
+                
+                # Check if this provider has old-style configuration (direct credential keys)
+                # Skip if already has 'accounts' structure or account-like sub-objects
+                if 'accounts' not in provider_config:
+                    has_old_config = any(key in provider_config for key in provider_keys)
+                    has_account_objects = any(
+                        isinstance(v, dict) and ('name' in v or any(k in v for k in provider_keys))
+                        for k, v in provider_config.items()
+                        if k not in provider_keys
+                    )
+                    
+                    if has_old_config and not has_account_objects:
+                        needs_migration = True
+                        break
+        
+        if not needs_migration:
+            return settings
+            
+        logger.info("Migrating DNS providers to multi-account format")
+        
+        # Migrate each provider
+        for provider_name, provider_config in dns_providers.items():
+            if not provider_config or not isinstance(provider_config, dict):
+                continue
+                
+            # Skip if already in multi-account format
+            if 'accounts' in provider_config:
+                continue
+                
+            # Define credential keys for each provider
+            old_config_keys = {
+                'cloudflare': ['api_token'],
+                'route53': ['access_key_id', 'secret_access_key', 'region'],
+                'azure': ['subscription_id', 'resource_group', 'tenant_id', 'client_id', 'client_secret'],
+                'google': ['project_id', 'service_account_key'],
+                'powerdns': ['api_url', 'api_key'],
+                'digitalocean': ['api_token'],
+                'linode': ['api_key'],
+                'gandi': ['api_token'],
+                'ovh': ['endpoint', 'application_key', 'application_secret', 'consumer_key'],
+                'namecheap': ['username', 'api_key'],
+                'rfc2136': ['nameserver', 'tsig_key', 'tsig_secret', 'api_key'],
+                'vultr': ['api_key'],
+                'hetzner': ['api_token'],
+                'porkbun': ['api_key', 'secret_key'],
+                'godaddy': ['api_key', 'secret'],
+                'he-ddns': ['username', 'password']
+            }
+            
+            provider_keys = old_config_keys.get(provider_name, ['api_token', 'api_key', 'username'])
+            
+            # Check if this provider has old-style configuration
+            has_old_config = any(key in provider_config for key in provider_keys)
+            
+            # Check if it already has account-like objects
+            has_account_objects = any(
+                isinstance(v, dict) and ('name' in v or any(k in v for k in provider_keys))
+                for k, v in provider_config.items()
+                if k not in provider_keys
+            )
+            
+            if not has_old_config or has_account_objects:
+                continue
+                
+            # Extract old configuration keys
+            old_config = {}
+            remaining_config = {}
+            
+            for key, value in provider_config.items():
+                if key in provider_keys:
+                    old_config[key] = value
+                else:
+                    remaining_config[key] = value
+                    
+            # Create new multi-account structure
+            new_config = {
+                'accounts': {
+                    'default': {
+                        'name': f'Default {provider_name.title()} Account',
+                        'description': 'Migrated from single-account configuration',
+                        **old_config
+                    }
+                },
+                **remaining_config
+            }
+                    
+            dns_providers[provider_name] = new_config
+            
+        # Update default accounts if not set
+        if 'default_accounts' not in settings:
+            settings['default_accounts'] = {}
+            
+        # Set default account for each configured provider
+        for provider_name, provider_config in dns_providers.items():
+            if provider_config and isinstance(provider_config, dict) and 'accounts' in provider_config:
+                if provider_name not in settings['default_accounts']:
+                    # Use the first account as default
+                    first_account = next(iter(provider_config['accounts'].keys()), None)
+                    if first_account:
+                        settings['default_accounts'][provider_name] = first_account
+                        
+        logger.info("DNS provider migration completed successfully")
+        return settings
+        
+    except Exception as e:
+        logger.error(f"Error during DNS provider migration: {e}")
+        return settings
+
+def get_domain_dns_provider(domain, settings):
+    """Get the DNS provider for a specific domain
+    
+    Args:
+        domain: The domain name to check
+        settings: Current settings dict
+        
+    Returns:
+        str: DNS provider name (e.g., 'cloudflare', 'route53')
+    """
+    try:
+        # Check if domain has specific DNS provider configured
+        domains = settings.get('domains', [])
+        
+        for domain_entry in domains:
+            if isinstance(domain_entry, dict):
+                # New format: {domain: "example.com", dns_provider: "route53", account_id: "prod"}
+                if domain_entry.get('domain') == domain:
+                    return domain_entry.get('dns_provider', settings.get('dns_provider', 'cloudflare'))
+            elif isinstance(domain_entry, str) and domain_entry == domain:
+                # Old format: just domain string, use global DNS provider
+                return settings.get('dns_provider', 'cloudflare')
+        
+        # Domain not found in list, use global default
+        return settings.get('dns_provider', 'cloudflare')
+        
+    except Exception as e:
+        logger.error(f"Error getting DNS provider for domain {domain}: {e}")
+        return 'cloudflare'  # Safe fallback
+
+def get_dns_provider_account_config(provider, account_id=None, settings=None):
+    """Get DNS provider account configuration
+    
+    Args:
+        provider: DNS provider name (e.g., 'cloudflare')
+        account_id: Specific account ID (optional, uses default if not provided)
+        settings: Settings dict (optional, loads current if not provided)
+        
+    Returns:
+        tuple: (account_config_dict, used_account_id)
+    """
+    try:
+        if not settings:
+            settings = load_settings()
+            
+        # Ensure migration is applied
+        settings = migrate_dns_providers_to_multi_account(settings)
+        
+        dns_providers = settings.get('dns_providers', {})
+        provider_config = dns_providers.get(provider, {})
+        
+        # Handle new multi-account format
+        if 'accounts' in provider_config:
+            accounts = provider_config['accounts']
+            
+            if account_id:
+                # Use specific account
+                if account_id in accounts:
+                    return accounts[account_id], account_id
+                else:
+                    logger.warning(f"Account {account_id} not found for provider {provider}")
+                    return None, None
+            else:
+                # Use default account
+                default_accounts = settings.get('default_accounts', {})
+                default_account_id = default_accounts.get(provider)
+                
+                if default_account_id and default_account_id in accounts:
+                    return accounts[default_account_id], default_account_id
+                elif accounts:
+                    # Use first available account
+                    first_account_id = next(iter(accounts.keys()))
+                    return accounts[first_account_id], first_account_id
+                else:
+                    return None, None
+        else:
+            # Handle legacy single-account format or direct config
+            if provider_config:
+                return provider_config, 'default'
+            else:
+                return None, None
+                
+    except Exception as e:
+        logger.error(f"Error getting DNS provider account config for {provider}: {e}")
+        return None, None
+
+def list_dns_provider_accounts(provider, settings=None):
+    """List all accounts for a DNS provider
+    
+    Args:
+        provider: DNS provider name
+        settings: Settings dict (optional, loads current if not provided)
+        
+    Returns:
+        list: List of account configurations with metadata
+    """
+    try:
+        if not settings:
+            settings = load_settings()
+            
+        # Ensure migration is applied
+        settings = migrate_dns_providers_to_multi_account(settings)
+        
+        dns_providers = settings.get('dns_providers', {})
+        provider_config = dns_providers.get(provider, {})
+        
+        accounts = []
+        
+        if 'accounts' in provider_config:
+            # Multi-account format
+            for account_id, account_config in provider_config['accounts'].items():
+                accounts.append({
+                    'account_id': account_id,
+                    'name': account_config.get('name', account_id.title()),
+                    'description': account_config.get('description', ''),
+                    'configured': bool(any(account_config.get(key) for key in [
+                        'api_token', 'access_key_id', 'api_key', 'api_url', 'username', 'token'
+                    ]))
+                })
+        elif provider_config:
+            # Legacy single-account format
+            accounts.append({
+                'account_id': 'default',
+                'name': f'Default {provider.title()} Account',
+                'description': 'Legacy single-account configuration',
+                'configured': bool(any(provider_config.get(key) for key in [
+                    'api_token', 'access_key_id', 'api_key', 'api_url', 'username', 'token'
+                ]))
+            })
+            
+        return accounts
+        
+    except Exception as e:
+        logger.error(f"Error listing DNS provider accounts for {provider}: {e}")
+        return []
+
+def validate_dns_provider_account(provider, account_id, account_config):
+    """Validate DNS provider account configuration
+    
+    Args:
+        provider: DNS provider name
+        account_id: Account identifier
+        account_config: Account configuration dict
+        
+    Returns:
+        tuple: (is_valid, error_message)
+    """
+    try:
+        # Define required fields for each provider
+        required_fields = {
+            'cloudflare': ['api_token'],
+            'route53': ['access_key_id', 'secret_access_key'],
+            'azure': ['subscription_id', 'resource_group', 'tenant_id', 'client_id', 'client_secret'],
+            'google': ['project_id', 'service_account_key'],
+            'powerdns': ['api_url', 'api_key'],
+            'digitalocean': ['api_token'],
+            'linode': ['api_key'],
+            'gandi': ['api_token'],
+            'ovh': ['endpoint', 'application_key', 'application_secret', 'consumer_key'],
+            'namecheap': ['username', 'api_key'],
+            'vultr': ['api_key'],
+            'dnsmadeeasy': ['api_key', 'secret_key'],
+            'nsone': ['api_key'],
+            'rfc2136': ['nameserver', 'tsig_key', 'tsig_secret'],
+            'hetzner': ['api_token'],
+            'porkbun': ['api_key', 'secret_key'],
+            'godaddy': ['api_key', 'secret'],
+            'he-ddns': ['username', 'password'],
+            'dynudns': ['token']
+        }
+        
+        if provider not in required_fields:
+            return False, f"Unsupported DNS provider: {provider}"
+            
+        # Check required fields
+        missing_fields = []
+        for field in required_fields[provider]:
+            if not account_config.get(field):
+                missing_fields.append(field)
+                
+        if missing_fields:
+            return False, f"Missing required fields: {', '.join(missing_fields)}"
+            
+        return True, "Valid configuration"
+        
+    except Exception as e:
+        logger.error(f"Error validating DNS provider account: {e}")
+        return False, f"Validation error: {str(e)}"

@@ -12,7 +12,7 @@
 ![screenshot1](screenshot_1.png)
 ![screenshot2](screenshot_2.png)
 
-[🚀 Quick Start](#-quick-start-with-docker) • [📖 Documentation](#-documentation) • [🔧 Installation](#-installation-methods) • [🌐 DNS Providers](#-supported-dns-providers) • [📊 API Reference](#-api-usage)
+[🚀 Quick Start](#-quick-start-with-docker) • [📖 Documentation](#-documentation) • [🔧 Installation](#-installation-methods) • [🌐 DNS Providers](#-supported-dns-providers) • [� Backup & Recovery](#-backup--recovery) • [�📊 API Reference](#-api-usage)
 
 </div>
 
@@ -27,6 +27,7 @@ CertMate solves the complexity of SSL certificate management in modern distribut
 - **🚀 Enterprise-Ready** - Docker, Kubernetes, REST API, and monitoring built-in
 - **📦 Simple Integration** - One-URL certificate downloads for easy automation
 - **🔒 Security-First** - Bearer token authentication, secure file permissions, audit logging
+- **💾 Automatic Backup** - Built-in backup and restore for settings and certificates
 
 ## ✨ Key Features
 
@@ -55,18 +56,27 @@ CertMate solves the complexity of SSL certificate management in modern distribut
 - **High Availability** - Stateless design for horizontal scaling
 - **Monitoring Integration** - Health checks and structured logging
 
-### � **Security & Compliance**
+### 💾 **Backup & Recovery**
+- **Automatic Backups** - Settings and certificates backed up automatically on changes
+- **Manual Backup Creation** - On-demand backup creation via web UI or API
+- **Comprehensive Coverage** - Backs up DNS configurations, certificates, and application settings
+- **Retention Management** - Configurable retention policies with automatic cleanup
+- **Easy Restore** - Simple restore process from any backup point
+- **Download Support** - Export backups for external storage and disaster recovery
+
+### 🔒 **Security & Compliance**
 - **Bearer Token Authentication** - Secure API access control
 - **File Permissions** - Proper certificate file security (600/700)
 - **Audit Logging** - Complete certificate lifecycle tracking
 - **Environment Variables** - Secure credential management
 - **Rate Limit Handling** - Let's Encrypt rate limit awareness
 
-### � **Developer Experience**
+### 💻 **Developer Experience**
 - **One-URL Downloads** - Simple certificate retrieval for automation
 - **Multiple Output Formats** - PEM, ZIP, individual files
 - **SDK Examples** - Python, Bash, Ansible, Terraform examples
 - **Webhook Support** - Certificate renewal notifications
+- **Backup API** - Programmatic backup creation and restoration
 - **Extensive Documentation** - API docs, guides, and examples
 
 ## 🌐 Supported DNS Providers
@@ -1322,7 +1332,162 @@ server {
 
 ### 🔄 Backup & Recovery
 
-#### Automated Backup Script
+CertMate provides comprehensive backup and recovery capabilities built directly into the application, ensuring your certificates and configuration data are always protected.
+
+#### Built-in Backup System
+
+**Automatic Backups:**
+- **Settings Backup** - Automatically created when DNS providers, domains, or application settings are modified
+- **Certificate Backup** - Automatically created when new certificates are generated or renewed
+- **Retention Management** - Configurable retention policy (default: 10 most recent backups)
+- **Automatic Cleanup** - Old backups are automatically removed based on retention settings
+
+**Manual Backups:**
+- **On-Demand Creation** - Create backups anytime via the web interface or API
+- **Selective Backup** - Choose to backup settings, certificates, or both
+- **Download Support** - Export backups for external storage and disaster recovery
+
+#### Web Interface Backup Management
+
+Access backup features from the Settings page:
+
+```html
+<!-- Manual backup creation -->
+<button onclick="createBackup('settings', this)">Create Settings Backup</button>
+<button onclick="createBackup('certificates', this)">Create Certificate Backup</button>
+
+<!-- View and manage existing backups -->
+- Download backups for external storage
+- Restore from any backup point
+- View backup contents and metadata
+- Delete specific backups manually
+```
+
+#### API Backup Operations
+
+**Create Backups:**
+```bash
+# Create settings backup
+curl -X POST "http://localhost:8000/api/backup/settings" \
+     -H "Authorization: Bearer your_token"
+
+# Create certificate backup  
+curl -X POST "http://localhost:8000/api/backup/certificates" \
+     -H "Authorization: Bearer your_token"
+```
+
+**List and Download Backups:**
+```bash
+# List all backups
+curl -H "Authorization: Bearer your_token" \
+     "http://localhost:8000/api/backups"
+
+# Download specific backup
+curl -H "Authorization: Bearer your_token" \
+     "http://localhost:8000/api/backup/download/settings_20241225_120000.json" \
+     -o backup.json
+```
+
+#### Backup File Structure
+
+**Settings Backup (JSON):**
+```json
+{
+  "timestamp": "2024-12-25T12:00:00Z",
+  "version": "1.0",
+  "dns_providers": {...},
+  "domains": [...],
+  "settings": {...}
+}
+```
+
+**Certificate Backup (ZIP):**
+```
+certificates_20241225_120000.zip
+├── domain1.com/
+│   ├── cert.pem
+│   ├── chain.pem
+│   ├── fullchain.pem
+│   └── privkey.pem
+└── domain2.com/
+    ├── cert.pem
+    ├── chain.pem
+    ├── fullchain.pem
+    └── privkey.pem
+```
+
+#### External Backup Integration
+
+For additional protection, integrate with external backup systems:
+
+**Automated External Backup Script:**
+```bash
+#!/bin/bash
+# /opt/scripts/backup-certmate-external.sh
+
+BACKUP_DIR="/backup/certmate/$(date +%Y%m%d_%H%M%S)"
+CERT_DIR="/opt/certmate/certificates"
+DATA_DIR="/opt/certmate/data"
+BACKUP_STORAGE="/backup/certmate/backups"
+RETENTION_DAYS=30
+
+# Create backup directory
+mkdir -p "$BACKUP_DIR"
+
+# Download latest backups via API
+curl -H "Authorization: Bearer $API_TOKEN" \
+     "http://localhost:8000/api/backups/latest/settings" \
+     -o "$BACKUP_DIR/settings_backup.json"
+
+curl -H "Authorization: Bearer $API_TOKEN" \
+     "http://localhost:8000/api/backups/latest/certificates" \
+     -o "$BACKUP_DIR/certificates_backup.zip"
+
+# Backup certificates directory
+tar -czf "$BACKUP_DIR/certificates.tar.gz" "$CERT_DIR"
+
+# Backup application data
+tar -czf "$BACKUP_DIR/data.tar.gz" "$DATA_DIR"
+
+# Copy built-in backups
+cp -r "$BACKUP_STORAGE"/* "$BACKUP_DIR/"
+
+# Encrypt backups (optional)
+gpg --cipher-algo AES256 --compress-algo 1 --symmetric \
+    --output "$BACKUP_DIR/certificates.tar.gz.gpg" \
+    "$BACKUP_DIR/certificates.tar.gz"
+
+# Cleanup old backups
+find /backup/certmate -type d -mtime +$RETENTION_DAYS -exec rm -rf {} \;
+
+echo "External backup completed: $BACKUP_DIR"
+```
+
+#### Recovery Procedures
+
+**Web Interface Recovery:**
+1. Navigate to Settings → Backup Management
+2. Select the backup to restore from
+3. Choose restore type (settings, certificates, or both)
+4. Confirm restoration
+5. Application will restart if settings are restored
+
+**API Recovery:**
+```bash
+# Restore settings from backup
+curl -X POST "http://localhost:8000/api/backup/restore/settings" \
+     -H "Authorization: Bearer your_token" \
+     -H "Content-Type: application/json" \
+     -d '{"backup_id": "settings_20241225_120000"}'
+
+# Restore certificates from backup
+curl -X POST "http://localhost:8000/api/backup/restore/certificates" \
+     -H "Authorization: Bearer your_token" \
+     -H "Content-Type: application/json" \
+     -d '{"backup_id": "certificates_20241225_120000"}'
+```
+
+**Manual Recovery from External Backup:**
 ```bash
 #!/bin/bash
 # /opt/scripts/backup-certmate.sh

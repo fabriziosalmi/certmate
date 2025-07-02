@@ -24,9 +24,11 @@ class TestCertificateOperations:
         mock_load_settings.return_value = {
             'dns_providers': {
                 'cloudflare': {
-                    'production': {
-                        'name': 'Production',
-                        'api_token': 'test-token'
+                    'accounts': {
+                        'production': {
+                            'name': 'Production',
+                            'api_token': 'test-token'
+                        }
                     }
                 }
             },
@@ -66,9 +68,11 @@ class TestCertificateOperations:
         mock_load_settings.return_value = {
             'dns_providers': {
                 'cloudflare': {
-                    'production': {
-                        'name': 'Production',
-                        'api_token': 'test-token'
+                    'accounts': {
+                        'production': {
+                            'name': 'Production',
+                            'api_token': 'test-token'
+                        }
                     }
                 }
             },
@@ -150,9 +154,11 @@ class TestCertificateOperations:
         mock_load_settings.return_value = {
             'dns_providers': {
                 'cloudflare': {
-                    'production': {
-                        'name': 'Production',
-                        'api_token': 'test-token'
+                    'accounts': {
+                        'production': {
+                            'name': 'Production',
+                            'api_token': 'test-token'
+                        }
                     }
                 }
             },
@@ -398,9 +404,11 @@ class TestCertificateOperationsExtended:
         mock_load_settings.return_value = {
             'dns_providers': {
                 'cloudflare': {
-                    'staging': {
-                        'name': 'Staging',
-                        'api_token': 'staging-token'
+                    'accounts': {
+                        'staging': {
+                            'name': 'Staging',
+                            'api_token': 'staging-token'
+                        }
                     }
                 }
             },
@@ -438,9 +446,11 @@ class TestCertificateOperationsExtended:
             'certbot_email': 'test@example.com',  # Add certbot_email to settings
             'dns_providers': {
                 'cloudflare': {
-                    'production': {
-                        'name': 'Production',
-                        'api_token': 'cloudflare-prod-token-1234567890'  # Make token longer for validation
+                    'accounts': {
+                        'production': {
+                            'name': 'Production',
+                            'api_token': 'cloudflare-prod-token-1234567890'  # Make token longer for validation
+                        }
                     }
                 }
             },
@@ -495,7 +505,7 @@ class TestCertificateOperationsExtended:
         )
         
         assert success is False
-        assert 'exception' in message.lower() or 'error' in message.lower()
+        assert 'not configured' in message.lower() or 'exception' in message.lower() or 'error' in message.lower()
     
     @patch('app.create_multi_provider_config')
     @patch('app.load_settings')

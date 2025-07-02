@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CertMate - SSL Certificate Manager</title>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico">
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
@@ -384,6 +386,12 @@
 
         // Update statistics cards with deployment info
         function updateStats(certificates) {
+            // Ensure certificates is an array
+            if (!Array.isArray(certificates)) {
+                console.error('[DEPLOYMENT CHECK] updateStats called with non-array:', certificates);
+                certificates = []; // Fallback to empty array
+            }
+            
             const total = certificates.length;
             const valid = certificates.filter(cert => cert.exists && cert.days_until_expiry > 30).length;
             const expiring = certificates.filter(cert => cert.exists && cert.days_until_expiry > 0 && cert.days_until_expiry <= 30).length;
@@ -555,6 +563,12 @@
             const searchTerm = document.getElementById('certificateSearch').value.toLowerCase();
             const statusFilter = document.getElementById('statusFilter').value;
             
+            // Ensure allCertificates is an array
+            if (!Array.isArray(allCertificates)) {
+                console.error('[DEPLOYMENT CHECK] allCertificates is not an array:', allCertificates);
+                allCertificates = [];
+            }
+            
             const filteredCerts = allCertificates.filter(cert => {
                 // Search filter
                 const matchesSearch = cert.domain.toLowerCase().includes(searchTerm);
@@ -588,6 +602,12 @@
         // Display certificates  
         function displayCertificates(certificates) {
             const container = document.getElementById('certificatesList');
+            
+            // Ensure certificates is an array
+            if (!Array.isArray(certificates)) {
+                console.error('[DEPLOYMENT CHECK] displayCertificates called with non-array:', certificates);
+                certificates = []; // Fallback to empty array
+            }
             
             if (certificates.length === 0) {
                 const isFiltered = document.getElementById('certificateSearch').value || 
@@ -791,11 +811,13 @@
             
             // After displaying, trigger deployment checks only for certificates that don't have cached status
             setTimeout(() => {
-                certificates.filter(cert => cert.exists).forEach(cert => {
-                    if (!deploymentCache.get(cert.domain)) {
-                        checkDeploymentStatus(cert.domain);
-                    }
-                });
+                if (Array.isArray(certificates)) {
+                    certificates.filter(cert => cert.exists).forEach(cert => {
+                        if (!deploymentCache.get(cert.domain)) {
+                            checkDeploymentStatus(cert.domain);
+                        }
+                    });
+                }
             }, 100);
         }
 
@@ -895,8 +917,8 @@
                 addDebugLog('All cache entries cleared by user request', 'warn');
                 updateCacheInfo();
                 
-                // Optionally re-check all certificates
-                if (allCertificates.length > 0) {
+                // Ensure allCertificates is an array before checking
+                if (Array.isArray(allCertificates) && allCertificates.length > 0) {
                     addDebugLog('Re-checking all certificates after cache clear...', 'info');
                     setTimeout(() => {
                         const existingCerts = allCertificates.filter(cert => cert.exists);
@@ -926,6 +948,12 @@
         // Update deployment statistics with better counting
         function updateDeploymentStats() {
             console.log('[DEPLOYMENT CHECK] Updating deployment statistics');
+            
+            // Ensure allCertificates is an array
+            if (!Array.isArray(allCertificates)) {
+                console.error('[DEPLOYMENT CHECK] allCertificates is not an array:', allCertificates);
+                allCertificates = [];
+            }
             
             const deployedCount = allCertificates.filter(cert => {
                 if (!cert.exists) return false;
@@ -958,6 +986,12 @@
             console.log('[DEPLOYMENT CHECK] Starting bulk deployment check for all certificates');
             
             try {
+                // Ensure allCertificates is an array
+                if (!Array.isArray(allCertificates)) {
+                    console.error('[DEPLOYMENT CHECK] allCertificates is not an array:', allCertificates);
+                    allCertificates = [];
+                }
+                
                 const certificatesToCheck = allCertificates.filter(cert => cert.exists);
                 console.log(`[DEPLOYMENT CHECK] Found ${certificatesToCheck.length} certificates to check`);
                 
@@ -1215,7 +1249,24 @@
                 const response = await fetch('/api/certificates', {
                     headers: API_HEADERS
                 });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
                 const certificates = await response.json();
+                
+                // Check if the response is an error object
+                if (certificates && certificates.error) {
+                    throw new Error(`API Error: ${certificates.error} (${certificates.code || 'unknown'})`);
+                }
+                
+                // Ensure certificates is an array
+                if (!Array.isArray(certificates)) {
+                    console.error('[DEPLOYMENT CHECK] API returned non-array response:', certificates);
+                    addDebugLog(`API returned invalid response: ${JSON.stringify(certificates)}`, 'error');
+                    throw new Error('Invalid API response: expected array of certificates');
+                }
                 
                 console.log(`[DEPLOYMENT CHECK] Loaded ${certificates.length} certificates`);
                 addDebugLog(`Loaded ${certificates.length} certificates successfully`, 'success');
@@ -1247,7 +1298,20 @@
             } catch (error) {
                 console.error('[DEPLOYMENT CHECK] Failed to load certificates:', error);
                 addDebugLog(`Failed to load certificates: ${error.message}`, 'error');
-                showMessage('Failed to load certificates', 'error');
+                
+                // Initialize with empty array to prevent further errors
+                allCertificates = [];
+                updateStats([]);
+                displayCertificates([]);
+                
+                // Show appropriate error message
+                if (error.message.includes('401') || error.message.includes('Unauthorized')) {
+                    showMessage('Authentication failed. Please check your API token.', 'error');
+                } else if (error.message.includes('403') || error.message.includes('Forbidden')) {
+                    showMessage('Access denied. Please check your permissions.', 'error');
+                } else {
+                    showMessage('Failed to load certificates. Please try again.', 'error');
+                }
             }
         }
 
@@ -1274,7 +1338,7 @@
                     addDebugLog('Deployment cache cleared by admin request', 'warn');
                     // Re-check all certificates
                     setTimeout(() => {
-                        if (allCertificates.length > 0) {
+                        if (Array.isArray(allCertificates) && allCertificates.length > 0) {
                             addDebugLog('Re-checking all certificates after cache clear...', 'info');
                             const existingCerts = allCertificates.filter(cert => cert.exists);
                             existingCerts.forEach(cert => checkDeploymentStatus(cert.domain));
@@ -1397,8 +1461,11 @@
         // Certificate action functions
         async function downloadCertificate(domain) {
             try {
-                const response = await fetch(`/api/web/certificates/${domain}/download`, {
-                    method: 'GET'
+                const response = await fetch(`/api/certificates/${domain}/download`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${API_TOKEN}`
+                    }
                 });
                 
                 if (response.ok) {
@@ -1429,9 +1496,10 @@
             );
             
             try {
-                const response = await fetch(`/api/web/certificates/${domain}/renew`, {
+                const response = await fetch(`/api/certificates/${domain}/renew`, {
                     method: 'POST',
                     headers: {
+                        'Authorization': `Bearer ${API_TOKEN}`,
                         'Content-Type': 'application/json'
                     }
                 });

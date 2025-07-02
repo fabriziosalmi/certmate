@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Settings - CertMate</title>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico">
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
@@ -1207,6 +1209,74 @@
                         </div>
                     </div>
 
+                    <!-- Backup & Restore Section -->
+                    <div class="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                            <i class="fas fa-archive mr-1"></i>
+                            Backup & Restore
+                        </label>
+                        
+                        <div class="space-y-4">
+                            <!-- Create Backup Section -->
+                            <div>
+                                <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Create Backup</h4>
+                                <div class="flex flex-wrap gap-3">
+                                    <button type="button" onclick="createBackup('settings', this)" 
+                                            class="bg-green-600 text-white px-3 py-2 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-colors text-sm">
+                                        <i class="fas fa-cog mr-1"></i>
+                                        Backup Settings
+                                    </button>
+                                    <button type="button" onclick="createBackup('certificates', this)" 
+                                            class="bg-blue-600 text-white px-3 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors text-sm">
+                                        <i class="fas fa-certificate mr-1"></i>
+                                        Backup Certificates
+                                    </button>
+                                    <button type="button" onclick="createBackup('both', this)" 
+                                            class="bg-purple-600 text-white px-3 py-2 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-colors text-sm">
+                                        <i class="fas fa-archive mr-1"></i>
+                                        Backup All
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- Backup List Section -->
+                            <div>
+                                <div class="flex items-center justify-between mb-2">
+                                    <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300">Available Backups</h4>
+                                    <button type="button" onclick="refreshBackupList()" 
+                                            class="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white text-sm">
+                                        <i class="fas fa-sync-alt mr-1"></i>
+                                        Refresh
+                                    </button>
+                                </div>
+                                
+                                <!-- Backup List Container -->
+                                <div id="backup-list" class="bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-md max-h-64 overflow-y-auto">
+                                    <div class="p-4 text-center text-gray-500 dark:text-gray-400">
+                                        <i class="fas fa-spinner fa-spin mr-2"></i>
+                                        Loading backups...
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Backup Info -->
+                            <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-600 rounded-md p-3">
+                                <div class="flex">
+                                    <div class="flex-shrink-0">
+                                        <i class="fas fa-info-circle text-blue-400"></i>
+                                    </div>
+                                    <div class="ml-3">
+                                        <p class="text-sm text-blue-700 dark:text-blue-300">
+                                            Backups are automatically created when you save settings or create certificates. 
+                                            You can also create manual backups and download them for safekeeping.
+                                            Backups are retained for 30 days and limited to 50 files per type.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Submit Button -->
                     <div class="flex justify-end">
                         <button type="submit" id="saveBtn" class="bg-primary text-white px-6 py-2 rounded-md hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition-colors">
@@ -2400,6 +2470,307 @@
             
             return card;
         }
+
+        // =============================================
+        // BACKUP MANAGEMENT FUNCTIONS
+        // =============================================
+
+        async function createBackup(type, buttonElement) {
+            let button = null;
+            let originalText = '';
+            
+            try {
+                addDebugLog(`Creating ${type} backup...`, 'info');
+                
+                // Get button element - either passed directly or from event
+                button = buttonElement || (window.event && window.event.target);
+                originalText = button ? button.innerHTML : '';
+                
+                if (button) {
+                    button.disabled = true;
+                    button.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Creating...';
+                }
+                
+                const response = await fetch('/api/backups/create', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${API_TOKEN}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        type: type,
+                        reason: 'manual_backup'
+                    })
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorData}`);
+                }
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    addDebugLog(`Backup created successfully: ${result.backups.map(b => b.filename).join(', ')}`, 'info');
+                    showMessage(`Backup created successfully!`, 'success');
+                    
+                    // Refresh backup list
+                    await refreshBackupList();
+                } else {
+                    throw new Error(result.message || 'Failed to create backup');
+                }
+                
+            } catch (error) {
+                addDebugLog(`Error creating backup: ${error.message}`, 'error');
+                showMessage(`Error creating backup: ${error.message}`, 'error');
+            } finally {
+                // Restore button state
+                if (button && originalText) {
+                    button.disabled = false;
+                    button.innerHTML = originalText;
+                }
+            }
+        }
+
+        async function refreshBackupList() {
+            try {
+                addDebugLog('Refreshing backup list...', 'info');
+                
+                const response = await fetch('/api/backups', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${API_TOKEN}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const backups = await response.json();
+                updateBackupList(backups);
+                
+                addDebugLog(`Backup list refreshed: ${backups.settings.length} settings, ${backups.certificates.length} certificates`, 'info');
+                
+            } catch (error) {
+                addDebugLog(`Error refreshing backup list: ${error.message}`, 'error');
+                console.error('Error refreshing backup list:', error);
+                
+                // Show error in backup list container
+                const backupList = document.getElementById('backup-list');
+                if (backupList) {
+                    backupList.innerHTML = `
+                        <div class="p-4 text-center text-red-500 dark:text-red-400">
+                            <i class="fas fa-exclamation-triangle mr-2"></i>
+                            Error loading backups: ${error.message}
+                        </div>
+                    `;
+                }
+            }
+        }
+
+        function updateBackupList(backups) {
+            const backupList = document.getElementById('backup-list');
+            if (!backupList) return;
+            
+            if (backups.settings.length === 0 && backups.certificates.length === 0) {
+                backupList.innerHTML = `
+                    <div class="p-4 text-center text-gray-500 dark:text-gray-400">
+                        <i class="fas fa-archive mr-2"></i>
+                        No backups available
+                    </div>
+                `;
+                return;
+            }
+            
+            let html = '';
+            
+            // Settings backups
+            if (backups.settings.length > 0) {
+                html += `
+                    <div class="p-3 border-b dark:border-gray-600">
+                        <h5 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                            <i class="fas fa-cog mr-1 text-blue-500"></i>
+                            Settings Backups (${backups.settings.length})
+                        </h5>
+                        <div class="space-y-2">
+                `;
+                
+                backups.settings.slice(0, 10).forEach(backup => {
+                    const createdDate = new Date(backup.created).toLocaleString();
+                    const sizeKB = Math.round(backup.size / 1024);
+                    const reason = backup.metadata?.reason || 'unknown';
+                    
+                    html += `
+                        <div class="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-600 rounded text-xs">
+                            <div class="flex-1 min-w-0">
+                                <div class="font-medium text-gray-900 dark:text-white truncate">${backup.filename}</div>
+                                <div class="text-gray-500 dark:text-gray-400">${createdDate} • ${sizeKB}KB • ${reason}</div>
+                            </div>
+                            <div class="flex items-center space-x-1 ml-2">
+                                <button onclick="downloadBackup('settings', '${backup.filename}')" 
+                                        class="p-1 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300" 
+                                        title="Download">
+                                    <i class="fas fa-download"></i>
+                                </button>
+                                <button onclick="restoreBackup('settings', '${backup.filename}')" 
+                                        class="p-1 text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300" 
+                                        title="Restore">
+                                    <i class="fas fa-undo"></i>
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                if (backups.settings.length > 10) {
+                    html += `
+                        <div class="text-xs text-gray-500 dark:text-gray-400 text-center p-2">
+                            ... and ${backups.settings.length - 10} more backups
+                        </div>
+                    `;
+                }
+                
+                html += '</div></div>';
+            }
+            
+            // Certificate backups
+            if (backups.certificates.length > 0) {
+                html += `
+                    <div class="p-3">
+                        <h5 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                            <i class="fas fa-certificate mr-1 text-green-500"></i>
+                            Certificate Backups (${backups.certificates.length})
+                        </h5>
+                        <div class="space-y-2">
+                `;
+                
+                backups.certificates.slice(0, 10).forEach(backup => {
+                    const createdDate = new Date(backup.created).toLocaleString();
+                    const sizeMB = Math.round(backup.size / (1024 * 1024) * 10) / 10;
+                    const reason = backup.metadata?.reason || 'unknown';
+                    const domains = backup.metadata?.total_domains || 0;
+                    
+                    html += `
+                        <div class="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-600 rounded text-xs">
+                            <div class="flex-1 min-w-0">
+                                <div class="font-medium text-gray-900 dark:text-white truncate">${backup.filename}</div>
+                                <div class="text-gray-500 dark:text-gray-400">${createdDate} • ${sizeMB}MB • ${domains} domains • ${reason}</div>
+                            </div>
+                            <div class="flex items-center space-x-1 ml-2">
+                                <button onclick="downloadBackup('certificates', '${backup.filename}')" 
+                                        class="p-1 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300" 
+                                        title="Download">
+                                    <i class="fas fa-download"></i>
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                if (backups.certificates.length > 10) {
+                    html += `
+                        <div class="text-xs text-gray-500 dark:text-gray-400 text-center p-2">
+                            ... and ${backups.certificates.length - 10} more backups
+                        </div>
+                    `;
+                }
+                
+                html += '</div></div>';
+            }
+            
+            backupList.innerHTML = html;
+        }
+
+        async function downloadBackup(type, filename) {
+            try {
+                addDebugLog(`Downloading ${type} backup: ${filename}`, 'info');
+                
+                const response = await fetch(`/api/backups/download/${type}/${filename}`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${API_TOKEN}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
+                }
+                
+                // Create download link
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+                
+                addDebugLog(`Backup downloaded: ${filename}`, 'info');
+                showMessage(`Backup downloaded: ${filename}`, 'success');
+                
+            } catch (error) {
+                addDebugLog(`Error downloading backup: ${error.message}`, 'error');
+                showMessage(`Error downloading backup: ${error.message}`, 'error');
+            }
+        }
+
+        async function restoreBackup(type, filename) {
+            if (!confirm(`Are you sure you want to restore from "${filename}"? This will replace your current ${type} and create a backup of your current configuration.`)) {
+                return;
+            }
+            
+            try {
+                addDebugLog(`Restoring ${type} from backup: ${filename}`, 'info');
+                
+                const response = await fetch(`/api/backups/restore/${type}`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${API_TOKEN}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        filename: filename,
+                        create_backup_before_restore: true
+                    })
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorData}`);
+                }
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    addDebugLog(`Backup restored successfully from: ${filename}`, 'info');
+                    showMessage(`Settings restored successfully from backup!`, 'success');
+                    
+                    // Refresh the page to show restored settings
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                } else {
+                    throw new Error(result.message || 'Failed to restore backup');
+                }
+                
+            } catch (error) {
+                addDebugLog(`Error restoring backup: ${error.message}`, 'error');
+                showMessage(`Error restoring backup: ${error.message}`, 'error');
+            }
+        }
+
+        // Load backup list on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            // Load backup list after a short delay to let other elements load first
+            setTimeout(() => {
+                refreshBackupList();
+            }, 1000);
+        });
     </script>
 </body>
 </html>

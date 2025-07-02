@@ -62,3 +62,5 @@ api_client_example.py
 # Exclude OS specific files
 .DS_Store
 Thumbs.db
+
+backups/

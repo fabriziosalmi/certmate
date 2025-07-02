@@ -1,3 +1,6 @@
+# CertMate - Complete SSL Certificate Management System
+# All DNS providers and cloud SDKs included for maximum compatibility
+
 # Core Flask dependencies
 Flask==3.0.3
 Flask-CORS==6.0.0
@@ -6,42 +9,32 @@ flask-restx==1.3.0
 # Certificate management
 certbot==2.11.0
 
-# DNS provider plugins (core providers)
+# DNS provider plugins - Major cloud providers
 certbot-dns-cloudflare==2.11.0
 certbot-dns-route53==2.11.0
 certbot-dns-digitalocean==2.11.0
-
-# DNS provider plugins (cloud providers)
-certbot-dns-azure==2.6.1
 certbot-dns-google==2.11.0
 
-# DNS provider plugins (additional providers, install on demand)
-# Uncomment only the providers you need to reduce build time:
-# certbot-dns-powerdns==2.11.0
-# certbot-dns-linode==2.11.0
-# certbot-dns-gandi==2.11.0
-# certbot-dns-ovh==2.11.0
-# certbot-dns-namecheap==2.11.0
-# certbot-dns-rfc2136==2.11.0
-# certbot-dns-vultr==2.11.0
-# certbot-dns-dnsmadeeasy==2.11.0
-# certbot-dns-nsone==2.11.0
-# certbot-dns-hetzner==2.11.0
-# certbot-dns-porkbun==2.11.0
-# certbot-dns-godaddy==2.11.0
-# certbot-dns-he-ddns==2.11.0
-# certbot-dns-dynudns==2.11.0
+# DNS provider plugins - Additional providers
+certbot-dns-powerdns
+certbot-dns-linode
+certbot-dns-gandi
+certbot-dns-ovh
+certbot-dns-namecheap
+certbot-dns-rfc2136
+certbot-dns-vultr
+certbot-dns-dnsmadeeasy
+certbot-dns-nsone
+certbot-dns-hetzner
+certbot-dns-porkbun
+certbot-dns-godaddy
 
-# Cloud SDK dependencies (install only what you need)
-# AWS support
-boto3==1.34.144
-# Azure support (uncomment if using Azure DNS)
-# azure-identity==1.17.1
-# azure-mgmt-dns==8.1.0
-# Google Cloud support (uncomment if using Google DNS)
-# google-cloud-dns==0.35.0
-# Cloudflare API support
-cloudflare==2.19.4
+# Cloud SDK dependencies
+boto3==1.34.144                    # AWS support
+azure-identity==1.17.1             # Azure support
+azure-mgmt-dns==8.1.0              # Azure DNS support
+google-cloud-dns==0.35.0           # Google Cloud support
+cloudflare==2.19.4                 # Cloudflare API support
 
 # Core application dependencies
 requests==2.32.4
@@ -52,3 +45,6 @@ pyopenssl==24.1.0
 
 # Production server
 gunicorn==23.0.0
+
+# Testing
+requests_mock

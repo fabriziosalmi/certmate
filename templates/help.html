@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Help - CertMate</title>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico">
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
@@ -195,6 +197,7 @@
                                 <li>Add your domain(s) to manage</li>
                                 <li>Create your first SSL certificate</li>
                                 <li>Set up automatic renewal</li>
+                                <li>Configure backup settings for data protection</li>
                             </ol>
                         </div>
 
@@ -227,6 +230,7 @@
                                     <li>• Renews 30 days before expiry</li>
                                     <li>• Updates certificate files</li>
                                     <li>• Maintains service availability</li>
+                                    <li>• Creates automatic backups</li>
                                 </ul>
                             </div>
                         </div>
@@ -671,6 +675,130 @@ POST /api/certificates/create
 }
                                 </code>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Backup & Recovery -->
+            <div id="backup-recovery" class="bg-white dark:bg-gray-800 shadow rounded-lg">
+                <div class="px-6 py-6">
+                    <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+                        <i class="fas fa-shield-alt text-blue-600 mr-2"></i>
+                        Backup & Recovery
+                    </h3>
+                    <p class="text-gray-600 dark:text-gray-300 mb-6">
+                        CertMate provides comprehensive backup and restore capabilities for both settings and certificates, 
+                        ensuring your data is protected and recoverable.
+                    </p>
+                    
+                    <div class="space-y-6">
+                        <!-- Automatic Backups -->
+                        <div>
+                            <h4 class="font-medium text-gray-900 dark:text-white mb-3">
+                                <i class="fas fa-sync-alt text-green-600 mr-2"></i>
+                                Automatic Backups
+                            </h4>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div class="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border border-green-200 dark:border-green-800">
+                                    <h5 class="font-medium text-green-900 dark:text-green-100 mb-2">
+                                        <i class="fas fa-cog mr-2"></i>Settings Backup
+                                    </h5>
+                                    <ul class="text-sm text-green-800 dark:text-green-200 space-y-1">
+                                        <li>• Triggered automatically on configuration changes</li>
+                                        <li>• Includes DNS provider settings and accounts</li>
+                                        <li>• Saves domain configurations</li>
+                                        <li>• Preserves application preferences</li>
+                                    </ul>
+                                </div>
+                                <div class="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
+                                    <h5 class="font-medium text-blue-900 dark:text-blue-100 mb-2">
+                                        <i class="fas fa-certificate mr-2"></i>Certificate Backup
+                                    </h5>
+                                    <ul class="text-sm text-blue-800 dark:text-blue-200 space-y-1">
+                                        <li>• Created when new certificates are generated</li>
+                                        <li>• Includes all certificate files (cert, key, chain)</li>
+                                        <li>• Compressed for efficient storage</li>
+                                        <li>• Organized by domain and timestamp</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Manual Backups -->
+                        <div>
+                            <h4 class="font-medium text-gray-900 dark:text-white mb-3">
+                                <i class="fas fa-hand-pointer text-orange-600 mr-2"></i>
+                                Manual Backups
+                            </h4>
+                            <div class="bg-orange-50 dark:bg-orange-900/20 p-4 rounded-lg border border-orange-200 dark:border-orange-800">
+                                <p class="text-sm text-orange-800 dark:text-orange-200 mb-3">
+                                    Create backups on-demand from the <a href="/settings" class="underline hover:no-underline">Settings</a> page:
+                                </p>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <h5 class="font-medium text-orange-900 dark:text-orange-100 mb-2">Settings Backup</h5>
+                                        <p class="text-sm text-orange-800 dark:text-orange-200">
+                                            Click "Create Settings Backup" to save current configuration including 
+                                            DNS providers, domains, and application settings.
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <h5 class="font-medium text-orange-900 dark:text-orange-100 mb-2">Certificate Backup</h5>
+                                        <p class="text-sm text-orange-800 dark:text-orange-200">
+                                            Click "Create Certificate Backup" to archive all current certificates 
+                                            and their associated files.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Backup Management -->
+                        <div>
+                            <h4 class="font-medium text-gray-900 dark:text-white mb-3">
+                                <i class="fas fa-archive text-purple-600 mr-2"></i>
+                                Backup Management
+                            </h4>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                                    <h5 class="font-medium text-gray-900 dark:text-white mb-2">
+                                        <i class="fas fa-download mr-2"></i>Download & Restore
+                                    </h5>
+                                    <ul class="text-sm text-gray-600 dark:text-gray-300 space-y-1">
+                                        <li>• View all backups in the Settings page</li>
+                                        <li>• Download backups for external storage</li>
+                                        <li>• Restore from any previous backup</li>
+                                        <li>• Preview backup contents before restore</li>
+                                    </ul>
+                                </div>
+                                <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                                    <h5 class="font-medium text-gray-900 dark:text-white mb-2">
+                                        <i class="fas fa-history mr-2"></i>Retention Policy
+                                    </h5>
+                                    <ul class="text-sm text-gray-600 dark:text-gray-300 space-y-1">
+                                        <li>• Automatic cleanup of old backups</li>
+                                        <li>• Configurable retention period</li>
+                                        <li>• Keeps last 10 backups by default</li>
+                                        <li>• Manual deletion of specific backups</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Best Practices -->
+                        <div class="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                            <h4 class="font-medium text-yellow-900 dark:text-yellow-100 mb-2">
+                                <i class="fas fa-lightbulb mr-2"></i>
+                                Best Practices
+                            </h4>
+                            <ul class="text-sm text-yellow-800 dark:text-yellow-200 space-y-1">
+                                <li>• Create manual backups before major configuration changes</li>
+                                <li>• Download important backups to external storage systems</li>
+                                <li>• Test backup restoration in a staging environment</li>
+                                <li>• Monitor backup creation for any failures</li>
+                                <li>• Keep multiple generations of backups for different restore points</li>
+                            </ul>
                         </div>
                     </div>
                 </div>

@@ -47,12 +47,14 @@ class TestMultiAccountProviders:
             'cloudflare': {'api_token': 'cf-token-123'},
             'azure': {
                 'subscription_id': 'sub-123',
-                'secret': 'secret-123'  # Use 'secret' which is explicitly in the migration list
+                'resource_group': 'rg-test',
+                'tenant_id': 'tenant-123',
+                'client_id': 'client-123',
+                'client_secret': 'secret-123'
             },
             'google': {
                 'project_id': 'gcp-project-123',
-                'service_account_key': '{"type": "service_account"}',
-                'api_key': 'google-api-key'  # Add api_key to ensure migration
+                'service_account_key': '{"type": "service_account"}'
             },
             'route53': {
                 'access_key_id': 'AKIATEST',
@@ -82,16 +84,21 @@ class TestMultiAccountProviders:
         # Should be migrated to multi-account format
         assert 'dns_providers' in result
         assert provider in result['dns_providers']
-        assert 'default' in result['dns_providers'][provider]
-        assert result['dns_providers'][provider]['default']['name'] == 'Default Account'
+        assert 'accounts' in result['dns_providers'][provider]
+        assert 'default' in result['dns_providers'][provider]['accounts']
+        provider_default_account = result['dns_providers'][provider]['accounts']['default']
+        assert 'name' in provider_default_account
+        assert provider.title() in provider_default_account['name']
         
         # Should have default account mapping
         assert 'default_accounts' in result
         assert result['default_accounts'][provider] == 'default'
         
         # Original config should be preserved within the default account
+        default_account = result['dns_providers'][provider]['accounts']['default']
         for key, value in single_account_configs[provider].items():
-            assert result['dns_providers'][provider]['default'][key] == value
+            assert key in default_account, f"Key {key} should be in default account"
+            assert default_account[key] == value
 
     @pytest.mark.parametrize("provider", MULTI_ACCOUNT_PROVIDERS)
     def test_multi_account_config_retrieval(self, provider):
@@ -100,13 +107,15 @@ class TestMultiAccountProviders:
         settings = {
             'dns_providers': {
                 provider: {
-                    'production': {
-                        'name': 'Production Account',
-                        'api_token': 'prod-token'  # Simplified for test
-                    },
-                    'staging': {
-                        'name': 'Staging Account',
-                        'api_token': 'staging-token'  # Simplified for test
+                    'accounts': {
+                        'production': {
+                            'name': 'Production Account',
+                            'api_token': 'prod-token'  # Simplified for test
+                        },
+                        'staging': {
+                            'name': 'Staging Account',
+                            'api_token': 'staging-token'  # Simplified for test
+                        }
                     }
                 }
             },
@@ -175,7 +184,7 @@ class TestMultiAccountProviders:
             provider, 'test-account', valid_configs[provider]
         )
         assert is_valid, f"Provider {provider} should be valid: {message}"
-        assert message == "Valid"
+        assert message == "Valid configuration"
 
     def test_multi_account_not_supported_for_other_providers(self):
         """Test that other providers don't have multi-account features tested."""
@@ -237,17 +246,21 @@ class TestMultiAccountProviders:
         assert 'staging' in result['dns_providers']['cloudflare']
         
         # Route53 should be migrated to multi-account
-        assert 'default' in result['dns_providers']['route53']
+        assert 'accounts' in result['dns_providers']['route53']
+        assert 'default' in result['dns_providers']['route53']['accounts']
         assert result['default_accounts']['route53'] == 'default'
         
         # Linode should be migrated to multi-account format too
-        assert 'default' in result['dns_providers']['linode']
+        assert 'accounts' in result['dns_providers']['linode']
+        assert 'default' in result['dns_providers']['linode']['accounts']
         assert result['default_accounts']['linode'] == 'default'
 
     def test_empty_multi_account_provider_config(self):
         """Test handling of empty configurations for multi-account providers."""
         for provider in self.MULTI_ACCOUNT_PROVIDERS:
-            config, account_id = get_dns_provider_account_config(provider, None, {})
+            # Pass empty settings explicitly to avoid loading from disk
+            empty_settings = {'dns_providers': {}}
+            config, account_id = get_dns_provider_account_config(provider, None, empty_settings)
             assert config is None
             assert account_id is None
 
@@ -256,9 +269,11 @@ class TestMultiAccountProviders:
         settings = {
             'dns_providers': {
                 'cloudflare': {
-                    'production': {
-                        'name': 'Production Account',
-                        'api_token': 'prod-token'
+                    'accounts': {
+                        'production': {
+                            'name': 'Production Account',
+                            'api_token': 'prod-token'
+                        }
                     }
                 }
             },

@@ -68,3 +68,5 @@ NEXT_FEATURES.md
 
 htmlcov/
 .pytest_cache/
+
+backups/

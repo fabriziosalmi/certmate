@@ -1,7 +1,10 @@
 
 services:
   certmate:
-    build: .
+    build: 
+      context: .
+      args:
+        REQUIREMENTS_FILE: requirements.txt
     # Uncomment to use pre-built multi-platform image instead of building locally:
     # image: YOUR_DOCKERHUB_USERNAME/certmate:latest
     # platform: linux/amd64  # Optional: force specific platform (linux/amd64, linux/arm64)
