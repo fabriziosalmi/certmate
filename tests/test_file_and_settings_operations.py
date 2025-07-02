@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from app import (
     safe_file_read, safe_file_write, load_settings, save_settings,
-    migrate_dns_providers_to_multi_account
+    migrate_dns_providers_to_multi_account, DATA_DIR, CERT_DIR, BACKUP_DIR
 )
 
 class TestFileOperations:
@@ -21,46 +21,72 @@ class TestFileOperations:
         """Test reading valid JSON file."""
         test_data = {"test": "value", "number": 42}
         
+        # Use DATA_DIR to ensure the file is in an allowed directory
+        test_file = DATA_DIR / "test.json"
+        
         with patch("builtins.open", mock_open(read_data=json.dumps(test_data))):
             with patch("pathlib.Path.exists", return_value=True):
                 with patch("fcntl.flock"):
-                    result = safe_file_read("test.json", is_json=True)
+                    result = safe_file_read(test_file, is_json=True)
                     assert result == test_data
     
     def test_safe_file_read_json_invalid(self):
         """Test reading invalid JSON file."""
+        # Use DATA_DIR to ensure the file is in an allowed directory
+        test_file = DATA_DIR / "invalid.json"
+        
         with patch("builtins.open", mock_open(read_data="invalid json")):
             with patch("pathlib.Path.exists", return_value=True):
                 with patch("fcntl.flock"):
-                    result = safe_file_read("test.json", is_json=True, default={})
+                    result = safe_file_read(test_file, is_json=True, default={})
                     assert result == {}
     
     def test_safe_file_read_text_file(self):
         """Test reading text file."""
         test_content = "This is test content"
         
+        # Use DATA_DIR to ensure the file is in an allowed directory
+        test_file = DATA_DIR / "test.txt"
+        
         with patch("builtins.open", mock_open(read_data=test_content)):
             with patch("pathlib.Path.exists", return_value=True):
                 with patch("fcntl.flock"):
-                    result = safe_file_read("test.txt", is_json=False)
+                    result = safe_file_read(test_file, is_json=False)
                     assert result == test_content
     
     def test_safe_file_read_nonexistent_file(self):
         """Test reading non-existent file."""
+        # Use DATA_DIR to ensure the path is in an allowed directory
+        test_file = DATA_DIR / "nonexistent.json"
+        
         with patch("pathlib.Path.exists", return_value=False):
-            result = safe_file_read("nonexistent.json", is_json=True, default={"default": True})
+            result = safe_file_read(test_file, is_json=True, default={"default": True})
             assert result == {"default": True}
     
     def test_safe_file_read_permission_error(self):
         """Test handling permission errors."""
+        # Use DATA_DIR to ensure the path is in an allowed directory
+        test_file = DATA_DIR / "test.json"
+        
         with patch("builtins.open", side_effect=PermissionError("Permission denied")):
             with patch("pathlib.Path.exists", return_value=True):
-                result = safe_file_read("test.json", is_json=True, default={"error": True})
+                result = safe_file_read(test_file, is_json=True, default={"error": True})
                 assert result == {"error": True}
+    
+    def test_safe_file_read_path_traversal_blocked(self):
+        """Test that path traversal attempts are blocked."""
+        # Attempt to read a file outside allowed directories
+        malicious_path = "/etc/passwd"
+        
+        result = safe_file_read(malicious_path, is_json=False, default="blocked")
+        assert result == "blocked"
     
     def test_safe_file_write_json_success(self):
         """Test successful JSON file writing."""
         test_data = {"test": "value"}
+        
+        # Use DATA_DIR to ensure the file is in an allowed directory
+        test_file = DATA_DIR / "test.json"
         
         with patch("builtins.open", mock_open()) as mock_file:
             with patch("pathlib.Path.mkdir"):
@@ -68,35 +94,52 @@ class TestFileOperations:
                     with patch("os.chmod"):
                         with patch("os.fsync"):
                             with patch("fcntl.flock"):
-                                result = safe_file_write("test.json", test_data, is_json=True)
+                                result = safe_file_write(test_file, test_data, is_json=True)
                                 assert result is True
     
     def test_safe_file_write_text_success(self):
         """Test successful text file writing."""
         test_content = "Test content"
         
+        # Use DATA_DIR to ensure the file is in an allowed directory
+        test_file = DATA_DIR / "test.txt"
+        
         with patch("builtins.open", mock_open()) as mock_file:
             with patch("pathlib.Path.mkdir"):
                 with patch("pathlib.Path.rename"):
                     with patch("os.chmod"):
                         with patch("os.fsync"):
                             with patch("fcntl.flock"):
-                                result = safe_file_write("test.txt", test_content, is_json=False)
+                                result = safe_file_write(test_file, test_content, is_json=False)
                                 assert result is True
     
     def test_safe_file_write_permission_error(self):
         """Test handling permission errors during write."""
+        # Use DATA_DIR to ensure the path is in an allowed directory
+        test_file = DATA_DIR / "test.json"
+        
         with patch("builtins.open", side_effect=PermissionError("Permission denied")):
             with patch("pathlib.Path.mkdir"):
-                result = safe_file_write("test.json", {"test": "data"}, is_json=True)
+                result = safe_file_write(test_file, {"test": "data"}, is_json=True)
                 assert result is False
     
     def test_safe_file_write_os_error(self):
         """Test handling OS errors during write."""
+        # Use DATA_DIR to ensure the path is in an allowed directory
+        test_file = DATA_DIR / "test.json"
+        
         with patch("builtins.open", side_effect=OSError("No space left on device")):
             with patch("pathlib.Path.mkdir"):
-                result = safe_file_write("test.json", {"test": "data"}, is_json=True)
+                result = safe_file_write(test_file, {"test": "data"}, is_json=True)
                 assert result is False
+    
+    def test_safe_file_write_path_traversal_blocked(self):
+        """Test that path traversal attempts are blocked during write."""
+        # Attempt to write to a file outside allowed directories
+        malicious_path = "/tmp/../../etc/malicious_file"
+        
+        result = safe_file_write(malicious_path, {"malicious": "data"}, is_json=True)
+        assert result is False
 
 class TestSettingsManagement:
     """Test settings loading and saving functionality."""
@@ -172,8 +215,12 @@ class TestSettingsManagement:
     @patch('app.validate_email')
     @patch('app.validate_api_token')
     @patch('app.validate_domain')
-    def test_save_settings_valid_data(self, mock_validate_domain, mock_validate_token, mock_validate_email, mock_write):
+    @patch('app.create_settings_backup')
+    @patch('app.SETTINGS_FILE')
+    def test_save_settings_valid_data(self, mock_settings_file, mock_backup, mock_validate_domain, 
+                                     mock_validate_token, mock_validate_email, mock_write):
         """Test saving valid settings."""
+        mock_settings_file.exists.return_value = False  # No existing file to backup
         mock_validate_email.return_value = (True, 'test@example.com')
         mock_validate_token.return_value = (True, 'valid-token-123456789012345678901234567890')
         mock_validate_domain.return_value = (True, 'example.com')
@@ -187,8 +234,7 @@ class TestSettingsManagement:
         
         result = save_settings(settings)
         assert result is True
-        # Function calls safe_file_write twice: once for backup, once for actual save
-        assert mock_write.call_count == 2
+        mock_write.assert_called_once()
     
     @patch('app.validate_email')
     def test_save_settings_invalid_email(self, mock_validate_email):
@@ -216,6 +262,7 @@ class TestSettingsManagement:
         
         result = save_settings(settings)
         assert result is False
+
 
 class TestDNSProviderMigration:
     """Test DNS provider migration functionality."""

@@ -33,7 +33,16 @@ MAX_BACKUPS_PER_TYPE = 50   # Maximum number of backups to keep per type
 def safe_file_read(file_path, is_json=False, default=None):
     """Safely read a file with proper error handling and file locking"""
     try:
-        if not Path(file_path).exists():
+        # Validate file path to prevent path traversal
+        file_path = Path(file_path).resolve()
+        
+        # Ensure the file is within allowed directories
+        allowed_dirs = [DATA_DIR.resolve(), CERT_DIR.resolve(), BACKUP_DIR.resolve()]
+        if not any(str(file_path).startswith(str(allowed_dir)) for allowed_dir in allowed_dirs):
+            logger.error(f"Access denied: file outside allowed directories: {file_path}")
+            return default
+        
+        if not file_path.exists():
             return default
             
         with open(file_path, 'r', encoding='utf-8') as f:
@@ -57,8 +66,17 @@ def safe_file_read(file_path, is_json=False, default=None):
 def safe_file_write(file_path, data, is_json=True):
     """Safely write data to a file with proper error handling and atomic operations"""
     try:
+        # Validate file path to prevent path traversal
+        file_path = Path(file_path).resolve()
+        
+        # Ensure the file is within allowed directories
+        allowed_dirs = [DATA_DIR.resolve(), CERT_DIR.resolve(), BACKUP_DIR.resolve()]
+        if not any(str(file_path).startswith(str(allowed_dir)) for allowed_dir in allowed_dirs):
+            logger.error(f"Access denied: file outside allowed directories: {file_path}")
+            return False
+        
         # Ensure parent directory exists
-        Path(file_path).parent.mkdir(parents=True, exist_ok=True)
+        file_path.parent.mkdir(parents=True, exist_ok=True)
         
         # Use temporary file for atomic writes
         temp_file = Path(f"{file_path}.tmp")
@@ -1791,6 +1809,7 @@ def web_settings():
     elif request.method == 'POST':
         try:
             data = request.get_json()
+           
             logger.info(f"[SETTINGS DEBUG] POST data received: {list(data.keys()) if data else 'None'}")
             
             if not data:
