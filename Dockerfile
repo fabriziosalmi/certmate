@@ -18,7 +18,7 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 # Install minimal requirements by default (fastest build)
 # Override with --build-arg REQUIREMENTS_FILE=requirements.txt for full install
-ARG REQUIREMENTS_FILE=requirements-minimal.txt
+ARG REQUIREMENTS_FILE=requirements.txt
 RUN pip install -U pip wheel && \
     pip install --no-cache-dir -r ${REQUIREMENTS_FILE}
 
