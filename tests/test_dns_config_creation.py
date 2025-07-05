@@ -6,7 +6,7 @@ import os
 # Add the parent directory to the path so we can import the app
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from app import (
+from modules.utils import (
     create_cloudflare_config, create_route53_config, create_azure_config,
     create_google_config, create_powerdns_config, create_digitalocean_config,
     create_linode_config, create_gandi_config, create_ovh_config,
@@ -48,14 +48,13 @@ class TestDNSProviderConfigs:
         
         result = create_route53_config('AKIATEST', 'secret-key')
         
-        # Should write both access key and secret
-        expected_calls = [
-            'dns_route53_access_key_id = AKIATEST\n',
+        # Should write both access key and secret in one call
+        expected_content = (
+            'dns_route53_access_key_id = AKIATEST\n'
             'dns_route53_secret_access_key = secret-key\n'
-        ]
+        )
         
-        actual_calls = [call[0][0] for call in mock_file.write.call_args_list]
-        assert actual_calls == expected_calls
+        mock_file.write.assert_called_once_with(expected_content)
         
         # Should set proper permissions
         mock_chmod.assert_called_once_with(0o600)
@@ -78,14 +77,16 @@ class TestDNSProviderConfigs:
             'client-secret'
         )
         
-        # Should write all Azure credentials
-        write_calls = [call[0][0] for call in mock_file.write.call_args_list]
+        # Should write all Azure credentials in one call
+        expected_content = (
+            'dns_azure_subscription_id = subscription-id\n'
+            'dns_azure_resource_group = resource-group\n'
+            'dns_azure_tenant_id = tenant-id\n'
+            'dns_azure_client_id = client-id\n'
+            'dns_azure_client_secret = client-secret\n'
+        )
         
-        assert 'dns_azure_subscription_id = subscription-id\n' in write_calls
-        assert 'dns_azure_resource_group = resource-group\n' in write_calls
-        assert 'dns_azure_tenant_id = tenant-id\n' in write_calls
-        assert 'dns_azure_client_id = client-id\n' in write_calls
-        assert 'dns_azure_client_secret = client-secret\n' in write_calls
+        mock_file.write.assert_called_once_with(expected_content)
         
         mock_chmod.assert_called_once_with(0o600)
         assert str(result).endswith('azure.ini')
@@ -104,8 +105,15 @@ class TestDNSProviderConfigs:
         # Should write service account key to separate file and config with file reference
         write_calls = [call[0][0] for call in mock_file.write.call_args_list]
         
-        assert 'dns_google_project_id = test-project\n' in write_calls
-        assert 'dns_google_service_account_key = letsencrypt/config/google-service-account.json\n' in write_calls
+        # First call should write the service account key JSON
+        assert service_key in write_calls
+        
+        # Second call should write the config content
+        expected_config = (
+            'dns_google_project_id = test-project\n'
+            'dns_google_service_account_key = letsencrypt/config/google-service-account.json\n'
+        )
+        assert expected_config in write_calls
         
         # chmod should be called twice - once for service account key file, once for config file
         assert mock_chmod.call_count == 2
@@ -122,11 +130,13 @@ class TestDNSProviderConfigs:
         
         result = create_powerdns_config('https://powerdns.example.com:8081', 'api-key-123')
         
-        # Should write both API URL and key
-        write_calls = [call[0][0] for call in mock_file.write.call_args_list]
+        # Should write both API URL and key in one call
+        expected_content = (
+            'dns_powerdns_api_url = https://powerdns.example.com:8081\n'
+            'dns_powerdns_api_key = api-key-123\n'
+        )
         
-        assert 'dns_powerdns_api_url = https://powerdns.example.com:8081\n' in write_calls
-        assert 'dns_powerdns_api_key = api-key-123\n' in write_calls
+        mock_file.write.assert_called_once_with(expected_content)
         
         mock_chmod.assert_called_once_with(0o600)
         assert str(result).endswith('powerdns.ini')
@@ -155,10 +165,13 @@ class TestDNSProviderConfigs:
         
         result = create_linode_config('linode-api-key-123')
         
-        # Should write both API key and version
-        write_calls = [call[0][0] for call in mock_file.write.call_args_list]
-        assert 'dns_linode_key = linode-api-key-123\n' in write_calls
-        assert 'dns_linode_version = 4\n' in write_calls
+        # Should write both API key and version in one call
+        expected_content = (
+            'dns_linode_key = linode-api-key-123\n'
+            'dns_linode_version = 4\n'
+        )
+        
+        mock_file.write.assert_called_once_with(expected_content)
         
         mock_chmod.assert_called_once_with(0o600)
         assert str(result).endswith('linode.ini')
@@ -192,13 +205,15 @@ class TestDNSProviderConfigs:
             'consumer-key-123'
         )
         
-        # Should write all OVH credentials
-        write_calls = [call[0][0] for call in mock_file.write.call_args_list]
+        # Should write all OVH credentials in one call
+        expected_content = (
+            'dns_ovh_endpoint = ovh-eu\n'
+            'dns_ovh_application_key = app-key-123\n'
+            'dns_ovh_application_secret = app-secret-123\n'
+            'dns_ovh_consumer_key = consumer-key-123\n'
+        )
         
-        assert 'dns_ovh_endpoint = ovh-eu\n' in write_calls
-        assert 'dns_ovh_application_key = app-key-123\n' in write_calls
-        assert 'dns_ovh_application_secret = app-secret-123\n' in write_calls
-        assert 'dns_ovh_consumer_key = consumer-key-123\n' in write_calls
+        mock_file.write.assert_called_once_with(expected_content)
         
         mock_chmod.assert_called_once_with(0o600)
         assert str(result).endswith('ovh.ini')
@@ -213,11 +228,13 @@ class TestDNSProviderConfigs:
         
         result = create_namecheap_config('username123', 'namecheap-api-key')
         
-        # Should write both username and API key
-        write_calls = [call[0][0] for call in mock_file.write.call_args_list]
+        # Should write both username and API key in one call
+        expected_content = (
+            'dns_namecheap_username = username123\n'
+            'dns_namecheap_api_key = namecheap-api-key\n'
+        )
         
-        assert 'dns_namecheap_username = username123\n' in write_calls
-        assert 'dns_namecheap_api_key = namecheap-api-key\n' in write_calls
+        mock_file.write.assert_called_once_with(expected_content)
         
         mock_chmod.assert_called_once_with(0o600)
         assert str(result).endswith('namecheap.ini')

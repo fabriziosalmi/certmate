@@ -464,28 +464,28 @@ class TestValidationFunctions:
     
     def test_validate_api_token_edge_cases(self):
         """Test edge cases for API token validation."""
-        # Test token at minimum length boundary
-        min_token = "x" * 32
+        # Test token at minimum length boundary with sufficient variety
+        min_token = "abcdefghij" + "x" * 22  # 10 unique chars + 22 x's = 32 chars
         is_valid, result = validate_api_token(min_token)
-        # Should be valid since the app.py only checks for specific weak tokens
+        # Should be valid since it has sufficient length and variety
         assert is_valid
         
         # Test token just under minimum
         short_token = "x" * 31
         is_valid, result = validate_api_token(short_token)
         assert not is_valid
-        assert "32 characters" in result
+        assert "between 32 and 512 characters" in result
         
-        # Test token at maximum boundary
-        max_token = "unique-long-auth-" + "x" * 483  # Total 500 chars
+        # Test token at maximum boundary (512 chars)
+        max_token = "unique-long-auth-" + "x" * 495  # Total 512 chars
         is_valid, result = validate_api_token(max_token)
         assert is_valid  # Should be valid if no weak patterns
         
-        # Test token over maximum (app.py DOES check for max length)
-        over_max = "unique-long-auth-" + "x" * 484  # Total 501 chars
+        # Test token over maximum (512 chars)
+        over_max = "unique-long-auth-" + "x" * 496  # Total 513 chars
         is_valid, result = validate_api_token(over_max)
         assert not is_valid  # Should be invalid - too long
-        assert "too long" in result.lower()
+        assert "between 32 and 512 characters" in result.lower()
         
         # Test whitespace handling
         spaced_token = "  valid-unique-environment-auth-67890  "
@@ -905,12 +905,12 @@ class TestValidationCornerCases:
         too_long_domain = "a" * 250 + ".com"
         is_valid, error = validate_domain(too_long_domain)
         assert not is_valid
-        assert "domain too long" in error.lower()
+        assert "domain is too long" in error.lower()
     
     def test_validate_api_token_boundary_lengths(self):
         """Test API token validation at boundary lengths."""
-        # Test exactly at minimum
-        min_token = "a" * 32
+        # Test exactly at minimum with sufficient variety
+        min_token = "abcdefghij" + "k" * 22  # 10 unique chars + 22 k's = 32 chars
         is_valid, result = validate_api_token(min_token)
         assert is_valid
         
@@ -918,15 +918,15 @@ class TestValidationCornerCases:
         too_short = "a" * 31
         is_valid, error = validate_api_token(too_short)
         assert not is_valid
-        assert "32 characters" in error
+        assert "between 32 and 512 characters" in error
         
-        # Test at maximum
-        max_token = "a" * 500
+        # Test at maximum (512 chars)
+        max_token = "abcdefghij" + "k" * 502  # 10 unique chars + 502 k's = 512 chars
         is_valid, result = validate_api_token(max_token)
         assert is_valid
         
-        # Test over maximum
-        too_long = "a" * 501
+        # Test over maximum (513 chars)
+        too_long = "abcdefghij" + "k" * 503  # 10 unique chars + 503 k's = 513 chars
         is_valid, error = validate_api_token(too_long)
         assert not is_valid  # App DOES enforce max length
-        assert "too long" in error.lower()
+        assert "between 32 and 512 characters" in error.lower()

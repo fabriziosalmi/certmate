@@ -26,6 +26,16 @@ import secrets
 import atexit
 import string
 
+# Import custom modules
+from modules.utils import (
+    DeploymentStatusCache, generate_secure_token, validate_email, validate_domain, validate_api_token,
+    validate_dns_provider_account, 
+    create_cloudflare_config, create_azure_config, create_google_config,
+    create_powerdns_config, create_digitalocean_config, create_linode_config,
+    create_gandi_config, create_ovh_config, create_namecheap_config,
+    create_multi_provider_config
+)
+
 # Backup constants
 BACKUP_RETENTION_DAYS = 30  # Keep backups for 30 days
 MAX_BACKUPS_PER_TYPE = 50   # Maximum number of backups to keep per type
@@ -115,72 +125,6 @@ def safe_file_write(file_path, data, is_json=True):
             temp_file.unlink(missing_ok=True)
         return False
 
-def validate_email(email):
-    """Validate email address format"""
-    if not email or not isinstance(email, str):
-        return False, "Email is required"
-    
-    email = email.strip().lower()
-    email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-    
-    if not re.match(email_pattern, email):
-        return False, "Invalid email format"
-    
-    if len(email) > 254:
-        return False, "Email too long"
-    
-    return True, email
-
-def validate_domain(domain):
-    """Validate domain name format"""
-    if not domain or not isinstance(domain, str):
-        return False, "Domain is required"
-    
-    domain = domain.strip().lower()
-    
-    # Remove protocol if present
-    if domain.startswith(('http://', 'https://')):
-        domain = urlparse(domain).netloc or domain
-    
-    # Basic domain validation
-    domain_pattern = r'^[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?)*$'
-    
-    if not re.match(domain_pattern, domain):
-        return False, "Invalid domain format"
-    
-    if len(domain) > 253:
-        return False, "Domain too long"
-    
-    if '..' in domain:
-        return False, "Domain cannot contain consecutive dots"
-    
-    return True, domain
-
-def validate_api_token(token):
-    """Validate API token strength and format"""
-    if not token or not isinstance(token, str):
-        return False, "API token is required"
-    
-    token = token.strip()
-    
-    if len(token) < 32:
-        return False, "API token must be at least 32 characters long"
-    
-    if len(token) > 500:
-        return False, "API token too long"
-    
-    # Check for weak patterns
-    weak_patterns = [
-        'password', '12345', 'admin', 'test', 'demo', 'change-this',
-        'default', 'secret', 'token', 'key', 'api'
-    ]
-    
-    token_lower = token.lower()
-    for pattern in weak_patterns:
-        if pattern in token_lower:
-            return False, f"API token contains weak pattern: {pattern}"
-    
-    return True, token
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -192,7 +136,7 @@ CORS(app)
 # Initialize Flask-RESTX
 api = Api(
     app,
-    version='1.0',
+    version='1.1.12',
     title='CertMate API',
     description='SSL Certificate Management API',
     doc='/docs/',
@@ -409,275 +353,7 @@ def require_auth(f):
             return {'error': 'Authentication failed', 'code': 'AUTH_ERROR'}, 401
     return decorated_function
 
-def create_cloudflare_config(token):
-    """Create Cloudflare credentials file"""
-    config_dir = Path("letsencrypt/config")
-    config_dir.mkdir(parents=True, exist_ok=True)
-    
-    config_file = config_dir / "cloudflare.ini"
-    with open(config_file, 'w') as f:
-        f.write(f"dns_cloudflare_api_token = {token}\n")
-    
-    # Set proper permissions
-    config_file.chmod(0o600)
-    return config_file
 
-def create_route53_config(access_key_id, secret_access_key):
-    """Create AWS Route53 credentials file"""
-    config_dir = Path("letsencrypt/config")
-    config_dir.mkdir(parents=True, exist_ok=True)
-    
-    config_file = config_dir / "route53.ini"
-    with open(config_file, 'w') as f:
-        f.write(f"dns_route53_access_key_id = {access_key_id}\n")
-        f.write(f"dns_route53_secret_access_key = {secret_access_key}\n")
-    
-    # Set proper permissions
-    config_file.chmod(0o600)
-    return config_file
-
-def create_azure_config(subscription_id, resource_group, tenant_id, client_id, client_secret):
-    """Create Azure DNS credentials file"""
-    config_dir = Path("letsencrypt/config")
-    config_dir.mkdir(parents=True, exist_ok=True)
-    
-    config_file = config_dir / "azure.ini"
-    with open(config_file, 'w') as f:
-        f.write(f"dns_azure_subscription_id = {subscription_id}\n")
-        f.write(f"dns_azure_resource_group = {resource_group}\n")
-        f.write(f"dns_azure_tenant_id = {tenant_id}\n")
-        f.write(f"dns_azure_client_id = {client_id}\n")
-        f.write(f"dns_azure_client_secret = {client_secret}\n")
-    
-    # Set proper permissions
-    config_file.chmod(0o600)
-    return config_file
-
-def create_google_config(project_id, service_account_key):
-    """Create Google Cloud DNS credentials file"""
-    config_dir = Path("letsencrypt/config")
-    config_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Create service account JSON file
-    sa_file = config_dir / "google-service-account.json"
-    with open(sa_file, 'w') as f:
-        f.write(service_account_key)
-    sa_file.chmod(0o600)
-    
-    # Create credentials file
-    config_file = config_dir / "google.ini"
-    with open(config_file, 'w') as f:
-        f.write(f"dns_google_project_id = {project_id}\n")
-        f.write(f"dns_google_service_account_key = {str(sa_file)}\n")
-    
-    # Set proper permissions
-    config_file.chmod(0o600)
-    return config_file
-
-def create_powerdns_config(api_url, api_key):
-    """Create PowerDNS credentials file"""
-    config_dir = Path("letsencrypt/config")
-    config_dir.mkdir(parents=True, exist_ok=True)
-    
-    config_file = config_dir / "powerdns.ini"
-    with open(config_file, 'w') as f:
-        f.write(f"dns_powerdns_api_url = {api_url}\n")
-        f.write(f"dns_powerdns_api_key = {api_key}\n")
-    
-    # Set proper permissions
-    config_file.chmod(0o600)
-    return config_file
-
-def create_digitalocean_config(api_token):
-    """Create DigitalOcean DNS credentials file"""
-    config_dir = Path("letsencrypt/config")
-    config_dir.mkdir(parents=True, exist_ok=True)
-    
-    config_file = config_dir / "digitalocean.ini"
-    with open(config_file, 'w') as f:
-        f.write(f"dns_digitalocean_token = {api_token}\n")
-    
-    # Set proper permissions
-    config_file.chmod(0o600)
-    return config_file
-
-def create_linode_config(api_key):
-    """Create Linode DNS credentials file"""
-    config_dir = Path("letsencrypt/config")
-    config_dir.mkdir(parents=True, exist_ok=True)
-    
-    config_file = config_dir / "linode.ini"
-    with open(config_file, 'w') as f:
-        f.write(f"dns_linode_key = {api_key}\n")
-        f.write("dns_linode_version = 4\n")  # Use API v4
-    
-    # Set proper permissions
-    config_file.chmod(0o600)
-    return config_file
-
-def create_gandi_config(api_token):
-    """Create Gandi DNS credentials file"""
-    config_dir = Path("letsencrypt/config")
-    config_dir.mkdir(parents=True, exist_ok=True)
-    
-    config_file = config_dir / "gandi.ini"
-    with open(config_file, 'w') as f:
-        f.write(f"dns_gandi_token = {api_token}\n")
-    
-    # Set proper permissions
-    config_file.chmod(0o600)
-    return config_file
-
-def create_ovh_config(endpoint, application_key, application_secret, consumer_key):
-    """Create OVH DNS credentials file"""
-    config_dir = Path("letsencrypt/config")
-    config_dir.mkdir(parents=True, exist_ok=True)
-    
-    config_file = config_dir / "ovh.ini"
-    with open(config_file, 'w') as f:
-        f.write(f"dns_ovh_endpoint = {endpoint}\n")
-        f.write(f"dns_ovh_application_key = {application_key}\n")
-        f.write(f"dns_ovh_application_secret = {application_secret}\n")
-        f.write(f"dns_ovh_consumer_key = {consumer_key}\n")
-    
-    # Set proper permissions
-    config_file.chmod(0o600)
-    return config_file
-
-def create_namecheap_config(username, api_key):
-    """Create Namecheap DNS credentials file"""
-    config_dir = Path("letsencrypt/config")
-    config_dir.mkdir(parents=True, exist_ok=True)
-    
-    config_file = config_dir / "namecheap.ini"
-    with open(config_file, 'w') as f:
-        f.write(f"dns_namecheap_username = {username}\n")
-        f.write(f"dns_namecheap_api_key = {api_key}\n")
-    
-    # Set proper permissions
-    config_file.chmod(0o600)
-    return config_file
-
-def create_multi_provider_config(provider, config_data):
-    """Create configuration for additional DNS providers using individual plugins where available
-    
-    This function supports additional providers beyond the core Tier 1 providers.
-    For
-    direct API implementation should be used instead.
-    """
-    config_dir = Path("letsencrypt/config")
-    config_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Map providers to their individual plugin configuration files
-    plugin_configs = {
-        'vultr': 'vultr.ini',
-        'dnsmadeeasy': 'dnsmadeeasy.ini',
-        'nsone': 'nsone.ini',
-        'rfc2136': 'rfc2136.ini',
-        'hetzner': 'hetzner.ini',
-        'porkbun': 'porkbun.ini',
-        'godaddy': 'godaddy.ini',
-        'he-ddns': 'he-ddns.ini',
-        'dynudns': 'dynudns.ini'
-    }
-    
-    if provider not in plugin_configs:
-        # Provider doesn't have an individual plugin
-        # Return None to indicate fallback to direct API should be used
-        return None
-    
-    config_file = config_dir / plugin_configs[provider]
-    
-    # Create provider-specific configuration
-    if provider == 'vultr':
-        api_key = config_data.get('api_key')
-        if not api_key:
-            raise ValueError("Vultr API key required")
-        
-        config_content = f"dns_vultr_api_key = {api_key}\n"
-        
-    elif provider == 'dnsmadeeasy':
-        api_key = config_data.get('api_key')
-        secret_key = config_data.get('secret_key')
-        if not api_key or not secret_key:
-            raise ValueError("DNS Made Easy API key and secret key required")
-            
-        config_content = f"dns_dnsmadeeasy_api_key = {api_key}\n"
-        config_content += f"dns_dnsmadeeasy_secret_key = {secret_key}\n"
-        
-    elif provider == 'nsone':
-        api_key = config_data.get('api_key')
-        if not api_key:
-            raise ValueError("NS1 API key required")
-            
-        config_content = f"dns_nsone_api_key = {api_key}\n"
-        
-    elif provider == 'rfc2136':
-        nameserver = config_data.get('nameserver')
-        tsig_key = config_data.get('tsig_key')
-        tsig_secret = config_data.get('tsig_secret')
-        tsig_algorithm = config_data.get('tsig_algorithm', 'HMAC-SHA512')
-        
-        if not nameserver or not tsig_key or not tsig_secret:
-            raise ValueError("RFC2136 nameserver, TSIG key and secret required")
-            
-        config_content = f"dns_rfc2136_nameserver = {nameserver}\n"
-        config_content += f"dns_rfc2136_name = {tsig_key}\n"
-        config_content += f"dns_rfc2136_secret = {tsig_secret}\n"
-        config_content += f"dns_rfc2136_algorithm = {tsig_algorithm}\n"
-        
-    elif provider == 'hetzner':
-        api_token = config_data.get('api_token')
-        if not api_token:
-            raise ValueError("Hetzner DNS API token required")
-            
-        config_content = f"dns_hetzner_api_token = {api_token}\n"
-        
-    elif provider == 'porkbun':
-        api_key = config_data.get('api_key')
-        secret_key = config_data.get('secret_key')
-        if not api_key or not secret_key:
-            raise ValueError("Porkbun API key and secret key required")
-            
-        config_content = f"dns_porkbun_api_key = {api_key}\n"
-        config_content += f"dns_porkbun_secret_key = {secret_key}\n"
-        
-    elif provider == 'godaddy':
-        api_key = config_data.get('api_key')
-        secret = config_data.get('secret')
-        if not api_key or not secret:
-            raise ValueError("GoDaddy API key and secret required")
-            
-        config_content = f"dns_godaddy_key = {api_key}\n"
-        config_content += f"dns_godaddy_secret = {secret}\n"
-        
-    elif provider == 'he-ddns':
-        username = config_data.get('username')
-        password = config_data.get('password')
-        if not username or not password:
-            raise ValueError("Hurricane Electric username and password required")
-            
-        config_content = f"dns_he_ddns_username = {username}\n"
-        config_content += f"dns_he_ddns_password = {password}\n"
-        
-    elif provider == 'dynudns':
-        token = config_data.get('token')
-        if not token:
-            raise ValueError("Dynu API token required")
-            
-        config_content = f"dns_dynudns_token = {token}\n"
-        
-    else:
-        # This shouldn't happen given our check above, but just in case
-        return None
-    
-    # Write the configuration file
-    with open(config_file, 'w') as f:
-        f.write(config_content)
-    
-    # Set proper permissions
-    config_file.chmod(0o600)
-    return config_file
 def get_certificate_info(domain):
     """Get certificate information for a domain"""
     if not domain:
@@ -1603,13 +1279,35 @@ class CertificateList(Resource):
             settings = load_settings()
             certificates = []
             
-            for domain_config in settings.get('domains', []):
+            # Get all domains from settings
+            domains_from_settings = settings.get('domains', [])
+            
+            # Also check for certificates that exist on disk but might not be in settings
+            cert_dirs = []
+            if CERT_DIR.exists():
+                cert_dirs = [d for d in CERT_DIR.iterdir() if d.is_dir()]
+            
+            # Create a set of all domains to check (from settings and disk)
+            all_domains = set()
+            
+            # Add domains from settings
+            for domain_config in domains_from_settings:
                 domain_name = domain_config.get('domain') if isinstance(domain_config, dict) else domain_config
+                if domain_name:
+                    all_domains.add(domain_name)
+            
+            # Add domains from disk
+            for cert_dir in cert_dirs:
+                all_domains.add(cert_dir.name)
+            
+            # Get certificate info for all domains
+            for domain_name in all_domains:
                 if domain_name:  # Ensure domain_name is not empty
                     cert_info = get_certificate_info(domain_name)
                     if cert_info:
                         certificates.append(cert_info)
             
+            logger.info(f"Found {len(certificates)} certificates")
             return certificates
         except Exception as e:
             logger.error(f"Error fetching certificates: {e}")
@@ -1637,23 +1335,94 @@ class CreateCertificate(Resource):
         if not email:
             return {'success': False, 'message': 'Email not configured in settings'}, 400
         
-        # Determine DNS provider
+        # Determine DNS provider with proper inheritance and smart suggestions
         if not dns_provider:
-            dns_provider = settings.get('dns_provider', 'cloudflare')
+            # Check if domain already exists in settings with specific DNS provider
+            existing_dns_provider = get_domain_dns_provider(domain, settings)
+            if existing_dns_provider and existing_dns_provider != settings.get('dns_provider', 'cloudflare'):
+                # Domain has a specific DNS provider configured
+                dns_provider = existing_dns_provider
+            else:
+                # Use smart suggestion based on domain patterns
+                suggested_provider, confidence = suggest_dns_provider_for_domain(domain, settings)
+                if confidence >= 70:
+                    dns_provider = suggested_provider
+                    logger.info(f"Smart DNS provider suggestion for {domain}: {suggested_provider} (confidence: {confidence}%)")
+                else:
+                    # Use global default
+                    dns_provider = settings.get('dns_provider', 'cloudflare')
+                    logger.info(f"Using global default DNS provider for {domain}: {dns_provider}")
         
-        # Validate that the specified account exists (if provided)
-        if account_id:
-            account_config, _ = get_dns_provider_account_config(dns_provider, account_id, settings)
-            if not account_config:
-                return {
-                    'success': False, 
-                    'message': f'DNS provider account "{account_id}" not found for {dns_provider}'
-                }, 400
+        # Determine account_id with proper inheritance
+        if not account_id:
+            # Try to get default account for this DNS provider
+            default_accounts = settings.get('default_accounts', {})
+            account_id = default_accounts.get(dns_provider)
+            
+            # If no default account is configured, use 'default' or first available account
+            if not account_id:
+                dns_providers = settings.get('dns_providers', {})
+                provider_accounts = dns_providers.get(dns_provider, {})
+                if isinstance(provider_accounts, dict):
+                    available_accounts = list(provider_accounts.keys())
+                    if available_accounts:
+                        account_id = available_accounts[0]
+                        logger.info(f"Using first available account '{account_id}' for {dns_provider}")
+                    else:
+                        account_id = 'default'
+                else:
+                    account_id = 'default'
+        
+        # Validate that the DNS provider account exists and is properly configured
+        account_config, used_account_id = get_dns_provider_account_config(dns_provider, account_id, settings)
+        if not account_config:
+            return {
+                'success': False, 
+                'message': f'DNS provider account "{account_id}" not found or not configured for {dns_provider}. Please configure the DNS provider settings first.'
+            }, 400
+        
+        # Use the validated account_id
+        account_id = used_account_id
         
         try:
-            success, message = create_certificate(domain, email, dns_provider, account_id=account_id)
+            success, message = create_certificate(domain, email, dns_provider, dns_config=account_config, account_id=used_account_id)
             
             if success:
+                # Automatically add the domain to the settings if it's not already there
+                current_domains = settings.get('domains', [])
+                domain_exists = False
+                
+                for existing_domain in current_domains:
+                    if isinstance(existing_domain, dict):
+                        if existing_domain.get('domain') == domain:
+                            domain_exists = True
+                            break
+                    elif existing_domain == domain:
+                        domain_exists = True
+                        break
+                
+                if not domain_exists:
+                    # Add domain with DNS provider info, ensuring all required fields are present
+                    domain_config = {
+                        'domain': domain,
+                        'dns_provider': dns_provider,
+                        'account_id': account_id or 'default'
+                    }
+                    
+                    # Validate the domain config before adding
+                    if domain_config['domain'] and domain_config['dns_provider']:
+                        current_domains.append(domain_config)
+                        settings['domains'] = current_domains
+                        
+                        # Save the updated settings
+                        save_result = save_settings(settings, f"auto_add_domain_{domain}")
+                        if save_result:
+                            logger.info(f"Domain {domain} automatically added to settings after certificate creation with DNS provider {dns_provider} and account {account_id}")
+                        else:
+                            logger.error(f"Failed to save settings after adding domain {domain}")
+                    else:
+                        logger.error(f"Invalid domain configuration for {domain}: missing required fields")
+                
                 return {
                     'success': True, 
                     'message': f'Certificate created successfully for {domain}',
@@ -1760,11 +1529,33 @@ def index():
     settings = load_settings()
     certificates = []
     
-    for domain_config in settings.get('domains', []):
+    # Get all domains from settings
+    domains_from_settings = settings.get('domains', [])
+    
+    # Also check for certificates that exist on disk but might not be in settings
+    cert_dirs = []
+    if CERT_DIR.exists():
+        cert_dirs = [d for d in CERT_DIR.iterdir() if d.is_dir()]
+    
+    # Create a set of all domains to check (from settings and disk)
+    all_domains = set()
+    
+    # Add domains from settings
+    for domain_config in domains_from_settings:
         domain_name = domain_config.get('domain') if isinstance(domain_config, dict) else domain_config
-        cert_info = get_certificate_info(domain_name)
-        if cert_info:
-            certificates.append(cert_info)
+        if domain_name:
+            all_domains.add(domain_name)
+    
+    # Add domains from disk
+    for cert_dir in cert_dirs:
+        all_domains.add(cert_dir.name)
+    
+    # Get certificate info for all domains
+    for domain_name in all_domains:
+        if domain_name:
+            cert_info = get_certificate_info(domain_name)
+            if cert_info:
+                certificates.append(cert_info)
     
     # Get API token for frontend use
     api_token = settings.get('api_bearer_token', 'token-not-configured')
@@ -2125,11 +1916,6 @@ def web_dns_provider_account(provider, account_id):
             logger.error(f"[DNS DEBUG] Error deleting account {account_id} for {provider}: {e}")
             return jsonify({'error': str(e)}), 500
 
-def generate_secure_token():
-    """Generate a secure random token for API authentication"""
-    # Use 40 characters for a good balance of security and usability
-    alphabet = string.ascii_letters + string.digits
-    return ''.join(secrets.choice(alphabet) for _ in range(40))
 
 def create_settings_backup(settings_data, backup_reason="manual"):
     """Create a backup of settings data with timestamp and metadata"""
@@ -2881,7 +2667,7 @@ def migrate_dns_providers_to_multi_account(settings):
                 # Look for credential keys that indicate old format
                 old_config_keys = {
                     'cloudflare': ['api_token'],
-                    'route53': ['access_key_id', 'secret_access_key'],
+                    'route53': ['access_key_id', 'secret_access_key', 'region'],
                     'azure': ['subscription_id', 'resource_group', 'tenant_id', 'client_id', 'client_secret'],
                     'google': ['project_id', 'service_account_key'],
                     'powerdns': ['api_url', 'api_key'],
@@ -2991,9 +2777,9 @@ def migrate_dns_providers_to_multi_account(settings):
             if provider_config and isinstance(provider_config, dict) and 'accounts' in provider_config:
                 if provider_name not in settings['default_accounts']:
                     # Use the first account as default
-                    first_account = next(iter(provider_config['accounts'].keys()), None)
-                    if first_account:
-                        settings['default_accounts'][provider_name] = first_account
+                    first_account_id = next(iter(provider_config['accounts'].keys()), None)
+                    if first_account_id:
+                        settings['default_accounts'][provider_name] = first_account_id
                         
         logger.info("DNS provider migration completed successfully")
         return settings
@@ -3053,36 +2839,85 @@ def get_dns_provider_account_config(provider, account_id=None, settings=None):
         dns_providers = settings.get('dns_providers', {})
         provider_config = dns_providers.get(provider, {})
         
-        # Handle new multi-account format
+        if not isinstance(provider_config, dict) or not provider_config:
+            return None, None
+        
+        # Check if this is multi-account format (has 'accounts' key)
         if 'accounts' in provider_config:
             accounts = provider_config['accounts']
+            if not isinstance(accounts, dict):
+                return None, None
             
+            # If account_id is specified, look for it directly
             if account_id:
-                # Use specific account
                 if account_id in accounts:
-                    return accounts[account_id], account_id
+                    account_config = accounts[account_id]
+                    if isinstance(account_config, dict):
+                        return account_config, account_id
                 else:
-                    logger.warning(f"Account {account_id} not found for provider {provider}")
+                    # Specific account requested but not found
                     return None, None
+            
+            # If no account_id specified, try to use default account
+            default_accounts = settings.get('default_accounts', {})
+            default_account_id = default_accounts.get(provider)
+            
+            if default_account_id and default_account_id in accounts:
+                account_config = accounts[default_account_id]
+                if isinstance(account_config, dict):
+                    return account_config, default_account_id
+            
+            # If we get here and no account_id was specified, try to use the first available account
+            for acc_id, acc_config in accounts.items():
+                if isinstance(acc_config, dict) and any(key in acc_config for key in [
+                    'api_token', 'access_key_id', 'api_key', 'api_url', 'username', 'token'
+                ]):
+                    logger.info(f"Using first available account '{acc_id}' for provider {provider}")
+                    return acc_config, acc_id
+            
+            return None, None
+        else:
+            # Check if this is old single-account format (has direct config keys)
+            if any(key in provider_config for key in [
+                'api_token', 'access_key_id', 'api_key', 'api_url', 'username', 'token'
+            ]):
+                # This is old single-account format
+                return provider_config, 'default'
+            
+            # If we get here, it's multi-account format but structured differently
+            # Try to find account configs directly under provider
+            if account_id:
+                # Look for specific account
+                if account_id in provider_config:
+                    acc_config = provider_config[account_id]
+                    if isinstance(acc_config, dict) and any(key in acc_config for key in [
+                        'api_token', 'access_key_id', 'api_key', 'api_url', 'username', 'token'
+                    ]):
+                        return acc_config, account_id
+                # Specific account requested but not found
+                return None, None
             else:
-                # Use default account
+                # No specific account requested - try default or first available
                 default_accounts = settings.get('default_accounts', {})
                 default_account_id = default_accounts.get(provider)
                 
-                if default_account_id and default_account_id in accounts:
-                    return accounts[default_account_id], default_account_id
-                elif accounts:
-                    # Use first available account
-                    first_account_id = next(iter(accounts.keys()))
-                    return accounts[first_account_id], first_account_id
-                else:
-                    return None, None
-        else:
-            # Handle legacy single-account format or direct config
-            if provider_config:
-                return provider_config, 'default'
-            else:
-                return None, None
+                # Try default account first
+                if default_account_id and default_account_id in provider_config:
+                    acc_config = provider_config[default_account_id]
+                    if isinstance(acc_config, dict) and any(key in acc_config for key in [
+                        'api_token', 'access_key_id', 'api_key', 'api_url', 'username', 'token'
+                    ]):
+                        return acc_config, default_account_id
+                
+                # Fall back to first available account
+                for acc_id, acc_config in provider_config.items():
+                    if isinstance(acc_config, dict) and any(key in acc_config for key in [
+                        'api_token', 'access_key_id', 'api_key', 'api_url', 'username', 'token'
+                    ]):
+                        logger.info(f"Using first available account '{acc_id}' for provider {provider}")
+                        return acc_config, acc_id
+            
+            return None, None
                 
     except Exception as e:
         logger.error(f"Error getting DNS provider account config for {provider}: {e}")
@@ -3138,138 +2973,50 @@ def list_dns_provider_accounts(provider, settings=None):
         logger.error(f"Error listing DNS provider accounts for {provider}: {e}")
         return []
 
-def validate_dns_provider_account(provider, account_id, account_config):
-    """Validate DNS provider account configuration
+def suggest_dns_provider_for_domain(domain, settings=None):
+    """Suggest DNS provider based on domain patterns and existing configuration
     
     Args:
-        provider: DNS provider name
-        account_id: Account identifier
-        account_config: Account configuration dict
+        domain: Domain name to analyze
+        settings: Current settings (optional)
         
     Returns:
-        tuple: (is_valid, error_message)
+        tuple: (suggested_provider, confidence_level)
     """
-    try:
-        # Define required fields for each provider
-        required_fields = {
-            'cloudflare': ['api_token'],
-            'route53': ['access_key_id', 'secret_access_key'],
-            'azure': ['subscription_id', 'resource_group', 'tenant_id', 'client_id', 'client_secret'],
-            'google': ['project_id', 'service_account_key'],
-            'powerdns': ['api_url', 'api_key'],
-            'digitalocean': ['api_token'],
-            'linode': ['api_key'],
-            'gandi': ['api_token'],
-            'ovh': ['endpoint', 'application_key', 'application_secret', 'consumer_key'],
-            'namecheap': ['username', 'api_key'],
-            'vultr': ['api_key'],
-            'dnsmadeeasy': ['api_key', 'secret_key'],
-            'nsone': ['api_key'],
-            'rfc2136': ['nameserver', 'tsig_key', 'tsig_secret'],
-            'hetzner': ['api_token'],
-            'porkbun': ['api_key', 'secret_key'],
-            'godaddy': ['api_key', 'secret'],
-            'he-ddns': ['username', 'password'],
-            'dynudns': ['token']
-        }
-        
-        if provider not in required_fields:
-            return False, f"Unsupported DNS provider: {provider}"
-            
-        # Check required fields
-        missing_fields = []
-        for field in required_fields[provider]:
-            if not account_config.get(field):
-                missing_fields.append(field)
-                
-        if missing_fields:
-            return False, f"Missing required fields: {', '.join(missing_fields)}"
-            
-        return True, "Valid configuration"
-        
-    except Exception as e:
-        logger.error(f"Error validating DNS provider account: {e}")
-        return False, f"Validation error: {str(e)}"
-# =============================================
-# DEPLOYMENT STATUS CACHE SYSTEM
-# =============================================
-
-class DeploymentStatusCache:
-    """Server-side cache for deployment status results to improve performance"""
+    if not domain:
+        return None, 0
     
-    def __init__(self):
-        self.cache = {}
-        self.default_ttl = 300  # 5 minutes default TTL in seconds
-        
-    def get(self, domain):
-        """Get cached deployment status for a domain"""
-        if domain in self.cache:
-            entry = self.cache[domain]
-            current_time = time.time()
-            
-            # Check if entry has expired
-            if current_time <= entry['expires_at']:
-                return entry['result']
-            else:
-                # Entry expired, remove it
-                del self.cache[domain]
-                
-        return None
-        
-    def set(self, domain, result, ttl=None):
-        """Cache deployment status result for a domain"""
-        if ttl is None:
-            ttl = self.default_ttl
-            
-        current_time = time.time()
-        self.cache[domain] = {
-            'result': result,
-            'timestamp': current_time,
-            'expires_at': current_time + ttl,
-            'ttl': ttl
-        }
-        
-    def clear(self):
-        """Clear all cached entries"""
-        cleared_count = len(self.cache)
-        self.cache.clear()
-        return cleared_count
-        
-    def get_stats(self):
-        """Get cache statistics"""
-        current_time = time.time()
-        entries = []
-        expired_keys = []
-        
-        for domain, entry in self.cache.items():
-            if current_time <= entry['expires_at']:
-                age = int(current_time - entry['timestamp'])
-                remaining = int(entry['expires_at'] - current_time)
-                entries.append({
-                    'domain': domain,
-                    'age': age,
-                    'remaining': remaining,
-                    'status': 'deployed' if entry['result'].get('deployed', False) else 'not-deployed'
-                })
-            else:
-                expired_keys.append(domain)
-                
-        # Clean up expired entries
-        for key in expired_keys:
-            del self.cache[key]
-            
-        return {
-            'total_entries': len(self.cache),
-            'current_ttl': self.default_ttl,
-            'entries': entries
-        }
-        
-    def set_ttl(self, ttl):
-        """Set default TTL for new cache entries"""
-        if isinstance(ttl, (int, float)) and 30 <= ttl <= 3600:
-            self.default_ttl = int(ttl)
-            return True
-        return False
+    # Load settings if not provided
+    if settings is None:
+        settings = load_settings()
+    
+    # Check if domain already exists in settings
+    existing_domains = settings.get('domains', [])
+    for domain_config in existing_domains:
+        if isinstance(domain_config, dict):
+            if domain_config.get('domain') == domain:
+                return domain_config.get('dns_provider'), 100  # High confidence
+        elif domain_config == domain:
+            # Old format, use global provider
+            return settings.get('dns_provider', 'cloudflare'), 80
+    
+    # Pattern-based suggestions
+    domain_lower = domain.lower()
+    
+    # AWS/Route53 patterns
+    if any(pattern in domain_lower for pattern in ['aws', 'amazon', 'route53', 'test.certmate.org']):
+        return 'route53', 70
+    
+    # Cloudflare patterns
+    if any(pattern in domain_lower for pattern in ['cf-', 'cloudflare', 'audiolibri.org']):
+        return 'cloudflare', 70
+    
+    # DigitalOcean patterns
+    if any(pattern in domain_lower for pattern in ['do-', 'digitalocean']):
+        return 'digitalocean', 70
+    
+    # Default to global setting
+    return settings.get('dns_provider', 'cloudflare'), 30
 
 # Initialize global deployment cache
 deployment_cache = DeploymentStatusCache()

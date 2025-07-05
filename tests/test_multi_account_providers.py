@@ -184,7 +184,7 @@ class TestMultiAccountProviders:
             provider, 'test-account', valid_configs[provider]
         )
         assert is_valid, f"Provider {provider} should be valid: {message}"
-        assert message == "Valid configuration"
+        assert message == "Valid configuration."
 
     def test_multi_account_not_supported_for_other_providers(self):
         """Test that other providers don't have multi-account features tested."""

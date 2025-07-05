@@ -70,3 +70,11 @@ htmlcov/
 .pytest_cache/
 
 backups/
+app.py.backup
+
+# Test files with sensitive data
+test_real_cert_*.py
+test_api_*.py
+test_certificate_creation_*.py
+real_world_test_*.py
+integration_test_*.py

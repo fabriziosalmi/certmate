@@ -477,16 +477,18 @@ class TestCertificateOperationsExtended:
         mock_subprocess.assert_called_once()
     
     @patch('app.subprocess.run')
-    @patch('app.create_multi_provider_config')
+    @patch('app.create_cloudflare_config')
     @patch('app.load_settings')
     def test_create_certificate_subprocess_exception(self, mock_load_settings, mock_create_config, mock_subprocess):
         """Test certificate creation when subprocess raises exception."""
         mock_load_settings.return_value = {
             'dns_providers': {
                 'cloudflare': {
-                    'production': {
-                        'name': 'Production',
-                        'api_token': 'prod-token'
+                    'accounts': {
+                        'production': {
+                            'name': 'Production',
+                            'api_token': 'prod-token'
+                        }
                     }
                 }
             },
@@ -507,16 +509,18 @@ class TestCertificateOperationsExtended:
         assert success is False
         assert 'not configured' in message.lower() or 'exception' in message.lower() or 'error' in message.lower()
     
-    @patch('app.create_multi_provider_config')
+    @patch('app.create_cloudflare_config')
     @patch('app.load_settings')
     def test_create_certificate_config_creation_failure(self, mock_load_settings, mock_create_config):
         """Test certificate creation when config file creation fails."""
         mock_load_settings.return_value = {
             'dns_providers': {
                 'cloudflare': {
-                    'production': {
-                        'name': 'Production',
-                        'api_token': 'prod-token'
+                    'accounts': {
+                        'production': {
+                            'name': 'Production',
+                            'api_token': 'prod-token'
+                        }
                     }
                 }
             },
