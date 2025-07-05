@@ -734,43 +734,26 @@
                                             ${isExpired ? 'Expired' : isExpiringSoon ? 'Expiring Soon' : 'Valid'}
                                         </span>
                                         ${deploymentHtml}
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                            isExpired ? 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400' : 
+                                            isExpiringSoon ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400' : 
+                                            'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400'
+                                        }" title="Certificate expires in ${cert.days_until_expiry} days">
+                                            <i class="fas fa-clock mr-1"></i>
+                                            ${cert.days_until_expiry} days
+                                        </span>
+                                        ${cert.dns_provider ? `
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-white dark:bg-gray-900 text-gray-900 dark:text-white" title="${cert.dns_provider.charAt(0).toUpperCase() + cert.dns_provider.slice(1)} DNS Provider">
+                                            <i class="fas fa-server mr-1"></i>
+                                            ${cert.dns_provider.charAt(0).toUpperCase() + cert.dns_provider.slice(1)}
+                                        </span>
+                                        ` : ''}
                                     </div>
                                 </div>
                             </div>
                             
                             <!-- Certificate Details (Compact) -->
                             <div class="flex flex-wrap items-center gap-4 lg:gap-6">
-                                <div class="flex items-center space-x-2">
-                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                        isExpired ? 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400' : 
-                                        isExpiringSoon ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400' : 
-                                        'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400'
-                                    }">
-                                        <i class="fas fa-calendar mr-1"></i>
-                                        ${expiryDate.toLocaleDateString()}
-                                    </span>
-                                </div>
-                                
-                                <div class="flex items-center space-x-2">
-                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                        isExpired ? 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400' : 
-                                        isExpiringSoon ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400' : 
-                                        'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400'
-                                    }">
-                                        <i class="fas fa-clock mr-1"></i>
-                                        ${cert.days_until_expiry} days
-                                    </span>
-                                </div>
-                                
-                                ${cert.dns_provider ? `
-                                    <div class="flex items-center space-x-2">
-                                        <i class="fas fa-server text-purple-600 dark:text-purple-400 text-sm"></i>
-                                        <div>
-                                            <p class="text-xs text-gray-500 dark:text-gray-400">DNS</p>
-                                            <p class="text-sm font-medium text-gray-900 dark:text-white">${cert.dns_provider.charAt(0).toUpperCase() + cert.dns_provider.slice(1)}</p>
-                                        </div>
-                                    </div>
-                                ` : ''}
                             </div>
                             
                             <!-- Action Buttons (Compact) -->
