@@ -17,7 +17,7 @@ cloudflare==2.19.4
 requests==2.32.4
 python-dotenv==1.0.1
 APScheduler==3.10.4
-cryptography==42.0.8
+cryptography==44.0.1
 pyopenssl==24.1.0
 
 # Production server
