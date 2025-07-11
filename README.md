@@ -1015,6 +1015,12 @@ main "$@"
         - "staging.company.com"
         - "test.company.com"
 ```
+
+**Production-Ready Ansible Playbook:**
+```yaml
+---
+- name: Enterprise SSL certificate management with CertMate
+  hosts: web_servers
   become: yes
   vars:
     certmate_url: "https://certmate.company.com"
