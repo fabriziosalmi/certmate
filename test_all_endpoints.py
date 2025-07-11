@@ -115,6 +115,7 @@ class EndpointTester:
             self._test_certificate_endpoints()
             self._test_cache_endpoints()
             self._test_backup_endpoints()
+            self._test_metrics_endpoints()
         
         # Test web interface endpoints (some require auth, some don't)
         self._test_web_endpoints()
@@ -190,6 +191,19 @@ class EndpointTester:
              {"type": "settings", "reason": "api_test"}, [200, 400]),
             ("POST", "/api/backups/cleanup", "Cleanup Old Backups", 
              {"type": "both", "force": False}, [200]),
+        ]
+        
+        for method, path, desc, data, expected in tests:
+            success, message, status = self.test_endpoint(method, path, desc, data, expected)
+            self._record_result(method, path, desc, success, message, status)
+    
+    def _test_metrics_endpoints(self):
+        """Test metrics and monitoring endpoints"""
+        print(f"\n{Colors.BOLD}{Colors.BLUE}📊 Metrics & Monitoring Endpoints{Colors.RESET}")
+        
+        tests = [
+            ("GET", "/api/metrics", "API Metrics Summary", None, [200]),
+            ("GET", "/metrics", "Prometheus Metrics", None, [200, 503]),  # 503 if prometheus_client not available
         ]
         
         for method, path, desc, data, expected in tests:

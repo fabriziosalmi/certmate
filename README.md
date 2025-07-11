@@ -522,6 +522,10 @@ GET /health
 # API documentation
 GET /docs/          # Swagger UI
 GET /redoc/         # ReDoc documentation
+
+# Prometheus/OpenMetrics monitoring
+GET /metrics        # Prometheus-compatible metrics
+GET /api/metrics    # JSON metrics summary
 ```
 
 #### Settings Management

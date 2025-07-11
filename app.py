@@ -35,6 +35,9 @@ from modules.utils import (
     create_gandi_config, create_ovh_config, create_namecheap_config,
     create_multi_provider_config
 )
+from modules.metrics import (
+    metrics_collector, generate_metrics_response, get_metrics_summary, is_prometheus_available
+)
 
 # Backup constants
 BACKUP_RETENTION_DAYS = 30  # Keep backups for 30 days
@@ -443,6 +446,9 @@ def create_certificate(domain, email, dns_provider=None, dns_config=None, accoun
         account_id: Specific account ID to use for the DNS provider
         staging: Use Let's Encrypt staging environment for testing
     """
+    # Track timing for metrics
+    start_time = time.time()
+    
     # Track if we set Route53 environment variables for cleanup
     route53_env_set = False
     
@@ -690,10 +696,29 @@ def create_certificate(domain, email, dns_provider=None, dns_config=None, accoun
             if backup_path:
                 logger.info(f"Certificate backup created after new certificate for {domain}")
             
+            # Record successful metrics
+            duration = time.time() - start_time
+            metrics_collector.record_certificate_request(domain, dns_provider or 'unknown', True)
+            metrics_collector.record_certificate_creation_time(dns_provider or 'unknown', duration)
+            
             return True, "Certificate created successfully"
         else:
             error_msg = result.stderr or result.stdout
             logger.error(f"Certificate creation failed: {error_msg}")
+            
+            # Record failure metrics
+            duration = time.time() - start_time
+            metrics_collector.record_certificate_request(domain, dns_provider or 'unknown', False)
+            metrics_collector.record_certificate_creation_time(dns_provider or 'unknown', duration)
+            
+            # Record ACME errors if detected
+            if 'rate limit' in error_msg.lower():
+                metrics_collector.record_rate_limit_hit('certificate_creation', dns_provider or 'unknown')
+            elif 'authorization' in error_msg.lower():
+                metrics_collector.record_acme_error('authorization_failed', domain, dns_provider or 'unknown')
+            elif 'challenge' in error_msg.lower():
+                metrics_collector.record_acme_error('challenge_failed', domain, dns_provider or 'unknown')
+            
             return False, f"Certificate creation failed: {error_msg}"
     
     except Exception as e:
@@ -705,6 +730,13 @@ def create_certificate(domain, email, dns_provider=None, dns_config=None, accoun
             
         error_msg = str(e)
         logger.error(f"Exception during certificate creation: {error_msg}")
+        
+        # Record exception metrics
+        duration = time.time() - start_time
+        metrics_collector.record_certificate_request(domain, dns_provider or 'unknown', False)
+        metrics_collector.record_certificate_creation_time(dns_provider or 'unknown', duration)
+        metrics_collector.record_acme_error('exception', domain, dns_provider or 'unknown')
+        
         return False, f"Exception: {error_msg}"
 
 # Legacy function for backward compatibility
@@ -946,12 +978,14 @@ ns_settings = Namespace('settings', description='Settings operations')
 ns_health = Namespace('health', description='Health check')
 ns_backups = Namespace('backups', description='Backup and restore operations')
 ns_cache = Namespace('cache', description='Cache management operations')
+ns_metrics = Namespace('metrics', description='Prometheus metrics and monitoring')
 
 api.add_namespace(ns_certificates)
 api.add_namespace(ns_settings)
 api.add_namespace(ns_health)
 api.add_namespace(ns_backups)
 api.add_namespace(ns_cache)
+api.add_namespace(ns_metrics)
 
 # Health check endpoint
 @ns_health.route('')
@@ -959,6 +993,19 @@ class HealthCheck(Resource):
     def get(self):
         """Health check endpoint"""
         return {'status': 'healthy', 'timestamp': datetime.now().isoformat()}
+
+# Metrics endpoints
+@ns_metrics.route('')
+class MetricsList(Resource):
+    def get(self):
+        """Get metrics summary and information"""
+        summary = get_metrics_summary()
+        return {
+            'metrics_available': is_prometheus_available(),
+            'prometheus_endpoint': '/metrics',
+            'api_endpoint': '/api/metrics',
+            'summary': summary
+        }
 
 # Settings endpoints
 @ns_settings.route('')
@@ -1628,6 +1675,37 @@ def health_check():
             'timestamp': datetime.now().isoformat(),
             'error': str(e)
         }), 500
+
+# Prometheus metrics endpoint
+@app.route('/metrics')
+def metrics():
+    """Prometheus metrics endpoint for monitoring integration"""
+    try:
+        # Prepare application context for metrics collection
+        app_context = {
+            'settings': load_settings(),
+            'cert_dir': CERT_DIR,
+            'get_certificate_info': get_certificate_info,
+            'cache': deployment_cache
+        }
+        
+        # Generate metrics response
+        response_data, status_code, headers = generate_metrics_response(app_context)
+        
+        # Create Flask response
+        response = app.make_response((response_data, status_code))
+        for key, value in headers.items():
+            response.headers[key] = value
+            
+        return response
+        
+    except Exception as e:
+        logger.error(f"Metrics endpoint error: {e}")
+        return app.make_response((
+            f"# Error generating metrics: {e}\n",
+            500,
+            {'Content-Type': 'text/plain'}
+        ))
 
 # Web-specific settings endpoints (no auth required for initial setup)
 @app.route('/api/web/settings', methods=['GET', 'POST'])

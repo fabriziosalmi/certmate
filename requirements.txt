@@ -46,5 +46,8 @@ pyopenssl==25.1.0
 # Production server
 gunicorn==23.0.0
 
+# Monitoring and metrics
+prometheus_client==0.21.0
+
 # Testing
 requests_mock
