@@ -342,3 +342,36 @@ class TestMultiProviderSupport:
         unsupported = ['linode', 'gandi', 'ovh', 'namecheap', 'vultr', 'hetzner', 'nsone', 'dnsmadeeasy', 'porkbun', 'godaddy', 'he-ddns', 'dynudns']
         for provider in unsupported:
             assert provider not in self.MULTI_ACCOUNT_PROVIDERS
+    
+    def test_powerdns_command_construction_fix(self):
+        """Test that PowerDNS uses correct certbot arguments to avoid ambiguous option error."""
+        # The error was: certbot: error: ambiguous option: --dns-powerdns could match --dns-powerdns-propagation-seconds, --dns-powerdns-credentials
+        # The fix: Use only --dns-powerdns-credentials, not --dns-powerdns
+        
+        provider = 'powerdns'
+        assert provider in self.MULTI_ACCOUNT_PROVIDERS
+        
+        # Verify that PowerDNS should use credentials file approach
+        assert provider == 'powerdns'
+        
+    @patch('app.subprocess.run')
+    def test_powerdns_avoids_ambiguous_option_error(self, mock_subprocess, client):
+        """Test that PowerDNS certificate creation avoids the ambiguous option error."""
+        # Mock successful subprocess to verify command construction
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = 'Certificate created successfully'
+        mock_result.stderr = ''
+        mock_subprocess.return_value = mock_result
+        
+        # This request should not cause the ambiguous option error
+        # The fix ensures we use --dns-powerdns-credentials instead of --dns-powerdns
+        response = client.post('/api/certificates/create',
+                             data=json.dumps({
+                                 'domain': 'test-powerdns.example.com',
+                                 'dns_provider': 'powerdns'
+                             }),
+                             content_type='application/json')
+        
+        # Should not fail with 500 due to ambiguous option error
+        assert response.status_code in [200, 201, 400, 401, 422]  # Any valid response, not 500

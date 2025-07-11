@@ -860,3 +860,67 @@ class TestCertificateOperationsParameterValidation:
         result = get_certificate_info(None)
         
         assert result is None
+
+    @patch('app.subprocess.run')
+    @patch('app.create_powerdns_config')
+    @patch('app.load_settings')
+    def test_create_certificate_powerdns_command_construction(self, mock_load_settings, mock_create_config, mock_subprocess):
+        """Test PowerDNS certificate creation command construction to avoid ambiguous option error."""
+        # Mock settings
+        mock_load_settings.return_value = {
+            'dns_providers': {
+                'powerdns': {
+                    'accounts': {
+                        'production': {
+                            'name': 'PowerDNS Production',
+                            'api_url': 'https://powerdns.example.com:8081',
+                            'api_key': 'test-api-key'
+                        }
+                    }
+                }
+            },
+            'default_accounts': {
+                'powerdns': 'production'
+            }
+        }
+        
+        # Mock config file creation
+        mock_create_config.return_value = '/path/to/powerdns.ini'
+        
+        # Mock successful subprocess
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = 'Certificate created successfully'
+        mock_result.stderr = ''
+        mock_subprocess.return_value = mock_result
+        
+        success, message = create_certificate(
+            'test.example.com', 
+            'test@example.com', 
+            'powerdns', 
+            account_id='production'
+        )
+        
+        assert success is True
+        assert 'successfully' in message
+        
+        # Verify the command was constructed correctly for PowerDNS
+        mock_subprocess.assert_called_once()
+        call_args = mock_subprocess.call_args[0][0]
+        
+        # Should contain --dns-powerdns-credentials but NOT --dns-powerdns
+        credentials_arg_found = False
+        dns_plugin_arg_found = False
+        
+        for i, arg in enumerate(call_args):
+            if arg == '--dns-powerdns-credentials':
+                credentials_arg_found = True
+                # Next arg should be the config file path
+                assert i + 1 < len(call_args)
+                assert call_args[i + 1] == '/path/to/powerdns.ini'
+            elif arg == '--dns-powerdns':
+                dns_plugin_arg_found = True
+        
+        # PowerDNS should use --dns-powerdns-credentials, not --dns-powerdns
+        assert credentials_arg_found, "PowerDNS command should contain --dns-powerdns-credentials"
+        assert not dns_plugin_arg_found, "PowerDNS command should NOT contain --dns-powerdns (causes ambiguous option error)"

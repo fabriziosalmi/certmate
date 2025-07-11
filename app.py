@@ -638,8 +638,6 @@ def create_certificate(domain, email, dns_provider=None, dns_config=None, accoun
             '--config-dir', str(config_dir),
             '--work-dir', str(work_dir),
             '--logs-dir', str(logs_dir),
-            f'--dns-{dns_plugin}',
-            *dns_args,
             '--email', email,
             '--agree-tos',
             '--non-interactive',
@@ -647,6 +645,15 @@ def create_certificate(domain, email, dns_provider=None, dns_config=None, accoun
             '-d', domain,
             '-d', f'*.{domain}'  # Include wildcard
         ]
+        
+        # Add DNS plugin flag only if dns_args doesn't already contain credentials flag
+        if dns_args and any('--dns-' in arg and '-credentials' in arg for arg in dns_args):
+            # DNS provider uses credentials file - dns_args already contains the right flags
+            cmd.extend(dns_args)
+        else:
+            # DNS provider uses plugin flag (like Route53 with environment variables)
+            cmd.append(f'--dns-{dns_plugin}')
+            cmd.extend(dns_args)
         
         # Add staging flag if requested
         if staging:
