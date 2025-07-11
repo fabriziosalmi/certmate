@@ -1718,8 +1718,9 @@ def web_settings():
             logger.error(f"[SETTINGS DEBUG] Error in POST settings: {e}")
             return jsonify({'error': str(e)}), 500
 
-# DNS Provider Account Management endpoints for web interface (no auth required for initial setup)
+# DNS Provider Account Management endpoints for web interface
 @app.route('/api/dns/<string:provider>/accounts', methods=['GET', 'POST'])
+@require_auth
 def web_dns_provider_accounts(provider):
     """Web interface DNS provider accounts endpoint"""
     logger.info(f"[DNS DEBUG] {request.method} /api/dns/{provider}/accounts called")
@@ -1795,6 +1796,7 @@ def web_dns_provider_accounts(provider):
             return jsonify({'error': str(e)}), 500
 
 @app.route('/api/dns/<string:provider>/accounts/<string:account_id>', methods=['GET', 'PUT', 'DELETE'])
+@require_auth
 def web_dns_provider_account(provider, account_id):
     """Web interface individual DNS provider account endpoint"""
     logger.info(f"[DNS DEBUG] {request.method} /api/dns/{provider}/accounts/{account_id} called")
@@ -1816,27 +1818,19 @@ def web_dns_provider_account(provider, account_id):
                 ]))
             }
             
-            return safe_config
+            return jsonify(safe_config)
         except Exception as e:
             logger.error(f"[DNS DEBUG] Error getting account {account_id} for {provider}: {e}")
-            return jsonify({'error': 'Failed to get DNS provider account'}, 500)
+            return jsonify({'error': 'Failed to get DNS provider account'}), 500
 
-    @api.doc(security='Bearer')
-    @require_auth
-    def put(self, provider, account_id):
-        """Update an existing account configuration"""
+    elif request.method == 'PUT':
+        # Update an existing account configuration
         try:
             data = request.get_json()
             logger.info(f"[DNS DEBUG] Updating account {account_id} for {provider}")
             
             if not data:
                 return jsonify({'error': 'No data provided'}), 400
-            
-            # Validate account data
-            is_valid, error_msg = validate_dns_provider_account(provider, account_id, data)
-            if not is_valid:
-                logger.error(f"[DNS DEBUG] Validation failed: {error_msg}")
-                return jsonify({'error': error_msg}), 400
             
             # Load current settings
             settings = load_settings()
@@ -1847,11 +1841,18 @@ def web_dns_provider_account(provider, account_id):
                 account_id not in settings['dns_providers'][provider]):
                 return jsonify({'error': 'Account not found'}), 404
             
+            # Prepare the updated account config
+            # Remove set_as_default from the account config as it's not part of the account data
+            account_config = {k: v for k, v in data.items() if k != 'set_as_default'}
+            
+            # Validate the account configuration
+            is_valid, error_msg = validate_dns_provider_account(provider, account_id, account_config)
+            if not is_valid:
+                logger.error(f"[DNS DEBUG] Validation failed: {error_msg}")
+                return jsonify({'error': error_msg}), 400
+            
             # Update account
-            settings['dns_providers'][provider][account_id] = {
-                **settings['dns_providers'][provider][account_id],
-                **data
-            }
+            settings['dns_providers'][provider][account_id] = account_config
             
             # Set as default if requested
             if data.get('set_as_default'):
@@ -1860,9 +1861,13 @@ def web_dns_provider_account(provider, account_id):
                 settings['default_accounts'][provider] = account_id
             
             # Save settings
-            save_settings(settings)
+            success = save_settings(settings, backup_reason="dns_account_update")
             
-            logger.info(f"[DNS DEBUG] Account {account_id} updated for {provider}")
+            if not success:
+                logger.error(f"[DNS DEBUG] Failed to save settings after updating account {account_id}")
+                return jsonify({'error': 'Failed to save settings'}), 500
+            
+            logger.info(f"[DNS DEBUG] Account {account_id} updated successfully for {provider}")
             return jsonify({
                 'success': True,
                 'message': f'Account updated successfully'
@@ -1872,10 +1877,8 @@ def web_dns_provider_account(provider, account_id):
             logger.error(f"[DNS DEBUG] Error updating account {account_id} for {provider}: {e}")
             return jsonify({'error': str(e)}), 500
     
-    @api.doc(security='Bearer')
-    @require_auth
-    def delete(self, provider, account_id):
-        """Delete an account configuration"""
+    elif request.method == 'DELETE':
+        # Delete an account configuration
         try:
             # Load current settings
             settings = load_settings()
@@ -1904,7 +1907,11 @@ def web_dns_provider_account(provider, account_id):
                         del settings['default_accounts'][provider]
             
             # Save settings
-            save_settings(settings)
+            success = save_settings(settings, backup_reason="dns_account_delete")
+            
+            if not success:
+                logger.error(f"[DNS DEBUG] Failed to save settings after deleting account {account_id}")
+                return jsonify({'error': 'Failed to save settings'}), 500
             
             logger.info(f"[DNS DEBUG] Account {account_id} deleted for {provider}")
             return jsonify({
@@ -1915,6 +1922,9 @@ def web_dns_provider_account(provider, account_id):
         except Exception as e:
             logger.error(f"[DNS DEBUG] Error deleting account {account_id} for {provider}: {e}")
             return jsonify({'error': str(e)}), 500
+    
+    else:
+        return jsonify({'error': 'Method not allowed'}), 405
 
 
 def create_settings_backup(settings_data, backup_reason="manual"):
@@ -3033,3 +3043,94 @@ def update_cache_settings():
 
 # Initialize cache settings
 update_cache_settings()
+
+# =============================================
+# MAIN SECTION FOR TESTING
+# =============================================
+
+if __name__ == '__main__':
+    """Main entry point for testing outside Docker"""
+    import os
+    import sys
+    
+    print("=" * 60)
+    print("🚀 Starting CertMate Development Server")
+    print("=" * 60)
+    
+    # Check if running in development mode
+    debug_mode = os.getenv('FLASK_DEBUG', 'False').lower() in ['true', '1', 'yes']
+    host = os.getenv('FLASK_HOST', '0.0.0.0')
+    port = int(os.getenv('FLASK_PORT', '5000'))
+    
+    print(f"📍 Host: {host}")
+    print(f"🔌 Port: {port}")
+    print(f"🐛 Debug Mode: {debug_mode}")
+    print(f"📁 Working Directory: {os.getcwd()}")
+    
+    # Check directory permissions
+    print("\n🔍 Directory Checks:")
+    dirs_to_check = [CERT_DIR, DATA_DIR, BACKUP_DIR, LOGS_DIR]
+    for directory in dirs_to_check:
+        exists = directory.exists()
+        writable = os.access(directory, os.W_OK) if exists else False
+        status = "✅" if exists and writable else "❌"
+        print(f"  {status} {directory.name}: {'exists' if exists else 'missing'}{', writable' if writable else ', not writable' if exists else ''}")
+    
+    # Check settings
+    print(f"\n⚙️  Settings File: {'✅ exists' if SETTINGS_FILE.exists() else '❌ missing'}")
+    
+    # Load and display basic settings info
+    try:
+        settings = load_settings()
+        domain_count = len(settings.get('domains', []))
+        has_email = bool(settings.get('email'))
+        dns_provider = settings.get('dns_provider', 'cloudflare')
+        api_token_set = bool(settings.get('api_bearer_token'))
+        
+        print(f"  📧 Email configured: {'✅' if has_email else '❌'}")
+        print(f"  🌐 DNS Provider: {dns_provider}")
+        print(f"  📝 Domains configured: {domain_count}")
+        print(f"  🔑 API Token: {'✅ set' if api_token_set else '❌ using default'}")
+        
+        if api_token_set:
+            token = settings.get('api_bearer_token', '')
+            masked_token = f"{token[:8]}{'*' * (len(token) - 12)}{token[-4:]}" if len(token) > 12 else "****"
+            print(f"     Token (masked): {masked_token}")
+        
+    except Exception as e:
+        print(f"  ❌ Error loading settings: {e}")
+    
+    # Display access information
+    print(f"\n🌐 Access URLs:")
+    if host == '0.0.0.0':
+        print(f"  📱 Local:     http://localhost:{port}")
+        print(f"  🌍 Network:   http://<your-ip>:{port}")
+    else:
+        print(f"  📱 Address:   http://{host}:{port}")
+    
+    print(f"  📋 API Docs:  http://{host if host != '0.0.0.0' else 'localhost'}:{port}/docs/")
+    print(f"  ❤️  Health:    http://{host if host != '0.0.0.0' else 'localhost'}:{port}/health")
+    
+    print("\n💡 Tips:")
+    print("  • Use Ctrl+C to stop the server")
+    print("  • Set FLASK_DEBUG=true for auto-reload during development")
+    print("  • Configure your DNS provider in Settings before creating certificates")
+    print("  • API endpoints require Bearer token authentication")
+    
+    print("\n" + "=" * 60)
+    
+    try:
+        # Run the Flask development server
+        app.run(
+            host=host,
+            port=port,
+            debug=debug_mode,
+            threaded=True,
+            use_reloader=debug_mode
+        )
+    except KeyboardInterrupt:
+        print("\n\n👋 CertMate server stopped gracefully")
+        sys.exit(0)
+    except Exception as e:
+        print(f"\n💥 Server error: {e}")
+        sys.exit(1)

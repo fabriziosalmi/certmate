@@ -113,7 +113,7 @@ class TestDNSProviderValidation:
         
         for provider in invalid_providers:
             response = client.get(f'/api/dns/{provider}/accounts')
-            assert response.status_code in [200, 400, 404]  # App might handle all providers
+            assert response.status_code in [200, 400, 401, 404]  # App might handle all providers, 401 for auth required
 
 @pytest.mark.dns
 @pytest.mark.integration

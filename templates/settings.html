@@ -2345,6 +2345,7 @@
                 const response = await fetch(`/api/dns/${provider}/accounts/${accountId}`, {
                     method: 'PUT',
                     headers: {
+                        'Authorization': `Bearer ${API_TOKEN}`,
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify(accountData)
