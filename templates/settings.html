@@ -1715,9 +1715,7 @@
                 
                 const response = await fetch('/api/web/settings', {
                     method: 'GET',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    }
+                    headers: API_HEADERS
                 });
                 
                 if (!response.ok) {

@@ -21,7 +21,7 @@ import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from modules.metrics import (
+from modules.core.metrics import (
     CertMateMetricsCollector, 
     generate_metrics_response,
     get_metrics_summary,
@@ -311,7 +311,7 @@ class TestMetricsResponse:
     def test_generate_metrics_response_with_exception(self):
         """Test metrics response generation with exceptions."""
         # Test with invalid app context
-        with patch('modules.metrics.generate_latest', side_effect=Exception("Test error")):
+        with patch('modules.core.metrics.generate_latest', side_effect=Exception("Test error")):
             if PROMETHEUS_AVAILABLE:
                 response_data, status_code, headers = generate_metrics_response({'invalid': 'context'})
                 
@@ -356,9 +356,8 @@ class TestMetricsIntegration:
         assert response.content_type == 'application/json'
         
         data = json.loads(response.data)
-        assert 'metrics_available' in data
-        assert 'prometheus_endpoint' in data
-        assert 'api_endpoint' in data
+        assert 'available' in data
+        assert 'metrics_endpoint' in data
         assert 'summary' in data
 
 

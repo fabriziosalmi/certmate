@@ -6,7 +6,7 @@ import os
 # Add the parent directory to the path so we can import the app
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from modules.utils import (
+from modules.core.utils import (
     create_cloudflare_config, create_route53_config, create_azure_config,
     create_google_config, create_powerdns_config, create_digitalocean_config,
     create_linode_config, create_gandi_config, create_ovh_config,

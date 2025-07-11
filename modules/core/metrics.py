@@ -235,7 +235,7 @@ class CertMateMetricsCollector:
             import sys
             try:
                 certmate_info.info({
-                    'version': '1.1.12',
+                    'version': '1.1.15',
                     'python_version': f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
                 })
             except Exception as e:
