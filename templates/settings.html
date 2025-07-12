@@ -1280,24 +1280,34 @@
                         Create Backup
                     </h4>
                     <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                        Create a new backup of your current settings and certificates.
+                        Create atomic backups that include both settings and certificates to ensure data consistency.
                     </p>
                     <div class="space-y-3">
-                        <button type="button" onclick="createBackup('full', this)" 
+                        <button type="button" onclick="createBackup('unified', this)" 
                                 class="w-full bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-colors text-sm">
                             <i class="fas fa-archive mr-2"></i>
-                            Create Full Backup
+                            Create Unified Backup (Recommended)
                         </button>
-                        <button type="button" onclick="createBackup('settings', this)" 
-                                class="w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors text-sm">
-                            <i class="fas fa-cog mr-2"></i>
-                            Backup Settings Only
-                        </button>
-                        <button type="button" onclick="createBackup('certificates', this)" 
-                                class="w-full bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-colors text-sm">
-                            <i class="fas fa-certificate mr-2"></i>
-                            Backup Certificates Only
-                        </button>
+                        
+                        <!-- Legacy Options (Deprecated) -->
+                        <div class="border-t border-gray-200 dark:border-gray-600 pt-3 mt-3">
+                            <p class="text-xs text-yellow-600 dark:text-yellow-400 mb-2">
+                                <i class="fas fa-exclamation-triangle mr-1"></i>
+                                Legacy Options (Not Recommended - Use Unified Backup Instead)
+                            </p>
+                            <div class="space-y-2">
+                                <button type="button" onclick="createBackup('settings', this)" 
+                                        class="w-full bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors text-sm opacity-75">
+                                    <i class="fas fa-cog mr-2"></i>
+                                    Settings Only (Legacy)
+                                </button>
+                                <button type="button" onclick="createBackup('certificates', this)" 
+                                        class="w-full bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors text-sm opacity-75">
+                                    <i class="fas fa-certificate mr-2"></i>
+                                    Certificates Only (Legacy)
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -1309,19 +1319,19 @@
                     <div class="space-y-2 text-sm text-gray-600 dark:text-gray-400">
                         <div class="flex items-start">
                             <i class="fas fa-check text-green-500 mr-2 mt-0.5 text-xs"></i>
-                            <span><strong>Full Backup:</strong> Includes settings, DNS configurations, and certificates</span>
+                            <span><strong>Unified Backup (Recommended):</strong> Atomic backup of both settings and certificates ensuring data consistency</span>
                         </div>
                         <div class="flex items-start">
-                            <i class="fas fa-check text-green-500 mr-2 mt-0.5 text-xs"></i>
-                            <span><strong>Settings Only:</strong> DNS providers, email, and configuration</span>
+                            <i class="fas fa-exclamation-triangle text-yellow-500 mr-2 mt-0.5 text-xs"></i>
+                            <span><strong>Legacy Backups:</strong> Separate settings/certificates backups may cause mismatched states during restoration</span>
                         </div>
                         <div class="flex items-start">
-                            <i class="fas fa-check text-green-500 mr-2 mt-0.5 text-xs"></i>
-                            <span><strong>Certificates Only:</strong> All SSL certificates and private keys</span>
+                            <i class="fas fa-shield-alt text-blue-500 mr-2 mt-0.5 text-xs"></i>
+                            <span>Unified backups prevent configuration/certificate mismatches that can occur with separate backups</span>
                         </div>
                         <div class="flex items-start mt-3 pt-2 border-t border-gray-200 dark:border-gray-600">
                             <i class="fas fa-shield-alt text-yellow-500 mr-2 mt-0.5 text-xs"></i>
-                            <span class="text-xs">Backups are stored locally and contain sensitive data. Keep them secure.</span>
+                            <span class="text-xs">Backups contain sensitive data. Keep them secure and stored safely.</span>
                         </div>
                     </div>
                 </div>
@@ -1342,29 +1352,54 @@
                 </div>
 
                 <!-- Backup Lists -->
-                <div class="grid lg:grid-cols-2 gap-6">
-                    <!-- Settings Backups -->
+                <div class="space-y-6">
+                    <!-- Unified Backups (Recommended) -->
                     <div>
                         <h5 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-                            <i class="fas fa-cog mr-1 text-blue-500"></i>
-                            Settings Backups
+                            <i class="fas fa-archive mr-1 text-green-500"></i>
+                            Unified Backups (Recommended)
+                            <span class="text-xs bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 px-2 py-1 rounded-full ml-2">Atomic</span>
                         </h5>
-                        <div id="settings-backup-list" class="space-y-2 max-h-64 overflow-y-auto">
+                        <div id="unified-backup-list" class="space-y-2 max-h-64 overflow-y-auto">
                             <div class="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
-                                Loading backups...
+                                Loading unified backups...
                             </div>
                         </div>
                     </div>
 
-                    <!-- Certificate Backups -->
-                    <div>
+                    <!-- Legacy Backups -->
+                    <div class="border-t border-gray-200 dark:border-gray-600 pt-4">
                         <h5 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-                            <i class="fas fa-certificate mr-1 text-purple-500"></i>
-                            Certificate Backups
+                            <i class="fas fa-exclamation-triangle mr-1 text-yellow-500"></i>
+                            Legacy Backups
+                            <span class="text-xs bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 px-2 py-1 rounded-full ml-2">Deprecated</span>
                         </h5>
-                        <div id="certificate-backup-list" class="space-y-2 max-h-64 overflow-y-auto">
-                            <div class="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
-                                Loading backups...
+                        
+                        <div class="grid lg:grid-cols-2 gap-4">
+                            <!-- Settings Backups -->
+                            <div>
+                                <h6 class="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
+                                    <i class="fas fa-cog mr-1 text-blue-500"></i>
+                                    Settings Backups
+                                </h6>
+                                <div id="settings-backup-list" class="space-y-2 max-h-48 overflow-y-auto">
+                                    <div class="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
+                                        Loading settings backups...
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Certificate Backups -->
+                            <div>
+                                <h6 class="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
+                                    <i class="fas fa-certificate mr-1 text-purple-500"></i>
+                                    Certificate Backups
+                                </h6>
+                                <div id="certificate-backup-list" class="space-y-2 max-h-48 overflow-y-auto">
+                                    <div class="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
+                                        Loading certificate backups...
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -2585,6 +2620,12 @@
                     button.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Creating...';
                 }
                 
+                // Map legacy backup types to new unified format
+                let backupType = type;
+                if (type === 'full') {
+                    backupType = 'unified';
+                }
+                
                 const response = await fetch('/api/backups/create', {
                     method: 'POST',
                     headers: {
@@ -2592,7 +2633,7 @@
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        type: type,
+                        type: backupType,
                         reason: 'manual_backup'
                     })
                 });
@@ -2604,14 +2645,19 @@
                 
                 const result = await response.json();
                 
-                if (result.success) {
+                if (result.message) {
                     addDebugLog(`Backup created successfully: ${result.backups.map(b => b.filename).join(', ')}`, 'info');
-                    showMessage(`Backup created successfully!`, 'success');
+                    
+                    let message = `${type === 'unified' ? 'Unified' : type} backup created successfully!`;
+                    if (result.recommendation) {
+                        message += ` Note: ${result.recommendation}`;
+                    }
+                    showMessage(message, 'success');
                     
                     // Refresh backup list
                     await refreshBackupList();
                 } else {
-                    throw new Error(result.message || 'Failed to create backup');
+                    throw new Error(result.error || 'Failed to create backup');
                 }
                 
             } catch (error) {
@@ -2665,50 +2711,55 @@
         }
 
         function updateBackupList(backups) {
+            const unifiedBackupList = document.getElementById('unified-backup-list');
             const settingsBackupList = document.getElementById('settings-backup-list');
             const certificateBackupList = document.getElementById('certificate-backup-list');
             
-            if (!settingsBackupList || !certificateBackupList) return;
+            if (!unifiedBackupList || !settingsBackupList || !certificateBackupList) return;
             
-            // Update Settings Backups
-            if (backups.settings.length === 0) {
-                settingsBackupList.innerHTML = `
+            // Update Unified Backups (show prominently)
+            if (backups.unified && backups.unified.length === 0) {
+                unifiedBackupList.innerHTML = `
                     <div class="p-4 text-center text-gray-500 dark:text-gray-400">
                         <i class="fas fa-archive mr-2"></i>
-                        No settings backups available
+                        No unified backups yet
+                        <div class="text-xs mt-1">Create your first unified backup above!</div>
                     </div>
                 `;
-            } else {
-                let settingsHtml = '';
-                backups.settings.slice(0, 10).forEach(backup => {
-                    const createdDate = new Date(backup.created).toLocaleString();
-                    const sizeKB = Math.round(backup.size / 1024);
-                    const reason = backup.metadata?.reason || 'manual';
+            } else if (backups.unified) {
+                let unifiedHtml = '';
+                backups.unified.slice(0, 10).forEach(backup => {
+                    const metadata = backup.metadata || {};
+                    const createdDate = new Date(metadata.created || metadata.timestamp).toLocaleString();
+                    const sizeMB = Math.round((metadata.size || 0) / (1024 * 1024) * 10) / 10;
+                    const reason = metadata.backup_reason || metadata.reason || 'manual';
+                    const domains = metadata.total_domains || metadata.domains?.length || 0;
                     
-                    settingsHtml += `
-                        <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+                    unifiedHtml += `
+                        <div class="flex items-center justify-between p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-700">
                             <div class="flex-1 min-w-0">
                                 <div class="text-sm font-medium text-gray-900 dark:text-white truncate">${backup.filename}</div>
                                 <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">${createdDate}</div>
                                 <div class="flex items-center space-x-3 text-xs text-gray-400 dark:text-gray-500 mt-1">
-                                    <span><i class="fas fa-weight mr-1"></i>${sizeKB}KB</span>
+                                    <span><i class="fas fa-weight mr-1"></i>${sizeMB}MB</span>
+                                    <span><i class="fas fa-archive mr-1"></i>${domains} domains</span>
                                     <span><i class="fas fa-tag mr-1"></i>${reason}</span>
                                 </div>
                             </div>
-                            <div class="flex items-center space-x-2 ml-3">
-                                <button onclick="downloadBackup('settings', '${backup.filename}')" 
+                            <div class="flex space-x-1 ml-2">
+                                <button onclick="downloadBackup('unified', '${backup.filename}')" 
                                         class="p-2 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded transition-colors" 
-                                        title="Download backup">
+                                        title="Download unified backup">
                                     <i class="fas fa-download text-sm"></i>
                                 </button>
-                                <button onclick="restoreBackup('settings', '${backup.filename}')" 
+                                <button onclick="restoreBackup('unified', '${backup.filename}')" 
                                         class="p-2 text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300 hover:bg-green-50 dark:hover:bg-green-900/30 rounded transition-colors" 
-                                        title="Restore from backup">
+                                        title="Restore unified backup (atomic restore)">
                                     <i class="fas fa-undo text-sm"></i>
                                 </button>
-                                <button onclick="deleteBackup('settings', '${backup.filename}')" 
+                                <button onclick="deleteBackup('unified', '${backup.filename}')" 
                                         class="p-2 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30 rounded transition-colors" 
-                                        title="Delete backup">
+                                        title="Delete unified backup">
                                     <i class="fas fa-trash text-sm"></i>
                                 </button>
                             </div>
@@ -2716,11 +2767,67 @@
                     `;
                 });
                 
-                if (backups.settings.length > 10) {
-                    settingsHtml += `
+                if (backups.unified.length > 10) {
+                    unifiedHtml += `
                         <div class="text-xs text-gray-500 dark:text-gray-400 text-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
                             <i class="fas fa-ellipsis-h mr-1"></i>
-                            ${backups.settings.length - 10} more backups available
+                            ${backups.unified.length - 10} more unified backups available
+                        </div>
+                    `;
+                }
+                
+                unifiedBackupList.innerHTML = unifiedHtml;
+            }
+            
+            // Update Legacy Settings Backups (show with deprecation warning)
+            if (backups.settings.length === 0) {
+                settingsBackupList.innerHTML = `
+                    <div class="p-3 text-center text-gray-500 dark:text-gray-400 text-xs">
+                        <i class="fas fa-archive mr-1"></i>
+                        No legacy settings backups
+                    </div>
+                `;
+            } else {
+                let settingsHtml = '';
+                backups.settings.slice(0, 5).forEach(backup => {
+                    const metadata = backup.metadata || {};
+                    const createdDate = new Date(metadata.created).toLocaleString();
+                    const sizeKB = Math.round((metadata.size || 0) / 1024);
+                    const reason = metadata.reason || 'manual';
+                    
+                    settingsHtml += `
+                        <div class="flex items-center justify-between p-2 bg-yellow-50 dark:bg-yellow-900/20 rounded border border-yellow-200 dark:border-yellow-700">
+                            <div class="flex-1 min-w-0">
+                                <div class="text-xs font-medium text-gray-900 dark:text-white truncate">${backup.filename}</div>
+                                <div class="text-xs text-gray-500 dark:text-gray-400">
+                                    ${createdDate} • ${sizeKB}KB • ${reason}
+                                </div>
+                            </div>
+                            <div class="flex space-x-1 ml-1">
+                                <button onclick="downloadBackup('settings', '${backup.filename}')" 
+                                        class="p-1 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded transition-colors text-xs" 
+                                        title="Download settings backup">
+                                    <i class="fas fa-download"></i>
+                                </button>
+                                <button onclick="restoreBackup('settings', '${backup.filename}')" 
+                                        class="p-1 text-yellow-600 hover:text-yellow-800 dark:text-yellow-400 dark:hover:text-yellow-300 hover:bg-yellow-50 dark:hover:bg-yellow-900/30 rounded transition-colors text-xs" 
+                                        title="Restore settings (may cause data inconsistency)">
+                                    <i class="fas fa-exclamation-triangle"></i>
+                                </button>
+                                <button onclick="deleteBackup('settings', '${backup.filename}')" 
+                                        class="p-1 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30 rounded transition-colors text-xs" 
+                                        title="Delete settings backup">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                if (backups.settings.length > 5) {
+                    settingsHtml += `
+                        <div class="text-xs text-gray-500 dark:text-gray-400 text-center p-2 bg-gray-50 dark:bg-gray-700 rounded">
+                            ${backups.settings.length - 5} more settings backups
                         </div>
                     `;
                 }
@@ -2728,59 +2835,56 @@
                 settingsBackupList.innerHTML = settingsHtml;
             }
             
-            // Update Certificate Backups
+            // Update Legacy Certificate Backups (show with deprecation warning)
             if (backups.certificates.length === 0) {
                 certificateBackupList.innerHTML = `
-                    <div class="p-4 text-center text-gray-500 dark:text-gray-400">
-                        <i class="fas fa-certificate mr-2"></i>
-                        No certificate backups available
+                    <div class="p-3 text-center text-gray-500 dark:text-gray-400 text-xs">
+                        <i class="fas fa-certificate mr-1"></i>
+                        No legacy certificate backups
                     </div>
                 `;
             } else {
                 let certificatesHtml = '';
-                backups.certificates.slice(0, 10).forEach(backup => {
-                    const createdDate = new Date(backup.created).toLocaleString();
-                    const sizeMB = Math.round(backup.size / (1024 * 1024) * 10) / 10;
-                    const reason = backup.metadata?.reason || 'manual';
-                    const domains = backup.metadata?.total_domains || 0;
+                backups.certificates.slice(0, 5).forEach(backup => {
+                    const metadata = backup.metadata || {};
+                    const createdDate = new Date(metadata.created).toLocaleString();
+                    const sizeMB = Math.round((metadata.size || 0) / (1024 * 1024) * 10) / 10;
+                    const reason = metadata.reason || 'manual';
+                    const domains = metadata.total_domains || 0;
                     
                     certificatesHtml += `
-                        <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+                        <div class="flex items-center justify-between p-2 bg-yellow-50 dark:bg-yellow-900/20 rounded border border-yellow-200 dark:border-yellow-700">
                             <div class="flex-1 min-w-0">
-                                <div class="text-sm font-medium text-gray-900 dark:text-white truncate">${backup.filename}</div>
-                                <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">${createdDate}</div>
-                                <div class="flex items-center space-x-3 text-xs text-gray-400 dark:text-gray-500 mt-1">
-                                    <span><i class="fas fa-weight mr-1"></i>${sizeMB}MB</span>
-                                    <span><i class="fas fa-certificate mr-1"></i>${domains} domains</span>
-                                    <span><i class="fas fa-tag mr-1"></i>${reason}</span>
+                                <div class="text-xs font-medium text-gray-900 dark:text-white truncate">${backup.filename}</div>
+                                <div class="text-xs text-gray-500 dark:text-gray-400">
+                                    ${createdDate} • ${sizeMB}MB • ${domains} domains • ${reason}
                                 </div>
                             </div>
-                            <div class="flex items-center space-x-2 ml-3">
+                            <div class="flex space-x-1 ml-1">
                                 <button onclick="downloadBackup('certificates', '${backup.filename}')" 
-                                        class="p-2 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded transition-colors" 
-                                        title="Download backup">
-                                    <i class="fas fa-download text-sm"></i>
+                                        class="p-1 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded transition-colors text-xs" 
+                                        title="Download certificate backup">
+                                    <i class="fas fa-download"></i>
                                 </button>
                                 <button onclick="restoreBackup('certificates', '${backup.filename}')" 
-                                        class="p-2 text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300 hover:bg-green-50 dark:hover:bg-green-900/30 rounded transition-colors" 
-                                        title="Restore from backup">
-                                    <i class="fas fa-undo text-sm"></i>
+                                        class="p-1 text-yellow-600 hover:text-yellow-800 dark:text-yellow-400 dark:hover:text-yellow-300 hover:bg-yellow-50 dark:hover:bg-yellow-900/30 rounded transition-colors text-xs" 
+                                        title="Restore certificates (may cause data inconsistency)">
+                                    <i class="fas fa-exclamation-triangle"></i>
                                 </button>
                                 <button onclick="deleteBackup('certificates', '${backup.filename}')" 
-                                        class="p-2 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30 rounded transition-colors" 
-                                        title="Delete backup">
-                                    <i class="fas fa-trash text-sm"></i>
+                                        class="p-1 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30 rounded transition-colors text-xs" 
+                                        title="Delete certificate backup">
+                                    <i class="fas fa-trash"></i>
                                 </button>
                             </div>
                         </div>
                     `;
                 });
                 
-                if (backups.certificates.length > 10) {
+                if (backups.certificates.length > 5) {
                     certificatesHtml += `
-                        <div class="text-xs text-gray-500 dark:text-gray-400 text-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                            <i class="fas fa-ellipsis-h mr-1"></i>
-                            ${backups.certificates.length - 10} more backups available
+                        <div class="text-xs text-gray-500 dark:text-gray-400 text-center p-2 bg-gray-50 dark:bg-gray-700 rounded">
+                            ${backups.certificates.length - 5} more certificate backups
                         </div>
                     `;
                 }
@@ -2826,7 +2930,15 @@
         }
 
         async function restoreBackup(type, filename) {
-            if (!confirm(`Are you sure you want to restore from "${filename}"? This will replace your current ${type} and create a backup of your current configuration.`)) {
+            let confirmMessage = `Are you sure you want to restore from "${filename}"?`;
+            
+            if (type === 'unified') {
+                confirmMessage += ` This will atomically restore both settings and certificates, creating a backup of your current configuration first.`;
+            } else {
+                confirmMessage += `\n\n⚠️ WARNING: This is a legacy ${type} backup. Restoring only ${type} may cause data inconsistency between settings and certificates. Consider using unified backups instead.`;
+            }
+            
+            if (!confirm(confirmMessage)) {
                 return;
             }
             
@@ -2854,8 +2966,16 @@
                 
                 addDebugLog(`Backup restored successfully from: ${filename}`, 'info');
                 
-                if (type === 'settings') {
-                    showMessage(`Settings restored successfully from backup! Reloading configuration...`, 'success');
+                let message = result.message || `${type} restored successfully from backup!`;
+                if (result.recommendation) {
+                    message += `\n\nRecommendation: ${result.recommendation}`;
+                }
+                if (result.pre_restore_backup) {
+                    message += `\n\nA backup of the previous state was created: ${result.pre_restore_backup}`;
+                }
+                
+                if (type === 'settings' || type === 'unified') {
+                    showMessage(`${message} Reloading configuration...`, 'success');
                     
                     // For settings restore, reload the settings data and refresh the UI
                     try {
@@ -2873,7 +2993,7 @@
                         }, 3000);
                     }
                 } else if (type === 'certificates') {
-                    showMessage(`Certificates restored successfully from backup!`, 'success');
+                    showMessage(`${message}`, 'success');
                     
                     // For certificate restore, refresh the backup list
                     await refreshBackupList();
@@ -2928,14 +3048,14 @@
                 
                 const result = await response.json();
                 
-                if (result.success) {
+                if (result.message) {
                     addDebugLog(`Backup deleted successfully: ${filename}`, 'info');
                     showMessage(`Backup "${filename}" deleted successfully!`, 'success');
                     
                     // Refresh backup list
                     await refreshBackupList();
                 } else {
-                    throw new Error(result.message || 'Failed to delete backup');
+                    throw new Error(result.error || 'Failed to delete backup');
                 }
                 
             } catch (error) {

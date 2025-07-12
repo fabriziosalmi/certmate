@@ -236,7 +236,7 @@ class CertMateMetricsCollector:
             try:
                 # Try the newer way first
                 certmate_info.info({
-                    'version': '1.1.15',
+                    'version': '1.1.17',
                     'python_version': f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
                 })
             except AttributeError as e:
@@ -246,7 +246,7 @@ class CertMateMetricsCollector:
                     global application_version
                     application_version = Gauge('certmate_version_info', 'CertMate version information', ['version', 'python_version'])
                     application_version.labels(
-                        version='1.1.15',
+                        version='1.1.17',
                         python_version=f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
                     ).set(1)
                 except Exception as fallback_error:

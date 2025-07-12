@@ -18,6 +18,28 @@
 
 ---
 
+## 🚨 Version 1.1.17 - Important Updates
+
+### ✨ New Features
+- **🔄 Unified Backup System** - Atomic backups of settings + certificates ensuring data consistency
+- **🏛️ Enhanced Storage Backends** - Full support for Azure Key Vault, AWS Secrets Manager, HashiCorp Vault, and Infisical
+- **⚡ Improved Performance** - Optimized API endpoints and faster certificate operations
+- **🔧 Better Error Handling** - Enhanced error messages and recovery procedures
+
+### ⚠️ Breaking Changes & Deprecations
+- **Unified Backup is now the default method** - Legacy separate settings/certificates backups are deprecated
+- **Legacy backup support will be REMOVED in the next version** - Migrate to unified backups before upgrading
+- **API changes**: `/api/backup/unified` is now the recommended endpoint for backup creation
+- **UI changes**: Unified backup is prominently featured, legacy options show deprecation warnings
+
+### 🔄 Migration Guide
+1. **Create unified backups** of your current setup using the new system
+2. **Test restore procedures** with unified backups to ensure compatibility  
+3. **Update automation scripts** to use `/api/backup/unified` instead of separate endpoints
+4. **Plan for next version upgrade** where legacy backup support will be completely removed
+
+---
+
 ## 🌟 Why CertMate?
 
 CertMate solves the complexity of SSL certificate management in modern distributed architectures. Whether you're running a single application or managing certificates across multiple datacenters, CertMate provides:
@@ -27,7 +49,7 @@ CertMate solves the complexity of SSL certificate management in modern distribut
 - **🚀 Enterprise-Ready** - Docker, Kubernetes, REST API, and monitoring built-in
 - **📦 Simple Integration** - One-URL certificate downloads for easy automation
 - **🔒 Security-First** - Bearer token authentication, secure file permissions, audit logging
-- **💾 Automatic Backup** - Built-in backup and restore for settings and certificates
+- **💾 Unified Backup System** - Atomic backups of settings and certificates ensuring data consistency
 
 ## ✨ Key Features
 
@@ -57,22 +79,24 @@ CertMate solves the complexity of SSL certificate management in modern distribut
 - **Monitoring Integration** - Health checks and structured logging
 
 ### 💾 **Backup & Recovery**
+- **🔄 Unified Backups (NEW)** - Atomic snapshots of both settings and certificates ensuring data consistency
+- **⚠️ Legacy Support (DEPRECATED)** - Backward compatibility with existing separate settings/certificates backups (removal planned in next version)
 - **Automatic Backups** - Settings and certificates backed up automatically on changes
 - **Manual Backup Creation** - On-demand backup creation via web UI or API
 - **Comprehensive Coverage** - Backs up DNS configurations, certificates, and application settings
 - **Retention Management** - Configurable retention policies with automatic cleanup
-- **Easy Restore** - Simple restore process from any backup point
+- **Easy Restore** - Simple restore process from any backup point with atomic consistency
 - **Download Support** - Export backups for external storage and disaster recovery
 
 ### 🏛️ **Certificate Storage Backends**
-- **Local Filesystem** - Default secure local storage with proper file permissions
-- **Azure Key Vault** - Enterprise-grade secret management with Azure integration
-- **AWS Secrets Manager** - Scalable secret storage with AWS ecosystem integration
-- **HashiCorp Vault** - Industry-standard secret management with versioning and audit
-- **Infisical** - Modern open-source secret management with team collaboration
-- **Pluggable Architecture** - Easy to extend with additional storage backends
-- **Migration Support** - Seamless migration between storage backends
-- **Backward Compatibility** - Existing installations continue working without changes
+- **Local Filesystem** - Default secure local storage with proper file permissions (600/700)
+- **🔷 Azure Key Vault** - Enterprise-grade secret management with Azure integration and HSM protection
+- **🟠 AWS Secrets Manager** - Scalable secret storage with AWS ecosystem integration and cross-region replication
+- **⚫ HashiCorp Vault** - Industry-standard secret management with versioning, audit logging, and fine-grained policies
+- **🟣 Infisical** - Modern open-source secret management with team collaboration and end-to-end encryption
+- **🔧 Pluggable Architecture** - Easy to extend with additional storage backends
+- **🔄 Migration Support** - Seamless migration between storage backends without downtime
+- **⚡ Backward Compatibility** - Existing installations continue working without changes
 
 ### 🔒 **Security & Compliance**
 - **Bearer Token Authentication** - Secure API access control
@@ -200,6 +224,8 @@ PORT=8000
 ```
 
 > 💡 **Storage Backends**: By default, certificates are stored locally. For enterprise deployments, you can configure Azure Key Vault, AWS Secrets Manager, HashiCorp Vault, or Infisical via the web interface after startup. See [🏛️ Storage Backends](#️-certificate-storage-configuration) for details.
+
+> 🔄 **Backup Best Practices**: CertMate v1.1.17 includes unified backup system that creates atomic snapshots of both settings and certificates. After setup, create your first unified backup from Settings → Backup Management. Legacy separate backups are deprecated and will be removed in the next version.
 
 ### 3. Deploy
 
@@ -710,17 +736,26 @@ Content-Type: application/json
 
 #### Backup Management
 ```bash
-# List all available backups
+# List all available backups (unified + legacy)
 GET /api/backups
 Authorization: Bearer your_token_here
 
-# Create new backup
+# Create new unified backup (RECOMMENDED)
 POST /api/backups/create
 Authorization: Bearer your_token_here
 Content-Type: application/json
 
 {
-  "type": "settings",        # or "certificates"
+  "reason": "manual_backup"
+}
+
+# DEPRECATED: Create legacy backups (will be removed in next version)
+POST /api/backups/create
+Authorization: Bearer your_token_here
+Content-Type: application/json
+
+{
+  "type": "settings",        # DEPRECATED
   "description": "Manual backup before upgrade"
 }
 
@@ -728,7 +763,24 @@ Content-Type: application/json
 GET /api/backups/download/{backup_type}/{filename}
 Authorization: Bearer your_token_here
 
-# Restore from backup
+# Examples:
+# Download unified backup (recommended)
+GET /api/backups/download/unified/unified_backup_20241225_120000.zip
+
+# Download legacy backup (deprecated)
+GET /api/backups/download/settings/settings_20241225_120000.json
+
+# Restore from unified backup (RECOMMENDED) 
+POST /api/backups/restore/unified
+Authorization: Bearer your_token_here
+Content-Type: application/json
+
+{
+  "filename": "unified_backup_20241225_120000.zip",
+  "create_backup_before_restore": true
+}
+
+# DEPRECATED: Restore from legacy backup (will be removed)
 POST /api/backups/restore/{backup_type}
 Authorization: Bearer your_token_here
 Content-Type: application/json
@@ -737,6 +789,8 @@ Content-Type: application/json
   "backup_id": "settings_20241225_120000"
 }
 ```
+
+> ⚠️ **API Deprecation Warning**: Legacy backup endpoints (`/api/backups/create` with `type` parameter and `/api/backups/restore/{backup_type}`) are deprecated and will be removed in the next major version. Use unified backup endpoints for new integrations.
 
 ### 🎯 Automation-Friendly Download URL
 
@@ -1325,7 +1379,14 @@ POWERDNS_API_KEY=your_api_key
 
 CertMate supports multiple storage backends for certificates, providing flexibility for different deployment scenarios and security requirements. By default, certificates are stored locally on the filesystem, but you can configure enterprise-grade storage backends for enhanced security and compliance.
 
-#### Local Filesystem (Default)
+> 💡 **Choosing the Right Storage Backend:**
+> - **Local Filesystem**: Perfect for development, testing, and small deployments
+> - **Azure Key Vault**: Best for Azure-native environments and Microsoft ecosystem integration
+> - **AWS Secrets Manager**: Ideal for AWS infrastructure and cross-region deployments
+> - **HashiCorp Vault**: Excellent for multi-cloud environments and advanced secret management
+> - **Infisical**: Great for teams wanting open-source secret management with collaboration features
+
+#### 📁 Local Filesystem (Default)
 The default storage backend stores certificates in the local filesystem with secure permissions:
 
 ```bash
@@ -1342,8 +1403,15 @@ certificates/
 - **Directory**: `certificates` (configurable)
 - **Permissions**: `600` for private keys, `644` for certificates
 - **Backup**: Included in automatic backups
+- **Use Cases**: Development, testing, single-server deployments
 
-#### Azure Key Vault
+**Benefits:**
+- ✅ Zero configuration required
+- ✅ No external dependencies
+- ✅ Fast access and operations
+- ✅ Perfect for getting started
+
+#### 🔷 Azure Key Vault
 Store certificates securely in Azure Key Vault for enterprise-grade secret management:
 
 **Required Dependencies:**
@@ -1367,12 +1435,128 @@ pip install -r requirements-azure-storage.txt
 ```
 
 **Benefits:**
-- Azure-native secret management
-- Compliance and audit capabilities
-- Hardware security module (HSM) protection
-- Azure RBAC integration
+- ✅ Azure-native secret management
+- ✅ Compliance and audit capabilities (SOC 2, ISO 27001, FIPS 140-2)
+- ✅ Hardware security module (HSM) protection
+- ✅ Azure RBAC integration and managed identity support
+- ✅ Automatic backup and disaster recovery
 
-#### AWS Secrets Manager
+**Use Cases:**
+- Azure-based infrastructure
+- Enterprise compliance requirements
+- Multi-region Azure deployments
+- Integration with Azure DevOps and ARM templates
+
+#### 🟠 AWS Secrets Manager
+Integrate with AWS Secrets Manager for scalable secret storage:
+
+**Required Dependencies:**
+```bash
+pip install -r requirements-aws-storage.txt
+```
+
+**Configuration:**
+```json
+{
+  "certificate_storage": {
+    "backend": "aws_secrets_manager",
+    "aws_secrets_manager": {
+      "region": "us-east-1",
+      "access_key_id": "AKIAIOSFODNN7EXAMPLE",
+      "secret_access_key": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+    }
+  }
+}
+```
+
+**Benefits:**
+- ✅ AWS-native secret management
+- ✅ Automatic encryption at rest with AWS KMS
+- ✅ Cross-region replication for high availability
+- ✅ IAM-based access control and fine-grained permissions
+- ✅ Integration with AWS CloudTrail for audit logging
+- ✅ Automatic rotation capabilities
+
+**Use Cases:**
+- AWS-based infrastructure
+- Multi-region deployments
+- Integration with ECS, EKS, Lambda
+- Compliance with AWS security best practices
+
+#### ⚫ HashiCorp Vault
+Use industry-standard HashiCorp Vault for advanced secret management:
+
+**Required Dependencies:**
+```bash
+pip install -r requirements-vault-storage.txt
+```
+
+**Configuration:**
+```json
+{
+  "certificate_storage": {
+    "backend": "hashicorp_vault",
+    "hashicorp_vault": {
+      "vault_url": "https://vault.example.com:8200",
+      "vault_token": "hvs.xxxxxxxxxxxxxxxxxxxx",
+      "mount_point": "secret",
+      "engine_version": "v2"
+    }
+  }
+}
+```
+
+**Benefits:**
+- ✅ Industry-standard secret management
+- ✅ Secret versioning and rollback capabilities
+- ✅ Comprehensive audit logging and monitoring
+- ✅ Fine-grained access policies and dynamic secrets
+- ✅ Multi-cloud and hybrid cloud support
+- ✅ Advanced authentication methods (LDAP, Kubernetes, AWS IAM)
+
+**Use Cases:**
+- Multi-cloud environments
+- Complex organizational security requirements
+- Dynamic secret generation
+- Integration with CI/CD pipelines and Kubernetes
+
+#### 🟣 Infisical
+Modern open-source secret management with team collaboration:
+
+**Required Dependencies:**
+```bash
+pip install -r requirements-infisical-storage.txt
+```
+
+**Configuration:**
+```json
+{
+  "certificate_storage": {
+    "backend": "infisical",
+    "infisical": {
+      "site_url": "https://app.infisical.com",
+      "client_id": "your_client_id",
+      "client_secret": "your_client_secret",
+      "project_id": "your_project_id",
+      "environment": "prod"
+    }
+  }
+}
+```
+
+**Benefits:**
+- ✅ Open-source secret management with transparency
+- ✅ End-to-end encryption for maximum security
+- ✅ Team collaboration features and role-based access
+- ✅ Multi-environment support (dev, staging, prod)
+- ✅ Git-like versioning for secrets
+- ✅ Self-hostable for complete control
+
+**Use Cases:**
+- Team-based development workflows
+- Open-source preference
+- Self-hosted secret management
+- Multi-environment certificate management
 Integrate with AWS Secrets Manager for scalable secret storage:
 
 **Required Dependencies:**
@@ -1424,12 +1608,20 @@ pip install -r requirements-vault-storage.txt
 ```
 
 **Benefits:**
-- Industry-standard secret management
-- Secret versioning and rollback
-- Comprehensive audit logging
-- Fine-grained access policies
+- ✅ Industry-standard secret management
+- ✅ Secret versioning and rollback capabilities
+- ✅ Comprehensive audit logging and monitoring
+- ✅ Fine-grained access policies and dynamic secrets
+- ✅ Multi-cloud and hybrid cloud support
+- ✅ Advanced authentication methods (LDAP, Kubernetes, AWS IAM)
 
-#### Infisical
+**Use Cases:**
+- Multi-cloud environments
+- Complex organizational security requirements
+- Dynamic secret generation
+- Integration with CI/CD pipelines and Kubernetes
+
+#### 🟣 Infisical
 Modern open-source secret management with team collaboration:
 
 **Required Dependencies:**
@@ -1454,23 +1646,62 @@ pip install -r requirements-infisical-storage.txt
 ```
 
 **Benefits:**
-- Open-source secret management
-- End-to-end encryption
-- Team collaboration features
-- Multi-environment support
+- ✅ Open-source secret management with transparency
+- ✅ End-to-end encryption for maximum security
+- ✅ Team collaboration features and role-based access
+- ✅ Multi-environment support (dev, staging, prod)
+- ✅ Git-like versioning for secrets
+- ✅ Self-hostable for complete control
 
-#### Configuring Storage Backends
+**Use Cases:**
+- Team-based development workflows
+- Open-source preference
+- Self-hosted secret management
+- Multi-environment certificate management
+
+#### 📦 Quick Installation Guide
+
+**Install All Storage Backends:**
+```bash
+# Install all storage backends at once
+pip install -r requirements-storage-all.txt
+```
+
+**Install Individual Storage Backends:**
+```bash
+# Azure Key Vault only
+pip install -r requirements-azure-storage.txt
+
+# AWS Secrets Manager only  
+pip install -r requirements-aws-storage.txt
+
+# HashiCorp Vault only
+pip install -r requirements-vault-storage.txt
+
+# Infisical only
+pip install -r requirements-infisical-storage.txt
+```
+
+**Requirements File Overview:**
+- `requirements-storage-all.txt` - All storage backends (recommended for production)
+- `requirements-azure-storage.txt` - Azure Key Vault dependencies
+- `requirements-aws-storage.txt` - AWS Secrets Manager dependencies  
+- `requirements-vault-storage.txt` - HashiCorp Vault dependencies
+- `requirements-infisical-storage.txt` - Infisical dependencies
+- `requirements-minimal.txt` - Base CertMate without storage backends
+
+#### ⚙️ Configuring Storage Backends
 
 **Via Web Interface:**
 1. Navigate to Settings → Certificate Storage Backend
-2. Select your preferred backend
-3. Configure the required credentials
-4. Test the connection
-5. Save settings
+2. Select your preferred backend from the dropdown
+3. Configure the required credentials and settings
+4. Test the connection to verify configuration
+5. Save settings and optionally migrate existing certificates
 
 **Via API:**
 ```bash
-# Test storage backend connectivity
+# Test storage backend connectivity before switching
 curl -X POST "http://localhost:8000/api/storage/test" \
   -H "Authorization: Bearer your_token" \
   -H "Content-Type: application/json" \
@@ -1478,22 +1709,62 @@ curl -X POST "http://localhost:8000/api/storage/test" \
     "backend": "azure_keyvault",
     "config": {
       "vault_url": "https://yourvault.vault.azure.net/",
-      "tenant_id": "...",
-      "client_id": "...",
-      "client_secret": "..."
+      "tenant_id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+      "client_id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+      "client_secret": "your_client_secret"
+    }
+  }'
+
+# Get current storage backend information
+curl -X GET "http://localhost:8000/api/storage/info" \
+  -H "Authorization: Bearer your_token"
+
+# Update storage backend configuration
+curl -X POST "http://localhost:8000/api/storage/config" \
+  -H "Authorization: Bearer your_token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "backend": "hashicorp_vault",
+    "config": {
+      "vault_url": "https://vault.example.com:8200",
+      "vault_token": "hvs.xxxxxxxxxxxxxxxxxxxx",
+      "mount_point": "secret",
+      "engine_version": "v2"
     }
   }'
 ```
 
-**Migrating Between Backends:**
-1. Configure the new storage backend
-2. Test connectivity
-3. Use the migration tool in Settings
-4. Verify certificate availability
-5. Clean up old storage if desired
+**🔄 Migrating Between Backends:**
 
+*Zero-Downtime Migration Process:*
+1. Configure the new storage backend
+2. Test connectivity and verify access
+3. Use the migration tool in Settings or API
+4. Verify all certificates are accessible in new backend
+5. Optionally clean up old storage
+
+*Migration via API:*
 ```bash
-# Migration via API
+# Migrate all certificates from current backend to new backend
+curl -X POST "http://localhost:8000/api/storage/migrate" \
+  -H "Authorization: Bearer your_token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "target_backend": "aws_secrets_manager",
+    "target_config": {
+      "region": "us-east-1",
+      "access_key_id": "AKIAIOSFODNN7EXAMPLE", 
+      "secret_access_key": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+    },
+    "verify_migration": true
+  }'
+```
+
+*Migration Benefits:*
+- ✅ Zero downtime during migration
+- ✅ Automatic verification of migrated certificates
+- ✅ Rollback capability if issues are detected
+- ✅ Preservation of certificate metadata and permissions
 curl -X POST "http://localhost:8000/api/storage/migrate" \
   -H "Authorization: Bearer your_token" \
   -H "Content-Type: application/json" \
@@ -1632,74 +1903,134 @@ server {
 
 CertMate provides comprehensive backup and recovery capabilities built directly into the application, ensuring your certificates and configuration data are always protected.
 
-#### Built-in Backup System
+> ⚠️ **IMPORTANT - Breaking Changes in v1.1.17**: 
+> - **Unified Backup is now the default and recommended method** for creating backups
+> - **Legacy separate settings/certificates backups are DEPRECATED** and will be removed in the next major version
+> - All new installations should use unified backups exclusively
+> - Existing users are strongly encouraged to migrate to unified backups
+> - Legacy backup support will be completely removed in the next version to simplify maintenance
+
+#### 🆕 Unified Backup System (Recommended)
+
+**What is Unified Backup?**
+- **Atomic Operation**: Creates a single ZIP file containing both settings and certificates
+- **Data Consistency**: Ensures settings and certificates are always in sync
+- **Prevents Corruption**: Eliminates configuration/certificate mismatches that can occur with separate backups
+- **Simplified Management**: One backup file contains everything needed for complete restoration
 
 **Automatic Backups:**
-- **Settings Backup** - Automatically created when DNS providers, domains, or application settings are modified
-- **Certificate Backup** - Automatically created when new certificates are generated or renewed
+- **Unified Snapshots** - Automatically created when DNS providers, domains, certificates, or application settings are modified
 - **Retention Management** - Configurable retention policy (default: 10 most recent backups)
 - **Automatic Cleanup** - Old backups are automatically removed based on retention settings
 
 **Manual Backups:**
-- **On-Demand Creation** - Create backups anytime via the web interface or API
-- **Selective Backup** - Choose to backup settings, certificates, or both
+- **On-Demand Creation** - Create unified backups anytime via the web interface or API
 - **Download Support** - Export backups for external storage and disaster recovery
+- **Comprehensive Coverage** - Includes all DNS configurations, certificates, and application settings
 
 #### Web Interface Backup Management
 
 Access backup features from the Settings page:
 
 ```html
-<!-- Manual backup creation -->
-<button onclick="createBackup('settings', this)">Create Settings Backup</button>
-<button onclick="createBackup('certificates', this)">Create Certificate Backup</button>
+<!-- Unified backup creation (RECOMMENDED) -->
+<button onclick="createBackup('unified', this)">Create Unified Backup (Recommended)</button>
+
+<!-- Legacy options (DEPRECATED - will be removed) -->
+<button onclick="createBackup('settings', this)">Create Settings Backup (DEPRECATED)</button>
+<button onclick="createBackup('certificates', this)">Create Certificate Backup (DEPRECATED)</button>
 
 <!-- View and manage existing backups -->
 - Download backups for external storage
-- Restore from any backup point
+- Restore from any backup point with atomic consistency
 - View backup contents and metadata
 - Delete specific backups manually
 ```
 
 #### API Backup Operations
 
-**Create Backups:**
+**Create Unified Backup (Recommended):**
 ```bash
-# Create settings backup
+# Create unified backup (settings + certificates)
+curl -X POST "http://localhost:8000/api/backup/unified" \
+     -H "Authorization: Bearer your_token"
+
+# Response includes backup file information
+{
+  "success": true,
+  "backup_file": "unified_backup_20241225_120000.zip",
+  "size": "2.5MB",
+  "contents": {
+    "settings": true,
+    "certificates": 15
+  }
+}
+```
+
+**Legacy API Endpoints (DEPRECATED):**
+```bash
+# DEPRECATED: Create settings backup (will be removed)
 curl -X POST "http://localhost:8000/api/backup/settings" \
      -H "Authorization: Bearer your_token"
 
-# Create certificate backup  
+# DEPRECATED: Create certificate backup (will be removed)
 curl -X POST "http://localhost:8000/api/backup/certificates" \
      -H "Authorization: Bearer your_token"
 ```
 
 **List and Download Backups:**
 ```bash
-# List all backups
+# List all backups (includes unified and legacy)
 curl -H "Authorization: Bearer your_token" \
      "http://localhost:8000/api/backups"
 
-# Download specific backup
+# Download unified backup
+curl -H "Authorization: Bearer your_token" \
+     "http://localhost:8000/api/backup/download/unified_backup_20241225_120000.zip" \
+     -o unified_backup.zip
+
+# Download legacy backup (DEPRECATED)
 curl -H "Authorization: Bearer your_token" \
      "http://localhost:8000/api/backup/download/settings_20241225_120000.json" \
-     -o backup.json
+     -o settings_backup.json
 ```
 
 #### Backup File Structure
 
-**Settings Backup (JSON):**
+**Unified Backup (ZIP) - RECOMMENDED:**
+```
+unified_backup_20241225_120000.zip
+├── settings.json                    # Complete application settings
+│   ├── timestamp: "2024-12-25T12:00:00Z"
+│   ├── version: "1.1.17"
+│   ├── dns_providers: {...}
+│   ├── domains: [...]
+│   └── settings: {...}
+└── certificates/                    # All certificate files
+    ├── domain1.com/
+    │   ├── cert.pem
+    │   ├── chain.pem
+    │   ├── fullchain.pem
+    │   └── privkey.pem
+    └── domain2.com/
+        ├── cert.pem
+        ├── chain.pem
+        ├── fullchain.pem
+        └── privkey.pem
+```
+
+**Legacy Settings Backup (JSON) - DEPRECATED:**
 ```json
 {
   "timestamp": "2024-12-25T12:00:00Z",
-  "version": "1.0",
+  "version": "1.1.17",
   "dns_providers": {...},
   "domains": [...],
   "settings": {...}
 }
 ```
 
-**Certificate Backup (ZIP):**
+**Legacy Certificate Backup (ZIP) - DEPRECATED:**
 ```
 certificates_20241225_120000.zip
 ├── domain1.com/
@@ -1712,6 +2043,41 @@ certificates_20241225_120000.zip
     ├── chain.pem
     ├── fullchain.pem
     └── privkey.pem
+```
+
+#### Recovery Procedures
+
+**Unified Backup Restoration (Recommended):**
+
+*Web Interface:*
+1. Navigate to Settings → Backup Management
+2. Select the unified backup to restore from
+3. Confirm restoration (restores both settings and certificates atomically)
+4. Application will restart to apply new settings
+5. Verify all certificates and configurations are working
+
+*API Restoration:*
+```bash
+# Restore from unified backup (recommended)
+curl -X POST "http://localhost:8000/api/backup/restore/unified" \
+     -H "Authorization: Bearer your_token" \
+     -H "Content-Type: application/json" \
+     -d '{"backup_id": "unified_backup_20241225_120000"}'
+```
+
+**Legacy Recovery (DEPRECATED):**
+```bash
+# DEPRECATED: Restore settings from backup (will be removed)
+curl -X POST "http://localhost:8000/api/backup/restore/settings" \
+     -H "Authorization: Bearer your_token" \
+     -H "Content-Type: application/json" \
+     -d '{"backup_id": "settings_20241225_120000"}'
+
+# DEPRECATED: Restore certificates from backup (will be removed)
+curl -X POST "http://localhost:8000/api/backup/restore/certificates" \
+     -H "Authorization: Bearer your_token" \
+     -H "Content-Type: application/json" \
+     -d '{"backup_id": "certificates_20241225_120000"}'
 ```
 
 #### External Backup Integration
@@ -2102,6 +2468,39 @@ FLASK_ENV=development
 
 # Or in Docker Compose
 docker-compose -f docker-compose.yml -f docker-compose.debug.yml up
+```
+
+### ⚠️ Known Issues (v1.1.17)
+
+#### Legacy Certificate Backup Creation (API)
+**Issue**: `POST /api/backups/create` for certificate backups returns 500 error  
+**Status**: Known issue with legacy certificate backup endpoint  
+**Workaround**: Use unified backup instead:
+```bash
+# Instead of legacy certificate backup (fails)
+curl -X POST "http://localhost:8000/api/backups/create" \
+     -H "Authorization: Bearer your_token" \
+     -d '{"type": "certificates"}'
+
+# Use unified backup (works)
+curl -X POST "http://localhost:8000/api/backups/create" \
+     -H "Authorization: Bearer your_token" \
+     -d '{"reason": "manual_backup"}'
+```
+**Impact**: Low - unified backups provide better data consistency  
+**Timeline**: Legacy endpoint will be removed in next version anyway
+
+#### Backup UI Error Messages
+**Issue**: Backup deletion may show error message on successful deletion  
+**Status**: Fixed in v1.1.17  
+**Solution**: Upgrade to latest version
+
+#### API Test Failures
+**Issue**: Some API endpoints may fail during rapid testing  
+**Workaround**: Add delays between API calls in automated tests:
+```bash
+# Add delay between test calls
+sleep 0.1
 ```
 
 ### 📋 Support Checklist

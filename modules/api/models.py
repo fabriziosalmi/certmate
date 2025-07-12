@@ -171,8 +171,9 @@ def create_api_models(api):
     })
 
     backup_list_model = api.model('BackupList', {
-        'settings': fields.List(fields.Nested(backup_metadata_model), description='Settings backups'),
-        'certificates': fields.List(fields.Nested(backup_metadata_model), description='Certificate backups')
+        'unified': fields.List(fields.Nested(backup_metadata_model), description='Unified backups (recommended)'),
+        'settings': fields.List(fields.Nested(backup_metadata_model), description='Legacy settings backups'),
+        'certificates': fields.List(fields.Nested(backup_metadata_model), description='Legacy certificate backups')
     })
 
     # Storage Backend models

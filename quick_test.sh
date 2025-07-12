@@ -224,19 +224,19 @@ test_backup_restore() {
     local auth_header="Authorization: Bearer $token"
     local content_header="Content-Type: application/json"
     
-    # Test settings backup creation
-    log_verbose "Testing settings backup creation..."
+    # Test unified backup creation (recommended)
+    log_verbose "Testing unified backup creation..."
     local backup_response=$(curl -s --max-time $TIMEOUT -X POST \
         -H "$auth_header" -H "$content_header" \
-        -d '{"type": "settings", "reason": "quick_test"}' \
+        -d '{"type": "unified", "reason": "quick_test"}' \
         "$DEFAULT_URL/api/backups/create" 2>/dev/null)
     
     if echo "$backup_response" | grep -q "created_backups\|filename"; then
-        log_success "Settings backup creation works"
+        log_success "Unified backup creation works"
     elif echo "$backup_response" | grep -q "message.*success\|backup.*created"; then
-        log_success "Settings backup creation works"
+        log_success "Unified backup creation works"
     else
-        log_warning "Settings backup creation may have issues"
+        log_warning "Unified backup creation may have issues"
         if [ "$VERBOSE" = true ]; then
             log_verbose "Response: $backup_response"
         fi
@@ -248,7 +248,7 @@ test_backup_restore() {
         -H "$auth_header" \
         "$DEFAULT_URL/api/backups" 2>/dev/null)
     
-    if echo "$list_response" | grep -q "settings\|certificates"; then
+    if echo "$list_response" | grep -q "unified\|settings\|certificates"; then
         log_success "Backup listing works"
     else
         log_warning "Backup listing may have issues"
