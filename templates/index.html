@@ -1602,6 +1602,46 @@
                     this.classList.add('hidden');
                 }
             });
+            
+            // Listen for certificate updates from other pages (e.g., settings page)
+            try {
+                // Listen for BroadcastChannel messages
+                if (typeof BroadcastChannel !== 'undefined') {
+                    const channel = new BroadcastChannel('certmate_updates');
+                    channel.addEventListener('message', function(event) {
+                        if (event.data && event.data.type === 'certificates_restored') {
+                            console.log('Received certificate update notification from another page');
+                            addDebugLog('Certificates updated from another page - refreshing list...', 'info');
+                            
+                            // Refresh certificates after a short delay
+                            setTimeout(() => {
+                                loadCertificates();
+                                showMessage('Certificate list refreshed - certificates have been restored!', 'success');
+                            }, 1000);
+                        }
+                    });
+                }
+                
+                // Also listen for localStorage changes as fallback
+                window.addEventListener('storage', function(event) {
+                    if (event.key === 'certificates_updated') {
+                        console.log('Detected certificate update via localStorage');
+                        addDebugLog('Certificates updated detected - refreshing list...', 'info');
+                        
+                        // Refresh certificates after a short delay
+                        setTimeout(() => {
+                            loadCertificates();
+                            showMessage('Certificate list refreshed - certificates have been updated!', 'success');
+                        }, 1000);
+                        
+                        // Clean up the signal
+                        localStorage.removeItem('certificates_updated');
+                    }
+                });
+                
+            } catch (e) {
+                console.log('Cross-page communication setup failed:', e);
+            }
         });
     </script>
 </body>

@@ -26,7 +26,7 @@ import requests
 # Import new modular components
 from modules.core import (
     FileOperations, SettingsManager, AuthManager,
-    CertificateManager, DNSManager, CacheManager
+    CertificateManager, DNSManager, CacheManager, StorageManager
 )
 from modules.api import create_api_models, create_api_resources
 from modules.web import register_web_routes
@@ -119,11 +119,15 @@ class CertMateApp:
             # Initialize cache manager
             cache_manager = CacheManager(settings_manager)
             
+            # Initialize storage manager
+            storage_manager = StorageManager(settings_manager)
+            
             # Initialize certificate manager
             certificate_manager = CertificateManager(
                 cert_dir=self.cert_dir,
                 settings_manager=settings_manager,
-                dns_manager=dns_manager
+                dns_manager=dns_manager,
+                storage_manager=storage_manager
             )
             
             # Store all managers for easy access
@@ -133,7 +137,8 @@ class CertMateApp:
                 'auth': auth_manager,
                 'certificates': certificate_manager,
                 'dns': dns_manager,
-                'cache': cache_manager
+                'cache': cache_manager,
+                'storage': storage_manager
             }
             
             logger.info("All managers initialized successfully")
@@ -202,6 +207,7 @@ class CertMateApp:
             ns_backups.add_resource(self.api_resources['BackupCreate'], '/create')
             ns_backups.add_resource(self.api_resources['BackupDownload'], '/download/<backup_type>/<filename>')
             ns_backups.add_resource(self.api_resources['BackupRestore'], '/restore/<backup_type>')
+            ns_backups.add_resource(self.api_resources['BackupDelete'], '/delete/<backup_type>/<filename>')
             
             logger.info("API setup completed successfully")
             
@@ -532,3 +538,63 @@ from modules.core.metrics import (
 
 # Import token validation for test compatibility (needs to be in module namespace for mocking)
 from modules.core.utils import validate_api_token
+
+
+# Main entry point for direct execution (useful for debugging)
+if __name__ == '__main__':
+    import argparse
+    
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='CertMate SSL Certificate Management')
+    parser.add_argument('--host', default='0.0.0.0', help='Host to bind to (default: 0.0.0.0)')
+    parser.add_argument('--port', type=int, default=8000, help='Port to bind to (default: 8000)')
+    parser.add_argument('--debug', action='store_true', help='Enable debug mode')
+    parser.add_argument('--log-level', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'], 
+                       default='INFO', help='Set logging level')
+    
+    args = parser.parse_args()
+    
+    # Set logging level
+    logging.getLogger().setLevel(getattr(logging, args.log_level))
+    
+    try:
+        # Create and configure the application
+        certmate_app = CertMateApp()
+        app = certmate_app.app
+        
+        # Print startup information
+        print(f"🚀 Starting CertMate on {args.host}:{args.port}")
+        print(f"📊 Debug mode: {'enabled' if args.debug else 'disabled'}")
+        print(f"📝 Log level: {args.log_level}")
+        print(f"🌐 Web interface: http://{args.host}:{args.port}")
+        print(f"📚 API documentation: http://{args.host}:{args.port}/docs/")
+        print(f"💚 Health check: http://{args.host}:{args.port}/health")
+        print("=" * 60)
+        
+        # Run the application
+        app.run(
+            host=args.host,
+            port=args.port,
+            debug=args.debug,
+            threaded=True,
+            use_reloader=False  # Disable reloader to avoid scheduler issues
+        )
+        
+    except KeyboardInterrupt:
+        print("\n🛑 Shutting down CertMate...")
+        
+        # Gracefully shutdown the scheduler if it exists
+        if hasattr(certmate_app, 'scheduler') and certmate_app.scheduler:
+            try:
+                certmate_app.scheduler.shutdown()
+                print("📅 Background scheduler stopped")
+            except Exception as e:
+                print(f"⚠️  Error stopping scheduler: {e}")
+        
+        print("✅ CertMate stopped successfully")
+        sys.exit(0)
+        
+    except Exception as e:
+        print(f"❌ Failed to start CertMate: {e}")
+        logger.exception("Application startup failed")
+        sys.exit(1)

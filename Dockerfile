@@ -42,8 +42,11 @@ ENV PATH="/opt/venv/bin:$PATH"
 COPY . .
 
 # Create necessary directories with proper permissions
-RUN mkdir -p certificates data logs && \
+RUN mkdir -p certificates data logs backups && \
     chown -R certmate:certmate /app
+
+# Ensure proper permissions for volume mounts
+RUN chmod 755 /app/certificates /app/data /app/logs
 
 # Set environment variables
 ENV FLASK_APP=app.py

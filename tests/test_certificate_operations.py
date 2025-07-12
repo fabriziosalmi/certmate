@@ -251,52 +251,46 @@ class TestCertificateOperations:
         assert 'Exception' in message or 'Error' in message
     
     @patch('app.subprocess.run')
-    @patch('app.load_settings')
-    @patch('app.CERT_DIR')
-    def test_get_certificate_info_success(self, mock_cert_dir, mock_load_settings, mock_subprocess):
+    @patch('app.certmate_app')
+    def test_get_certificate_info_success(self, mock_certmate_app, mock_subprocess):
         """Test successful certificate info retrieval."""
-        # Mock certificate directory and file existence
-        mock_cert_path = MagicMock()
-        mock_cert_path.exists.return_value = True
-        mock_cert_file = MagicMock()
-        mock_cert_file.exists.return_value = True
-        mock_cert_path.__truediv__.return_value = mock_cert_file
-        mock_cert_dir.__truediv__.return_value = mock_cert_path
-        
-        # Mock settings
-        mock_load_settings.return_value = {
-            'dns_providers': {'cloudflare': {'production': {'api_token': 'test'}}},
-            'default_accounts': {'cloudflare': 'production'}
+        # Mock the certificate manager
+        mock_cert_manager = MagicMock()
+        mock_cert_manager.get_certificate_info.return_value = {
+            'exists': True,
+            'domain': 'example.com',
+            'dns_provider': 'cloudflare',
+            'backend': 'local_filesystem',
+            'valid_from': '2023-12-25 12:00:00',
+            'valid_to': '2024-12-25 12:00:00',
+            'days_until_expiry': 207,
+            'status': 'valid'
         }
         
-        # Mock openssl output
-        mock_result = MagicMock()
-        mock_result.returncode = 0
-        mock_result.stdout = 'notBefore=Dec 25 12:00:00 2023 GMT\nnotAfter=Dec 25 12:00:00 2024 GMT'
-        mock_subprocess.return_value = mock_result
+        mock_certmate_app.managers = {
+            'certificates': mock_cert_manager
+        }
         
-        with patch('app.datetime') as mock_datetime:
-            mock_datetime.now.return_value = mock_datetime.strptime('2024-06-01 12:00:00', '%Y-%m-%d %H:%M:%S')
-            mock_datetime.strptime.return_value = mock_datetime.strptime('2024-12-25 12:00:00', '%Y-%m-%d %H:%M:%S')
-            
-            result = get_certificate_info('example.com')
-            
-            assert result['exists'] is True
-            assert result['domain'] == 'example.com'
+        result = get_certificate_info('example.com')
+        
+        assert result['exists'] is True
+        assert result['domain'] == 'example.com'
     
-    @patch('app.load_settings')
-    @patch('app.CERT_DIR')
-    def test_get_certificate_info_not_exists(self, mock_cert_dir, mock_load_settings):
+    @patch('app.certmate_app')
+    def test_get_certificate_info_not_exists(self, mock_certmate_app):
         """Test certificate info when certificate doesn't exist."""
-        # Mock certificate directory doesn't exist
-        mock_cert_path = MagicMock()
-        mock_cert_path.exists.return_value = False
-        mock_cert_dir.__truediv__.return_value = mock_cert_path
+        # Mock the certificate manager
+        mock_cert_manager = MagicMock()
+        mock_cert_manager.get_certificate_info.return_value = {
+            'exists': False,
+            'domain': 'nonexistent.com',
+            'dns_provider': None,
+            'backend': 'local_filesystem',
+            'status': 'not_found'
+        }
         
-        # Mock settings
-        mock_load_settings.return_value = {
-            'dns_providers': {},
-            'default_accounts': {}
+        mock_certmate_app.managers = {
+            'certificates': mock_cert_manager
         }
         
         result = get_certificate_info('nonexistent.com')

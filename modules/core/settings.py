@@ -82,7 +82,35 @@ class SettingsManager:
             'api_bearer_token': os.getenv('API_BEARER_TOKEN') or generate_secure_token(),
             'setup_completed': False,  # Track if initial setup is done
             'dns_provider': 'cloudflare',
-            'dns_providers': {}  # Start with empty DNS providers - only add what's actually configured
+            'dns_providers': {},  # Start with empty DNS providers - only add what's actually configured
+            'certificate_storage': {  # New storage backend configuration
+                'backend': 'local_filesystem',  # Default to local filesystem for backward compatibility
+                'cert_dir': 'certificates',
+                'azure_keyvault': {
+                    'vault_url': '',
+                    'client_id': '',
+                    'client_secret': '',
+                    'tenant_id': ''
+                },
+                'aws_secrets_manager': {
+                    'region': 'us-east-1',
+                    'access_key_id': '',
+                    'secret_access_key': ''
+                },
+                'hashicorp_vault': {
+                    'vault_url': '',
+                    'vault_token': '',
+                    'mount_point': 'secret',
+                    'engine_version': 'v2'
+                },
+                'infisical': {
+                    'site_url': 'https://app.infisical.com',
+                    'client_id': '',
+                    'client_secret': '',
+                    'project_id': '',
+                    'environment': 'prod'
+                }
+            }
         }
         
         # Only create full template for first-time setup
@@ -105,7 +133,8 @@ class SettingsManager:
                 'gandi': {'api_token': ''},
                 'ovh': {'endpoint': '', 'application_key': '', 'application_secret': '', 'consumer_key': ''},
                 'namecheap': {'username': '', 'api_key': ''}
-            }
+            },
+            'certificate_storage': default_settings['certificate_storage']
         }
         
         if not self._settings_file_exists_compat():
@@ -134,6 +163,17 @@ class SettingsManager:
             if 'dns_providers' not in settings:
                 settings['dns_providers'] = {}
                 was_migrated = True
+                
+            # Ensure certificate_storage exists with default configuration
+            if 'certificate_storage' not in settings:
+                settings['certificate_storage'] = default_settings['certificate_storage']
+                was_migrated = True
+            else:
+                # Merge missing storage backend configuration keys
+                for key, value in default_settings['certificate_storage'].items():
+                    if key not in settings['certificate_storage']:
+                        settings['certificate_storage'][key] = value
+                        was_migrated = True
                     
             # Validate critical settings
             if settings.get('api_bearer_token') in ['change-this-token', 'certmate-api-token-12345', '']:

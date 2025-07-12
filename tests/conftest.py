@@ -43,7 +43,8 @@ def app():
         "cloudflare_email": "test@example.com",
         "certbot_email": "test@example.com",
         "auto_renew": False,
-        "renewal_threshold_days": 30
+        "renewal_threshold_days": 30,
+        "api_bearer_token": "test-api-bearer-token"
     }
     
     settings_path = os.path.join(flask_app.config['DATA_DIR'], 'settings.json')

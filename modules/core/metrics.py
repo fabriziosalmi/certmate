@@ -234,19 +234,25 @@ class CertMateMetricsCollector:
         if PROMETHEUS_AVAILABLE:
             import sys
             try:
+                # Try the newer way first
                 certmate_info.info({
                     'version': '1.1.15',
                     'python_version': f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
                 })
-            except Exception as e:
-                logger.warning(f"Could not set application info metric: {e}")
-                # Create a simple gauge instead if Info doesn't work
+            except AttributeError as e:
+                # Fall back to older prometheus_client API or use Gauge
+                logger.debug(f"Info metric not supported in this prometheus_client version: {e}")
                 try:
                     global application_version
-                    application_version = Gauge('certmate_version_info', 'CertMate version information')
-                    application_version.set(1)
-                except:
-                    pass
+                    application_version = Gauge('certmate_version_info', 'CertMate version information', ['version', 'python_version'])
+                    application_version.labels(
+                        version='1.1.15',
+                        python_version=f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+                    ).set(1)
+                except Exception as fallback_error:
+                    logger.debug(f"Could not set version metric: {fallback_error}")
+            except Exception as e:
+                logger.debug(f"Could not set application info metric: {e}")
     
     def should_collect(self) -> bool:
         """Check if it's time to collect metrics."""

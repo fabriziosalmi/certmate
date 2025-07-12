@@ -1,7 +1,7 @@
 """
 Core module for CertMate
 Contains core functionality including file operations, settings, authentication, 
-certificate management, DNS providers, and cache management
+certificate management, DNS providers, cache management, and storage backends
 """
 
 from .file_operations import FileOperations
@@ -10,6 +10,15 @@ from .auth import AuthManager
 from .certificates import CertificateManager
 from .dns_providers import DNSManager
 from .cache import CacheManager
+from .storage_backends import (
+    StorageManager, 
+    CertificateStorageBackend,
+    LocalFileSystemBackend,
+    AzureKeyVaultBackend,
+    AWSSecretsManagerBackend,
+    HashiCorpVaultBackend,
+    InfisicalBackend
+)
 
 __all__ = [
     'FileOperations',
@@ -17,5 +26,12 @@ __all__ = [
     'AuthManager',
     'CertificateManager',
     'DNSManager',
-    'CacheManager'
+    'CacheManager',
+    'StorageManager',
+    'CertificateStorageBackend',
+    'LocalFileSystemBackend',
+    'AzureKeyVaultBackend',
+    'AWSSecretsManagerBackend',
+    'HashiCorpVaultBackend',
+    'InfisicalBackend'
 ]

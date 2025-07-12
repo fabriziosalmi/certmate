@@ -1,0 +1,15 @@
+# All optional storage backend dependencies
+# Install with: pip install -r requirements-storage-all.txt
+
+# Azure Key Vault
+azure-keyvault-secrets>=4.7.0
+azure-identity>=1.12.0
+
+# AWS Secrets Manager
+boto3>=1.26.0
+
+# HashiCorp Vault
+hvac>=1.1.0
+
+# Infisical
+infisical-python>=2.0.0

@@ -1,0 +1,2 @@
+# Optional dependencies for AWS Secrets Manager storage backend
+boto3>=1.26.0

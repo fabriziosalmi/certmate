@@ -25,9 +25,10 @@ class Colors:
     RESET = '\033[0m'
 
 class EndpointTester:
-    def __init__(self, base_url: str = "http://127.0.0.1:8000", api_token: str = None):
+    def __init__(self, base_url: str = "http://127.0.0.1:8000", api_token: str = None, quick_mode: bool = False):
         self.base_url = base_url.rstrip('/')
         self.api_token = api_token
+        self.quick_mode = quick_mode
         self.results = []
         self.session = requests.Session()
         
@@ -113,12 +114,17 @@ class EndpointTester:
             # Test authenticated endpoints
             self._test_settings_endpoints()
             self._test_certificate_endpoints()
-            self._test_cache_endpoints()
-            self._test_backup_endpoints()
-            self._test_metrics_endpoints()
+            
+            if not self.quick_mode:
+                self._test_cache_endpoints()
+                self._test_backup_endpoints()
+                self._test_metrics_endpoints()
+            else:
+                print(f"\n{Colors.CYAN}⚡ Quick mode: Skipping cache, backup, and metrics tests{Colors.RESET}")
         
         # Test web interface endpoints (some require auth, some don't)
-        self._test_web_endpoints()
+        if not self.quick_mode:
+            self._test_web_endpoints()
         
         # Print summary and return result
         return self._print_summary()
@@ -187,16 +193,53 @@ class EndpointTester:
         
         tests = [
             ("GET", "/api/backups", "List All Backups", None, [200]),
-            ("POST", "/api/backups/create", "Create Manual Backup", 
+            ("POST", "/api/backups/create", "Create Settings Backup", 
              {"type": "settings", "reason": "api_test"}, [200, 201, 400]),
-            # Note: cleanup endpoint not implemented yet
-            # ("POST", "/api/backups/cleanup", "Cleanup Old Backups", 
-            #  {"type": "both", "force": False}, [200, 404]),
+            ("POST", "/api/backups/create", "Create Certificate Backup", 
+             {"type": "certificates", "reason": "api_test"}, [200, 201, 400]),
+            ("POST", "/api/backups/create", "Create Combined Backup", 
+             {"type": "both", "reason": "api_test"}, [200, 201, 400]),
         ]
+        
+        # Test backup creation and get a backup filename for restore testing
+        backup_filename = None
         
         for method, path, desc, data, expected in tests:
             success, message, status = self.test_endpoint(method, path, desc, data, expected)
             self._record_result(method, path, desc, success, message, status)
+            
+            # Extract backup filename for restore testing
+            if success and "Create" in desc and "Settings" in desc:
+                try:
+                    # Try to parse the response to get backup filename
+                    import json
+                    response = self.session.post(f"{self.base_url}{path}", json=data)
+                    if response.status_code in [200, 201]:
+                        result = response.json()
+                        if 'created_backups' in result and result['created_backups']:
+                            backup_filename = result['created_backups'][0].get('filename')
+                except:
+                    pass
+        
+        # Test backup restore if we have a backup file
+        if backup_filename:
+            restore_tests = [
+                ("POST", "/api/backups/restore/settings", "Restore Settings Backup",
+                 {"filename": backup_filename, "create_backup_before_restore": True}, [200, 400, 404]),
+            ]
+            
+            for method, path, desc, data, expected in restore_tests:
+                success, message, status = self.test_endpoint(method, path, desc, data, expected)
+                self._record_result(method, path, desc, success, message, status)
+        else:
+            # Test restore with a placeholder (expected to fail gracefully)
+            success, message, status = self.test_endpoint(
+                "POST", "/api/backups/restore/settings", "Restore Settings Backup (No File)",
+                {"filename": "nonexistent.json", "create_backup_before_restore": True}, 
+                [400, 404, 500]
+            )
+            self._record_result("POST", "/api/backups/restore/settings", 
+                              "Restore Settings Backup (No File)", success, message, status)
     
     def _test_metrics_endpoints(self):
         """Test metrics and monitoring endpoints"""
@@ -321,7 +364,7 @@ def main():
                 print(f"{Colors.YELLOW}⚠️  Could not load API token from settings.json{Colors.RESET}")
     
     # Create tester instance
-    tester = EndpointTester(base_url=args.url, api_token=api_token)
+    tester = EndpointTester(base_url=args.url, api_token=api_token, quick_mode=args.quick)
     
     # Run tests
     start_time = time.time()

@@ -1019,256 +1019,229 @@
                         </div>
                     </div>
 
-                    <!-- DNS Made Easy Configuration -->
-                    <div id="dnsmadeeasy-config" class="dns-config hidden">
-                        <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
-                            <h4 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
-                                <i class="fas fa-cogs mr-2 text-green-600"></i>
-                                DNS Made Easy Configuration
-                            </h4>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label for="dnsmadeeasy_api_key" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                        API Key
-                                    </label>
-                                    <input type="password" id="dnsmadeeasy_api_key" name="dnsmadeeasy_api_key" 
-                                           class="mt-1 block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
-                                           placeholder="Your DNS Made Easy API key">
-                                </div>
-                                <div>
-                                    <label for="dnsmadeeasy_secret_key" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                        Secret Key
-                                    </label>
-                                    <input type="password" id="dnsmadeeasy_secret_key" name="dnsmadeeasy_secret_key" 
-                                           class="mt-1 block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
-                                           placeholder="Your DNS Made Easy secret key">
-                                </div>
-                            </div>
-                            <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
-                                Create API credentials in your DNS Made Easy account with DNS management permissions.
-                            </p>
-                        </div>
-                    </div>
-
-                    <!-- NS1 Configuration -->
-                    <div id="nsone-config" class="dns-config hidden">
-                        <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
-                            <h4 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
-                                <i class="fas fa-network-wired mr-2 text-indigo-600"></i>
-                                NS1 DNS Configuration
-                            </h4>
-                            <div>
-                                <label for="nsone_api_key" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                    API Key
-                                </label>
-                                <input type="password" id="nsone_api_key" name="nsone_api_key" 
-                                       class="mt-1 block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
-                                       placeholder="Your NS1 API key">
-                            </div>
-                            <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
-                                Generate an API key in your NS1 account with DNS record management permissions.
-                            </p>
-                        </div>
-                    </div>
-
-                    <!-- Basic Settings -->
-                    <div class="bg-gray-50 dark:bg-gray-700/50 p-6 rounded-lg">
-                        <h4 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
-                            <i class="fas fa-cog mr-2 text-gray-500"></i>
-                            Basic Settings
-                        </h4>
-                        
-                        <!-- Email -->
-                        <div class="mb-6">
-                            <label for="email" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                <i class="fas fa-envelope mr-1"></i>
-                                Email Address
-                            </label>
-                            <div class="mt-1">
-                                <input type="email" id="email" name="email" 
-                                       class="block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
-                                       placeholder="your@email.com" required>
-                            </div>
-                            <p class="mt-2 text-sm text-gray-500">
-                                Used for Let's Encrypt registration and renewal notifications.
-                            </p>
-                        </div>
-
-                        <!-- Domains -->
-                        <div class="mb-6">
-                            <label for="domains" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                <i class="fas fa-globe mr-1"></i>
-                                Domains
-                            </label>
-                            <div class="mt-1">
-                                <textarea id="domains" name="domains" rows="3"
-                                       class="block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
-                                       placeholder="example.com&#10;anotherdomain.com&#10;One domain per line"></textarea>
-                            </div>
-                            <p class="mt-2 text-sm text-gray-500">
-                                Enter one domain per line. Certificates will be created for each domain with wildcard support (*.domain.com).
-                            </p>
-                        </div>
-
-                        <!-- Auto Renewal -->
-                        <div class="mb-6">
-                            <div class="flex items-center">
-                                <input type="checkbox" id="auto_renew" name="auto_renew" 
-                                       class="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded">
-                                <label for="auto_renew" class="ml-2 block text-sm text-gray-900 dark:text-gray-300">
-                                    Enable automatic certificate renewal
-                                </label>
-                            </div>
-                            <p class="mt-2 text-sm text-gray-500 ml-6">
-                                Certificates will be automatically renewed when they have 30 days or less until expiration.
-                            </p>
-                        </div>
-
-                        <!-- API Bearer Token -->
-                        <div class="mb-6">
-                            <label for="api_bearer_token" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                <i class="fas fa-key mr-1"></i>
-                                API Bearer Token
-                            </label>
-                            <div class="mt-1">
-                                <input type="password" id="api_bearer_token" name="api_bearer_token" 
-                                       class="appearance-none block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md placeholder-gray-400 dark:placeholder-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
-                                       placeholder="Enter API bearer token for authentication">
-                            </div>
-                            <p class="mt-2 text-sm text-gray-500">
-                                This token is required for API access and automated certificate downloads. Keep it secure!
-                            </p>
-                        </div>
-                    </div>
-
-                    <!-- Cache Configuration -->
-                    <div class="bg-gray-50 dark:bg-gray-700/50 p-6 rounded-lg">
-                        <h4 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
-                            <i class="fas fa-database mr-2 text-blue-500"></i>
-                            Deployment Status Cache
-                        </h4>
-                        <div class="space-y-4">
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label for="cache_ttl" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                        Cache TTL (Time to Live)
-                                    </label>
-                                    <div class="mt-1 flex rounded-md shadow-sm">
-                                        <input type="number" id="cache_ttl" name="cache_ttl" min="30" max="3600" step="30"
-                                               class="block w-full border border-gray-300 dark:border-gray-600 rounded-l-md shadow-sm py-2 px-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-primary focus:border-primary"
-                                               placeholder="300">
-                                        <span class="inline-flex items-center px-3 rounded-r-md border border-l-0 border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/50 text-gray-500 dark:text-gray-400 text-sm">
-                                            seconds
-                                        </span>
-                                    </div>
-                                    <p class="mt-1 text-xs text-gray-500">
-                                        How long to cache deployment status results (30-3600 seconds)
-                                    </p>
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                        Cache Statistics
-                                    </label>
-                                    <div class="bg-white dark:bg-gray-700 p-3 rounded border border-gray-200 dark:border-gray-600 text-sm">
-                                        <div class="flex justify-between">
-                                            <span class="text-gray-600 dark:text-gray-400">Cached Entries:</span>
-                                            <span id="cache-entries" class="font-medium text-gray-900 dark:text-white">-</span>
-                                        </div>
-                                        <div class="flex justify-between mt-1">
-                                            <span class="text-gray-600 dark:text-gray-400">Current TTL:</span>
-                                            <span id="cache-current-ttl" class="font-medium text-gray-900 dark:text-white">-</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="flex justify-end">
-                                <button type="button" onclick="clearDeploymentCache()" 
-                                        class="bg-yellow-600 text-white px-4 py-2 rounded-md hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2 transition-colors text-sm">
-                                    <i class="fas fa-trash mr-1"></i>
-                                    Clear Cache
-                                </button>
-                            </div>
-                            <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-600 rounded-md p-3">
-                                <div class="flex">
-                                    <div class="flex-shrink-0">
-                                        <i class="fas fa-info-circle text-blue-400"></i>
-                                    </div>
-                                    <div class="ml-3">
-                                        <p class="text-sm text-blue-700">
-                                            The deployment status cache stores SSL certificate check results to improve performance. 
-                                            Lower TTL values provide more up-to-date status but may cause slower page loads.
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Backup & Restore Section -->
+                    <!-- Certificate Storage Backend Section -->
                     <div class="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-                            <i class="fas fa-archive mr-1"></i>
-                            Backup & Restore
+                            <i class="fas fa-database mr-1"></i>
+                            Certificate Storage Backend
                         </label>
                         
                         <div class="space-y-4">
-                            <!-- Create Backup Section -->
+                            <!-- Backend Selection -->
                             <div>
-                                <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Create Backup</h4>
-                                <div class="flex flex-wrap gap-3">
-                                    <button type="button" onclick="createBackup('settings', this)" 
-                                            class="bg-green-600 text-white px-3 py-2 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-colors text-sm">
-                                        <i class="fas fa-cog mr-1"></i>
-                                        Backup Settings
-                                    </button>
-                                    <button type="button" onclick="createBackup('certificates', this)" 
-                                            class="bg-blue-600 text-white px-3 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors text-sm">
-                                        <i class="fas fa-certificate mr-1"></i>
-                                        Backup Certificates
-                                    </button>
-                                    <button type="button" onclick="createBackup('both', this)" 
-                                            class="bg-purple-600 text-white px-3 py-2 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-colors text-sm">
-                                        <i class="fas fa-archive mr-1"></i>
-                                        Backup All
-                                    </button>
-                                </div>
+                                <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
+                                    Storage Backend Type
+                                </label>
+                                <select id="storage-backend" name="storage_backend" 
+                                        class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm"
+                                        onchange="toggleStorageBackendConfig()">
+                                    <option value="local_filesystem">Local Filesystem (Default)</option>
+                                    <option value="azure_keyvault">Azure Key Vault</option>
+                                    <option value="aws_secrets_manager">AWS Secrets Manager</option>
+                                    <option value="hashicorp_vault">HashiCorp Vault</option>
+                                    <option value="infisical">Infisical</option>
+                                </select>
+                                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                    Choose where to store your SSL certificates. Local filesystem is the default and most compatible option.
+                                </p>
                             </div>
-                            
-                            <!-- Backup List Section -->
-                            <div>
-                                <div class="flex items-center justify-between mb-2">
-                                    <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300">Available Backups</h4>
-                                    <button type="button" onclick="refreshBackupList()" 
-                                            class="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white text-sm">
-                                        <i class="fas fa-sync-alt mr-1"></i>
-                                        Refresh
-                                    </button>
-                                </div>
-                                
-                                <!-- Backup List Container -->
-                                <div id="backup-list" class="bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-md max-h-64 overflow-y-auto">
-                                    <div class="p-4 text-center text-gray-500 dark:text-gray-400">
-                                        <i class="fas fa-spinner fa-spin mr-2"></i>
-                                        Loading backups...
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <!-- Backup Info -->
-                            <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-600 rounded-md p-3">
-                                <div class="flex">
-                                    <div class="flex-shrink-0">
-                                        <i class="fas fa-info-circle text-blue-400"></i>
-                                    </div>
-                                    <div class="ml-3">
-                                        <p class="text-sm text-blue-700 dark:text-blue-300">
-                                            Backups are automatically created when you save settings or create certificates. 
-                                            You can also create manual backups and download them for safekeeping.
-                                            Backups are retained for 30 days and limited to 50 files per type.
+
+                            <!-- Local Filesystem Configuration -->
+                            <div id="storage-local-config" class="storage-config">
+                                <div class="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-md border border-blue-200 dark:border-blue-700">
+                                    <h5 class="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
+                                        <i class="fas fa-folder mr-1"></i> Local Filesystem Storage
+                                    </h5>
+                                    <div class="space-y-2">
+                                        <div>
+                                            <label class="block text-xs text-blue-800 dark:text-blue-200 mb-1">Certificate Directory</label>
+                                            <input type="text" id="storage-cert-dir" 
+                                                   class="w-full px-2 py-1 text-sm border border-blue-300 dark:border-blue-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                                   placeholder="certificates" value="certificates">
+                                        </div>
+                                        <p class="text-xs text-blue-700 dark:text-blue-300">
+                                            Certificates are stored locally in the specified directory with secure file permissions.
                                         </p>
                                     </div>
                                 </div>
                             </div>
+
+                            <!-- Azure Key Vault Configuration -->
+                            <div id="storage-azure-config" class="storage-config" style="display: none;">
+                                <div class="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-md border border-blue-200 dark:border-blue-700">
+                                    <h5 class="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
+                                        <i class="fab fa-microsoft mr-1"></i> Azure Key Vault Configuration
+                                    </h5>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        <div>
+                                            <label class="block text-xs text-blue-800 dark:text-blue-200 mb-1">Vault URL</label>
+                                            <input type="text" id="azure-vault-url" 
+                                                   class="w-full px-2 py-1 text-sm border border-blue-300 dark:border-blue-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                                   placeholder="https://yourvault.vault.azure.net/">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs text-blue-800 dark:text-blue-200 mb-1">Tenant ID</label>
+                                            <input type="text" id="azure-tenant-id" 
+                                                   class="w-full px-2 py-1 text-sm border border-blue-300 dark:border-blue-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                                   placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs text-blue-800 dark:text-blue-200 mb-1">Client ID</label>
+                                            <input type="text" id="azure-client-id" 
+                                                   class="w-full px-2 py-1 text-sm border border-blue-300 dark:border-blue-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                                   placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs text-blue-800 dark:text-blue-200 mb-1">Client Secret</label>
+                                            <input type="password" id="azure-client-secret" 
+                                                   class="w-full px-2 py-1 text-sm border border-blue-300 dark:border-blue-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                                   placeholder="Enter client secret">
+                                        </div>
+                                    </div>
+                                    <p class="text-xs text-blue-700 dark:text-blue-300 mt-2">
+                                        Certificates will be stored as secrets in Azure Key Vault with enhanced security and audit capabilities.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- AWS Secrets Manager Configuration -->
+                            <div id="storage-aws-config" class="storage-config" style="display: none;">
+                                <div class="bg-orange-50 dark:bg-orange-900/20 p-3 rounded-md border border-orange-200 dark:border-orange-700">
+                                    <h5 class="text-sm font-medium text-orange-900 dark:text-orange-100 mb-2">
+                                        <i class="fab fa-aws mr-1"></i> AWS Secrets Manager Configuration
+                                    </h5>
+                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                        <div>
+                                            <label class="block text-xs text-orange-800 dark:text-orange-200 mb-1">Region</label>
+                                            <input type="text" id="aws-region" 
+                                                   class="w-full px-2 py-1 text-sm border border-orange-300 dark:border-orange-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                                   placeholder="us-east-1" value="us-east-1">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs text-orange-800 dark:text-orange-200 mb-1">Access Key ID</label>
+                                            <input type="text" id="aws-access-key-id" 
+                                                   class="w-full px-2 py-1 text-sm border border-orange-300 dark:border-orange-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                                   placeholder="AKIAIOSFODNN7EXAMPLE">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs text-orange-800 dark:text-orange-200 mb-1">Secret Access Key</label>
+                                            <input type="password" id="aws-secret-access-key" 
+                                                   class="w-full px-2 py-1 text-sm border border-orange-300 dark:border-orange-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                                   placeholder="Enter secret access key">
+                                        </div>
+                                    </div>
+                                    <p class="text-xs text-orange-700 dark:text-orange-300 mt-2">
+                                        Certificates will be stored in AWS Secrets Manager with automatic encryption and access logging.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- HashiCorp Vault Configuration -->
+                            <div id="storage-vault-config" class="storage-config" style="display: none;">
+                                <div class="bg-purple-50 dark:bg-purple-900/20 p-3 rounded-md border border-purple-200 dark:border-purple-700">
+                                    <h5 class="text-sm font-medium text-purple-900 dark:text-purple-100 mb-2">
+                                        <i class="fas fa-vault mr-1"></i> HashiCorp Vault Configuration
+                                    </h5>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        <div>
+                                            <label class="block text-xs text-purple-800 dark:text-purple-200 mb-1">Vault URL</label>
+                                            <input type="text" id="vault-url" 
+                                                   class="w-full px-2 py-1 text-sm border border-purple-300 dark:border-purple-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                                   placeholder="https://vault.example.com:8200">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs text-purple-800 dark:text-purple-200 mb-1">Vault Token</label>
+                                            <input type="password" id="vault-token" 
+                                                   class="w-full px-2 py-1 text-sm border border-purple-300 dark:border-purple-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                                   placeholder="Enter vault token">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs text-purple-800 dark:text-purple-200 mb-1">Mount Point</label>
+                                            <input type="text" id="vault-mount-point" 
+                                                   class="w-full px-2 py-1 text-sm border border-purple-300 dark:border-purple-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                                   placeholder="secret" value="secret">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs text-purple-800 dark:text-purple-200 mb-1">Engine Version</label>
+                                            <select id="vault-engine-version" 
+                                                    class="w-full px-2 py-1 text-sm border border-purple-300 dark:border-purple-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white">
+                                                <option value="v2">KV v2</option>
+                                                <option value="v1">KV v1</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <p class="text-xs text-purple-700 dark:text-purple-300 mt-2">
+                                        Certificates will be stored in HashiCorp Vault's KV secrets engine with versioning and audit capabilities.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- Infisical Configuration -->
+                            <div id="storage-infisical-config" class="storage-config" style="display: none;">
+                                <div class="bg-green-50 dark:bg-green-900/20 p-3 rounded-md border border-green-200 dark:border-green-700">
+                                    <h5 class="text-sm font-medium text-green-900 dark:text-green-100 mb-2">
+                                        <i class="fas fa-shield-alt mr-1"></i> Infisical Configuration
+                                    </h5>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        <div>
+                                            <label class="block text-xs text-green-800 dark:text-green-200 mb-1">Site URL</label>
+                                            <input type="text" id="infisical-site-url" 
+                                                   class="w-full px-2 py-1 text-sm border border-green-300 dark:border-green-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                                   placeholder="https://app.infisical.com" value="https://app.infisical.com">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs text-green-800 dark:text-green-200 mb-1">Project ID</label>
+                                            <input type="text" id="infisical-project-id" 
+                                                   class="w-full px-2 py-1 text-sm border border-green-300 dark:border-green-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                                   placeholder="Enter project ID">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs text-green-800 dark:text-green-200 mb-1">Client ID</label>
+                                            <input type="text" id="infisical-client-id" 
+                                                   class="w-full px-2 py-1 text-sm border border-green-300 dark:border-green-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                                   placeholder="Enter client ID">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs text-green-800 dark:text-green-200 mb-1">Client Secret</label>
+                                            <input type="password" id="infisical-client-secret" 
+                                                   class="w-full px-2 py-1 text-sm border border-green-300 dark:border-green-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                                   placeholder="Enter client secret">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs text-green-800 dark:text-green-200 mb-1">Environment</label>
+                                            <input type="text" id="infisical-environment" 
+                                                   class="w-full px-2 py-1 text-sm border border-green-300 dark:border-green-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                                   placeholder="prod" value="prod">
+                                        </div>
+                                    </div>
+                                    <p class="text-xs text-green-700 dark:text-green-300 mt-2">
+                                        Certificates will be stored in Infisical with end-to-end encryption and team collaboration features.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- Storage Backend Actions -->
+                            <div class="flex flex-wrap gap-3 pt-2 border-t border-gray-200 dark:border-gray-600">
+                                <button type="button" onclick="testStorageBackend()" 
+                                        class="bg-blue-600 text-white px-3 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors text-sm">
+                                    <i class="fas fa-plug mr-1"></i> Test Connection
+                                </button>
+                                <button type="button" onclick="showStorageMigrationModal()" 
+                                        class="bg-yellow-600 text-white px-3 py-2 rounded-md hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2 transition-colors text-sm">
+                                    <i class="fas fa-exchange-alt mr-1"></i> Migrate Certificates
+                                </button>
+                                <div class="text-xs text-gray-500 dark:text-gray-400 flex items-center">
+                                    <i class="fas fa-info-circle mr-1"></i>
+                                    Test connection before saving settings
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- DNS Provider Test Connection -->
+                    <div id="testConnectionResult" class="mt-4 hidden">
+                        <div class="p-4 rounded-md text-sm" id="testConnectionMessage">
+                            <!-- Test connection message will be displayed here -->
                         </div>
                     </div>
 
@@ -1280,6 +1253,122 @@
                         </button>
                     </div>
                 </form>
+            </div>
+        </div>
+
+        <!-- Backup & Restore Section -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 mt-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
+                    <i class="fas fa-database mr-2 text-blue-500"></i>
+                    Backup & Restore
+                </h3>
+                <span class="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 px-2 py-1 rounded-full">
+                    Data Protection
+                </span>
+            </div>
+            
+            <p class="text-gray-600 dark:text-gray-400 text-sm mb-6">
+                Create backups of your settings and certificates to prevent data loss. Restore from previous backups when needed.
+            </p>
+
+            <!-- Create Backup Section -->
+            <div class="grid md:grid-cols-2 gap-6 mb-6">
+                <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+                    <h4 class="font-medium text-gray-900 dark:text-white mb-3 flex items-center">
+                        <i class="fas fa-plus-circle mr-2 text-green-500"></i>
+                        Create Backup
+                    </h4>
+                    <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                        Create a new backup of your current settings and certificates.
+                    </p>
+                    <div class="space-y-3">
+                        <button type="button" onclick="createBackup('full', this)" 
+                                class="w-full bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-colors text-sm">
+                            <i class="fas fa-archive mr-2"></i>
+                            Create Full Backup
+                        </button>
+                        <button type="button" onclick="createBackup('settings', this)" 
+                                class="w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors text-sm">
+                            <i class="fas fa-cog mr-2"></i>
+                            Backup Settings Only
+                        </button>
+                        <button type="button" onclick="createBackup('certificates', this)" 
+                                class="w-full bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-colors text-sm">
+                            <i class="fas fa-certificate mr-2"></i>
+                            Backup Certificates Only
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+                    <h4 class="font-medium text-gray-900 dark:text-white mb-3 flex items-center">
+                        <i class="fas fa-info-circle mr-2 text-blue-500"></i>
+                        Backup Information
+                    </h4>
+                    <div class="space-y-2 text-sm text-gray-600 dark:text-gray-400">
+                        <div class="flex items-start">
+                            <i class="fas fa-check text-green-500 mr-2 mt-0.5 text-xs"></i>
+                            <span><strong>Full Backup:</strong> Includes settings, DNS configurations, and certificates</span>
+                        </div>
+                        <div class="flex items-start">
+                            <i class="fas fa-check text-green-500 mr-2 mt-0.5 text-xs"></i>
+                            <span><strong>Settings Only:</strong> DNS providers, email, and configuration</span>
+                        </div>
+                        <div class="flex items-start">
+                            <i class="fas fa-check text-green-500 mr-2 mt-0.5 text-xs"></i>
+                            <span><strong>Certificates Only:</strong> All SSL certificates and private keys</span>
+                        </div>
+                        <div class="flex items-start mt-3 pt-2 border-t border-gray-200 dark:border-gray-600">
+                            <i class="fas fa-shield-alt text-yellow-500 mr-2 mt-0.5 text-xs"></i>
+                            <span class="text-xs">Backups are stored locally and contain sensitive data. Keep them secure.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Existing Backups Section -->
+            <div class="border-t border-gray-200 dark:border-gray-600 pt-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h4 class="font-medium text-gray-900 dark:text-white flex items-center">
+                        <i class="fas fa-history mr-2 text-orange-500"></i>
+                        Existing Backups
+                    </h4>
+                    <button type="button" onclick="refreshBackupList()" 
+                            class="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300">
+                        <i class="fas fa-sync-alt mr-1"></i>
+                        Refresh
+                    </button>
+                </div>
+
+                <!-- Backup Lists -->
+                <div class="grid lg:grid-cols-2 gap-6">
+                    <!-- Settings Backups -->
+                    <div>
+                        <h5 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                            <i class="fas fa-cog mr-1 text-blue-500"></i>
+                            Settings Backups
+                        </h5>
+                        <div id="settings-backup-list" class="space-y-2 max-h-64 overflow-y-auto">
+                            <div class="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
+                                Loading backups...
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Certificate Backups -->
+                    <div>
+                        <h5 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                            <i class="fas fa-certificate mr-1 text-purple-500"></i>
+                            Certificate Backups
+                        </h5>
+                        <div id="certificate-backup-list" class="space-y-2 max-h-64 overflow-y-auto">
+                            <div class="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
+                                Loading backups...
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -1422,7 +1511,12 @@
     </button>
     <script>
         // API Configuration
-        const API_TOKEN = '{{ api_token }}';
+        const API_TOKEN = '{{ api_token }}' || '';
+        
+        if (!API_TOKEN) {
+            console.warn('No API token available - some features may not work');
+        }
+        
         const API_HEADERS = {
             'Authorization': `Bearer ${API_TOKEN}`,
             'Content-Type': 'application/json'
@@ -1553,7 +1647,9 @@
                     auto_renew: formData.get('auto_renew') === 'on',
                     dns_provider: formData.get('dns_provider'),
                     api_bearer_token: formData.get('api_bearer_token')?.trim(),
-                    cache_ttl: parseInt(formData.get('cache_ttl')) || 300
+                    cache_ttl: parseInt(formData.get('cache_ttl')) || 300,
+                    storage_backend: formData.get('storage_backend'),
+                    certificate_storage: collectStorageBackendSettings()
                 };
                 
                 // Validate required fields
@@ -1923,6 +2019,10 @@
                         }
                     }
                 }
+                
+                // Load storage backend settings
+                loadStorageBackendSettings(data);
+                addDebugLog('Storage backend settings loaded', 'info');
                 
                 addDebugLog('Form populated successfully', 'info');
             } catch (error) {
@@ -2565,53 +2665,51 @@
         }
 
         function updateBackupList(backups) {
-            const backupList = document.getElementById('backup-list');
-            if (!backupList) return;
+            const settingsBackupList = document.getElementById('settings-backup-list');
+            const certificateBackupList = document.getElementById('certificate-backup-list');
             
-            if (backups.settings.length === 0 && backups.certificates.length === 0) {
-                backupList.innerHTML = `
+            if (!settingsBackupList || !certificateBackupList) return;
+            
+            // Update Settings Backups
+            if (backups.settings.length === 0) {
+                settingsBackupList.innerHTML = `
                     <div class="p-4 text-center text-gray-500 dark:text-gray-400">
                         <i class="fas fa-archive mr-2"></i>
-                        No backups available
+                        No settings backups available
                     </div>
                 `;
-                return;
-            }
-            
-            let html = '';
-            
-            // Settings backups
-            if (backups.settings.length > 0) {
-                html += `
-                    <div class="p-3 border-b dark:border-gray-600">
-                        <h5 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                            <i class="fas fa-cog mr-1 text-blue-500"></i>
-                            Settings Backups (${backups.settings.length})
-                        </h5>
-                        <div class="space-y-2">
-                `;
-                
+            } else {
+                let settingsHtml = '';
                 backups.settings.slice(0, 10).forEach(backup => {
                     const createdDate = new Date(backup.created).toLocaleString();
                     const sizeKB = Math.round(backup.size / 1024);
-                    const reason = backup.metadata?.reason || 'unknown';
+                    const reason = backup.metadata?.reason || 'manual';
                     
-                    html += `
-                        <div class="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-600 rounded text-xs">
+                    settingsHtml += `
+                        <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
                             <div class="flex-1 min-w-0">
-                                <div class="font-medium text-gray-900 dark:text-white truncate">${backup.filename}</div>
-                                <div class="text-gray-500 dark:text-gray-400">${createdDate} • ${sizeKB}KB • ${reason}</div>
+                                <div class="text-sm font-medium text-gray-900 dark:text-white truncate">${backup.filename}</div>
+                                <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">${createdDate}</div>
+                                <div class="flex items-center space-x-3 text-xs text-gray-400 dark:text-gray-500 mt-1">
+                                    <span><i class="fas fa-weight mr-1"></i>${sizeKB}KB</span>
+                                    <span><i class="fas fa-tag mr-1"></i>${reason}</span>
+                                </div>
                             </div>
-                            <div class="flex items-center space-x-1 ml-2">
+                            <div class="flex items-center space-x-2 ml-3">
                                 <button onclick="downloadBackup('settings', '${backup.filename}')" 
-                                        class="p-1 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300" 
-                                        title="Download">
-                                    <i class="fas fa-download"></i>
+                                        class="p-2 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded transition-colors" 
+                                        title="Download backup">
+                                    <i class="fas fa-download text-sm"></i>
                                 </button>
                                 <button onclick="restoreBackup('settings', '${backup.filename}')" 
-                                        class="p-1 text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300" 
-                                        title="Restore">
-                                    <i class="fas fa-undo"></i>
+                                        class="p-2 text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300 hover:bg-green-50 dark:hover:bg-green-900/30 rounded transition-colors" 
+                                        title="Restore from backup">
+                                    <i class="fas fa-undo text-sm"></i>
+                                </button>
+                                <button onclick="deleteBackup('settings', '${backup.filename}')" 
+                                        class="p-2 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30 rounded transition-colors" 
+                                        title="Delete backup">
+                                    <i class="fas fa-trash text-sm"></i>
                                 </button>
                             </div>
                         </div>
@@ -2619,44 +2717,59 @@
                 });
                 
                 if (backups.settings.length > 10) {
-                    html += `
-                        <div class="text-xs text-gray-500 dark:text-gray-400 text-center p-2">
-                            ... and ${backups.settings.length - 10} more backups
+                    settingsHtml += `
+                        <div class="text-xs text-gray-500 dark:text-gray-400 text-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                            <i class="fas fa-ellipsis-h mr-1"></i>
+                            ${backups.settings.length - 10} more backups available
                         </div>
                     `;
                 }
                 
-                html += '</div></div>';
+                settingsBackupList.innerHTML = settingsHtml;
             }
             
-            // Certificate backups
-            if (backups.certificates.length > 0) {
-                html += `
-                    <div class="p-3">
-                        <h5 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                            <i class="fas fa-certificate mr-1 text-green-500"></i>
-                            Certificate Backups (${backups.certificates.length})
-                        </h5>
-                        <div class="space-y-2">
+            // Update Certificate Backups
+            if (backups.certificates.length === 0) {
+                certificateBackupList.innerHTML = `
+                    <div class="p-4 text-center text-gray-500 dark:text-gray-400">
+                        <i class="fas fa-certificate mr-2"></i>
+                        No certificate backups available
+                    </div>
                 `;
-                
+            } else {
+                let certificatesHtml = '';
                 backups.certificates.slice(0, 10).forEach(backup => {
                     const createdDate = new Date(backup.created).toLocaleString();
                     const sizeMB = Math.round(backup.size / (1024 * 1024) * 10) / 10;
-                    const reason = backup.metadata?.reason || 'unknown';
+                    const reason = backup.metadata?.reason || 'manual';
                     const domains = backup.metadata?.total_domains || 0;
                     
-                    html += `
-                        <div class="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-600 rounded text-xs">
+                    certificatesHtml += `
+                        <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
                             <div class="flex-1 min-w-0">
-                                <div class="font-medium text-gray-900 dark:text-white truncate">${backup.filename}</div>
-                                <div class="text-gray-500 dark:text-gray-400">${createdDate} • ${sizeMB}MB • ${domains} domains • ${reason}</div>
+                                <div class="text-sm font-medium text-gray-900 dark:text-white truncate">${backup.filename}</div>
+                                <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">${createdDate}</div>
+                                <div class="flex items-center space-x-3 text-xs text-gray-400 dark:text-gray-500 mt-1">
+                                    <span><i class="fas fa-weight mr-1"></i>${sizeMB}MB</span>
+                                    <span><i class="fas fa-certificate mr-1"></i>${domains} domains</span>
+                                    <span><i class="fas fa-tag mr-1"></i>${reason}</span>
+                                </div>
                             </div>
-                            <div class="flex items-center space-x-1 ml-2">
+                            <div class="flex items-center space-x-2 ml-3">
                                 <button onclick="downloadBackup('certificates', '${backup.filename}')" 
-                                        class="p-1 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300" 
-                                        title="Download">
-                                    <i class="fas fa-download"></i>
+                                        class="p-2 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded transition-colors" 
+                                        title="Download backup">
+                                    <i class="fas fa-download text-sm"></i>
+                                </button>
+                                <button onclick="restoreBackup('certificates', '${backup.filename}')" 
+                                        class="p-2 text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300 hover:bg-green-50 dark:hover:bg-green-900/30 rounded transition-colors" 
+                                        title="Restore from backup">
+                                    <i class="fas fa-undo text-sm"></i>
+                                </button>
+                                <button onclick="deleteBackup('certificates', '${backup.filename}')" 
+                                        class="p-2 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30 rounded transition-colors" 
+                                        title="Delete backup">
+                                    <i class="fas fa-trash text-sm"></i>
                                 </button>
                             </div>
                         </div>
@@ -2664,17 +2777,16 @@
                 });
                 
                 if (backups.certificates.length > 10) {
-                    html += `
-                        <div class="text-xs text-gray-500 dark:text-gray-400 text-center p-2">
-                            ... and ${backups.certificates.length - 10} more backups
+                    certificatesHtml += `
+                        <div class="text-xs text-gray-500 dark:text-gray-400 text-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                            <i class="fas fa-ellipsis-h mr-1"></i>
+                            ${backups.certificates.length - 10} more backups available
                         </div>
                     `;
                 }
                 
-                html += '</div></div>';
+                certificateBackupList.innerHTML = certificatesHtml;
             }
-            
-            backupList.innerHTML = html;
         }
 
         async function downloadBackup(type, filename) {
@@ -2740,21 +2852,95 @@
                 
                 const result = await response.json();
                 
-                if (result.success) {
-                    addDebugLog(`Backup restored successfully from: ${filename}`, 'info');
-                    showMessage(`Settings restored successfully from backup!`, 'success');
+                addDebugLog(`Backup restored successfully from: ${filename}`, 'info');
+                
+                if (type === 'settings') {
+                    showMessage(`Settings restored successfully from backup! Reloading configuration...`, 'success');
                     
-                    // Refresh the page to show restored settings
+                    // For settings restore, reload the settings data and refresh the UI
+                    try {
+                        await loadSettings();
+                        await refreshBackupList();
+                        addDebugLog('Settings reloaded successfully after restore', 'info');
+                        showMessage(`Settings restored and reloaded successfully!`, 'success');
+                    } catch (error) {
+                        addDebugLog(`Error reloading settings after restore: ${error.message}`, 'warn');
+                        showMessage(`Settings restored successfully! Please refresh the page to see all changes.`, 'info');
+                        
+                        // Fallback to page reload if settings reload fails
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 3000);
+                    }
+                } else if (type === 'certificates') {
+                    showMessage(`Certificates restored successfully from backup!`, 'success');
+                    
+                    // For certificate restore, refresh the backup list
+                    await refreshBackupList();
+                    
+                    // Signal other pages that certificates have been updated
+                    try {
+                        // Use localStorage to signal certificate refresh needed
+                        localStorage.setItem('certificates_updated', Date.now().toString());
+                        
+                        // Also try to use BroadcastChannel if available (modern browsers)
+                        if (typeof BroadcastChannel !== 'undefined') {
+                            const channel = new BroadcastChannel('certmate_updates');
+                            channel.postMessage({ type: 'certificates_restored', timestamp: Date.now() });
+                            channel.close();
+                        }
+                    } catch (e) {
+                        // Fallback if localStorage/BroadcastChannel not available
+                        console.log('Cross-page communication not available:', e);
+                    }
+                    
+                    // Show guidance with option to navigate to main page
                     setTimeout(() => {
-                        window.location.reload();
+                        const mainPageLink = '<a href="/" style="color: #007bff; text-decoration: underline;">Go to main dashboard</a>';
+                        showMessage(`Certificates restored successfully! ${mainPageLink} to view the restored certificates.`, 'info');
                     }, 2000);
-                } else {
-                    throw new Error(result.message || 'Failed to restore backup');
                 }
                 
             } catch (error) {
                 addDebugLog(`Error restoring backup: ${error.message}`, 'error');
                 showMessage(`Error restoring backup: ${error.message}`, 'error');
+            }
+        }
+
+        async function deleteBackup(type, filename) {
+            if (!confirm(`Are you sure you want to delete the backup "${filename}"?\n\nThis action cannot be undone.`)) {
+                return;
+            }
+            
+            try {
+                addDebugLog(`Deleting ${type} backup: ${filename}`, 'info');
+                
+                const response = await fetch(`/api/backups/delete/${type}/${filename}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${API_TOKEN}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    addDebugLog(`Backup deleted successfully: ${filename}`, 'info');
+                    showMessage(`Backup "${filename}" deleted successfully!`, 'success');
+                    
+                    // Refresh backup list
+                    await refreshBackupList();
+                } else {
+                    throw new Error(result.message || 'Failed to delete backup');
+                }
+                
+            } catch (error) {
+                addDebugLog(`Error deleting backup: ${error.message}`, 'error');
+                showMessage(`Error deleting backup: ${error.message}`, 'error');
             }
         }
 
@@ -2765,6 +2951,310 @@
                 refreshBackupList();
             }, 1000);
         });
+
+        // STORAGE BACKEND MANAGEMENT FUNCTIONS
+        function toggleStorageBackendConfig() {
+            const backend = document.getElementById('storage-backend').value;
+            const configs = document.querySelectorAll('.storage-config');
+            
+            // Hide all configuration panels
+            configs.forEach(config => {
+                config.style.display = 'none';
+            });
+            
+            // Map backend names to their corresponding config div IDs
+            const backendToConfigId = {
+                'local_filesystem': 'storage-local-config',
+                'azure_keyvault': 'storage-azure-config',
+                'aws_secrets_manager': 'storage-aws-config',
+                'hashicorp_vault': 'storage-vault-config',
+                'infisical': 'storage-infisical-config'
+            };
+            
+            // Show the selected configuration panel
+            const configId = backendToConfigId[backend];
+            if (configId) {
+                const selectedConfig = document.getElementById(configId);
+                if (selectedConfig) {
+                    selectedConfig.style.display = 'block';
+                    console.log(`Showing storage config for ${backend}: ${configId}`);
+                } else {
+                    console.error(`Storage config element not found: ${configId}`);
+                }
+            } else {
+                console.error(`Unknown storage backend: ${backend}`);
+            }
+        }
+
+        function testStorageBackend() {
+            const backend = document.getElementById('storage-backend').value;
+            const config = getStorageBackendConfig(backend);
+            
+            console.log('Testing storage backend:', backend);
+            console.log('Configuration:', config);
+            console.log('API Token available:', !!API_TOKEN);
+            console.log('API Headers:', API_HEADERS);
+            
+            if (!validateStorageConfig(backend, config)) {
+                console.log('Validation failed for config:', config);
+                showMessage('Please fill in all required fields for the selected storage backend.', 'error');
+                return;
+            }
+            
+            showMessage('Testing storage backend connection...', 'info');
+            
+            const requestData = {
+                backend: backend,
+                config: config
+            };
+            
+            console.log('Sending request data:', requestData);
+            
+            fetch('/api/storage/test', {
+                method: 'POST',
+                headers: API_HEADERS,
+                body: JSON.stringify(requestData)
+            })
+            .then(response => {
+                console.log('Response status:', response.status);
+                console.log('Response headers:', response.headers);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                return response.json();
+            })
+            .then(data => {
+                console.log('Response data:', data);
+                
+                if (data.success) {
+                    showMessage(`✓ ${data.message}`, 'success');
+                } else if (data.message) {
+                    showMessage(`✗ ${data.message}`, 'error');
+                } else if (data.error) {
+                    showMessage(`✗ ${data.error}`, 'error');
+                } else {
+                    showMessage('✗ Unknown error occurred', 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Storage backend test error:', error);
+                showMessage(`Failed to test storage backend connection: ${error.message}`, 'error');
+            });
+        }
+
+        function getStorageBackendConfig(backend) {
+            const config = {};
+            
+            switch (backend) {
+                case 'local_filesystem':
+                    config.cert_dir = document.getElementById('storage-cert-dir').value || 'certificates';
+                    break;
+                    
+                case 'azure_keyvault':
+                    config.vault_url = document.getElementById('azure-vault-url').value;
+                    config.tenant_id = document.getElementById('azure-tenant-id').value;
+                    config.client_id = document.getElementById('azure-client-id').value;
+                    config.client_secret = document.getElementById('azure-client-secret').value;
+                    break;
+                    
+                case 'aws_secrets_manager':
+                    config.region = document.getElementById('aws-region').value || 'us-east-1';
+                    config.access_key_id = document.getElementById('aws-access-key-id').value;
+                    config.secret_access_key = document.getElementById('aws-secret-access-key').value;
+                    break;
+                    
+                case 'hashicorp_vault':
+                    config.vault_url = document.getElementById('vault-url').value;
+                    config.vault_token = document.getElementById('vault-token').value;
+                    config.mount_point = document.getElementById('vault-mount-point').value || 'secret';
+                    config.engine_version = document.getElementById('vault-engine-version').value;
+                    break;
+                    
+                case 'infisical':
+                    config.site_url = document.getElementById('infisical-site-url').value || 'https://app.infisical.com';
+                    config.client_id = document.getElementById('infisical-client-id').value;
+                    config.client_secret = document.getElementById('infisical-client-secret').value;
+                    config.project_id = document.getElementById('infisical-project-id').value;
+                    config.environment = document.getElementById('infisical-environment').value || 'prod';
+                    break;
+            }
+            
+            return config;
+        }
+
+        function validateStorageConfig(backend, config) {
+            switch (backend) {
+                case 'local_filesystem':
+                    return config.cert_dir && config.cert_dir.trim() !== '';
+                    
+                case 'azure_keyvault':
+                    return config.vault_url && config.tenant_id && config.client_id && config.client_secret;
+                    
+                case 'aws_secrets_manager':
+                    return config.access_key_id && config.secret_access_key;
+                    
+                case 'hashicorp_vault':
+                    return config.vault_url && config.vault_token;
+                    
+                case 'infisical':
+                    return config.client_id && config.client_secret && config.project_id;
+                    
+                default:
+                    return false;
+            }
+        }
+
+        function loadStorageBackendSettings(settings) {
+            const storageConfig = settings.certificate_storage || {};
+            const backend = storageConfig.backend || 'local_filesystem';
+            
+            // Set backend selection
+            document.getElementById('storage-backend').value = backend;
+            toggleStorageBackendConfig();
+            
+            // Load backend-specific configuration
+            switch (backend) {
+                case 'local_filesystem':
+                    if (storageConfig.cert_dir) {
+                        document.getElementById('storage-cert-dir').value = storageConfig.cert_dir;
+                    }
+                    break;
+                    
+                case 'azure_keyvault':
+                    const azureConfig = storageConfig.azure_keyvault || {};
+                    document.getElementById('azure-vault-url').value = azureConfig.vault_url || '';
+                    document.getElementById('azure-tenant-id').value = azureConfig.tenant_id || '';
+                    document.getElementById('azure-client-id').value = azureConfig.client_id || '';
+                    // Don't populate client_secret for security
+                    break;
+                    
+                case 'aws_secrets_manager':
+                    const awsConfig = storageConfig.aws_secrets_manager || {};
+                    document.getElementById('aws-region').value = awsConfig.region || 'us-east-1';
+                    document.getElementById('aws-access-key-id').value = awsConfig.access_key_id || '';
+                    // Don't populate secret_access_key for security
+                    break;
+                    
+                case 'hashicorp_vault':
+                    const vaultConfig = storageConfig.hashicorp_vault || {};
+                    document.getElementById('vault-url').value = vaultConfig.vault_url || '';
+                    document.getElementById('vault-mount-point').value = vaultConfig.mount_point || 'secret';
+                    document.getElementById('vault-engine-version').value = vaultConfig.engine_version || 'v2';
+                    // Don't populate vault_token for security
+                    break;
+                    
+                case 'infisical':
+                    const infisicalConfig = storageConfig.infisical || {};
+                    document.getElementById('infisical-site-url').value = infisicalConfig.site_url || 'https://app.infisical.com';
+                    document.getElementById('infisical-project-id').value = infisicalConfig.project_id || '';
+                    document.getElementById('infisical-environment').value = infisicalConfig.environment || 'prod';
+                    // Don't populate client credentials for security
+                    break;
+            }
+        }
+
+        function collectStorageBackendSettings() {
+            const backend = document.getElementById('storage-backend').value;
+            const config = getStorageBackendConfig(backend);
+            
+            return {
+                backend: backend,
+                ...config
+            };
+        }
+
+        function showStorageMigrationModal() {
+            // Create migration modal dynamically
+            const modal = document.createElement('div');
+            modal.id = 'storageMigrationModal';
+            modal.className = 'fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50';
+            modal.innerHTML = `
+                <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white dark:bg-gray-800">
+                    <div class="mt-3">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                                <i class="fas fa-exchange-alt mr-2"></i>Certificate Storage Migration
+                            </h3>
+                            <button type="button" onclick="closeStorageMigrationModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        <div class="mb-4">
+                            <p class="text-sm text-gray-600 dark:text-gray-400">
+                                This will migrate all existing certificates from the current storage backend to the newly configured backend.
+                            </p>
+                            <div class="mt-3 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-md">
+                                <div class="flex">
+                                    <i class="fas fa-exclamation-triangle text-yellow-400 mt-0.5 mr-2"></i>
+                                    <div class="text-sm text-yellow-800 dark:text-yellow-200">
+                                        <strong>Important:</strong> This operation will copy certificates to the new backend. 
+                                        Original certificates will remain in the current location until manually removed.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex justify-end space-x-3">
+                            <button type="button" onclick="closeStorageMigrationModal()" 
+                                    class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-600 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-md">
+                                Cancel
+                            </button>
+                            <button type="button" onclick="performStorageMigration()" 
+                                    class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md">
+                                <i class="fas fa-play mr-1"></i>Start Migration
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+
+        function closeStorageMigrationModal() {
+            const modal = document.getElementById('storageMigrationModal');
+            if (modal) {
+                modal.remove();
+            }
+        }
+
+        function performStorageMigration() {
+            const currentBackend = document.getElementById('storage-backend').value;
+            const newConfig = collectStorageBackendSettings();
+            
+            // Validate new configuration first
+            if (!validateStorageConfig(newConfig.backend, newConfig)) {
+                showMessage('Please configure and test the new storage backend before migrating.', 'error');
+                return;
+            }
+            
+            showMessage('Starting certificate migration...', 'info');
+            closeStorageMigrationModal();
+            
+            fetch('/api/storage/migrate', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${getAuthToken()}`
+                },
+                body: JSON.stringify({
+                    source_backend: currentBackend,
+                    target_config: newConfig
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showMessage(`Migration completed successfully. ${data.migrated_count || 0} certificates migrated.`, 'success');
+                } else {
+                    showMessage(`Migration failed: ${data.message || 'Unknown error'}`, 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Migration error:', error);
+                showMessage('Failed to perform storage migration.', 'error');
+            });
+        }
     </script>
 </body>
 </html>

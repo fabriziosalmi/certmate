@@ -17,9 +17,10 @@ services:
       - CLOUDFLARE_TOKEN=${CLOUDFLARE_TOKEN}
       - API_BEARER_TOKEN=${API_BEARER_TOKEN}
     volumes:
-      - ./certificates:/app/certificates
-      - ./logs:/app/logs
-      - ./data:/app/data
+      - ./certificates:/app/certificates:rw
+      - ./logs:/app/logs:rw
+      - ./data:/app/data:rw
+      - ./backups:/app/backups:rw
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]

@@ -175,6 +175,56 @@ def create_api_models(api):
         'certificates': fields.List(fields.Nested(backup_metadata_model), description='Certificate backups')
     })
 
+    # Storage Backend models
+    azure_keyvault_storage_model = api.model('AzureKeyVaultStorage', {
+        'vault_url': fields.String(description='Azure Key Vault URL'),
+        'client_id': fields.String(description='Azure Client ID'),
+        'client_secret': fields.String(description='Azure Client Secret'),
+        'tenant_id': fields.String(description='Azure Tenant ID')
+    })
+
+    aws_secrets_manager_storage_model = api.model('AWSSecretsManagerStorage', {
+        'region': fields.String(description='AWS Region', default='us-east-1'),
+        'access_key_id': fields.String(description='AWS Access Key ID'),
+        'secret_access_key': fields.String(description='AWS Secret Access Key')
+    })
+
+    hashicorp_vault_storage_model = api.model('HashiCorpVaultStorage', {
+        'vault_url': fields.String(description='HashiCorp Vault URL'),
+        'vault_token': fields.String(description='HashiCorp Vault Token'),
+        'mount_point': fields.String(description='Vault Mount Point', default='secret'),
+        'engine_version': fields.String(description='KV Engine Version', default='v2')
+    })
+
+    infisical_storage_model = api.model('InfisicalStorage', {
+        'site_url': fields.String(description='Infisical Site URL', default='https://app.infisical.com'),
+        'client_id': fields.String(description='Infisical Client ID'),
+        'client_secret': fields.String(description='Infisical Client Secret'),
+        'project_id': fields.String(description='Infisical Project ID'),
+        'environment': fields.String(description='Infisical Environment', default='prod')
+    })
+
+    storage_config_model = api.model('StorageConfig', {
+        'backend': fields.String(description='Storage backend type', enum=['local_filesystem', 'azure_keyvault', 'aws_secrets_manager', 'hashicorp_vault', 'infisical']),
+        'cert_dir': fields.String(description='Certificate directory for local filesystem'),
+        'azure_keyvault': fields.Nested(azure_keyvault_storage_model),
+        'aws_secrets_manager': fields.Nested(aws_secrets_manager_storage_model),
+        'hashicorp_vault': fields.Nested(hashicorp_vault_storage_model),
+        'infisical': fields.Nested(infisical_storage_model)
+    })
+
+    storage_test_config_model = api.model('StorageTestConfig', {
+        'backend': fields.String(description='Storage backend type to test', required=True),
+        'config': fields.Raw(description='Backend-specific configuration', required=True)
+    })
+
+    storage_migration_config_model = api.model('StorageMigrationConfig', {
+        'source_backend': fields.String(description='Source storage backend type', required=True),
+        'target_backend': fields.String(description='Target storage backend type', required=True),
+        'source_config': fields.Raw(description='Source backend configuration', required=True),
+        'target_config': fields.Raw(description='Target backend configuration', required=True)
+    })
+
     # Return all models as a dict for easy access
     return {
         'certificate_model': certificate_model,
@@ -201,5 +251,13 @@ def create_api_models(api):
         'godaddy_model': godaddy_model,
         'he_ddns_model': he_ddns_model,
         'dynudns_model': dynudns_model,
-        'multi_provider_model': multi_provider_model
+        'multi_provider_model': multi_provider_model,
+        # Storage backend models
+        'StorageConfig': storage_config_model,
+        'StorageTestConfig': storage_test_config_model,
+        'StorageMigrationConfig': storage_migration_config_model,
+        'AzureKeyVaultStorage': azure_keyvault_storage_model,
+        'AWSSecretsManagerStorage': aws_secrets_manager_storage_model,
+        'HashiCorpVaultStorage': hashicorp_vault_storage_model,
+        'InfisicalStorage': infisical_storage_model
     }

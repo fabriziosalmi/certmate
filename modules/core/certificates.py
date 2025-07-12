@@ -24,10 +24,11 @@ logger = logging.getLogger(__name__)
 class CertificateManager:
     """Class to handle certificate operations"""
     
-    def __init__(self, cert_dir, settings_manager, dns_manager):
+    def __init__(self, cert_dir, settings_manager, dns_manager, storage_manager=None):
         self.cert_dir = Path(cert_dir)
         self.settings_manager = settings_manager
         self.dns_manager = dns_manager
+        self.storage_manager = storage_manager
 
     def _get_cert_dir_compat(self):
         """Get certificate directory with compatibility layer for tests"""
@@ -123,7 +124,18 @@ class CertificateManager:
         if not domain:
             return None
         
-        # Use compatibility layer for cert directory
+        # First try to get certificate from storage backend if available
+        if self.storage_manager:
+            try:
+                storage_result = self.storage_manager.retrieve_certificate(domain)
+                if storage_result:
+                    cert_files, metadata = storage_result
+                    if 'cert.pem' in cert_files:
+                        return self._parse_certificate_info(domain, cert_files['cert.pem'], metadata)
+            except Exception as e:
+                logger.warning(f"Failed to retrieve certificate from storage backend for {domain}: {e}")
+        
+        # Fall back to local filesystem for backward compatibility
         cert_dir = self._get_cert_dir_compat()
         cert_path = cert_dir / domain
         if not cert_path.exists():
@@ -138,6 +150,7 @@ class CertificateManager:
         # Get DNS provider info from metadata file first, then fall back to settings
         dns_provider = None
         metadata_file = cert_path / "metadata.json"
+        metadata = {}
         
         if metadata_file.exists():
             try:
@@ -155,37 +168,71 @@ class CertificateManager:
             dns_provider = self.settings_manager.get_domain_dns_provider(domain, settings)
             logger.debug(f"Using DNS provider '{dns_provider}' from settings for {domain}")
         
+        # Read certificate file and parse info
         try:
-            # Get certificate expiry using openssl
-            result = self._subprocess_run_compat([
-                'openssl', 'x509', '-in', str(cert_file), '-noout', '-dates'
-            ], capture_output=True, text=True)
+            with open(cert_file, 'rb') as f:
+                cert_content = f.read()
+            return self._parse_certificate_info(domain, cert_content, metadata)
+        except Exception as e:
+            logger.error(f"Failed to read certificate file for {domain}: {e}")
+            return self._create_empty_cert_info(domain)
+    
+    def _parse_certificate_info(self, domain, cert_content, metadata=None):
+        """Parse certificate information from certificate content"""
+        if metadata is None:
+            metadata = {}
+        
+        dns_provider = metadata.get('dns_provider')
+        if not dns_provider:
+            # Fall back to current settings
+            settings = self._load_settings_compat()
+            dns_provider = self.settings_manager.get_domain_dns_provider(domain, settings)
+        
+        try:
+            # Write cert content to temporary file for openssl processing
+            with tempfile.NamedTemporaryFile(mode='wb', suffix='.pem', delete=False) as temp_cert:
+                temp_cert.write(cert_content)
+                temp_cert_path = temp_cert.name
             
-            if result.returncode == 0:
-                lines = result.stdout.strip().split('\n')
-                not_after = None
-                for line in lines:
-                    if line.startswith('notAfter='):
-                        not_after = line.split('=', 1)[1]
-                        break
+            try:
+                # Get certificate expiry using openssl
+                result = self._subprocess_run_compat([
+                    'openssl', 'x509', '-in', temp_cert_path, '-noout', '-dates'
+                ], capture_output=True, text=True)
                 
-                if not_after:
-                    # Parse the date
-                    try:
-                        expiry_date = datetime.strptime(not_after, '%b %d %H:%M:%S %Y %Z')
-                        days_left = (expiry_date - datetime.now()).days
-                        
-                        return {
-                            'domain': domain,
-                            'exists': True,
-                            'expiry_date': expiry_date.strftime('%Y-%m-%d %H:%M:%S'),
-                            'days_left': days_left,
-                            'days_until_expiry': days_left,
-                            'needs_renewal': days_left < 30,
-                            'dns_provider': dns_provider
-                        }
-                    except Exception as e:
-                        logger.error(f"Error parsing certificate date: {e}")
+                if result.returncode == 0:
+                    lines = result.stdout.strip().split('\n')
+                    not_after = None
+                    for line in lines:
+                        if line.startswith('notAfter='):
+                            not_after = line.split('=', 1)[1]
+                            break
+                    
+                    if not_after:
+                        # Parse the date
+                        try:
+                            expiry_date = datetime.strptime(not_after, '%b %d %H:%M:%S %Y %Z')
+                            days_left = (expiry_date - datetime.now()).days
+                            
+                            return {
+                                'domain': domain,
+                                'exists': True,
+                                'expiry_date': expiry_date.strftime('%Y-%m-%d %H:%M:%S'),
+                                'days_left': days_left,
+                                'days_until_expiry': days_left,
+                                'needs_renewal': days_left < 30,
+                                'dns_provider': dns_provider
+                            }
+                        except Exception as e:
+                            logger.error(f"Error parsing certificate date: {e}")
+            finally:
+                # Clean up temporary file
+                try:
+                    import os
+                    os.unlink(temp_cert_path)
+                except Exception:
+                    pass
+                    
         except Exception as e:
             logger.error(f"Error getting certificate info: {e}")
         
@@ -353,6 +400,8 @@ class CertificateManager:
             
             # Move certificates to standard location
             live_dir = cert_output_dir / 'live' / domain
+            cert_files = {}
+            
             if live_dir.exists():
                 for cert_file in ['cert.pem', 'chain.pem', 'fullchain.pem', 'privkey.pem']:
                     src_file = live_dir / cert_file
@@ -360,6 +409,9 @@ class CertificateManager:
                     if src_file.exists():
                         src_file.rename(dst_file)
                         logger.info(f"Moved {cert_file} to {dst_file}")
+                        # Read file content for storage backend
+                        with open(dst_file, 'rb') as f:
+                            cert_files[cert_file] = f.read()
             
             # Save certificate metadata including DNS provider used
             metadata = {
@@ -371,6 +423,18 @@ class CertificateManager:
                 'account_id': account_id
             }
             
+            # Store certificate using storage backend if available
+            if self.storage_manager:
+                try:
+                    storage_success = self.storage_manager.store_certificate(domain, cert_files, metadata)
+                    if storage_success:
+                        logger.info(f"Certificate stored in {self.storage_manager.get_backend_name()} backend for {domain}")
+                    else:
+                        logger.warning(f"Failed to store certificate in {self.storage_manager.get_backend_name()} backend for {domain}")
+                except Exception as e:
+                    logger.error(f"Error storing certificate in storage backend for {domain}: {e}")
+            
+            # Always save metadata to local filesystem for backward compatibility
             metadata_file = cert_output_dir / 'metadata.json'
             try:
                 import json

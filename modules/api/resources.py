@@ -485,6 +485,275 @@ def create_api_resources(api, models, managers):
                 logger.error(f"Error restoring backup: {e}")
                 return {'error': f'Failed to restore backup: {str(e)}'}, 500
 
+    class BackupDelete(Resource):
+        @api.doc(security='Bearer')
+        @auth_manager.require_auth
+        def delete(self, backup_type, filename):
+            """Delete a backup file"""
+            try:
+                file_ops = managers.get('file_ops')
+                if not file_ops:
+                    return {'error': 'File operations manager not available'}, 500
+                
+                if backup_type not in ['settings', 'certificates']:
+                    return {'error': 'Invalid backup type. Must be "settings" or "certificates"'}, 400
+                
+                # Construct backup path
+                backup_dir = file_ops.backup_dir / backup_type
+                backup_path = backup_dir / filename
+                
+                # Validate the backup file exists and is within the backup directory
+                if not backup_path.exists():
+                    return {'error': f'Backup file not found: {filename}'}, 404
+                
+                if not str(backup_path).startswith(str(backup_dir)):
+                    return {'error': 'Invalid backup path'}, 400
+                
+                # Delete the backup file
+                backup_path.unlink()
+                
+                logger.info(f"Backup deleted: {backup_type}/{filename}")
+                return {
+                    'message': f'Backup {filename} deleted successfully',
+                    'deleted_file': filename,
+                    'backup_type': backup_type
+                }, 200
+                
+            except Exception as e:
+                logger.error(f"Error deleting backup: {e}")
+                return {'error': f'Failed to delete backup: {str(e)}'}, 500
+
+    # Storage Backend Management
+    class StorageBackendInfo(Resource):
+        @api.doc(security='Bearer')
+        @auth_manager.require_auth
+        def get(self):
+            """Get current storage backend information"""
+            try:
+                storage_manager = managers.get('storage')
+                if not storage_manager:
+                    return {'error': 'Storage manager not available'}, 500
+                
+                backend_name = storage_manager.get_backend_name()
+                settings = settings_manager.load_settings()
+                storage_config = settings.get('certificate_storage', {})
+                
+                return {
+                    'current_backend': backend_name,
+                    'available_backends': [
+                        'local_filesystem',
+                        'azure_keyvault', 
+                        'aws_secrets_manager',
+                        'hashicorp_vault',
+                        'infisical'
+                    ],
+                    'configuration': {
+                        'backend': storage_config.get('backend', 'local_filesystem'),
+                        'cert_dir': storage_config.get('cert_dir', 'certificates')
+                    }
+                }
+            except Exception as e:
+                logger.error(f"Error getting storage backend info: {e}")
+                return {'error': str(e)}, 500
+    
+    class StorageBackendConfig(Resource):
+        @api.doc(security='Bearer')
+        @auth_manager.require_auth
+        @api.expect(models['StorageConfig'])
+        def post(self):
+            """Update storage backend configuration"""
+            try:
+                data = api.payload
+                backend_type = data.get('backend')
+                
+                if backend_type not in ['local_filesystem', 'azure_keyvault', 'aws_secrets_manager', 'hashicorp_vault', 'infisical']:
+                    return {'error': 'Invalid backend type'}, 400
+                
+                settings = settings_manager.load_settings()
+                
+                # Update storage configuration
+                if 'certificate_storage' not in settings:
+                    settings['certificate_storage'] = {}
+                
+                settings['certificate_storage']['backend'] = backend_type
+                
+                # Update backend-specific configuration
+                if backend_type == 'local_filesystem':
+                    cert_dir = data.get('cert_dir', 'certificates')
+                    settings['certificate_storage']['cert_dir'] = cert_dir
+                
+                elif backend_type == 'azure_keyvault':
+                    azure_config = data.get('azure_keyvault', {})
+                    settings['certificate_storage']['azure_keyvault'] = azure_config
+                
+                elif backend_type == 'aws_secrets_manager':
+                    aws_config = data.get('aws_secrets_manager', {})
+                    settings['certificate_storage']['aws_secrets_manager'] = aws_config
+                
+                elif backend_type == 'hashicorp_vault':
+                    vault_config = data.get('hashicorp_vault', {})
+                    settings['certificate_storage']['hashicorp_vault'] = vault_config
+                
+                elif backend_type == 'infisical':
+                    infisical_config = data.get('infisical', {})
+                    settings['certificate_storage']['infisical'] = infisical_config
+                
+                # Save settings
+                success = settings_manager.save_settings(settings, backup_reason="storage_backend_update")
+                
+                if success:
+                    return {
+                        'success': True,
+                        'message': f'Storage backend updated to {backend_type}',
+                        'backend': backend_type
+                    }
+                else:
+                    return {'error': 'Failed to save storage configuration'}, 500
+                    
+            except Exception as e:
+                logger.error(f"Error updating storage backend config: {e}")
+                return {'error': str(e)}, 500
+    
+    class StorageBackendTest(Resource):
+        @api.doc(security='Bearer')
+        @auth_manager.require_auth
+        @api.expect(models['StorageTestConfig'])
+        def post(self):
+            """Test storage backend connection"""
+            try:
+                data = api.payload
+                backend_type = data.get('backend')
+                config = data.get('config', {})
+                
+                # Import storage backends
+                from ..core.storage_backends import (
+                    LocalFileSystemBackend, AzureKeyVaultBackend, 
+                    AWSSecretsManagerBackend, HashiCorpVaultBackend, 
+                    InfisicalBackend
+                )
+                
+                # Test connection based on backend type
+                try:
+                    if backend_type == 'local_filesystem':
+                        test_backend = LocalFileSystemBackend(Path(config.get('cert_dir', 'certificates')))
+                        
+                    elif backend_type == 'azure_keyvault':
+                        test_backend = AzureKeyVaultBackend(config)
+                        
+                    elif backend_type == 'aws_secrets_manager':
+                        test_backend = AWSSecretsManagerBackend(config)
+                        
+                    elif backend_type == 'hashicorp_vault':
+                        test_backend = HashiCorpVaultBackend(config)
+                        
+                    elif backend_type == 'infisical':
+                        test_backend = InfisicalBackend(config)
+                        
+                    else:
+                        return {'error': 'Invalid backend type'}, 400
+                    
+                    # Test by trying to list certificates (should not fail for auth issues)
+                    domains = test_backend.list_certificates()
+                    
+                    return {
+                        'success': True,
+                        'message': f'Successfully connected to {backend_type}',
+                        'backend': backend_type,
+                        'certificate_count': len(domains)
+                    }
+                    
+                except Exception as test_error:
+                    return {
+                        'success': False,
+                        'message': f'Connection test failed: {str(test_error)}',
+                        'backend': backend_type
+                    }
+                    
+            except Exception as e:
+                logger.error(f"Error testing storage backend: {e}")
+                return {'error': str(e)}, 500
+    
+    class StorageBackendMigrate(Resource):
+        @api.doc(security='Bearer')
+        @auth_manager.require_auth
+        @api.expect(models['StorageMigrationConfig'])
+        def post(self):
+            """Migrate certificates between storage backends"""
+            try:
+                data = api.payload
+                source_backend_type = data.get('source_backend')
+                target_backend_type = data.get('target_backend')
+                source_config = data.get('source_config', {})
+                target_config = data.get('target_config', {})
+                
+                # Import storage backends
+                from ..core.storage_backends import (
+                    LocalFileSystemBackend, AzureKeyVaultBackend, 
+                    AWSSecretsManagerBackend, HashiCorpVaultBackend, 
+                    InfisicalBackend
+                )
+                
+                # Create backend instances
+                backend_classes = {
+                    'local_filesystem': LocalFileSystemBackend,
+                    'azure_keyvault': AzureKeyVaultBackend,
+                    'aws_secrets_manager': AWSSecretsManagerBackend,
+                    'hashicorp_vault': HashiCorpVaultBackend,
+                    'infisical': InfisicalBackend
+                }
+                
+                if source_backend_type not in backend_classes or target_backend_type not in backend_classes:
+                    return {'error': 'Invalid backend type'}, 400
+                
+                try:
+                    # Initialize backends
+                    if source_backend_type == 'local_filesystem':
+                        source_backend = LocalFileSystemBackend(Path(source_config.get('cert_dir', 'certificates')))
+                    else:
+                        source_backend = backend_classes[source_backend_type](source_config)
+                    
+                    if target_backend_type == 'local_filesystem':
+                        target_backend = LocalFileSystemBackend(Path(target_config.get('cert_dir', 'certificates')))
+                    else:
+                        target_backend = backend_classes[target_backend_type](target_config)
+                    
+                    # Perform migration using storage manager
+                    storage_manager = managers.get('storage')
+                    if not storage_manager:
+                        return {'error': 'Storage manager not available'}, 500
+                    
+                    migration_results = storage_manager.migrate_certificates(source_backend, target_backend)
+                    
+                    successful = sum(1 for success in migration_results.values() if success)
+                    total = len(migration_results)
+                    
+                    return {
+                        'success': True,
+                        'message': f'Migration completed: {successful}/{total} certificates migrated',
+                        'migration_results': migration_results,
+                        'source_backend': source_backend_type,
+                        'target_backend': target_backend_type
+                    }
+                    
+                except Exception as migration_error:
+                    return {
+                        'success': False,
+                        'message': f'Migration failed: {str(migration_error)}',
+                        'source_backend': source_backend_type,
+                        'target_backend': target_backend_type
+                    }
+                    
+            except Exception as e:
+                logger.error(f"Error during storage migration: {e}")
+                return {'error': str(e)}, 500
+
+    # Register storage backend endpoints
+    storage_ns = api.namespace('storage', description='Storage Backend Operations')
+    storage_ns.add_resource(StorageBackendInfo, '/info')
+    storage_ns.add_resource(StorageBackendConfig, '/config')
+    storage_ns.add_resource(StorageBackendTest, '/test')
+    storage_ns.add_resource(StorageBackendMigrate, '/migrate')
+
     # Return all resource classes
     return {
         'HealthCheck': HealthCheck,
@@ -500,5 +769,6 @@ def create_api_resources(api, models, managers):
         'BackupList': BackupList,
         'BackupCreate': BackupCreate,
         'BackupDownload': BackupDownload,
-        'BackupRestore': BackupRestore
+        'BackupRestore': BackupRestore,
+        'BackupDelete': BackupDelete
     }

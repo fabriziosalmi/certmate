@@ -389,6 +389,7 @@ class FileOperations:
     def restore_certificates_backup(self, backup_file_path):
         """Restore certificates from a backup ZIP file"""
         try:
+            logger.info(f"Starting certificate restore from: {backup_file_path}")
             backup_path = Path(backup_file_path)
             
             if not backup_path.exists():
@@ -398,6 +399,9 @@ class FileOperations:
             # Ensure certificates directory exists
             self.cert_dir.mkdir(parents=True, exist_ok=True)
             
+            # Track restored domains for settings update
+            restored_domains = []
+            
             # Extract ZIP file
             with zipfile.ZipFile(backup_path, 'r') as zipf:
                 # Get list of files to extract (exclude metadata)
@@ -406,16 +410,121 @@ class FileOperations:
                 # Extract all certificate files
                 for file_info in zipf.infolist():
                     if file_info.filename != "backup_metadata.json":
+                        logger.info(f"Extracting file: {file_info.filename}")
                         # Ensure target directory exists
                         target_path = self.cert_dir / file_info.filename
                         target_path.parent.mkdir(parents=True, exist_ok=True)
                         
                         # Extract file
                         zipf.extract(file_info, self.cert_dir)
+                        
+                        # Track domains that have been restored
+                        if '/' in file_info.filename:
+                            domain = file_info.filename.split('/')[0]
+                            if domain and domain not in restored_domains:
+                                logger.info(f"Found domain in backup: {domain}")
+                                restored_domains.append(domain)
+            
+            # Update settings with restored domains
+            if restored_domains:
+                logger.info(f"Found {len(restored_domains)} domains to potentially add to settings: {restored_domains}")
+                self._update_settings_with_restored_domains(restored_domains)
+            else:
+                logger.info("No domains found in certificate backup to add to settings")
             
             logger.info(f"Certificates restored successfully from: {backup_path.name}")
+            if restored_domains:
+                logger.info(f"Added {len(restored_domains)} restored domains to settings: {', '.join(restored_domains)}")
             return True
             
         except Exception as e:
             logger.error(f"Error restoring certificates backup: {e}")
             return False
+
+    def _update_settings_with_restored_domains(self, restored_domains):
+        """Update settings file with restored certificate domains"""
+        try:
+            logger.info(f"Starting to update settings with restored domains: {restored_domains}")
+            settings_file = self.data_dir / "settings.json"
+            
+            # Load current settings
+            current_settings = self.safe_file_read(settings_file, is_json=True, default={})
+            if not current_settings:
+                current_settings = {}
+            
+            logger.info(f"Loaded current settings, found {len(current_settings.get('domains', []))} existing domains")
+            
+            # Ensure domains array exists
+            if 'domains' not in current_settings:
+                current_settings['domains'] = []
+            
+            # Get existing domains
+            existing_domains = set()
+            for domain_entry in current_settings['domains']:
+                if isinstance(domain_entry, str):
+                    existing_domains.add(domain_entry)
+                elif isinstance(domain_entry, dict) and 'domain' in domain_entry:
+                    existing_domains.add(domain_entry['domain'])
+            
+            # Add new domains that have valid certificates
+            added_count = 0
+            for domain in restored_domains:
+                if domain in existing_domains:
+                    continue
+                
+                # Check if the domain has valid certificate files
+                domain_path = self.cert_dir / domain
+                if (domain_path.exists() and 
+                    (domain_path / "cert.pem").exists() and 
+                    (domain_path / "privkey.pem").exists()):
+                    
+                    # Try to read DNS provider from metadata
+                    metadata_file = domain_path / "metadata.json"
+                    dns_provider = None
+                    account_id = None
+                    
+                    if metadata_file.exists():
+                        try:
+                            metadata = self.safe_file_read(metadata_file, is_json=True, default={})
+                            dns_provider = metadata.get('dns_provider')
+                            account_id = metadata.get('account_id')
+                        except Exception as e:
+                            logger.warning(f"Could not read metadata for {domain}: {e}")
+                    
+                    # Create domain entry
+                    if dns_provider and account_id:
+                        # Use metadata information
+                        domain_entry = {
+                            "domain": domain,
+                            "dns_provider": dns_provider,
+                            "account_id": account_id
+                        }
+                    elif dns_provider:
+                        # Use DNS provider but no account
+                        domain_entry = {
+                            "domain": domain,
+                            "dns_provider": dns_provider
+                        }
+                    else:
+                        # Fallback to default DNS provider from settings
+                        default_dns_provider = current_settings.get('dns_provider', 'cloudflare')
+                        domain_entry = {
+                            "domain": domain,
+                            "dns_provider": default_dns_provider
+                        }
+                    
+                    current_settings['domains'].append(domain_entry)
+                    added_count += 1
+                    logger.info(f"Added restored domain to settings: {domain} (DNS: {domain_entry.get('dns_provider', 'unknown')})")
+            
+            # Save updated settings
+            if added_count > 0:
+                if self.safe_file_write(settings_file, current_settings, is_json=True):
+                    logger.info(f"Settings updated with {added_count} restored certificate domains")
+                else:
+                    logger.error("Failed to save updated settings after certificate restore")
+            else:
+                logger.info("No new domains to add to settings (all restored domains already configured)")
+                
+        except Exception as e:
+            logger.error(f"Error updating settings with restored domains: {e}")

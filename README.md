@@ -12,7 +12,7 @@
 ![screenshot1](screenshot_1.png)
 ![screenshot2](screenshot_2.png)
 
-[🚀 Quick Start](#-quick-start-with-docker) • [📖 Documentation](#-documentation) • [🔧 Installation](#-installation-methods) • [🌐 DNS Providers](#-supported-dns-providers) • [� Backup & Recovery](#-backup--recovery) • [�📊 API Reference](#-api-usage)
+[🚀 Quick Start](#-quick-start-with-docker) • [📖 Documentation](#-documentation) • [🔧 Installation](#-installation-methods) • [🌐 DNS Providers](#-supported-dns-providers) • [🏛️ Storage Backends](#️-certificate-storage-configuration) • [💾 Backup & Recovery](#-backup--recovery) • [📊 API Reference](#-api-usage)
 
 </div>
 
@@ -63,6 +63,16 @@ CertMate solves the complexity of SSL certificate management in modern distribut
 - **Retention Management** - Configurable retention policies with automatic cleanup
 - **Easy Restore** - Simple restore process from any backup point
 - **Download Support** - Export backups for external storage and disaster recovery
+
+### 🏛️ **Certificate Storage Backends**
+- **Local Filesystem** - Default secure local storage with proper file permissions
+- **Azure Key Vault** - Enterprise-grade secret management with Azure integration
+- **AWS Secrets Manager** - Scalable secret storage with AWS ecosystem integration
+- **HashiCorp Vault** - Industry-standard secret management with versioning and audit
+- **Infisical** - Modern open-source secret management with team collaboration
+- **Pluggable Architecture** - Easy to extend with additional storage backends
+- **Migration Support** - Seamless migration between storage backends
+- **Backward Compatibility** - Existing installations continue working without changes
 
 ### 🔒 **Security & Compliance**
 - **Bearer Token Authentication** - Secure API access control
@@ -188,6 +198,8 @@ FLASK_ENV=production
 HOST=0.0.0.0
 PORT=8000
 ```
+
+> 💡 **Storage Backends**: By default, certificates are stored locally. For enterprise deployments, you can configure Azure Key Vault, AWS Secrets Manager, HashiCorp Vault, or Infisical via the web interface after startup. See [🏛️ Storage Backends](#️-certificate-storage-configuration) for details.
 
 ### 3. Deploy
 
@@ -638,6 +650,91 @@ Content-Type: application/json
     "description": "Updated staging environment",
     "api_token": "new_staging_token_here"
   }
+}
+```
+
+#### Storage Backend Management
+```bash
+# Get current storage backend information
+GET /api/storage/info
+Authorization: Bearer your_token_here
+
+# Update storage backend configuration
+POST /api/storage/config
+Authorization: Bearer your_token_here
+Content-Type: application/json
+
+{
+  "backend": "azure_keyvault",
+  "azure_keyvault": {
+    "vault_url": "https://yourvault.vault.azure.net/",
+    "tenant_id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+    "client_id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+    "client_secret": "your_client_secret"
+  }
+}
+
+# Test storage backend connectivity
+POST /api/storage/test
+Authorization: Bearer your_token_here
+Content-Type: application/json
+
+{
+  "backend": "aws_secrets_manager",
+  "config": {
+    "region": "us-east-1",
+    "access_key_id": "AKIAIOSFODNN7EXAMPLE",
+    "secret_access_key": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+  }
+}
+
+# Migrate certificates between storage backends
+POST /api/storage/migrate
+Authorization: Bearer your_token_here
+Content-Type: application/json
+
+{
+  "source_backend": "local_filesystem",
+  "target_backend": "azure_keyvault",
+  "source_config": {
+    "cert_dir": "certificates"
+  },
+  "target_config": {
+    "vault_url": "https://yourvault.vault.azure.net/",
+    "tenant_id": "...",
+    "client_id": "...",
+    "client_secret": "..."
+  }
+}
+```
+
+#### Backup Management
+```bash
+# List all available backups
+GET /api/backups
+Authorization: Bearer your_token_here
+
+# Create new backup
+POST /api/backups/create
+Authorization: Bearer your_token_here
+Content-Type: application/json
+
+{
+  "type": "settings",        # or "certificates"
+  "description": "Manual backup before upgrade"
+}
+
+# Download specific backup
+GET /api/backups/download/{backup_type}/{filename}
+Authorization: Bearer your_token_here
+
+# Restore from backup
+POST /api/backups/restore/{backup_type}
+Authorization: Bearer your_token_here
+Content-Type: application/json
+
+{
+  "backup_id": "settings_20241225_120000"
 }
 ```
 
@@ -1223,6 +1320,197 @@ GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
 POWERDNS_API_URL=https://your-powerdns-server:8081
 POWERDNS_API_KEY=your_api_key
 ```
+
+### 🏛️ Certificate Storage Configuration
+
+CertMate supports multiple storage backends for certificates, providing flexibility for different deployment scenarios and security requirements. By default, certificates are stored locally on the filesystem, but you can configure enterprise-grade storage backends for enhanced security and compliance.
+
+#### Local Filesystem (Default)
+The default storage backend stores certificates in the local filesystem with secure permissions:
+
+```bash
+# Default certificate directory
+certificates/
+└── example.com/
+    ├── cert.pem      # Server certificate
+    ├── chain.pem     # Certificate chain
+    ├── fullchain.pem # Full chain
+    └── privkey.pem   # Private key (600 permissions)
+```
+
+**Configuration:**
+- **Directory**: `certificates` (configurable)
+- **Permissions**: `600` for private keys, `644` for certificates
+- **Backup**: Included in automatic backups
+
+#### Azure Key Vault
+Store certificates securely in Azure Key Vault for enterprise-grade secret management:
+
+**Required Dependencies:**
+```bash
+pip install -r requirements-azure-storage.txt
+```
+
+**Configuration:**
+```json
+{
+  "certificate_storage": {
+    "backend": "azure_keyvault",
+    "azure_keyvault": {
+      "vault_url": "https://yourvault.vault.azure.net/",
+      "tenant_id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+      "client_id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+      "client_secret": "your_client_secret"
+    }
+  }
+}
+```
+
+**Benefits:**
+- Azure-native secret management
+- Compliance and audit capabilities
+- Hardware security module (HSM) protection
+- Azure RBAC integration
+
+#### AWS Secrets Manager
+Integrate with AWS Secrets Manager for scalable secret storage:
+
+**Required Dependencies:**
+```bash
+pip install -r requirements-aws-storage.txt
+```
+
+**Configuration:**
+```json
+{
+  "certificate_storage": {
+    "backend": "aws_secrets_manager",
+    "aws_secrets_manager": {
+      "region": "us-east-1",
+      "access_key_id": "AKIAIOSFODNN7EXAMPLE",
+      "secret_access_key": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+    }
+  }
+}
+```
+
+**Benefits:**
+- AWS-native secret management
+- Automatic encryption at rest
+- Cross-region replication
+- IAM-based access control
+
+#### HashiCorp Vault
+Use industry-standard HashiCorp Vault for advanced secret management:
+
+**Required Dependencies:**
+```bash
+pip install -r requirements-vault-storage.txt
+```
+
+**Configuration:**
+```json
+{
+  "certificate_storage": {
+    "backend": "hashicorp_vault",
+    "hashicorp_vault": {
+      "vault_url": "https://vault.example.com:8200",
+      "vault_token": "hvs.xxxxxxxxxxxxxxxxxxxx",
+      "mount_point": "secret",
+      "engine_version": "v2"
+    }
+  }
+}
+```
+
+**Benefits:**
+- Industry-standard secret management
+- Secret versioning and rollback
+- Comprehensive audit logging
+- Fine-grained access policies
+
+#### Infisical
+Modern open-source secret management with team collaboration:
+
+**Required Dependencies:**
+```bash
+pip install -r requirements-infisical-storage.txt
+```
+
+**Configuration:**
+```json
+{
+  "certificate_storage": {
+    "backend": "infisical",
+    "infisical": {
+      "site_url": "https://app.infisical.com",
+      "client_id": "your_client_id",
+      "client_secret": "your_client_secret",
+      "project_id": "your_project_id",
+      "environment": "prod"
+    }
+  }
+}
+```
+
+**Benefits:**
+- Open-source secret management
+- End-to-end encryption
+- Team collaboration features
+- Multi-environment support
+
+#### Configuring Storage Backends
+
+**Via Web Interface:**
+1. Navigate to Settings → Certificate Storage Backend
+2. Select your preferred backend
+3. Configure the required credentials
+4. Test the connection
+5. Save settings
+
+**Via API:**
+```bash
+# Test storage backend connectivity
+curl -X POST "http://localhost:8000/api/storage/test" \
+  -H "Authorization: Bearer your_token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "backend": "azure_keyvault",
+    "config": {
+      "vault_url": "https://yourvault.vault.azure.net/",
+      "tenant_id": "...",
+      "client_id": "...",
+      "client_secret": "..."
+    }
+  }'
+```
+
+**Migrating Between Backends:**
+1. Configure the new storage backend
+2. Test connectivity
+3. Use the migration tool in Settings
+4. Verify certificate availability
+5. Clean up old storage if desired
+
+```bash
+# Migration via API
+curl -X POST "http://localhost:8000/api/storage/migrate" \
+  -H "Authorization: Bearer your_token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "source_backend": "local_filesystem",
+    "target_config": {
+      "backend": "azure_keyvault",
+      "azure_keyvault": {...}
+    }
+  }'
+```
+
+**Backward Compatibility:**
+- Existing installations continue working without changes
+- New storage backends are opt-in
+- Migration is non-destructive (copies certificates)
+- Local filesystem remains the default backend
 
 ### 📁 Directory Structure
 
