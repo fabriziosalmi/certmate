@@ -109,7 +109,7 @@ def register_web_routes(app, managers):
             settings = settings_manager.load_settings()
             return jsonify({
                 'status': 'healthy',
-                'version': '1.1.17',
+                'version': '1.2.0',
                 'timestamp': str(datetime.now())
             })
         except Exception as e:
@@ -498,21 +498,16 @@ def register_web_routes(app, managers):
         """Web interface endpoint to create backup"""
         try:
             data = request.json or {}
-            backup_type = data.get('type', 'both')
+            backup_type = data.get('type', 'unified')
             reason = data.get('reason', 'manual')
             
             created_backups = []
             
-            if backup_type in ['settings', 'both']:
-                settings = settings_manager.load_settings()
-                filename = file_ops.create_settings_backup(settings, reason)
-                if filename:
-                    created_backups.append({'type': 'settings', 'filename': filename})
-                    
-            if backup_type in ['certificates', 'both']:
-                filename = file_ops.create_certificates_backup(reason)
-                if filename:
-                    created_backups.append({'type': 'certificates', 'filename': filename})
+            # Only create unified backups
+            settings = settings_manager.load_settings()
+            filename = file_ops.create_unified_backup(settings, reason)
+            if filename:
+                created_backups.append({'type': 'unified', 'filename': filename})
             
             if created_backups:
                 return jsonify({
@@ -530,10 +525,10 @@ def register_web_routes(app, managers):
     @app.route('/api/web/backups/download/<backup_type>/<filename>')
     @auth_manager.require_auth
     def web_download_backup(backup_type, filename):
-        """Web interface endpoint to download backup"""
+        """Web interface endpoint to download unified backup"""
         try:
-            if backup_type not in ['settings', 'certificates']:
-                return jsonify({'error': 'Invalid backup type'}), 400
+            if backup_type != 'unified':
+                return jsonify({'error': 'Only unified backup download is supported'}), 400
             
             backup_path = Path(file_ops.backup_dir) / backup_type / filename
             

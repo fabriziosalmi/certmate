@@ -65,9 +65,8 @@ class CertMateApp:
                 directory.mkdir(exist_ok=True)
                 logger.info(f"Ensured directory exists: {directory}")
             
-            # Create backup subdirectories
-            (self.backup_dir / "settings").mkdir(exist_ok=True)
-            (self.backup_dir / "certificates").mkdir(exist_ok=True)
+            # Create unified backup subdirectory
+            (self.backup_dir / "unified").mkdir(exist_ok=True)
             logger.info(f"Backup directories created: {self.backup_dir}")
             
             # Test write permissions
@@ -153,7 +152,7 @@ class CertMateApp:
             # Initialize Flask-RESTX
             self.api = Api(
                 self.app,
-                version='1.1.17',
+                version='1.2.0',
                 title='CertMate API',
                 description='SSL Certificate Management API',
                 doc='/docs/',
@@ -509,14 +508,7 @@ def suggest_dns_provider_for_domain(domain, settings=None):
     """Compatibility wrapper for suggest_dns_provider_for_domain"""
     return certmate_app.managers['dns'].suggest_dns_provider_for_domain(domain, settings)
 
-def create_settings_backup(settings, reason="manual"):
-    """Compatibility wrapper for create_settings_backup"""
-    return certmate_app.managers['file_ops'].create_backup(
-        certmate_app.data_dir / "settings.json", 
-        settings, 
-        backup_type="settings",
-        reason=reason
-    )
+
 
 # Import validation functions from modules.core.utils for test compatibility
 from modules.core.utils import (

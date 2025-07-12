@@ -688,8 +688,8 @@ POST /api/certificates/create
                         Backup & Recovery
                     </h3>
                     <p class="text-gray-600 dark:text-gray-300 mb-6">
-                        CertMate provides comprehensive backup and restore capabilities for both settings and certificates, 
-                        ensuring your data is protected and recoverable.
+                        CertMate provides comprehensive backup and restore capabilities with unified backup system, 
+                        ensuring your data is protected and recoverable with atomic consistency.
                     </p>
                     
                     <div class="space-y-6">
@@ -699,29 +699,18 @@ POST /api/certificates/create
                                 <i class="fas fa-sync-alt text-green-600 mr-2"></i>
                                 Automatic Backups
                             </h4>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div class="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border border-green-200 dark:border-green-800">
-                                    <h5 class="font-medium text-green-900 dark:text-green-100 mb-2">
-                                        <i class="fas fa-cog mr-2"></i>Settings Backup
-                                    </h5>
-                                    <ul class="text-sm text-green-800 dark:text-green-200 space-y-1">
-                                        <li>• Triggered automatically on configuration changes</li>
-                                        <li>• Includes DNS provider settings and accounts</li>
-                                        <li>• Saves domain configurations</li>
-                                        <li>• Preserves application preferences</li>
-                                    </ul>
-                                </div>
-                                <div class="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
-                                    <h5 class="font-medium text-blue-900 dark:text-blue-100 mb-2">
-                                        <i class="fas fa-certificate mr-2"></i>Certificate Backup
-                                    </h5>
-                                    <ul class="text-sm text-blue-800 dark:text-blue-200 space-y-1">
-                                        <li>• Created when new certificates are generated</li>
-                                        <li>• Includes all certificate files (cert, key, chain)</li>
-                                        <li>• Compressed for efficient storage</li>
-                                        <li>• Organized by domain and timestamp</li>
-                                    </ul>
-                                </div>
+                            <div class="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border border-green-200 dark:border-green-800">
+                                <h5 class="font-medium text-green-900 dark:text-green-100 mb-2">
+                                    <i class="fas fa-archive mr-2"></i>Unified Backup System
+                                </h5>
+                                <ul class="text-sm text-green-800 dark:text-green-200 space-y-1">
+                                    <li>• Triggered automatically on configuration changes</li>
+                                    <li>• Creates atomic snapshots of settings and certificates</li>
+                                    <li>• Includes DNS provider settings and accounts</li>
+                                    <li>• Saves domain configurations and all certificate files</li>
+                                    <li>• Ensures data consistency between settings and certificates</li>
+                                    <li>• Compressed ZIP format for efficient storage</li>
+                                </ul>
                             </div>
                         </div>
 
@@ -735,21 +724,13 @@ POST /api/certificates/create
                                 <p class="text-sm text-orange-800 dark:text-orange-200 mb-3">
                                     Create backups on-demand from the <a href="/settings" class="underline hover:no-underline">Settings</a> page:
                                 </p>
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
-                                        <h5 class="font-medium text-orange-900 dark:text-orange-100 mb-2">Settings Backup</h5>
-                                        <p class="text-sm text-orange-800 dark:text-orange-200">
-                                            Click "Create Settings Backup" to save current configuration including 
-                                            DNS providers, domains, and application settings.
-                                        </p>
-                                    </div>
-                                    <div>
-                                        <h5 class="font-medium text-orange-900 dark:text-orange-100 mb-2">Certificate Backup</h5>
-                                        <p class="text-sm text-orange-800 dark:text-orange-200">
-                                            Click "Create Certificate Backup" to archive all current certificates 
-                                            and their associated files.
-                                        </p>
-                                    </div>
+                                <div>
+                                    <h5 class="font-medium text-orange-900 dark:text-orange-100 mb-2">Create Backup</h5>
+                                    <p class="text-sm text-orange-800 dark:text-orange-200">
+                                        Click "Create Backup" to create a unified backup containing both current configuration 
+                                        (DNS providers, domains, application settings) and all certificates with their files.
+                                        This ensures complete atomic consistency between settings and certificates.
+                                    </p>
                                 </div>
                             </div>
                         </div>
@@ -768,8 +749,9 @@ POST /api/certificates/create
                                     <ul class="text-sm text-gray-600 dark:text-gray-300 space-y-1">
                                         <li>• View all backups in the Settings page</li>
                                         <li>• Download backups for external storage</li>
-                                        <li>• Restore from any previous backup</li>
-                                        <li>• Preview backup contents before restore</li>
+                                        <li>• Restore from any previous backup atomically</li>
+                                        <li>• Preview backup contents and metadata</li>
+                                        <li>• Automatic pre-restore backup creation</li>
                                     </ul>
                                 </div>
                                 <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
@@ -798,6 +780,7 @@ POST /api/certificates/create
                                 <li>• Test backup restoration in a staging environment</li>
                                 <li>• Monitor backup creation for any failures</li>
                                 <li>• Keep multiple generations of backups for different restore points</li>
+                                <li>• Use unified backups for guaranteed data consistency</li>
                             </ul>
                         </div>
                     </div>

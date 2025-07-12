@@ -215,9 +215,9 @@ class TestSettingsManagement:
     @patch('app.validate_email')
     @patch('app.validate_api_token')
     @patch('app.validate_domain')
-    @patch('app.create_settings_backup')
+    @patch('app.certmate_app.managers')
     @patch('app.SETTINGS_FILE')
-    def test_save_settings_valid_data(self, mock_settings_file, mock_backup, mock_validate_domain, 
+    def test_save_settings_valid_data(self, mock_settings_file, mock_managers, mock_validate_domain, 
                                      mock_validate_token, mock_validate_email, mock_write):
         """Test saving valid settings."""
         mock_settings_file.exists.return_value = False  # No existing file to backup
@@ -225,6 +225,11 @@ class TestSettingsManagement:
         mock_validate_token.return_value = (True, 'valid-token-123456789012345678901234567890')
         mock_validate_domain.return_value = (True, 'example.com')
         mock_write.return_value = True
+        
+        # Mock the settings manager to return True on save_settings
+        mock_settings_manager = MagicMock()
+        mock_settings_manager.save_settings.return_value = True
+        mock_managers.__getitem__.return_value = mock_settings_manager
         
         settings = {
             'email': 'test@example.com',
@@ -234,7 +239,8 @@ class TestSettingsManagement:
         
         result = save_settings(settings)
         assert result is True
-        mock_write.assert_called_once()
+        # Verify the settings manager save_settings was called
+        mock_settings_manager.save_settings.assert_called_once_with(settings, "manual")
     
     @patch('app.validate_email')
     def test_save_settings_invalid_email(self, mock_validate_email):

@@ -18,7 +18,7 @@
 
 ---
 
-## 🚨 Version 1.1.17 - Important Updates
+## 🚨 Version 1.2.0 - Important Updates
 
 ### ✨ New Features
 - **🔄 Unified Backup System** - Atomic backups of settings + certificates ensuring data consistency
@@ -26,17 +26,15 @@
 - **⚡ Improved Performance** - Optimized API endpoints and faster certificate operations
 - **🔧 Better Error Handling** - Enhanced error messages and recovery procedures
 
-### ⚠️ Breaking Changes & Deprecations
-- **Unified Backup is now the default method** - Legacy separate settings/certificates backups are deprecated
-- **Legacy backup support will be REMOVED in the next version** - Migrate to unified backups before upgrading
-- **API changes**: `/api/backup/unified` is now the recommended endpoint for backup creation
-- **UI changes**: Unified backup is prominently featured, legacy options show deprecation warnings
+### ⚠️ Breaking Changes
+- **Legacy backup support has been REMOVED** - Only unified backups are now supported
+- **API changes**: `/api/backups/create` now only accepts unified backup requests
+- **UI changes**: Legacy backup options have been completely removed from the interface
 
 ### 🔄 Migration Guide
 1. **Create unified backups** of your current setup using the new system
-2. **Test restore procedures** with unified backups to ensure compatibility  
-3. **Update automation scripts** to use `/api/backup/unified` instead of separate endpoints
-4. **Plan for next version upgrade** where legacy backup support will be completely removed
+2. **Update automation scripts** to use unified backup endpoints only
+3. **Review existing backup procedures** to ensure they use the new unified system only
 
 ---
 
@@ -79,8 +77,7 @@ CertMate solves the complexity of SSL certificate management in modern distribut
 - **Monitoring Integration** - Health checks and structured logging
 
 ### 💾 **Backup & Recovery**
-- **🔄 Unified Backups (NEW)** - Atomic snapshots of both settings and certificates ensuring data consistency
-- **⚠️ Legacy Support (DEPRECATED)** - Backward compatibility with existing separate settings/certificates backups (removal planned in next version)
+- **🔄 Unified Backups** - Atomic snapshots of both settings and certificates ensuring data consistency
 - **Automatic Backups** - Settings and certificates backed up automatically on changes
 - **Manual Backup Creation** - On-demand backup creation via web UI or API
 - **Comprehensive Coverage** - Backs up DNS configurations, certificates, and application settings
@@ -225,7 +222,7 @@ PORT=8000
 
 > 💡 **Storage Backends**: By default, certificates are stored locally. For enterprise deployments, you can configure Azure Key Vault, AWS Secrets Manager, HashiCorp Vault, or Infisical via the web interface after startup. See [🏛️ Storage Backends](#️-certificate-storage-configuration) for details.
 
-> 🔄 **Backup Best Practices**: CertMate v1.1.17 includes unified backup system that creates atomic snapshots of both settings and certificates. After setup, create your first unified backup from Settings → Backup Management. Legacy separate backups are deprecated and will be removed in the next version.
+> 🔄 **Backup Best Practices**: CertMate v1.2.0 includes a unified backup system that creates atomic snapshots of both settings and certificates. After setup, create your first backup from Settings → Backup Management.
 
 ### 3. Deploy
 
@@ -736,11 +733,11 @@ Content-Type: application/json
 
 #### Backup Management
 ```bash
-# List all available backups (unified + legacy)
+# List all available backups
 GET /api/backups
 Authorization: Bearer your_token_here
 
-# Create new unified backup (RECOMMENDED)
+# Create new backup
 POST /api/backups/create
 Authorization: Bearer your_token_here
 Content-Type: application/json
@@ -749,28 +746,14 @@ Content-Type: application/json
   "reason": "manual_backup"
 }
 
-# DEPRECATED: Create legacy backups (will be removed in next version)
-POST /api/backups/create
-Authorization: Bearer your_token_here
-Content-Type: application/json
-
-{
-  "type": "settings",        # DEPRECATED
-  "description": "Manual backup before upgrade"
-}
-
 # Download specific backup
-GET /api/backups/download/{backup_type}/{filename}
+GET /api/backups/download/unified/{filename}
 Authorization: Bearer your_token_here
 
-# Examples:
-# Download unified backup (recommended)
+# Example:
 GET /api/backups/download/unified/unified_backup_20241225_120000.zip
 
-# Download legacy backup (deprecated)
-GET /api/backups/download/settings/settings_20241225_120000.json
-
-# Restore from unified backup (RECOMMENDED) 
+# Restore from backup
 POST /api/backups/restore/unified
 Authorization: Bearer your_token_here
 Content-Type: application/json
@@ -779,18 +762,7 @@ Content-Type: application/json
   "filename": "unified_backup_20241225_120000.zip",
   "create_backup_before_restore": true
 }
-
-# DEPRECATED: Restore from legacy backup (will be removed)
-POST /api/backups/restore/{backup_type}
-Authorization: Bearer your_token_here
-Content-Type: application/json
-
-{
-  "backup_id": "settings_20241225_120000"
-}
 ```
-
-> ⚠️ **API Deprecation Warning**: Legacy backup endpoints (`/api/backups/create` with `type` parameter and `/api/backups/restore/{backup_type}`) are deprecated and will be removed in the next major version. Use unified backup endpoints for new integrations.
 
 ### 🎯 Automation-Friendly Download URL
 
@@ -1903,19 +1875,12 @@ server {
 
 CertMate provides comprehensive backup and recovery capabilities built directly into the application, ensuring your certificates and configuration data are always protected.
 
-> ⚠️ **IMPORTANT - Breaking Changes in v1.1.17**: 
-> - **Unified Backup is now the default and recommended method** for creating backups
-> - **Legacy separate settings/certificates backups are DEPRECATED** and will be removed in the next major version
-> - All new installations should use unified backups exclusively
-> - Existing users are strongly encouraged to migrate to unified backups
-> - Legacy backup support will be completely removed in the next version to simplify maintenance
-
-#### 🆕 Unified Backup System (Recommended)
+#### 🔄 Unified Backup System
 
 **What is Unified Backup?**
 - **Atomic Operation**: Creates a single ZIP file containing both settings and certificates
 - **Data Consistency**: Ensures settings and certificates are always in sync
-- **Prevents Corruption**: Eliminates configuration/certificate mismatches that can occur with separate backups
+- **Prevents Corruption**: Eliminates configuration/certificate mismatches
 - **Simplified Management**: One backup file contains everything needed for complete restoration
 
 **Automatic Backups:**
@@ -1924,7 +1889,7 @@ CertMate provides comprehensive backup and recovery capabilities built directly 
 - **Automatic Cleanup** - Old backups are automatically removed based on retention settings
 
 **Manual Backups:**
-- **On-Demand Creation** - Create unified backups anytime via the web interface or API
+- **On-Demand Creation** - Create backups anytime via the web interface or API
 - **Download Support** - Export backups for external storage and disaster recovery
 - **Comprehensive Coverage** - Includes all DNS configurations, certificates, and application settings
 
@@ -1933,12 +1898,8 @@ CertMate provides comprehensive backup and recovery capabilities built directly 
 Access backup features from the Settings page:
 
 ```html
-<!-- Unified backup creation (RECOMMENDED) -->
-<button onclick="createBackup('unified', this)">Create Unified Backup (Recommended)</button>
-
-<!-- Legacy options (DEPRECATED - will be removed) -->
-<button onclick="createBackup('settings', this)">Create Settings Backup (DEPRECATED)</button>
-<button onclick="createBackup('certificates', this)">Create Certificate Backup (DEPRECATED)</button>
+<!-- Create backup -->
+<button onclick="createBackup('unified', this)">Create Backup</button>
 
 <!-- View and manage existing backups -->
 - Download backups for external storage
@@ -1949,11 +1910,13 @@ Access backup features from the Settings page:
 
 #### API Backup Operations
 
-**Create Unified Backup (Recommended):**
+**Create Backup:**
 ```bash
-# Create unified backup (settings + certificates)
-curl -X POST "http://localhost:8000/api/backup/unified" \
-     -H "Authorization: Bearer your_token"
+# Create backup (settings + certificates)
+curl -X POST "http://localhost:8000/api/backups/create" \
+     -H "Authorization: Bearer your_token" \
+     -H "Content-Type: application/json" \
+     -d '{"reason": "manual_backup"}'
 
 # Response includes backup file information
 {
@@ -1967,42 +1930,26 @@ curl -X POST "http://localhost:8000/api/backup/unified" \
 }
 ```
 
-**Legacy API Endpoints (DEPRECATED):**
-```bash
-# DEPRECATED: Create settings backup (will be removed)
-curl -X POST "http://localhost:8000/api/backup/settings" \
-     -H "Authorization: Bearer your_token"
-
-# DEPRECATED: Create certificate backup (will be removed)
-curl -X POST "http://localhost:8000/api/backup/certificates" \
-     -H "Authorization: Bearer your_token"
-```
-
 **List and Download Backups:**
 ```bash
-# List all backups (includes unified and legacy)
+# List all backups
 curl -H "Authorization: Bearer your_token" \
      "http://localhost:8000/api/backups"
 
-# Download unified backup
+# Download backup
 curl -H "Authorization: Bearer your_token" \
-     "http://localhost:8000/api/backup/download/unified_backup_20241225_120000.zip" \
-     -o unified_backup.zip
-
-# Download legacy backup (DEPRECATED)
-curl -H "Authorization: Bearer your_token" \
-     "http://localhost:8000/api/backup/download/settings_20241225_120000.json" \
-     -o settings_backup.json
+     "http://localhost:8000/api/backups/download/unified/unified_backup_20241225_120000.zip" \
+     -o backup.zip
 ```
 
 #### Backup File Structure
 
-**Unified Backup (ZIP) - RECOMMENDED:**
+**Backup File (ZIP):**
 ```
 unified_backup_20241225_120000.zip
 ├── settings.json                    # Complete application settings
 │   ├── timestamp: "2024-12-25T12:00:00Z"
-│   ├── version: "1.1.17"
+│   ├── version: "1.2.0"
 │   ├── dns_providers: {...}
 │   ├── domains: [...]
 │   └── settings: {...}
@@ -2019,65 +1966,24 @@ unified_backup_20241225_120000.zip
         └── privkey.pem
 ```
 
-**Legacy Settings Backup (JSON) - DEPRECATED:**
-```json
-{
-  "timestamp": "2024-12-25T12:00:00Z",
-  "version": "1.1.17",
-  "dns_providers": {...},
-  "domains": [...],
-  "settings": {...}
-}
-```
-
-**Legacy Certificate Backup (ZIP) - DEPRECATED:**
-```
-certificates_20241225_120000.zip
-├── domain1.com/
-│   ├── cert.pem
-│   ├── chain.pem
-│   ├── fullchain.pem
-│   └── privkey.pem
-└── domain2.com/
-    ├── cert.pem
-    ├── chain.pem
-    ├── fullchain.pem
-    └── privkey.pem
-```
-
 #### Recovery Procedures
 
-**Unified Backup Restoration (Recommended):**
+**Backup Restoration:**
 
 *Web Interface:*
 1. Navigate to Settings → Backup Management
-2. Select the unified backup to restore from
+2. Select the backup to restore from
 3. Confirm restoration (restores both settings and certificates atomically)
 4. Application will restart to apply new settings
 5. Verify all certificates and configurations are working
 
 *API Restoration:*
 ```bash
-# Restore from unified backup (recommended)
-curl -X POST "http://localhost:8000/api/backup/restore/unified" \
+# Restore from backup
+curl -X POST "http://localhost:8000/api/backups/restore/unified" \
      -H "Authorization: Bearer your_token" \
      -H "Content-Type: application/json" \
-     -d '{"backup_id": "unified_backup_20241225_120000"}'
-```
-
-**Legacy Recovery (DEPRECATED):**
-```bash
-# DEPRECATED: Restore settings from backup (will be removed)
-curl -X POST "http://localhost:8000/api/backup/restore/settings" \
-     -H "Authorization: Bearer your_token" \
-     -H "Content-Type: application/json" \
-     -d '{"backup_id": "settings_20241225_120000"}'
-
-# DEPRECATED: Restore certificates from backup (will be removed)
-curl -X POST "http://localhost:8000/api/backup/restore/certificates" \
-     -H "Authorization: Bearer your_token" \
-     -H "Content-Type: application/json" \
-     -d '{"backup_id": "certificates_20241225_120000"}'
+     -d '{"filename": "unified_backup_20241225_120000.zip", "create_backup_before_restore": true}'
 ```
 
 #### External Backup Integration
@@ -2092,20 +1998,15 @@ For additional protection, integrate with external backup systems:
 BACKUP_DIR="/backup/certmate/$(date +%Y%m%d_%H%M%S)"
 CERT_DIR="/opt/certmate/certificates"
 DATA_DIR="/opt/certmate/data"
-BACKUP_STORAGE="/backup/certmate/backups"
 RETENTION_DAYS=30
 
 # Create backup directory
 mkdir -p "$BACKUP_DIR"
 
-# Download latest backups via API
+# Download latest backup via API
 curl -H "Authorization: Bearer $API_TOKEN" \
-     "http://localhost:8000/api/backups/latest/settings" \
-     -o "$BACKUP_DIR/settings_backup.json"
-
-curl -H "Authorization: Bearer $API_TOKEN" \
-     "http://localhost:8000/api/backups/latest/certificates" \
-     -o "$BACKUP_DIR/certificates_backup.zip"
+     "http://localhost:8000/api/backups/download/unified/latest" \
+     -o "$BACKUP_DIR/certmate_backup.zip"
 
 # Backup certificates directory
 tar -czf "$BACKUP_DIR/certificates.tar.gz" "$CERT_DIR"
@@ -2113,18 +2014,42 @@ tar -czf "$BACKUP_DIR/certificates.tar.gz" "$CERT_DIR"
 # Backup application data
 tar -czf "$BACKUP_DIR/data.tar.gz" "$DATA_DIR"
 
-# Copy built-in backups
-cp -r "$BACKUP_STORAGE"/* "$BACKUP_DIR/"
-
 # Encrypt backups (optional)
 gpg --cipher-algo AES256 --compress-algo 1 --symmetric \
-    --output "$BACKUP_DIR/certificates.tar.gz.gpg" \
-    "$BACKUP_DIR/certificates.tar.gz"
+    --output "$BACKUP_DIR/certmate_backup.zip.gpg" \
+    "$BACKUP_DIR/certmate_backup.zip"
 
 # Cleanup old backups
 find /backup/certmate -type d -mtime +$RETENTION_DAYS -exec rm -rf {} \;
 
 echo "External backup completed: $BACKUP_DIR"
+```
+
+#### Recovery Procedure
+```bash
+#!/bin/bash
+# Recovery from backup
+
+BACKUP_DATE="20241225_120000"
+BACKUP_DIR="/backup/certmate/$BACKUP_DATE"
+
+# Stop services
+docker-compose down
+
+# Restore certificates
+tar -xzf "$BACKUP_DIR/certificates.tar.gz" -C /opt/certmate/
+
+# Restore data
+tar -xzf "$BACKUP_DIR/data.tar.gz" -C /opt/certmate/
+
+# Set permissions
+chown -R 1000:1000 /opt/certmate/certificates
+chmod -R 700 /opt/certmate/certificates
+
+# Start services
+docker-compose up -d
+
+echo "Recovery completed from backup: $BACKUP_DATE"
 ```
 
 #### Recovery Procedures
@@ -2470,30 +2395,7 @@ FLASK_ENV=development
 docker-compose -f docker-compose.yml -f docker-compose.debug.yml up
 ```
 
-### ⚠️ Known Issues (v1.1.17)
-
-#### Legacy Certificate Backup Creation (API)
-**Issue**: `POST /api/backups/create` for certificate backups returns 500 error  
-**Status**: Known issue with legacy certificate backup endpoint  
-**Workaround**: Use unified backup instead:
-```bash
-# Instead of legacy certificate backup (fails)
-curl -X POST "http://localhost:8000/api/backups/create" \
-     -H "Authorization: Bearer your_token" \
-     -d '{"type": "certificates"}'
-
-# Use unified backup (works)
-curl -X POST "http://localhost:8000/api/backups/create" \
-     -H "Authorization: Bearer your_token" \
-     -d '{"reason": "manual_backup"}'
-```
-**Impact**: Low - unified backups provide better data consistency  
-**Timeline**: Legacy endpoint will be removed in next version anyway
-
-#### Backup UI Error Messages
-**Issue**: Backup deletion may show error message on successful deletion  
-**Status**: Fixed in v1.1.17  
-**Solution**: Upgrade to latest version
+### ⚠️ Known Issues (v1.2.0)
 
 #### API Test Failures
 **Issue**: Some API endpoints may fail during rapid testing  

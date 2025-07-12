@@ -199,7 +199,7 @@ class SettingsManager:
         try:
             # Create backup before saving (if settings file exists)
             if self.settings_file.exists():
-                self.file_ops.create_settings_backup(settings, backup_reason)
+                self.file_ops.create_unified_backup(settings, backup_reason)
             
             # Validate settings structure
             if not isinstance(settings, dict):
@@ -544,7 +544,7 @@ class SettingsManager:
                             "domain": domain,
                             "dns_provider": dns_provider,
                             "created_at": "unknown",
-                            "version": "1.1.17",
+                            "version": "1.2.0",
                             "migrated": True
                         }
                         

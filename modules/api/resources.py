@@ -41,7 +41,7 @@ def create_api_resources(api, models, managers):
                 
                 return {
                     'status': 'healthy',
-                    'version': '1.1.17',
+                    'version': '1.2.0',
                     'services': {
                         'settings': 'ok' if settings else 'error',
                         'cache': 'ok',
@@ -372,27 +372,12 @@ def create_api_resources(api, models, managers):
                 
                 created_backups = []
                 
-                # Always prefer unified backup for consistency
-                if backup_type in ['unified', 'both', 'full']:
-                    settings = settings_manager.load_settings()
-                    filename = file_ops.create_unified_backup(settings, reason)
-                    if filename:
-                        created_backups.append({'type': 'unified', 'filename': filename})
-                        logger.info(f"Created unified backup: {filename}")
-                
-                # Legacy support for separate backups (deprecated)
-                elif backup_type == 'settings':
-                    logger.warning("Separate settings backup is deprecated. Consider using unified backup for consistency.")
-                    settings = settings_manager.load_settings()
-                    filename = file_ops.create_settings_backup(settings, reason)
-                    if filename:
-                        created_backups.append({'type': 'settings', 'filename': filename})
-                
-                elif backup_type == 'certificates':
-                    logger.warning("Separate certificates backup is deprecated. Consider using unified backup for consistency.")
-                    filename = file_ops.create_certificates_backup(reason)
-                    if filename:
-                        created_backups.append({'type': 'certificates', 'filename': filename})
+                # Only support unified backup (legacy removed)
+                settings = settings_manager.load_settings()
+                filename = file_ops.create_unified_backup(settings, reason)
+                if filename:
+                    created_backups.append({'type': 'unified', 'filename': filename})
+                    logger.info(f"Created unified backup: {filename}")
                 
                 if created_backups:
                     return {
@@ -413,8 +398,8 @@ def create_api_resources(api, models, managers):
         def get(self, backup_type, filename):
             """Download a backup file"""
             try:
-                if backup_type not in ['unified', 'settings', 'certificates']:
-                    return {'error': 'Invalid backup type. Must be "unified", "settings", or "certificates"'}, 400
+                if backup_type != 'unified':
+                    return {'error': 'Only unified backup download is supported'}, 400
                 
                 backup_path = Path(file_ops.backup_dir) / backup_type / filename
                 
@@ -444,10 +429,10 @@ def create_api_resources(api, models, managers):
         }))
         @auth_manager.require_auth
         def post(self, backup_type):
-            """Restore from a backup file (unified backups restore both settings and certificates atomically)"""
+            """Restore from a unified backup file (only unified backups supported)"""
             try:
-                if backup_type not in ['unified', 'settings', 'certificates']:
-                    return {'error': 'Invalid backup type. Must be "unified", "settings", or "certificates"'}, 400
+                if backup_type != 'unified':
+                    return {'error': 'Only unified backup restoration is supported'}, 400
                 
                 data = api.payload
                 filename = data.get('filename')
@@ -456,11 +441,8 @@ def create_api_resources(api, models, managers):
                 if not filename:
                     return {'error': 'Filename is required'}, 400
                 
-                # Handle unified backups from all locations
-                if backup_type == 'unified':
-                    backup_path = Path(file_ops.backup_dir) / "unified" / filename
-                else:
-                    backup_path = Path(file_ops.backup_dir) / backup_type / filename
+                # Handle unified backups only
+                backup_path = Path(file_ops.backup_dir) / "unified" / filename
                 
                 if not backup_path.exists():
                     return {'error': 'Backup file not found'}, 404
@@ -476,37 +458,23 @@ def create_api_resources(api, models, managers):
                     pre_restore_backup = file_ops.create_unified_backup(current_settings, "pre_restore")
                     logger.info(f"Created pre-restore backup: {pre_restore_backup}")
                 
-                # Restore from backup
-                if backup_type == 'unified':
-                    success = file_ops.restore_unified_backup(str(backup_path))
-                    restore_msg = "Settings and certificates restored atomically"
-                elif backup_type == 'settings':
-                    success = file_ops.restore_settings_backup(str(backup_path))
-                    restore_msg = "Settings restored"
-                elif backup_type == 'certificates':
-                    success = file_ops.restore_certificates_backup(str(backup_path))
-                    restore_msg = "Certificates restored"
-                else:
-                    success = False
-                    restore_msg = "Unknown backup type"
+                # Restore from unified backup
+                success = file_ops.restore_unified_backup(str(backup_path))
+                restore_msg = "Settings and certificates restored atomically"
                 
                 if success:
                     response = {
                         'message': f'{restore_msg} successfully from {filename}',
                         'restored_from': filename,
-                        'backup_type': backup_type
+                        'backup_type': 'unified'
                     }
                     if pre_restore_backup:
                         response['pre_restore_backup'] = pre_restore_backup
                         response['note'] = 'A backup of the previous state was created before restore'
                     
-                    # Add recommendation for legacy backups
-                    if backup_type != 'unified':
-                        response['recommendation'] = 'Consider using unified backups for better data consistency'
-                    
                     return response, 200
                 else:
-                    return {'error': f'Failed to restore {backup_type}'}, 500
+                    return {'error': 'Failed to restore unified backup'}, 500
                     
             except Exception as e:
                 logger.error(f"Error restoring backup: {e}")
@@ -516,14 +484,14 @@ def create_api_resources(api, models, managers):
         @api.doc(security='Bearer')
         @auth_manager.require_auth
         def delete(self, backup_type, filename):
-            """Delete a backup file"""
+            """Delete a unified backup file"""
             try:
                 file_ops = managers.get('file_ops')
                 if not file_ops:
                     return {'error': 'File operations manager not available'}, 500
                 
-                if backup_type not in ['unified', 'settings', 'certificates']:
-                    return {'error': 'Invalid backup type. Must be "unified", "settings", or "certificates"'}, 400
+                if backup_type != 'unified':
+                    return {'error': 'Only unified backup deletion is supported'}, 400
                 
                 # Construct backup path
                 backup_dir = file_ops.backup_dir / backup_type
