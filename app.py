@@ -28,6 +28,8 @@ from modules.core import (
     FileOperations, SettingsManager, AuthManager,
     CertificateManager, DNSManager, CacheManager, StorageManager
 )
+# Import CA manager for DigiCert and Private CA support
+from modules.core.ca_manager import CAManager
 from modules.api import create_api_models, create_api_resources
 from modules.web import register_web_routes
 
@@ -121,12 +123,16 @@ class CertMateApp:
             # Initialize storage manager
             storage_manager = StorageManager(settings_manager)
             
+            # Initialize CA manager
+            ca_manager = CAManager(settings_manager)
+            
             # Initialize certificate manager
             certificate_manager = CertificateManager(
                 cert_dir=self.cert_dir,
                 settings_manager=settings_manager,
                 dns_manager=dns_manager,
-                storage_manager=storage_manager
+                storage_manager=storage_manager,
+                ca_manager=ca_manager
             )
             
             # Store all managers for easy access
@@ -137,7 +143,8 @@ class CertMateApp:
                 'certificates': certificate_manager,
                 'dns': dns_manager,
                 'cache': cache_manager,
-                'storage': storage_manager
+                'storage': storage_manager,
+                'ca': ca_manager
             }
             
             logger.info("All managers initialized successfully")
@@ -196,6 +203,7 @@ class CertMateApp:
             ns_metrics.add_resource(self.api_resources['MetricsList'], '')
             ns_settings.add_resource(self.api_resources['Settings'], '')
             ns_settings.add_resource(self.api_resources['DNSProviders'], '/dns-providers')
+            ns_settings.add_resource(self.api_resources['CAProviderTest'], '/test-ca-provider')
             ns_cache.add_resource(self.api_resources['CacheStats'], '/stats')
             ns_cache.add_resource(self.api_resources['CacheClear'], '/clear')
             ns_certificates.add_resource(self.api_resources['CertificateList'], '')

@@ -24,11 +24,12 @@ logger = logging.getLogger(__name__)
 class CertificateManager:
     """Class to handle certificate operations"""
     
-    def __init__(self, cert_dir, settings_manager, dns_manager, storage_manager=None):
+    def __init__(self, cert_dir, settings_manager, dns_manager, storage_manager=None, ca_manager=None):
         self.cert_dir = Path(cert_dir)
         self.settings_manager = settings_manager
         self.dns_manager = dns_manager
         self.storage_manager = storage_manager
+        self.ca_manager = ca_manager
 
     def _get_cert_dir_compat(self):
         """Get certificate directory with compatibility layer for tests"""
@@ -253,16 +254,18 @@ class CertificateManager:
             'dns_provider': dns_provider
         }
 
-    def create_certificate(self, domain, email, dns_provider=None, dns_config=None, account_id=None, staging=False):
-        """Create SSL certificate using Let's Encrypt with configurable DNS challenge
+    def create_certificate(self, domain, email, dns_provider=None, dns_config=None, account_id=None, staging=False, ca_provider=None, ca_account_id=None):
+        """Create SSL certificate using configurable CA with DNS challenge
         
         Args:
             domain: Domain name for certificate
-            email: Contact email for Let's Encrypt
+            email: Contact email for certificate authority
             dns_provider: DNS provider name (e.g., 'cloudflare')
             dns_config: Explicit DNS configuration (overrides account lookup)
             account_id: Specific account ID to use for the DNS provider
-            staging: Use Let's Encrypt staging environment for testing
+            staging: Use staging environment for testing
+            ca_provider: Certificate Authority provider (letsencrypt, digicert, private_ca)
+            ca_account_id: Specific CA account ID to use
         """
         # Track timing for metrics
         start_time = time.time()
@@ -276,6 +279,23 @@ class CertificateManager:
             # Validate inputs
             if not domain or not email:
                 raise ValueError("Domain and email are required")
+            
+            # Get CA provider configuration
+            if not ca_provider:
+                settings = self._load_settings_compat()
+                ca_provider = settings.get('default_ca_provider', 'letsencrypt')
+            
+            logger.info(f"Using CA provider: {ca_provider}")
+            
+            # Get CA account configuration if CA manager is available
+            ca_account_config = None
+            if self.ca_manager:
+                try:
+                    ca_account_config, used_ca_account_id = self.ca_manager.get_ca_config(ca_provider, ca_account_id)
+                    logger.info(f"Using CA account: {used_ca_account_id}")
+                except Exception as e:
+                    logger.warning(f"Could not get CA config, using default Let's Encrypt: {e}")
+                    ca_provider = 'letsencrypt'
             
             # Get DNS configuration
             if not dns_config:
@@ -297,22 +317,29 @@ class CertificateManager:
             cert_output_dir = cert_dir / domain
             cert_output_dir.mkdir(parents=True, exist_ok=True)
             
-            # Prepare certbot command
-            certbot_cmd = [
-                'certbot', 'certonly',
-                '--non-interactive',
-                '--agree-tos',
-                '--email', email,
-                '--cert-name', domain,
-                '--config-dir', str(cert_output_dir),
-                '--work-dir', str(cert_output_dir / 'work'),
-                '--logs-dir', str(cert_output_dir / 'logs'),
-                '-d', domain
-            ]
-            
-            # Add staging flag if requested
-            if staging:
-                certbot_cmd.append('--staging')
+            # Build certbot command using CA manager if available
+            if self.ca_manager and ca_account_config:
+                certbot_cmd = self.ca_manager.build_certbot_command(
+                    domain, email, ca_provider, dns_provider, dns_config, 
+                    ca_account_config, staging, cert_dir
+                )
+            else:
+                # Fallback to traditional Let's Encrypt command
+                certbot_cmd = [
+                    'certbot', 'certonly',
+                    '--non-interactive',
+                    '--agree-tos',
+                    '--email', email,
+                    '--cert-name', domain,
+                    '--config-dir', str(cert_output_dir),
+                    '--work-dir', str(cert_output_dir / 'work'),
+                    '--logs-dir', str(cert_output_dir / 'logs'),
+                    '-d', domain
+                ]
+                
+                # Add staging flag if requested
+                if staging:
+                    certbot_cmd.append('--staging')
             
             # Configure DNS plugin based on provider
             config_content = ""

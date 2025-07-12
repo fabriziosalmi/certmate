@@ -120,12 +120,12 @@
                     </div>
                 </div>
             </a>
-            <a href="#multi-account" class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow hover:shadow-md transition-shadow">
+            <a href="#ca-providers" class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow hover:shadow-md transition-shadow">
                 <div class="flex items-center">
-                    <i class="fas fa-users text-green-600 text-xl mr-3"></i>
+                    <i class="fas fa-certificate text-purple-600 text-xl mr-3"></i>
                     <div>
-                        <h3 class="font-medium text-gray-900 dark:text-white">Multi-Account Support</h3>
-                        <p class="text-sm text-gray-500 dark:text-gray-400">Multiple accounts per provider</p>
+                        <h3 class="font-medium text-gray-900 dark:text-white">CA Providers</h3>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">Certificate authorities</p>
                     </div>
                 </div>
             </a>
@@ -168,7 +168,7 @@
                                 </h4>
                                 <ul class="text-sm text-gray-600 dark:text-gray-300 space-y-1">
                                     <li>• Automatic certificate renewal</li>
-                                    <li>• Let's Encrypt integration</li>
+                                    <li>• Multiple CA providers (Let's Encrypt, DigiCert, Private CA)</li>
                                     <li>• Modern web dashboard</li>
                                     <li>• Complete API control</li>
                                     <li>• Docker & Kubernetes ready</li>
@@ -234,6 +234,95 @@
                                 </ul>
                             </div>
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CA Providers -->
+            <div id="ca-providers" class="bg-white dark:bg-gray-800 shadow rounded-lg">
+                <div class="px-6 py-6">
+                    <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+                        <i class="fas fa-certificate text-purple-600 mr-2"></i>
+                        Certificate Authority (CA) Providers
+                    </h3>
+                    <p class="text-gray-600 dark:text-gray-300 mb-6">
+                        CertMate supports multiple Certificate Authority providers, allowing you to choose the best CA for your needs.
+                    </p>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <!-- Let's Encrypt -->
+                        <div class="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border border-green-200 dark:border-green-800">
+                            <h4 class="font-medium text-green-900 dark:text-green-100 mb-2 flex items-center">
+                                <i class="fas fa-leaf text-green-600 mr-2"></i>
+                                Let's Encrypt
+                                <span class="ml-2 text-xs bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 px-2 py-0.5 rounded-full">Free</span>
+                            </h4>
+                            <p class="text-sm text-green-800 dark:text-green-200 mb-3">
+                                Free, automated SSL certificates with 90-day validity and automatic renewal.
+                            </p>
+                            <ul class="text-sm text-green-700 dark:text-green-300 space-y-1">
+                                <li>• <strong>Cost:</strong> Free</li>
+                                <li>• <strong>Validation:</strong> Domain Validation (DV)</li>
+                                <li>• <strong>Wildcard:</strong> ✅ Supported</li>
+                                <li>• <strong>Rate Limits:</strong> 50 certs/week</li>
+                                <li>• <strong>Best For:</strong> Most use cases</li>
+                            </ul>
+                        </div>
+
+                        <!-- DigiCert -->
+                        <div class="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
+                            <h4 class="font-medium text-blue-900 dark:text-blue-100 mb-2 flex items-center">
+                                <i class="fas fa-shield-alt text-blue-600 mr-2"></i>
+                                DigiCert ACME
+                                <span class="ml-2 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 px-2 py-0.5 rounded-full">Enterprise</span>
+                            </h4>
+                            <p class="text-sm text-blue-800 dark:text-blue-200 mb-3">
+                                Enterprise-grade certificates with Extended Validation options and premium support.
+                            </p>
+                            <ul class="text-sm text-blue-700 dark:text-blue-300 space-y-1">
+                                <li>• <strong>Cost:</strong> Paid plans</li>
+                                <li>• <strong>Validation:</strong> DV, OV, EV</li>
+                                <li>• <strong>Wildcard:</strong> ✅ Supported</li>
+                                <li>• <strong>EAB Required:</strong> ✅ Yes</li>
+                                <li>• <strong>Best For:</strong> Enterprise, compliance</li>
+                            </ul>
+                        </div>
+
+                        <!-- Private CA -->
+                        <div class="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg border border-purple-200 dark:border-purple-800">
+                            <h4 class="font-medium text-purple-900 dark:text-purple-100 mb-2 flex items-center">
+                                <i class="fas fa-building text-purple-600 mr-2"></i>
+                                Private CA
+                                <span class="ml-2 text-xs bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 px-2 py-0.5 rounded-full">Custom</span>
+                            </h4>
+                            <p class="text-sm text-purple-800 dark:text-purple-200 mb-3">
+                                Internal or corporate Certificate Authorities for private networks and development.
+                            </p>
+                            <ul class="text-sm text-purple-700 dark:text-purple-300 space-y-1">
+                                <li>• <strong>Cost:</strong> Varies</li>
+                                <li>• <strong>Validation:</strong> Custom</li>
+                                <li>• <strong>Wildcard:</strong> ✅ Usually supported</li>
+                                <li>• <strong>ACME Required:</strong> ✅ Yes</li>
+                                <li>• <strong>Best For:</strong> Internal networks, dev</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="mt-6 bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
+                        <h4 class="font-medium text-blue-900 dark:text-blue-100 mb-2">
+                            <i class="fas fa-cog mr-2"></i>
+                            CA Provider Configuration
+                        </h4>
+                        <ol class="text-sm text-blue-800 dark:text-blue-200 space-y-2 ml-4 list-decimal">
+                            <li>Go to <a href="/settings" class="underline hover:no-underline">Settings</a> and scroll to "Certificate Authority (CA) Providers"</li>
+                            <li>Select your default CA provider from the dropdown</li>
+                            <li>Fill in the required configuration fields for your chosen CA</li>
+                            <li>Click "Test CA Connection" to verify the configuration</li>
+                            <li>Save settings once the test succeeds</li>
+                        </ol>
+                        <p class="text-sm text-blue-700 dark:text-blue-300 mt-3">
+                            <strong>💡 Tip:</strong> You can override the default CA when creating individual certificates.
+                        </p>
                     </div>
                 </div>
             </div>

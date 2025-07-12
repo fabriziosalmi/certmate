@@ -62,75 +62,190 @@
     <!-- Main Content -->
     <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <!-- Create Certificate Form -->
-        <div class="bg-white dark:bg-gray-800 shadow-sm rounded-lg mb-6 border border-gray-200 dark:border-gray-700">
-            <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50 rounded-t-lg">
-                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Create New Certificate</h3>
-                <p class="text-sm text-gray-600 dark:text-gray-300 mt-1">Generate a new SSL certificate for your domain</p>
+        <div class="bg-white dark:bg-gray-800 shadow-lg rounded-xl mb-6 border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div class="px-6 py-5 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-700">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-xl font-bold text-gray-900 dark:text-white flex items-center">
+                            <i class="fas fa-plus-circle mr-2 text-primary"></i>
+                            Create New Certificate
+                        </h3>
+                        <p class="text-sm text-gray-600 dark:text-gray-300 mt-1">Generate SSL certificates with multiple CA providers and advanced DNS challenge support</p>
+                    </div>
+                    <div class="hidden lg:flex items-center space-x-2">
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
+                            <i class="fas fa-leaf mr-1"></i>
+                            Let's Encrypt
+                        </span>
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                            <i class="fas fa-shield-alt mr-1"></i>
+                            DigiCert
+                        </span>
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300">
+                            <i class="fas fa-building mr-1"></i>
+                            Private CA
+                        </span>
+                    </div>
+                </div>
             </div>
             <div class="px-6 py-6">
-                <form id="createCertForm" class="space-y-4">
-                    <div class="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:items-end">
-                        <div class="lg:col-span-4">
-                            <label for="domain" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                <i class="fas fa-globe mr-1 text-gray-400"></i>
-                                Domain
-                            </label>
-                            <input type="text" id="domain" name="domain" 
-                                   class="block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg shadow-sm py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-shadow duration-200"
-                                   placeholder="example.com" required>
+                <form id="createCertForm" class="space-y-6">
+                    <!-- Main Certificate Configuration -->
+                    <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                        <div class="space-y-4">
+                            <div>
+                                <label for="domain" class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                                    <i class="fas fa-globe mr-2 text-blue-500"></i>
+                                    Domain Name
+                                </label>
+                                <input type="text" id="domain" name="domain" 
+                                       class="block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg shadow-sm py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-200 placeholder-gray-400"
+                                       placeholder="example.com or *.example.com" required>
+                                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                    <i class="fas fa-info-circle mr-1"></i>
+                                    Supports wildcard domains (*.example.com) and single domains
+                                </p>
+                            </div>
+                            
+                            <div>
+                                <label for="ca_provider_select" class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                                    <i class="fas fa-certificate mr-2 text-green-500"></i>
+                                    Certificate Authority
+                                </label>
+                                <select id="ca_provider_select" name="ca_provider" 
+                                        class="block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg shadow-sm py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-200"
+                                        onchange="updateCAProviderInfo()">
+                                    <option value="">🔧 Use default from settings</option>
+                                    <option value="letsencrypt">🌿 Let's Encrypt (Free, DV certificates)</option>
+                                    <option value="digicert">🛡️ DigiCert ACME (Enterprise, DV/OV/EV)</option>
+                                    <option value="private_ca">🏢 Private CA (Internal/Corporate)</option>
+                                </select>
+                                <div id="ca-provider-info" class="mt-2 text-xs text-gray-600 dark:text-gray-400 hidden">
+                                    <!-- CA provider info will be populated here -->
+                                </div>
+                            </div>
                         </div>
-                        <div class="lg:col-span-3">
-                            <label for="dns_provider_select" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                <i class="fas fa-server mr-1 text-gray-400"></i>
-                                DNS Provider (Optional)
-                            </label>
-                            <select id="dns_provider_select" name="dns_provider" 
-                                    class="block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg shadow-sm py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-shadow duration-200"
-                                    onchange="updateAccountSelection()">
-                                <option value="">Use default from settings</option>
-                                <option value="cloudflare">Cloudflare</option>
-                                <option value="route53">AWS Route53</option>
-                                <option value="digitalocean">DigitalOcean</option>
-                                <option value="azure">Azure DNS</option>
-                                <option value="google">Google Cloud DNS</option>
-                                <option value="powerdns">PowerDNS</option>
-                                <option value="rfc2136">RFC2136 (Generic DNS Update)</option>
-                                <option value="linode">Linode</option>
-                                <option value="vultr">Vultr</option>
-                                <option value="hetzner">Hetzner</option>
-                                <option value="gandi">Gandi</option>
-                                <option value="ovh">OVH</option>
-                                <option value="namecheap">Namecheap</option>
-                                <option value="porkbun">Porkbun</option>
-                                <option value="godaddy">GoDaddy</option>
-                                <option value="dnsmadeeasy">DNS Made Easy</option>
-                                <option value="nsone">NS1</option>
-                                <option value="he-ddns">Hurricane Electric</option>
-                                <option value="dynudns">Dynu</option>
-                            </select>
-                        </div>
-                        <div class="lg:col-span-2" id="account-selection-container" style="display: none;">
-                            <label for="account_select" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                <i class="fas fa-user mr-1 text-gray-400"></i>
-                                Account (Optional)
-                            </label>
-                            <select id="account_select" name="account_id" 
-                                    class="block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg shadow-sm py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-shadow duration-200">
-                                <option value="">Use default account</option>
-                            </select>
-                        </div>
-                        <div class="lg:col-span-3">
-                            <button type="submit" 
-                                    class="w-full lg:w-auto inline-flex items-center justify-center px-6 py-3 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-primary hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors duration-200">
-                                <i class="fas fa-plus mr-2"></i>
-                                Create Certificate
-                            </button>
+                        
+                        <div class="space-y-4">
+                            <div>
+                                <label for="dns_provider_select" class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                                    <i class="fas fa-server mr-2 text-purple-500"></i>
+                                    DNS Provider
+                                </label>
+                                <select id="dns_provider_select" name="dns_provider" 
+                                        class="block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg shadow-sm py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-200"
+                                        onchange="updateAccountSelection()">
+                                    <option value="">🔧 Use default from settings</option>
+                                    <option value="cloudflare">☁️ Cloudflare</option>
+                                    <option value="route53">🚀 AWS Route53</option>
+                                    <option value="digitalocean">🌊 DigitalOcean</option>
+                                    <option value="azure">☁️ Azure DNS</option>
+                                    <option value="google">📊 Google Cloud DNS</option>
+                                    <option value="powerdns">⚡ PowerDNS</option>
+                                    <option value="rfc2136">🔧 RFC2136 (Generic)</option>
+                                    <option value="linode">🌐 Linode</option>
+                                    <option value="vultr">⚡ Vultr</option>
+                                    <option value="hetzner">🇩🇪 Hetzner</option>
+                                    <option value="gandi">🇫🇷 Gandi</option>
+                                    <option value="ovh">🇫🇷 OVH</option>
+                                    <option value="namecheap">💰 Namecheap</option>
+                                    <option value="porkbun">🐷 Porkbun</option>
+                                    <option value="godaddy">🌐 GoDaddy</option>
+                                    <option value="dnsmadeeasy">📡 DNS Made Easy</option>
+                                    <option value="nsone">1️⃣ NS1</option>
+                                    <option value="he-ddns">🌪️ Hurricane Electric</option>
+                                    <option value="dynudns">🔄 Dynu</option>
+                                </select>
+                                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                    <i class="fas fa-info-circle mr-1"></i>
+                                    DNS provider for domain validation challenge
+                                </p>
+                            </div>
+                            
+                            <div id="account-selection-container" style="display: none;">
+                                <label for="account_select" class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                                    <i class="fas fa-user mr-2 text-orange-500"></i>
+                                    Account
+                                </label>
+                                <select id="account_select" name="account_id" 
+                                        class="block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg shadow-sm py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-200">
+                                    <option value="">🔧 Use default account</option>
+                                </select>
+                                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                    <i class="fas fa-info-circle mr-1"></i>
+                                    For multi-account DNS provider setups
+                                </p>
+                            </div>
                         </div>
                     </div>
-                    <div class="lg:hidden">
-                        <p class="text-sm text-gray-500 dark:text-gray-400">
-                            Leave DNS provider empty to use the default from settings
-                        </p>
+                    
+                    <!-- Advanced Options (Collapsible) -->
+                    <div class="border-t border-gray-200 dark:border-gray-600 pt-6">
+                        <button type="button" onclick="toggleAdvancedOptions()" 
+                                class="flex items-center text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-primary transition-colors duration-200">
+                            <i class="fas fa-cog mr-2"></i>
+                            Advanced Options
+                            <i id="advanced-chevron" class="fas fa-chevron-down ml-2 transform transition-transform duration-200"></i>
+                        </button>
+                        
+                        <div id="advanced-options" class="hidden mt-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="flex items-center text-sm text-gray-700 dark:text-gray-300">
+                                        <input type="checkbox" id="wildcard-cert" class="rounded border-gray-300 text-primary focus:ring-primary dark:bg-gray-700 dark:border-gray-600">
+                                        <span class="ml-2">
+                                            <i class="fas fa-asterisk mr-1 text-yellow-500"></i>
+                                            Generate wildcard certificate
+                                        </span>
+                                    </label>
+                                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400 ml-6">
+                                        Covers *.domain.com and domain.com
+                                    </p>
+                                </div>
+                                
+                                <div>
+                                    <label class="flex items-center text-sm text-gray-700 dark:text-gray-300">
+                                        <input type="checkbox" id="staging-cert" class="rounded border-gray-300 text-primary focus:ring-primary dark:bg-gray-700 dark:border-gray-600">
+                                        <span class="ml-2">
+                                            <i class="fas fa-flask mr-1 text-orange-500"></i>
+                                            Use staging environment
+                                        </span>
+                                    </label>
+                                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400 ml-6">
+                                        For testing (Let's Encrypt only)
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Action Button -->
+                    <div class="flex flex-col sm:flex-row items-center justify-between space-y-3 sm:space-y-0">
+                        <div class="text-sm text-gray-600 dark:text-gray-400">
+                            <i class="fas fa-shield-alt mr-1 text-green-500"></i>
+                            Free SSL certificates with automatic renewal
+                        </div>
+                        <button type="submit" 
+                                class="w-full sm:w-auto inline-flex items-center justify-center px-8 py-3 border border-transparent text-base font-medium rounded-lg shadow-lg text-white bg-gradient-to-r from-primary to-secondary hover:from-secondary hover:to-primary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transform transition-all duration-200 hover:scale-105">
+                            <i class="fas fa-magic mr-2"></i>
+                            Create Certificate
+                        </button>
+                    </div>
+                    
+                    <!-- Quick Info -->
+                    <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4">
+                        <div class="flex items-start">
+                            <i class="fas fa-lightbulb text-blue-500 mt-0.5 mr-3"></i>
+                            <div class="text-sm text-blue-800 dark:text-blue-300">
+                                <p class="font-medium">💡 Quick Tips:</p>
+                                <ul class="mt-1 space-y-1 text-xs">
+                                    <li>• Wildcard certificates work for unlimited subdomains</li>
+                                    <li>• DigiCert requires EAB credentials (configured in Settings)</li>
+                                    <li>• Private CAs are perfect for internal/corporate use</li>
+                                    <li>• Certificates auto-renew 30 days before expiry</li>
+                                </ul>
+                            </div>
+                        </div>
                     </div>
                 </form>
             </div>
@@ -1371,6 +1486,44 @@
             }
         }
 
+        function updateCAProviderInfo() {
+            const caSelect = document.getElementById('ca_provider_select');
+            const infoDiv = document.getElementById('ca-provider-info');
+            const selectedCA = caSelect.value;
+            
+            if (selectedCA) {
+                let infoText = '';
+                switch (selectedCA) {
+                    case 'letsencrypt':
+                        infoText = '<i class="fas fa-leaf mr-1 text-green-500"></i> Free certificates with 90-day validity and automatic renewal';
+                        break;
+                    case 'digicert':
+                        infoText = '<i class="fas fa-shield-alt mr-1 text-blue-500"></i> Enterprise certificates (requires EAB credentials configured in Settings)';
+                        break;
+                    case 'private_ca':
+                        infoText = '<i class="fas fa-building mr-1 text-purple-500"></i> Internal CA certificates (requires ACME URL configured in Settings)';
+                        break;
+                }
+                infoDiv.innerHTML = infoText;
+                infoDiv.classList.remove('hidden');
+            } else {
+                infoDiv.classList.add('hidden');
+            }
+        }
+
+        function toggleAdvancedOptions() {
+            const optionsDiv = document.getElementById('advanced-options');
+            const chevron = document.getElementById('advanced-chevron');
+            
+            if (optionsDiv.classList.contains('hidden')) {
+                optionsDiv.classList.remove('hidden');
+                chevron.classList.add('rotate-180');
+            } else {
+                optionsDiv.classList.add('hidden');
+                chevron.classList.remove('rotate-180');
+            }
+        }
+
         // Create certificate
         document.getElementById('createCertForm').addEventListener('submit', async function(e) {
             e.preventDefault();
@@ -1378,6 +1531,7 @@
             const domain = document.getElementById('domain').value;
             const dnsProvider = document.getElementById('dns_provider_select').value;
             const accountId = document.getElementById('account_select').value;
+            const caProvider = document.getElementById('ca_provider_select').value;
             
             if (!domain) {
                 showMessage('Please enter a domain', 'error');
@@ -1396,6 +1550,9 @@
             if (accountId) {
                 requestBody.account_id = accountId;
             }
+            if (caProvider) {
+                requestBody.ca_provider = caProvider;
+            }
             
             try {
                 const response = await fetch('/api/certificates/create', {
@@ -1411,6 +1568,7 @@
                     document.getElementById('domain').value = '';
                     document.getElementById('dns_provider_select').value = '';
                     document.getElementById('account_select').value = '';
+                    document.getElementById('ca_provider_select').value = '';
                     updateAccountSelection(); // Hide account selector
                     loadCertificates();
                 } else {

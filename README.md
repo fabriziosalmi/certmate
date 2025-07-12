@@ -12,29 +12,38 @@
 ![screenshot1](screenshot_1.png)
 ![screenshot2](screenshot_2.png)
 
-[🚀 Quick Start](#-quick-start-with-docker) • [📖 Documentation](#-documentation) • [🔧 Installation](#-installation-methods) • [🌐 DNS Providers](#-supported-dns-providers) • [🏛️ Storage Backends](#️-certificate-storage-configuration) • [💾 Backup & Recovery](#-backup--recovery) • [📊 API Reference](#-api-usage)
+[🚀 Quick Start](#-quick-start-with-docker) • [📖 Documentation](#-documentation) • [🔧 Installation](#-installation-methods) • [🌐 DNS Providers](#-supported-dns-providers) • [🏛️ CA Providers](CA_PROVIDERS.md) • [🏛️ Storage Backends](#️-certificate-storage-configuration) • [💾 Backup & Recovery](#-backup--recovery) • [📊 API Reference](#-api-usage)
 
 </div>
 
 ---
 
-## 🚨 Version 1.2.0 - Important Updates
+## 🚨 Version 1.3.0 - Multi-CA Provider & Enterprise Features
 
 ### ✨ New Features
-- **🔄 Unified Backup System** - Atomic backups of settings + certificates ensuring data consistency
-- **🏛️ Enhanced Storage Backends** - Full support for Azure Key Vault, AWS Secrets Manager, HashiCorp Vault, and Infisical
-- **⚡ Improved Performance** - Optimized API endpoints and faster certificate operations
-- **🔧 Better Error Handling** - Enhanced error messages and recovery procedures
+- **🏛️ Multiple CA Providers** - Support for Let's Encrypt, DigiCert ACME, and Private CAs with step-ca compatibility
+- **🔐 DigiCert Integration** - Enterprise-grade certificates with External Account Binding (EAB) for corporate environments
+- **🏢 Private CA Support** - Internal/corporate CAs with custom ACME endpoints, trust bundles, and EAB support
+- **⚙️ Per-Certificate CA Selection** - Choose different CAs for different certificates in the same deployment
+- **🧪 CA Provider Testing** - Built-in connection testing and ACME directory validation for all CA types
+- **🔄 Unified Backup System** - Atomic backups of settings + certificates ensuring data consistency and recoverability
+- **🏛️ Enhanced Storage Backends** - Production-ready support for Azure Key Vault, AWS Secrets Manager, HashiCorp Vault, and Infisical
+- **⚡ Improved Performance** - Optimized API endpoints, better caching, and faster certificate operations
+- **🔧 Enterprise Error Handling** - Enhanced error messages, recovery procedures, and audit logging
+- **📊 Advanced Monitoring** - Comprehensive Prometheus metrics and health monitoring endpoints
 
-### ⚠️ Breaking Changes
-- **Legacy backup support has been REMOVED** - Only unified backups are now supported
-- **API changes**: `/api/backups/create` now only accepts unified backup requests
-- **UI changes**: Legacy backup options have been completely removed from the interface
+### ⚠️ Breaking Changes & Modernization
+- **Legacy backup support REMOVED** - Simplified to unified backups only for better reliability
+- **API modernization**: Streamlined backup endpoints for consistency
+- **UI modernization**: Cleaner interface focused on unified workflows
+- **Enhanced security**: Improved API token validation and secure defaults
 
 ### 🔄 Migration Guide
-1. **Create unified backups** of your current setup using the new system
-2. **Update automation scripts** to use unified backup endpoints only
-3. **Review existing backup procedures** to ensure they use the new unified system only
+1. **Export unified backups** of your current setup before upgrading
+2. **Update automation scripts** to use the new unified backup system
+3. **Configure CA providers** for DigiCert or Private CA if needed (Let's Encrypt remains default)
+4. **Test CA connectivity** using the new built-in testing tools
+5. **Review storage backends** and consider enterprise options for production
 
 ---
 
@@ -52,11 +61,15 @@ CertMate solves the complexity of SSL certificate management in modern distribut
 ## ✨ Key Features
 
 ### 🔐 **Certificate Management**
-- **Let's Encrypt Integration** - Free, automated SSL certificates
+- **Multiple CA Providers** - Support for Let's Encrypt, DigiCert ACME, and Private CAs
+- **Let's Encrypt Integration** - Free, automated SSL certificates with staging/production environments
+- **DigiCert ACME Support** - Enterprise-grade certificates with External Account Binding (EAB)
+- **Private CA Support** - Internal/corporate CAs with custom trust bundles and ACME compatibility
 - **Wildcard Support** - Single certificate for `*.example.com` and `example.com`
 - **Multi-Domain Certificates** - SAN certificates for multiple domains
 - **Automatic Renewal** - Smart renewal 30 days before expiry
 - **Certificate Validation** - Real-time SSL certificate status checking
+- **Per-Certificate CA Selection** - Choose different CAs for different certificates
 
 ### 🌐 **Multi-DNS Provider Support**
 - **Multi-Account Support** - Manage multiple accounts per provider for enterprise environments
@@ -2436,6 +2449,7 @@ echo "Settings: $(docker exec certmate cat /app/data/settings.json | jq .)"
 | **[README.md](README.md)** | Main documentation and quick start | All users |
 | **[INSTALLATION.md](INSTALLATION.md)** | Detailed installation instructions | System administrators |
 | **[DNS_PROVIDERS.md](DNS_PROVIDERS.md)** | DNS provider setup guides | DevOps engineers |
+| **[CA_PROVIDERS.md](CA_PROVIDERS.md)** | Certificate Authority configuration | Enterprise users |
 | **[CONTRIBUTING.md](CONTRIBUTING.md)** | Development and contribution guide | Developers |
 | **[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)** | Community guidelines | Contributors |
 

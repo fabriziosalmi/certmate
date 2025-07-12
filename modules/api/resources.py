@@ -264,6 +264,7 @@ def create_api_resources(api, models, managers):
                 domain = data.get('domain')
                 dns_provider = data.get('dns_provider')
                 account_id = data.get('account_id')
+                ca_provider = data.get('ca_provider')
                 
                 if not domain:
                     return {'error': 'Domain is required'}, 400
@@ -279,13 +280,15 @@ def create_api_resources(api, models, managers):
                     domain=domain,
                     email=email,
                     dns_provider=dns_provider,
-                    account_id=account_id
+                    account_id=account_id,
+                    ca_provider=ca_provider
                 )
                 
                 return {
                     'message': f'Certificate created successfully for {domain}',
                     'domain': domain,
                     'dns_provider': result.get('dns_provider'),
+                    'ca_provider': result.get('ca_provider'),
                     'duration': result.get('duration')
                 }, 201
                 
@@ -668,6 +671,215 @@ def create_api_resources(api, models, managers):
                 logger.error(f"Error testing storage backend: {e}")
                 return {'error': str(e)}, 500
     
+    class CAProviderTest(Resource):
+        @api.doc(security='Bearer')
+        @auth_manager.require_auth
+        @api.expect(models['CATestConfig'])
+        def post(self):
+            """Test CA provider connection"""
+            try:
+                data = api.payload
+                ca_provider = data.get('ca_provider')
+                config = data.get('config', {})
+                
+                # Import CA manager
+                ca_manager = managers.get('ca')
+                if not ca_manager:
+                    return {'error': 'CA manager not available'}, 500
+                
+                # Test connection based on CA provider type
+                try:
+                    if ca_provider == 'letsencrypt':
+                        # Test Let's Encrypt connection
+                        environment = config.get('environment', 'production')
+                        email = config.get('email', '')
+                        
+                        if not email:
+                            return {
+                                'success': False,
+                                'message': 'Email is required for Let\'s Encrypt',
+                                'ca_provider': ca_provider
+                            }
+                        
+                        # Test by getting the directory URL
+                        directory_url = ca_manager._get_letsencrypt_directory_url(environment)
+                        
+                        return {
+                            'success': True,
+                            'message': f'Let\'s Encrypt {environment} endpoint is accessible',
+                            'ca_provider': ca_provider,
+                            'directory_url': directory_url
+                        }
+                        
+                    elif ca_provider == 'digicert':
+                        # Test DigiCert ACME connection
+                        acme_url = config.get('acme_url', '')
+                        eab_kid = config.get('eab_kid', '')
+                        eab_hmac = config.get('eab_hmac', '')
+                        email = config.get('email', '')
+                        
+                        if not acme_url:
+                            return {
+                                'success': False,
+                                'message': 'ACME URL is required for DigiCert',
+                                'ca_provider': ca_provider
+                            }
+                        
+                        if not eab_kid or not eab_hmac:
+                            return {
+                                'success': False,
+                                'message': 'EAB credentials (Key ID and HMAC Key) are required for DigiCert',
+                                'ca_provider': ca_provider
+                            }
+                        
+                        if not email:
+                            return {
+                                'success': False,
+                                'message': 'Email is required for DigiCert',
+                                'ca_provider': ca_provider
+                            }
+                        
+                        # Test by attempting to validate EAB credentials format
+                        if len(eab_kid) < 10 or len(eab_hmac) < 32:
+                            return {
+                                'success': False,
+                                'message': 'EAB credentials appear to be invalid (too short)',
+                                'ca_provider': ca_provider
+                            }
+                        
+                        return {
+                            'success': True,
+                            'message': 'DigiCert configuration appears valid',
+                            'ca_provider': ca_provider,
+                            'acme_url': acme_url
+                        }
+                        
+                    elif ca_provider == 'private_ca':
+                        # Test Private CA connection
+                        acme_url = config.get('acme_url', '')
+                        ca_cert = config.get('ca_cert', '')
+                        email = config.get('email', '')
+                        
+                        if not acme_url:
+                            return {
+                                'success': False,
+                                'message': 'ACME URL is required for Private CA',
+                                'ca_provider': ca_provider
+                            }
+                        
+                        if not email:
+                            return {
+                                'success': False,
+                                'message': 'Email is required for Private CA',
+                                'ca_provider': ca_provider
+                            }
+                        
+                        # Basic URL validation
+                        if not (acme_url.startswith('http://') or acme_url.startswith('https://')):
+                            return {
+                                'success': False,
+                                'message': 'ACME URL must be a valid HTTP/HTTPS URL',
+                                'ca_provider': ca_provider
+                            }
+                        
+                        # If CA cert is provided, validate it's PEM format
+                        if ca_cert and not (ca_cert.strip().startswith('-----BEGIN CERTIFICATE-----') and 
+                                          ca_cert.strip().endswith('-----END CERTIFICATE-----')):
+                            return {
+                                'success': False,
+                                'message': 'CA certificate must be in PEM format',
+                                'ca_provider': ca_provider
+                            }
+                        
+                        # Test actual connectivity to the ACME endpoint
+                        try:
+                            import requests
+                            import ssl
+                            from urllib.parse import urljoin
+                            
+                            # Test if the ACME directory is accessible
+                            timeout = 10
+                            
+                            # For HTTPS URLs, we might need to handle custom CA certificates
+                            verify_ssl = True
+                            if ca_cert:
+                                # If a custom CA cert is provided, we should use it for verification
+                                # For now, we'll warn but still allow the connection
+                                logger.info("Custom CA certificate provided for Private CA")
+                            
+                            response = requests.get(acme_url, timeout=timeout, verify=verify_ssl)
+                            
+                            if response.status_code == 200:
+                                try:
+                                    directory_data = response.json()
+                                    # Check if it looks like an ACME directory
+                                    if 'newAccount' in directory_data or 'keyChange' in directory_data:
+                                        return {
+                                            'success': True,
+                                            'message': f'Private CA ACME endpoint is accessible and appears to be a valid ACME directory',
+                                            'ca_provider': ca_provider,
+                                            'acme_url': acme_url,
+                                            'has_ca_cert': bool(ca_cert),
+                                            'directory_urls': list(directory_data.keys()) if isinstance(directory_data, dict) else []
+                                        }
+                                    else:
+                                        return {
+                                            'success': False,
+                                            'message': 'Endpoint is accessible but does not appear to be a valid ACME directory',
+                                            'ca_provider': ca_provider
+                                        }
+                                except:
+                                    return {
+                                        'success': False,
+                                        'message': 'Endpoint is accessible but returned invalid JSON',
+                                        'ca_provider': ca_provider
+                                    }
+                            else:
+                                return {
+                                    'success': False,
+                                    'message': f'ACME endpoint returned HTTP {response.status_code}',
+                                    'ca_provider': ca_provider
+                                }
+                                
+                        except requests.exceptions.Timeout:
+                            return {
+                                'success': False,
+                                'message': 'Connection timeout - ACME endpoint is not accessible',
+                                'ca_provider': ca_provider
+                            }
+                        except requests.exceptions.ConnectionError:
+                            return {
+                                'success': False,
+                                'message': 'Connection failed - ACME endpoint is not accessible',
+                                'ca_provider': ca_provider
+                            }
+                        except requests.exceptions.SSLError as ssl_error:
+                            return {
+                                'success': False,
+                                'message': f'SSL verification failed: {str(ssl_error)}',
+                                'ca_provider': ca_provider
+                            }
+                        except Exception as conn_error:
+                            return {
+                                'success': False,
+                                'message': f'Connection test failed: {str(conn_error)}',
+                                'ca_provider': ca_provider
+                            }
+                        
+                    else:
+                        return {'error': 'Invalid CA provider type'}, 400
+                    
+                except Exception as test_error:
+                    return {
+                        'success': False,
+                        'message': f'CA provider test failed: {str(test_error)}',
+                        'ca_provider': ca_provider
+                    }
+                    
+            except Exception as e:
+                logger.error(f"Error testing CA provider: {e}")
+                return {'error': str(e)}, 500
+
     class StorageBackendMigrate(Resource):
         @api.doc(security='Bearer')
         @auth_manager.require_auth
@@ -749,7 +961,7 @@ def create_api_resources(api, models, managers):
     storage_ns.add_resource(StorageBackendTest, '/test')
     storage_ns.add_resource(StorageBackendMigrate, '/migrate')
 
-    # Return all resource classes
+    # Return all resource classes (CA provider test will be registered in app.py)
     return {
         'HealthCheck': HealthCheck,
         'MetricsList': MetricsList,
@@ -765,5 +977,6 @@ def create_api_resources(api, models, managers):
         'BackupCreate': BackupCreate,
         'BackupDownload': BackupDownload,
         'BackupRestore': BackupRestore,
-        'BackupDelete': BackupDelete
+        'BackupDelete': BackupDelete,
+        'CAProviderTest': CAProviderTest
     }

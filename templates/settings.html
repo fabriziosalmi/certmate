@@ -1019,6 +1019,181 @@
                         </div>
                     </div>
 
+                    <!-- CA Providers Section -->
+                    <div class="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                            <i class="fas fa-certificate mr-1"></i>
+                            Certificate Authority (CA) Providers
+                        </label>
+                        
+                        <div class="space-y-4">
+                            <!-- Default CA Selection -->
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
+                                    Default Certificate Authority
+                                </label>
+                                <select id="default-ca" name="default_ca" 
+                                        class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm"
+                                        onchange="toggleCAProviderConfig()">
+                                    <option value="letsencrypt">Let's Encrypt (Default)</option>
+                                    <option value="digicert">DigiCert ACME</option>
+                                    <option value="private_ca">Private CA</option>
+                                </select>
+                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                    Select the default CA for new certificate requests. You can override this per-certificate.
+                                </p>
+                            </div>
+
+                            <!-- CA Provider Configurations -->
+                            
+                            <!-- Let's Encrypt Configuration -->
+                            <div id="letsencrypt-config" class="border border-green-300 dark:border-green-600 rounded-lg p-4 bg-green-50 dark:bg-green-900/20">
+                                <h4 class="text-sm font-semibold text-green-800 dark:text-green-200 mb-2 flex items-center">
+                                    <i class="fas fa-leaf mr-2 text-green-600"></i>
+                                    Let's Encrypt Configuration
+                                    <span class="ml-2 text-xs bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 px-2 py-0.5 rounded-full">Free</span>
+                                </h4>
+                                <div class="space-y-3">
+                                    <div>
+                                        <label class="block text-xs text-green-800 dark:text-green-200 mb-1">Environment</label>
+                                        <select id="letsencrypt-environment" 
+                                                class="w-full px-2 py-1 text-sm border border-green-300 dark:border-green-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white">
+                                            <option value="production">Production (Default)</option>
+                                            <option value="staging">Staging (Testing)</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-green-800 dark:text-green-200 mb-1">Email (for notifications)</label>
+                                        <input type="email" id="letsencrypt-email" 
+                                               class="w-full px-2 py-1 text-sm border border-green-300 dark:border-green-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                               placeholder="admin@example.com">
+                                    </div>
+                                </div>
+                                <p class="text-xs text-green-700 dark:text-green-300 mt-2">
+                                    Let's Encrypt provides free SSL certificates with automated renewal.
+                                </p>
+                            </div>
+
+                            <!-- DigiCert Configuration -->
+                            <div id="digicert-config" class="border border-blue-300 dark:border-blue-600 rounded-lg p-4 bg-blue-50 dark:bg-blue-900/20" style="display: none;">
+                                <h4 class="text-sm font-semibold text-blue-800 dark:text-blue-200 mb-2 flex items-center">
+                                    <i class="fas fa-shield-alt mr-2 text-blue-600"></i>
+                                    DigiCert ACME Configuration
+                                    <span class="ml-2 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 px-2 py-0.5 rounded-full">Enterprise</span>
+                                </h4>
+                                <div class="space-y-3">
+                                    <div>
+                                        <label class="block text-xs text-blue-800 dark:text-blue-200 mb-1">ACME Directory URL</label>
+                                        <input type="url" id="digicert-acme-url" 
+                                               class="w-full px-2 py-1 text-sm border border-blue-300 dark:border-blue-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                               placeholder="https://acme.digicert.com/v2/acme/directory"
+                                               value="https://acme.digicert.com/v2/acme/directory">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-blue-800 dark:text-blue-200 mb-1">External Account Binding (EAB) Key ID</label>
+                                        <input type="text" id="digicert-eab-kid" 
+                                               class="w-full px-2 py-1 text-sm border border-blue-300 dark:border-blue-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                               placeholder="Your EAB Key ID from DigiCert">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-blue-800 dark:text-blue-200 mb-1">External Account Binding (EAB) HMAC Key</label>
+                                        <input type="password" id="digicert-eab-hmac" 
+                                               class="w-full px-2 py-1 text-sm border border-blue-300 dark:border-blue-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                               placeholder="Your EAB HMAC Key from DigiCert">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-blue-800 dark:text-blue-200 mb-1">Email (for notifications)</label>
+                                        <input type="email" id="digicert-email" 
+                                               class="w-full px-2 py-1 text-sm border border-blue-300 dark:border-blue-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                               placeholder="admin@example.com">
+                                    </div>
+                                </div>
+                                <p class="text-xs text-blue-700 dark:text-blue-300 mt-2">
+                                    DigiCert provides enterprise-grade SSL certificates via ACME. Requires EAB credentials from DigiCert.
+                                </p>
+                            </div>
+
+                            <!-- Private CA Configuration -->
+                            <div id="private-ca-config" class="border border-purple-300 dark:border-purple-600 rounded-lg p-4 bg-purple-50 dark:bg-purple-900/20" style="display: none;">
+                                <h4 class="text-sm font-semibold text-purple-800 dark:text-purple-200 mb-2 flex items-center">
+                                    <i class="fas fa-building mr-2 text-purple-600"></i>
+                                    Private CA Configuration
+                                    <span class="ml-2 text-xs bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 px-2 py-0.5 rounded-full">Custom</span>
+                                </h4>
+                                <div class="space-y-3">
+                                    <div>
+                                        <label class="block text-xs text-purple-800 dark:text-purple-200 mb-1">
+                                            ACME Directory URL
+                                            <span class="text-red-500">*</span>
+                                            <i class="fas fa-info-circle ml-1 cursor-help" title="URL to your private CA's ACME directory endpoint (e.g., step-ca, Smallstep, or custom ACME server)"></i>
+                                        </label>
+                                        <input type="url" id="private-ca-acme-url" 
+                                               class="w-full px-2 py-1 text-sm border-2 border-purple-300 dark:border-purple-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
+                                               placeholder="https://step-ca.example.com:9000/acme/directory"
+                                               required>
+                                        <p class="text-xs text-purple-600 dark:text-purple-400 mt-1">
+                                            <strong>Common examples:</strong><br>
+                                            • step-ca: https://step-ca.internal.com:9000/acme/directory<br>
+                                            • Smallstep: https://ca.example.com/acme/directory<br>
+                                            • Boulder: https://boulder.local:4001/acme/directory
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-purple-800 dark:text-purple-200 mb-1">CA Certificate (PEM format) - Optional</label>
+                                        <textarea id="private-ca-cert" rows="3"
+                                                  class="w-full px-2 py-1 text-sm border border-purple-300 dark:border-purple-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                                  placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"></textarea>
+                                        <p class="text-xs text-purple-600 dark:text-purple-400 mt-1">
+                                            Upload your private CA root certificate if using self-signed or internal CA
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-purple-800 dark:text-purple-200 mb-1">External Account Binding (EAB) Key ID - Optional</label>
+                                        <input type="text" id="private-ca-eab-kid" 
+                                               class="w-full px-2 py-1 text-sm border border-purple-300 dark:border-purple-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                               placeholder="EAB Key ID (if required by your CA)">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-purple-800 dark:text-purple-200 mb-1">External Account Binding (EAB) HMAC Key - Optional</label>
+                                        <input type="password" id="private-ca-eab-hmac" 
+                                               class="w-full px-2 py-1 text-sm border border-purple-300 dark:border-purple-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                               placeholder="EAB HMAC Key (if required by your CA)">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-purple-800 dark:text-purple-200 mb-1">
+                                            Email (for notifications)
+                                            <span class="text-red-500">*</span>
+                                        </label>
+                                        <input type="email" id="private-ca-email" 
+                                               class="w-full px-2 py-1 text-sm border border-purple-300 dark:border-purple-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                               placeholder="admin@example.com"
+                                               required>
+                                    </div>
+                                </div>
+                                <p class="text-xs text-purple-700 dark:text-purple-300 mt-2">
+                                    Configure your private or corporate CA. Supports ACME-compatible CAs like step-ca, Smallstep, Boulder, and others.
+                                    <br><strong>🚀 Quick Start:</strong>
+                                    <br>1. Enter your CA's ACME directory URL above
+                                    <br>2. Enter your email address
+                                    <br>3. Click "Test CA Connection" to verify
+                                    <br>4. Save settings once test succeeds
+                                </p>
+                            </div>
+
+                            <!-- CA Provider Actions -->
+                            <div class="flex flex-wrap gap-3 pt-2 border-t border-gray-200 dark:border-gray-600">
+                                <button type="button" onclick="testCAProvider()" 
+                                        class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-colors text-sm font-medium">
+                                    <i class="fas fa-plug mr-1"></i> Test CA Connection
+                                </button>
+                                <div class="text-xs text-gray-500 dark:text-gray-400 flex items-center">
+                                    <i class="fas fa-info-circle mr-1"></i>
+                                    <span id="ca-test-hint">Select a CA provider and fill in required fields, then test the connection</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Certificate Storage Backend Section -->
                     <div class="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
@@ -1338,16 +1513,6 @@
                             </div>
                         </div>
                     </div>
-
-                    <!-- Legacy Backups -->
-                    <div class="border-t border-gray-200 dark:border-gray-600 pt-4">
-                        <h5 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-                            <i class="fas fa-exclamation-triangle mr-1 text-yellow-500"></i>
-                            Legacy Backups
-                            <span class="text-xs bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 px-2 py-1 rounded-full ml-2">Deprecated</span>
-                        </h5>
-                        
-                    </div>
                 </div>
             </div>
         </div>
@@ -1594,6 +1759,9 @@
             // Load settings on page load
             loadSettings();
             
+            // Initialize CA provider configuration visibility
+            toggleCAProviderConfig();
+            
             // Refresh cache stats on load
             refreshCacheStats();
         });
@@ -1629,7 +1797,9 @@
                     api_bearer_token: formData.get('api_bearer_token')?.trim(),
                     cache_ttl: parseInt(formData.get('cache_ttl')) || 300,
                     storage_backend: formData.get('storage_backend'),
-                    certificate_storage: collectStorageBackendSettings()
+                    certificate_storage: collectStorageBackendSettings(),
+                    default_ca: formData.get('default_ca') || 'letsencrypt',
+                    ca_providers: collectCAProviderSettings()
                 };
                 
                 // Validate required fields
@@ -1785,7 +1955,7 @@
         }
 
         // Load settings on page load
-        async function loadSettings() {
+        async function loadSettings(suppressErrorMessages = false) {
             try {
                 addDebugLog('Loading settings from backend...', 'info');
                 
@@ -1812,7 +1982,10 @@
             } catch (error) {
                 addDebugLog(`Failed to load settings: ${error.message}`, 'error');
                 console.error('Error loading settings:', error);
-                showMessage(`Failed to load settings: ${error.message}`, 'error');
+                if (!suppressErrorMessages) {
+                    showMessage(`Failed to load settings: ${error.message}`, 'error');
+                }
+                throw error; // Re-throw so caller can handle it
             }
         }
         
@@ -2003,6 +2176,10 @@
                 // Load storage backend settings
                 loadStorageBackendSettings(data);
                 addDebugLog('Storage backend settings loaded', 'info');
+                
+                // Load CA provider settings
+                loadCAProviderSettings(data);
+                addDebugLog('CA provider settings loaded', 'info');
                 
                 addDebugLog('Form populated successfully', 'info');
             } catch (error) {
@@ -2800,32 +2977,39 @@
                 
                 addDebugLog(`Backup restored successfully from: ${filename}`, 'info');
                 
-                let message = result.message || `Backup restored successfully!`;
+                let successMessage = result.message || `Backup restored successfully!`;
                 if (result.pre_restore_backup) {
-                    message += `\n\nA backup of the previous state was created: ${result.pre_restore_backup}`;
+                    successMessage += `\n\nA backup of the previous state was created: ${result.pre_restore_backup}`;
                 }
                 
-                showMessage(`${message} Reloading configuration...`, 'success');
+                // Show immediate success message
+                showMessage(`${successMessage}`, 'success');
                 
-                // Reload the settings data and refresh the UI
+                // Try to reload the settings data and refresh the UI
                 try {
-                    await loadSettings();
-                    await refreshBackupList();
-                    addDebugLog('Settings reloaded successfully after restore', 'info');
-                    showMessage(`Backup restored and reloaded successfully!`, 'success');
-                } catch (error) {
-                    addDebugLog(`Error reloading settings after restore: ${error.message}`, 'warn');
-                    showMessage(`Backup restored successfully! Please refresh the page to see all changes.`, 'info');
+                    addDebugLog('Reloading settings after successful restore...', 'info');
                     
-                    // Fallback to page reload if settings reload fails
+                    // Use loadSettings with suppressed error messages to avoid confusing the user
+                    await loadSettings(true);
+                    await refreshBackupList();
+                    
+                    addDebugLog('Settings reloaded successfully after restore', 'info');
+                    showMessage(`✅ Backup restored and configuration reloaded successfully!`, 'success');
+                    
+                } catch (reloadError) {
+                    addDebugLog(`Settings reload failed after successful restore: ${reloadError.message}`, 'warn');
+                    showMessage(`✅ Backup restored successfully! Please refresh the page to see all changes.`, 'success');
+                    
+                    // Fallback to page reload after a delay
                     setTimeout(() => {
+                        addDebugLog('Auto-refreshing page after restore...', 'info');
                         window.location.reload();
                     }, 3000);
                 }
                 
             } catch (error) {
-                addDebugLog(`Error restoring backup: ${error.message}`, 'error');
-                showMessage(`Error restoring backup: ${error.message}`, 'error');
+                addDebugLog(`Error during backup restore: ${error.message}`, 'error');
+                showMessage(`❌ Error restoring backup: ${error.message}`, 'error');
             }
         }
 
@@ -2879,6 +3063,136 @@
                 refreshBackupList();
             }, 1000);
         });
+
+        // CA PROVIDER MANAGEMENT FUNCTIONS
+        function toggleCAProviderConfig() {
+            const caProvider = document.getElementById('default-ca').value;
+            const configs = document.querySelectorAll('[id$="-config"]');
+            
+            // Hide all CA configuration panels
+            const caConfigs = ['letsencrypt-config', 'digicert-config', 'private-ca-config'];
+            caConfigs.forEach(configId => {
+                const element = document.getElementById(configId);
+                if (element) {
+                    element.style.display = 'none';
+                }
+            });
+            
+            // Show the selected CA configuration panel
+            const selectedConfigId = caProvider + '-config';
+            const selectedConfig = document.getElementById(selectedConfigId);
+            if (selectedConfig) {
+                selectedConfig.style.display = 'block';
+            }
+            
+            // Update hint text based on selected CA
+            const hintElement = document.getElementById('ca-test-hint');
+            if (hintElement) {
+                switch (caProvider) {
+                    case 'letsencrypt':
+                        hintElement.textContent = 'Enter your email address and test Let\'s Encrypt connection';
+                        break;
+                    case 'digicert':
+                        hintElement.textContent = 'Enter ACME URL, EAB credentials, and email, then test DigiCert connection';
+                        break;
+                    case 'private_ca':
+                        hintElement.textContent = 'Enter your ACME directory URL and email, then test Private CA connection';
+                        break;
+                    default:
+                        hintElement.textContent = 'Select a CA provider and fill in required fields, then test the connection';
+                }
+            }
+        }
+
+        async function testCAProvider() {
+            const caProvider = document.getElementById('default-ca').value;
+            let config = {};
+            let missingFields = [];
+            
+            if (caProvider === 'letsencrypt') {
+                const email = document.getElementById('letsencrypt-email').value;
+                if (!email.trim()) {
+                    missingFields.push('Email');
+                }
+                config = {
+                    environment: document.getElementById('letsencrypt-environment').value,
+                    email: email
+                };
+            } else if (caProvider === 'digicert') {
+                const acmeUrl = document.getElementById('digicert-acme-url').value;
+                const eabKid = document.getElementById('digicert-eab-kid').value;
+                const eabHmac = document.getElementById('digicert-eab-hmac').value;
+                const email = document.getElementById('digicert-email').value;
+                
+                if (!acmeUrl.trim()) missingFields.push('ACME URL');
+                if (!eabKid.trim()) missingFields.push('EAB Key ID');
+                if (!eabHmac.trim()) missingFields.push('EAB HMAC Key');
+                if (!email.trim()) missingFields.push('Email');
+                
+                config = {
+                    acme_url: acmeUrl,
+                    eab_kid: eabKid,
+                    eab_hmac: eabHmac,
+                    email: email
+                };
+            } else if (caProvider === 'private_ca') {
+                const acmeUrl = document.getElementById('private-ca-acme-url').value;
+                const email = document.getElementById('private-ca-email').value;
+                
+                if (!acmeUrl.trim()) missingFields.push('ACME URL');
+                if (!email.trim()) missingFields.push('Email');
+                
+                config = {
+                    acme_url: acmeUrl,
+                    ca_cert: document.getElementById('private-ca-cert').value,
+                    eab_kid: document.getElementById('private-ca-eab-kid').value,
+                    eab_hmac: document.getElementById('private-ca-eab-hmac').value,
+                    email: email
+                };
+            }
+
+            // Validate required fields
+            if (missingFields.length > 0) {
+                showMessage(`Please fill in the following required fields: ${missingFields.join(', ')}`, 'error');
+                return;
+            }
+
+            // Show loading state
+            const testButton = document.querySelector('button[onclick="testCAProvider()"]');
+            const originalText = testButton.innerHTML;
+            testButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Testing...';
+            testButton.disabled = true;
+
+            try {
+                const response = await fetch('/api/settings/test-ca-provider', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${API_HEADERS.Authorization.replace('Bearer ', '')}`
+                    },
+                    body: JSON.stringify({
+                        ca_provider: caProvider,
+                        config: config
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (response.ok && result.success) {
+                    showMessage(`✅ CA connection test successful! ${result.message}`, 'success');
+                } else {
+                    const errorMsg = result.message || result.error || 'Unknown error occurred';
+                    showMessage(`❌ CA connection test failed: ${errorMsg}`, 'error');
+                }
+            } catch (error) {
+                console.error('Error testing CA provider:', error);
+                showMessage('❌ Error testing CA provider connection. Please check your network connection.', 'error');
+            } finally {
+                // Restore button state
+                testButton.innerHTML = originalText;
+                testButton.disabled = false;
+            }
+        }
 
         // STORAGE BACKEND MANAGEMENT FUNCTIONS
         function toggleStorageBackendConfig() {
@@ -3034,6 +3348,54 @@
             }
         }
 
+        function loadCAProviderSettings(settings) {
+            // Set default CA provider
+            const defaultCA = settings.default_ca || 'letsencrypt';
+            document.getElementById('default-ca').value = defaultCA;
+            toggleCAProviderConfig();
+            
+            // Load CA provider configurations
+            const caProviders = settings.ca_providers || {};
+            
+            // Load Let's Encrypt settings
+            const letsencryptConfig = caProviders.letsencrypt || {};
+            if (letsencryptConfig.environment) {
+                document.getElementById('letsencrypt-environment').value = letsencryptConfig.environment;
+            }
+            if (letsencryptConfig.email) {
+                document.getElementById('letsencrypt-email').value = letsencryptConfig.email;
+            }
+            
+            // Load DigiCert settings
+            const digicertConfig = caProviders.digicert || {};
+            if (digicertConfig.acme_url) {
+                document.getElementById('digicert-acme-url').value = digicertConfig.acme_url;
+            }
+            if (digicertConfig.eab_kid) {
+                document.getElementById('digicert-eab-kid').value = digicertConfig.eab_kid;
+            }
+            // Don't populate HMAC key for security reasons - user needs to re-enter
+            if (digicertConfig.email) {
+                document.getElementById('digicert-email').value = digicertConfig.email;
+            }
+            
+            // Load Private CA settings
+            const privateCaConfig = caProviders.private_ca || {};
+            if (privateCaConfig.acme_url) {
+                document.getElementById('private-ca-acme-url').value = privateCaConfig.acme_url;
+            }
+            if (privateCaConfig.ca_cert) {
+                document.getElementById('private-ca-cert').value = privateCaConfig.ca_cert;
+            }
+            if (privateCaConfig.eab_kid) {
+                document.getElementById('private-ca-eab-kid').value = privateCaConfig.eab_kid;
+            }
+            // Don't populate HMAC key for security reasons - user needs to re-enter
+            if (privateCaConfig.email) {
+                document.getElementById('private-ca-email').value = privateCaConfig.email;
+            }
+        }
+
         function loadStorageBackendSettings(settings) {
             const storageConfig = settings.certificate_storage || {};
             const backend = storageConfig.backend || 'local_filesystem';
@@ -3081,6 +3443,35 @@
                     // Don't populate client credentials for security
                     break;
             }
+        }
+
+        function collectCAProviderSettings() {
+            const caProviders = {};
+            
+            // Let's Encrypt configuration
+            caProviders.letsencrypt = {
+                environment: document.getElementById('letsencrypt-environment').value || 'production',
+                email: document.getElementById('letsencrypt-email').value || ''
+            };
+            
+            // DigiCert configuration
+            caProviders.digicert = {
+                acme_url: document.getElementById('digicert-acme-url').value || 'https://acme.digicert.com/v2/acme/directory',
+                eab_kid: document.getElementById('digicert-eab-kid').value || '',
+                eab_hmac: document.getElementById('digicert-eab-hmac').value || '',
+                email: document.getElementById('digicert-email').value || ''
+            };
+            
+            // Private CA configuration
+            caProviders.private_ca = {
+                acme_url: document.getElementById('private-ca-acme-url').value || '',
+                ca_cert: document.getElementById('private-ca-cert').value || '',
+                eab_kid: document.getElementById('private-ca-eab-kid').value || '',
+                eab_hmac: document.getElementById('private-ca-eab-hmac').value || '',
+                email: document.getElementById('private-ca-email').value || ''
+            };
+            
+            return caProviders;
         }
 
         function collectStorageBackendSettings() {

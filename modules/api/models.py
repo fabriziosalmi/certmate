@@ -139,7 +139,8 @@ def create_api_models(api):
     create_cert_model = api.model('CreateCertificate', {
         'domain': fields.String(required=True, description='Domain name to create certificate for'),
         'dns_provider': fields.String(description='DNS provider to use (optional, uses default from settings)', enum=['cloudflare', 'route53', 'azure', 'google', 'powerdns', 'digitalocean', 'linode', 'gandi', 'ovh', 'namecheap', 'vultr', 'dnsmadeeasy', 'nsone', 'rfc2136', 'hetzner', 'porkbun', 'godaddy', 'he-ddns', 'dynudns']),
-        'account_id': fields.String(description='DNS provider account ID to use (optional, uses default account if not specified)')
+        'account_id': fields.String(description='DNS provider account ID to use (optional, uses default account if not specified)'),
+        'ca_provider': fields.String(description='Certificate Authority provider to use (optional, uses default from settings)', enum=['letsencrypt', 'digicert', 'private_ca'])
     })
 
     # Cache models
@@ -224,6 +225,12 @@ def create_api_models(api):
         'target_config': fields.Raw(description='Target backend configuration', required=True)
     })
 
+    # CA Provider models
+    ca_test_config_model = api.model('CATestConfig', {
+        'ca_provider': fields.String(description='CA provider type to test', required=True),
+        'config': fields.Raw(description='CA provider-specific configuration', required=True)
+    })
+
     # Return all models as a dict for easy access
     return {
         'certificate_model': certificate_model,
@@ -258,5 +265,7 @@ def create_api_models(api):
         'AzureKeyVaultStorage': azure_keyvault_storage_model,
         'AWSSecretsManagerStorage': aws_secrets_manager_storage_model,
         'HashiCorpVaultStorage': hashicorp_vault_storage_model,
-        'InfisicalStorage': infisical_storage_model
+        'InfisicalStorage': infisical_storage_model,
+        # CA Provider models
+        'CATestConfig': ca_test_config_model
     }
