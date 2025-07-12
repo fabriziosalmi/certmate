@@ -41,7 +41,7 @@ def create_api_resources(api, models, managers):
                 
                 return {
                     'status': 'healthy',
-                    'version': '1.2.0',
+                    'version': '1.2.1',
                     'services': {
                         'settings': 'ok' if settings else 'error',
                         'cache': 'ok',

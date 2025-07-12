@@ -544,7 +544,7 @@ class SettingsManager:
                             "domain": domain,
                             "dns_provider": dns_provider,
                             "created_at": "unknown",
-                            "version": "1.2.0",
+                            "version": "1.2.1",
                             "migrated": True
                         }
                         

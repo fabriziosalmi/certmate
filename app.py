@@ -159,7 +159,7 @@ class CertMateApp:
             # Initialize Flask-RESTX
             self.api = Api(
                 self.app,
-                version='1.2.0',
+                version='1.2.1',
                 title='CertMate API',
                 description='SSL Certificate Management API',
                 doc='/docs/',

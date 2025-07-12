@@ -109,7 +109,7 @@ def register_web_routes(app, managers):
             settings = settings_manager.load_settings()
             return jsonify({
                 'status': 'healthy',
-                'version': '1.2.0',
+                'version': '1.2.1',
                 'timestamp': str(datetime.now())
             })
         except Exception as e:
