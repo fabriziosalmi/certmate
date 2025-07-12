@@ -18,35 +18,6 @@
 
 ---
 
-## 🚨 Version 1.3.0 - Multi-CA Provider & Enterprise Features
-
-### ✨ New Features
-- **🏛️ Multiple CA Providers** - Support for Let's Encrypt, DigiCert ACME, and Private CAs with step-ca compatibility
-- **🔐 DigiCert Integration** - Enterprise-grade certificates with External Account Binding (EAB) for corporate environments
-- **🏢 Private CA Support** - Internal/corporate CAs with custom ACME endpoints, trust bundles, and EAB support
-- **⚙️ Per-Certificate CA Selection** - Choose different CAs for different certificates in the same deployment
-- **🧪 CA Provider Testing** - Built-in connection testing and ACME directory validation for all CA types
-- **🔄 Unified Backup System** - Atomic backups of settings + certificates ensuring data consistency and recoverability
-- **🏛️ Enhanced Storage Backends** - Production-ready support for Azure Key Vault, AWS Secrets Manager, HashiCorp Vault, and Infisical
-- **⚡ Improved Performance** - Optimized API endpoints, better caching, and faster certificate operations
-- **🔧 Enterprise Error Handling** - Enhanced error messages, recovery procedures, and audit logging
-- **📊 Advanced Monitoring** - Comprehensive Prometheus metrics and health monitoring endpoints
-
-### ⚠️ Breaking Changes & Modernization
-- **Legacy backup support REMOVED** - Simplified to unified backups only for better reliability
-- **API modernization**: Streamlined backup endpoints for consistency
-- **UI modernization**: Cleaner interface focused on unified workflows
-- **Enhanced security**: Improved API token validation and secure defaults
-
-### 🔄 Migration Guide
-1. **Export unified backups** of your current setup before upgrading
-2. **Update automation scripts** to use the new unified backup system
-3. **Configure CA providers** for DigiCert or Private CA if needed (Let's Encrypt remains default)
-4. **Test CA connectivity** using the new built-in testing tools
-5. **Review storage backends** and consider enterprise options for production
-
----
-
 ## 🌟 Why CertMate?
 
 CertMate solves the complexity of SSL certificate management in modern distributed architectures. Whether you're running a single application or managing certificates across multiple datacenters, CertMate provides:
