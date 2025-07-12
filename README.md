@@ -2441,27 +2441,6 @@ Check out our examples repository for:
 - Kubernetes manifests
 - CI/CD pipeline examples
 
-## 🚀 Roadmap & Future Features
-
-### 🔮 Planned Features
-
-- **🔄 Certificate Templates** - Predefined certificate configurations
-- **📊 Advanced Analytics** - Certificate usage and performance metrics
-- **🔐 ACME v2 Features** - External account binding, certificate transparency
-- **🌍 Multi-Region Support** - Geographic certificate distribution
-- **📱 Mobile App** - iOS/Android certificate monitoring
-- **🤖 AI-Powered Renewal** - Intelligent renewal scheduling
-- **🔌 Plugin System** - Custom DNS provider plugins
-- **📈 Enterprise Dashboard** - Multi-tenant certificate management
-
-### 🗓️ Version History
-
-| Version | Release Date | Key Features |
-|---------|--------------|--------------|
-| **v2.0.0** | 2024-12-25 | Multi-DNS provider support, enhanced API |
-| **v1.5.0** | 2024-11-15 | Docker improvements, monitoring features |
-| **v1.0.0** | 2024-10-01 | Initial release with Cloudflare support |
-
 ### 🤝 Community Contributions
 
 We welcome contributions! Areas where we need help:
@@ -2512,29 +2491,15 @@ python app.py
 4. **Push** to the branch (`git push origin feature/amazing-feature`)
 5. **Open** a Pull Request
 
-### 🏆 Contributors
-
-Thanks to all contributors who make CertMate better! 
-
-[![Contributors](https://contrib.rocks/image?repo=fabriziosalmi/certmate)](https://github.com/fabriziosalmi/certmate/graphs/contributors)
-
 ## 📄 License
 
 This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
-
-### 🎯 MIT License Summary
-- ✅ **Commercial Use** - Use in commercial projects
-- ✅ **Modification** - Modify and distribute changes
-- ✅ **Distribution** - Distribute the software
-- ✅ **Private Use** - Use privately
-- ❌ **Liability** - No warranty or liability
-- ❌ **Patent Grant** - No patent rights granted
 
 ---
 
 <div align="center">
 
-**Made with ❤️ by the CertMate Team**
+**Made with ❤️ by Fabrizio Salmi**
 
 [⭐ Star us on GitHub](https://github.com/fabriziosalmi/certmate) • [🐛 Report Bug](https://github.com/fabriziosalmi/certmate/issues) • [💡 Request Feature](https://github.com/fabriziosalmi/certmate/issues/new?template=feature_request.md)
 
