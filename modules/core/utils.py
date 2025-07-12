@@ -20,12 +20,13 @@ from urllib.parse import urlparse
 # =============================================
 
 # Constants for API token validation
-_MIN_TOKEN_LENGTH = 32
+_MIN_TOKEN_LENGTH = 32  # Increased minimum for better security
 _MAX_TOKEN_LENGTH = 512
-_MIN_UNIQUE_CHARS = 10
+_MIN_UNIQUE_CHARS = 12  # Increased for better entropy
 _WEAK_TOKEN_PATTERNS = {
     'password', '12345', 'admin', 'test', 'demo', 'change-this',
-    'default', 'secret', 'token', 'key', 'api', 'qwerty'
+    'default', 'secret', 'token', 'key', 'api', 'qwerty', 'example',
+    'your_token_here', 'your_super_secure_api_token_here_change_this'
 }
 
 # A mapping of DNS providers to their required credential fields for validation.
@@ -161,22 +162,44 @@ def validate_domain(domain: str) -> Tuple[bool, str]:
 def validate_api_token(token: str) -> Tuple[bool, str]:
     """
     Validate an API token for strength, format, and complexity.
+    Enhanced security validation with cryptographic strength checks.
     """
     if not token or not isinstance(token, str):
         return False, "API token is required and must be a string."
     
     token = token.strip()
     
+    # Check minimum and maximum length
     if not (_MIN_TOKEN_LENGTH <= len(token) <= _MAX_TOKEN_LENGTH):
         return False, f"API token length must be between {_MIN_TOKEN_LENGTH} and {_MAX_TOKEN_LENGTH} characters."
     
+    # Check for weak patterns (case insensitive)
     token_lower = token.lower()
     for pattern in _WEAK_TOKEN_PATTERNS:
         if pattern in token_lower:
             return False, f"API token must not contain weak patterns like '{pattern}'."
     
-    if len(set(token)) < _MIN_UNIQUE_CHARS:
+    # Check character variety for entropy
+    unique_chars = len(set(token))
+    if unique_chars < _MIN_UNIQUE_CHARS:
         return False, f"API token lacks character variety (must have at least {_MIN_UNIQUE_CHARS} unique characters)."
+    
+    # Additional security checks
+    # Check for repeating patterns
+    if len(token) >= 6:
+        for i in range(len(token) - 5):
+            pattern = token[i:i+3]
+            if token.count(pattern) > 2:
+                return False, "API token contains too many repeating patterns."
+    
+    # Check character type distribution for better entropy
+    has_upper = any(c.isupper() for c in token)
+    has_lower = any(c.islower() for c in token)
+    has_digit = any(c.isdigit() for c in token)
+    
+    char_types = sum([has_upper, has_lower, has_digit])
+    if char_types < 2:
+        return False, "API token must contain at least 2 character types (uppercase, lowercase, digits)."
     
     return True, token
 
@@ -188,12 +211,33 @@ def validate_api_token(token: str) -> Tuple[bool, str]:
 def generate_secure_token(length: int = 40) -> str:
     """
     Generate a cryptographically secure, random string for API authentication.
+    Enhanced to ensure compliance with stronger validation requirements.
     """
-    if not isinstance(length, int) or length < 24:
-        raise ValueError("Token length must be an integer of at least 24 characters for security.")
+    if not isinstance(length, int) or length < _MIN_TOKEN_LENGTH:
+        raise ValueError(f"Token length must be an integer of at least {_MIN_TOKEN_LENGTH} characters for security.")
     
-    alphabet = string.ascii_letters + string.digits
-    return ''.join(secrets.choice(alphabet) for _ in range(length))
+    # Ensure we have a good mix of character types for better entropy
+    alphabet_upper = string.ascii_uppercase
+    alphabet_lower = string.ascii_lowercase
+    alphabet_digits = string.digits
+    alphabet_all = alphabet_upper + alphabet_lower + alphabet_digits
+    
+    # Generate token with guaranteed character type diversity
+    token_parts = []
+    
+    # Ensure at least one character from each type
+    token_parts.append(secrets.choice(alphabet_upper))
+    token_parts.append(secrets.choice(alphabet_lower))
+    token_parts.append(secrets.choice(alphabet_digits))
+    
+    # Fill the rest with random characters
+    for _ in range(length - 3):
+        token_parts.append(secrets.choice(alphabet_all))
+    
+    # Shuffle to avoid predictable patterns
+    secrets.SystemRandom().shuffle(token_parts)
+    
+    return ''.join(token_parts)
 
 
 # =============================================

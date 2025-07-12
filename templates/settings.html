@@ -375,7 +375,10 @@
                                 <div class="mt-1">
                                     <input type="password" id="cloudflare_api_token" name="cloudflare_api_token" 
                                            class="block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
-                                           placeholder="Enter your Cloudflare API token">
+                                           placeholder="Enter your Cloudflare API token"
+                                           autocomplete="new-password" 
+                                           spellcheck="false"
+                                           data-lpignore="true">
                                 </div>
                                 <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
                                     Create an API token at <a href="https://dash.cloudflare.com/profile/api-tokens" target="_blank" class="text-primary hover:underline">Cloudflare Dashboard</a> with <strong>Zone:DNS:Edit</strong> permissions.
@@ -413,7 +416,10 @@
                                         </label>
                                         <input type="password" id="route53_access_key_id" name="route53_access_key_id" 
                                                class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
-                                               placeholder="AKIAIOSFODNN7EXAMPLE">
+                                               placeholder="AKIAIOSFODNN7EXAMPLE"
+                                               autocomplete="new-password" 
+                                               spellcheck="false"
+                                               data-lpignore="true">
                                     </div>
                                     <div>
                                         <label for="route53_secret_access_key" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -421,7 +427,10 @@
                                         </label>
                                         <input type="password" id="route53_secret_access_key" name="route53_secret_access_key" 
                                                class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
-                                               placeholder="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY">
+                                               placeholder="Your AWS secret access key"
+                                               autocomplete="new-password" 
+                                               spellcheck="false"
+                                               data-lpignore="true">
                                     </div>
                                     <div>
                                         <label for="route53_region" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -500,7 +509,10 @@
                                         </label>
                                         <input type="password" id="azure_client_secret" name="azure_client_secret" 
                                                class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
-                                               placeholder="Your Azure client secret">
+                                               placeholder="Your Azure client secret"
+                                               autocomplete="new-password" 
+                                               spellcheck="false"
+                                               data-lpignore="true">
                                     </div>
                                 </div>
                                 <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
@@ -594,7 +606,10 @@
                                         </label>
                                         <input type="password" id="powerdns_api_key" name="powerdns_api_key" 
                                                class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
-                                               placeholder="Your PowerDNS API key">
+                                               placeholder="Your PowerDNS API key"
+                                               autocomplete="new-password" 
+                                               spellcheck="false"
+                                               data-lpignore="true">
                                     </div>
                                 </div>
                                 <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
@@ -633,7 +648,10 @@
                                         </label>
                                         <input type="password" id="digitalocean_api_token" name="digitalocean_api_token" 
                                                class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
-                                               placeholder="Your DigitalOcean API token">
+                                               placeholder="Your DigitalOcean API token"
+                                               autocomplete="new-password" 
+                                               spellcheck="false"
+                                               data-lpignore="true">
                                     </div>
                                 </div>
                                 <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
@@ -1099,7 +1117,10 @@
                                         <label class="block text-xs text-blue-800 dark:text-blue-200 mb-1">External Account Binding (EAB) HMAC Key</label>
                                         <input type="password" id="digicert-eab-hmac" 
                                                class="w-full px-2 py-1 text-sm border border-blue-300 dark:border-blue-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-                                               placeholder="Your EAB HMAC Key from DigiCert">
+                                               placeholder="Your EAB HMAC Key from DigiCert"
+                                               autocomplete="new-password" 
+                                               spellcheck="false"
+                                               data-lpignore="true">
                                     </div>
                                     <div>
                                         <label class="block text-xs text-blue-800 dark:text-blue-200 mb-1">Email (for notifications)</label>
@@ -1157,7 +1178,10 @@
                                         <label class="block text-xs text-purple-800 dark:text-purple-200 mb-1">External Account Binding (EAB) HMAC Key - Optional</label>
                                         <input type="password" id="private-ca-eab-hmac" 
                                                class="w-full px-2 py-1 text-sm border border-purple-300 dark:border-purple-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-                                               placeholder="EAB HMAC Key (if required by your CA)">
+                                               placeholder="EAB HMAC Key (if required by your CA)"
+                                               autocomplete="new-password" 
+                                               spellcheck="false"
+                                               data-lpignore="true">
                                     </div>
                                     <div>
                                         <label class="block text-xs text-purple-800 dark:text-purple-200 mb-1">
@@ -1270,7 +1294,10 @@
                                             <label class="block text-xs text-blue-800 dark:text-blue-200 mb-1">Client Secret</label>
                                             <input type="password" id="azure-client-secret" 
                                                    class="w-full px-2 py-1 text-sm border border-blue-300 dark:border-blue-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-                                                   placeholder="Enter client secret">
+                                                   placeholder="Enter client secret"
+                                                   autocomplete="new-password" 
+                                                   spellcheck="false"
+                                                   data-lpignore="true">
                                         </div>
                                     </div>
                                     <p class="text-xs text-blue-700 dark:text-blue-300 mt-2">
@@ -1302,7 +1329,10 @@
                                             <label class="block text-xs text-orange-800 dark:text-orange-200 mb-1">Secret Access Key</label>
                                             <input type="password" id="aws-secret-access-key" 
                                                    class="w-full px-2 py-1 text-sm border border-orange-300 dark:border-orange-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-                                                   placeholder="Enter secret access key">
+                                                   placeholder="Enter secret access key"
+                                                   autocomplete="new-password" 
+                                                   spellcheck="false"
+                                                   data-lpignore="true">
                                         </div>
                                     </div>
                                     <p class="text-xs text-orange-700 dark:text-orange-300 mt-2">
@@ -1328,7 +1358,10 @@
                                             <label class="block text-xs text-purple-800 dark:text-purple-200 mb-1">Vault Token</label>
                                             <input type="password" id="vault-token" 
                                                    class="w-full px-2 py-1 text-sm border border-purple-300 dark:border-purple-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-                                                   placeholder="Enter vault token">
+                                                   placeholder="Enter vault token"
+                                                   autocomplete="new-password" 
+                                                   spellcheck="false"
+                                                   data-lpignore="true">
                                         </div>
                                         <div>
                                             <label class="block text-xs text-purple-800 dark:text-purple-200 mb-1">Mount Point</label>
@@ -1380,7 +1413,10 @@
                                             <label class="block text-xs text-green-800 dark:text-green-200 mb-1">Client Secret</label>
                                             <input type="password" id="infisical-client-secret" 
                                                    class="w-full px-2 py-1 text-sm border border-green-300 dark:border-green-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-                                                   placeholder="Enter client secret">
+                                                   placeholder="Enter client secret"
+                                                   autocomplete="new-password" 
+                                                   spellcheck="false"
+                                                   data-lpignore="true">
                                         </div>
                                         <div>
                                             <label class="block text-xs text-green-800 dark:text-green-200 mb-1">Environment</label>
