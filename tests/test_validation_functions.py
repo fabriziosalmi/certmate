@@ -102,10 +102,10 @@ class TestValidationFunctions:
     def test_validate_api_token_valid_cases(self):
         """Test valid API token validation."""
         valid_tokens = [
-            "secure-long-unique-random-string-abcdefgh",
-            "verySecureAuthWithNumbers987AndSymbols!@#",
-            "environment-bearer-auth-with-sufficient-length",
-            "valid_auth_without_weak_patterns_67890",
+            "Secure-Long-Unique-Random-String-Abcdefgh123",
+            "VerySecureAuthWithNumbers987AndSymbols",
+            "Environment-Bearer-Auth-With-Sufficient-Length456",
+            "Valid_Auth_Without_Weak_Patterns_67890ABC",
         ]
         
         for token in valid_tokens:
@@ -464,10 +464,10 @@ class TestValidationFunctions:
     
     def test_validate_api_token_edge_cases(self):
         """Test edge cases for API token validation."""
-        # Test token at minimum length boundary with sufficient variety
-        min_token = "abcdefghij" + "x" * 22  # 10 unique chars + 22 x's = 32 chars
+        # Test token at minimum length boundary with sufficient variety and character types
+        min_token = "AbcDefGhiJkL123mnOpQrStUvWxYz890"  # 32 chars with good variety, no repeating patterns
         is_valid, result = validate_api_token(min_token)
-        # Should be valid since it has sufficient length and variety
+        # Should be valid since it has sufficient length, variety, and character types
         assert is_valid
         
         # Test token just under minimum
@@ -476,22 +476,29 @@ class TestValidationFunctions:
         assert not is_valid
         assert "between 32 and 512 characters" in result
         
-        # Test token at maximum boundary (512 chars)
-        max_token = "unique-long-auth-" + "x" * 495  # Total 512 chars
+        # Test token at maximum boundary (512 chars) with character types
+        # Create a 512-char token with good variety and no repeating patterns
+        import string
+        import random
+        random.seed(42)  # For reproducible tests
+        chars = string.ascii_letters + string.digits + '-_'
+        max_token = ''.join(random.choice(chars) for _ in range(512))
+        # Ensure it has required character types
+        max_token = 'A1' + max_token[2:]  # Ensure uppercase and digit
         is_valid, result = validate_api_token(max_token)
         assert is_valid  # Should be valid if no weak patterns
         
         # Test token over maximum (512 chars)
-        over_max = "unique-long-auth-" + "x" * 496  # Total 513 chars
+        over_max = max_token + "X"  # 513 chars
         is_valid, result = validate_api_token(over_max)
         assert not is_valid  # Should be invalid - too long
         assert "between 32 and 512 characters" in result.lower()
         
         # Test whitespace handling
-        spaced_token = "  valid-unique-environment-auth-67890  "
+        spaced_token = "  Valid-Unique-Environment-Auth-67890  "
         is_valid, result = validate_api_token(spaced_token)
         assert is_valid
-        assert result == "valid-unique-environment-auth-67890"  # App strips whitespace
+        assert result == "Valid-Unique-Environment-Auth-67890"  # App strips whitespace
         
         # Test case sensitivity of weak patterns
         case_test_tokens = [
@@ -909,8 +916,8 @@ class TestValidationCornerCases:
     
     def test_validate_api_token_boundary_lengths(self):
         """Test API token validation at boundary lengths."""
-        # Test exactly at minimum with sufficient variety
-        min_token = "abcdefghij" + "k" * 22  # 10 unique chars + 22 k's = 32 chars
+        # Test exactly at minimum with sufficient variety and character types
+        min_token = "AbcDefGhiJkL123mnOpQrStUvWxYz890"  # 32 chars with good variety, no repeating patterns
         is_valid, result = validate_api_token(min_token)
         assert is_valid
         
@@ -920,13 +927,20 @@ class TestValidationCornerCases:
         assert not is_valid
         assert "between 32 and 512 characters" in error
         
-        # Test at maximum (512 chars)
-        max_token = "abcdefghij" + "k" * 502  # 10 unique chars + 502 k's = 512 chars
+        # Test at maximum (512 chars) with character types
+        # Create a 512-char token with good variety and no repeating patterns
+        import string
+        import random
+        random.seed(42)  # For reproducible tests
+        chars = string.ascii_letters + string.digits + '-_'
+        max_token = ''.join(random.choice(chars) for _ in range(512))
+        # Ensure it has required character types
+        max_token = 'A1' + max_token[2:]  # Ensure uppercase and digit
         is_valid, result = validate_api_token(max_token)
         assert is_valid
         
         # Test over maximum (513 chars)
-        too_long = "abcdefghij" + "k" * 503  # 10 unique chars + 503 k's = 513 chars
+        too_long = max_token + "X"  # 513 chars
         is_valid, error = validate_api_token(too_long)
         assert not is_valid  # App DOES enforce max length
         assert "between 32 and 512 characters" in error.lower()
