@@ -92,8 +92,45 @@ class CertificateManager:
                     # Cloudflare function expects just the token
                     token = dns_config.get('api_token') or dns_config.get('token', '')
                     return config_func(token)
+                elif dns_provider == 'azure':
+                    return config_func(
+                        dns_config.get('subscription_id', ''),
+                        dns_config.get('resource_group', ''),
+                        dns_config.get('tenant_id', ''),
+                        dns_config.get('client_id', ''),
+                        dns_config.get('client_secret', ''),
+                    )
+                elif dns_provider == 'google':
+                    return config_func(
+                        dns_config.get('project_id', ''),
+                        dns_config.get('service_account_key', ''),
+                    )
+                elif dns_provider == 'powerdns':
+                    return config_func(
+                        dns_config.get('api_url', ''),
+                        dns_config.get('api_key', ''),
+                    )
+                elif dns_provider == 'digitalocean':
+                    return config_func(dns_config.get('api_token', ''))
+                elif dns_provider == 'linode':
+                    return config_func(dns_config.get('api_key', ''))
+                elif dns_provider == 'gandi':
+                    return config_func(dns_config.get('api_token', ''))
+                elif dns_provider == 'ovh':
+                    return config_func(
+                        dns_config.get('endpoint', ''),
+                        dns_config.get('application_key', ''),
+                        dns_config.get('application_secret', ''),
+                        dns_config.get('consumer_key', ''),
+                    )
+                elif dns_provider == 'namecheap':
+                    return config_func(
+                        dns_config.get('username', ''),
+                        dns_config.get('api_key', ''),
+                    )
                 else:
-                    return config_func(dns_config)
+                    # Multi-provider config: (provider, config_dict)
+                    return config_func(dns_provider, dns_config)
         except (ImportError, AttributeError):
             pass
         
@@ -102,21 +139,41 @@ class CertificateManager:
             token = dns_config.get('api_token') or dns_config.get('token', '')
             return create_cloudflare_config(token)
         elif dns_provider == 'azure':
-            return create_azure_config(dns_config)
+            return create_azure_config(
+                dns_config.get('subscription_id', ''),
+                dns_config.get('resource_group', ''),
+                dns_config.get('tenant_id', ''),
+                dns_config.get('client_id', ''),
+                dns_config.get('client_secret', ''),
+            )
         elif dns_provider == 'google':
-            return create_google_config(dns_config)
+            return create_google_config(
+                dns_config.get('project_id', ''),
+                dns_config.get('service_account_key', ''),
+            )
         elif dns_provider == 'powerdns':
-            return create_powerdns_config(dns_config)
+            return create_powerdns_config(
+                dns_config.get('api_url', ''),
+                dns_config.get('api_key', ''),
+            )
         elif dns_provider == 'digitalocean':
-            return create_digitalocean_config(dns_config)
+            return create_digitalocean_config(dns_config.get('api_token', ''))
         elif dns_provider == 'linode':
-            return create_linode_config(dns_config)
+            return create_linode_config(dns_config.get('api_key', ''))
         elif dns_provider == 'gandi':
-            return create_gandi_config(dns_config)
+            return create_gandi_config(dns_config.get('api_token', ''))
         elif dns_provider == 'ovh':
-            return create_ovh_config(dns_config)
+            return create_ovh_config(
+                dns_config.get('endpoint', ''),
+                dns_config.get('application_key', ''),
+                dns_config.get('application_secret', ''),
+                dns_config.get('consumer_key', ''),
+            )
         elif dns_provider == 'namecheap':
-            return create_namecheap_config(dns_config)
+            return create_namecheap_config(
+                dns_config.get('username', ''),
+                dns_config.get('api_key', ''),
+            )
         else:
             return create_multi_provider_config(dns_provider, dns_config)
 
@@ -371,7 +428,8 @@ class CertificateManager:
             
             # Add DNS plugin to command - special handling for PowerDNS
             if dns_provider == 'powerdns':
-                # PowerDNS only needs credentials, not the plugin flag (to avoid ambiguous option error)
+                # Explicitly set authenticator and credentials to avoid ambiguity
+                certbot_cmd.extend(['--authenticator', plugin_name])
                 if credentials_file:
                     certbot_cmd.extend([f'--{plugin_name}-credentials', credentials_file])
             else:
@@ -381,7 +439,13 @@ class CertificateManager:
                     certbot_cmd.extend([f'--{plugin_name}-credentials', credentials_file])
             
             # Set appropriate propagation time
-            propagation_times = {
+            # Read from settings if configured, else use defaults
+            try:
+                settings = self._load_settings_compat()
+                propagation_map = settings.get('dns_propagation_seconds', {}) or {}
+            except Exception:
+                propagation_map = {}
+            default_map = {
                 'cloudflare': 60,
                 'route53': 60,
                 'digitalocean': 120,
@@ -393,8 +457,7 @@ class CertificateManager:
                 'ovh': 180,
                 'namecheap': 300
             }
-            
-            propagation_time = propagation_times.get(dns_provider, 120)
+            propagation_time = int(propagation_map.get(dns_provider, default_map.get(dns_provider, 120)))
             certbot_cmd.extend([f'--{plugin_name}-propagation-seconds', str(propagation_time)])
             
             logger.info(f"Running certbot command for {domain} with {dns_provider}")
@@ -501,14 +564,26 @@ class CertificateManager:
     def renew_certificate(self, domain):
         """Renew a certificate"""
         try:
-            cmd = ['certbot', 'renew', '--cert-name', domain, '--quiet']
+            # Use the same config/work/log directories as during creation
+            cert_dir = self._get_cert_dir_compat()
+            domain_dir = cert_dir / domain
+            work_dir = domain_dir / 'work'
+            logs_dir = domain_dir / 'logs'
+            
+            cmd = [
+                'certbot', 'renew',
+                '--cert-name', domain,
+                '--quiet',
+                '--config-dir', str(domain_dir),
+                '--work-dir', str(work_dir),
+                '--logs-dir', str(logs_dir)
+            ]
             result = self._subprocess_run_compat(cmd, capture_output=True, text=True)
             
             if result.returncode == 0:
-                # Copy renewed certificates
-                src_dir = Path(f"/etc/letsencrypt/live/{domain}")
-                cert_dir = self._get_cert_dir_compat()
-                dest_dir = cert_dir / domain
+                # Copy renewed certificates from the correct live directory
+                src_dir = domain_dir / 'live' / domain
+                dest_dir = domain_dir
                 
                 files_to_copy = ['cert.pem', 'chain.pem', 'fullchain.pem', 'privkey.pem']
                 for file_name in files_to_copy:

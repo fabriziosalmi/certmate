@@ -434,11 +434,14 @@ class DeploymentStatusCache:
             entries = []
             current_time = time.time()
             for domain, entry in self._cache.items():
+                deployed = False
+                if isinstance(entry.result, dict):
+                    deployed = bool(entry.result.get('deployed', False))
                 entries.append({
                     'domain': domain,
                     'age': int(current_time - entry.timestamp),
                     'remaining': int(entry.expires_at - current_time),
-                    'status': 'deployed' if entry.result.get('deployed', False) else 'not-deployed'
+                    'status': 'deployed' if deployed else 'not-deployed'
                 })
             
             return {

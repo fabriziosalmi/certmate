@@ -90,8 +90,7 @@ class CertMateApp:
         self.app = Flask(__name__)
         
         # Generate a secure random secret key if not provided
-        default_secret = os.urandom(32).hex() if not os.getenv('SECRET_KEY') else 'your-secret-key-here'
-        self.app.secret_key = os.getenv('SECRET_KEY', default_secret)
+        self.app.secret_key = os.getenv('SECRET_KEY') or os.urandom(32).hex()
         
         # Enable CORS
         CORS(self.app)

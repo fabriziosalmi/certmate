@@ -242,6 +242,12 @@ class SettingsManager:
                     logger.error(f"Invalid API token: {token_or_error}")
                     return False
                     
+            # Validate dns_provider against supported set
+            supported_providers = {'cloudflare','route53','azure','google','powerdns','digitalocean','linode','gandi','ovh','namecheap','vultr','dnsmadeeasy','nsone','rfc2136','hetzner','porkbun','godaddy','he-ddns','dynudns'}
+            if 'dns_provider' in settings and settings['dns_provider'] not in supported_providers:
+                logger.error(f"Invalid dns_provider: {settings['dns_provider']}")
+                return False
+                    
             # Validate domains
             if 'domains' in settings:
                 validated_domains = []
@@ -289,6 +295,26 @@ class SettingsManager:
                 if field not in settings:
                     logger.warning(f"Missing required field '{field}' in settings")
                     
+            # Allow DNS propagation seconds override per provider
+            defaults = {
+                'cloudflare': 60,
+                'route53': 60,
+                'digitalocean': 120,
+                'linode': 120,
+                'azure': 180,
+                'google': 120,
+                'powerdns': 60,
+                'gandi': 180,
+                'ovh': 180,
+                'namecheap': 300
+            }
+            if 'dns_propagation_seconds' not in settings or not isinstance(settings['dns_propagation_seconds'], dict):
+                settings['dns_propagation_seconds'] = defaults
+            else:
+                # Merge with defaults for missing providers
+                for k, v in defaults.items():
+                    settings['dns_propagation_seconds'].setdefault(k, v)
+            
             # Save settings
             if self._safe_file_write_compat(self.settings_file, settings, is_json=True):
                 logger.info("Settings saved successfully")

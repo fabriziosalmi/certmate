@@ -6,8 +6,9 @@ Defines Flask-RESTX Resource classes for REST API endpoints
 import logging
 import tempfile
 import zipfile
+import os
 from pathlib import Path
-from flask import send_file
+from flask import send_file, after_this_request
 from flask_restx import Resource, fields
 
 from ..core.metrics import generate_metrics_response, get_metrics_summary, is_prometheus_available
@@ -308,14 +309,23 @@ def create_api_resources(api, models, managers):
                 
                 # Create temporary ZIP file
                 with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as tmp_file:
-                    with zipfile.ZipFile(tmp_file.name, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                    tmp_path = tmp_file.name
+                    with zipfile.ZipFile(tmp_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
                         for cert_file in ['cert.pem', 'chain.pem', 'fullchain.pem', 'privkey.pem']:
                             file_path = cert_dir / cert_file
                             if file_path.exists():
                                 zipf.write(file_path, cert_file)
                     
+                    @after_this_request
+                    def remove_file(response):
+                        try:
+                            os.remove(tmp_path)
+                        except Exception:
+                            pass
+                        return response
+                    
                     return send_file(
-                        tmp_file.name,
+                        tmp_path,
                         as_attachment=True,
                         download_name=f'{domain}_certificates.zip',
                         mimetype='application/zip'

@@ -45,9 +45,9 @@ class AuthManager:
                 
                 # Validate token strength using imported function
                 from modules.core.utils import validate_api_token
-                is_valid, validation_error = validate_api_token(expected_token)
+                is_valid, token_or_error = validate_api_token(expected_token)
                 if not is_valid:
-                    logger.error(f"Server has weak API token: {validation_error}")
+                    logger.error(f"Server has weak API token: {token_or_error}")
                     return {'error': 'Server security configuration error', 'code': 'WEAK_SERVER_TOKEN'}, 500
                 
                 # Use constant-time comparison to prevent timing attacks
