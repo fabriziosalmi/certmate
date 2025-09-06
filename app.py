@@ -466,6 +466,8 @@ def create_certificate_legacy(domain, email, cloudflare_token):
 
 def renew_certificate(domain):
     """Compatibility wrapper for renew_certificate"""
+    if not domain:
+        return False, "Domain cannot be empty"
     try:
         result = certmate_app.managers['certificates'].renew_certificate(domain)
         if isinstance(result, dict) and result.get('success'):
