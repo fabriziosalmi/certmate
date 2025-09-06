@@ -79,6 +79,7 @@ class SettingsManager:
             'domains': [],
             'email': '',
             'auto_renew': True,
+            'renewal_threshold_days': 30,  # Configurable certificate expiry threshold (days)
             'api_bearer_token': os.getenv('API_BEARER_TOKEN') or generate_secure_token(),
             'setup_completed': False,  # Track if initial setup is done
             'dns_provider': 'cloudflare',
@@ -119,6 +120,7 @@ class SettingsManager:
             'domains': [],
             'email': '',
             'auto_renew': True,
+            'renewal_threshold_days': 30,  # Configurable certificate expiry threshold (days)
             'api_bearer_token': os.getenv('API_BEARER_TOKEN') or generate_secure_token(),
             'setup_completed': False,
             'dns_provider': 'cloudflare',
@@ -154,7 +156,7 @@ class SettingsManager:
             settings, was_migrated = self._migrate_settings_format(settings)
             
             # Only merge essential missing keys, NOT the full dns_providers template
-            essential_keys = ['cloudflare_token', 'domains', 'email', 'auto_renew', 'api_bearer_token', 'setup_completed', 'dns_provider']
+            essential_keys = ['cloudflare_token', 'domains', 'email', 'auto_renew', 'renewal_threshold_days', 'api_bearer_token', 'setup_completed', 'dns_provider']
             for key in essential_keys:
                 if key not in settings:
                     settings[key] = default_settings[key]
