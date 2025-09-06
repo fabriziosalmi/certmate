@@ -241,10 +241,13 @@ class CertificateManager:
             metadata = {}
         
         dns_provider = metadata.get('dns_provider')
+        settings = self._load_settings_compat()
         if not dns_provider:
             # Fall back to current settings
-            settings = self._load_settings_compat()
             dns_provider = self.settings_manager.get_domain_dns_provider(domain, settings)
+        
+        # Get configurable renewal threshold (default 30 days for backward compatibility)
+        renewal_threshold_days = settings.get('renewal_threshold_days', 30)
         
         try:
             # Write cert content to temporary file for openssl processing
@@ -278,7 +281,7 @@ class CertificateManager:
                                 'expiry_date': expiry_date.strftime('%Y-%m-%d %H:%M:%S'),
                                 'days_left': days_left,
                                 'days_until_expiry': days_left,
-                                'needs_renewal': days_left < 30,
+                                'needs_renewal': days_left < renewal_threshold_days,
                                 'dns_provider': dns_provider
                             }
                         except Exception as e:

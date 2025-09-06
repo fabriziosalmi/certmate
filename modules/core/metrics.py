@@ -293,6 +293,9 @@ class CertMateMetricsCollector:
             if not all([settings, cert_dir, get_certificate_info]):
                 return
                 
+            # Get configurable renewal threshold (default 30 days for backward compatibility)
+            renewal_threshold_days = settings.get('renewal_threshold_days', 30)
+                
             domains = settings.get('domains', [])
             total_domains.set(len(domains))
             
@@ -347,7 +350,7 @@ class CertMateMetricsCollector:
                         status = 'missing'
                     elif days_left < 0:
                         status = 'expired'
-                    elif days_left <= 30:
+                    elif days_left <= renewal_threshold_days:
                         status = 'expiring_soon'
                     else:
                         status = 'valid'
@@ -366,12 +369,12 @@ class CertMateMetricsCollector:
                     certificate_last_renewal.labels(
                         domain=domain,
                         dns_provider=dns_provider
-                    ).set(time.time() - (30 - days_left) * 24 * 3600 if days_left is not None else 0)
+                    ).set(time.time() - (renewal_threshold_days - days_left) * 24 * 3600 if days_left is not None else 0)
                     
                     certificate_next_renewal.labels(
                         domain=domain,
                         dns_provider=dns_provider
-                    ).set(time.time() + (days_left - 30) * 24 * 3600 if days_left is not None and days_left > 30 else time.time())
+                    ).set(time.time() + (days_left - renewal_threshold_days) * 24 * 3600 if days_left is not None and days_left > renewal_threshold_days else time.time())
                     
                 else:
                     status_counts['missing'] += 1
