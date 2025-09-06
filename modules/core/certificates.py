@@ -15,6 +15,7 @@ from .utils import (
     create_cloudflare_config, create_azure_config, create_google_config,
     create_powerdns_config, create_digitalocean_config, create_linode_config,
     create_gandi_config, create_ovh_config, create_namecheap_config,
+    create_arvancloud_config, create_acme_dns_config,
     create_multi_provider_config
 )
 
@@ -78,7 +79,9 @@ class CertificateManager:
             'linode': 'create_linode_config',
             'gandi': 'create_gandi_config',
             'ovh': 'create_ovh_config',
-            'namecheap': 'create_namecheap_config'
+            'namecheap': 'create_namecheap_config',
+            'arvancloud': 'create_arvancloud_config',
+            'acme-dns': 'create_acme_dns_config'
         }
         
         # Try to get function from app module for test compatibility
@@ -128,6 +131,15 @@ class CertificateManager:
                         dns_config.get('username', ''),
                         dns_config.get('api_key', ''),
                     )
+                elif dns_provider == 'arvancloud':
+                    return config_func(dns_config.get('api_key', ''))
+                elif dns_provider == 'acme-dns':
+                    return config_func(
+                        dns_config.get('api_url', ''),
+                        dns_config.get('username', ''),
+                        dns_config.get('password', ''),
+                        dns_config.get('subdomain', ''),
+                    )
                 else:
                     # Multi-provider config: (provider, config_dict)
                     return config_func(dns_provider, dns_config)
@@ -173,6 +185,15 @@ class CertificateManager:
             return create_namecheap_config(
                 dns_config.get('username', ''),
                 dns_config.get('api_key', ''),
+            )
+        elif dns_provider == 'arvancloud':
+            return create_arvancloud_config(dns_config.get('api_key', ''))
+        elif dns_provider == 'acme-dns':
+            return create_acme_dns_config(
+                dns_config.get('api_url', ''),
+                dns_config.get('username', ''),
+                dns_config.get('password', ''),
+                dns_config.get('subdomain', ''),
             )
         else:
             return create_multi_provider_config(dns_provider, dns_config)
@@ -419,7 +440,7 @@ class CertificateManager:
                 route53_env_set = True
                 plugin_name = 'dns-route53'
                 
-            elif dns_provider in ['azure', 'google', 'powerdns', 'digitalocean', 'linode', 'gandi', 'ovh', 'namecheap']:
+            elif dns_provider in ['azure', 'google', 'powerdns', 'digitalocean', 'linode', 'gandi', 'ovh', 'namecheap', 'arvancloud', 'acme-dns']:
                 # Use compatibility function for config creation
                 credentials_file = self._create_dns_config_compat(dns_provider, dns_config)
                 plugin_name = f'dns-{dns_provider}'
@@ -429,12 +450,17 @@ class CertificateManager:
                 credentials_file = self._create_dns_config_compat(dns_provider, dns_config)
                 plugin_name = f'dns-{dns_provider}'
             
-            # Add DNS plugin to command - special handling for PowerDNS
+            # Add DNS plugin to command - special handling for PowerDNS and ACME-DNS
             if dns_provider == 'powerdns':
                 # Explicitly set authenticator and credentials to avoid ambiguity
                 certbot_cmd.extend(['--authenticator', plugin_name])
                 if credentials_file:
                     certbot_cmd.extend([f'--{plugin_name}-credentials', credentials_file])
+            elif dns_provider == 'acme-dns':
+                # ACME-DNS uses 'acme-dns' plugin name without 'dns-' prefix
+                certbot_cmd.extend(['--authenticator', 'acme-dns'])
+                if credentials_file:
+                    certbot_cmd.extend(['--acme-dns-credentials', credentials_file])
             else:
                 certbot_cmd.extend([f'--{plugin_name}'])
                 # Add credentials file if needed
@@ -458,7 +484,9 @@ class CertificateManager:
                 'powerdns': 60,
                 'gandi': 180,
                 'ovh': 180,
-                'namecheap': 300
+                'namecheap': 300,
+                'arvancloud': 120,
+                'acme-dns': 30
             }
             propagation_time = int(propagation_map.get(dns_provider, default_map.get(dns_provider, 120)))
             certbot_cmd.extend([f'--{plugin_name}-propagation-seconds', str(propagation_time)])

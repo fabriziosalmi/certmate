@@ -134,7 +134,9 @@ class SettingsManager:
                 'linode': {'api_key': ''},
                 'gandi': {'api_token': ''},
                 'ovh': {'endpoint': '', 'application_key': '', 'application_secret': '', 'consumer_key': ''},
-                'namecheap': {'username': '', 'api_key': ''}
+                'namecheap': {'username': '', 'api_key': ''},
+                'arvancloud': {'api_key': ''},
+                'acme-dns': {'api_url': '', 'username': '', 'password': '', 'subdomain': ''}
             },
             'certificate_storage': default_settings['certificate_storage']
         }
@@ -245,7 +247,7 @@ class SettingsManager:
                     return False
                     
             # Validate dns_provider against supported set
-            supported_providers = {'cloudflare','route53','azure','google','powerdns','digitalocean','linode','gandi','ovh','namecheap','vultr','dnsmadeeasy','nsone','rfc2136','hetzner','porkbun','godaddy','he-ddns','dynudns'}
+            supported_providers = {'cloudflare','route53','azure','google','powerdns','digitalocean','linode','gandi','ovh','namecheap','vultr','dnsmadeeasy','nsone','rfc2136','hetzner','porkbun','godaddy','he-ddns','dynudns','arvancloud','acme-dns'}
             if 'dns_provider' in settings and settings['dns_provider'] not in supported_providers:
                 logger.error(f"Invalid dns_provider: {settings['dns_provider']}")
                 return False
@@ -308,7 +310,9 @@ class SettingsManager:
                 'powerdns': 60,
                 'gandi': 180,
                 'ovh': 180,
-                'namecheap': 300
+                'namecheap': 300,
+                'arvancloud': 120,
+                'acme-dns': 30
             }
             if 'dns_propagation_seconds' not in settings or not isinstance(settings['dns_propagation_seconds'], dict):
                 settings['dns_propagation_seconds'] = defaults
@@ -400,7 +404,9 @@ class SettingsManager:
                 'hetzner': ['api_token'],
                 'porkbun': ['api_key', 'secret_key'],
                 'godaddy': ['api_key', 'secret'],
-                'he-ddns': ['username', 'password']
+                'he-ddns': ['username', 'password'],
+                'arvancloud': ['api_key'],
+                'acme-dns': ['api_url', 'username', 'password', 'subdomain']
             }
             
             # Check if migration is needed

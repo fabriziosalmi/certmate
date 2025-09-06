@@ -1,6 +1,6 @@
 # DNS Providers Support
 
-CertMate now supports **19 DNS providers** for Let's Encrypt DNS challenges through individual certbot plugins that provide reliable, well-tested DNS challenge support.
+CertMate now supports **21 DNS providers** for Let's Encrypt DNS challenges through individual certbot plugins that provide reliable, well-tested DNS challenge support.
 
 ## 🎯 Supported Providers
 
@@ -27,6 +27,8 @@ All providers are supported through individual, well-maintained certbot plugins:
 | **GoDaddy** | `certbot-dns-godaddy` | API Key, Secret | Domain registrar |
 | **Hurricane Electric** | `certbot-dns-he-ddns` | Username, Password | Free DNS hosting |
 | **Dynu** | `certbot-dns-dynudns` | API Token | Dynamic DNS service |
+| **ArvanCloud** | `certbot-dns-arvancloud` | API Key | Iranian cloud provider |
+| **ACME-DNS** | `certbot-acme-dns` | API URL, Username, Password, Subdomain | Generic ACME-DNS server |
 
 ## 🛠 Configuration
 
@@ -179,6 +181,35 @@ curl -X POST http://localhost:5000/api/settings \
 }
 ```
 
+### ArvanCloud
+```bash
+# Get API key from ArvanCloud panel
+{
+  "dns_provider": "arvancloud",
+  "dns_providers": {
+    "arvancloud": {
+      "api_key": "your_arvancloud_api_key"
+    }
+  }
+}
+```
+
+### ACME-DNS
+```bash
+# Get credentials from your ACME-DNS server
+{
+  "dns_provider": "acme-dns",
+  "dns_providers": {
+    "acme-dns": {
+      "api_url": "https://auth.acme-dns.io",
+      "username": "your_acme_username",
+      "password": "your_acme_password",
+      "subdomain": "your_subdomain"
+    }
+  }
+}
+```
+
 ## Creating Certificates
 
 ### Using Default Provider
@@ -212,7 +243,8 @@ supported_providers = [
     'cloudflare', 'route53', 'azure', 'google', 'powerdns', 
     'digitalocean', 'linode', 'gandi', 'ovh', 'namecheap',
     'vultr', 'dnsmadeeasy', 'nsone', 'rfc2136',
-    'hetzner', 'porkbun', 'godaddy', 'he-ddns', 'dynudns'
+    'hetzner', 'porkbun', 'godaddy', 'he-ddns', 'dynudns',
+    'arvancloud', 'acme-dns'
 ]
 
 if dns_provider in supported_providers:
@@ -297,12 +329,12 @@ curl -X GET http://localhost:5000/api/settings/dns-providers \
 
 ## 📊 Provider Statistics
 
-- **Total Supported**: 19 providers
+- **Total Supported**: 21 providers
 - **Geographic Coverage**: Global (all continents)
 - **Enterprise Providers**: AWS, Azure, GCP, Cloudflare, PowerDNS, DNS Made Easy, NS1
 - **European Providers**: OVH, Gandi, Hetzner
 - **Budget Providers**: Namecheap, DigitalOcean, Linode, Vultr, Porkbun
-- **Free Providers**: Hurricane Electric, Dynu
+- **Free Providers**: Hurricane Electric, Dynu, ACME-DNS
 
 ---
 
