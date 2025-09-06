@@ -1218,6 +1218,41 @@
                         </div>
                     </div>
 
+                    <!-- General Certificate Settings Section -->
+                    <div class="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                            <i class="fas fa-cogs mr-1"></i>
+                            Certificate Management Settings
+                        </label>
+                        
+                        <div class="space-y-4">
+                            <!-- Auto Renewal Setting -->
+                            <div>
+                                <label class="flex items-center">
+                                    <input type="checkbox" id="auto_renew" name="auto_renew" 
+                                           class="rounded border-gray-300 dark:border-gray-600 text-primary focus:ring-primary focus:ring-offset-0 dark:bg-gray-700">
+                                    <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Enable automatic certificate renewal</span>
+                                </label>
+                                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                    Automatically renew certificates when they approach expiration
+                                </p>
+                            </div>
+                            
+                            <!-- Renewal Threshold Setting -->
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
+                                    Certificate Renewal Threshold (days)
+                                </label>
+                                <input type="number" id="renewal_threshold_days" name="renewal_threshold_days" 
+                                       min="1" max="90" value="30"
+                                       class="w-32 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm">
+                                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                    Renew certificates when they have this many days left before expiration (default: 30 days)
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Certificate Storage Backend Section -->
                     <div class="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
@@ -1829,6 +1864,7 @@
                     email: formData.get('email')?.trim(),
                     domains: formData.get('domains')?.split('\n').map(d => d.trim()).filter(d => d),
                     auto_renew: formData.get('auto_renew') === 'on',
+                    renewal_threshold_days: parseInt(formData.get('renewal_threshold_days')) || 30,
                     dns_provider: formData.get('dns_provider'),
                     api_bearer_token: formData.get('api_bearer_token')?.trim(),
                     cache_ttl: parseInt(formData.get('cache_ttl')) || 300,
@@ -2169,6 +2205,14 @@
                     if (autoRenewField) {
                         autoRenewField.checked = data.auto_renew;
                         addDebugLog(`Auto-renewal set to ${data.auto_renew}`, 'info');
+                    }
+                }
+                
+                if (data.renewal_threshold_days !== undefined) {
+                    const thresholdField = document.getElementById('renewal_threshold_days');
+                    if (thresholdField) {
+                        thresholdField.value = data.renewal_threshold_days;
+                        addDebugLog(`Renewal threshold set to ${data.renewal_threshold_days} days`, 'info');
                     }
                 }
                 
