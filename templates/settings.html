@@ -2620,6 +2620,7 @@
                 const response = await fetch(`/api/dns/${provider}/accounts`, {
                     method: 'POST',
                     headers: {
+                        'Authorization': `Bearer ${API_TOKEN}`,
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify(payload)
@@ -2714,7 +2715,10 @@
                 addDebugLog(`Deleting account ${provider}:${accountId}`, 'info');
                 
                 const response = await fetch(`/api/dns/${provider}/accounts/${accountId}`, {
-                    method: 'DELETE'
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${API_TOKEN}`
+                    }
                 });
                 
                 if (!response.ok) {
