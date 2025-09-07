@@ -41,6 +41,8 @@ _DNS_PROVIDER_CREDENTIALS = {
     'gandi': ['api_token'],
     'ovh': ['endpoint', 'application_key', 'application_secret', 'consumer_key'],
     'namecheap': ['username', 'api_key'],
+    'arvancloud': ['api_key'],
+    'acme-dns': ['api_url', 'username', 'password', 'subdomain'],
     'vultr': ['api_key'],
     'dnsmadeeasy': ['api_key', 'secret_key'],
     'nsone': ['api_key'],
@@ -321,6 +323,24 @@ def create_namecheap_config(username: str, api_key: str) -> Path:
     """Create Namecheap DNS credentials file."""
     content = f"dns_namecheap_username = {username}\ndns_namecheap_api_key = {api_key}\n"
     return _create_config_file("namecheap", content)
+
+def create_arvancloud_config(api_key: str) -> Path:
+    """Create ArvanCloud DNS credentials file."""
+    content = f"dns_arvancloud_api_key = {api_key}\n"
+    return _create_config_file("arvancloud", content)
+
+def create_acme_dns_config(api_url: str, username: str, password: str, subdomain: str) -> Path:
+    """Create ACME-DNS credentials file."""
+    content = f"""{{
+    "{subdomain}": {{
+        "username": "{username}",
+        "password": "{password}",
+        "fulldomain": "{subdomain}",
+        "subdomain": "{subdomain}",
+        "allowfrom": []
+    }}
+}}"""
+    return _create_config_file("acme-dns", content)
 
 def create_multi_provider_config(provider: str, config_data: Dict[str, Any]) -> Optional[Path]:
     """

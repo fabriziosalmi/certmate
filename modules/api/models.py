@@ -86,6 +86,17 @@ def create_api_models(api):
         'token': fields.String(description='Dynu API token')
     })
 
+    arvancloud_model = api.model('ArvanCloudConfig', {
+        'api_key': fields.String(description='ArvanCloud API key')
+    })
+
+    acme_dns_model = api.model('ACMEDNSConfig', {
+        'api_url': fields.String(description='ACME-DNS server URL'),
+        'username': fields.String(description='ACME-DNS username'),
+        'password': fields.String(description='ACME-DNS password'),
+        'subdomain': fields.String(description='ACME-DNS subdomain')
+    })
+
     # Multi-provider model for certbot-dns-multi (117+ providers)
     multi_provider_model = api.model('MultiProviderConfig', {
         'provider': fields.String(description='DNS provider name (e.g., hetzner, porkbun, vultr)'),
@@ -112,6 +123,8 @@ def create_api_models(api):
         'godaddy': fields.Nested(godaddy_model),
         'he-ddns': fields.Nested(he_ddns_model),
         'dynudns': fields.Nested(dynudns_model),
+        'arvancloud': fields.Nested(arvancloud_model),
+        'acme-dns': fields.Nested(acme_dns_model),
         # Support for any other provider via certbot-dns-multi
         'multi': fields.Raw(description='Configuration for any DNS provider via certbot-dns-multi')
     })
@@ -132,13 +145,13 @@ def create_api_models(api):
         'email': fields.String(description='Email for Let\'s Encrypt'),
         'auto_renew': fields.Boolean(description='Enable auto-renewal'),
         'api_bearer_token': fields.String(description='API bearer token for authentication'),
-        'dns_provider': fields.String(description='Active DNS provider', enum=['cloudflare', 'route53', 'azure', 'google', 'powerdns', 'digitalocean', 'linode', 'gandi', 'ovh', 'namecheap', 'vultr', 'dnsmadeeasy', 'nsone', 'rfc2136', 'hetzner', 'porkbun', 'godaddy', 'he-ddns', 'dynudns']),
+        'dns_provider': fields.String(description='Active DNS provider', enum=['cloudflare', 'route53', 'azure', 'google', 'powerdns', 'digitalocean', 'linode', 'gandi', 'ovh', 'namecheap', 'vultr', 'dnsmadeeasy', 'nsone', 'rfc2136', 'hetzner', 'porkbun', 'godaddy', 'he-ddns', 'dynudns', 'arvancloud', 'acme-dns']),
         'dns_providers': fields.Nested(dns_providers_model, description='DNS provider configurations')
     })
 
     create_cert_model = api.model('CreateCertificate', {
         'domain': fields.String(required=True, description='Domain name to create certificate for'),
-        'dns_provider': fields.String(description='DNS provider to use (optional, uses default from settings)', enum=['cloudflare', 'route53', 'azure', 'google', 'powerdns', 'digitalocean', 'linode', 'gandi', 'ovh', 'namecheap', 'vultr', 'dnsmadeeasy', 'nsone', 'rfc2136', 'hetzner', 'porkbun', 'godaddy', 'he-ddns', 'dynudns']),
+        'dns_provider': fields.String(description='DNS provider to use (optional, uses default from settings)', enum=['cloudflare', 'route53', 'azure', 'google', 'powerdns', 'digitalocean', 'linode', 'gandi', 'ovh', 'namecheap', 'vultr', 'dnsmadeeasy', 'nsone', 'rfc2136', 'hetzner', 'porkbun', 'godaddy', 'he-ddns', 'dynudns', 'arvancloud', 'acme-dns']),
         'account_id': fields.String(description='DNS provider account ID to use (optional, uses default account if not specified)'),
         'ca_provider': fields.String(description='Certificate Authority provider to use (optional, uses default from settings)', enum=['letsencrypt', 'digicert', 'private_ca'])
     })
@@ -257,6 +270,8 @@ def create_api_models(api):
         'godaddy_model': godaddy_model,
         'he_ddns_model': he_ddns_model,
         'dynudns_model': dynudns_model,
+        'arvancloud_model': arvancloud_model,
+        'acme_dns_model': acme_dns_model,
         'multi_provider_model': multi_provider_model,
         # Storage backend models
         'StorageConfig': storage_config_model,
