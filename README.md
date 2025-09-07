@@ -8,11 +8,12 @@
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![Docker](https://img.shields.io/badge/docker-ready-blue)](https://hub.docker.com/)
 [![API Documentation](https://img.shields.io/badge/API-Swagger-green)](http://localhost:8000/docs/)
-
+[![CI](https://github.com/fabriziosalmi/certmate/actions/workflows/ci.yml/badge.svg)](https://github.com/fabriziosalmi/certmate/actions/workflows/ci.yml)
+ 
 ![screenshot1](screenshot_1.png)
 ![screenshot2](screenshot_2.png)
 
-[🚀 Quick Start](#-quick-start-with-docker) • [📖 Documentation](#-documentation) • [🔧 Installation](#-installation-methods) • [🌐 DNS Providers](#-supported-dns-providers) • [🏛️ CA Providers](CA_PROVIDERS.md) • [🏛️ Storage Backends](#️-certificate-storage-configuration) • [💾 Backup & Recovery](#-backup--recovery) • [📊 API Reference](#-api-usage) • [![CI](https://github.com/fabriziosalmi/certmate/actions/workflows/ci.yml/badge.svg)](https://github.com/fabriziosalmi/certmate/actions/workflows/ci.yml)
+[🚀 Quick Start](#-quick-start-with-docker) • [📖 Documentation](#-documentation) • [🔧 Installation](#-installation-methods) • [🌐 DNS Providers](#-supported-dns-providers) • [🏛️ CA Providers](CA_PROVIDERS.md) • [🏛️ Storage Backends](#️-certificate-storage-configuration) • [💾 Backup & Recovery](#-backup--recovery) • [📊 API Reference](#-api-usage)
 
 </div>
 
