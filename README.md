@@ -12,7 +12,7 @@
 ![screenshot1](screenshot_1.png)
 ![screenshot2](screenshot_2.png)
 
-[🚀 Quick Start](#-quick-start-with-docker) • [📖 Documentation](#-documentation) • [🔧 Installation](#-installation-methods) • [🌐 DNS Providers](#-supported-dns-providers) • [🏛️ CA Providers](CA_PROVIDERS.md) • [🏛️ Storage Backends](#️-certificate-storage-configuration) • [💾 Backup & Recovery](#-backup--recovery) • [📊 API Reference](#-api-usage)
+[🚀 Quick Start](#-quick-start-with-docker) • [📖 Documentation](#-documentation) • [🔧 Installation](#-installation-methods) • [🌐 DNS Providers](#-supported-dns-providers) • [🏛️ CA Providers](CA_PROVIDERS.md) • [🏛️ Storage Backends](#️-certificate-storage-configuration) • [💾 Backup & Recovery](#-backup--recovery) • [📊 API Reference](#-api-usage) • [![CI](https://github.com/fabriziosalmi/certmate/actions/workflows/ci.yml/badge.svg)](https://github.com/fabriziosalmi/certmate/actions/workflows/ci.yml)
 
 </div>
 
