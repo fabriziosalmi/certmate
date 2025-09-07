@@ -224,22 +224,34 @@ def generate_secure_token(length: int = 40) -> str:
     alphabet_digits = string.digits
     alphabet_all = alphabet_upper + alphabet_lower + alphabet_digits
     
-    # Generate token with guaranteed character type diversity
-    token_parts = []
+    # Generate tokens until we get one that passes validation
+    max_attempts = 100  # Prevent infinite loops
+    for attempt in range(max_attempts):
+        # Generate token with guaranteed character type diversity
+        token_parts = []
+        
+        # Ensure at least one character from each type
+        token_parts.append(secrets.choice(alphabet_upper))
+        token_parts.append(secrets.choice(alphabet_lower))
+        token_parts.append(secrets.choice(alphabet_digits))
+        
+        # Fill the rest with random characters
+        for _ in range(length - 3):
+            token_parts.append(secrets.choice(alphabet_all))
+        
+        # Shuffle to avoid predictable patterns
+        secrets.SystemRandom().shuffle(token_parts)
+        
+        token = ''.join(token_parts)
+        
+        # Check if the generated token passes validation
+        is_valid, _ = validate_api_token(token)
+        if is_valid:
+            return token
     
-    # Ensure at least one character from each type
-    token_parts.append(secrets.choice(alphabet_upper))
-    token_parts.append(secrets.choice(alphabet_lower))
-    token_parts.append(secrets.choice(alphabet_digits))
-    
-    # Fill the rest with random characters
-    for _ in range(length - 3):
-        token_parts.append(secrets.choice(alphabet_all))
-    
-    # Shuffle to avoid predictable patterns
-    secrets.SystemRandom().shuffle(token_parts)
-    
-    return ''.join(token_parts)
+    # Fallback: if we can't generate a valid token after max_attempts,
+    # raise an exception rather than return an invalid token
+    raise RuntimeError(f"Failed to generate a valid token after {max_attempts} attempts")
 
 
 # =============================================
