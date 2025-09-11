@@ -461,6 +461,11 @@ class CertificateManager:
                 certbot_cmd.extend(['--authenticator', 'acme-dns'])
                 if credentials_file:
                     certbot_cmd.extend(['--acme-dns-credentials', credentials_file])
+            elif dns_provider == 'namecheap':
+                # Namecheap uses dns-namecheap-credentials
+                certbot_cmd.extend(['--authenticator', plugin_name])
+                if credentials_file:
+                    certbot_cmd.extend(['--namecheap-dns-credentials', credentials_file])
             else:
                 certbot_cmd.extend([f'--{plugin_name}'])
                 # Add credentials file if needed
