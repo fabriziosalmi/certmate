@@ -440,11 +440,8 @@ class CertificateManager:
                 route53_env_set = True
                 plugin_name = 'dns-route53'
             
-            elif dns_provider == 'namecheap':
-                credentials_file = self._create_dns_config_compat(dns_provider, dns_config)
-                plugin_name = f'dns-{dns_provider}-credentials'
                 
-            elif dns_provider in ['azure', 'google', 'powerdns', 'digitalocean', 'linode', 'gandi', 'ovh', 'arvancloud', 'acme-dns']:
+            elif dns_provider in ['azure', 'google', 'powerdns', 'digitalocean', 'linode', 'gandi', 'ovh', 'namecheap', 'arvancloud', 'acme-dns']:
                 # Use compatibility function for config creation
                 credentials_file = self._create_dns_config_compat(dns_provider, dns_config)
                 plugin_name = f'dns-{dns_provider}'
@@ -465,6 +462,10 @@ class CertificateManager:
                 certbot_cmd.extend(['--authenticator', 'acme-dns'])
                 if credentials_file:
                     certbot_cmd.extend(['--acme-dns-credentials', credentials_file])
+            elif dns_provider == 'namecheap':
+                certbot_cmd.extend(['--authenticator', 'dns-namecheap'])
+                if credentials_file:
+                    certbot_cmd.extend(['--dns-namecheap-credentials', credentials_file])
             else:
                 certbot_cmd.extend([f'--{plugin_name}'])
                 # Add credentials file if needed
