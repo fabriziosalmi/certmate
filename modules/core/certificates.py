@@ -497,7 +497,8 @@ class CertificateManager:
             certbot_cmd.extend([f'--{plugin_name}-propagation-seconds', str(propagation_time)])
             
             logger.info(f"Running certbot command for {domain} with {dns_provider}")
-            logger.info(f"Certbot command: {' '.join(str(item) for item in certbot_cmd)}")
+            logger.info(f"Current certbot command: {certbot_cmd}")
+            logger.debug(f"Certbot command: {' '.join(str(item) for item in certbot_cmd)}")
             
             # Run certbot
             result = self._subprocess_run_compat(
