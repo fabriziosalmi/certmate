@@ -499,6 +499,8 @@ class CertificateManager:
             logger.info(f"Running certbot command for {domain} with {dns_provider}")
             logger.debug(f"Certbot command: {' '.join(str(item) for item in certbot_cmd)}")
             
+            # debug
+            print(certbot_cmd)
             # Run certbot
             result = self._subprocess_run_compat(
                 certbot_cmd,
