@@ -9,6 +9,7 @@
 [![Docker](https://img.shields.io/badge/docker-ready-blue)](https://hub.docker.com/)
 [![API Documentation](https://img.shields.io/badge/API-Swagger-green)](http://localhost:8000/docs/)
 [![CI](https://github.com/fabriziosalmi/certmate/actions/workflows/ci.yml/badge.svg)](https://github.com/fabriziosalmi/certmate/actions/workflows/ci.yml)
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Ffabriziosalmi%2Fcertmate.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Ffabriziosalmi%2Fcertmate?ref=badge_shield)
  
 ![screenshot1](screenshot_1.png)
 ![screenshot2](screenshot_2.png)
@@ -2505,3 +2506,6 @@ This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) 
 [⭐ Star us on GitHub](https://github.com/fabriziosalmi/certmate) • [🐛 Report Bug](https://github.com/fabriziosalmi/certmate/issues) • [💡 Request Feature](https://github.com/fabriziosalmi/certmate/issues/new?template=feature_request.md)
 
 </div>
+
+
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Ffabriziosalmi%2Fcertmate.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Ffabriziosalmi%2Fcertmate?ref=badge_large)
