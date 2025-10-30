@@ -189,6 +189,15 @@ class SettingsManager:
             if was_migrated:
                 logger.info("Settings migrated, saving updated format")
                 self._save_settings_compat(settings, backup_reason="migration")
+            
+            # Override settings with environment variables
+            if os.getenv('LETSENCRYPT_EMAIL'):
+                settings['email'] = os.getenv('LETSENCRYPT_EMAIL')
+
+            if os.getenv('CLOUDFLARE_TOKEN'):
+                if 'cloudflare' not in settings['dns_providers']:
+                    settings['dns_providers']['cloudflare'] = {'accounts': {'default': {}}}
+                settings['dns_providers']['cloudflare']['accounts']['default']['api_token'] = os.getenv('CLOUDFLARE_TOKEN')
 
             return settings
             
