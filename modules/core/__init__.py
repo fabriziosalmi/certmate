@@ -11,7 +11,7 @@ from .certificates import CertificateManager
 from .dns_providers import DNSManager
 from .cache import CacheManager
 from .storage_backends import (
-    StorageManager, 
+    StorageManager,
     CertificateStorageBackend,
     LocalFileSystemBackend,
     AzureKeyVaultBackend,
@@ -19,10 +19,12 @@ from .storage_backends import (
     HashiCorpVaultBackend,
     InfisicalBackend
 )
+from .private_ca import PrivateCAGenerator
+from .csr_handler import CSRHandler
 
 __all__ = [
     'FileOperations',
-    'SettingsManager', 
+    'SettingsManager',
     'AuthManager',
     'CertificateManager',
     'DNSManager',
@@ -33,5 +35,7 @@ __all__ = [
     'AzureKeyVaultBackend',
     'AWSSecretsManagerBackend',
     'HashiCorpVaultBackend',
-    'InfisicalBackend'
+    'InfisicalBackend',
+    'PrivateCAGenerator',
+    'CSRHandler'
 ]

@@ -26,7 +26,8 @@ import requests
 # Import new modular components
 from modules.core import (
     FileOperations, SettingsManager, AuthManager,
-    CertificateManager, DNSManager, CacheManager, StorageManager
+    CertificateManager, DNSManager, CacheManager, StorageManager,
+    PrivateCAGenerator, CSRHandler
 )
 # Import CA manager for DigiCert and Private CA support
 from modules.core.ca_manager import CAManager
@@ -121,10 +122,16 @@ class CertMateApp:
             
             # Initialize storage manager
             storage_manager = StorageManager(settings_manager)
-            
+
             # Initialize CA manager
             ca_manager = CAManager(settings_manager)
-            
+
+            # Initialize Private CA (self-signed Certificate Authority)
+            ca_dir = self.data_dir / "certs" / "ca"
+            private_ca = PrivateCAGenerator(ca_dir)
+            if not private_ca.initialize():
+                logger.warning("Failed to initialize private CA, will retry later")
+
             # Initialize certificate manager
             certificate_manager = CertificateManager(
                 cert_dir=self.cert_dir,
@@ -143,7 +150,9 @@ class CertMateApp:
                 'dns': dns_manager,
                 'cache': cache_manager,
                 'storage': storage_manager,
-                'ca': ca_manager
+                'ca': ca_manager,
+                'private_ca': private_ca,
+                'csr': CSRHandler
             }
             
             logger.info("All managers initialized successfully")
