@@ -244,6 +244,34 @@ def create_api_models(api):
         'config': fields.Raw(description='CA provider-specific configuration', required=True)
     })
 
+    # Client Certificate models
+    client_certificate_model = api.model('ClientCertificate', {
+        'identifier': fields.String(description='Certificate identifier'),
+        'common_name': fields.String(description='Common name'),
+        'email': fields.String(description='Email address'),
+        'organization': fields.String(description='Organization'),
+        'cert_usage': fields.String(description='Usage type'),
+        'created_at': fields.String(description='Creation date'),
+        'expires_at': fields.String(description='Expiration date'),
+        'revoked': fields.Boolean(description='Revocation status'),
+        'notes': fields.String(description='Notes')
+    })
+
+    client_certificate_request_model = api.model('ClientCertificateRequest', {
+        'common_name': fields.String(description='Common name', required=True),
+        'email': fields.String(description='Email address'),
+        'organization': fields.String(description='Organization'),
+        'organizational_unit': fields.String(description='Organizational unit'),
+        'cert_usage': fields.String(description='Usage type'),
+        'days_valid': fields.Integer(description='Days until expiration'),
+        'generate_key': fields.Boolean(description='Generate private key'),
+        'notes': fields.String(description='Notes')
+    })
+
+    client_certificate_revoke_model = api.model('ClientCertificateRevoke', {
+        'reason': fields.String(description='Reason for revocation')
+    })
+
     # Return all models as a dict for easy access
     return {
         'certificate_model': certificate_model,
@@ -282,5 +310,9 @@ def create_api_models(api):
         'HashiCorpVaultStorage': hashicorp_vault_storage_model,
         'InfisicalStorage': infisical_storage_model,
         # CA Provider models
-        'CATestConfig': ca_test_config_model
+        'CATestConfig': ca_test_config_model,
+        # Client Certificate models
+        'ClientCertificate': client_certificate_model,
+        'ClientCertificateRequest': client_certificate_request_model,
+        'ClientCertificateRevoke': client_certificate_revoke_model
     }

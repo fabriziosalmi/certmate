@@ -27,7 +27,7 @@ import requests
 from modules.core import (
     FileOperations, SettingsManager, AuthManager,
     CertificateManager, DNSManager, CacheManager, StorageManager,
-    PrivateCAGenerator, CSRHandler
+    PrivateCAGenerator, CSRHandler, ClientCertificateManager
 )
 # Import CA manager for DigiCert and Private CA support
 from modules.core.ca_manager import CAManager
@@ -132,6 +132,10 @@ class CertMateApp:
             if not private_ca.initialize():
                 logger.warning("Failed to initialize private CA, will retry later")
 
+            # Initialize Client Certificate Manager
+            client_certs_dir = self.data_dir / "certs" / "client"
+            client_cert_manager = ClientCertificateManager(client_certs_dir, private_ca)
+
             # Initialize certificate manager
             certificate_manager = CertificateManager(
                 cert_dir=self.cert_dir,
@@ -147,6 +151,7 @@ class CertMateApp:
                 'settings': settings_manager,
                 'auth': auth_manager,
                 'certificates': certificate_manager,
+                'client_certificates': client_cert_manager,
                 'dns': dns_manager,
                 'cache': cache_manager,
                 'storage': storage_manager,
@@ -245,7 +250,17 @@ class CertMateApp:
                 id='certificate_renewal_check',
                 replace_existing=True
             )
-            
+
+            # Schedule client certificate renewal check every day at 3 AM
+            self.scheduler.add_job(
+                func=self.managers['client_certificates'].check_renewals,
+                trigger="cron",
+                hour=3,
+                minute=0,
+                id='client_certificate_renewal_check',
+                replace_existing=True
+            )
+
             logger.info("Background scheduler started successfully")
             
         except Exception as e:

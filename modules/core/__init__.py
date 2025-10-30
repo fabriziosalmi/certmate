@@ -21,6 +21,7 @@ from .storage_backends import (
 )
 from .private_ca import PrivateCAGenerator
 from .csr_handler import CSRHandler
+from .client_certificates import ClientCertificateManager
 
 __all__ = [
     'FileOperations',
@@ -37,5 +38,6 @@ __all__ = [
     'HashiCorpVaultBackend',
     'InfisicalBackend',
     'PrivateCAGenerator',
-    'CSRHandler'
+    'CSRHandler',
+    'ClientCertificateManager'
 ]
