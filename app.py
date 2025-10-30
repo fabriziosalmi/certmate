@@ -27,11 +27,13 @@ import requests
 from modules.core import (
     FileOperations, SettingsManager, AuthManager,
     CertificateManager, DNSManager, CacheManager, StorageManager,
-    PrivateCAGenerator, CSRHandler, ClientCertificateManager
+    PrivateCAGenerator, CSRHandler, ClientCertificateManager,
+    OCSPResponder, CRLManager
 )
 # Import CA manager for DigiCert and Private CA support
 from modules.core.ca_manager import CAManager
 from modules.api import create_api_models, create_api_resources
+from modules.api.client_certificates import create_client_certificate_resources
 from modules.web import register_web_routes
 
 # Configure logging
@@ -136,6 +138,13 @@ class CertMateApp:
             client_certs_dir = self.data_dir / "certs" / "client"
             client_cert_manager = ClientCertificateManager(client_certs_dir, private_ca)
 
+            # Initialize OCSP Responder
+            ocsp_responder = OCSPResponder(private_ca, client_cert_manager)
+
+            # Initialize CRL Manager
+            crl_dir = self.data_dir / "certs" / "crl"
+            crl_manager = CRLManager(private_ca, client_cert_manager, crl_dir)
+
             # Initialize certificate manager
             certificate_manager = CertificateManager(
                 cert_dir=self.cert_dir,
@@ -157,7 +166,9 @@ class CertMateApp:
                 'storage': storage_manager,
                 'ca': ca_manager,
                 'private_ca': private_ca,
-                'csr': CSRHandler
+                'csr': CSRHandler,
+                'ocsp': ocsp_responder,
+                'crl': crl_manager
             }
             
             logger.info("All managers initialized successfully")
@@ -194,17 +205,26 @@ class CertMateApp:
             
             # Create API resources
             self.api_resources = create_api_resources(self.api, self.api_models, self.managers)
-            
+
+            # Create client certificate API resources
+            self.api_resources.update(create_client_certificate_resources(self.api, self.managers))
+
             # Create namespaces
             ns_certificates = Namespace('certificates', description='Certificate operations')
+            ns_client_certs = Namespace('client-certs', description='Client certificate operations')
+            ns_ocsp = Namespace('ocsp', description='OCSP certificate status')
+            ns_crl = Namespace('crl', description='Certificate Revocation List')
             ns_settings = Namespace('settings', description='Settings operations')
             ns_health = Namespace('health', description='Health check')
             ns_backups = Namespace('backups', description='Backup and restore operations')
             ns_cache = Namespace('cache', description='Cache management operations')
             ns_metrics = Namespace('metrics', description='Prometheus metrics and monitoring')
-            
+
             # Add namespaces to API
             self.api.add_namespace(ns_certificates)
+            self.api.add_namespace(ns_client_certs)
+            self.api.add_namespace(ns_ocsp)
+            self.api.add_namespace(ns_crl)
             self.api.add_namespace(ns_settings)
             self.api.add_namespace(ns_health)
             self.api.add_namespace(ns_backups)
@@ -228,7 +248,23 @@ class CertMateApp:
             ns_backups.add_resource(self.api_resources['BackupDownload'], '/download/<backup_type>/<filename>')
             ns_backups.add_resource(self.api_resources['BackupRestore'], '/restore/<backup_type>')
             ns_backups.add_resource(self.api_resources['BackupDelete'], '/delete/<backup_type>/<filename>')
-            
+
+            # Client Certificate endpoints
+            ns_client_certs.add_resource(self.api_resources['ClientCertificateList'], '')
+            ns_client_certs.add_resource(self.api_resources['ClientCertificateCreate'], '/create')
+            ns_client_certs.add_resource(self.api_resources['ClientCertificateDetail'], '/<string:identifier>')
+            ns_client_certs.add_resource(self.api_resources['ClientCertificateDownload'], '/<string:identifier>/download/<string:file_type>')
+            ns_client_certs.add_resource(self.api_resources['ClientCertificateRevoke'], '/<string:identifier>/revoke')
+            ns_client_certs.add_resource(self.api_resources['ClientCertificateRenew'], '/<string:identifier>/renew')
+            ns_client_certs.add_resource(self.api_resources['ClientCertificateStatistics'], '/stats')
+            ns_client_certs.add_resource(self.api_resources['ClientCertificateBatch'], '/batch')
+
+            # OCSP endpoints
+            ns_ocsp.add_resource(self.api_resources['OCSPStatus'], '/status/<int:serial_number>')
+
+            # CRL endpoints
+            ns_crl.add_resource(self.api_resources['CRLDistribution'], '/download/<string:format_type>')
+
             logger.info("API setup completed successfully")
             
         except Exception as e:

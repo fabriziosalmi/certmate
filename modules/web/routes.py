@@ -101,6 +101,17 @@ def register_web_routes(app, managers):
         """Help and documentation page"""
         return render_template('help.html')
 
+    @app.route('/client-certificates')
+    def client_certificates_page():
+        """Client certificates management page"""
+        try:
+            settings = settings_manager.load_settings()
+            api_token = settings.get('api_bearer_token', '')
+            return render_template('client-certificates.html', api_token=api_token)
+        except Exception as e:
+            logger.error(f"Failed to load settings for client certificates page: {e}")
+            return render_template('client-certificates.html', api_token='')
+
     # Health check for Docker
     @app.route('/health')
     def health_check():
