@@ -8,6 +8,7 @@ import subprocess
 import tempfile
 import time
 import logging
+import shutil
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -450,7 +451,7 @@ class CertificateManager:
                 credentials_file = self._create_dns_config_compat(dns_provider, dns_config)
                 plugin_name = f'dns-{dns_provider}'
             
-            # Add DNS plugin to command - special handling for PowerDNS and ACME-DNS
+            # Add DNS plugin to command - special handling for PowerDNS, ACME-DNS and Namecheap
             if dns_provider == 'powerdns':
                 # Explicitly set authenticator and credentials to avoid ambiguity
                 certbot_cmd.extend(['--authenticator', plugin_name])
@@ -461,6 +462,10 @@ class CertificateManager:
                 certbot_cmd.extend(['--authenticator', 'acme-dns'])
                 if credentials_file:
                     certbot_cmd.extend(['--acme-dns-credentials', credentials_file])
+            elif dns_provider == 'namecheap':
+                certbot_cmd.extend(['--authenticator', plugin_name])
+                if credentials_file:
+                    certbot_cmd.extend([f'--{plugin_name}-credentials', credentials_file])
             else:
                 certbot_cmd.extend([f'--{plugin_name}'])
                 # Add credentials file if needed
@@ -528,8 +533,9 @@ class CertificateManager:
                     src_file = live_dir / cert_file
                     dst_file = cert_output_dir / cert_file
                     if src_file.exists():
-                        src_file.rename(dst_file)
-                        logger.info(f"Moved {cert_file} to {dst_file}")
+                        # Resolve symlink and copy the actual file
+                        shutil.copy(os.path.realpath(src_file), dst_file)
+                        logger.info(f"Copied {cert_file} to {dst_file}")
                         # Read file content for storage backend
                         with open(dst_file, 'rb') as f:
                             cert_files[cert_file] = f.read()

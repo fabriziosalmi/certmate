@@ -46,12 +46,6 @@ def test_certificate_listing():
     # Test certificate listing from API endpoint logic
     print("\nTesting certificate listing logic...")
     
-    # Import the certificate listing functions
-    from app import CertificateList
-    
-    # Create a dummy resource instance and test the get method
-    resource = CertificateList()
-    
     # We can't directly test the API method without proper Flask context,
     # but we can test the core logic
     settings = load_settings()
