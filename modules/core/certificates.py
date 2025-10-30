@@ -16,7 +16,7 @@ from .utils import (
     create_cloudflare_config, create_azure_config, create_google_config,
     create_powerdns_config, create_digitalocean_config, create_linode_config,
     create_gandi_config, create_ovh_config, create_namecheap_config,
-    create_arvancloud_config, create_acme_dns_config,
+    create_arvancloud_config, create_infomaniak_config, create_acme_dns_config,
     create_multi_provider_config
 )
 
@@ -73,7 +73,7 @@ class CertificateManager:
         """Create DNS config file with compatibility layer for tests"""
         config_funcs = {
             'cloudflare': 'create_cloudflare_config',
-            'azure': 'create_azure_config', 
+            'azure': 'create_azure_config',
             'google': 'create_google_config',
             'powerdns': 'create_powerdns_config',
             'digitalocean': 'create_digitalocean_config',
@@ -82,6 +82,7 @@ class CertificateManager:
             'ovh': 'create_ovh_config',
             'namecheap': 'create_namecheap_config',
             'arvancloud': 'create_arvancloud_config',
+            'infomaniak': 'create_infomaniak_config',
             'acme-dns': 'create_acme_dns_config'
         }
         
@@ -134,6 +135,8 @@ class CertificateManager:
                     )
                 elif dns_provider == 'arvancloud':
                     return config_func(dns_config.get('api_key', ''))
+                elif dns_provider == 'infomaniak':
+                    return config_func(dns_config.get('api_token', ''))
                 elif dns_provider == 'acme-dns':
                     return config_func(
                         dns_config.get('api_url', ''),
@@ -189,6 +192,8 @@ class CertificateManager:
             )
         elif dns_provider == 'arvancloud':
             return create_arvancloud_config(dns_config.get('api_key', ''))
+        elif dns_provider == 'infomaniak':
+            return create_infomaniak_config(dns_config.get('api_token', ''))
         elif dns_provider == 'acme-dns':
             return create_acme_dns_config(
                 dns_config.get('api_url', ''),
@@ -441,7 +446,7 @@ class CertificateManager:
                 route53_env_set = True
                 plugin_name = 'dns-route53'
                 
-            elif dns_provider in ['azure', 'google', 'powerdns', 'digitalocean', 'linode', 'gandi', 'ovh', 'namecheap', 'arvancloud', 'acme-dns']:
+            elif dns_provider in ['azure', 'google', 'powerdns', 'digitalocean', 'linode', 'gandi', 'ovh', 'namecheap', 'arvancloud', 'infomaniak', 'acme-dns']:
                 # Use compatibility function for config creation
                 credentials_file = self._create_dns_config_compat(dns_provider, dns_config)
                 plugin_name = f'dns-{dns_provider}'
@@ -451,7 +456,7 @@ class CertificateManager:
                 credentials_file = self._create_dns_config_compat(dns_provider, dns_config)
                 plugin_name = f'dns-{dns_provider}'
             
-            # Add DNS plugin to command - special handling for PowerDNS, ACME-DNS and Namecheap
+            # Add DNS plugin to command - special handling for PowerDNS, ACME-DNS, Namecheap and Infomaniak
             if dns_provider == 'powerdns':
                 # Explicitly set authenticator and credentials to avoid ambiguity
                 certbot_cmd.extend(['--authenticator', plugin_name])
@@ -463,6 +468,10 @@ class CertificateManager:
                 if credentials_file:
                     certbot_cmd.extend(['--acme-dns-credentials', credentials_file])
             elif dns_provider == 'namecheap':
+                certbot_cmd.extend(['--authenticator', plugin_name])
+                if credentials_file:
+                    certbot_cmd.extend([f'--{plugin_name}-credentials', credentials_file])
+            elif dns_provider == 'infomaniak':
                 certbot_cmd.extend(['--authenticator', plugin_name])
                 if credentials_file:
                     certbot_cmd.extend([f'--{plugin_name}-credentials', credentials_file])
@@ -491,6 +500,7 @@ class CertificateManager:
                 'ovh': 180,
                 'namecheap': 300,
                 'arvancloud': 120,
+                'infomaniak': 300,
                 'acme-dns': 30
             }
             propagation_time = int(propagation_map.get(dns_provider, default_map.get(dns_provider, 120)))

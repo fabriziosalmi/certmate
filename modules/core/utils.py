@@ -42,6 +42,7 @@ _DNS_PROVIDER_CREDENTIALS = {
     'ovh': ['endpoint', 'application_key', 'application_secret', 'consumer_key'],
     'namecheap': ['username', 'api_key'],
     'arvancloud': ['api_key'],
+    'infomaniak': ['api_token'],
     'acme-dns': ['api_url', 'username', 'password', 'subdomain'],
     'vultr': ['api_key'],
     'dnsmadeeasy': ['api_key', 'secret_key'],
@@ -340,6 +341,10 @@ def create_arvancloud_config(api_key: str) -> Path:
     """Create ArvanCloud DNS credentials file."""
     content = f"dns_arvancloud_api_key = {api_key}\n"
     return _create_config_file("arvancloud", content)
+
+def create_infomaniak_config(api_token: str) -> Path:
+    """Create Infomaniak DNS credentials file."""
+    return _create_config_file("infomaniak", f"dns_infomaniak_token = {api_token}\n")
 
 def create_acme_dns_config(api_url: str, username: str, password: str, subdomain: str) -> Path:
     """Create ACME-DNS credentials file."""

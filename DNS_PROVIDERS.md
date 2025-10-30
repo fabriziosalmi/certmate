@@ -1,6 +1,6 @@
 # DNS Providers Support
 
-CertMate now supports **21 DNS providers** for Let's Encrypt DNS challenges through individual certbot plugins that provide reliable, well-tested DNS challenge support.
+CertMate now supports **22 DNS providers** for Let's Encrypt DNS challenges through individual certbot plugins that provide reliable, well-tested DNS challenge support.
 
 ## 🎯 Supported Providers
 
@@ -23,6 +23,7 @@ All providers are supported through individual, well-maintained certbot plugins:
 | **NS1** | `certbot-dns-nsone` | API Key | Intelligent DNS platform |
 | **RFC2136** | `certbot-dns-rfc2136` | Nameserver, TSIG Key/Secret | Standard DNS update protocol |
 | **Hetzner** | `certbot-dns-hetzner` | API Token | European cloud hosting |
+| **Infomaniak** | `certbot-dns-infomaniak` | API Token | Swiss ISP & cloud provider |
 | **Porkbun** | `certbot-dns-porkbun` | API Key, Secret Key | Domain registrar with DNS |
 | **GoDaddy** | `certbot-dns-godaddy` | API Key, Secret | Domain registrar |
 | **Hurricane Electric** | `certbot-dns-he-ddns` | Username, Password | Free DNS hosting |
@@ -121,6 +122,19 @@ curl -X POST http://localhost:5000/api/settings \
   "dns_providers": {
     "hetzner": {
       "api_token": "your_hetzner_api_token"
+    }
+  }
+}
+```
+
+### Infomaniak
+```bash
+# Get API token from Infomaniak Manager (API section with "Domain" scope)
+{
+  "dns_provider": "infomaniak",
+  "dns_providers": {
+    "infomaniak": {
+      "api_token": "your_infomaniak_api_token"
     }
   }
 }
