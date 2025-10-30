@@ -4,7 +4,7 @@ Flask-RESTX endpoints for client certificate management
 """
 
 import logging
-from flask import request, send_file
+from flask import request, send_file, Response
 from flask_restx import Resource, fields, abort
 from io import BytesIO
 import json
@@ -258,6 +258,157 @@ class ClientCertificateStatisticsResource(Resource):
             abort(500, str(e))
 
 
+class ClientCertificateBatchResource(Resource):
+    """Resource for batch certificate creation from CSV."""
+
+    def __init__(self, api, managers):
+        super().__init__()
+        self.managers = managers
+
+    def post(self):
+        """Create multiple certificates from CSV data."""
+        try:
+            data = request.get_json()
+
+            if not data or 'rows' not in data:
+                abort(400, "CSV rows required")
+
+            rows = data.get('rows', [])
+            headers = data.get('headers', [])
+
+            if not headers or 'common_name' not in headers:
+                abort(400, "CSV must have 'common_name' column")
+
+            # Create certificates
+            results = {
+                'total': len(rows),
+                'successful': 0,
+                'failed': 0,
+                'errors': [],
+                'certificates': []
+            }
+
+            for idx, row in enumerate(rows):
+                try:
+                    # Map CSV row to certificate parameters
+                    cert_data = {}
+                    for i, header in enumerate(headers):
+                        if i < len(row):
+                            cert_data[header.strip()] = row[i].strip()
+
+                    # Create certificate
+                    success, error, cert_info = self.managers['client_certificates'].create_client_certificate(
+                        common_name=cert_data.get('common_name', ''),
+                        email=cert_data.get('email', ''),
+                        organization=cert_data.get('organization', 'CertMate'),
+                        cert_usage=cert_data.get('cert_usage', 'api-mtls'),
+                        days_valid=int(cert_data.get('days_valid', 365)),
+                        generate_key=True,
+                        notes=cert_data.get('notes', '')
+                    )
+
+                    if success:
+                        results['successful'] += 1
+                        results['certificates'].append({
+                            'identifier': cert_info['identifier'],
+                            'common_name': cert_data.get('common_name')
+                        })
+                    else:
+                        results['failed'] += 1
+                        results['errors'].append({
+                            'row': idx + 2,  # Account for header row
+                            'error': error
+                        })
+
+                except Exception as e:
+                    results['failed'] += 1
+                    results['errors'].append({
+                        'row': idx + 2,
+                        'error': str(e)
+                    })
+
+            logger.info(f"Batch certificate creation: {results['successful']}/{results['total']} successful")
+            return results, 201
+
+        except Exception as e:
+            logger.error(f"Error in batch creation: {str(e)}")
+            abort(500, str(e))
+
+
+class OCSPStatusResource(Resource):
+    """Resource for OCSP certificate status."""
+
+    def __init__(self, api, managers):
+        super().__init__()
+        self.managers = managers
+
+    def get(self, serial_number):
+        """Get OCSP status for certificate."""
+        try:
+            ocsp_responder = self.managers.get('ocsp')
+            if not ocsp_responder:
+                abort(503, "OCSP responder not available")
+
+            cert_status = ocsp_responder.get_cert_status(int(serial_number))
+            response = ocsp_responder.generate_ocsp_response(cert_status)
+
+            return response, 200
+
+        except ValueError:
+            abort(400, "Invalid serial number")
+        except Exception as e:
+            logger.error(f"Error getting OCSP status: {str(e)}")
+            abort(500, str(e))
+
+
+class CRLDistributionResource(Resource):
+    """Resource for CRL distribution."""
+
+    def __init__(self, api, managers):
+        super().__init__()
+        self.managers = managers
+
+    def get(self, format_type='pem'):
+        """Get Certificate Revocation List."""
+        try:
+            crl_manager = self.managers.get('crl')
+            if not crl_manager:
+                abort(503, "CRL manager not available")
+
+            if format_type == 'pem':
+                crl_data = crl_manager.get_crl_pem()
+                if not crl_data:
+                    abort(404, "No CRL available")
+
+                return Response(
+                    crl_data,
+                    mimetype='application/x-pem-file',
+                    headers={'Content-Disposition': 'attachment; filename=ca.crl'}
+                )
+
+            elif format_type == 'der':
+                crl_data = crl_manager.get_crl_der()
+                if not crl_data:
+                    abort(404, "No CRL available")
+
+                return Response(
+                    crl_data,
+                    mimetype='application/x-pkix-crl',
+                    headers={'Content-Disposition': 'attachment; filename=ca.crl'}
+                )
+
+            elif format_type == 'info':
+                info = crl_manager.get_crl_info()
+                return info, 200
+
+            else:
+                abort(400, "Format must be 'pem', 'der', or 'info'")
+
+        except Exception as e:
+            logger.error(f"Error getting CRL: {str(e)}")
+            abort(500, str(e))
+
+
 def create_client_certificate_resources(api, managers):
     """Create and register all client certificate resources."""
 
@@ -269,6 +420,9 @@ def create_client_certificate_resources(api, managers):
         'ClientCertificateRevoke': ClientCertificateRevokeResource(api, managers),
         'ClientCertificateRenew': ClientCertificateRenewResource(api, managers),
         'ClientCertificateStatistics': ClientCertificateStatisticsResource(api, managers),
+        'ClientCertificateBatch': ClientCertificateBatchResource(api, managers),
+        'OCSPStatus': OCSPStatusResource(api, managers),
+        'CRLDistribution': CRLDistributionResource(api, managers),
     }
 
     return resources

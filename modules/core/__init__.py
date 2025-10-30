@@ -22,6 +22,7 @@ from .storage_backends import (
 from .private_ca import PrivateCAGenerator
 from .csr_handler import CSRHandler
 from .client_certificates import ClientCertificateManager
+from .ocsp_crl import OCSPResponder, CRLManager
 
 __all__ = [
     'FileOperations',
@@ -39,5 +40,7 @@ __all__ = [
     'InfisicalBackend',
     'PrivateCAGenerator',
     'CSRHandler',
-    'ClientCertificateManager'
+    'ClientCertificateManager',
+    'OCSPResponder',
+    'CRLManager'
 ]
