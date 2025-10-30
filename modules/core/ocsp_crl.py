@@ -215,7 +215,7 @@ class CRLManager:
 
             # Convert PEM to DER
             from cryptography import x509
-            crl = x509.load_pem_x509_crl(crl_pem, default_backend=None)
+            crl = x509.load_pem_x509_crl(crl_pem)
 
             if crl:
                 return crl.public_bytes(serialization.Encoding.DER)
@@ -235,13 +235,12 @@ class CRLManager:
         """
         try:
             from cryptography import x509
-            from cryptography.hazmat.backends import default_backend
 
             crl_pem = self.get_crl_pem()
             if not crl_pem:
                 return {'status': 'no_crl', 'message': 'No CRL available'}
 
-            crl = x509.load_pem_x509_crl(crl_pem, default_backend())
+            crl = x509.load_pem_x509_crl(crl_pem)
 
             revoked_serials = self.get_revoked_serials()
 
