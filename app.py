@@ -28,7 +28,8 @@ from modules.core import (
     FileOperations, SettingsManager, AuthManager,
     CertificateManager, DNSManager, CacheManager, StorageManager,
     PrivateCAGenerator, CSRHandler, ClientCertificateManager,
-    OCSPResponder, CRLManager
+    OCSPResponder, CRLManager, AuditLogger,
+    RateLimitConfig, SimpleRateLimiter
 )
 # Import CA manager for DigiCert and Private CA support
 from modules.core.ca_manager import CAManager
@@ -153,7 +154,15 @@ class CertMateApp:
                 storage_manager=storage_manager,
                 ca_manager=ca_manager
             )
-            
+
+            # Initialize Audit Logger (Phase 4 - Easy Win)
+            audit_dir = self.logs_dir / "audit"
+            audit_logger = AuditLogger(audit_dir)
+
+            # Initialize Rate Limiter (Phase 4 - Easy Win)
+            rate_limit_config = RateLimitConfig()
+            rate_limiter = SimpleRateLimiter(rate_limit_config)
+
             # Store all managers for easy access
             self.managers = {
                 'file_ops': file_ops,
@@ -168,7 +177,9 @@ class CertMateApp:
                 'private_ca': private_ca,
                 'csr': CSRHandler,
                 'ocsp': ocsp_responder,
-                'crl': crl_manager
+                'crl': crl_manager,
+                'audit': audit_logger,
+                'rate_limiter': rate_limiter
             }
             
             logger.info("All managers initialized successfully")

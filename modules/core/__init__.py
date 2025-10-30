@@ -23,6 +23,8 @@ from .private_ca import PrivateCAGenerator
 from .csr_handler import CSRHandler
 from .client_certificates import ClientCertificateManager
 from .ocsp_crl import OCSPResponder, CRLManager
+from .audit import AuditLogger
+from .rate_limit import RateLimitConfig, SimpleRateLimiter, rate_limit_decorator
 
 __all__ = [
     'FileOperations',
@@ -42,5 +44,9 @@ __all__ = [
     'CSRHandler',
     'ClientCertificateManager',
     'OCSPResponder',
-    'CRLManager'
+    'CRLManager',
+    'AuditLogger',
+    'RateLimitConfig',
+    'SimpleRateLimiter',
+    'rate_limit_decorator'
 ]
