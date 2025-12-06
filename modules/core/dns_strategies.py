@@ -37,11 +37,21 @@ class DNSProviderStrategy(ABC):
         """Return default propagation time in seconds"""
         return 120
 
-    def configure_certbot_arguments(self, cmd: list, credentials_file: Optional[Path]) -> None:
-        """Add provider-specific arguments to the certbot command"""
+    def configure_certbot_arguments(self, cmd: list, credentials_file: Optional[Path], domain_alias: Optional[str] = None) -> None:
+        """Add provider-specific arguments to the certbot command
+        
+        Args:
+            cmd: Certbot command list to append arguments to
+            credentials_file: Path to credentials file
+            domain_alias: Optional domain alias for DNS validation
+        """
         cmd.extend([f'--{self.plugin_name}'])
         if credentials_file:
             cmd.extend([f'--{self.plugin_name}-credentials', str(credentials_file)])
+        
+        # Add domain alias if provided
+        if domain_alias:
+            cmd.extend(['--domain-alias', domain_alias])
 
     def prepare_environment(self, env: Dict[str, str], config_data: Dict[str, Any]) -> None:
         """Set up environment variables if needed"""
@@ -50,19 +60,6 @@ class DNSProviderStrategy(ABC):
     def cleanup_environment(self, env: Dict[str, str]) -> None:
         """Clean up environment variables"""
         pass
-
-    def configure_certbot_arguments(self, cmd: list, credentials_file: Optional[Path]) -> None:
-        """Add provider-specific arguments to the certbot command"""
-        # Default implementation for most plugins
-        # cmd.extend([f'--{self.plugin_name}'])
-        # However, some plugins use --authenticator logic.
-        # But wait, the standard way is --dns-cloudflare not --authenticator dns-cloudflare for many.
-        # Let's check the original code. 
-        # original: else: certbot_cmd.extend([f'--{plugin_name}'])
-        
-        cmd.extend([f'--{self.plugin_name}'])
-        if credentials_file:
-            cmd.extend([f'--{self.plugin_name}-credentials', str(credentials_file)])
 
 class CloudflareStrategy(DNSProviderStrategy):
     def create_config_file(self, config_data: Dict[str, Any]) -> Optional[Path]:
@@ -150,10 +147,14 @@ class PowerDNSStrategy(DNSProviderStrategy):
     def default_propagation_seconds(self) -> int:
         return 60
 
-    def configure_certbot_arguments(self, cmd: list, credentials_file: Optional[Path]) -> None:
+    def configure_certbot_arguments(self, cmd: list, credentials_file: Optional[Path], domain_alias: Optional[str] = None) -> None:
         cmd.extend(['--authenticator', self.plugin_name])
         if credentials_file:
             cmd.extend([f'--{self.plugin_name}-credentials', str(credentials_file)])
+        
+        # Add domain alias if provided
+        if domain_alias:
+            cmd.extend(['--domain-alias', domain_alias])
 
 class DigitalOceanStrategy(DNSProviderStrategy):
     def create_config_file(self, config_data: Dict[str, Any]) -> Optional[Path]:
@@ -215,10 +216,14 @@ class NamecheapStrategy(DNSProviderStrategy):
     def default_propagation_seconds(self) -> int:
         return 300
 
-    def configure_certbot_arguments(self, cmd: list, credentials_file: Optional[Path]) -> None:
+    def configure_certbot_arguments(self, cmd: list, credentials_file: Optional[Path], domain_alias: Optional[str] = None) -> None:
         cmd.extend(['--authenticator', self.plugin_name])
         if credentials_file:
             cmd.extend([f'--{self.plugin_name}-credentials', str(credentials_file)])
+        
+        # Add domain alias if provided
+        if domain_alias:
+            cmd.extend(['--domain-alias', domain_alias])
 
 class ArvanCloudStrategy(DNSProviderStrategy):
     def create_config_file(self, config_data: Dict[str, Any]) -> Optional[Path]:
@@ -240,10 +245,14 @@ class InfomaniakStrategy(DNSProviderStrategy):
     def default_propagation_seconds(self) -> int:
         return 300
 
-    def configure_certbot_arguments(self, cmd: list, credentials_file: Optional[Path]) -> None:
+    def configure_certbot_arguments(self, cmd: list, credentials_file: Optional[Path], domain_alias: Optional[str] = None) -> None:
         cmd.extend(['--authenticator', self.plugin_name])
         if credentials_file:
             cmd.extend([f'--{self.plugin_name}-credentials', str(credentials_file)])
+        
+        # Add domain alias if provided
+        if domain_alias:
+            cmd.extend(['--domain-alias', domain_alias])
 
 class AcmeDNSStrategy(DNSProviderStrategy):
     def create_config_file(self, config_data: Dict[str, Any]) -> Optional[Path]:
@@ -264,10 +273,14 @@ class AcmeDNSStrategy(DNSProviderStrategy):
     def default_propagation_seconds(self) -> int:
         return 30
 
-    def configure_certbot_arguments(self, cmd: list, credentials_file: Optional[Path]) -> None:
+    def configure_certbot_arguments(self, cmd: list, credentials_file: Optional[Path], domain_alias: Optional[str] = None) -> None:
         cmd.extend(['--authenticator', 'acme-dns'])
         if credentials_file:
             cmd.extend(['--acme-dns-credentials', str(credentials_file)])
+        
+        # Add domain alias if provided
+        if domain_alias:
+            cmd.extend(['--domain-alias', domain_alias])
 
 class GenericMultiProviderStrategy(DNSProviderStrategy):
     def __init__(self, provider_name: str):

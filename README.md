@@ -39,6 +39,7 @@ CertMate solves the complexity of SSL certificate management in modern distribut
 - **Private CA Support** - Internal/corporate CAs with custom trust bundles and ACME compatibility
 - **Wildcard Support** - Single certificate for `*.example.com` and `example.com`
 - **Multi-Domain Certificates** - SAN certificates for multiple domains
+- **Domain Alias Support** - Use alternative domains for DNS validation (e.g., centralized validation domain)
 - **Automatic Renewal** - Smart renewal 30 days before expiry
 - **Certificate Validation** - Real-time SSL certificate status checking
 - **Per-Certificate CA Selection** - Choose different CAs for different certificates
@@ -604,6 +605,22 @@ Content-Type: application/json
   "dns_provider": "cloudflare",
   "account_id": "staging"
 }
+
+# Create certificate with domain alias (centralized DNS validation)
+POST /api/certificates/create
+Authorization: Bearer your_token_here
+Content-Type: application/json
+
+{
+  "domain": "example.com",
+  "dns_provider": "cloudflare",
+  "domain_alias": "_acme-challenge.validation.example.org"
+}
+# This creates a certificate for example.com but performs DNS validation
+# on _acme-challenge.validation.example.org instead. Useful when:
+# - The primary domain doesn't support DNS API
+# - You want to centralize DNS validations on a single domain
+# - There are DNS restrictions on the primary domain
 
 # Renew certificate
 POST /api/certificates/example.com/renew

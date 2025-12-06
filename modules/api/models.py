@@ -163,7 +163,8 @@ def create_api_models(api):
         'domain': fields.String(required=True, description='Domain name to create certificate for'),
         'dns_provider': fields.String(description='DNS provider to use (optional, uses default from settings)', enum=['cloudflare', 'route53', 'azure', 'google', 'powerdns', 'digitalocean', 'linode', 'gandi', 'ovh', 'namecheap', 'vultr', 'dnsmadeeasy', 'nsone', 'rfc2136', 'hetzner', 'porkbun', 'godaddy', 'he-ddns', 'dynudns', 'arvancloud', 'acme-dns']),
         'account_id': fields.String(description='DNS provider account ID to use (optional, uses default account if not specified)'),
-        'ca_provider': fields.String(description='Certificate Authority provider to use (optional, uses default from settings)', enum=['letsencrypt', 'digicert', 'private_ca'])
+        'ca_provider': fields.String(description='Certificate Authority provider to use (optional, uses default from settings)', enum=['letsencrypt', 'digicert', 'private_ca']),
+        'domain_alias': fields.String(description='Optional domain alias for DNS validation (e.g., _acme-challenge.validation.example.org)')
     })
 
     # Cache models

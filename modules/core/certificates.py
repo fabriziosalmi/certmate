@@ -169,7 +169,7 @@ class CertificateManager:
             'dns_provider': dns_provider
         }
 
-    def create_certificate(self, domain, email, dns_provider=None, dns_config=None, account_id=None, staging=False, ca_provider=None, ca_account_id=None):
+    def create_certificate(self, domain, email, dns_provider=None, dns_config=None, account_id=None, staging=False, ca_provider=None, ca_account_id=None, domain_alias=None):
         """Create SSL certificate using configurable CA with DNS challenge
         
         Args:
@@ -181,6 +181,7 @@ class CertificateManager:
             staging: Use staging environment for testing
             ca_provider: Certificate Authority provider (letsencrypt, digicert, private_ca)
             ca_account_id: Specific CA account ID to use
+            domain_alias: Optional domain alias for DNS validation (e.g., '_acme-challenge.validation.example.org')
         """
         # Track timing for metrics
         start_time = time.time()
@@ -267,7 +268,7 @@ class CertificateManager:
             credentials_file = strategy.create_config_file(dns_config)
             
             # Configure Args
-            strategy.configure_certbot_arguments(certbot_cmd, credentials_file)
+            strategy.configure_certbot_arguments(certbot_cmd, credentials_file, domain_alias=domain_alias)
             
             # Set propagation time
             try:

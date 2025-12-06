@@ -211,6 +211,7 @@ def create_api_resources(api, models, managers):
                 dns_provider = data.get('dns_provider')
                 account_id = data.get('account_id')
                 ca_provider = data.get('ca_provider')
+                domain_alias = data.get('domain_alias')  # Optional domain alias
                 
                 if not domain:
                     return {'error': 'Domain is required'}, 400
@@ -227,7 +228,8 @@ def create_api_resources(api, models, managers):
                     email=email,
                     dns_provider=dns_provider,
                     account_id=account_id,
-                    ca_provider=ca_provider
+                    ca_provider=ca_provider,
+                    domain_alias=domain_alias  # Pass domain alias
                 )
                 
                 return {
