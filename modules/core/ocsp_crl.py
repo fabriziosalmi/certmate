@@ -247,8 +247,8 @@ class CRLManager:
             return {
                 'status': 'available',
                 'issuer': str(crl.issuer),
-                'last_update': crl.last_update.isoformat() if crl.last_update else None,
-                'next_update': crl.next_update.isoformat() if crl.next_update else None,
+                'last_update': crl.last_update_utc.isoformat() if crl.last_update_utc else None,
+                'next_update': crl.next_update_utc.isoformat() if crl.next_update_utc else None,
                 'revoked_count': len(revoked_serials),
                 'revoked_serials': revoked_serials
             }

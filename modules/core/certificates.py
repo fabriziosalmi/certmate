@@ -9,16 +9,10 @@ import tempfile
 import time
 import logging
 import shutil
-from datetime import datetime, timedelta
 from pathlib import Path
-
-from .utils import (
-    create_cloudflare_config, create_azure_config, create_google_config,
-    create_powerdns_config, create_digitalocean_config, create_linode_config,
-    create_gandi_config, create_ovh_config, create_namecheap_config,
-    create_arvancloud_config, create_infomaniak_config, create_acme_dns_config,
-    create_multi_provider_config
-)
+from datetime import datetime, timedelta
+from .shell import ShellExecutor
+from .dns_strategies import DNSStrategyFactory
 
 logger = logging.getLogger(__name__)
 
@@ -26,183 +20,17 @@ logger = logging.getLogger(__name__)
 class CertificateManager:
     """Class to handle certificate operations"""
     
-    def __init__(self, cert_dir, settings_manager, dns_manager, storage_manager=None, ca_manager=None):
+    def __init__(self, cert_dir, settings_manager, dns_manager, storage_manager=None, ca_manager=None, shell_executor=None):
         self.cert_dir = Path(cert_dir)
         self.settings_manager = settings_manager
         self.dns_manager = dns_manager
         self.storage_manager = storage_manager
         self.ca_manager = ca_manager
+        self.shell_executor = shell_executor or ShellExecutor()
 
-    def _get_cert_dir_compat(self):
-        """Get certificate directory with compatibility layer for tests"""
-        try:
-            import app
-            if hasattr(app, 'CERT_DIR'):
-                return app.CERT_DIR
-        except ImportError:
-            pass
-        return self.cert_dir
 
-    def _get_compatibility_function(self, func_name, default_func):
-        """Get function from app module for test compatibility, fallback to default"""
-        try:
-            import app
-            if hasattr(app, func_name):
-                return getattr(app, func_name)
-        except ImportError:
-            pass
-        return default_func
-    
-    def _load_settings_compat(self):
-        """Load settings with compatibility layer for tests"""
-        load_settings_func = self._get_compatibility_function('load_settings', self.settings_manager.load_settings)
-        return load_settings_func()
-    
-    def _subprocess_run_compat(self, *args, **kwargs):
-        """Run subprocess with compatibility layer for tests"""
-        # Try to get subprocess.run from app module for test mocking
-        try:
-            import app
-            if hasattr(app, 'subprocess') and hasattr(app.subprocess, 'run'):
-                return app.subprocess.run(*args, **kwargs)
-        except (ImportError, AttributeError):
-            pass
-        return subprocess.run(*args, **kwargs)
-    
-    def _create_dns_config_compat(self, dns_provider, dns_config):
-        """Create DNS config file with compatibility layer for tests"""
-        config_funcs = {
-            'cloudflare': 'create_cloudflare_config',
-            'azure': 'create_azure_config',
-            'google': 'create_google_config',
-            'powerdns': 'create_powerdns_config',
-            'digitalocean': 'create_digitalocean_config',
-            'linode': 'create_linode_config',
-            'gandi': 'create_gandi_config',
-            'ovh': 'create_ovh_config',
-            'namecheap': 'create_namecheap_config',
-            'arvancloud': 'create_arvancloud_config',
-            'infomaniak': 'create_infomaniak_config',
-            'acme-dns': 'create_acme_dns_config'
-        }
-        
-        # Try to get function from app module for test compatibility
-        func_name = config_funcs.get(dns_provider, 'create_multi_provider_config')
-        
-        try:
-            import app
-            if hasattr(app, func_name):
-                config_func = getattr(app, func_name)
-                if dns_provider == 'cloudflare':
-                    # Cloudflare function expects just the token
-                    token = dns_config.get('api_token') or dns_config.get('token', '')
-                    return config_func(token)
-                elif dns_provider == 'azure':
-                    return config_func(
-                        dns_config.get('subscription_id', ''),
-                        dns_config.get('resource_group', ''),
-                        dns_config.get('tenant_id', ''),
-                        dns_config.get('client_id', ''),
-                        dns_config.get('client_secret', ''),
-                    )
-                elif dns_provider == 'google':
-                    return config_func(
-                        dns_config.get('project_id', ''),
-                        dns_config.get('service_account_key', ''),
-                    )
-                elif dns_provider == 'powerdns':
-                    return config_func(
-                        dns_config.get('api_url', ''),
-                        dns_config.get('api_key', ''),
-                    )
-                elif dns_provider == 'digitalocean':
-                    return config_func(dns_config.get('api_token', ''))
-                elif dns_provider == 'linode':
-                    return config_func(dns_config.get('api_key', ''))
-                elif dns_provider == 'gandi':
-                    return config_func(dns_config.get('api_token', ''))
-                elif dns_provider == 'ovh':
-                    return config_func(
-                        dns_config.get('endpoint', ''),
-                        dns_config.get('application_key', ''),
-                        dns_config.get('application_secret', ''),
-                        dns_config.get('consumer_key', ''),
-                    )
-                elif dns_provider == 'namecheap':
-                    return config_func(
-                        dns_config.get('username', ''),
-                        dns_config.get('api_key', ''),
-                    )
-                elif dns_provider == 'arvancloud':
-                    return config_func(dns_config.get('api_key', ''))
-                elif dns_provider == 'infomaniak':
-                    return config_func(dns_config.get('api_token', ''))
-                elif dns_provider == 'acme-dns':
-                    return config_func(
-                        dns_config.get('api_url', ''),
-                        dns_config.get('username', ''),
-                        dns_config.get('password', ''),
-                        dns_config.get('subdomain', ''),
-                    )
-                else:
-                    # Multi-provider config: (provider, config_dict)
-                    return config_func(dns_provider, dns_config)
-        except (ImportError, AttributeError):
-            pass
-        
-        # Fallback to direct module functions
-        if dns_provider == 'cloudflare':
-            token = dns_config.get('api_token') or dns_config.get('token', '')
-            return create_cloudflare_config(token)
-        elif dns_provider == 'azure':
-            return create_azure_config(
-                dns_config.get('subscription_id', ''),
-                dns_config.get('resource_group', ''),
-                dns_config.get('tenant_id', ''),
-                dns_config.get('client_id', ''),
-                dns_config.get('client_secret', ''),
-            )
-        elif dns_provider == 'google':
-            return create_google_config(
-                dns_config.get('project_id', ''),
-                dns_config.get('service_account_key', ''),
-            )
-        elif dns_provider == 'powerdns':
-            return create_powerdns_config(
-                dns_config.get('api_url', ''),
-                dns_config.get('api_key', ''),
-            )
-        elif dns_provider == 'digitalocean':
-            return create_digitalocean_config(dns_config.get('api_token', ''))
-        elif dns_provider == 'linode':
-            return create_linode_config(dns_config.get('api_key', ''))
-        elif dns_provider == 'gandi':
-            return create_gandi_config(dns_config.get('api_token', ''))
-        elif dns_provider == 'ovh':
-            return create_ovh_config(
-                dns_config.get('endpoint', ''),
-                dns_config.get('application_key', ''),
-                dns_config.get('application_secret', ''),
-                dns_config.get('consumer_key', ''),
-            )
-        elif dns_provider == 'namecheap':
-            return create_namecheap_config(
-                dns_config.get('username', ''),
-                dns_config.get('api_key', ''),
-            )
-        elif dns_provider == 'arvancloud':
-            return create_arvancloud_config(dns_config.get('api_key', ''))
-        elif dns_provider == 'infomaniak':
-            return create_infomaniak_config(dns_config.get('api_token', ''))
-        elif dns_provider == 'acme-dns':
-            return create_acme_dns_config(
-                dns_config.get('api_url', ''),
-                dns_config.get('username', ''),
-                dns_config.get('password', ''),
-                dns_config.get('subdomain', ''),
-            )
-        else:
-            return create_multi_provider_config(dns_provider, dns_config)
+
+
 
     def get_certificate_info(self, domain):
         """Get certificate information for a domain"""
@@ -221,7 +49,7 @@ class CertificateManager:
                 logger.warning(f"Failed to retrieve certificate from storage backend for {domain}: {e}")
         
         # Fall back to local filesystem for backward compatibility
-        cert_dir = self._get_cert_dir_compat()
+        cert_dir = self.cert_dir
         cert_path = cert_dir / domain
         if not cert_path.exists():
             logger.info(f"Certificate directory does not exist for domain: {domain}")
@@ -249,7 +77,7 @@ class CertificateManager:
         
         if not dns_provider:
             # Fall back to current settings
-            settings = self._load_settings_compat()
+            settings = self.settings_manager.load_settings()
             dns_provider = self.settings_manager.get_domain_dns_provider(domain, settings)
             logger.debug(f"Using DNS provider '{dns_provider}' from settings for {domain}")
         
@@ -268,7 +96,7 @@ class CertificateManager:
             metadata = {}
         
         dns_provider = metadata.get('dns_provider')
-        settings = self._load_settings_compat()
+        settings = self.settings_manager.load_settings()
         if not dns_provider:
             # Fall back to current settings
             dns_provider = self.settings_manager.get_domain_dns_provider(domain, settings)
@@ -284,7 +112,7 @@ class CertificateManager:
             
             try:
                 # Get certificate expiry using openssl
-                result = self._subprocess_run_compat([
+                result = self.shell_executor.run([
                     'openssl', 'x509', '-in', temp_cert_path, '-noout', '-dates'
                 ], capture_output=True, text=True)
                 
@@ -328,7 +156,7 @@ class CertificateManager:
 
     def _create_empty_cert_info(self, domain):
         """Create empty certificate info structure"""
-        settings = self._load_settings_compat()
+        settings = self.settings_manager.load_settings()
         dns_provider = self.settings_manager.get_domain_dns_provider(domain, settings)
         
         return {
@@ -357,11 +185,13 @@ class CertificateManager:
         # Track timing for metrics
         start_time = time.time()
         
-        # Track if we set Route53 environment variables for cleanup
-        route53_env_set = False
+        # Track if we set env vars
+        env_vars_set = False
         
         try:
             logger.info(f"Starting certificate creation for domain: {domain}")
+            
+            # ... (Validation and CA setup remains the same until DNS config)
             
             # Validate inputs
             if not domain or not email:
@@ -369,7 +199,7 @@ class CertificateManager:
             
             # Get CA provider configuration
             if not ca_provider:
-                settings = self._load_settings_compat()
+                settings = self.settings_manager.load_settings()
                 ca_provider = settings.get('default_ca_provider', 'letsencrypt')
             
             logger.info(f"Using CA provider: {ca_provider}")
@@ -387,10 +217,10 @@ class CertificateManager:
             # Get DNS configuration
             if not dns_config:
                 if not dns_provider:
-                    settings = self._load_settings_compat()
+                    settings = self.settings_manager.load_settings()
                     dns_provider = self.settings_manager.get_domain_dns_provider(domain, settings)
                 
-                dns_config, used_account_id = self._get_dns_config_compat(
+                dns_config, used_account_id = self._get_dns_config(
                     dns_provider, account_id
                 )
                 
@@ -400,18 +230,20 @@ class CertificateManager:
                 logger.info(f"Using DNS provider: {dns_provider} with account: {used_account_id}")
             
             # Create output directory
-            cert_dir = self._get_cert_dir_compat()
+            cert_dir = self.cert_dir
             cert_output_dir = cert_dir / domain
             cert_output_dir.mkdir(parents=True, exist_ok=True)
             
-            # Build certbot command using CA manager if available
+            # Get Strategy
+            strategy = DNSStrategyFactory.get_strategy(dns_provider)
+
+            # Build certbot command
             if self.ca_manager and ca_account_config:
                 certbot_cmd = self.ca_manager.build_certbot_command(
                     domain, email, ca_provider, dns_provider, dns_config, 
                     ca_account_config, staging, cert_dir
                 )
             else:
-                # Fallback to traditional Let's Encrypt command
                 certbot_cmd = [
                     'certbot', 'certonly',
                     '--non-interactive',
@@ -424,93 +256,37 @@ class CertificateManager:
                     '-d', domain
                 ]
                 
-                # Add staging flag if requested
                 if staging:
                     certbot_cmd.append('--staging')
             
-            # Configure DNS plugin based on provider
-            config_content = ""
-            credentials_file = None
+            # Prepare Environment
+            strategy.prepare_environment(os.environ, dns_config)
+            env_vars_set = True
+
+            # Create Config File
+            credentials_file = strategy.create_config_file(dns_config)
             
-            if dns_provider == 'cloudflare':
-                # Use compatibility function for config creation
-                credentials_file = self._create_dns_config_compat('cloudflare', dns_config)
-                plugin_name = 'dns-cloudflare'
-                
-            elif dns_provider == 'route53':
-                # Set environment variables for Route53
-                os.environ['AWS_ACCESS_KEY_ID'] = dns_config.get('access_key_id', '')
-                os.environ['AWS_SECRET_ACCESS_KEY'] = dns_config.get('secret_access_key', '')
-                if dns_config.get('region'):
-                    os.environ['AWS_DEFAULT_REGION'] = dns_config['region']
-                route53_env_set = True
-                plugin_name = 'dns-route53'
-                
-            elif dns_provider in ['azure', 'google', 'powerdns', 'digitalocean', 'linode', 'gandi', 'ovh', 'namecheap', 'arvancloud', 'infomaniak', 'acme-dns']:
-                # Use compatibility function for config creation
-                credentials_file = self._create_dns_config_compat(dns_provider, dns_config)
-                plugin_name = f'dns-{dns_provider}'
-                
-            else:
-                # Try multi-provider plugin for other providers
-                credentials_file = self._create_dns_config_compat(dns_provider, dns_config)
-                plugin_name = f'dns-{dns_provider}'
+            # Configure Args
+            strategy.configure_certbot_arguments(certbot_cmd, credentials_file)
             
-            # Add DNS plugin to command - special handling for PowerDNS, ACME-DNS, Namecheap and Infomaniak
-            if dns_provider == 'powerdns':
-                # Explicitly set authenticator and credentials to avoid ambiguity
-                certbot_cmd.extend(['--authenticator', plugin_name])
-                if credentials_file:
-                    certbot_cmd.extend([f'--{plugin_name}-credentials', credentials_file])
-            elif dns_provider == 'acme-dns':
-                # ACME-DNS uses 'acme-dns' plugin name without 'dns-' prefix
-                certbot_cmd.extend(['--authenticator', 'acme-dns'])
-                if credentials_file:
-                    certbot_cmd.extend(['--acme-dns-credentials', credentials_file])
-            elif dns_provider == 'namecheap':
-                certbot_cmd.extend(['--authenticator', plugin_name])
-                if credentials_file:
-                    certbot_cmd.extend([f'--{plugin_name}-credentials', credentials_file])
-            elif dns_provider == 'infomaniak':
-                certbot_cmd.extend(['--authenticator', plugin_name])
-                if credentials_file:
-                    certbot_cmd.extend([f'--{plugin_name}-credentials', credentials_file])
-            else:
-                certbot_cmd.extend([f'--{plugin_name}'])
-                # Add credentials file if needed
-                if credentials_file:
-                    certbot_cmd.extend([f'--{plugin_name}-credentials', credentials_file])
-            
-            # Set appropriate propagation time
-            # Read from settings if configured, else use defaults
+            # Set propagation time
             try:
-                settings = self._load_settings_compat()
+                settings = self.settings_manager.load_settings()
                 propagation_map = settings.get('dns_propagation_seconds', {}) or {}
             except Exception:
                 propagation_map = {}
-            default_map = {
-                'cloudflare': 60,
-                'route53': 60,
-                'digitalocean': 120,
-                'linode': 120,
-                'azure': 180,
-                'google': 120,
-                'powerdns': 60,
-                'gandi': 180,
-                'ovh': 180,
-                'namecheap': 300,
-                'arvancloud': 120,
-                'infomaniak': 300,
-                'acme-dns': 30
-            }
-            propagation_time = int(propagation_map.get(dns_provider, default_map.get(dns_provider, 120)))
-            certbot_cmd.extend([f'--{plugin_name}-propagation-seconds', str(propagation_time)])
+            
+            # Default to strategy default if not in settings map
+            default_seconds = strategy.default_propagation_seconds
+            propagation_time = int(propagation_map.get(dns_provider, default_seconds))
+            
+            certbot_cmd.extend([f'--{strategy.plugin_name}-propagation-seconds', str(propagation_time)])
             
             logger.info(f"Running certbot command for {domain} with {dns_provider}")
             logger.debug(f"Certbot command: {' '.join(str(item) for item in certbot_cmd)}")
             
             # Run certbot
-            result = self._subprocess_run_compat(
+            result = self.shell_executor.run(
                 certbot_cmd,
                 capture_output=True,
                 text=True,
@@ -524,11 +300,10 @@ class CertificateManager:
                 except FileNotFoundError:
                     pass
             
-            # Clean up Route53 environment variables
-            if route53_env_set:
-                for env_var in ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_DEFAULT_REGION']:
-                    if env_var in os.environ:
-                        del os.environ[env_var]
+            # Cleanup Environment
+            if env_vars_set:
+                strategy.cleanup_environment(os.environ)
+                env_vars_set = False
             
             if result.returncode != 0:
                 logger.error(f"Certbot failed for {domain}: {result.stderr}")
@@ -543,14 +318,12 @@ class CertificateManager:
                     src_file = live_dir / cert_file
                     dst_file = cert_output_dir / cert_file
                     if src_file.exists():
-                        # Resolve symlink and copy the actual file
                         shutil.copy(os.path.realpath(src_file), dst_file)
                         logger.info(f"Copied {cert_file} to {dst_file}")
-                        # Read file content for storage backend
                         with open(dst_file, 'rb') as f:
                             cert_files[cert_file] = f.read()
             
-            # Save certificate metadata including DNS provider used
+            # Save metadata
             metadata = {
                 'domain': domain,
                 'dns_provider': dns_provider,
@@ -560,7 +333,6 @@ class CertificateManager:
                 'account_id': account_id
             }
             
-            # Store certificate using storage backend if available
             if self.storage_manager:
                 try:
                     storage_success = self.storage_manager.store_certificate(domain, cert_files, metadata)
@@ -571,7 +343,6 @@ class CertificateManager:
                 except Exception as e:
                     logger.error(f"Error storing certificate in storage backend for {domain}: {e}")
             
-            # Always save metadata to local filesystem for backward compatibility
             metadata_file = cert_output_dir / 'metadata.json'
             try:
                 import json
@@ -581,7 +352,6 @@ class CertificateManager:
             except Exception as e:
                 logger.warning(f"Failed to save metadata for {domain}: {e}")
             
-            # Track metrics
             duration = time.time() - start_time
             logger.info(f"Certificate created successfully for {domain} in {duration:.2f} seconds")
             
@@ -598,11 +368,16 @@ class CertificateManager:
             raise RuntimeError("Certificate creation timed out")
             
         except Exception as e:
-            # Clean up Route53 environment variables on error
-            if route53_env_set:
-                for env_var in ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_DEFAULT_REGION']:
-                    if env_var in os.environ:
-                        del os.environ[env_var]
+            # Clean up env if still set
+            if env_vars_set:
+                # We need to access strategy again, but it might not be defined if error happened early
+                # Best effort cleanup
+                try:
+                    strategy = DNSStrategyFactory.get_strategy(dns_provider) if 'dns_provider' in locals() and dns_provider else None
+                    if strategy:
+                        strategy.cleanup_environment(os.environ)
+                except:
+                    pass
             
             duration = time.time() - start_time
             logger.error(f"Certificate creation failed for {domain}: {str(e)} (duration: {duration:.2f}s)")
@@ -612,7 +387,7 @@ class CertificateManager:
         """Renew a certificate"""
         try:
             # Use the same config/work/log directories as during creation
-            cert_dir = self._get_cert_dir_compat()
+            cert_dir = self.cert_dir
             domain_dir = cert_dir / domain
             work_dir = domain_dir / 'work'
             logs_dir = domain_dir / 'logs'
@@ -625,7 +400,7 @@ class CertificateManager:
                 '--work-dir', str(work_dir),
                 '--logs-dir', str(logs_dir)
             ]
-            result = self._subprocess_run_compat(cmd, capture_output=True, text=True)
+            result = self.shell_executor.run(cmd, capture_output=True, text=True)
             
             if result.returncode == 0:
                 # Copy renewed certificates from the correct live directory
@@ -671,31 +446,15 @@ class CertificateManager:
 
     def check_renewals(self):
         """Check and renew certificates that are about to expire"""
-        # Use compatibility layer for load_settings (for test mocking)
-        try:
-            import app
-            if hasattr(app, 'load_settings'):
-                settings = app.load_settings()
-            else:
-                settings = self.settings_manager.load_settings()
-        except ImportError:
-            settings = self.settings_manager.load_settings()
+        settings = self.settings_manager.load_settings()
             
         if not settings.get('auto_renew', True):
             return
         
         # Migrate settings format if needed
-        try:
-            import app
-            if hasattr(app, 'migrate_domains_format'):
-                settings = app.migrate_domains_format(settings)
-            else:
-                settings = self.settings_manager.migrate_domains_format(settings)
-        except ImportError:
-            settings = self.settings_manager.migrate_domains_format(settings)
+        settings = self.settings_manager.migrate_domains_format(settings)
         
-        logger_compat = self._get_logger_compat()
-        logger_compat.info("Checking for certificates that need renewal")
+        logger.info("Checking for certificates that need renewal")
         
         for domain_entry in settings.get('domains', []):
             try:
@@ -711,36 +470,13 @@ class CertificateManager:
                 if not domain:
                     continue
                 
-                # Use compatibility layer for get_certificate_info (for test mocking)
-                try:
-                    import app
-                    if hasattr(app, 'get_certificate_info'):
-                        cert_info = app.get_certificate_info(domain)
-                    else:
-                        cert_info = self.get_certificate_info(domain)
-                except ImportError:
-                    cert_info = self.get_certificate_info(domain)
+                cert_info = self.get_certificate_info(domain)
                 
                 if cert_info and cert_info.get('needs_renewal'):
-                    logger_compat.info(f"Renewing certificate for {domain}")
+                    logger.info(f"Renewing certificate for {domain}")
                     try:
-                        # Use compatibility layer for renewal (for test mocking)
-                        try:
-                            import app
-                            if hasattr(app, 'renew_certificate'):
-                                success, message = app.renew_certificate(domain)
-                                if success:
-                                    logger_compat.info(f"Successfully renewed certificate for {domain}")
-                                else:
-                                    logger.error(f"Failed to renew certificate for {domain}: {message}")
-                            else:
-                                # Fallback to direct method call
-                                self.renew_certificate(domain)
-                                logger_compat.info(f"Successfully renewed certificate for {domain}")
-                        except ImportError:
-                            # Fallback to direct method call
-                            self.renew_certificate(domain)
-                            logger_compat.info(f"Successfully renewed certificate for {domain}")
+                        self.renew_certificate(domain)
+                        logger.info(f"Successfully renewed certificate for {domain}")
                     except Exception as e:
                         logger.error(f"Failed to renew certificate for {domain}: {e}")
                         
@@ -750,46 +486,19 @@ class CertificateManager:
     def create_certificate_legacy(self, domain, email, cloudflare_token):
         """Legacy function for backward compatibility"""
         dns_config = {'api_token': cloudflare_token}
-        
-        # Try to use app-level create_certificate for test compatibility
-        try:
-            import app
-            if hasattr(app, 'create_certificate'):
-                return app.create_certificate(domain, email, 'cloudflare', dns_config)
-        except ImportError:
-            pass
-            
         # Fallback to direct method call
         return self.create_certificate(domain, email, 'cloudflare', dns_config)
     
-    def _get_logger_compat(self):
-        """Get logger with compatibility layer for tests"""
-        try:
-            import app
-            if hasattr(app, 'logger'):
-                return app.logger
-        except ImportError:
-            pass
-        return logger
 
-    def _get_dns_config_compat(self, dns_provider, account_id):
-        """Get DNS provider account config with compatibility layer for tests"""
-        # Try to get function from app module for test compatibility
-        try:
-            import app
-            if hasattr(app, 'get_dns_provider_account_config'):
-                settings = self._load_settings_compat()
-                return app.get_dns_provider_account_config(dns_provider, account_id, settings)
-        except (ImportError, AttributeError):
-            pass
-        
-        # Fallback to direct manager call
+
+    def _get_dns_config(self, dns_provider, account_id):
+        """Get DNS provider account config"""
         return self.dns_manager.get_dns_provider_account_config(dns_provider, account_id)
 
     def create_missing_metadata(self):
         """Create metadata files for existing certificates that don't have them"""
-        cert_dir = self._get_cert_dir_compat()
-        settings = self._load_settings_compat()
+        cert_dir = self.cert_dir
+        settings = self.settings_manager.load_settings()
         
         created_count = 0
         

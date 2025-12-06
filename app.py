@@ -31,6 +31,8 @@ from modules.core import (
     OCSPResponder, CRLManager, AuditLogger,
     RateLimitConfig, SimpleRateLimiter
 )
+from modules.core.shell import ShellExecutor
+# Import CA manager for DigiCert and Private CA support
 # Import CA manager for DigiCert and Private CA support
 from modules.core.ca_manager import CAManager
 from modules.api import create_api_models, create_api_resources
@@ -146,13 +148,17 @@ class CertMateApp:
             crl_dir = self.data_dir / "certs" / "crl"
             crl_manager = CRLManager(private_ca, client_cert_manager, crl_dir)
 
+            # Initialize Shell Executor
+            shell_executor = ShellExecutor()
+
             # Initialize certificate manager
             certificate_manager = CertificateManager(
                 cert_dir=self.cert_dir,
                 settings_manager=settings_manager,
                 dns_manager=dns_manager,
                 storage_manager=storage_manager,
-                ca_manager=ca_manager
+                ca_manager=ca_manager,
+                shell_executor=shell_executor
             )
 
             # Initialize Audit Logger (Phase 4 - Easy Win)
@@ -179,7 +185,8 @@ class CertMateApp:
                 'ocsp': ocsp_responder,
                 'crl': crl_manager,
                 'audit': audit_logger,
-                'rate_limiter': rate_limiter
+                'rate_limiter': rate_limiter,
+                'shell_executor': shell_executor
             }
             
             logger.info("All managers initialized successfully")

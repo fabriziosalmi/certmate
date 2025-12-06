@@ -234,7 +234,7 @@ class PrivateCAGenerator:
                 "type": "ca",
                 "common_name": common_name,
                 "created_at": datetime.utcnow().isoformat(),
-                "expires_at": cert.not_valid_after.isoformat(),
+                "expires_at": cert.not_valid_after_utc.isoformat(),
                 "serial_number": str(cert.serial_number),
                 "key_size": key.key_size,
                 "issuer": {

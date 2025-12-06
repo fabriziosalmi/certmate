@@ -5,18 +5,28 @@ Defines Flask-RESTX models for API documentation and validation
 
 from flask_restx import fields
 
+class MaskedString(fields.String):
+    """Custom field that masks sensitive string values"""
+    def format(self, value):
+        if not value:
+            return value
+        s = str(value)
+        if len(s) > 8:
+            return f"{s[:4]}...{s[-4:]}"
+        return "***"
+
 
 def create_api_models(api):
     """Create and register all API models with the Flask-RESTX API instance"""
     
     # DNS Provider models
     cloudflare_model = api.model('CloudflareConfig', {
-        'api_token': fields.String(description='Cloudflare API token')
+        'api_token': MaskedString(description='Cloudflare API token')
     })
 
     route53_model = api.model('Route53Config', {
         'access_key_id': fields.String(description='AWS Access Key ID'),
-        'secret_access_key': fields.String(description='AWS Secret Access Key'),
+        'secret_access_key': MaskedString(description='AWS Secret Access Key'),
         'region': fields.String(description='AWS Region', default='us-east-1')
     })
 
@@ -25,75 +35,75 @@ def create_api_models(api):
         'resource_group': fields.String(description='Azure Resource Group'),
         'tenant_id': fields.String(description='Azure Tenant ID'),
         'client_id': fields.String(description='Azure Client ID'),
-        'client_secret': fields.String(description='Azure Client Secret')
+        'client_secret': MaskedString(description='Azure Client Secret')
     })
 
     google_model = api.model('GoogleConfig', {
         'project_id': fields.String(description='Google Cloud Project ID'),
-        'service_account_key': fields.String(description='Google Service Account JSON Key')
+        'service_account_key': MaskedString(description='Google Service Account JSON Key')
     })
 
     powerdns_model = api.model('PowerDNSConfig', {
         'api_url': fields.String(description='PowerDNS API URL'),
-        'api_key': fields.String(description='PowerDNS API Key')
+        'api_key': MaskedString(description='PowerDNS API Key')
     })
 
     digitalocean_model = api.model('DigitalOceanConfig', {
-        'api_token': fields.String(description='DigitalOcean API token')
+        'api_token': MaskedString(description='DigitalOcean API token')
     })
 
     linode_model = api.model('LinodeConfig', {
-        'api_key': fields.String(description='Linode API key')
+        'api_key': MaskedString(description='Linode API key')
     })
 
     gandi_model = api.model('GandiConfig', {
-        'api_token': fields.String(description='Gandi API token')
+        'api_token': MaskedString(description='Gandi API token')
     })
 
     ovh_model = api.model('OvhConfig', {
         'endpoint': fields.String(description='OVH API endpoint'),
-        'application_key': fields.String(description='OVH application key'),
-        'application_secret': fields.String(description='OVH application secret'),
-        'consumer_key': fields.String(description='OVH consumer key')
+        'application_key': MaskedString(description='OVH application key'),
+        'application_secret': MaskedString(description='OVH application secret'),
+        'consumer_key': MaskedString(description='OVH consumer key')
     })
 
     namecheap_model = api.model('NamecheapConfig', {
         'username': fields.String(description='Namecheap username'),
-        'api_key': fields.String(description='Namecheap API key')
+        'api_key': MaskedString(description='Namecheap API key')
     })
 
     # Tier 3 DNS Providers (Additional individual plugins)
     hetzner_model = api.model('HetznerConfig', {
-        'api_token': fields.String(description='Hetzner DNS API token')
+        'api_token': MaskedString(description='Hetzner DNS API token')
     })
 
     porkbun_model = api.model('PorkbunConfig', {
-        'api_key': fields.String(description='Porkbun API key'),
-        'secret_key': fields.String(description='Porkbun secret key')
+        'api_key': MaskedString(description='Porkbun API key'),
+        'secret_key': MaskedString(description='Porkbun secret key')
     })
 
     godaddy_model = api.model('GoDaddyConfig', {
-        'api_key': fields.String(description='GoDaddy API key'),
-        'secret': fields.String(description='GoDaddy API secret')
+        'api_key': MaskedString(description='GoDaddy API key'),
+        'secret': MaskedString(description='GoDaddy API secret')
     })
 
     he_ddns_model = api.model('HurricaneElectricConfig', {
         'username': fields.String(description='Hurricane Electric username'),
-        'password': fields.String(description='Hurricane Electric password')
+        'password': MaskedString(description='Hurricane Electric password')
     })
 
     dynudns_model = api.model('DynuConfig', {
-        'token': fields.String(description='Dynu API token')
+        'token': MaskedString(description='Dynu API token')
     })
 
     arvancloud_model = api.model('ArvanCloudConfig', {
-        'api_key': fields.String(description='ArvanCloud API key')
+        'api_key': MaskedString(description='ArvanCloud API key')
     })
 
     acme_dns_model = api.model('ACMEDNSConfig', {
         'api_url': fields.String(description='ACME-DNS server URL'),
         'username': fields.String(description='ACME-DNS username'),
-        'password': fields.String(description='ACME-DNS password'),
+        'password': MaskedString(description='ACME-DNS password'),
         'subdomain': fields.String(description='ACME-DNS subdomain')
     })
 
@@ -140,11 +150,11 @@ def create_api_models(api):
     })
 
     settings_model = api.model('Settings', {
-        'cloudflare_token': fields.String(description='Cloudflare API token (deprecated, use dns_providers)'),
+        'cloudflare_token': MaskedString(description='Cloudflare API token (deprecated, use dns_providers)'),
         'domains': fields.List(fields.Raw, description='List of domains (can be strings or objects)'),
         'email': fields.String(description='Email for Let\'s Encrypt'),
         'auto_renew': fields.Boolean(description='Enable auto-renewal'),
-        'api_bearer_token': fields.String(description='API bearer token for authentication'),
+        'api_bearer_token': MaskedString(description='API bearer token for authentication'),
         'dns_provider': fields.String(description='Active DNS provider', enum=['cloudflare', 'route53', 'azure', 'google', 'powerdns', 'digitalocean', 'linode', 'gandi', 'ovh', 'namecheap', 'vultr', 'dnsmadeeasy', 'nsone', 'rfc2136', 'hetzner', 'porkbun', 'godaddy', 'he-ddns', 'dynudns', 'arvancloud', 'acme-dns']),
         'dns_providers': fields.Nested(dns_providers_model, description='DNS provider configurations')
     })

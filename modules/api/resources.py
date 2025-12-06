@@ -75,26 +75,17 @@ def create_api_resources(api, models, managers):
     class Settings(Resource):
         @api.doc(security='Bearer')
         @auth_manager.require_auth
+        @api.marshal_with(models['settings_model'])
         def get(self):
             """Get current settings"""
             try:
                 settings = settings_manager.load_settings()
-                # Don't expose sensitive data in API response
-                safe_settings = dict(settings)
-                
-                # Mask sensitive values
-                if 'api_bearer_token' in safe_settings:
-                    token = safe_settings['api_bearer_token']
-                    if len(token) > 8:
-                        safe_settings['api_bearer_token'] = f"{token[:4]}...{token[-4:]}"
-                
-                # Mask DNS provider credentials
-                if 'dns_providers' in safe_settings:
-                    for provider, config in safe_settings['dns_providers'].items():
-                        if isinstance(config, dict):
-                            self._mask_sensitive_dns_config(config)
-                
-                return safe_settings
+                if not settings:
+                    return {}, 200
+                return settings
+            except ValueError as e:
+                logger.error(f"Invalid settings format: {e}")
+                return {'error': 'Invalid settings data'}, 500
             except Exception as e:
                 logger.error(f"Error getting settings: {e}")
                 return {'error': 'Failed to load settings'}, 500
@@ -127,69 +118,23 @@ def create_api_resources(api, models, managers):
                 logger.error(f"Error updating settings: {e}")
                 return {'error': 'Failed to update settings'}, 500
 
-        def _mask_sensitive_dns_config(self, config):
-            """Mask sensitive values in DNS configuration"""
-            sensitive_keys = [
-                'api_token', 'secret_access_key', 'client_secret', 'service_account_key',
-                'api_key', 'secret_key', 'password', 'consumer_key', 'application_secret'
-            ]
-            
-            for key in sensitive_keys:
-                if key in config and config[key]:
-                    value = str(config[key])
-                    if len(value) > 8:
-                        config[key] = f"{value[:4]}...{value[-4:]}"
-                    else:
-                        config[key] = "***"
+
 
     # DNS Providers endpoint
     class DNSProviders(Resource):
         @api.doc(security='Bearer')
         @auth_manager.require_auth
+        @api.marshal_with(models['dns_providers_model'])
         def get(self):
             """Get DNS provider configurations"""
             try:
                 settings = settings_manager.load_settings()
-                dns_providers = settings.get('dns_providers', {})
-                
-                # Mask sensitive data
-                safe_providers = {}
-                for provider, config in dns_providers.items():
-                    if isinstance(config, dict):
-                        safe_config = dict(config)
-                        self._mask_sensitive_dns_config(safe_config)
-                        safe_providers[provider] = safe_config
-                
-                return safe_providers
+                return settings.get('dns_providers', {})
             except Exception as e:
                 logger.error(f"Error getting DNS providers: {e}")
                 return {'error': 'Failed to load DNS providers'}, 500
 
-        def _mask_sensitive_dns_config(self, config):
-            """Mask sensitive values in DNS configuration (same as Settings class)"""
-            sensitive_keys = [
-                'api_token', 'secret_access_key', 'client_secret', 'service_account_key',
-                'api_key', 'secret_key', 'password', 'consumer_key', 'application_secret'
-            ]
-            
-            if 'accounts' in config:
-                for account_id, account_config in config['accounts'].items():
-                    if isinstance(account_config, dict):
-                        for key in sensitive_keys:
-                            if key in account_config and account_config[key]:
-                                value = str(account_config[key])
-                                if len(value) > 8:
-                                    account_config[key] = f"{value[:4]}...{value[-4:]}"
-                                else:
-                                    account_config[key] = "***"
-            else:
-                for key in sensitive_keys:
-                    if key in config and config[key]:
-                        value = str(config[key])
-                        if len(value) > 8:
-                            config[key] = f"{value[:4]}...{value[-4:]}"
-                        else:
-                            config[key] = "***"
+
 
     # Cache management endpoints
     class CacheStats(Resource):
@@ -430,6 +375,10 @@ def create_api_resources(api, models, managers):
                     mimetype='application/octet-stream'
                 )
                 
+            except FileNotFoundError:
+                return {'error': 'Backup file not found'}, 404
+            except PermissionError:
+                return {'error': 'Access denied to backup file'}, 403
             except Exception as e:
                 logger.error(f"Error downloading backup: {e}")
                 return {'error': 'Failed to download backup'}, 500
@@ -489,6 +438,10 @@ def create_api_resources(api, models, managers):
                 else:
                     return {'error': 'Failed to restore unified backup'}, 500
                     
+            except FileNotFoundError:
+                return {'error': 'Backup file not found'}, 404
+            except ValueError as e:
+                return {'error': str(e)}, 400
             except Exception as e:
                 logger.error(f"Error restoring backup: {e}")
                 return {'error': f'Failed to restore backup: {str(e)}'}, 500
