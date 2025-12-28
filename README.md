@@ -24,7 +24,7 @@
 CertMate solves the complexity of SSL certificate management in modern distributed architectures. Whether you're running a single application or managing certificates across multiple datacenters, CertMate provides:
 
 - **🔄 Zero-Downtime Automation** - Certificates renew automatically 30 days before expiry
-- **🌐 Multi-Cloud Support** - Works with 19 DNS providers (Cloudflare, AWS, Azure, GCP, Hetzner, Porkbun, GoDaddy, and more)
+- **🌐 Multi-Cloud Support** - Works with **22 DNS providers** (Cloudflare, AWS, Azure, GCP, Hetzner, Porkbun, GoDaddy, and more)
 - **🚀 Enterprise-Ready** - Docker, Kubernetes, REST API, and monitoring built-in
 - **📦 Simple Integration** - One-URL certificate downloads for easy automation
 - **🔒 Security-First** - Bearer token authentication, secure file permissions, audit logging
@@ -98,7 +98,7 @@ CertMate solves the complexity of SSL certificate management in modern distribut
 
 ## 🌐 Supported DNS Providers
 
-CertMate supports **19 DNS providers** through Let's Encrypt DNS-01 challenge via individual certbot plugins that provide reliable, well-tested DNS challenge support. **Multi-account support** is available for major providers, enabling enterprise-grade deployments with separate accounts for production, staging, and disaster recovery.
+CertMate supports **22 DNS providers** through Let's Encrypt DNS-01 challenge via individual certbot plugins that provide reliable, well-tested DNS challenge support. **Multi-account support** is available for major providers, enabling enterprise-grade deployments with separate accounts for production, staging, and disaster recovery.
 
 | Provider | Credentials Required | Multi-Account | Use Case | Status |
 |----------|---------------------|---------------|----------|---------|
@@ -121,6 +121,9 @@ CertMate supports **19 DNS providers** through Let's Encrypt DNS-01 challenge vi
 | **🟢 GoDaddy** | API Key, Secret | ➖ Single | Popular domain registrar | ✅ **Stable** |
 | **🔵 Hurricane Electric** | Username, Password | ➖ Single | Free DNS hosting | ✅ **Stable** |
 | **🔶 Dynu** | API Token | ➖ Single | Dynamic DNS service | ✅ **Stable** |
+| **🟣 ArvanCloud** | API Key | ➖ Single | Iranian cloud provider | ✅ **Stable** |
+| **🟢 Infomaniak** | API Token | ➖ Single | Swiss ISP & cloud provider | ✅ **Stable** |
+| **🔷 ACME-DNS** | JSON Config | ➖ Single | Generic ACME-DNS server | ✅ **Stable** |
 
 ### 🌟 Provider Categories
 
