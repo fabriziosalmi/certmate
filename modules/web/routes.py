@@ -50,7 +50,7 @@ def register_web_routes(app, managers):
             
             # Also check for certificates that exist on disk but might not be in settings
             cert_dirs = []
-            cert_dir = certificate_manager._get_cert_dir_compat()
+            cert_dir = certificate_manager.cert_dir
             if cert_dir.exists():
                 cert_dirs = [d for d in cert_dir.iterdir() if d.is_dir()]
             
@@ -334,7 +334,7 @@ def register_web_routes(app, managers):
             
             # Also check for certificates that exist on disk but might not be in settings
             cert_dirs = []
-            cert_dir = certificate_manager._get_cert_dir_compat()
+            cert_dir = certificate_manager.cert_dir
             if cert_dir.exists():
                 cert_dirs = [d for d in cert_dir.iterdir() if d.is_dir()]
             
