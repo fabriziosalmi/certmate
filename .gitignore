@@ -78,3 +78,4 @@ test_api_*.py
 test_certificate_creation_*.py
 real_world_test_*.py
 integration_test_*.py
+github_response.md
