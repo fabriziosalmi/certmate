@@ -9,6 +9,7 @@
 [![Docker](https://img.shields.io/badge/docker-ready-blue)](https://hub.docker.com/)
 [![API Documentation](https://img.shields.io/badge/API-Swagger-green)](http://localhost:8000/docs/)
 [![CI](https://github.com/fabriziosalmi/certmate/actions/workflows/ci.yml/badge.svg)](https://github.com/fabriziosalmi/certmate/actions/workflows/ci.yml)
+[![Build Multi-Platform Docker Images](https://github.com/fabriziosalmi/certmate/actions/workflows/docker-multiplatform.yml/badge.svg)](https://github.com/fabriziosalmi/certmate/actions/workflows/docker-multiplatform.yml)
  
 ![screenshot1](screenshot_1.png)
 ![screenshot2](screenshot_2.png)
