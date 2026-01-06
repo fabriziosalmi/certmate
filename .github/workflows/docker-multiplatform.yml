@@ -8,8 +8,8 @@ name: Build Multi-Platform Docker Images
 #   - DOCKERHUB_USER: Docker Hub username (required for pushing)
 #
 # The workflow runs on:
-#   - Push to main/develop branches (builds and pushes)
-#   - Push of version tags (builds and pushes with version tags)
+#   - Push to main/develop branches (builds only, no push to registry)
+#   - Push of version tags v* (builds and pushes to Docker Hub)
 #   - Pull requests to main (builds only, no push)
 #   - Manual trigger via workflow_dispatch (configurable platforms and push)
 
@@ -51,7 +51,7 @@ jobs:
         version: latest
         
     - name: Log in to Docker Hub
-      if: github.event_name != 'pull_request'
+      if: github.ref_type == 'tag' || github.event_name == 'workflow_dispatch'
       uses: docker/login-action@v3
       with:
         registry: ${{ env.REGISTRY }}
@@ -85,13 +85,16 @@ jobs:
       run: |
         if [ "${{ github.event_name }}" = "pull_request" ]; then
           echo "push=false" >> $GITHUB_OUTPUT
+        elif [ "${{ github.ref_type }}" = "tag" ]; then
+          echo "push=true" >> $GITHUB_OUTPUT
         elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
           echo "push=${{ github.event.inputs.push_to_registry }}" >> $GITHUB_OUTPUT
         else
-          echo "push=true" >> $GITHUB_OUTPUT
+          echo "push=false" >> $GITHUB_OUTPUT
         fi
         
     - name: Build and push Docker image
+      id: build
       uses: docker/build-push-action@v5
       with:
         context: .
@@ -105,7 +108,7 @@ jobs:
           REQUIREMENTS_FILE=requirements-minimal.txt
           
     - name: Update Docker Hub description
-      if: github.ref == 'refs/heads/main' && steps.should_push.outputs.push == 'true'
+      if: github.ref_type == 'tag' && steps.should_push.outputs.push == 'true'
       uses: peter-evans/dockerhub-description@v3
       with:
         username: ${{ env.DOCKERHUB_USERNAME }}
@@ -120,11 +123,11 @@ jobs:
   security-scan:
     runs-on: ubuntu-latest
     needs: build
-    if: github.event_name != 'pull_request'
+    if: github.ref_type == 'tag'
     
     steps:
     - name: Run Trivy vulnerability scanner
-      uses: aquasecurity/trivy-action@master
+      uses: aquasecurity/trivy-action@0.28.0
       with:
         image-ref: docker.io/${{ secrets.DOCKERHUB_USER }}/certmate:latest
         format: 'sarif'
