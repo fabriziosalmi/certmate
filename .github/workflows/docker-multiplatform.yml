@@ -124,12 +124,14 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     if: github.ref_type == 'tag'
+    env:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USER }}
     
     steps:
     - name: Run Trivy vulnerability scanner
       uses: aquasecurity/trivy-action@0.28.0
       with:
-        image-ref: docker.io/${{ secrets.DOCKERHUB_USER }}/certmate:latest
+        image-ref: docker.io/${{ env.DOCKERHUB_USERNAME }}/certmate:latest
         format: 'sarif'
         output: 'trivy-results.sarif'
         
