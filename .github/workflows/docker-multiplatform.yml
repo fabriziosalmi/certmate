@@ -40,6 +40,9 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     
     steps:
     - name: Checkout repository
@@ -124,6 +127,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     if: github.ref_type == 'tag'
+    permissions:
+      contents: read
+      security-events: write
     env:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USER }}
     
