@@ -396,7 +396,7 @@ class PrivateCAGenerator:
                         elif oid_string == "serverAuth":
                             eku_list.append(x509.oid.ExtendedKeyUsageOID.SERVER_AUTH)
                         elif oid_string == "codeSigning":
-                            sku_list.append(x509.oid.ExtendedKeyUsageOID.CODE_SIGNING)
+                            eku_list.append(x509.oid.ExtendedKeyUsageOID.CODE_SIGNING)
                         elif oid_string == "timeStamping":
                             eku_list.append(x509.oid.ExtendedKeyUsageOID.TIME_STAMPING)
 
