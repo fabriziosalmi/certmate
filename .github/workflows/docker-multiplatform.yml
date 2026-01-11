@@ -55,7 +55,11 @@ jobs:
           type=semver,pattern={{version}}
           type=semver,pattern={{major}}.{{minor}}
           type=semver,pattern={{major}}
+          type=semver,pattern=v{{version}}
+          type=semver,pattern=v{{major}}.{{minor}}
           type=raw,value=latest,enable={{is_default_branch}}
+        flavor: |
+          latest=auto
           
     - name: Determine platforms
       id: platforms
@@ -92,12 +96,14 @@ jobs:
           
     - name: Update Docker Hub description
       if: github.ref == 'refs/heads/main' && steps.should_push.outputs.push == 'true'
+      continue-on-error: true  # Don't fail build if description update fails
       uses: peter-evans/dockerhub-description@v3
       with:
         username: ${{ secrets.DOCKERHUB_USER }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
         repository: ${{ secrets.DOCKERHUB_USER }}/${{ env.IMAGE_NAME }}
-        readme-filepath: ./README.md
+        readme-filepath: ./README.dockerhub.md
+        short-description: 'SSL Certificate Management System - 22 DNS providers, Multi-CA support, Enterprise-ready'
         
     - name: Image digest
       if: steps.should_push.outputs.push == 'true'
