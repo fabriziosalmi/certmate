@@ -3153,20 +3153,31 @@
             const caProvider = document.getElementById('default-ca').value;
             const configs = document.querySelectorAll('[id$="-config"]');
             
-            // Hide all CA configuration panels
+            // Hide all CA configuration panels and disable their required fields
             const caConfigs = ['letsencrypt-config', 'digicert-config', 'private-ca-config'];
             caConfigs.forEach(configId => {
                 const element = document.getElementById(configId);
                 if (element) {
                     element.style.display = 'none';
+                    // Disable required validation for hidden fields
+                    const requiredFields = element.querySelectorAll('[required]');
+                    requiredFields.forEach(field => {
+                        field.removeAttribute('required');
+                        field.dataset.wasRequired = 'true';
+                    });
                 }
             });
             
-            // Show the selected CA configuration panel
+            // Show the selected CA configuration panel and re-enable required fields
             const selectedConfigId = caProvider + '-config';
             const selectedConfig = document.getElementById(selectedConfigId);
             if (selectedConfig) {
                 selectedConfig.style.display = 'block';
+                // Re-enable required validation for visible fields
+                const requiredFields = selectedConfig.querySelectorAll('[data-was-required="true"]');
+                requiredFields.forEach(field => {
+                    field.setAttribute('required', '');
+                });
             }
             
             // Update hint text based on selected CA
