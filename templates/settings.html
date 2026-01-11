@@ -1860,8 +1860,21 @@
                 addDebugLog('Saving main settings...', 'info');
                 
                 const formData = new FormData(form);
+                const caProviders = collectCAProviderSettings();
+                const defaultCA = formData.get('default_ca') || 'letsencrypt';
+                
+                // Get email from the selected CA provider
+                let email = '';
+                if (defaultCA === 'letsencrypt') {
+                    email = caProviders.letsencrypt?.email || '';
+                } else if (defaultCA === 'digicert') {
+                    email = caProviders.digicert?.email || '';
+                } else if (defaultCA === 'private_ca') {
+                    email = caProviders.private_ca?.email || '';
+                }
+                
                 const settings = {
-                    email: formData.get('email')?.trim(),
+                    email: email.trim(),
                     domains: formData.get('domains')?.split('\n').map(d => d.trim()).filter(d => d),
                     auto_renew: formData.get('auto_renew') === 'on',
                     renewal_threshold_days: parseInt(formData.get('renewal_threshold_days')) || 30,
@@ -1870,13 +1883,15 @@
                     cache_ttl: parseInt(formData.get('cache_ttl')) || 300,
                     storage_backend: formData.get('storage_backend'),
                     certificate_storage: collectStorageBackendSettings(),
-                    default_ca: formData.get('default_ca') || 'letsencrypt',
-                    ca_providers: collectCAProviderSettings()
+                    default_ca: defaultCA,
+                    ca_providers: caProviders
                 };
                 
-                // Validate required fields
+                // Validate required fields - email comes from the selected CA provider
                 if (!settings.email) {
-                    throw new Error('Email address is required');
+                    const caDisplayName = defaultCA === 'letsencrypt' ? "Let's Encrypt" : 
+                                          defaultCA === 'digicert' ? 'DigiCert' : 'Private CA';
+                    throw new Error(`Email address is required in the ${caDisplayName} configuration section`);
                 }
                 
                 if (!settings.dns_provider) {
@@ -3153,6 +3168,13 @@
             const caProvider = document.getElementById('default-ca').value;
             const configs = document.querySelectorAll('[id$="-config"]');
             
+            // Map CA provider values to config IDs
+            const caProviderToConfigId = {
+                'letsencrypt': 'letsencrypt-config',
+                'digicert': 'digicert-config',
+                'private_ca': 'private-ca-config'
+            };
+            
             // Hide all CA configuration panels and disable their required fields
             const caConfigs = ['letsencrypt-config', 'digicert-config', 'private-ca-config'];
             caConfigs.forEach(configId => {
@@ -3169,7 +3191,7 @@
             });
             
             // Show the selected CA configuration panel and re-enable required fields
-            const selectedConfigId = caProvider + '-config';
+            const selectedConfigId = caProviderToConfigId[caProvider] || caProvider + '-config';
             const selectedConfig = document.getElementById(selectedConfigId);
             if (selectedConfig) {
                 selectedConfig.style.display = 'block';
