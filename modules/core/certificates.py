@@ -353,6 +353,34 @@ class CertificateManager:
             except Exception as e:
                 logger.warning(f"Failed to save metadata for {domain}: {e}")
             
+            # Add domain to settings.json so it appears in certificate list
+            try:
+                settings = self.settings_manager.load_settings()
+                domains = settings.get('domains', [])
+                
+                # Check if domain already exists (handle both str and dict formats)
+                exists = any(
+                    (isinstance(d, str) and d == domain) or
+                    (isinstance(d, dict) and d.get('domain') == domain)
+                    for d in domains
+                )
+                
+                if not exists:
+                    # Add as dict for better metadata
+                    domain_entry = {
+                        'domain': domain,
+                        'dns_provider': dns_provider or settings.get('dns_provider', 'cloudflare'),
+                        'account_id': account_id or 'default'
+                    }
+                    domains.append(domain_entry)
+                    settings['domains'] = domains
+                    self.settings_manager.save_settings(settings, backup_reason="add_domain_after_creation")
+                    logger.info(f"Added domain {domain} to settings.json")
+                else:
+                    logger.debug(f"Domain {domain} already in settings.json, skipping add")
+            except Exception as e:
+                logger.warning(f"Failed to add domain {domain} to settings.json: {e} (certificate still created)")
+            
             duration = time.time() - start_time
             logger.info(f"Certificate created successfully for {domain} in {duration:.2f} seconds")
             
