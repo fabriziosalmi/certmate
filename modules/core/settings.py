@@ -33,23 +33,11 @@ class SettingsManager:
         return generate_secure_token()
 
     def _safe_file_write_compat(self, file_path, data, is_json=True):
-        """Write file with compatibility layer for tests"""
-        try:
-            import app
-            if hasattr(app, 'safe_file_write'):
-                return app.safe_file_write(file_path, data, is_json)
-        except ImportError:
-            pass
+        """Write file - always use instance's file_ops to respect test isolation"""
         return self.file_ops.safe_file_write(file_path, data, is_json)
 
     def _safe_file_read_compat(self, file_path, is_json=False, default=None):
-        """Read file with compatibility layer for tests"""
-        try:
-            import app
-            if hasattr(app, 'safe_file_read'):
-                return app.safe_file_read(file_path, is_json, default)
-        except ImportError:
-            pass
+        """Read file - always use instance's file_ops to respect test isolation"""
         return self.file_ops.safe_file_read(file_path, is_json, default)
 
     def _settings_file_exists_compat(self):
@@ -63,13 +51,7 @@ class SettingsManager:
         return self.settings_file.exists()
 
     def _save_settings_compat(self, settings, backup_reason="auto"):
-        """Save settings with compatibility layer for tests"""
-        try:
-            import app
-            if hasattr(app, 'save_settings'):
-                return app.save_settings(settings, backup_reason)
-        except ImportError:
-            pass
+        """Save settings - always use instance method to respect test isolation"""
         return self.save_settings(settings, backup_reason)
 
     def load_settings(self):
