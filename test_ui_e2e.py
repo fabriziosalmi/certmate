@@ -224,7 +224,9 @@ class TestSuite:
             total = stats['passed'] + stats['failed']
             emoji = "✅" if stats['failed'] == 0 else "⚠️"
             color = Colors.GREEN if stats['failed'] == 0 else Colors.YELLOW
-            print(f"    {emoji} {cat}: {colorize(f'{stats['passed']}/{total}', color)} passed")
+            passed_count = stats['passed']
+            result_str = f"{passed_count}/{total}"
+            print(f"    {emoji} {cat}: {colorize(result_str, color)} passed")
         
         # Failed tests details
         if self.failed > 0:
