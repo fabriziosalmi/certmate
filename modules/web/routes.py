@@ -137,6 +137,207 @@ def register_web_routes(app, managers):
             logger.error(f"Error generating metrics: {e}")
             return "# Error generating metrics\n", 500
 
+    # Authentication endpoints for local login
+    @app.route('/login', methods=['GET'])
+    def login_page():
+        """Login page"""
+        # Check if local auth is enabled and has users
+        if not auth_manager.is_local_auth_enabled() or not auth_manager.has_any_users():
+            # Redirect to main page if local auth not set up
+            return render_template('index.html', api_token='')
+        return render_template('login.html')
+    
+    @app.route('/api/auth/login', methods=['POST'])
+    def api_login():
+        """Login endpoint for local authentication"""
+        try:
+            data = request.json
+            username = data.get('username', '').strip()
+            password = data.get('password', '')
+            
+            if not username or not password:
+                return jsonify({'error': 'Username and password are required'}), 400
+            
+            # Check if local auth is enabled
+            if not auth_manager.is_local_auth_enabled():
+                return jsonify({'error': 'Local authentication is not enabled'}), 403
+            
+            # Authenticate user
+            user_info = auth_manager.authenticate_user(username, password)
+            
+            if not user_info:
+                return jsonify({'error': 'Invalid username or password'}), 401
+            
+            # Create session
+            session_id = auth_manager.create_session(username)
+            
+            response = jsonify({
+                'message': 'Login successful',
+                'user': user_info
+            })
+            
+            # Set session cookie
+            response.set_cookie(
+                'certmate_session',
+                session_id,
+                httponly=True,
+                samesite='Lax',
+                max_age=24 * 60 * 60  # 24 hours
+            )
+            
+            return response
+            
+        except Exception as e:
+            logger.error(f"Login error: {e}")
+            return jsonify({'error': 'Login failed'}), 500
+    
+    @app.route('/api/auth/logout', methods=['POST'])
+    def api_logout():
+        """Logout endpoint"""
+        try:
+            session_id = request.cookies.get('certmate_session')
+            if session_id:
+                auth_manager.invalidate_session(session_id)
+            
+            response = jsonify({'message': 'Logged out successfully'})
+            response.delete_cookie('certmate_session')
+            return response
+        except Exception as e:
+            logger.error(f"Logout error: {e}")
+            return jsonify({'error': 'Logout failed'}), 500
+    
+    @app.route('/api/auth/me', methods=['GET'])
+    def api_current_user():
+        """Get current user info"""
+        try:
+            session_id = request.cookies.get('certmate_session')
+            if session_id:
+                user_info = auth_manager.validate_session(session_id)
+                if user_info:
+                    return jsonify({'user': user_info})
+            
+            return jsonify({'user': None}), 401
+        except Exception as e:
+            logger.error(f"Get current user error: {e}")
+            return jsonify({'error': 'Failed to get user info'}), 500
+    
+    # User management endpoints (admin only)
+    @app.route('/api/users', methods=['GET', 'POST'])
+    @auth_manager.require_auth
+    def api_users():
+        """List or create users"""
+        if request.method == 'GET':
+            try:
+                users = auth_manager.list_users()
+                return jsonify({'users': users})
+            except Exception as e:
+                logger.error(f"Error listing users: {e}")
+                return jsonify({'error': 'Failed to list users'}), 500
+        
+        elif request.method == 'POST':
+            try:
+                data = request.json
+                username = data.get('username', '').strip()
+                password = data.get('password', '')
+                role = data.get('role', 'user')
+                email = data.get('email', '').strip() or None
+                
+                if not username or not password:
+                    return jsonify({'error': 'Username and password are required'}), 400
+                
+                if role not in ['admin', 'user']:
+                    return jsonify({'error': 'Role must be admin or user'}), 400
+                
+                success, message = auth_manager.create_user(username, password, role, email)
+                
+                if success:
+                    return jsonify({'message': message})
+                else:
+                    return jsonify({'error': message}), 400
+            except Exception as e:
+                logger.error(f"Error creating user: {e}")
+                return jsonify({'error': 'Failed to create user'}), 500
+    
+    @app.route('/api/users/<string:username>', methods=['GET', 'PUT', 'DELETE'])
+    @auth_manager.require_auth
+    def api_user(username):
+        """Get, update, or delete a specific user"""
+        if request.method == 'GET':
+            try:
+                users = auth_manager.list_users()
+                if username not in users:
+                    return jsonify({'error': 'User not found'}), 404
+                return jsonify({'user': {username: users[username]}})
+            except Exception as e:
+                logger.error(f"Error getting user: {e}")
+                return jsonify({'error': 'Failed to get user'}), 500
+        
+        elif request.method == 'PUT':
+            try:
+                data = request.json
+                password = data.get('password')
+                role = data.get('role')
+                email = data.get('email')
+                enabled = data.get('enabled')
+                
+                if role and role not in ['admin', 'user']:
+                    return jsonify({'error': 'Role must be admin or user'}), 400
+                
+                success, message = auth_manager.update_user(
+                    username, password=password, role=role, email=email, enabled=enabled
+                )
+                
+                if success:
+                    return jsonify({'message': message})
+                else:
+                    return jsonify({'error': message}), 400
+            except Exception as e:
+                logger.error(f"Error updating user: {e}")
+                return jsonify({'error': 'Failed to update user'}), 500
+        
+        elif request.method == 'DELETE':
+            try:
+                success, message = auth_manager.delete_user(username)
+                
+                if success:
+                    return jsonify({'message': message})
+                else:
+                    return jsonify({'error': message}), 400
+            except Exception as e:
+                logger.error(f"Error deleting user: {e}")
+                return jsonify({'error': 'Failed to delete user'}), 500
+    
+    @app.route('/api/auth/config', methods=['GET', 'POST'])
+    @auth_manager.require_auth
+    def api_auth_config():
+        """Get or update authentication configuration"""
+        if request.method == 'GET':
+            try:
+                return jsonify({
+                    'local_auth_enabled': auth_manager.is_local_auth_enabled(),
+                    'has_users': auth_manager.has_any_users()
+                })
+            except Exception as e:
+                logger.error(f"Error getting auth config: {e}")
+                return jsonify({'error': 'Failed to get auth config'}), 500
+        
+        elif request.method == 'POST':
+            try:
+                data = request.json
+                enable = data.get('local_auth_enabled', False)
+                
+                # Require at least one admin user before enabling local auth
+                if enable and not auth_manager.has_any_users():
+                    return jsonify({'error': 'Create at least one admin user before enabling local auth'}), 400
+                
+                if auth_manager.enable_local_auth(enable):
+                    return jsonify({'message': f'Local authentication {"enabled" if enable else "disabled"}'})
+                else:
+                    return jsonify({'error': 'Failed to update auth config'}), 500
+            except Exception as e:
+                logger.error(f"Error updating auth config: {e}")
+                return jsonify({'error': 'Failed to update auth config'}), 500
+
     # Special download endpoint for easy automation
     @app.route('/<string:domain>/tls')
     @auth_manager.require_auth
@@ -380,44 +581,117 @@ def register_web_routes(app, managers):
             else:
                 data = request.form.to_dict()
             
-            domain = data.get('domain')
+            domain = data.get('domain', '').strip()
+            san_domains_raw = data.get('san_domains', '')  # Can be comma-separated string or list
             dns_provider = data.get('dns_provider')  # Optional, uses default from settings
             account_id = data.get('account_id')      # Optional, uses default account
             
+            # Parse SAN domains (support both comma-separated string and list)
+            san_domains = []
+            if san_domains_raw:
+                if isinstance(san_domains_raw, list):
+                    san_domains = [d.strip() for d in san_domains_raw if d.strip()]
+                elif isinstance(san_domains_raw, str):
+                    san_domains = [d.strip() for d in san_domains_raw.split(',') if d.strip()]
+            
+            # Validate domain
             if not domain:
-                return jsonify({'error': 'Domain is required'}), 400
+                return jsonify({
+                    'error': 'Domain is required',
+                    'hint': 'Please enter a valid domain name (e.g., example.com or *.example.com for wildcard)'
+                }), 400
+            
+            # Basic domain validation
+            if ' ' in domain:
+                return jsonify({
+                    'error': 'Invalid domain format',
+                    'hint': 'Enter the primary domain name only. Use the SAN domains field for additional domains.'
+                }), 400
+            
+            # Check for common domain format issues
+            if domain.startswith('http://') or domain.startswith('https://'):
+                return jsonify({
+                    'error': 'Invalid domain format',
+                    'hint': 'Enter domain name only (e.g., example.com), not the full URL.'
+                }), 400
             
             settings = settings_manager.load_settings()
             email = settings.get('email')
             
             if not email:
-                return jsonify({'error': 'Email not configured in settings'}), 400
+                return jsonify({
+                    'error': 'Email not configured',
+                    'hint': 'Go to Settings and configure your email address first. This is required by certificate authorities.'
+                }), 400
             
             # Determine DNS provider
             if not dns_provider:
                 dns_provider = settings_manager.get_domain_dns_provider(domain, settings)
             
-            # Validate that the specified account exists (if provided)
+            if not dns_provider:
+                return jsonify({
+                    'error': 'No DNS provider configured',
+                    'hint': 'Go to Settings and select a DNS provider. Configure the provider credentials to enable certificate creation.'
+                }), 400
+            
+            # Validate DNS provider configuration exists
+            dns_providers_config = settings.get('dns_providers', {})
+            provider_config = dns_providers_config.get(dns_provider, {})
+            
+            # Check if account_id is provided, validate it exists
             if account_id:
                 config, _ = dns_manager.get_dns_provider_account_config(dns_provider, account_id)
                 if not config:
-                    return jsonify({'error': f'DNS account {account_id} not found for provider {dns_provider}'}), 400
+                    available_accounts = list(dns_manager.list_dns_provider_accounts(dns_provider).keys())
+                    hint = f"Available accounts: {', '.join(available_accounts)}" if available_accounts else "Configure a DNS account in Settings first."
+                    return jsonify({
+                        'error': f'DNS account "{account_id}" not found for provider {dns_provider}',
+                        'hint': hint
+                    }), 400
+            else:
+                # Check if default account is configured
+                config, _ = dns_manager.get_dns_provider_account_config(dns_provider, None)
+                if not config:
+                    # Check if there are any accounts for this provider
+                    accounts = dns_manager.list_dns_provider_accounts(dns_provider)
+                    if not accounts:
+                        return jsonify({
+                            'error': f'No {dns_provider} credentials configured',
+                            'hint': f'Go to Settings → DNS Providers → {dns_provider.title()} and add your API credentials.'
+                        }), 400
+                    else:
+                        return jsonify({
+                            'error': f'No default account set for {dns_provider}',
+                            'hint': f'Select an account or configure a default account in Settings for {dns_provider}.'
+                        }), 400
             
-            # Create certificate in background
+            # All validations passed, create certificate in background
             def create_cert_async():
                 try:
-                    certificate_manager.create_certificate(domain, email, dns_provider, account_id=account_id)
-                    logger.info(f"Background certificate creation completed for {domain}")
+                    certificate_manager.create_certificate(
+                        domain, email, dns_provider, 
+                        account_id=account_id,
+                        san_domains=san_domains if san_domains else None
+                    )
+                    domains_info = f"{domain}" + (f" (+ {len(san_domains)} SANs)" if san_domains else "")
+                    logger.info(f"Background certificate creation completed for {domains_info}")
                 except Exception as e:
                     logger.error(f"Background certificate creation failed for {domain}: {e}")
             
             thread = threading.Thread(target=create_cert_async)
             thread.start()
             
+            # Build response message
+            if san_domains:
+                msg = f'Certificate creation started for {domain} with {len(san_domains)} additional SAN(s)'
+            else:
+                msg = f'Certificate creation started for {domain}'
+            
             return jsonify({
                 'success': True, 
-                'message': f'Certificate creation started for {domain}',
+                'message': msg,
                 'domain': domain,
+                'san_domains': san_domains,
                 'dns_provider': dns_provider,
                 'account_id': account_id
             })

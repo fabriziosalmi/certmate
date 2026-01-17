@@ -2401,7 +2401,14 @@ FLASK_ENV=development
 docker-compose -f docker-compose.yml -f docker-compose.debug.yml up
 ```
 
-### ⚠️ Known Issues (v1.2.0)
+### ⚠️ Known Issues (v1.7.0)
+
+#### Resolved in v1.7.0
+- ✅ **#54**: Settings Save - API Bearer Token Required (FIXED)
+- ✅ **#53**: Local Authentication Support (ADDED)
+- ✅ **#50**: Certificates Not Showing After Generation (FIXED)
+- ✅ **#49**: Better Error Messages (IMPROVED)
+- ✅ **#48**: SAN Certificates Support (ADDED)
 
 #### API Test Failures
 **Issue**: Some API endpoints may fail during rapid testing  

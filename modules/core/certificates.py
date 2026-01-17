@@ -169,11 +169,11 @@ class CertificateManager:
             'dns_provider': dns_provider
         }
 
-    def create_certificate(self, domain, email, dns_provider=None, dns_config=None, account_id=None, staging=False, ca_provider=None, ca_account_id=None, domain_alias=None):
+    def create_certificate(self, domain, email, dns_provider=None, dns_config=None, account_id=None, staging=False, ca_provider=None, ca_account_id=None, domain_alias=None, san_domains=None):
         """Create SSL certificate using configurable CA with DNS challenge
         
         Args:
-            domain: Domain name for certificate
+            domain: Primary domain name for certificate
             email: Contact email for certificate authority
             dns_provider: DNS provider name (e.g., 'cloudflare')
             dns_config: Explicit DNS configuration (overrides account lookup)
@@ -182,6 +182,7 @@ class CertificateManager:
             ca_provider: Certificate Authority provider (letsencrypt, digicert, private_ca)
             ca_account_id: Specific CA account ID to use
             domain_alias: Optional domain alias for DNS validation (e.g., '_acme-challenge.validation.example.org')
+            san_domains: Optional list of additional domains for Subject Alternative Names (SAN)
         """
         # Track timing for metrics
         start_time = time.time()
@@ -238,11 +239,21 @@ class CertificateManager:
             # Get Strategy
             strategy = DNSStrategyFactory.get_strategy(dns_provider)
 
+            # Build list of all domains (primary + SANs)
+            all_domains = [domain]
+            if san_domains:
+                # Filter and validate SAN domains
+                for san in san_domains:
+                    san = san.strip()
+                    if san and san != domain and san not in all_domains:
+                        all_domains.append(san)
+                logger.info(f"Creating SAN certificate with domains: {', '.join(all_domains)}")
+
             # Build certbot command
             if self.ca_manager and ca_account_config:
                 certbot_cmd = self.ca_manager.build_certbot_command(
                     domain, email, ca_provider, dns_provider, dns_config, 
-                    ca_account_config, staging, cert_dir
+                    ca_account_config, staging, cert_dir, san_domains=all_domains[1:] if len(all_domains) > 1 else None
                 )
             else:
                 certbot_cmd = [
@@ -254,8 +265,11 @@ class CertificateManager:
                     '--config-dir', str(cert_output_dir),
                     '--work-dir', str(cert_output_dir / 'work'),
                     '--logs-dir', str(cert_output_dir / 'logs'),
-                    '-d', domain
                 ]
+                
+                # Add all domains
+                for d in all_domains:
+                    certbot_cmd.extend(['-d', d])
                 
                 if staging:
                     certbot_cmd.append('--staging')
@@ -327,6 +341,7 @@ class CertificateManager:
             # Save metadata
             metadata = {
                 'domain': domain,
+                'san_domains': all_domains[1:] if len(all_domains) > 1 else [],
                 'dns_provider': dns_provider,
                 'created_at': datetime.now().isoformat(),
                 'email': email,

@@ -1,4 +1,64 @@
-# Release v1.6.6
+# Release v1.7.0
+
+## 🎉 New Features
+
+### Issue #53: Local Authentication Support
+- **Full user management system** with username/password authentication
+- Password hashing using SHA-256 with cryptographic salt
+- Session-based authentication with secure HTTP-only cookies
+- User CRUD operations (Create, Read, Update, Delete)
+- Role-based access control (admin/user roles)
+- Login page with modern UI design
+- Toggle to enable/disable local authentication
+- Protection against deleting the last admin user
+
+### Issue #48: SAN (Subject Alternative Names) Certificate Support
+- Create certificates with multiple domains in a single certificate
+- New `san_domains` field in API for specifying additional domains
+- Comma-separated SAN input in web UI
+- Automatic deduplication of domain entries
+- Full support across all DNS providers
+
+## 🐛 Bug Fixes
+
+### Issue #54: Settings Save - API Bearer Token Required Error
+- Added missing API Bearer Token input field to settings form
+- Added Cache TTL configuration field
+- Token generation button with cryptographic random token
+- Conditional validation: token required only after initial setup
+- Auto-generation of token during first-time setup
+
+### Issue #50: Certificates Not Showing After Generation
+- Fixed certificate listing to scan both settings AND filesystem
+- Certificates created outside settings now properly displayed
+- Unified domain discovery from multiple sources
+- Automatic deduplication using set-based approach
+
+### Issue #49: Better Error Messages
+- Added descriptive hints to all validation errors
+- Pre-validation checks before async operations
+- Specific error hints for common issues:
+  - DNS provider authentication failures
+  - Rate limiting from certificate authorities
+  - DNS propagation timeouts
+  - Missing configuration
+- Clear guidance on how to resolve each error type
+
+## 📋 Technical Changes
+- Enhanced `AuthManager` class in `modules/core/auth.py`
+- New `login.html` template
+- Updated `require_auth` decorator to support both session and bearer token
+- Modified `CertificateList.get()` to scan certificate directories
+- Extended `create_certificate()` to accept `san_domains` parameter
+- Added `san_domains` field to API models
+
+## 🧪 Testing
+- All 32 existing tests pass
+- No regressions detected
+
+---
+
+# Release v1.2.1
 
 ## Bug Fixes
 

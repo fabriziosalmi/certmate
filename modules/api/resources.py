@@ -182,6 +182,10 @@ def create_api_resources(api, models, managers):
                 settings = settings_manager.load_settings()
                 certificates = []
                 
+                # Create a set of all domains to check (from settings and disk)
+                all_domains = set()
+                
+                # Add domains from settings
                 for domain_entry in settings.get('domains', []):
                     if isinstance(domain_entry, str):
                         domain = domain_entry
@@ -189,10 +193,22 @@ def create_api_resources(api, models, managers):
                         domain = domain_entry.get('domain')
                     else:
                         continue
-                    
+                    if domain:
+                        all_domains.add(domain)
+                
+                # Also check for certificates that exist on disk but might not be in settings
+                cert_dir = certificate_manager.cert_dir
+                if cert_dir.exists():
+                    for cert_dir_path in cert_dir.iterdir():
+                        if cert_dir_path.is_dir():
+                            all_domains.add(cert_dir_path.name)
+                
+                # Get certificate info for all domains
+                for domain in all_domains:
                     if domain:
                         cert_info = certificate_manager.get_certificate_info(domain)
-                        certificates.append(cert_info)
+                        if cert_info:
+                            certificates.append(cert_info)
                 
                 return certificates
             except Exception as e:
@@ -207,30 +223,98 @@ def create_api_resources(api, models, managers):
             """Create a new certificate"""
             try:
                 data = api.payload
-                domain = data.get('domain')
+                domain = (data.get('domain') or '').strip()
+                san_domains = data.get('san_domains', [])  # Optional SAN domains
                 dns_provider = data.get('dns_provider')
                 account_id = data.get('account_id')
                 ca_provider = data.get('ca_provider')
                 domain_alias = data.get('domain_alias')  # Optional domain alias
                 
+                # Validate domain
                 if not domain:
-                    return {'error': 'Domain is required'}, 400
+                    return {
+                        'error': 'Domain is required',
+                        'hint': 'Please provide a valid domain name (e.g., example.com or *.example.com for wildcard)'
+                    }, 400
+                
+                # Basic domain validation
+                if ' ' in domain:
+                    return {
+                        'error': 'Invalid domain format',
+                        'hint': 'Enter only ONE primary domain. Use san_domains array for additional domains.'
+                    }, 400
+                
+                # Check for common domain format issues
+                if domain.startswith('http://') or domain.startswith('https://'):
+                    return {
+                        'error': 'Invalid domain format',
+                        'hint': 'Provide domain name only (e.g., example.com), not the full URL.'
+                    }, 400
+                
+                # Validate SAN domains if provided
+                if san_domains:
+                    if not isinstance(san_domains, list):
+                        return {
+                            'error': 'Invalid san_domains format',
+                            'hint': 'san_domains must be an array of domain strings.'
+                        }, 400
+                    
+                    # Validate each SAN domain
+                    for san in san_domains:
+                        san = san.strip() if isinstance(san, str) else ''
+                        if san and (san.startswith('http://') or san.startswith('https://')):
+                            return {
+                                'error': f'Invalid SAN domain format: {san}',
+                                'hint': 'SAN domains should be domain names only, not URLs.'
+                            }, 400
                 
                 settings = settings_manager.load_settings()
                 email = settings.get('email')
                 
                 if not email:
-                    return {'error': 'Email not configured in settings'}, 400
+                    return {
+                        'error': 'Email not configured',
+                        'hint': 'Configure email in settings first. Required by certificate authorities for important notifications.'
+                    }, 400
                 
-                # Create certificate
+                # Determine DNS provider
+                if not dns_provider:
+                    dns_provider = settings.get('dns_provider')
+                
+                if not dns_provider:
+                    return {
+                        'error': 'No DNS provider specified or configured',
+                        'hint': 'Either specify dns_provider in request or configure a default DNS provider in settings.'
+                    }, 400
+                
+                # Create certificate with SAN domains
                 result = certificate_manager.create_certificate(
                     domain=domain,
                     email=email,
                     dns_provider=dns_provider,
                     account_id=account_id,
                     ca_provider=ca_provider,
-                    domain_alias=domain_alias  # Pass domain alias
+                    domain_alias=domain_alias,
+                    san_domains=san_domains  # Pass SAN domains
                 )
+                
+                # Ensure domain is in settings for proper listing
+                domains_list = settings.get('domains', [])
+                domain_exists = any(
+                    (d == domain if isinstance(d, str) else d.get('domain') == domain)
+                    for d in domains_list
+                )
+                if not domain_exists:
+                    # Add domain with its configuration
+                    domain_config = {
+                        'domain': domain,
+                        'dns_provider': dns_provider or settings.get('dns_provider'),
+                        'dns_account_id': account_id
+                    }
+                    domains_list.append(domain_config)
+                    settings['domains'] = domains_list
+                    settings_manager.save_settings(settings, "certificate_created")
+                    logger.info(f"Added domain {domain} to settings after certificate creation")
                 
                 return {
                     'message': f'Certificate created successfully for {domain}',
@@ -240,9 +324,38 @@ def create_api_resources(api, models, managers):
                     'duration': result.get('duration')
                 }, 201
                 
+            except ValueError as e:
+                # Validation errors from certificate_manager
+                error_msg = str(e)
+                hint = None
+                if 'not configured' in error_msg.lower():
+                    hint = 'Check your DNS provider settings and ensure credentials are properly configured.'
+                elif 'domain' in error_msg.lower() and 'email' in error_msg.lower():
+                    hint = 'Both domain and email are required. Configure email in settings.'
+                return {
+                    'error': error_msg,
+                    'hint': hint
+                }, 400
+            except RuntimeError as e:
+                # Certbot execution errors
+                error_msg = str(e)
+                hint = 'Check DNS provider credentials and ensure DNS records can be created.'
+                if 'unauthorized' in error_msg.lower() or 'auth' in error_msg.lower():
+                    hint = 'DNS provider authentication failed. Verify your API credentials in settings.'
+                elif 'timeout' in error_msg.lower():
+                    hint = 'DNS propagation timed out. Try increasing DNS propagation time in settings.'
+                elif 'rate limit' in error_msg.lower():
+                    hint = "You've hit the certificate authority's rate limit. Wait before trying again."
+                return {
+                    'error': f'Certificate creation failed: {error_msg}',
+                    'hint': hint
+                }, 500
             except Exception as e:
                 logger.error(f"Certificate creation failed: {str(e)}")
-                return {'error': f'Certificate creation failed: {str(e)}'}, 500
+                return {
+                    'error': f'Certificate creation failed: {str(e)}',
+                    'hint': 'Check application logs for detailed error information.'
+                }, 500
 
     class DownloadCertificate(Resource):
         @api.doc(security='Bearer')

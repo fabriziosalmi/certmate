@@ -160,7 +160,8 @@ def create_api_models(api):
     })
 
     create_cert_model = api.model('CreateCertificate', {
-        'domain': fields.String(required=True, description='Domain name to create certificate for'),
+        'domain': fields.String(required=True, description='Primary domain name to create certificate for'),
+        'san_domains': fields.List(fields.String, description='Additional Subject Alternative Names (SANs) - e.g., ["www.example.com", "mail.example.com", "*.example.com"]'),
         'dns_provider': fields.String(description='DNS provider to use (optional, uses default from settings)', enum=['cloudflare', 'route53', 'azure', 'google', 'powerdns', 'digitalocean', 'linode', 'gandi', 'ovh', 'namecheap', 'vultr', 'dnsmadeeasy', 'nsone', 'rfc2136', 'hetzner', 'porkbun', 'godaddy', 'he-ddns', 'dynudns', 'arvancloud', 'acme-dns']),
         'account_id': fields.String(description='DNS provider account ID to use (optional, uses default account if not specified)'),
         'ca_provider': fields.String(description='Certificate Authority provider to use (optional, uses default from settings)', enum=['letsencrypt', 'digicert', 'private_ca']),

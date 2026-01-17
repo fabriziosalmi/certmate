@@ -96,7 +96,7 @@
                             <div>
                                 <label for="domain" class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                                     <i class="fas fa-globe mr-2 text-blue-500"></i>
-                                    Domain Name
+                                    Primary Domain Name
                                 </label>
                                 <input type="text" id="domain" name="domain" 
                                        class="block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg shadow-sm py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-200 placeholder-gray-400"
@@ -104,6 +104,22 @@
                                 <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
                                     <i class="fas fa-info-circle mr-1"></i>
                                     Supports wildcard domains (*.example.com) and single domains
+                                </p>
+                            </div>
+                            
+                            <!-- SAN Domains (optional) -->
+                            <div>
+                                <label for="san_domains" class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                                    <i class="fas fa-plus-circle mr-2 text-indigo-500"></i>
+                                    Additional Domains (SAN)
+                                    <span class="font-normal text-xs text-gray-500 dark:text-gray-400 ml-1">Optional</span>
+                                </label>
+                                <input type="text" id="san_domains" name="san_domains" 
+                                       class="block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg shadow-sm py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-200 placeholder-gray-400"
+                                       placeholder="www.example.com, mail.example.com, *.api.example.com">
+                                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                    <i class="fas fa-info-circle mr-1"></i>
+                                    Comma-separated list of Subject Alternative Names (SANs) to include in the certificate
                                 </p>
                             </div>
                             
@@ -1528,22 +1544,36 @@
         document.getElementById('createCertForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             
-            const domain = document.getElementById('domain').value;
+            const domain = document.getElementById('domain').value.trim();
+            const sanDomainsInput = document.getElementById('san_domains').value.trim();
             const dnsProvider = document.getElementById('dns_provider_select').value;
             const accountId = document.getElementById('account_select').value;
             const caProvider = document.getElementById('ca_provider_select').value;
+            
+            // Parse SAN domains from comma-separated input
+            const sanDomains = sanDomainsInput 
+                ? sanDomainsInput.split(',').map(d => d.trim()).filter(d => d)
+                : [];
             
             if (!domain) {
                 showMessage('Please enter a domain', 'error');
                 return;
             }
             
+            // Build display message
+            const domainsDisplay = sanDomains.length > 0 
+                ? `${domain} (+ ${sanDomains.length} SAN${sanDomains.length > 1 ? 's' : ''})`
+                : domain;
+            
             const progressInterval = showLoadingModal(
-                `Creating Certificate for ${domain}`, 
+                `Creating Certificate for ${domainsDisplay}`, 
                 'Validating domain ownership and generating certificate...'
             );
             
             const requestBody = { domain };
+            if (sanDomains.length > 0) {
+                requestBody.san_domains = sanDomains;
+            }
             if (dnsProvider) {
                 requestBody.dns_provider = dnsProvider;
             }
@@ -1563,20 +1593,26 @@
                 
                 const result = await response.json();
                 
-                if (result.success) {
-                    showMessage(`Certificate created successfully for ${domain}!`);
+                if (response.ok && result.success !== false) {
+                    showMessage(`Certificate created successfully for ${domainsDisplay}!`);
                     document.getElementById('domain').value = '';
+                    document.getElementById('san_domains').value = '';
                     document.getElementById('dns_provider_select').value = '';
                     document.getElementById('account_select').value = '';
                     document.getElementById('ca_provider_select').value = '';
                     updateAccountSelection(); // Hide account selector
                     loadCertificates();
                 } else {
-                    showMessage(result.message || 'Failed to create certificate', 'error');
+                    // Build error message with hint if available
+                    let errorMsg = result.error || result.message || 'Failed to create certificate';
+                    if (result.hint) {
+                        errorMsg += `\n\n💡 ${result.hint}`;
+                    }
+                    showMessage(errorMsg, 'error');
                 }
             } catch (error) {
                 console.error('Error creating certificate:', error);
-                showMessage('Failed to create certificate. Please try again.', 'error');
+                showMessage('Failed to create certificate. Please check your network connection and try again.', 'error');
             } finally {
                 hideLoadingModal(progressInterval);
             }

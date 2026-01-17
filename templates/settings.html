@@ -1250,6 +1250,52 @@
                                     Renew certificates when they have this many days left before expiration (default: 30 days)
                                 </p>
                             </div>
+
+                            <!-- Cache TTL Setting -->
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
+                                    Cache TTL (seconds)
+                                </label>
+                                <input type="number" id="cache_ttl" name="cache_ttl" 
+                                       min="0" max="86400" value="300"
+                                       class="w-32 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm">
+                                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                    How long to cache DNS responses (default: 300 seconds)
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- API Security Settings Section -->
+                    <div class="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                            <i class="fas fa-key mr-1"></i>
+                            API Security Settings
+                        </label>
+                        
+                        <div class="space-y-4">
+                            <!-- API Bearer Token Setting -->
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
+                                    API Bearer Token
+                                </label>
+                                <div class="flex items-center space-x-2">
+                                    <input type="password" id="api_bearer_token" name="api_bearer_token" 
+                                           placeholder="Enter a secure token for API authentication"
+                                           class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm">
+                                    <button type="button" onclick="toggleTokenVisibility()" 
+                                            class="px-3 py-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
+                                        <i class="fas fa-eye" id="tokenToggleIcon"></i>
+                                    </button>
+                                    <button type="button" onclick="generateToken()" 
+                                            class="px-3 py-2 bg-gray-100 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md hover:bg-gray-200 dark:hover:bg-gray-500 text-sm">
+                                        <i class="fas fa-random mr-1"></i> Generate
+                                    </button>
+                                </div>
+                                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                    Token used for API authentication. Required for API access after initial setup.
+                                </p>
+                            </div>
                         </div>
                     </div>
 
@@ -1499,6 +1545,93 @@
                         </button>
                     </div>
                 </form>
+            </div>
+        </div>
+
+        <!-- User Management Section -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 mt-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
+                    <i class="fas fa-users mr-2 text-purple-500"></i>
+                    User Management
+                </h3>
+                <span class="text-xs bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 px-2 py-1 rounded-full">
+                    Local Authentication
+                </span>
+            </div>
+            
+            <p class="text-gray-600 dark:text-gray-400 text-sm mb-6">
+                Manage local user accounts for CertMate. Enable local authentication to require username/password login.
+            </p>
+
+            <!-- Local Auth Toggle -->
+            <div class="mb-6 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Enable Local Authentication</label>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Require username/password login for web access</p>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="localAuthToggle" class="sr-only peer" onchange="toggleLocalAuth()">
+                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Add User Form -->
+            <div class="mb-6">
+                <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+                    <i class="fas fa-user-plus mr-1"></i> Add New User
+                </h4>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div>
+                        <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Username</label>
+                        <input type="text" id="newUserUsername" placeholder="username"
+                               class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-gray-700 dark:text-white">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Password</label>
+                        <input type="password" id="newUserPassword" placeholder="password"
+                               class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-gray-700 dark:text-white">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Email (optional)</label>
+                        <input type="email" id="newUserEmail" placeholder="user@example.com"
+                               class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-gray-700 dark:text-white">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Role</label>
+                        <div class="flex items-center space-x-2">
+                            <select id="newUserRole" 
+                                    class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-gray-700 dark:text-white">
+                                <option value="user">User</option>
+                                <option value="admin">Admin</option>
+                            </select>
+                            <button type="button" onclick="createUser()" 
+                                    class="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 text-sm">
+                                <i class="fas fa-plus mr-1"></i> Add
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- User List -->
+            <div>
+                <div class="flex items-center justify-between mb-3">
+                    <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                        <i class="fas fa-list mr-1"></i> Existing Users
+                    </h4>
+                    <button type="button" onclick="refreshUserList()" 
+                            class="text-sm text-blue-600 dark:text-blue-400 hover:underline">
+                        <i class="fas fa-sync-alt mr-1"></i> Refresh
+                    </button>
+                </div>
+                <div id="userList" class="space-y-2 max-h-64 overflow-y-auto">
+                    <div class="text-center py-4 text-gray-500 dark:text-gray-400 text-sm">
+                        <i class="fas fa-spinner fa-spin mr-2"></i> Loading users...
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -1762,6 +1895,39 @@
             document.getElementById('debugOutput').innerHTML = '<div class="text-gray-500">Debug console cleared. All settings actions will be logged here...</div>';
         }
         
+        // API Token helper functions
+        function toggleTokenVisibility() {
+            const tokenField = document.getElementById('api_bearer_token');
+            const toggleIcon = document.getElementById('tokenToggleIcon');
+            if (tokenField.type === 'password') {
+                tokenField.type = 'text';
+                toggleIcon.classList.remove('fa-eye');
+                toggleIcon.classList.add('fa-eye-slash');
+            } else {
+                tokenField.type = 'password';
+                toggleIcon.classList.remove('fa-eye-slash');
+                toggleIcon.classList.add('fa-eye');
+            }
+        }
+        
+        function generateRandomToken() {
+            const array = new Uint8Array(32);
+            crypto.getRandomValues(array);
+            return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+        }
+        
+        function generateToken() {
+            const tokenField = document.getElementById('api_bearer_token');
+            const newToken = generateRandomToken();
+            tokenField.value = newToken;
+            tokenField.type = 'text'; // Show the generated token
+            const toggleIcon = document.getElementById('tokenToggleIcon');
+            toggleIcon.classList.remove('fa-eye');
+            toggleIcon.classList.add('fa-eye-slash');
+            addDebugLog('Generated new API Bearer Token', 'info');
+            showMessage('New API token generated. Remember to save your settings!', 'success');
+        }
+        
         function addDebugLog(message, type = 'info') {
             const output = document.getElementById('debugOutput');
             const color = type === 'error' ? 'text-red-400' : type === 'warn' ? 'text-yellow-400' : 'text-green-400';
@@ -1898,8 +2064,21 @@
                     throw new Error('DNS provider must be selected');
                 }
                 
-                if (!settings.api_bearer_token) {
+                // API Bearer Token is only required after initial setup
+                // During initial setup, a token will be auto-generated if not provided
+                if (!settings.api_bearer_token && currentSettings.setup_completed) {
                     throw new Error('API Bearer Token is required');
+                }
+                
+                // Auto-generate token for initial setup if not provided
+                if (!settings.api_bearer_token && !currentSettings.setup_completed) {
+                    settings.api_bearer_token = generateRandomToken();
+                    // Update the field so user can see it
+                    const tokenField = document.getElementById('api_bearer_token');
+                    if (tokenField) {
+                        tokenField.value = settings.api_bearer_token;
+                    }
+                    addDebugLog('Auto-generated API Bearer Token for initial setup', 'info');
                 }
                 
                 // Add legacy DNS provider configurations from form fields
@@ -3691,6 +3870,256 @@
                 showMessage('Failed to perform storage migration.', 'error');
             });
         }
+
+        // USER MANAGEMENT FUNCTIONS
+        async function loadAuthConfig() {
+            try {
+                const response = await fetch('/api/auth/config', {
+                    headers: {
+                        'Authorization': `Bearer ${API_TOKEN}`
+                    }
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    document.getElementById('localAuthToggle').checked = data.local_auth_enabled;
+                    return data;
+                }
+            } catch (error) {
+                console.error('Error loading auth config:', error);
+            }
+            return null;
+        }
+
+        async function toggleLocalAuth() {
+            const toggle = document.getElementById('localAuthToggle');
+            const enabled = toggle.checked;
+            
+            try {
+                const response = await fetch('/api/auth/config', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${API_TOKEN}`
+                    },
+                    body: JSON.stringify({ local_auth_enabled: enabled })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showMessage(data.message, 'success');
+                } else {
+                    showMessage(data.error || 'Failed to update auth config', 'error');
+                    toggle.checked = !enabled; // Revert toggle
+                }
+            } catch (error) {
+                console.error('Error toggling local auth:', error);
+                showMessage('Failed to update authentication settings', 'error');
+                toggle.checked = !enabled; // Revert toggle
+            }
+        }
+
+        async function createUser() {
+            const username = document.getElementById('newUserUsername').value.trim();
+            const password = document.getElementById('newUserPassword').value;
+            const email = document.getElementById('newUserEmail').value.trim();
+            const role = document.getElementById('newUserRole').value;
+            
+            if (!username || !password) {
+                showMessage('Username and password are required', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/users', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${API_TOKEN}`
+                    },
+                    body: JSON.stringify({ username, password, email: email || null, role })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showMessage(`User '${username}' created successfully`, 'success');
+                    // Clear form
+                    document.getElementById('newUserUsername').value = '';
+                    document.getElementById('newUserPassword').value = '';
+                    document.getElementById('newUserEmail').value = '';
+                    document.getElementById('newUserRole').value = 'user';
+                    // Refresh user list
+                    refreshUserList();
+                } else {
+                    showMessage(data.error || 'Failed to create user', 'error');
+                }
+            } catch (error) {
+                console.error('Error creating user:', error);
+                showMessage('Failed to create user', 'error');
+            }
+        }
+
+        async function refreshUserList() {
+            const userListDiv = document.getElementById('userList');
+            userListDiv.innerHTML = '<div class="text-center py-4 text-gray-500 dark:text-gray-400 text-sm"><i class="fas fa-spinner fa-spin mr-2"></i> Loading users...</div>';
+            
+            try {
+                const response = await fetch('/api/users', {
+                    headers: {
+                        'Authorization': `Bearer ${API_TOKEN}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to fetch users');
+                }
+                
+                const data = await response.json();
+                const users = data.users || {};
+                
+                if (Object.keys(users).length === 0) {
+                    userListDiv.innerHTML = '<div class="text-center py-4 text-gray-500 dark:text-gray-400 text-sm"><i class="fas fa-users mr-2"></i> No users configured. Add a user above to enable local authentication.</div>';
+                    return;
+                }
+                
+                let html = '';
+                for (const [username, userInfo] of Object.entries(users)) {
+                    const roleColor = userInfo.role === 'admin' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300' : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
+                    const statusColor = userInfo.enabled !== false ? 'text-green-500' : 'text-red-500';
+                    const lastLogin = userInfo.last_login ? new Date(userInfo.last_login).toLocaleString() : 'Never';
+                    
+                    html += `
+                        <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                            <div class="flex items-center space-x-3">
+                                <i class="fas fa-user-circle text-2xl text-gray-400 dark:text-gray-500"></i>
+                                <div>
+                                    <div class="flex items-center space-x-2">
+                                        <span class="font-medium text-gray-900 dark:text-white">${username}</span>
+                                        <span class="text-xs px-2 py-0.5 rounded-full ${roleColor}">${userInfo.role}</span>
+                                        <i class="fas fa-circle text-xs ${statusColor}" title="${userInfo.enabled !== false ? 'Active' : 'Disabled'}"></i>
+                                    </div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">
+                                        ${userInfo.email ? `<span class="mr-3"><i class="fas fa-envelope mr-1"></i>${userInfo.email}</span>` : ''}
+                                        <span><i class="fas fa-clock mr-1"></i>Last login: ${lastLogin}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <button onclick="toggleUserStatus('${username}', ${userInfo.enabled === false})" 
+                                        class="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200" 
+                                        title="${userInfo.enabled !== false ? 'Disable user' : 'Enable user'}">
+                                    <i class="fas fa-${userInfo.enabled !== false ? 'ban' : 'check'}"></i>
+                                </button>
+                                <button onclick="resetUserPassword('${username}')" 
+                                        class="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200" 
+                                        title="Reset password">
+                                    <i class="fas fa-key"></i>
+                                </button>
+                                <button onclick="deleteUser('${username}')" 
+                                        class="p-2 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300" 
+                                        title="Delete user">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                userListDiv.innerHTML = html;
+                
+            } catch (error) {
+                console.error('Error loading users:', error);
+                userListDiv.innerHTML = '<div class="text-center py-4 text-red-500 text-sm"><i class="fas fa-exclamation-triangle mr-2"></i> Failed to load users</div>';
+            }
+        }
+
+        async function toggleUserStatus(username, enable) {
+            try {
+                const response = await fetch(`/api/users/${username}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${API_TOKEN}`
+                    },
+                    body: JSON.stringify({ enabled: enable })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showMessage(`User '${username}' ${enable ? 'enabled' : 'disabled'}`, 'success');
+                    refreshUserList();
+                } else {
+                    showMessage(data.error || 'Failed to update user', 'error');
+                }
+            } catch (error) {
+                console.error('Error toggling user status:', error);
+                showMessage('Failed to update user status', 'error');
+            }
+        }
+
+        async function resetUserPassword(username) {
+            const newPassword = prompt(`Enter new password for '${username}':`);
+            if (!newPassword) return;
+            
+            try {
+                const response = await fetch(`/api/users/${username}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${API_TOKEN}`
+                    },
+                    body: JSON.stringify({ password: newPassword })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showMessage(`Password reset for '${username}'`, 'success');
+                } else {
+                    showMessage(data.error || 'Failed to reset password', 'error');
+                }
+            } catch (error) {
+                console.error('Error resetting password:', error);
+                showMessage('Failed to reset password', 'error');
+            }
+        }
+
+        async function deleteUser(username) {
+            if (!confirm(`Are you sure you want to delete user '${username}'? This action cannot be undone.`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/users/${username}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${API_TOKEN}`
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showMessage(`User '${username}' deleted`, 'success');
+                    refreshUserList();
+                } else {
+                    showMessage(data.error || 'Failed to delete user', 'error');
+                }
+            } catch (error) {
+                console.error('Error deleting user:', error);
+                showMessage('Failed to delete user', 'error');
+            }
+        }
+
+        // Load user list on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(() => {
+                loadAuthConfig();
+                refreshUserList();
+            }, 500);
+        });
     </script>
 </body>
 </html>
