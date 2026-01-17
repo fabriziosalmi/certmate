@@ -3,7 +3,7 @@
 
 # Core Flask dependencies
 Flask==3.0.3
-Flask-CORS==6.0.0
+Flask-CORS==6.0.2
 flask-restx==1.3.0
 
 # Certificate management
@@ -40,7 +40,7 @@ google-cloud-dns==0.35.0           # Google Cloud support
 cloudflare==2.19.4                 # Cloudflare API support
 
 # Core application dependencies
-requests==2.32.4
+requests==2.32.5
 python-dotenv==1.0.1
 APScheduler==3.10.4
 cryptography==46.0.3
