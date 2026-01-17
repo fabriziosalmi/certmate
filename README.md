@@ -103,28 +103,28 @@ CertMate supports **22 DNS providers** through Let's Encrypt DNS-01 challenge vi
 
 | Provider | Credentials Required | Multi-Account | Use Case | Status |
 |----------|---------------------|---------------|----------|---------|
-| ** Cloudflare** | API Token | **Yes** | Global CDN, Free tier available | **Stable** |
-| ** AWS Route53** | Access Key, Secret Key | **Yes** | AWS infrastructure, Enterprise | **Stable** |
-| ** Azure DNS** | Service Principal credentials | **Yes** | Microsoft ecosystem | **Stable** |
-| ** Google Cloud DNS** | Service Account JSON | **Yes** | Google Cloud Platform | **Stable** |
-| ** DigitalOcean** | API Token | **Yes** | Cloud infrastructure | **Stable** |
-| ** PowerDNS** | API URL, API Key | **Yes** | Self-hosted, On-premises | **Stable** |
-| ** RFC2136** | Nameserver, TSIG Key/Secret | **Yes** | Standard DNS update protocol | **Stable** |
-| ** Linode** | API Key | Single | Cloud hosting | **Stable** |
-| ** Gandi** | API Token | Single | Domain registrar | **Stable** |
-| ** OVH** | API Credentials | Single | European hosting | **Stable** |
-| ** Namecheap** | Username, API Key | Single | Domain registrar | **Stable** |
-| ** Vultr** | API Key | Single | Global cloud infrastructure | **Stable** |
-| ** DNS Made Easy** | API Key, Secret Key | Single | Enterprise DNS management | **Stable** |
-| ** NS1** | API Key | Single | Intelligent DNS platform | **Stable** |
-| ** Hetzner** | API Token | Single | European cloud hosting | **Stable** |
-| ** Porkbun** | API Key, Secret Key | Single | Domain registrar with DNS | **Stable** |
-| ** GoDaddy** | API Key, Secret | Single | Popular domain registrar | **Stable** |
-| ** Hurricane Electric** | Username, Password | Single | Free DNS hosting | **Stable** |
-| ** Dynu** | API Token | Single | Dynamic DNS service | **Stable** |
-| ** ArvanCloud** | API Key | Single | Iranian cloud provider | **Stable** |
-| ** Infomaniak** | API Token | Single | Swiss ISP & cloud provider | **Stable** |
-| ** ACME-DNS** | JSON Config | Single | Generic ACME-DNS server | **Stable** |
+| **Cloudflare** | API Token | **Yes** | Global CDN, Free tier available | **Stable** |
+| **AWS Route53** | Access Key, Secret Key | **Yes** | AWS infrastructure, Enterprise | **Stable** |
+| **Azure DNS** | Service Principal credentials | **Yes** | Microsoft ecosystem | **Stable** |
+| **Google Cloud DNS** | Service Account JSON | **Yes** | Google Cloud Platform | **Stable** |
+| **DigitalOcean** | API Token | **Yes** | Cloud infrastructure | **Stable** |
+| **PowerDNS** | API URL, API Key | **Yes** | Self-hosted, On-premises | **Stable** |
+| **RFC2136** | Nameserver, TSIG Key/Secret | **Yes** | Standard DNS update protocol | **Stable** |
+| **Linode** | API Key | Single | Cloud hosting | **Stable** |
+| **Gandi** | API Token | Single | Domain registrar | **Stable** |
+| **OVH** | API Credentials | Single | European hosting | **Stable** |
+| **Namecheap** | Username, API Key | Single | Domain registrar | **Stable** |
+| **Vultr** | API Key | Single | Global cloud infrastructure | **Stable** |
+| **DNS Made Easy** | API Key, Secret Key | Single | Enterprise DNS management | **Stable** |
+| **NS1** | API Key | Single | Intelligent DNS platform | **Stable** |
+| **Hetzner** | API Token | Single | European cloud hosting | **Stable** |
+| **Porkbun** | API Key, Secret Key | Single | Domain registrar with DNS | **Stable** |
+| **GoDaddy** | API Key, Secret | Single | Popular domain registrar | **Stable** |
+| **Hurricane Electric** | Username, Password | Single | Free DNS hosting | **Stable** |
+| **Dynu** | API Token | Single | Dynamic DNS service | **Stable** |
+| **ArvanCloud** | API Key | Single | Iranian cloud provider | **Stable** |
+| **Infomaniak** | API Token | Single | Swiss ISP & cloud provider | **Stable** |
+| **ACME-DNS** | JSON Config | Single | Generic ACME-DNS server | **Stable** |
 
 ### Provider Categories
 

@@ -202,7 +202,7 @@ docs/
 | Batch Ops | Ready | 2/2 |
 | OCSP/CRL | Ready | 5/5 |
 | Audit/Rate Limit | Ready | 3/3 |
-| **Total** | ** Ready** | **27/27** |
+| **Total** | **Ready** | **27/27** |
 
 ---
 
