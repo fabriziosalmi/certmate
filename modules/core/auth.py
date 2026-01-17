@@ -13,6 +13,12 @@ from functools import wraps
 from flask import request, jsonify, session
 from datetime import datetime, timedelta
 
+try:
+    import bcrypt
+    BCRYPT_AVAILABLE = True
+except ImportError:
+    BCRYPT_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
 
@@ -23,21 +29,51 @@ class AuthManager:
         self.settings_manager = settings_manager
         self._sessions = {}  # In-memory session store: {session_id: {user, expires, created}}
         self._session_timeout = 24 * 60 * 60  # 24 hours in seconds
+        if not BCRYPT_AVAILABLE:
+            logger.warning("bcrypt not available, falling back to SHA-256 (less secure)")
         
     def _hash_password(self, password, salt=None):
-        """Hash password using SHA-256 with salt"""
-        if salt is None:
-            salt = secrets.token_hex(16)
-        hashed = hashlib.sha256((salt + password).encode()).hexdigest()
-        return f"{salt}:{hashed}"
+        """Hash password using bcrypt (preferred) or SHA-256 with salt (fallback)
+        
+        bcrypt is the industry standard for password hashing as it's designed
+        to be slow and resistant to GPU/ASIC attacks.
+        """
+        if BCRYPT_AVAILABLE:
+            # bcrypt handles salt internally, rounds=12 provides good security
+            return bcrypt.hashpw(password.encode(), bcrypt.gensalt(rounds=12)).decode()
+        else:
+            # Fallback to SHA-256 with salt (less secure but functional)
+            if salt is None:
+                salt = secrets.token_hex(16)
+            hashed = hashlib.sha256((salt + password).encode()).hexdigest()
+            return f"sha256:{salt}:{hashed}"
     
     def _verify_password(self, password, stored_hash):
-        """Verify password against stored hash"""
+        """Verify password against stored hash (supports bcrypt and legacy SHA-256)"""
         try:
-            salt, expected_hash = stored_hash.split(':', 1)
+            # Check if it's a bcrypt hash (starts with $2b$ or $2a$)
+            if stored_hash.startswith('$2'):
+                if BCRYPT_AVAILABLE:
+                    return bcrypt.checkpw(password.encode(), stored_hash.encode())
+                else:
+                    logger.error("bcrypt hash found but bcrypt not available")
+                    return False
+            
+            # Legacy SHA-256 format: "sha256:salt:hash" or "salt:hash"
+            if stored_hash.startswith('sha256:'):
+                parts = stored_hash.split(':', 2)
+                if len(parts) == 3:
+                    _, salt, expected_hash = parts
+                else:
+                    return False
+            else:
+                # Old format without prefix
+                salt, expected_hash = stored_hash.split(':', 1)
+            
             actual_hash = hashlib.sha256((salt + password).encode()).hexdigest()
             return secrets.compare_digest(actual_hash, expected_hash)
-        except (ValueError, AttributeError):
+        except (ValueError, AttributeError) as e:
+            logger.debug(f"Password verification error: {e}")
             return False
     
     def _get_users(self):

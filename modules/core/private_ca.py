@@ -407,8 +407,8 @@ class PrivateCAGenerator:
                                 ext for ext in cert_builder._extensions
                                 if ext.oid != x509.oid.ExtensionOID.EXTENDED_KEY_USAGE
                             ]
-                        except:
-                            pass
+                        except (AttributeError, TypeError) as eku_error:
+                            logger.debug(f"Could not remove existing EKU extension: {eku_error}")
 
                         cert_builder = cert_builder.add_extension(
                             x509.ExtendedKeyUsage(eku_list),

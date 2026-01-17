@@ -14,6 +14,8 @@ from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple, Any
 
+from .constants import CERTIFICATE_FILES
+
 logger = logging.getLogger(__name__)
 
 
@@ -96,7 +98,7 @@ class LocalFileSystemBackend(CertificateStorageBackend):
                 return None
             
             cert_files = {}
-            standard_files = ['cert.pem', 'chain.pem', 'fullchain.pem', 'privkey.pem']
+            standard_files = list(CERTIFICATE_FILES)
             
             for filename in standard_files:
                 file_path = domain_dir / filename
@@ -219,7 +221,7 @@ class AzureKeyVaultBackend(CertificateStorageBackend):
             client = self._get_client()
             
             cert_files = {}
-            standard_files = ['cert.pem', 'chain.pem', 'fullchain.pem', 'privkey.pem']
+            standard_files = list(CERTIFICATE_FILES)
             
             for filename in standard_files:
                 try:
@@ -270,7 +272,7 @@ class AzureKeyVaultBackend(CertificateStorageBackend):
         try:
             client = self._get_client()
             
-            standard_files = ['cert.pem', 'chain.pem', 'fullchain.pem', 'privkey.pem']
+            standard_files = list(CERTIFICATE_FILES)
             
             for filename in standard_files:
                 try:
@@ -667,7 +669,7 @@ class InfisicalBackend(CertificateStorageBackend):
             client = self._get_client()
             
             cert_files = {}
-            standard_files = ['cert.pem', 'chain.pem', 'fullchain.pem', 'privkey.pem']
+            standard_files = list(CERTIFICATE_FILES)
             
             for filename in standard_files:
                 try:
@@ -731,7 +733,7 @@ class InfisicalBackend(CertificateStorageBackend):
         try:
             client = self._get_client()
             
-            standard_files = ['cert.pem', 'chain.pem', 'fullchain.pem', 'privkey.pem']
+            standard_files = list(CERTIFICATE_FILES)
             
             for filename in standard_files:
                 try:

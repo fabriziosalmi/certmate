@@ -18,6 +18,7 @@ from cryptography.hazmat.backends import default_backend
 
 from .private_ca import PrivateCAGenerator
 from .csr_handler import CSRHandler
+from .constants import MIN_CERTIFICATE_VALIDITY_DAYS, MAX_CERTIFICATE_VALIDITY_DAYS
 
 logger = logging.getLogger(__name__)
 
@@ -91,6 +92,16 @@ class ClientCertificateManager:
             Tuple of (success, error_message, certificate_data)
         """
         try:
+            # Validate common_name
+            if not common_name or not common_name.strip():
+                return False, "Common name is required", None
+            if len(common_name) > 64:
+                return False, "Common name must be 64 characters or less", None
+            
+            # Validate days_valid
+            if not isinstance(days_valid, int) or days_valid < MIN_CERTIFICATE_VALIDITY_DAYS or days_valid > MAX_CERTIFICATE_VALIDITY_DAYS:
+                return False, f"days_valid must be between {MIN_CERTIFICATE_VALIDITY_DAYS} and {MAX_CERTIFICATE_VALIDITY_DAYS}", None
+            
             # Generate unique identifier
             identifier = f"{common_name.lower().replace(' ', '-')}-{uuid4().hex[:8]}"
 

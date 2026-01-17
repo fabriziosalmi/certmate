@@ -13,6 +13,7 @@ from pathlib import Path
 from datetime import datetime, timedelta
 from .shell import ShellExecutor
 from .dns_strategies import DNSStrategyFactory
+from .constants import CERTIFICATE_FILES, get_domain_name
 
 logger = logging.getLogger(__name__)
 
@@ -329,7 +330,7 @@ class CertificateManager:
             cert_files = {}
             
             if live_dir.exists():
-                for cert_file in ['cert.pem', 'chain.pem', 'fullchain.pem', 'privkey.pem']:
+                for cert_file in CERTIFICATE_FILES:
                     src_file = live_dir / cert_file
                     dst_file = cert_output_dir / cert_file
                     if src_file.exists():
@@ -392,8 +393,8 @@ class CertificateManager:
                     strategy = DNSStrategyFactory.get_strategy(dns_provider) if 'dns_provider' in locals() and dns_provider else None
                     if strategy:
                         strategy.cleanup_environment(os.environ)
-                except:
-                    pass
+                except Exception as cleanup_error:
+                    logger.debug(f"Cleanup error (non-critical): {cleanup_error}")
             
             duration = time.time() - start_time
             logger.error(f"Certificate creation failed for {domain}: {str(e)} (duration: {duration:.2f}s)")
@@ -423,8 +424,7 @@ class CertificateManager:
                 src_dir = domain_dir / 'live' / domain
                 dest_dir = domain_dir
                 
-                files_to_copy = ['cert.pem', 'chain.pem', 'fullchain.pem', 'privkey.pem']
-                for file_name in files_to_copy:
+                for file_name in CERTIFICATE_FILES:
                     src_file = src_dir / file_name
                     dest_file = dest_dir / file_name
                     if src_file.exists():

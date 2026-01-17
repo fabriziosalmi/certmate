@@ -9,11 +9,49 @@ import zipfile
 import threading
 from datetime import datetime
 from pathlib import Path
+from collections import defaultdict
+from time import time
 from flask import render_template, request, jsonify, send_file, send_from_directory
 
 from ..core.metrics import generate_metrics_response
 
 logger = logging.getLogger(__name__)
+
+# Simple login rate limiter (5 attempts per IP per minute)
+_login_attempts = defaultdict(list)
+_LOGIN_RATE_LIMIT = 5
+_LOGIN_RATE_WINDOW = 60  # seconds
+
+
+def _check_login_rate_limit(ip_address):
+    """Check if login attempt is allowed for this IP
+    
+    Returns:
+        tuple: (allowed: bool, retry_after: int or None)
+    """
+    current_time = time()
+    window_start = current_time - _LOGIN_RATE_WINDOW
+    
+    # Clean old attempts
+    _login_attempts[ip_address] = [
+        t for t in _login_attempts[ip_address] if t > window_start
+    ]
+    
+    if len(_login_attempts[ip_address]) >= _LOGIN_RATE_LIMIT:
+        oldest = min(_login_attempts[ip_address])
+        retry_after = int(oldest + _LOGIN_RATE_WINDOW - current_time) + 1
+        return False, retry_after
+    
+    return True, None
+
+
+def _record_login_attempt(ip_address):
+    """Record a login attempt for rate limiting"""
+    _login_attempts[ip_address].append(time())
+
+
+# Import certificate files constant
+from ..core.constants import CERTIFICATE_FILES
 
 
 def register_web_routes(app, managers):
@@ -151,6 +189,18 @@ def register_web_routes(app, managers):
     def api_login():
         """Login endpoint for local authentication"""
         try:
+            # Rate limiting - prevent brute force attacks
+            client_ip = request.remote_addr or 'unknown'
+            allowed, retry_after = _check_login_rate_limit(client_ip)
+            if not allowed:
+                logger.warning(f"Login rate limit exceeded for IP: {client_ip}")
+                response = jsonify({
+                    'error': 'Too many login attempts. Please try again later.',
+                    'retry_after': retry_after
+                })
+                response.headers['Retry-After'] = str(retry_after)
+                return response, 429
+            
             data = request.json
             username = data.get('username', '').strip()
             password = data.get('password', '')
@@ -161,6 +211,9 @@ def register_web_routes(app, managers):
             # Check if local auth is enabled
             if not auth_manager.is_local_auth_enabled():
                 return jsonify({'error': 'Local authentication is not enabled'}), 403
+            
+            # Record attempt before authentication
+            _record_login_attempt(client_ip)
             
             # Authenticate user
             user_info = auth_manager.authenticate_user(username, password)
@@ -176,12 +229,15 @@ def register_web_routes(app, managers):
                 'user': user_info
             })
             
-            # Set session cookie
+            # Set session cookie with security flags
+            # secure=True requires HTTPS (disabled for local dev, enable in production)
+            # samesite='Strict' prevents CSRF attacks
             response.set_cookie(
                 'certmate_session',
                 session_id,
                 httponly=True,
-                samesite='Lax',
+                secure=request.is_secure,  # Auto-enable on HTTPS
+                samesite='Strict',
                 max_age=24 * 60 * 60  # 24 hours
             )
             
@@ -712,7 +768,7 @@ def register_web_routes(app, managers):
             # Create temporary ZIP file
             with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as tmp_file:
                 with zipfile.ZipFile(tmp_file.name, 'w', zipfile.ZIP_DEFLATED) as zipf:
-                    for cert_file in ['cert.pem', 'chain.pem', 'fullchain.pem', 'privkey.pem']:
+                    for cert_file in CERTIFICATE_FILES:
                         file_path = cert_dir / cert_file
                         if file_path.exists():
                             zipf.write(file_path, cert_file)

@@ -28,7 +28,9 @@ env/
 ENV/
 
 # Application specific
+# SECURITY: Never commit settings.json - may contain API tokens and secrets
 settings.json
+data/settings.json
 cloudflare.ini
 certificates/
 data/

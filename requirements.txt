@@ -43,8 +43,9 @@ cloudflare==2.19.4                 # Cloudflare API support
 requests==2.32.4
 python-dotenv==1.0.1
 APScheduler==3.10.4
-cryptography==45.0.0
+cryptography==46.0.3
 pyopenssl==25.1.0
+bcrypt==4.2.0                      # Secure password hashing
 
 # Production server
 gunicorn==23.0.0

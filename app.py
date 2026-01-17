@@ -98,8 +98,16 @@ class CertMateApp:
         # Generate a secure random secret key if not provided
         self.app.secret_key = os.getenv('SECRET_KEY') or os.urandom(32).hex()
         
-        # Enable CORS
-        CORS(self.app)
+        # Enable CORS with security restrictions
+        # In production, set CORS_ORIGINS env var to allowed origins (comma-separated)
+        # e.g., CORS_ORIGINS=https://example.com,https://app.example.com
+        cors_origins = os.getenv('CORS_ORIGINS', '*').split(',')
+        CORS(self.app, 
+             origins=cors_origins,
+             methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+             allow_headers=['Authorization', 'Content-Type'],
+             supports_credentials=True,
+             max_age=3600)
 
     def _initialize_managers(self):
         """Initialize all manager instances"""

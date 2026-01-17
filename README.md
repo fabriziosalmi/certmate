@@ -599,6 +599,21 @@ Content-Type: application/json
   "account_id": "production"     # Optional, specify which account to use
 }
 
+# Create SAN certificate (multiple domains)
+POST /api/certificates/create
+Authorization: Bearer your_token_here
+Content-Type: application/json
+
+{
+  "domain": "example.com",
+  "san_domains": ["www.example.com", "mail.example.com", "api.example.com"],
+  "dns_provider": "cloudflare"
+}
+# This creates a single certificate covering all specified domains.
+# The primary domain is "example.com" and san_domains are additional 
+# Subject Alternative Names included in the certificate.
+# Note: All domains must use the same DNS provider for validation.
+
 # Create certificate with specific account
 POST /api/certificates/create
 Authorization: Bearer your_token_here
