@@ -1,4 +1,4 @@
-# 📡 CertMate Client Certificates - API Reference
+# CertMate Client Certificates - API Reference
 
 ## Overview
 
@@ -24,8 +24,8 @@ Authorization: Bearer YOUR_TOKEN
 
 ```bash
 curl -X GET http://localhost:5000/api/client-certs \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -H "Content-Type: application/json"
+ -H "Authorization: Bearer YOUR_TOKEN" \
+ -H "Content-Type: application/json"
 ```
 
 ---
@@ -50,9 +50,9 @@ When rate limited, you'll receive:
 HTTP 429 Too Many Requests
 
 {
-  "error": "Rate limit exceeded",
-  "message": "Too many requests. Please try again later.",
-  "retry_after": 60
+ "error": "Rate limit exceeded",
+ "message": "Too many requests. Please try again later.",
+ "retry_after": 60
 }
 ```
 
@@ -71,14 +71,14 @@ Create a new client certificate.
 **Request**:
 ```json
 {
-  "common_name": "user@example.com",
-  "email": "user@example.com",
-  "organization": "ACME Corp",
-  "organizational_unit": "Engineering",
-  "cert_usage": "api-mtls",
-  "days_valid": 365,
-  "generate_key": true,
-  "notes": "Production certificate"
+ "common_name": "user@example.com",
+ "email": "user@example.com",
+ "organization": "ACME Corp",
+ "organizational_unit": "Engineering",
+ "cert_usage": "api-mtls",
+ "days_valid": 365,
+ "generate_key": true,
+ "notes": "Production certificate"
 }
 ```
 
@@ -95,28 +95,28 @@ Create a new client certificate.
 **Response** (201 Created):
 ```json
 {
-  "identifier": "cert-abc123",
-  "common_name": "user@example.com",
-  "serial_number": "12345678901234567890",
-  "created_at": "2024-10-30T18:00:00Z",
-  "expires_at": "2025-10-30T18:00:00Z",
-  "cert_usage": "api-mtls",
-  "status": "active"
+ "identifier": "cert-abc123",
+ "common_name": "user@example.com",
+ "serial_number": "12345678901234567890",
+ "created_at": "2024-10-30T18:00:00Z",
+ "expires_at": "2025-10-30T18:00:00Z",
+ "cert_usage": "api-mtls",
+ "status": "active"
 }
 ```
 
 **Example**:
 ```bash
 curl -X POST http://localhost:5000/api/client-certs/create \
-  -H "Authorization: Bearer TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "common_name": "user@example.com",
-    "email": "user@example.com",
-    "organization": "ACME Corp",
-    "cert_usage": "api-mtls",
-    "days_valid": 365
-  }'
+ -H "Authorization: Bearer TOKEN" \
+ -H "Content-Type: application/json" \
+ -d '{
+ "common_name": "user@example.com",
+ "email": "user@example.com",
+ "organization": "ACME Corp",
+ "cert_usage": "api-mtls",
+ "days_valid": 365
+ }'
 ```
 
 ---
@@ -135,29 +135,28 @@ List all client certificates with optional filtering.
 **Response** (200 OK):
 ```json
 {
-  "certificates": [
-    {
-      "identifier": "cert-001",
-      "common_name": "user1@example.com",
-      "organization": "ACME Corp",
-      "cert_usage": "api-mtls",
-      "created_at": "2024-10-30T18:00:00Z",
-      "expires_at": "2025-10-30T18:00:00Z",
-      "revoked": false,
-      "status": "active"
-    },
-    {
-      "identifier": "cert-002",
-      "common_name": "user2@example.com",
-      "organization": "ACME Corp",
-      "cert_usage": "vpn",
-      "created_at": "2024-10-29T18:00:00Z",
-      "expires_at": "2025-10-29T18:00:00Z",
-      "revoked": true,
-      "status": "revoked"
-    }
-  ],
-  "total": 2
+ "certificates": [{
+ "identifier": "cert-001",
+ "common_name": "user1@example.com",
+ "organization": "ACME Corp",
+ "cert_usage": "api-mtls",
+ "created_at": "2024-10-30T18:00:00Z",
+ "expires_at": "2025-10-30T18:00:00Z",
+ "revoked": false,
+ "status": "active"
+ },
+ {
+ "identifier": "cert-002",
+ "common_name": "user2@example.com",
+ "organization": "ACME Corp",
+ "cert_usage": "vpn",
+ "created_at": "2024-10-29T18:00:00Z",
+ "expires_at": "2025-10-29T18:00:00Z",
+ "revoked": true,
+ "status": "revoked"
+ }
+ ],
+ "total": 2
 }
 ```
 
@@ -165,19 +164,19 @@ List all client certificates with optional filtering.
 ```bash
 # List all certificates
 curl http://localhost:5000/api/client-certs \
-  -H "Authorization: Bearer TOKEN"
+ -H "Authorization: Bearer TOKEN"
 
 # Filter by usage type
 curl "http://localhost:5000/api/client-certs?usage=api-mtls" \
-  -H "Authorization: Bearer TOKEN"
+ -H "Authorization: Bearer TOKEN"
 
 # List only revoked
 curl "http://localhost:5000/api/client-certs?revoked=true" \
-  -H "Authorization: Bearer TOKEN"
+ -H "Authorization: Bearer TOKEN"
 
 # Search by common name
 curl "http://localhost:5000/api/client-certs?search=user1" \
-  -H "Authorization: Bearer TOKEN"
+ -H "Authorization: Bearer TOKEN"
 ```
 
 ---
@@ -191,33 +190,33 @@ Get complete metadata for a certificate.
 **Response** (200 OK):
 ```json
 {
-  "type": "client_certificate",
-  "identifier": "cert-001",
-  "common_name": "user@example.com",
-  "email": "user@example.com",
-  "organization": "ACME Corp",
-  "organizational_unit": "Engineering",
-  "serial_number": "12345678901234567890",
-  "created_at": "2024-10-30T18:00:00Z",
-  "expires_at": "2025-10-30T18:00:00Z",
-  "cert_usage": "api-mtls",
-  "notes": "Production certificate",
-  "revocation": {
-    "revoked": false,
-    "revoked_at": null,
-    "reason_revoked": null
-  },
-  "renewal": {
-    "renewal_enabled": true,
-    "renewal_threshold_days": 30
-  }
+ "type": "client_certificate",
+ "identifier": "cert-001",
+ "common_name": "user@example.com",
+ "email": "user@example.com",
+ "organization": "ACME Corp",
+ "organizational_unit": "Engineering",
+ "serial_number": "12345678901234567890",
+ "created_at": "2024-10-30T18:00:00Z",
+ "expires_at": "2025-10-30T18:00:00Z",
+ "cert_usage": "api-mtls",
+ "notes": "Production certificate",
+ "revocation": {
+ "revoked": false,
+ "revoked_at": null,
+ "reason_revoked": null
+ },
+ "renewal": {
+ "renewal_enabled": true,
+ "renewal_threshold_days": 30
+ }
 }
 ```
 
 **Example**:
 ```bash
 curl http://localhost:5000/api/client-certs/cert-001 \
-  -H "Authorization: Bearer TOKEN"
+ -H "Authorization: Bearer TOKEN"
 ```
 
 ---
@@ -240,18 +239,18 @@ Download certificate, private key, or CSR file.
 ```bash
 # Download certificate
 curl http://localhost:5000/api/client-certs/cert-001/download/crt \
-  -H "Authorization: Bearer TOKEN" \
-  -o certificate.crt
+ -H "Authorization: Bearer TOKEN" \
+ -o certificate.crt
 
 # Download private key
 curl http://localhost:5000/api/client-certs/cert-001/download/key \
-  -H "Authorization: Bearer TOKEN" \
-  -o private.key
+ -H "Authorization: Bearer TOKEN" \
+ -o private.key
 
 # Download CSR
 curl http://localhost:5000/api/client-certs/cert-001/download/csr \
-  -H "Authorization: Bearer TOKEN" \
-  -o request.csr
+ -H "Authorization: Bearer TOKEN" \
+ -o request.csr
 ```
 
 ---
@@ -265,27 +264,27 @@ Revoke a certificate with optional reason.
 **Request** (optional):
 ```json
 {
-  "reason": "compromised"
+ "reason": "compromised"
 }
 ```
 
 **Response** (200 OK):
 ```json
 {
-  "message": "Certificate revoked: cert-001",
-  "revoked_at": "2024-10-30T18:15:00Z",
-  "reason": "compromised"
+ "message": "Certificate revoked: cert-001",
+ "revoked_at": "2024-10-30T18:15:00Z",
+ "reason": "compromised"
 }
 ```
 
 **Example**:
 ```bash
 curl -X POST http://localhost:5000/api/client-certs/cert-001/revoke \
-  -H "Authorization: Bearer TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "reason": "compromised"
-  }'
+ -H "Authorization: Bearer TOKEN" \
+ -H "Content-Type: application/json" \
+ -d '{
+ "reason": "compromised"
+ }'
 ```
 
 ---
@@ -299,19 +298,19 @@ Renew a certificate (same CN, new serial).
 **Response** (201 Created):
 ```json
 {
-  "identifier": "cert-001-renewed",
-  "common_name": "user@example.com",
-  "serial_number": "98765432109876543210",
-  "created_at": "2024-10-30T18:20:00Z",
-  "expires_at": "2025-10-30T18:20:00Z",
-  "status": "active"
+ "identifier": "cert-001-renewed",
+ "common_name": "user@example.com",
+ "serial_number": "98765432109876543210",
+ "created_at": "2024-10-30T18:20:00Z",
+ "expires_at": "2025-10-30T18:20:00Z",
+ "status": "active"
 }
 ```
 
 **Example**:
 ```bash
 curl -X POST http://localhost:5000/api/client-certs/cert-001/renew \
-  -H "Authorization: Bearer TOKEN"
+ -H "Authorization: Bearer TOKEN"
 ```
 
 ---
@@ -325,24 +324,24 @@ Get certificate usage statistics.
 **Response** (200 OK):
 ```json
 {
-  "total": 100,
-  "active": 85,
-  "revoked": 15,
-  "expiring_soon": 8,
-  "by_usage": {
-    "api-mtls": 60,
-    "vpn": 35,
-    "other": 5
-  },
-  "created_count": 100,
-  "renewal_enabled": 92
+ "total": 100,
+ "active": 85,
+ "revoked": 15,
+ "expiring_soon": 8,
+ "by_usage": {
+ "api-mtls": 60,
+ "vpn": 35,
+ "other": 5
+ },
+ "created_count": 100,
+ "renewal_enabled": 92
 }
 ```
 
 **Example**:
 ```bash
 curl http://localhost:5000/api/client-certs/stats \
-  -H "Authorization: Bearer TOKEN"
+ -H "Authorization: Bearer TOKEN"
 ```
 
 ---
@@ -356,51 +355,48 @@ Create multiple certificates from CSV data in single request.
 **Request**:
 ```json
 {
-  "headers": ["common_name", "email", "organization", "cert_usage", "days_valid"],
-  "rows": [
-    ["user1@example.com", "user1@example.com", "ACME Corp", "api-mtls", "365"],
-    ["user2@example.com", "user2@example.com", "ACME Corp", "vpn", "365"],
-    ["user3@example.com", "user3@example.com", "ACME Corp", "api-mtls", "365"]
-  ]
+ "headers": ["common_name", "email", "organization", "cert_usage", "days_valid"],
+ "rows": [["user1@example.com", "user1@example.com", "ACME Corp", "api-mtls", "365"],
+ ["user2@example.com", "user2@example.com", "ACME Corp", "vpn", "365"],
+ ["user3@example.com", "user3@example.com", "ACME Corp", "api-mtls", "365"]
+ ]
 }
 ```
 
 **Response** (201 Created):
 ```json
 {
-  "total": 3,
-  "successful": 3,
-  "failed": 0,
-  "errors": [],
-  "certificates": [
-    {
-      "identifier": "cert-batch-001",
-      "common_name": "user1@example.com"
-    },
-    {
-      "identifier": "cert-batch-002",
-      "common_name": "user2@example.com"
-    },
-    {
-      "identifier": "cert-batch-003",
-      "common_name": "user3@example.com"
-    }
-  ]
+ "total": 3,
+ "successful": 3,
+ "failed": 0,
+ "errors": [],
+ "certificates": [{
+ "identifier": "cert-batch-001",
+ "common_name": "user1@example.com"
+ },
+ {
+ "identifier": "cert-batch-002",
+ "common_name": "user2@example.com"
+ },
+ {
+ "identifier": "cert-batch-003",
+ "common_name": "user3@example.com"
+ }
+ ]
 }
 ```
 
 **Example**:
 ```bash
 curl -X POST http://localhost:5000/api/client-certs/batch \
-  -H "Authorization: Bearer TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "headers": ["common_name", "email", "organization"],
-    "rows": [
-      ["user1@example.com", "user1@example.com", "ACME Corp"],
-      ["user2@example.com", "user2@example.com", "ACME Corp"]
-    ]
-  }'
+ -H "Authorization: Bearer TOKEN" \
+ -H "Content-Type: application/json" \
+ -d '{
+ "headers": ["common_name", "email", "organization"],
+ "rows": [["user1@example.com", "user1@example.com", "ACME Corp"],
+ ["user2@example.com", "user2@example.com", "ACME Corp"]
+ ]
+ }'
 ```
 
 ---
@@ -416,19 +412,19 @@ Query certificate status via OCSP.
 **Response** (200 OK):
 ```json
 {
-  "response_status": "successful",
-  "certificate_status": "good|revoked|unknown",
-  "certificate_serial": 12345678,
-  "this_update": "2024-10-30T18:00:00Z",
-  "next_update": null,
-  "responder_name": "CertMate OCSP Responder"
+ "response_status": "successful",
+ "certificate_status": "good|revoked|unknown",
+ "certificate_serial": 12345678,
+ "this_update": "2024-10-30T18:00:00Z",
+ "next_update": null,
+ "responder_name": "CertMate OCSP Responder"
 }
 ```
 
 **Example**:
 ```bash
 curl http://localhost:5000/api/ocsp/status/12345678 \
-  -H "Authorization: Bearer TOKEN"
+ -H "Authorization: Bearer TOKEN"
 ```
 
 ---
@@ -450,31 +446,30 @@ Download Certificate Revocation List.
 ```bash
 # Download CRL in PEM format
 curl http://localhost:5000/api/crl/download/pem \
-  -H "Authorization: Bearer TOKEN" \
-  -o ca.crl
+ -H "Authorization: Bearer TOKEN" \
+ -o ca.crl
 
 # Download CRL in DER format
 curl http://localhost:5000/api/crl/download/der \
-  -H "Authorization: Bearer TOKEN" \
-  -o ca.crl
+ -H "Authorization: Bearer TOKEN" \
+ -o ca.crl
 
 # Get CRL info
 curl http://localhost:5000/api/crl/download/info \
-  -H "Authorization: Bearer TOKEN"
+ -H "Authorization: Bearer TOKEN"
 ```
 
 **CRL Info Response**:
 ```json
 {
-  "status": "available",
-  "issuer": "CN=CertMate CA, O=CertMate",
-  "last_update": "2024-10-30T18:00:00Z",
-  "next_update": "2024-10-31T18:00:00Z",
-  "revoked_count": 5,
-  "revoked_serials": [
-    12345678,
-    87654321
-  ]
+ "status": "available",
+ "issuer": "CN=CertMate CA, O=CertMate",
+ "last_update": "2024-10-30T18:00:00Z",
+ "next_update": "2024-10-31T18:00:00Z",
+ "revoked_count": 5,
+ "revoked_serials": [12345678,
+ 87654321
+ ]
 }
 ```
 
@@ -486,9 +481,9 @@ curl http://localhost:5000/api/crl/download/info \
 
 ```json
 {
-  "error": "Error message",
-  "code": "ERROR_CODE",
-  "status": 400
+ "error": "Error message",
+ "code": "ERROR_CODE",
+ "status": 400
 }
 ```
 
@@ -509,13 +504,13 @@ curl http://localhost:5000/api/crl/download/info \
 
 ```bash
 curl http://localhost:5000/api/client-certs/invalid-id \
-  -H "Authorization: Bearer TOKEN"
+ -H "Authorization: Bearer TOKEN"
 
 # Response
 {
-  "error": "Certificate not found: invalid-id",
-  "code": 404,
-  "status": 404
+ "error": "Certificate not found: invalid-id",
+ "code": 404,
+ "status": 404
 }
 ```
 
@@ -544,18 +539,18 @@ tail -f logs/audit/certificate_audit.log
 Each entry is JSON formatted for easy parsing:
 ```json
 {
-  "timestamp": "2024-10-30T18:00:00Z",
-  "operation": "create",
-  "resource_type": "certificate",
-  "resource_id": "cert-001",
-  "status": "success",
-  "user": "admin@example.com",
-  "ip_address": "192.168.1.1",
-  "details": {
-    "common_name": "user@example.com",
-    "usage": "api-mtls"
-  },
-  "error": null
+ "timestamp": "2024-10-30T18:00:00Z",
+ "operation": "create",
+ "resource_type": "certificate",
+ "resource_id": "cert-001",
+ "status": "success",
+ "user": "admin@example.com",
+ "ip_address": "192.168.1.1",
+ "details": {
+ "common_name": "user@example.com",
+ "usage": "api-mtls"
+ },
+ "error": null
 }
 ```
 
@@ -594,37 +589,37 @@ cert_usage: "custom-application"
 ### Security
 
 1. **Protect Your Token**
-   - Keep tokens secret
-   - Rotate tokens regularly
-   - Use HTTPS in production
+ - Keep tokens secret
+ - Rotate tokens regularly
+ - Use HTTPS in production
 
 2. **Certificate Management**
-   - Enable auto-renewal
-   - Monitor expiration dates
-   - Review audit logs regularly
-   - Revoke compromised certs immediately
+ - Enable auto-renewal
+ - Monitor expiration dates
+ - Review audit logs regularly
+ - Revoke compromised certs immediately
 
 3. **Rate Limiting**
-   - Respect rate limits
-   - Implement exponential backoff
-   - Batch operations when possible
+ - Respect rate limits
+ - Implement exponential backoff
+ - Batch operations when possible
 
 ### Performance
 
 1. **Use Batch Operations**
-   - Import multiple certs at once
-   - Reduces API calls
-   - Better error reporting
+ - Import multiple certs at once
+ - Reduces API calls
+ - Better error reporting
 
 2. **Filter Results**
-   - Use query parameters
-   - Filter by usage or status
-   - Reduces data transfer
+ - Use query parameters
+ - Filter by usage or status
+ - Reduces data transfer
 
 3. **Cache When Appropriate**
-   - Cache certificate metadata
-   - Refresh periodically
-   - Check expiration locally
+ - Cache certificate metadata
+ - Refresh periodically
+ - Check expiration locally
 
 ---
 

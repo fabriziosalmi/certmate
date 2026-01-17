@@ -1,4 +1,4 @@
-# 🚀 CertMate Client Certificates - User Guide
+# CertMate Client Certificates - User Guide
 
 ## Getting Started
 
@@ -68,11 +68,11 @@ Days Valid: 365
 
 1. Click "Bulk Import" tab
 2. Prepare CSV file with headers:
-   ```
-   common_name,email,organization,cert_usage,days_valid
-   user1@example.com,user1@example.com,ACME Corp,api-mtls,365
-   user2@example.com,user2@example.com,ACME Corp,vpn,365
-   ```
+ ```
+ common_name,email,organization,cert_usage,days_valid
+ user1@example.com,user1@example.com,ACME Corp,api-mtls,365
+ user2@example.com,user2@example.com,ACME Corp,vpn,365
+ ```
 3. Drag and drop or click to upload
 4. Review preview
 5. Click "Import"
@@ -94,16 +94,16 @@ Days Valid: 365
 
 ```bash
 curl -X POST http://localhost:5000/api/client-certs/create \
-  -H "Authorization: Bearer TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "common_name": "user@example.com",
-    "email": "user@example.com",
-    "organization": "ACME Corp",
-    "cert_usage": "api-mtls",
-    "days_valid": 365,
-    "generate_key": true
-  }'
+ -H "Authorization: Bearer TOKEN" \
+ -H "Content-Type: application/json" \
+ -d '{
+ "common_name": "user@example.com",
+ "email": "user@example.com",
+ "organization": "ACME Corp",
+ "cert_usage": "api-mtls",
+ "days_valid": 365,
+ "generate_key": true
+ }'
 ```
 
 ---
@@ -113,24 +113,24 @@ curl -X POST http://localhost:5000/api/client-certs/create \
 #### Via Web Dashboard
 
 1. Find certificate in the table
-2. Click the "Download" icon (⬇️)
+2. Click the "Download" icon ()
 3. Select file type:
-   - **CRT** - Certificate (public)
-   - **KEY** - Private key (keep secret)
-   - **CSR** - Certificate Signing Request
+ - **CRT** - Certificate (public)
+ - **KEY** - Private key (keep secret)
+ - **CSR** - Certificate Signing Request
 
 #### Via API
 
 ```bash
 # Download certificate
 curl http://localhost:5000/api/client-certs/CERT_ID/download/crt \
-  -H "Authorization: Bearer TOKEN" \
-  -o my-cert.crt
+ -H "Authorization: Bearer TOKEN" \
+ -o my-cert.crt
 
 # Download key
 curl http://localhost:5000/api/client-certs/CERT_ID/download/key \
-  -H "Authorization: Bearer TOKEN" \
-  -o my-key.key
+ -H "Authorization: Bearer TOKEN" \
+ -o my-key.key
 ```
 
 ---
@@ -140,7 +140,7 @@ curl http://localhost:5000/api/client-certs/CERT_ID/download/key \
 #### Via Web Dashboard
 
 1. Find certificate in table
-2. Click the "Revoke" button (🚫)
+2. Click the "Revoke" button ()
 3. Enter revocation reason (optional)
 4. Confirm
 
@@ -148,11 +148,11 @@ curl http://localhost:5000/api/client-certs/CERT_ID/download/key \
 
 ```bash
 curl -X POST http://localhost:5000/api/client-certs/CERT_ID/revoke \
-  -H "Authorization: Bearer TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "reason": "compromised"
-  }'
+ -H "Authorization: Bearer TOKEN" \
+ -H "Content-Type: application/json" \
+ -d '{
+ "reason": "compromised"
+ }'
 ```
 
 **Revocation Reasons**:
@@ -168,14 +168,14 @@ curl -X POST http://localhost:5000/api/client-certs/CERT_ID/revoke \
 #### Via Web Dashboard
 
 1. Find certificate in table
-2. Click the "Renew" button (🔄)
+2. Click the "Renew" button ()
 3. Confirm renewal
 
 #### Via API
 
 ```bash
 curl -X POST http://localhost:5000/api/client-certs/CERT_ID/renew \
-  -H "Authorization: Bearer TOKEN"
+ -H "Authorization: Bearer TOKEN"
 ```
 
 **Note**: Renewal creates a new certificate with:
@@ -201,19 +201,19 @@ curl -X POST http://localhost:5000/api/client-certs/CERT_ID/renew \
 ```bash
 # List all
 curl http://localhost:5000/api/client-certs \
-  -H "Authorization: Bearer TOKEN"
+ -H "Authorization: Bearer TOKEN"
 
 # Filter by usage
 curl "http://localhost:5000/api/client-certs?usage=api-mtls" \
-  -H "Authorization: Bearer TOKEN"
+ -H "Authorization: Bearer TOKEN"
 
 # Filter by status
 curl "http://localhost:5000/api/client-certs?revoked=false" \
-  -H "Authorization: Bearer TOKEN"
+ -H "Authorization: Bearer TOKEN"
 
 # Search
 curl "http://localhost:5000/api/client-certs?search=user@" \
-  -H "Authorization: Bearer TOKEN"
+ -H "Authorization: Bearer TOKEN"
 ```
 
 ---
@@ -224,15 +224,15 @@ curl "http://localhost:5000/api/client-certs?search=user@" \
 
 ```bash
 curl http://localhost:5000/api/ocsp/status/SERIAL_NUMBER \
-  -H "Authorization: Bearer TOKEN"
+ -H "Authorization: Bearer TOKEN"
 ```
 
 **Response**:
 ```json
 {
-  "certificate_status": "good",
-  "certificate_serial": 12345678,
-  "this_update": "2024-10-30T18:00:00Z"
+ "certificate_status": "good",
+ "certificate_serial": 12345678,
+ "this_update": "2024-10-30T18:00:00Z"
 }
 ```
 
@@ -245,20 +245,20 @@ curl http://localhost:5000/api/ocsp/status/SERIAL_NUMBER \
 ```bash
 # PEM format
 curl http://localhost:5000/api/crl/download/pem \
-  -H "Authorization: Bearer TOKEN" \
-  -o ca.crl
+ -H "Authorization: Bearer TOKEN" \
+ -o ca.crl
 
 # DER format
 curl http://localhost:5000/api/crl/download/der \
-  -H "Authorization: Bearer TOKEN" \
-  -o ca.crl
+ -H "Authorization: Bearer TOKEN" \
+ -o ca.crl
 ```
 
 #### Get CRL Info
 
 ```bash
 curl http://localhost:5000/api/crl/download/info \
-  -H "Authorization: Bearer TOKEN"
+ -H "Authorization: Bearer TOKEN"
 ```
 
 ---
@@ -297,16 +297,15 @@ user3@example.com,user3@example.com,ACME Corp,api-mtls,730
 
 ```bash
 curl -X POST http://localhost:5000/api/client-certs/batch \
-  -H "Authorization: Bearer TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "headers": ["common_name", "email", "organization"],
-    "rows": [
-      ["user1@example.com", "user1@example.com", "ACME Corp"],
-      ["user2@example.com", "user2@example.com", "ACME Corp"],
-      ["user3@example.com", "user3@example.com", "ACME Corp"]
-    ]
-  }'
+ -H "Authorization: Bearer TOKEN" \
+ -H "Content-Type: application/json" \
+ -d '{
+ "headers": ["common_name", "email", "organization"],
+ "rows": [["user1@example.com", "user1@example.com", "ACME Corp"],
+ ["user2@example.com", "user2@example.com", "ACME Corp"],
+ ["user3@example.com", "user3@example.com", "ACME Corp"]
+ ]
+ }'
 ```
 
 ### Import Results
@@ -314,15 +313,14 @@ curl -X POST http://localhost:5000/api/client-certs/batch \
 Returns success/failure counts:
 ```json
 {
-  "total": 3,
-  "successful": 3,
-  "failed": 0,
-  "errors": [],
-  "certificates": [
-    {"identifier": "cert-batch-001", "common_name": "user1@example.com"},
-    {"identifier": "cert-batch-002", "common_name": "user2@example.com"},
-    {"identifier": "cert-batch-003", "common_name": "user3@example.com"}
-  ]
+ "total": 3,
+ "successful": 3,
+ "failed": 0,
+ "errors": [],
+ "certificates": [{"identifier": "cert-batch-001", "common_name": "user1@example.com"},
+ {"identifier": "cert-batch-002", "common_name": "user2@example.com"},
+ {"identifier": "cert-batch-003", "common_name": "user3@example.com"}
+ ]
 }
 ```
 
@@ -374,16 +372,16 @@ Auto-renewal is enabled by default. To check status:
 
 ```bash
 curl http://localhost:5000/api/client-certs/CERT_ID \
-  -H "Authorization: Bearer TOKEN"
+ -H "Authorization: Bearer TOKEN"
 ```
 
 Look for:
 ```json
 {
-  "renewal": {
-    "renewal_enabled": true,
-    "renewal_threshold_days": 30
-  }
+ "renewal": {
+ "renewal_enabled": true,
+ "renewal_threshold_days": 30
+ }
 }
 ```
 

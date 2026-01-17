@@ -181,28 +181,28 @@ You can change your default CA provider at any time:
 ### Create Certificate with Specific CA
 ```bash
 curl -X POST http://localhost:8000/api/certificates/create \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "domain": "example.com",
-    "ca_provider": "digicert"
-  }'
+ -H "Authorization: Bearer YOUR_TOKEN" \
+ -H "Content-Type: application/json" \
+ -d '{
+ "domain": "example.com",
+ "ca_provider": "digicert"
+ }'
 ```
 
 ### Test CA Provider Connection
 ```bash
 curl -X POST http://localhost:8000/api/test-ca-provider \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "ca_provider": "digicert",
-    "config": {
-      "acme_url": "https://acme.digicert.com/v2/acme/directory",
-      "eab_kid": "your_key_id",
-      "eab_hmac": "your_hmac_key",
-      "email": "admin@example.com"
-    }
-  }'
+ -H "Authorization: Bearer YOUR_TOKEN" \
+ -H "Content-Type: application/json" \
+ -d '{
+ "ca_provider": "digicert",
+ "config": {
+ "acme_url": "https://acme.digicert.com/v2/acme/directory",
+ "eab_kid": "your_key_id",
+ "eab_hmac": "your_hmac_key",
+ "email": "admin@example.com"
+ }
+ }'
 ```
 
 ## Support and Resources

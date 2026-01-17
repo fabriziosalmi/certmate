@@ -1,94 +1,94 @@
-# 📖 CertMate Documentation
+# CertMate Documentation
 
 Welcome to the CertMate documentation! This folder contains comprehensive guides for all features.
 
-## 🎫 Client Certificates Documentation
+## Client Certificates Documentation
 
-**Status**: ✅ Production Ready | **Version**: 1.0.0 | **Tests**: 27/27 Passing
+**Status**: Production Ready | **Version**: 1.0.0 | **Tests**: 27/27 Passing
 
 ### Quick Navigation
 
-- **[📌 Start Here](./index.md)** - Main landing page with overview
-- **[🚀 Quick Start Guide](./guide.md)** - Get up and running in minutes
-- **[📡 API Reference](./api.md)** - Complete REST API documentation
-- **[🏗️ Architecture](./architecture.md)** - System design and components
-- **[📝 Changelog](./CHANGELOG.md)** - Version history and updates
+- **[Start Here](./index.md)** - Main landing page with overview
+- **[Quick Start Guide](./guide.md)** - Get up and running in minutes
+- **[API Reference](./api.md)** - Complete REST API documentation
+- **[Architecture](./architecture.md)** - System design and components
+- **[Changelog](./CHANGELOG.md)** - Version history and updates
 
 ---
 
-## 📚 Documentation Sections
+## Documentation Sections
 
 ### For New Users
 Start with these if you're new to CertMate Client Certificates:
 
 1. **[Getting Started](./guide.md#getting-started)**
-   - Installation and setup
-   - First certificate creation
-   - Web dashboard tour
+ - Installation and setup
+ - First certificate creation
+ - Web dashboard tour
 
 2. **[Common Tasks](./guide.md#common-tasks)**
-   - Creating certificates
-   - Batch importing
-   - Downloading files
-   - Renewing and revoking
+ - Creating certificates
+ - Batch importing
+ - Downloading files
+ - Renewing and revoking
 
 ### For Developers
 Use these if you're integrating with the API:
 
 1. **[API Reference](./api.md)**
-   - All endpoints documented
-   - Request/response examples
-   - Error handling
-   - Rate limiting info
+ - All endpoints documented
+ - Request/response examples
+ - Error handling
+ - Rate limiting info
 
 2. **[Architecture](./architecture.md)**
-   - System components
-   - Data flow
-   - Security model
-   - Scalability design
+ - System components
+ - Data flow
+ - Security model
+ - Scalability design
 
 ### For Administrators
 Use these to manage and monitor the system:
 
 1. **[Audit Logging](./api.md#audit-logging)**
-   - How to access audit logs
-   - Understanding log entries
+ - How to access audit logs
+ - Understanding log entries
 
 2. **[Rate Limiting](./api.md#rate-limiting)**
-   - Default limits
-   - Configuration
-   - Per-endpoint limits
+ - Default limits
+ - Configuration
+ - Per-endpoint limits
 
 ---
 
-## 🎯 Feature Overview
+## Feature Overview
 
-### Phase 1: CA Foundation ✅
+### Phase 1: CA Foundation 
 - Self-signed Certificate Authority (4096-bit RSA)
 - CSR validation and creation
 - Secure key storage
 
-### Phase 2: Client Certificate Engine ✅
+### Phase 2: Client Certificate Engine 
 - Complete lifecycle management
 - Multi-filter queries and search
 - Auto-renewal scheduling
 - Support for 30k+ certificates
 
-### Phase 3: UI & Advanced Features ✅
+### Phase 3: UI & Advanced Features 
 - Web dashboard at `/client-certificates`
 - OCSP real-time status queries
 - CRL generation and distribution
 - REST API (10 endpoints)
 - Batch CSV import
 
-### Phase 4: Easy Wins ✅
+### Phase 4: Easy Wins 
 - Comprehensive audit logging
 - API rate limiting
 - Production-ready security
 
 ---
 
-## 🔗 API Endpoints Quick Reference
+## API Endpoints Quick Reference
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -107,7 +107,7 @@ See [API Reference](./api.md#endpoints) for full documentation.
 
 ---
 
-## 🧪 Testing
+## Testing
 
 All features are thoroughly tested:
 
@@ -119,17 +119,17 @@ python test_e2e_complete.py
 ```
 
 Test coverage includes:
-- ✅ CA Operations
-- ✅ CSR Operations
-- ✅ Certificate Lifecycle
-- ✅ Filtering & Search
-- ✅ Batch Operations
-- ✅ OCSP & CRL
-- ✅ Audit & Rate Limiting
+- CA Operations
+- CSR Operations
+- Certificate Lifecycle
+- Filtering & Search
+- Batch Operations
+- OCSP & CRL
+- Audit & Rate Limiting
 
 ---
 
-## 🔐 Security Features
+## Security Features
 
 - **4096-bit RSA** for CA keys
 - **SHA256** signature algorithm
@@ -140,7 +140,7 @@ Test coverage includes:
 
 ---
 
-## 📊 Performance
+## Performance
 
 - Supports **30k+ concurrent certificates**
 - Efficient **multi-filter queries**
@@ -149,7 +149,7 @@ Test coverage includes:
 
 ---
 
-## 🆘 Need Help?
+## Need Help?
 
 1. **Installation Issues?** → See [Installation Section](./guide.md#installation)
 2. **API Questions?** → See [API Reference](./api.md)
@@ -158,21 +158,21 @@ Test coverage includes:
 
 ---
 
-## 📝 File Structure
+## File Structure
 
 ```
 docs/
-├── README.md              ← You are here
-├── index.md              ← Main landing page
-├── guide.md              ← User guide & getting started
-├── api.md                ← Complete API reference
-├── architecture.md       ← System design & components
-└── CHANGELOG.md          ← Version history
+ README.md ← You are here
+ index.md ← Main landing page
+ guide.md ← User guide & getting started
+ api.md ← Complete API reference
+ architecture.md ← System design & components
+ CHANGELOG.md ← Version history
 ```
 
 ---
 
-## 🎓 Learning Path
+## Learning Path
 
 **Beginner** → [Start Here](./index.md) → [Getting Started](./guide.md)
 
@@ -182,7 +182,7 @@ docs/
 
 ---
 
-## 📌 Important Links
+## Important Links
 
 - **Web Dashboard**: `http://localhost:5000/client-certificates`
 - **API Docs**: `http://localhost:5000/docs/`
@@ -191,63 +191,63 @@ docs/
 
 ---
 
-## 📊 Status Dashboard
+## Status Dashboard
 
 | Component | Status | Tests |
 |-----------|--------|-------|
-| CA Foundation | ✅ Ready | 3/3 |
-| CSR Handler | ✅ Ready | 3/3 |
-| Cert Manager | ✅ Ready | 8/8 |
-| Filtering | ✅ Ready | 3/3 |
-| Batch Ops | ✅ Ready | 2/2 |
-| OCSP/CRL | ✅ Ready | 5/5 |
-| Audit/Rate Limit | ✅ Ready | 3/3 |
-| **Total** | **✅ Ready** | **27/27** |
+| CA Foundation | Ready | 3/3 |
+| CSR Handler | Ready | 3/3 |
+| Cert Manager | Ready | 8/8 |
+| Filtering | Ready | 3/3 |
+| Batch Ops | Ready | 2/2 |
+| OCSP/CRL | Ready | 5/5 |
+| Audit/Rate Limit | Ready | 3/3 |
+| **Total** | ** Ready** | **27/27** |
 
 ---
 
-## 💡 Quick Examples
+## Quick Examples
 
 ### Create a Certificate via API
 
 ```bash
 curl -X POST http://localhost:5000/api/client-certs/create \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "common_name": "user@example.com",
-    "organization": "ACME Corp",
-    "cert_usage": "api-mtls",
-    "days_valid": 365
-  }'
+ -H "Authorization: Bearer YOUR_TOKEN" \
+ -H "Content-Type: application/json" \
+ -d '{
+ "common_name": "user@example.com",
+ "organization": "ACME Corp",
+ "cert_usage": "api-mtls",
+ "days_valid": 365
+ }'
 ```
 
 ### List Certificates
 
 ```bash
 curl http://localhost:5000/api/client-certs \
-  -H "Authorization: Bearer YOUR_TOKEN"
+ -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
 ### Download Certificate
 
 ```bash
 curl http://localhost:5000/api/client-certs/USER_ID/download/crt \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -o certificate.crt
+ -H "Authorization: Bearer YOUR_TOKEN" \
+ -o certificate.crt
 ```
 
 See [API Guide](./api.md) for more examples.
 
 ---
 
-## 📄 License
+## License
 
 CertMate is licensed under the MIT License. See LICENSE file in the repository.
 
 ---
 
-## 🙋 Questions or Issues?
+## Questions or Issues?
 
 - Check the relevant documentation page
 - Review the test files for usage examples
@@ -257,7 +257,7 @@ CertMate is licensed under the MIT License. See LICENSE file in the repository.
 
 <div align="center">
 
-**Made with ❤️ for CertMate**
+**Made with for CertMate**
 
 [Home](../README.md) • [Documentation](./) • [GitHub](https://github.com/fabriziosalmi/certmate)
 

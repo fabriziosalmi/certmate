@@ -9,7 +9,7 @@
 
 **Complete Client Certificate Management for CertMate**
 
-[📖 Documentation](#documentation) • [🚀 Quick Start](#quick-start) • [📡 API Reference](./api.md) • [🏗️ Architecture](./architecture.md)
+[Documentation](#documentation) • [Quick Start](#quick-start) • [API Reference](./api.md) • [Architecture](./architecture.md)
 
 </div>
 
@@ -19,39 +19,39 @@
 
 CertMate Client Certificates is a comprehensive, production-ready solution for managing client certificates with:
 
-- 🔐 **Self-Signed CA** - Generate and manage your own Certificate Authority
-- 🎫 **Full Lifecycle Management** - Create, renew, revoke, and monitor client certificates
-- 📊 **OCSP & CRL** - Real-time certificate status and revocation lists
-- 🌐 **Web Dashboard** - Intuitive UI for certificate management
-- 📡 **REST API** - Complete API for automation
-- 📦 **Batch Operations** - Import 100-30,000 certificates via CSV
-- 📋 **Audit Logging** - Track all operations for compliance
-- ⚡ **Rate Limiting** - Built-in protection against abuse
+- **Self-Signed CA** - Generate and manage your own Certificate Authority
+- **Full Lifecycle Management** - Create, renew, revoke, and monitor client certificates
+- **OCSP & CRL** - Real-time certificate status and revocation lists
+- **Web Dashboard** - Intuitive UI for certificate management
+- **REST API** - Complete API for automation
+- **Batch Operations** - Import 100-30,000 certificates via CSV
+- **Audit Logging** - Track all operations for compliance
+- **Rate Limiting** - Built-in protection against abuse
 
 ---
 
 ## Features
 
-### Phase 1: CA Foundation ✅
+### Phase 1: CA Foundation 
 - **PrivateCAGenerator**: Self-signed CA with 4096-bit RSA keys, 10-year validity
 - **CSRHandler**: Validate, create, and parse Certificate Signing Requests
 - **Secure Storage**: Proper file permissions (0600) for private keys
 
-### Phase 2: Client Certificate Engine ✅
+### Phase 2: Client Certificate Engine 
 - **Complete Lifecycle**: Create, list, filter, revoke, and renew certificates
 - **Multi-Filter Queries**: Search by usage type, revocation status, common name
 - **Auto-Renewal**: Scheduled daily renewal checks for expiring certificates
 - **Support for 30k+ Certificates**: Directory-based storage for linear scalability
 - **Metadata Management**: Track CN, email, organization, usage, expiration dates
 
-### Phase 3: UI & Advanced Features ✅
+### Phase 3: UI & Advanced Features 
 - **Web Dashboard**: Responsive, dark-mode-enabled management interface
 - **OCSP Responder**: Query certificate status in real-time
 - **CRL Manager**: Generate and distribute revocation lists (PEM/DER)
 - **REST API**: 10 endpoints across 3 namespaces for full automation
 - **Batch Operations**: Import certificates from CSV files
 
-### Phase 4: Easy Wins ✅
+### Phase 4: Easy Wins 
 - **Audit Logging**: Track all certificate operations with user/IP information
 - **Rate Limiting**: Configurable per-endpoint limits with sensible defaults
 - **Ready for Integration**: Both managers available in app for immediate use
@@ -82,49 +82,49 @@ Navigate to: http://localhost:5000/client-certificates
 #### 2. Create a Certificate via API
 ```bash
 curl -X POST http://localhost:5000/api/client-certs/create \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "common_name": "user@example.com",
-    "email": "user@example.com",
-    "organization": "ACME Corp",
-    "cert_usage": "api-mtls",
-    "days_valid": 365,
-    "generate_key": true
-  }'
+ -H "Authorization: Bearer YOUR_TOKEN" \
+ -H "Content-Type: application/json" \
+ -d '{
+ "common_name": "user@example.com",
+ "email": "user@example.com",
+ "organization": "ACME Corp",
+ "cert_usage": "api-mtls",
+ "days_valid": 365,
+ "generate_key": true
+ }'
 ```
 
 #### 3. List Certificates
 ```bash
 curl http://localhost:5000/api/client-certs \
-  -H "Authorization: Bearer YOUR_TOKEN"
+ -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
 #### 4. Download Certificate Files
 ```bash
 # Download certificate
 curl http://localhost:5000/api/client-certs/USER_ID/download/crt \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -o user.crt
+ -H "Authorization: Bearer YOUR_TOKEN" \
+ -o user.crt
 
 # Download private key
 curl http://localhost:5000/api/client-certs/USER_ID/download/key \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -o user.key
+ -H "Authorization: Bearer YOUR_TOKEN" \
+ -o user.key
 ```
 
 ---
 
 ## Documentation
 
-### 📖 Main Documentation
+### Main Documentation
 
 - **[API Reference](./api.md)** - Complete REST API documentation with examples
 - **[Architecture](./architecture.md)** - System design, components, and data flow
 - **[User Guide](./guide.md)** - Step-by-step guide for common tasks
 - **[Changelog](./CHANGELOG.md)** - Version history and updates
 
-### 🔗 Quick Links
+### Quick Links
 
 - [API Endpoints](./api.md#endpoints) - All available endpoints
 - [Certificate Types](./api.md#certificate-types) - VPN, API mTLS, etc.
@@ -145,13 +145,13 @@ python test_e2e_complete.py
 ```
 
 ### Test Coverage
-- ✅ CA Operations (3 tests)
-- ✅ CSR Operations (3 tests)
-- ✅ Certificate Lifecycle (8 tests)
-- ✅ Filtering & Search (3 tests)
-- ✅ Batch Operations (2 tests)
-- ✅ OCSP & CRL (5 tests)
-- ✅ Audit & Rate Limiting (3 tests)
+- CA Operations (3 tests)
+- CSR Operations (3 tests)
+- Certificate Lifecycle (8 tests)
+- Filtering & Search (3 tests)
+- Batch Operations (2 tests)
+- OCSP & CRL (5 tests)
+- Audit & Rate Limiting (3 tests)
 
 ---
 
@@ -177,19 +177,19 @@ python test_e2e_complete.py
 The system is built with a modular, layered architecture:
 
 ```
-┌─────────────────────────────────────────┐
-│     Web UI & REST API                   │
-│  (/client-certificates, /api/*)        │
-├─────────────────────────────────────────┤
-│     API Resources & Managers            │
-│  (OCSP, CRL, Audit, Rate Limiting)     │
-├─────────────────────────────────────────┤
-│     Core Modules                        │
-│  (Certificate Mgmt, CSR, CA, Storage)  │
-├─────────────────────────────────────────┤
-│     Cryptography & Storage              │
-│  (OpenSSL, File System, Backends)       │
-└─────────────────────────────────────────┘
+
+ Web UI & REST API 
+ (/client-certificates, /api/*) 
+
+ API Resources & Managers 
+ (OCSP, CRL, Audit, Rate Limiting) 
+
+ Core Modules 
+ (Certificate Mgmt, CSR, CA, Storage) 
+
+ Cryptography & Storage 
+ (OpenSSL, File System, Backends) 
+
 ```
 
 See [Architecture Documentation](./architecture.md) for detailed information.
@@ -210,10 +210,10 @@ See [Architecture Documentation](./architecture.md) for detailed information.
 - **Audit Logging**: All operations tracked with user/IP info
 
 ### Compliance
-- ✅ Certificate metadata tracking
-- ✅ Revocation audit trail
-- ✅ Persistent operation logs
-- ✅ Support for compliance queries
+- Certificate metadata tracking
+- Revocation audit trail
+- Persistent operation logs
+- Support for compliance queries
 
 ---
 
@@ -253,8 +253,8 @@ See LICENSE file in the repository
 
 <div align="center">
 
-Made with ❤️ for CertMate
+Made with for CertMate
 
-[📄 Documentation](.) • [🔐 Privacy](./privacy.md) • [📜 License](../LICENSE)
+[Documentation](.) • [Privacy](./privacy.md) • [License](../LICENSE)
 
 </div>

@@ -23,7 +23,7 @@ python3 test_all_endpoints.py --auto-token
 ## Test Scripts
 
 ### `quick_test.sh` 
-**🚀 Use this for daily development!**
+** Use this for daily development!**
 
 - Checks if server is running
 - Automatically loads API token from `data/settings.json`
@@ -32,12 +32,12 @@ python3 test_all_endpoints.py --auto-token
 - Perfect for pre-commit validation
 
 ```bash
-./quick_test.sh                    # Test all endpoints
-./quick_test.sh --public-only      # Test only public endpoints
+./quick_test.sh # Test all endpoints
+./quick_test.sh --public-only # Test only public endpoints
 ```
 
 ### `test_all_endpoints.py`
-**🔧 Advanced testing with options**
+** Advanced testing with options**
 
 The main testing script with comprehensive options:
 
@@ -63,31 +63,31 @@ python3 test_all_endpoints.py --quick --auto-token
 
 ## What Gets Tested
 
-### ✅ Health Endpoints (No Auth Required)
+### Health Endpoints (No Auth Required)
 - `GET /api/health` - API health check
 - `GET /health` - Web health check
 
-### ✅ Settings Endpoints (Auth Required)
+### Settings Endpoints (Auth Required)
 - `GET /api/settings` - Get current settings
 - `GET /api/settings/dns-providers` - Get DNS providers info
 - `POST /api/settings` - Update settings
 
-### ✅ Certificate Endpoints (Auth Required)
+### Certificate Endpoints (Auth Required)
 - `GET /api/certificates` - List all certificates
 - `POST /api/certificates/create` - Create new certificate
 - `GET /api/certificates/{domain}/download` - Download certificate
 - `POST /api/certificates/{domain}/renew` - Renew certificate
 
-### ✅ Cache Management (Auth Required)
+### Cache Management (Auth Required)
 - `GET /api/cache/stats` - Get cache statistics
 - `POST /api/cache/clear` - Clear deployment cache
 
-### ✅ Backup & Restore (Auth Required)
+### Backup & Restore (Auth Required)
 - `GET /api/backups` - List all backups
 - `POST /api/backups/create` - Create manual backup
 - `POST /api/backups/cleanup` - Cleanup old backups
 
-### ✅ Web Interface Endpoints
+### Web Interface Endpoints
 - `GET /` - Main dashboard
 - `GET /settings` - Settings page
 - `GET /help` - Help page
@@ -98,13 +98,13 @@ python3 test_all_endpoints.py --quick --auto-token
 ## Expected Results
 
 ### 🟢 Success Indicators
-- **✅ Green checkmarks** - Endpoint working correctly
+- **Green checkmarks** - Endpoint working correctly
 - **Status codes 200/201** - Normal success responses
 - **Status codes 400/422** - Expected validation errors (normal)
 - **Status code 404** - Expected for non-existent resources
 
-### 🔴 Failure Indicators
-- **❌ Red X marks** - Endpoint not working
+### Failure Indicators
+- **Red X marks** - Endpoint not working
 - **Connection refused** - Server not running
 - **401 Unauthorized** - Invalid/missing API token
 - **500 Internal Server Error** - Application bug
@@ -118,21 +118,21 @@ Add this to your Git pre-commit hook:
 #!/bin/sh
 echo "Running API endpoint tests..."
 ./quick_test.sh
-if [ $? -ne 0 ]; then
-    echo "❌ API tests failed! Commit aborted."
-    exit 1
+if [$? -ne 0 ]; then
+ echo " API tests failed! Commit aborted."
+ exit 1
 fi
-echo "✅ All API tests passed!"
+echo " All API tests passed!"
 ```
 
 ### CI/CD Integration
 ```yaml
 # GitHub Actions example
 - name: Test API Endpoints
-  run: |
-    python app.py &
-    sleep 5
-    python3 test_all_endpoints.py --auto-token
+ run: |
+ python app.py &
+ sleep 5
+ python3 test_all_endpoints.py --auto-token
 ```
 
 ### Development Workflow
@@ -175,8 +175,8 @@ python3 test_all_endpoints.py --token YOUR_TOKEN
 ### Testing Against Remote Server
 ```bash
 python3 test_all_endpoints.py \
-  --url https://your-production-server.com \
-  --token your-production-token
+ --url https://your-production-server.com \
+ --token your-production-token
 ```
 
 ### Custom Test Scenarios
@@ -192,8 +192,8 @@ python3 test_all_endpoints.py --public-only
 
 ## Exit Codes
 
-- **0** - All tests passed ✅
-- **1** - Some tests failed ❌
+- **0** - All tests passed 
+- **1** - Some tests failed 
 
 Perfect for scripting and CI/CD integration!
 
@@ -202,33 +202,33 @@ Perfect for scripting and CI/CD integration!
 ## Example Output
 
 ```
-🚀 CertMate API Endpoint Test Suite
+ CertMate API Endpoint Test Suite
 Testing API at: http://127.0.0.1:8000
 Timestamp: 2025-01-07 10:30:15
 ================================================================================
 
-🏥 Health Check Endpoints
-  ✅ GET  /api/health                      API Health Check               ✓ 200
-  ✅ GET  /health                          Web Health Check               ✓ 200
+ Health Check Endpoints
+ GET /api/health API Health Check 200
+ GET /health Web Health Check 200
 
-⚙️  Settings Endpoints
-  ✅ GET  /api/settings                    Get Current Settings           ✓ 200
-  ✅ GET  /api/settings/dns-providers      Get DNS Providers              ✓ 200
-  ✅ POST /api/settings                    Update Settings                ✓ 200
+ Settings Endpoints
+ GET /api/settings Get Current Settings 200
+ GET /api/settings/dns-providers Get DNS Providers 200
+ POST /api/settings Update Settings 200
 
-🔒 Certificate Endpoints
-  ✅ GET  /api/certificates                List All Certificates          ✓ 200
-  ✅ POST /api/certificates/create         Create Certificate             ✓ 400
-  ✅ GET  /api/certificates/test.../download Download Certificate         ✓ 404
-  ✅ POST /api/certificates/test.../renew  Renew Certificate              ✓ 404
+ Certificate Endpoints
+ GET /api/certificates List All Certificates 200
+ POST /api/certificates/create Create Certificate 400
+ GET /api/certificates/test.../download Download Certificate 404
+ POST /api/certificates/test.../renew Renew Certificate 404
 
 ================================================================================
-📊 Test Summary
+ Test Summary
 Total Tests: 24
-✅ Passed: 24
-❌ Failed: 0
+ Passed: 24
+ Failed: 0
 
-🎉 All tests passed! Ready to commit.
+ All tests passed! Ready to commit.
 ```
 
-This testing suite will give you confidence that your API is working correctly before every commit! 🚀
+This testing suite will give you confidence that your API is working correctly before every commit! 

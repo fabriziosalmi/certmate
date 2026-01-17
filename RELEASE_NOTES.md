@@ -1,6 +1,6 @@
 # Release v1.7.0
 
-## 🎉 New Features
+## New Features
 
 ### Issue #53: Local Authentication Support
 - **Full user management system** with username/password authentication
@@ -19,7 +19,7 @@
 - Automatic deduplication of domain entries
 - Full support across all DNS providers
 
-## 🐛 Bug Fixes
+## Bug Fixes
 
 ### Issue #54: Settings Save - API Bearer Token Required Error
 - Added missing API Bearer Token input field to settings form
@@ -38,13 +38,13 @@
 - Added descriptive hints to all validation errors
 - Pre-validation checks before async operations
 - Specific error hints for common issues:
-  - DNS provider authentication failures
-  - Rate limiting from certificate authorities
-  - DNS propagation timeouts
-  - Missing configuration
+ - DNS provider authentication failures
+ - Rate limiting from certificate authorities
+ - DNS propagation timeouts
+ - Missing configuration
 - Clear guidance on how to resolve each error type
 
-## 📋 Technical Changes
+## Technical Changes
 - Enhanced `AuthManager` class in `modules/core/auth.py`
 - New `login.html` template
 - Updated `require_auth` decorator to support both session and bearer token
@@ -52,7 +52,7 @@
 - Extended `create_certificate()` to accept `san_domains` parameter
 - Added `san_domains` field to API models
 
-## 🧪 Testing
+## Testing
 - All 32 existing tests pass
 - No regressions detected
 

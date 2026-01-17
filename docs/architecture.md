@@ -1,51 +1,51 @@
-# 🏗️ CertMate Client Certificates - Architecture
+# CertMate Client Certificates - Architecture
 
 ## System Overview
 
 ```
-┌──────────────────────────────────────────────────────────┐
-│                    Web UI Layer                           │
-│    (/client-certificates web dashboard)                  │
-└─────────────────────────┬────────────────────────────────┘
-                          │
-┌─────────────────────────▼────────────────────────────────┐
-│                    API Layer                             │
-│  (/api/client-certs, /api/ocsp, /api/crl)               │
-│  (REST endpoints with Flask-RESTX)                       │
-└─────────────────────────┬────────────────────────────────┘
-                          │
-┌─────────────────────────▼────────────────────────────────┐
-│                  Managers Layer                          │
-│  ┌─────────────────────────────────────────────────────┐ │
-│  │ ClientCertificateManager (lifecycle + metadata)     │ │
-│  │ OCSPResponder (certificate status queries)          │ │
-│  │ CRLManager (revocation list generation)             │ │
-│  │ AuditLogger (operation tracking)                    │ │
-│  │ SimpleRateLimiter (request throttling)              │ │
-│  └─────────────────────────────────────────────────────┘ │
-└─────────────────────────┬────────────────────────────────┘
-                          │
-┌─────────────────────────▼────────────────────────────────┐
-│                  Core Modules Layer                      │
-│  ┌─────────────────────────────────────────────────────┐ │
-│  │ PrivateCAGenerator (CA management)                  │ │
-│  │ CSRHandler (CSR validation & creation)              │ │
-│  │ ClientCertificateManager (cert operations)          │ │
-│  │ OCSPResponder (status responses)                    │ │
-│  │ CRLManager (revocation lists)                       │ │
-│  │ AuditLogger (logging)                               │ │
-│  │ RateLimitConfig/SimpleRateLimiter (limiting)        │ │
-│  └─────────────────────────────────────────────────────┘ │
-└─────────────────────────┬────────────────────────────────┘
-                          │
-┌─────────────────────────▼────────────────────────────────┐
-│              Cryptography & Storage Layer                │
-│  ┌─────────────────────────────────────────────────────┐ │
-│  │ Cryptography Library (OpenSSL)                      │ │
-│  │ File System Storage (data/certs/)                   │ │
-│  │ Storage Backends (Azure, AWS, Vault, etc)           │ │
-│  └─────────────────────────────────────────────────────┘ │
-└──────────────────────────────────────────────────────────┘
+
+ Web UI Layer 
+ (/client-certificates web dashboard) 
+
+ 
+
+ API Layer 
+ (/api/client-certs, /api/ocsp, /api/crl) 
+ (REST endpoints with Flask-RESTX) 
+
+ 
+
+ Managers Layer 
+ 
+ ClientCertificateManager (lifecycle + metadata) 
+ OCSPResponder (certificate status queries) 
+ CRLManager (revocation list generation) 
+ AuditLogger (operation tracking) 
+ SimpleRateLimiter (request throttling) 
+ 
+
+ 
+
+ Core Modules Layer 
+ 
+ PrivateCAGenerator (CA management) 
+ CSRHandler (CSR validation & creation) 
+ ClientCertificateManager (cert operations) 
+ OCSPResponder (status responses) 
+ CRLManager (revocation lists) 
+ AuditLogger (logging) 
+ RateLimitConfig/SimpleRateLimiter (limiting) 
+ 
+
+ 
+
+ Cryptography & Storage Layer 
+ 
+ Cryptography Library (OpenSSL) 
+ File System Storage (data/certs/) 
+ Storage Backends (Azure, AWS, Vault, etc) 
+ 
+
 ```
 
 ---
@@ -71,10 +71,10 @@
 
 **Key Methods**:
 ```python
-initialize()              # Initialize or load existing CA
+initialize() # Initialize or load existing CA
 sign_certificate_request() # Sign a CSR
-generate_crl()            # Generate CRL from revoked serials
-get_crl_pem()            # Get CRL in PEM format
+generate_crl() # Generate CRL from revoked serials
+get_crl_pem() # Get CRL in PEM format
 ```
 
 ---
@@ -92,10 +92,10 @@ get_crl_pem()            # Get CRL in PEM format
 
 **Key Methods**:
 ```python
-create_csr()           # Create new CSR with private key
-validate_csr_pem()     # Validate and load CSR from PEM
-get_csr_info()        # Extract information from CSR
-save_csr_and_key()    # Save CSR and key to files
+create_csr() # Create new CSR with private key
+validate_csr_pem() # Validate and load CSR from PEM
+get_csr_info() # Extract information from CSR
+save_csr_and_key() # Save CSR and key to files
 ```
 
 ---
@@ -116,61 +116,61 @@ save_csr_and_key()    # Save CSR and key to files
 **Storage Structure**:
 ```
 data/certs/client/
-├── api-mtls/           # Certificates for API mTLS
-│   └── cert-001/
-│       ├── cert.crt
-│       ├── cert.key
-│       ├── cert.csr
-│       └── metadata.json
-├── vpn/                # Certificates for VPN
-│   └── cert-002/
-│       └── ...
-└── other/              # Other usage types
-    └── ...
+ api-mtls/ # Certificates for API mTLS
+ cert-001/
+ cert.crt
+ cert.key
+ cert.csr
+ metadata.json
+ vpn/ # Certificates for VPN
+ cert-002/
+ ...
+ other/ # Other usage types
+ ...
 ```
 
 **Metadata Structure** (JSON):
 ```json
 {
-  "type": "client_certificate",
-  "identifier": "cert-001",
-  "common_name": "user@example.com",
-  "email": "user@example.com",
-  "organization": "ACME Corp",
-  "organizational_unit": "Engineering",
-  "country": "US",
-  "state": "California",
-  "locality": "San Francisco",
-  "serial_number": "12345678901234567890",
-  "key_usage": ["digitalSignature", "keyEncipherment"],
-  "extended_key_usage": ["serverAuth", "clientAuth"],
-  "created_at": "2024-10-30T18:00:00Z",
-  "expires_at": "2025-10-30T18:00:00Z",
-  "cert_usage": "api-mtls",
-  "notes": "Production certificate",
-  "revocation": {
-    "revoked": false,
-    "revoked_at": null,
-    "reason_revoked": null
-  },
-  "renewal": {
-    "renewal_enabled": true,
-    "renewal_threshold_days": 30,
-    "last_renewed_at": null
-  }
+ "type": "client_certificate",
+ "identifier": "cert-001",
+ "common_name": "user@example.com",
+ "email": "user@example.com",
+ "organization": "ACME Corp",
+ "organizational_unit": "Engineering",
+ "country": "US",
+ "state": "California",
+ "locality": "San Francisco",
+ "serial_number": "12345678901234567890",
+ "key_usage": ["digitalSignature", "keyEncipherment"],
+ "extended_key_usage": ["serverAuth", "clientAuth"],
+ "created_at": "2024-10-30T18:00:00Z",
+ "expires_at": "2025-10-30T18:00:00Z",
+ "cert_usage": "api-mtls",
+ "notes": "Production certificate",
+ "revocation": {
+ "revoked": false,
+ "revoked_at": null,
+ "reason_revoked": null
+ },
+ "renewal": {
+ "renewal_enabled": true,
+ "renewal_threshold_days": 30,
+ "last_renewed_at": null
+ }
 }
 ```
 
 **Key Methods**:
 ```python
-create_client_certificate()   # Create new certificate
-list_client_certificates()    # List with optional filters
-get_certificate_metadata()    # Get cert metadata
-get_certificate_file()        # Get cert/key/csr file
-revoke_certificate()          # Revoke with reason
-renew_certificate()           # Renew certificate
-check_renewals()             # Auto-renewal check
-get_statistics()             # Get usage statistics
+create_client_certificate() # Create new certificate
+list_client_certificates() # List with optional filters
+get_certificate_metadata() # Get cert metadata
+get_certificate_file() # Get cert/key/csr file
+revoke_certificate() # Revoke with reason
+renew_certificate() # Renew certificate
+check_renewals() # Auto-renewal check
+get_statistics() # Get usage statistics
 ```
 
 ---
@@ -192,21 +192,21 @@ get_statistics()             # Get usage statistics
 
 **Key Methods**:
 ```python
-get_cert_status()         # Get certificate status
-generate_ocsp_response()  # Generate OCSP response
+get_cert_status() # Get certificate status
+generate_ocsp_response() # Generate OCSP response
 ```
 
 **Response Format**:
 ```json
 {
-  "response_status": "successful",
-  "certificate_status": "good|revoked|unknown",
-  "certificate_serial": 12345678,
-  "this_update": "2024-10-30T18:00:00Z",
-  "next_update": null,
-  "responder_name": "CertMate OCSP Responder",
-  "revocation_time": null,
-  "revocation_reason": null
+ "response_status": "successful",
+ "certificate_status": "good|revoked|unknown",
+ "certificate_serial": 12345678,
+ "this_update": "2024-10-30T18:00:00Z",
+ "next_update": null,
+ "responder_name": "CertMate OCSP Responder",
+ "revocation_time": null,
+ "revocation_reason": null
 }
 ```
 
@@ -224,11 +224,11 @@ generate_ocsp_response()  # Generate OCSP response
 
 **Key Methods**:
 ```python
-get_revoked_serials()     # Get revoked certificate serials
-update_crl()             # Generate/update CRL
-get_crl_pem()            # Get CRL in PEM format
-get_crl_der()            # Get CRL in DER format
-get_crl_info()           # Get CRL metadata
+get_revoked_serials() # Get revoked certificate serials
+update_crl() # Generate/update CRL
+get_crl_pem() # Get CRL in PEM format
+get_crl_der() # Get CRL in DER format
+get_crl_info() # Get CRL metadata
 ```
 
 ---
@@ -246,15 +246,15 @@ get_crl_info()           # Get CRL metadata
 **Log Format**:
 ```json
 {
-  "timestamp": "2024-10-30T18:00:00Z",
-  "operation": "create|revoke|renew|download|batch_import",
-  "resource_type": "certificate|endpoint",
-  "resource_id": "cert-001",
-  "status": "success|failure|denied",
-  "user": "admin@example.com",
-  "ip_address": "192.168.1.1",
-  "details": {},
-  "error": null
+ "timestamp": "2024-10-30T18:00:00Z",
+ "operation": "create|revoke|renew|download|batch_import",
+ "resource_type": "certificate|endpoint",
+ "resource_id": "cert-001",
+ "status": "success|failure|denied",
+ "user": "admin@example.com",
+ "ip_address": "192.168.1.1",
+ "details": {},
+ "error": null
 }
 ```
 
@@ -262,14 +262,14 @@ get_crl_info()           # Get CRL metadata
 
 **Key Methods**:
 ```python
-log_certificate_created()   # Log cert creation
-log_certificate_revoked()   # Log revocation
-log_certificate_renewed()   # Log renewal
+log_certificate_created() # Log cert creation
+log_certificate_revoked() # Log revocation
+log_certificate_renewed() # Log renewal
 log_certificate_downloaded() # Log downloads
-log_batch_operation()       # Log batch operations
-log_api_request()          # Log API requests
-get_recent_entries()       # Get latest audit entries
-get_entries_by_resource()  # Get entries for a resource
+log_batch_operation() # Log batch operations
+log_api_request() # Log API requests
+get_recent_entries() # Get latest audit entries
+get_entries_by_resource() # Get entries for a resource
 ```
 
 ---
@@ -287,17 +287,17 @@ get_entries_by_resource()  # Get entries for a resource
 
 **Key Classes**:
 ```python
-RateLimitConfig         # Configuration holder
-SimpleRateLimiter       # In-memory limiter
-rate_limit_decorator    # Flask endpoint decorator
+RateLimitConfig # Configuration holder
+SimpleRateLimiter # In-memory limiter
+rate_limit_decorator # Flask endpoint decorator
 ```
 
 **Response on Rate Limit**:
 ```json
 {
-  "error": "Rate limit exceeded",
-  "message": "Too many requests. Please try again later.",
-  "retry_after": 60
+ "error": "Rate limit exceeded",
+ "message": "Too many requests. Please try again later.",
+ "retry_after": 60
 }
 ```
 
@@ -311,15 +311,15 @@ HTTP Status: `429 Too Many Requests`
 
 ```
 User/API Request
-    ↓
+ ↓
 ClientCertificateManager.create_client_certificate()
-    ├─ Generate CSR (or accept provided CSR)
-    ├─ Sign CSR with private CA
-    ├─ Create metadata.json
-    ├─ Store cert/key/csr files
-    ├─ Log in audit trail
-    └─ Return cert data
-    ↓
+ Generate CSR (or accept provided CSR)
+ Sign CSR with private CA
+ Create metadata.json
+ Store cert/key/csr files
+ Log in audit trail
+ Return cert data
+ ↓
 Response to User
 ```
 
@@ -327,15 +327,15 @@ Response to User
 
 ```
 User/API Request (revoke endpoint)
-    ↓
+ ↓
 ClientCertificateManager.revoke_certificate()
-    ├─ Load certificate metadata
-    ├─ Update revocation status
-    ├─ Save updated metadata
-    ├─ Log in audit trail
-    ├─ Trigger CRL update
-    └─ Return success
-    ↓
+ Load certificate metadata
+ Update revocation status
+ Save updated metadata
+ Log in audit trail
+ Trigger CRL update
+ Return success
+ ↓
 Response to User
 ```
 
@@ -343,17 +343,17 @@ Response to User
 
 ```
 Client OCSP Request (serial number)
-    ↓
+ ↓
 OCSPResponder.get_cert_status()
-    ├─ Search certificate by serial
-    ├─ Check revocation status
-    ├─ Return status (good/revoked/unknown)
-    ↓
+ Search certificate by serial
+ Check revocation status
+ Return status (good/revoked/unknown)
+ ↓
 OCSPResponder.generate_ocsp_response()
-    ├─ Format OCSP response
-    ├─ Add timestamps
-    └─ Return response
-    ↓
+ Format OCSP response
+ Add timestamps
+ Return response
+ ↓
 Response to Client
 ```
 
@@ -365,27 +365,27 @@ Response to Client
 
 ```
 data/certs/
-├── ca/                          # Certificate Authority
-│   ├── ca.crt                  # CA certificate (public)
-│   ├── ca.key                  # CA private key (0600)
-│   ├── ca_metadata.json        # CA metadata
-│   └── crl.pem                 # Certificate Revocation List
-│
-├── client/                      # Client certificates
-│   ├── api-mtls/               # API mTLS certificates
-│   │   ├── cert-001/
-│   │   │   ├── cert.crt
-│   │   │   ├── cert.key
-│   │   │   ├── cert.csr
-│   │   │   └── metadata.json
-│   │   └── ...
-│   ├── vpn/                    # VPN certificates
-│   │   └── ...
-│   └── other/                  # Other usage types
-│       └── ...
-│
-└── crl/                         # CRL storage
-    └── (generated CRLs)
+ ca/ # Certificate Authority
+ ca.crt # CA certificate (public)
+ ca.key # CA private key (0600)
+ ca_metadata.json # CA metadata
+ crl.pem # Certificate Revocation List
+
+ client/ # Client certificates
+ api-mtls/ # API mTLS certificates
+ cert-001/
+ cert.crt
+ cert.key
+ cert.csr
+ metadata.json
+ ...
+ vpn/ # VPN certificates
+ ...
+ other/ # Other usage types
+ ...
+
+ crl/ # CRL storage
+ (generated CRLs)
 ```
 
 ### Metadata Files

@@ -17,7 +17,7 @@ This directory contains comprehensive documentation about CertMate's certificate
 
 **Read this if you want to**: Understand the system in 15 minutes
 
-### 2. [ARCHITECTURE_SUMMARY.md](ARCHITECTURE_SUMMARY.md) - COMPREHENSIVE OVERVIEW  
+### 2. [ARCHITECTURE_SUMMARY.md](ARCHITECTURE_SUMMARY.md) - COMPREHENSIVE OVERVIEW 
 **Best for**: Detailed but readable technical overview
 - 10 major sections covering all aspects
 - Structured, easy-to-scan format
@@ -28,7 +28,7 @@ This directory contains comprehensive documentation about CertMate's certificate
 
 **Sections covered**:
 1. Certificate Storage Model
-2. Certificate Metadata Tracked  
+2. Certificate Metadata Tracked 
 3. Certificate API Exposure
 4. Web Interface Structure
 5. Certificate File Organization Details
@@ -53,7 +53,7 @@ This directory contains comprehensive documentation about CertMate's certificate
 **Sections covered**:
 1. Current Certificate Storage and Management
 2. Certificate Metadata Structure
-3. Certificate API Exposure  
+3. Certificate API Exposure 
 4. Current UI/Web Interface Structure
 5. Certificate File Organization Details
 6. Current Certificate Type and Key Usage Support
@@ -101,7 +101,7 @@ This directory contains comprehensive documentation about CertMate's certificate
 2. Extensibility: [ARCHITECTURE_SUMMARY.md](ARCHITECTURE_SUMMARY.md#9-extensibility-for-client-certificates)
 3. Full recommendation: [CERTIFICATE_ARCHITECTURE_ANALYSIS.md](CERTIFICATE_ARCHITECTURE_ANALYSIS.md#11-recommended-architecture-for-client-certificates)
 
-### Limitations for Client Certificates  
+### Limitations for Client Certificates 
 1. Quick reference: [ARCHITECTURE_QUICK_REFERENCE.md](ARCHITECTURE_QUICK_REFERENCE.md#important-limitations)
 2. Details: [ARCHITECTURE_SUMMARY.md](ARCHITECTURE_SUMMARY.md#10-current-limitations-for-client-certificates)
 3. Full analysis: [CERTIFICATE_ARCHITECTURE_ANALYSIS.md](CERTIFICATE_ARCHITECTURE_ANALYSIS.md#10-current-limitations-for-client-certificate-support)

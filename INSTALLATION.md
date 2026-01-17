@@ -21,7 +21,7 @@ cd certmate
 
 ```bash
 python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+source venv/bin/activate # On Windows: venv\Scripts\activate
 ```
 
 ### 3. Install Dependencies
@@ -267,17 +267,17 @@ sudo systemctl start certmate
 ```yaml
 version: '3.8'
 services:
-  certmate:
-    build: .
-    ports:
-      - "8000:8000"
-    environment:
-      - API_BEARER_TOKEN=${API_BEARER_TOKEN}
-      - CLOUDFLARE_TOKEN=${CLOUDFLARE_TOKEN}
-    volumes:
-      - ./certificates:/app/certificates
-      - ./data:/app/data
-    restart: unless-stopped
+ certmate:
+ build: .
+ ports:
+ - "8000:8000"
+ environment:
+ - API_BEARER_TOKEN=${API_BEARER_TOKEN}
+ - CLOUDFLARE_TOKEN=${CLOUDFLARE_TOKEN}
+ volumes:
+ - ./certificates:/app/certificates
+ - ./data:/app/data
+ restart: unless-stopped
 ```
 
 ## Support

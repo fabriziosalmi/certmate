@@ -1,8 +1,8 @@
-# 🐳 Docker Multi-Platform Guide
+# Docker Multi-Platform Guide
 
 This guide explains how to build and use CertMate Docker images that work on both ARM and non-ARM architectures.
 
-## 🎯 Quick Start
+## Quick Start
 
 ### For Users (Pull and Run)
 
@@ -11,10 +11,10 @@ The easiest way to use CertMate is to pull the pre-built multi-platform image:
 ```bash
 # Pull and run - Docker automatically selects the right architecture
 docker run -d --name certmate \
-  --env-file .env \
-  -p 8000:8000 \
-  -v certmate_data:/app/data \
-  USERNAME/certmate:latest
+ --env-file .env \
+ -p 8000:8000 \
+ -v certmate_data:/app/data \
+ USERNAME/certmate:latest
 ```
 
 ### For Developers (Build Multi-Platform)
@@ -67,7 +67,7 @@ docker buildx build --platform linux/amd64,linux/arm64 -t USERNAME/certmate:late
 docker buildx build --platform linux/amd64,linux/arm64 -t USERNAME/certmate:latest --push .
 ```
 
-## 🏗️ Supported Architectures
+## Supported Architectures
 
 | Platform | Description | Common Use Cases |
 |----------|-------------|------------------|
@@ -76,7 +76,7 @@ docker buildx build --platform linux/amd64,linux/arm64 -t USERNAME/certmate:late
 | `linux/arm/v7` | ARM 32-bit v7 | Raspberry Pi 3+, some IoT devices |
 | `linux/arm/v6` | ARM 32-bit v6 | Raspberry Pi 1, Zero |
 
-## 🔧 Setup Instructions
+## Setup Instructions
 
 ### Prerequisites
 
@@ -108,18 +108,18 @@ docker run --privileged --rm tonistiigi/binfmt --install all
 docker buildx inspect --bootstrap
 ```
 
-## 🚀 Usage Examples
+## Usage Examples
 
 ### Running on Specific Platforms
 
 ```bash
 # Force AMD64 (useful for performance testing)
 docker run --platform linux/amd64 --rm \
-  --env-file .env -p 8000:8000 USERNAME/certmate:latest
+ --env-file .env -p 8000:8000 USERNAME/certmate:latest
 
 # Force ARM64 (useful on Apple Silicon)
 docker run --platform linux/arm64 --rm \
-  --env-file .env -p 8000:8000 USERNAME/certmate:latest
+ --env-file .env -p 8000:8000 USERNAME/certmate:latest
 
 # Auto-detect platform (recommended)
 docker run --rm --env-file .env -p 8000:8000 USERNAME/certmate:latest
@@ -131,10 +131,10 @@ Update your `docker-compose.yml` to specify platform if needed:
 
 ```yaml
 services:
-  certmate:
-    image: USERNAME/certmate:latest
-    platform: linux/amd64  # Optional: force specific platform
-    # ... rest of your config
+ certmate:
+ image: USERNAME/certmate:latest
+ platform: linux/amd64 # Optional: force specific platform
+ # ... rest of your config
 ```
 
 ### Checking Image Platforms
@@ -147,7 +147,7 @@ docker manifest inspect USERNAME/certmate:latest
 docker pull --platform linux/arm64 USERNAME/certmate:latest
 ```
 
-## 🔨 Building Custom Images
+## Building Custom Images
 
 ### Environment Variables for Builds
 
@@ -165,57 +165,57 @@ docker buildx build --platform $BUILDX_PLATFORMS -t certmate:custom .
 ```bash
 # Use different requirements file
 docker buildx build \
-  --platform linux/amd64,linux/arm64 \
-  --build-arg REQUIREMENTS_FILE=requirements.txt \
-  -t certmate:full .
+ --platform linux/amd64,linux/arm64 \
+ --build-arg REQUIREMENTS_FILE=requirements.txt \
+ -t certmate:full .
 
 # Build with specific Python version
 docker buildx build \
-  --platform linux/amd64,linux/arm64 \
-  --build-arg PYTHON_VERSION=3.11 \
-  -t certmate:py311 .
+ --platform linux/amd64,linux/arm64 \
+ --build-arg PYTHON_VERSION=3.11 \
+ -t certmate:py311 .
 ```
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### Common Issues
 
 1. **"multiple platforms feature is currently not supported for docker driver"**
-   ```bash
-   # Create a new builder
-   docker buildx create --name multiplatform --use
-   ```
+ ```bash
+ # Create a new builder
+ docker buildx create --name multiplatform --use
+ ```
 
 2. **"exec format error" when running**
-   ```bash
-   # Enable emulation
-   docker run --privileged --rm tonistiigi/binfmt --install all
-   ```
+ ```bash
+ # Enable emulation
+ docker run --privileged --rm tonistiigi/binfmt --install all
+ ```
 
 3. **Slow builds on non-native platforms**
-   - This is normal due to emulation
-   - Use GitHub Actions for production builds
-   - Consider building on native hardware for each platform
+ - This is normal due to emulation
+ - Use GitHub Actions for production builds
+ - Consider building on native hardware for each platform
 
 4. **Cannot load multi-platform image to local Docker**
-   ```bash
-   # Multi-platform images must be pushed to registry
-   # For local testing, build single platform:
-   docker buildx build --platform linux/amd64 --load -t certmate:test .
-   ```
+ ```bash
+ # Multi-platform images must be pushed to registry
+ # For local testing, build single platform:
+ docker buildx build --platform linux/amd64 --load -t certmate:test .
+ ```
 
 ### Performance Tips
 
 1. **Use layer caching**:
-   ```bash
-   docker buildx build --cache-from type=registry,ref=USERNAME/certmate:cache .
-   ```
+ ```bash
+ docker buildx build --cache-from type=registry,ref=USERNAME/certmate:cache .
+ ```
 
 2. **Parallel builds**: Use GitHub Actions or multiple machines for faster builds
 
 3. **Minimal base images**: The current Dockerfile already uses `python:3.11-slim`
 
-## 🤖 CI/CD Integration
+## CI/CD Integration
 
 ### GitHub Actions
 
@@ -230,11 +230,11 @@ Required secrets:
 ```bash
 # Trigger workflow with custom platforms
 gh workflow run docker-multiplatform.yml \
-  -f platforms="linux/amd64,linux/arm64,linux/arm/v7" \
-  -f push_to_registry=true
+ -f platforms="linux/amd64,linux/arm64,linux/arm/v7" \
+ -f push_to_registry=true
 ```
 
-## 📊 Image Information
+## Image Information
 
 ### Size Comparison
 
@@ -247,24 +247,23 @@ Typical image sizes:
 
 ```json
 {
-  "manifests": [
-    {
-      "platform": {
-        "architecture": "amd64",
-        "os": "linux"
-      }
-    },
-    {
-      "platform": {
-        "architecture": "arm64",
-        "os": "linux"
-      }
-    }
-  ]
+ "manifests": [{
+ "platform": {
+ "architecture": "amd64",
+ "os": "linux"
+ }
+ },
+ {
+ "platform": {
+ "architecture": "arm64",
+ "os": "linux"
+ }
+ }
+ ]
 }
 ```
 
-## 🔗 Useful Commands
+## Useful Commands
 
 ```bash
 # Clean up builders
@@ -281,7 +280,7 @@ docker inspect CONTAINER_ID | grep Architecture
 docker buildx build --no-cache --platform linux/amd64,linux/arm64 .
 ```
 
-## 🎯 Best Practices
+## Best Practices
 
 1. **Always test on target platforms** before releasing
 2. **Use registry caching** for faster CI/CD builds
@@ -291,7 +290,7 @@ docker buildx build --no-cache --platform linux/amd64,linux/arm64 .
 6. **Use health checks** to verify container startup
 7. **Test with different DNS providers** on each platform
 
-## 📚 Additional Resources
+## Additional Resources
 
 - [Docker Buildx Documentation](https://docs.docker.com/buildx/)
 - [Multi-platform Images](https://docs.docker.com/build/building/multi-platform/)

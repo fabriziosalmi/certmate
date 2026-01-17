@@ -1,0 +1,244 @@
+{
+  "version": "2.0.0",
+  "timestamp": "2026-01-17T17:03:35.459008",
+  "duration_seconds": 0.117461,
+  "summary": {
+    "total": 22,
+    "passed": 8,
+    "failed": 7,
+    "skipped": 7,
+    "pass_rate": 36.36363636363637
+  },
+  "tests": [
+    {
+      "name": "Server Health",
+      "status": "passed",
+      "duration": 0.008172035217285156,
+      "message": "Server healthy",
+      "severity": "critical",
+      "timestamp": "2026-01-17T17:03:35.467235",
+      "details": {
+        "version": "1.2.1",
+        "duration": 0.008157014846801758
+      }
+    },
+    {
+      "name": "Web UI Accessible",
+      "status": "passed",
+      "duration": 0.04127001762390137,
+      "message": "Web UI accessible",
+      "severity": "low",
+      "timestamp": "2026-01-17T17:03:35.508527",
+      "details": {
+        "duration": 0.04126286506652832
+      }
+    },
+    {
+      "name": "API Docs",
+      "status": "passed",
+      "duration": 0.009598970413208008,
+      "message": "API docs at /docs/",
+      "severity": "low",
+      "timestamp": "2026-01-17T17:03:35.518146",
+      "details": {
+        "endpoint": "/docs/",
+        "duration": 0.009595155715942383
+      }
+    },
+    {
+      "name": "API Authentication",
+      "status": "passed",
+      "duration": 0.0020220279693603516,
+      "message": "Authentication successful",
+      "severity": "critical",
+      "timestamp": "2026-01-17T17:03:35.520181",
+      "details": {}
+    },
+    {
+      "name": "Invalid Token Rejected",
+      "status": "failed",
+      "duration": 0.0014171600341796875,
+      "message": "Server not responding",
+      "severity": "high",
+      "timestamp": "2026-01-17T17:03:35.521606",
+      "details": {}
+    },
+    {
+      "name": "DNS Provider Configured",
+      "status": "failed",
+      "duration": 0.0018727779388427734,
+      "message": "Cloudflare not configured",
+      "severity": "critical",
+      "timestamp": "2026-01-17T17:03:35.523490",
+      "details": {
+        "dns_accounts": []
+      }
+    },
+    {
+      "name": "List Certificates",
+      "status": "passed",
+      "duration": 0.034667015075683594,
+      "message": "Listed 5 certificates",
+      "severity": "high",
+      "timestamp": "2026-01-17T17:03:35.558176",
+      "details": {
+        "count": 5,
+        "duration": 0.03465104103088379
+      }
+    },
+    {
+      "name": "Settings Endpoint",
+      "status": "passed",
+      "duration": 0.0023517608642578125,
+      "message": "Settings valid, found: []",
+      "severity": "medium",
+      "timestamp": "2026-01-17T17:03:35.560541",
+      "details": {
+        "keys": [
+          "cloudflare_token",
+          "domains",
+          "email",
+          "auto_renew",
+          "api_bearer_token",
+          "dns_provider",
+          "dns_providers"
+        ]
+      }
+    },
+    {
+      "name": "Create Certificate",
+      "status": "skipped",
+      "duration": 0.0,
+      "message": "Skipped (--skip-creation or --quick)",
+      "severity": "critical",
+      "timestamp": "2026-01-17T17:03:35.560549",
+      "details": {}
+    },
+    {
+      "name": "Download Certificate",
+      "status": "skipped",
+      "duration": 0.0,
+      "message": "Skipped (no cert created)",
+      "severity": "high",
+      "timestamp": "2026-01-17T17:03:35.560552",
+      "details": {}
+    },
+    {
+      "name": "Certificate Status",
+      "status": "skipped",
+      "duration": 0.0,
+      "message": "Skipped (no cert created)",
+      "severity": "medium",
+      "timestamp": "2026-01-17T17:03:35.560556",
+      "details": {}
+    },
+    {
+      "name": "Client CA Exists",
+      "status": "failed",
+      "duration": 0.0013899803161621094,
+      "message": "Server not responding",
+      "severity": "medium",
+      "timestamp": "2026-01-17T17:03:35.561951",
+      "details": {}
+    },
+    {
+      "name": "List Client Certs",
+      "status": "failed",
+      "duration": 0.0012412071228027344,
+      "message": "Server not responding",
+      "severity": "medium",
+      "timestamp": "2026-01-17T17:03:35.563201",
+      "details": {}
+    },
+    {
+      "name": "Generate Client Cert",
+      "status": "skipped",
+      "duration": 0.0,
+      "message": "Skipped (--quick)",
+      "severity": "medium",
+      "timestamp": "2026-01-17T17:03:35.563206",
+      "details": {}
+    },
+    {
+      "name": "CRL Endpoint",
+      "status": "skipped",
+      "duration": 0.0,
+      "message": "Skipped (--quick)",
+      "severity": "low",
+      "timestamp": "2026-01-17T17:03:35.563209",
+      "details": {}
+    },
+    {
+      "name": "Invalid Domain Format",
+      "status": "failed",
+      "duration": 0.0016939640045166016,
+      "message": "Server not responding",
+      "severity": "medium",
+      "timestamp": "2026-01-17T17:03:35.564907",
+      "details": {}
+    },
+    {
+      "name": "Missing Required Fields",
+      "status": "failed",
+      "duration": 0.0010828971862792969,
+      "message": "Server not responding",
+      "severity": "medium",
+      "timestamp": "2026-01-17T17:03:35.565994",
+      "details": {}
+    },
+    {
+      "name": "Non-existent Certificate",
+      "status": "failed",
+      "duration": 0.0010807514190673828,
+      "message": "Server not responding",
+      "severity": "medium",
+      "timestamp": "2026-01-17T17:03:35.567080",
+      "details": {}
+    },
+    {
+      "name": "Health Response Time",
+      "status": "passed",
+      "duration": 0.0043981075286865234,
+      "message": "Response time OK: avg=0.001s",
+      "severity": "medium",
+      "timestamp": "2026-01-17T17:03:35.571491",
+      "details": {
+        "times": [
+          0.0012660026550292969,
+          0.0017290115356445312,
+          0.0013949871063232422
+        ],
+        "avg": 0.0014633337656656902
+      }
+    },
+    {
+      "name": "List Backups",
+      "status": "passed",
+      "duration": 0.004954814910888672,
+      "message": "Listed 0 backups",
+      "severity": "medium",
+      "timestamp": "2026-01-17T17:03:35.576456",
+      "details": {
+        "count": 0
+      }
+    },
+    {
+      "name": "Create Backup",
+      "status": "skipped",
+      "duration": 0.0,
+      "message": "Skipped (--quick)",
+      "severity": "medium",
+      "timestamp": "2026-01-17T17:03:35.576464",
+      "details": {}
+    },
+    {
+      "name": "Audit Log",
+      "status": "skipped",
+      "duration": 0.0,
+      "message": "Skipped (--quick)",
+      "severity": "low",
+      "timestamp": "2026-01-17T17:03:35.576467",
+      "details": {}
+    }
+  ]
+}

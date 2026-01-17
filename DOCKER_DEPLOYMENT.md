@@ -76,13 +76,13 @@ EOF
 ```bash
 # Run with environment file
 docker run -d \
-  --name certmate \
-  --env-file .env \
-  -p 8000:8000 \
-  -v certmate_certificates:/app/certificates \
-  -v certmate_data:/app/data \
-  -v certmate_logs:/app/logs \
-  yourusername/certmate:latest
+ --name certmate \
+ --env-file .env \
+ -p 8000:8000 \
+ -v certmate_certificates:/app/certificates \
+ -v certmate_data:/app/data \
+ -v certmate_logs:/app/logs \
+ yourusername/certmate:latest
 ```
 
 #### 3. Run with Direct Environment Variables
@@ -90,17 +90,17 @@ docker run -d \
 ```bash
 # Run with individual environment variables
 docker run -d \
-  --name certmate \
-  -e SECRET_KEY="your-super-secret-key-here" \
-  -e ADMIN_TOKEN="your-admin-token-here" \
-  -e CLOUDFLARE_EMAIL="your-email@example.com" \
-  -e CLOUDFLARE_API_TOKEN="your-cloudflare-api-token" \
-  -e LOG_LEVEL="INFO" \
-  -p 8000:8000 \
-  -v certmate_certificates:/app/certificates \
-  -v certmate_data:/app/data \
-  -v certmate_logs:/app/logs \
-  yourusername/certmate:latest
+ --name certmate \
+ -e SECRET_KEY="your-super-secret-key-here" \
+ -e ADMIN_TOKEN="your-admin-token-here" \
+ -e CLOUDFLARE_EMAIL="your-email@example.com" \
+ -e CLOUDFLARE_API_TOKEN="your-cloudflare-api-token" \
+ -e LOG_LEVEL="INFO" \
+ -p 8000:8000 \
+ -v certmate_certificates:/app/certificates \
+ -v certmate_data:/app/data \
+ -v certmate_logs:/app/logs \
+ yourusername/certmate:latest
 ```
 
 ### Docker Compose Deployment
@@ -111,33 +111,33 @@ docker run -d \
 version: '3.8'
 
 services:
-  certmate:
-    image: yourusername/certmate:latest
-    container_name: certmate
-    ports:
-      - "8000:8000"
-    environment:
-      - SECRET_KEY=${SECRET_KEY}
-      - ADMIN_TOKEN=${ADMIN_TOKEN}
-      - CLOUDFLARE_EMAIL=${CLOUDFLARE_EMAIL}
-      - CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN}
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
-    volumes:
-      - certmate_certificates:/app/certificates
-      - certmate_data:/app/data
-      - certmate_logs:/app/logs
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+ certmate:
+ image: yourusername/certmate:latest
+ container_name: certmate
+ ports:
+ - "8000:8000"
+ environment:
+ - SECRET_KEY=${SECRET_KEY}
+ - ADMIN_TOKEN=${ADMIN_TOKEN}
+ - CLOUDFLARE_EMAIL=${CLOUDFLARE_EMAIL}
+ - CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN}
+ - LOG_LEVEL=${LOG_LEVEL:-INFO}
+ volumes:
+ - certmate_certificates:/app/certificates
+ - certmate_data:/app/data
+ - certmate_logs:/app/logs
+ restart: unless-stopped
+ healthcheck:
+ test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+ interval: 30s
+ timeout: 10s
+ retries: 3
+ start_period: 40s
 
 volumes:
-  certmate_certificates:
-  certmate_data:
-  certmate_logs:
+ certmate_certificates:
+ certmate_data:
+ certmate_logs:
 ```
 
 #### 2. Run with Docker Compose
@@ -223,8 +223,8 @@ docker exec certmate ls -la /app/data
 ## Summary
 
 This setup ensures:
-- ✅ No secrets are baked into the Docker image
-- ✅ Environment variables are provided at runtime
-- ✅ Sensitive files are excluded via `.dockerignore`
-- ✅ Image can be safely pushed to public registries
-- ✅ Production-ready deployment configuration
+- No secrets are baked into the Docker image
+- Environment variables are provided at runtime
+- Sensitive files are excluded via `.dockerignore`
+- Image can be safely pushed to public registries
+- Production-ready deployment configuration

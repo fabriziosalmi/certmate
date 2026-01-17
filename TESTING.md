@@ -10,15 +10,15 @@ CertMate uses a comprehensive testing framework to ensure code quality and preve
 
 ```
 tests/
-├── __init__.py
-├── conftest.py              # Test configuration and fixtures
-├── test_app.py             # Flask application tests
-├── test_api.py             # API endpoint tests
-├── test_certificate_management.py  # Certificate handling tests
-├── test_dns_providers_integration.py  # DNS provider tests
-└── fixtures/
-    ├── __init__.py
-    └── sample_settings.json
+ __init__.py
+ conftest.py # Test configuration and fixtures
+ test_app.py # Flask application tests
+ test_api.py # API endpoint tests
+ test_certificate_management.py # Certificate handling tests
+ test_dns_providers_integration.py # DNS provider tests
+ fixtures/
+ __init__.py
+ sample_settings.json
 ```
 
 ## Running Tests
@@ -110,45 +110,45 @@ import pytest
 from unittest.mock import patch, MagicMock
 
 def test_function_name(client, sample_settings):
-    """Test description."""
-    # Arrange
-    setup_data = {...}
-    
-    # Act
-    response = client.get('/api/endpoint')
-    
-    # Assert
-    assert response.status_code == 200
-    assert 'expected_key' in response.json()
+ """Test description."""
+ # Arrange
+ setup_data = {...}
+ 
+ # Act
+ response = client.get('/api/endpoint')
+ 
+ # Assert
+ assert response.status_code == 200
+ assert 'expected_key' in response.json()
 ```
 
 ### Fixtures Usage
 ```python
 def test_with_app_context(app):
-    """Test that requires app context."""
-    with app.app_context():
-        # Test code here
-        pass
+ """Test that requires app context."""
+ with app.app_context():
+ # Test code here
+ pass
 
 def test_api_endpoint(client):
-    """Test API endpoint."""
-    response = client.get('/api/test')
-    assert response.status_code == 200
+ """Test API endpoint."""
+ response = client.get('/api/test')
+ assert response.status_code == 200
 
 def test_with_mock_data(mock_certificate_data):
-    """Test with mock data."""
-    assert mock_certificate_data['domain'] == 'test.example.com'
+ """Test with mock data."""
+ assert mock_certificate_data['domain'] == 'test.example.com'
 ```
 
 ### Mocking External Services
 ```python
 @patch('app.requests.get')
 def test_external_api(mock_get, client):
-    """Test external API call."""
-    mock_get.return_value.json.return_value = {'status': 'success'}
-    
-    response = client.post('/api/certificate/request')
-    assert response.status_code == 200
+ """Test external API call."""
+ mock_get.return_value.json.return_value = {'status': 'success'}
+ 
+ response = client.post('/api/certificate/request')
+ assert response.status_code == 200
 ```
 
 ## Continuous Integration
@@ -223,7 +223,7 @@ Tests use temporary directories and mock data to avoid affecting production data
 
 ### Verbose Output
 ```bash
-pytest -v -s  # Show print statements
+pytest -v -s # Show print statements
 ```
 
 ### Debug Specific Test
@@ -234,8 +234,8 @@ pytest tests/test_api.py::test_specific_function -v -s
 ### Using pdb
 ```python
 def test_debug_example():
-    import pdb; pdb.set_trace()
-    # Test code here
+ import pdb; pdb.set_trace()
+ # Test code here
 ```
 
 ## Performance Testing
@@ -249,15 +249,15 @@ import concurrent.futures
 
 @pytest.mark.slow
 def test_api_load(client):
-    """Test API under load."""
-    def make_request():
-        return client.get('/api/certificates')
-    
-    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-        futures = [executor.submit(make_request) for _ in range(100)]
-        responses = [f.result() for f in futures]
-    
-    assert all(r.status_code == 200 for r in responses)
+ """Test API under load."""
+ def make_request():
+ return client.get('/api/certificates')
+ 
+ with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+ futures = [executor.submit(make_request) for _ in range(100)]
+ responses = [f.result() for f in futures]
+ 
+ assert all(r.status_code == 200 for r in responses)
 ```
 
 ## Maintenance

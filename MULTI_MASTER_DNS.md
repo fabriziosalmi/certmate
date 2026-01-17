@@ -46,20 +46,20 @@ validation.example.org. NS record already exists
 ```bash
 # Configure the DNS provider for your validation domain
 curl -X POST http://localhost:5000/api/web/settings \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "dns_provider": "cloudflare",
-    "dns_providers": {
-      "cloudflare": {
-        "accounts": {
-          "default": {
-            "api_token": "your_cloudflare_token"
-          }
-        }
-      }
-    }
-  }'
+ -H "Authorization: Bearer YOUR_TOKEN" \
+ -H "Content-Type: application/json" \
+ -d '{
+ "dns_provider": "cloudflare",
+ "dns_providers": {
+ "cloudflare": {
+ "accounts": {
+ "default": {
+ "api_token": "your_cloudflare_token"
+ }
+ }
+ }
+ }
+ }'
 ```
 
 #### Step 4: Request Certificate with Domain Alias
@@ -68,13 +68,13 @@ curl -X POST http://localhost:5000/api/web/settings \
 # Request certificate for example.com
 # But perform validation on validation.example.org
 curl -X POST http://localhost:5000/api/certificates/create \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "domain": "example.com",
-    "dns_provider": "cloudflare",
-    "domain_alias": "_acme-challenge.validation.example.org"
-  }'
+ -H "Authorization: Bearer YOUR_TOKEN" \
+ -H "Content-Type: application/json" \
+ -d '{
+ "domain": "example.com",
+ "dns_provider": "cloudflare",
+ "domain_alias": "_acme-challenge.validation.example.org"
+ }'
 ```
 
 ## Benefits of This Approach
@@ -90,13 +90,13 @@ curl -X POST http://localhost:5000/api/certificates/create \
 ```bash
 # Wildcard certificate with domain alias
 curl -X POST http://localhost:5000/api/certificates/create \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "domain": "*.example.com",
-    "dns_provider": "cloudflare",
-    "domain_alias": "_acme-challenge.validation.example.org"
-  }'
+ -H "Authorization: Bearer YOUR_TOKEN" \
+ -H "Content-Type: application/json" \
+ -d '{
+ "domain": "*.example.com",
+ "dns_provider": "cloudflare",
+ "domain_alias": "_acme-challenge.validation.example.org"
+ }'
 ```
 
 ## deSEC and gcore Provider Support
@@ -106,8 +106,8 @@ curl -X POST http://localhost:5000/api/certificates/create \
 CertMate does **not natively support** deSEC or gcore DNS providers yet. However:
 
 1. **Certbot plugins exist**:
-   - deSEC: [`certbot-dns-desec`](https://github.com/desec-io/certbot-dns-desec)
-   - gcore: [`gcore-dns-certbot-plugin`](https://github.com/G-Core/gcore-dns-certbot-plugin)
+ - deSEC: [`certbot-dns-desec`](https://github.com/desec-io/certbot-dns-desec)
+ - gcore: [`gcore-dns-certbot-plugin`](https://github.com/G-Core/gcore-dns-certbot-plugin)
 
 2. **Workaround**: Use domain alias (as described above) to avoid needing direct integration
 
@@ -146,38 +146,38 @@ dig _acme-challenge.mysite.com CNAME +short
 3. **Configure CertMate with Cloudflare** (for validation domain):
 ```json
 {
-  "dns_provider": "cloudflare",
-  "dns_providers": {
-    "cloudflare": {
-      "accounts": {
-        "default": {
-          "api_token": "your_cloudflare_api_token"
-        }
-      }
-    }
-  }
+ "dns_provider": "cloudflare",
+ "dns_providers": {
+ "cloudflare": {
+ "accounts": {
+ "default": {
+ "api_token": "your_cloudflare_api_token"
+ }
+ }
+ }
+ }
 }
 ```
 
 4. **Request certificate**:
 ```bash
 curl -X POST http://localhost:5000/api/certificates/create \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "domain": "mysite.com",
-    "email": "admin@mysite.com",
-    "dns_provider": "cloudflare",
-    "domain_alias": "_acme-challenge.acme.mydomain.net"
-  }'
+ -H "Authorization: Bearer YOUR_TOKEN" \
+ -H "Content-Type: application/json" \
+ -d '{
+ "domain": "mysite.com",
+ "email": "admin@mysite.com",
+ "dns_provider": "cloudflare",
+ "domain_alias": "_acme-challenge.acme.mydomain.net"
+ }'
 ```
 
 5. **How it works**:
-   - Let's Encrypt requests `_acme-challenge.mysite.com`
-   - Both deSEC and gcore return CNAME to `_acme-challenge.acme.mydomain.net`
-   - CertMate creates TXT record at `_acme-challenge.acme.mydomain.net` via Cloudflare
-   - Validation succeeds regardless of which DNS provider responds
-   - Certificate is issued for `mysite.com`
+ - Let's Encrypt requests `_acme-challenge.mysite.com`
+ - Both deSEC and gcore return CNAME to `_acme-challenge.acme.mydomain.net`
+ - CertMate creates TXT record at `_acme-challenge.acme.mydomain.net` via Cloudflare
+ - Validation succeeds regardless of which DNS provider responds
+ - Certificate is issued for `mysite.com`
 
 ## Troubleshooting
 

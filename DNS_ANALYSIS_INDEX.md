@@ -71,19 +71,19 @@ User-facing documentation with:
 
 ```
 DNS_ANALYSIS_INDEX.md (You are here)
-├── DNS_PROVIDER_ARCHITECTURE.md
-│   ├── Detailed architecture
-│   ├── Code patterns
-│   ├── Integration examples
-│   └── Security details
-├── DNS_PROVIDERS_QUICK_REFERENCE.txt
-│   ├── Provider list
-│   ├── Quick lookups
-│   └── Troubleshooting
-└── DNS_PROVIDERS.md
-    ├── User guide
-    ├── Setup examples
-    └── API documentation
+ DNS_PROVIDER_ARCHITECTURE.md
+ Detailed architecture
+ Code patterns
+ Integration examples
+ Security details
+ DNS_PROVIDERS_QUICK_REFERENCE.txt
+ Provider list
+ Quick lookups
+ Troubleshooting
+ DNS_PROVIDERS.md
+ User guide
+ Setup examples
+ API documentation
 ```
 
 ## Quick Navigation by Topic

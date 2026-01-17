@@ -2,7 +2,7 @@
 
 CertMate now supports **22 DNS providers** for Let's Encrypt DNS challenges through individual certbot plugins that provide reliable, well-tested DNS challenge support.
 
-## 🎯 Supported Providers
+## Supported Providers
 
 All providers are supported through individual, well-maintained certbot plugins:
 
@@ -31,7 +31,7 @@ All providers are supported through individual, well-maintained certbot plugins:
 | **ArvanCloud** | `certbot-dns-arvancloud` | API Key | Iranian cloud provider |
 | **ACME-DNS** | `certbot-acme-dns` | API URL, Username, Password, Subdomain | Generic ACME-DNS server |
 
-## 🛠 Configuration
+## Configuration
 
 ### Via Web Interface
 
@@ -44,30 +44,30 @@ All providers are supported through individual, well-maintained certbot plugins:
 
 ```bash
 curl -X POST http://localhost:5000/api/settings \
-  -H "Authorization: Bearer YOUR_API_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "dns_provider": "vultr",
-    "dns_providers": {
-      "vultr": {
-        "api_key": "your_vultr_api_key"
-      }
-    }
-  }'
+ -H "Authorization: Bearer YOUR_API_TOKEN" \
+ -H "Content-Type: application/json" \
+ -d '{
+ "dns_provider": "vultr",
+ "dns_providers": {
+ "vultr": {
+ "api_key": "your_vultr_api_key"
+ }
+ }
+ }'
 ```
 
-## 🎯 Popular Provider Setup Examples
+## Popular Provider Setup Examples
 
 ### Vultr
 ```bash
 # Get API key from Vultr account
 {
-  "dns_provider": "vultr",
-  "dns_providers": {
-    "vultr": {
-      "api_key": "your_vultr_api_key"
-    }
-  }
+ "dns_provider": "vultr",
+ "dns_providers": {
+ "vultr": {
+ "api_key": "your_vultr_api_key"
+ }
+ }
 }
 ```
 
@@ -75,13 +75,13 @@ curl -X POST http://localhost:5000/api/settings \
 ```bash
 # Get API credentials from DNS Made Easy account
 {
-  "dns_provider": "dnsmadeeasy", 
-  "dns_providers": {
-    "dnsmadeeasy": {
-      "api_key": "your_api_key",
-      "secret_key": "your_secret_key"
-    }
-  }
+ "dns_provider": "dnsmadeeasy", 
+ "dns_providers": {
+ "dnsmadeeasy": {
+ "api_key": "your_api_key",
+ "secret_key": "your_secret_key"
+ }
+ }
 }
 ```
 
@@ -89,12 +89,12 @@ curl -X POST http://localhost:5000/api/settings \
 ```bash
 # Get API key from NS1 account
 {
-  "dns_provider": "nsone",
-  "dns_providers": {
-    "nsone": {
-      "api_key": "your_nsone_api_key"
-    }
-  }
+ "dns_provider": "nsone",
+ "dns_providers": {
+ "nsone": {
+ "api_key": "your_nsone_api_key"
+ }
+ }
 }
 ```
 
@@ -102,15 +102,15 @@ curl -X POST http://localhost:5000/api/settings \
 ```bash
 # For BIND or other RFC2136-compatible DNS servers
 {
-  "dns_provider": "rfc2136",
-  "dns_providers": {
-    "rfc2136": {
-      "nameserver": "ns.example.com",
-      "tsig_key": "mykey",
-      "tsig_secret": "base64-encoded-secret",
-      "tsig_algorithm": "HMAC-SHA512"
-    }
-  }
+ "dns_provider": "rfc2136",
+ "dns_providers": {
+ "rfc2136": {
+ "nameserver": "ns.example.com",
+ "tsig_key": "mykey",
+ "tsig_secret": "base64-encoded-secret",
+ "tsig_algorithm": "HMAC-SHA512"
+ }
+ }
 }
 ```
 
@@ -118,12 +118,12 @@ curl -X POST http://localhost:5000/api/settings \
 ```bash
 # Get API token from Hetzner DNS Console
 {
-  "dns_provider": "hetzner",
-  "dns_providers": {
-    "hetzner": {
-      "api_token": "your_hetzner_api_token"
-    }
-  }
+ "dns_provider": "hetzner",
+ "dns_providers": {
+ "hetzner": {
+ "api_token": "your_hetzner_api_token"
+ }
+ }
 }
 ```
 
@@ -131,12 +131,12 @@ curl -X POST http://localhost:5000/api/settings \
 ```bash
 # Get API token from Infomaniak Manager (API section with "Domain" scope)
 {
-  "dns_provider": "infomaniak",
-  "dns_providers": {
-    "infomaniak": {
-      "api_token": "your_infomaniak_api_token"
-    }
-  }
+ "dns_provider": "infomaniak",
+ "dns_providers": {
+ "infomaniak": {
+ "api_token": "your_infomaniak_api_token"
+ }
+ }
 }
 ```
 
@@ -144,13 +144,13 @@ curl -X POST http://localhost:5000/api/settings \
 ```bash
 # Get API credentials from Porkbun
 {
-  "dns_provider": "porkbun",
-  "dns_providers": {
-    "porkbun": {
-      "api_key": "your_porkbun_api_key",
-      "secret_key": "your_porkbun_secret_key"
-    }
-  }
+ "dns_provider": "porkbun",
+ "dns_providers": {
+ "porkbun": {
+ "api_key": "your_porkbun_api_key",
+ "secret_key": "your_porkbun_secret_key"
+ }
+ }
 }
 ```
 
@@ -158,13 +158,13 @@ curl -X POST http://localhost:5000/api/settings \
 ```bash
 # Get API credentials from GoDaddy Developer Portal
 {
-  "dns_provider": "godaddy",
-  "dns_providers": {
-    "godaddy": {
-      "api_key": "your_godaddy_api_key",
-      "secret": "your_godaddy_secret"
-    }
-  }
+ "dns_provider": "godaddy",
+ "dns_providers": {
+ "godaddy": {
+ "api_key": "your_godaddy_api_key",
+ "secret": "your_godaddy_secret"
+ }
+ }
 }
 ```
 
@@ -172,13 +172,13 @@ curl -X POST http://localhost:5000/api/settings \
 ```bash
 # Use your Hurricane Electric DNS account credentials
 {
-  "dns_provider": "he-ddns",
-  "dns_providers": {
-    "he-ddns": {
-      "username": "your_he_username",
-      "password": "your_he_password"
-    }
-  }
+ "dns_provider": "he-ddns",
+ "dns_providers": {
+ "he-ddns": {
+ "username": "your_he_username",
+ "password": "your_he_password"
+ }
+ }
 }
 ```
 
@@ -186,12 +186,12 @@ curl -X POST http://localhost:5000/api/settings \
 ```bash
 # Get API token from Dynu Control Panel
 {
-  "dns_provider": "dynudns",
-  "dns_providers": {
-    "dynudns": {
-      "token": "your_dynu_api_token"
-    }
-  }
+ "dns_provider": "dynudns",
+ "dns_providers": {
+ "dynudns": {
+ "token": "your_dynu_api_token"
+ }
+ }
 }
 ```
 
@@ -199,12 +199,12 @@ curl -X POST http://localhost:5000/api/settings \
 ```bash
 # Get API key from ArvanCloud panel
 {
-  "dns_provider": "arvancloud",
-  "dns_providers": {
-    "arvancloud": {
-      "api_key": "your_arvancloud_api_key"
-    }
-  }
+ "dns_provider": "arvancloud",
+ "dns_providers": {
+ "arvancloud": {
+ "api_key": "your_arvancloud_api_key"
+ }
+ }
 }
 ```
 
@@ -212,15 +212,15 @@ curl -X POST http://localhost:5000/api/settings \
 ```bash
 # Get credentials from your ACME-DNS server
 {
-  "dns_provider": "acme-dns",
-  "dns_providers": {
-    "acme-dns": {
-      "api_url": "https://auth.acme-dns.io",
-      "username": "your_acme_username",
-      "password": "your_acme_password",
-      "subdomain": "your_subdomain"
-    }
-  }
+ "dns_provider": "acme-dns",
+ "dns_providers": {
+ "acme-dns": {
+ "api_url": "https://auth.acme-dns.io",
+ "username": "your_acme_username",
+ "password": "your_acme_password",
+ "subdomain": "your_subdomain"
+ }
+ }
 }
 ```
 
@@ -229,45 +229,44 @@ curl -X POST http://localhost:5000/api/settings \
 ### Using Default Provider
 ```bash
 curl -X POST http://localhost:5000/api/certificates/create \
-  -H "Authorization: Bearer YOUR_API_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"domain": "example.com"}'
+ -H "Authorization: Bearer YOUR_API_TOKEN" \
+ -H "Content-Type: application/json" \
+ -d '{"domain": "example.com"}'
 ```
 
 ### Using Specific Provider
 ```bash
 curl -X POST http://localhost:5000/api/certificates/create \
-  -H "Authorization: Bearer YOUR_API_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "domain": "example.com",
-    "dns_provider": "vultr"
-  }'
+ -H "Authorization: Bearer YOUR_API_TOKEN" \
+ -H "Content-Type: application/json" \
+ -d '{
+ "domain": "example.com",
+ "dns_provider": "vultr"
+ }'
 ```
 
-## 🚀 How Provider Support Works
+## How Provider Support Works
 
 CertMate uses individual, well-maintained certbot plugins for maximum reliability. All 19 supported providers use dedicated certbot plugins, ensuring stability and consistent behavior across all DNS providers.
 
-## 🔍 Provider Detection Logic
+## Provider Detection Logic
 
 ```python
 # All supported providers use individual certbot plugins
-supported_providers = [
-    'cloudflare', 'route53', 'azure', 'google', 'powerdns', 
-    'digitalocean', 'linode', 'gandi', 'ovh', 'namecheap',
-    'vultr', 'dnsmadeeasy', 'nsone', 'rfc2136',
-    'hetzner', 'porkbun', 'godaddy', 'he-ddns', 'dynudns',
-    'arvancloud', 'acme-dns'
+supported_providers = ['cloudflare', 'route53', 'azure', 'google', 'powerdns', 
+ 'digitalocean', 'linode', 'gandi', 'ovh', 'namecheap',
+ 'vultr', 'dnsmadeeasy', 'nsone', 'rfc2136',
+ 'hetzner', 'porkbun', 'godaddy', 'he-ddns', 'dynudns',
+ 'arvancloud', 'acme-dns'
 ]
 
 if dns_provider in supported_providers:
-    use_individual_plugin()
+ use_individual_plugin()
 else:
-    return_not_supported_error()
+ return_not_supported_error()
 ```
 
-## 🛡 Security Features
+## Security Features
 
 - **Credential masking** in web interface
 - **Secure file permissions** (600) for all credential files
@@ -275,7 +274,7 @@ else:
 - **Environment variable support** for CI/CD workflows
 - **Audit logging** for all DNS provider usage
 
-## 📋 Migration Guide
+## Migration Guide
 
 ### From Single Provider to Multi-Provider
 
@@ -285,49 +284,49 @@ Your existing configurations remain unchanged! Simply add new providers:
 # Existing Cloudflare config continues to work
 # Add Vultr for new domains
 {
-  "dns_providers": {
-    "cloudflare": {
-      "api_token": "existing_token"
-    },
-    "vultr": {
-      "api_key": "new_vultr_api_key"  
-    }
-  }
+ "dns_providers": {
+ "cloudflare": {
+ "api_token": "existing_token"
+ },
+ "vultr": {
+ "api_key": "new_vultr_api_key" 
+ }
+ }
 }
 ```
 
-## 🏗 Contributing New Providers
+## Contributing New Providers
 
 Adding support for a new provider:
 
 1. **Individual Plugin Route:**
-   - Add plugin to `requirements.txt` (e.g., `certbot-dns-newprovider`)
-   - Create config function in `app.py` (e.g., `create_newprovider_config()`)
-   - Add provider logic to `create_certificate()` function
-   - Add UI elements in templates
-   - Update documentation
+ - Add plugin to `requirements.txt` (e.g., `certbot-dns-newprovider`)
+ - Create config function in `app.py` (e.g., `create_newprovider_config()`)
+ - Add provider logic to `create_certificate()` function
+ - Add UI elements in templates
+ - Update documentation
 
 2. **Check for Existing Plugins:**
-   - Search for `certbot-dns-[provider]` on PyPI
-   - Verify plugin is actively maintained
-   - Test plugin compatibility with current certbot version
+ - Search for `certbot-dns-[provider]` on PyPI
+ - Verify plugin is actively maintained
+ - Test plugin compatibility with current certbot version
 
-## 🔧 Troubleshooting
+## Troubleshooting
 
 ### Common Issues
 
 1. **"DNS provider not configured"**
-   - Verify all required credentials are provided
-   - Check credential validity with provider
+ - Verify all required credentials are provided
+ - Check credential validity with provider
 
 2. **"Certificate creation failed"**
-   - Ensure domain is managed by your DNS provider
-   - Verify API permissions include DNS record management
-   - Check rate limits and quotas
+ - Ensure domain is managed by your DNS provider
+ - Verify API permissions include DNS record management
+ - Check rate limits and quotas
 
 3. **Plugin not found errors**
-   - Run `pip install -r requirements.txt` to install all plugins
-   - For Docker: rebuild container to get latest plugins
+ - Run `pip install -r requirements.txt` to install all plugins
+ - For Docker: rebuild container to get latest plugins
 
 ### Debug Mode
 ```bash
@@ -338,10 +337,10 @@ python app.py
 ### Testing Provider Configuration
 ```bash
 curl -X GET http://localhost:5000/api/settings/dns-providers \
-  -H "Authorization: Bearer YOUR_API_TOKEN"
+ -H "Authorization: Bearer YOUR_API_TOKEN"
 ```
 
-## 📊 Provider Statistics
+## Provider Statistics
 
 - **Total Supported**: 21 providers
 - **Geographic Coverage**: Global (all continents)
@@ -352,7 +351,7 @@ curl -X GET http://localhost:5000/api/settings/dns-providers \
 
 ---
 
-🎉 **CertMate provides rock-solid DNS provider support with individual, well-maintained plugins!**
+ **CertMate provides rock-solid DNS provider support with individual, well-maintained plugins!**
 
 ## Configuration
 
@@ -367,16 +366,16 @@ curl -X GET http://localhost:5000/api/settings/dns-providers \
 
 ```bash
 curl -X POST http://localhost:5000/api/settings \
-  -H "Authorization: Bearer YOUR_API_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "dns_provider": "cloudflare",
-    "dns_providers": {
-      "cloudflare": {
-        "api_token": "your_cloudflare_token"
-      }
-    }
-  }'
+ -H "Authorization: Bearer YOUR_API_TOKEN" \
+ -H "Content-Type: application/json" \
+ -d '{
+ "dns_provider": "cloudflare",
+ "dns_providers": {
+ "cloudflare": {
+ "api_token": "your_cloudflare_token"
+ }
+ }
+ }'
 ```
 
 ## Creating Certificates
@@ -385,23 +384,23 @@ curl -X POST http://localhost:5000/api/settings \
 
 ```bash
 curl -X POST http://localhost:5000/api/certificates/create \
-  -H "Authorization: Bearer YOUR_API_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "domain": "example.com"
-  }'
+ -H "Authorization: Bearer YOUR_API_TOKEN" \
+ -H "Content-Type: application/json" \
+ -d '{
+ "domain": "example.com"
+ }'
 ```
 
 ### Using Specific Provider
 
 ```bash
 curl -X POST http://localhost:5000/api/certificates/create \
-  -H "Authorization: Bearer YOUR_API_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "domain": "example.com",
-    "dns_provider": "route53"
-  }'
+ -H "Authorization: Bearer YOUR_API_TOKEN" \
+ -H "Content-Type: application/json" \
+ -d '{
+ "domain": "example.com",
+ "dns_provider": "route53"
+ }'
 ```
 
 ## Environment Variables
@@ -486,7 +485,7 @@ Use the API to test your DNS provider configuration:
 
 ```bash
 curl -X GET http://localhost:5000/api/settings/dns-providers \
-  -H "Authorization: Bearer YOUR_API_TOKEN"
+ -H "Authorization: Bearer YOUR_API_TOKEN"
 ```
 
 ## Contributing
@@ -505,17 +504,17 @@ To add support for a new DNS provider:
 
 ```json
 {
-  "domains": ["example.com", "test.org"],
-  "dns_provider": "cloudflare",
-  "dns_providers": {
-    "cloudflare": {
-      "api_token": "token_for_example_com"
-    },
-    "route53": {
-      "access_key_id": "key_for_test_org",
-      "secret_access_key": "secret_for_test_org"
-    }
-  }
+ "domains": ["example.com", "test.org"],
+ "dns_provider": "cloudflare",
+ "dns_providers": {
+ "cloudflare": {
+ "api_token": "token_for_example_com"
+ },
+ "route53": {
+ "access_key_id": "key_for_test_org",
+ "secret_access_key": "secret_for_test_org"
+ }
+ }
 }
 ```
 
@@ -524,13 +523,13 @@ To add support for a new DNS provider:
 ```bash
 # Create certificate using Cloudflare
 curl -X POST http://localhost:5000/api/certificates/create \
-  -H "Authorization: Bearer YOUR_API_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"domain": "example.com", "dns_provider": "cloudflare"}'
+ -H "Authorization: Bearer YOUR_API_TOKEN" \
+ -H "Content-Type: application/json" \
+ -d '{"domain": "example.com", "dns_provider": "cloudflare"}'
 
 # Create certificate using Route53
 curl -X POST http://localhost:5000/api/certificates/create \
-  -H "Authorization: Bearer YOUR_API_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"domain": "test.org", "dns_provider": "route53"}'
+ -H "Authorization: Bearer YOUR_API_TOKEN" \
+ -H "Content-Type: application/json" \
+ -d '{"domain": "test.org", "dns_provider": "route53"}'
 ```
