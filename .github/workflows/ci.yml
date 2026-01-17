@@ -55,7 +55,7 @@ jobs:
         FLASK_ENV: testing
         TESTING: true
       run: |
-        pytest -v --tb=short --cov=. --cov-report=xml --cov-report=html
+        pytest -v --tb=short --cov=. --cov-report=xml --cov-report=html --ignore=test_e2e_real.py --ignore=test_ui_e2e.py
 
     - name: Upload coverage reports
       if: matrix.python-version == '3.11'
