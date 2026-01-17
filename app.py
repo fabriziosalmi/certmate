@@ -29,7 +29,8 @@ from modules.core import (
     CertificateManager, DNSManager, CacheManager, StorageManager,
     PrivateCAGenerator, CSRHandler, ClientCertificateManager,
     OCSPResponder, CRLManager, AuditLogger,
-    RateLimitConfig, SimpleRateLimiter
+    RateLimitConfig, SimpleRateLimiter,
+    configure_structured_logging, get_certmate_logger
 )
 from modules.core.shell import ShellExecutor
 # Import CA manager for DigiCert and Private CA support
@@ -39,9 +40,12 @@ from modules.api import create_api_models, create_api_resources
 from modules.api.client_certificates import create_client_certificate_resources
 from modules.web import register_web_routes
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Configure structured JSON logging
+# Set CERTMATE_LOG_JSON=false to disable JSON output
+json_logging = os.getenv('CERTMATE_LOG_JSON', 'true').lower() == 'true'
+log_level = getattr(logging, os.getenv('CERTMATE_LOG_LEVEL', 'INFO').upper(), logging.INFO)
+configure_structured_logging(level=log_level, json_output=json_logging)
+logger = get_certmate_logger('app')
 
 
 class CertMateApp:

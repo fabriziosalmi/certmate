@@ -25,6 +25,17 @@ from .client_certificates import ClientCertificateManager
 from .ocsp_crl import OCSPResponder, CRLManager
 from .audit import AuditLogger
 from .rate_limit import RateLimitConfig, SimpleRateLimiter, rate_limit_decorator
+from .structured_logging import (
+    get_logger,
+    get_certmate_logger,
+    configure_structured_logging,
+    LogContext,
+    set_context,
+    clear_context,
+    timed,
+    log_request,
+    JSONFormatter
+)
 
 __all__ = [
     'FileOperations',
@@ -48,5 +59,15 @@ __all__ = [
     'AuditLogger',
     'RateLimitConfig',
     'SimpleRateLimiter',
-    'rate_limit_decorator'
+    'rate_limit_decorator',
+    # Structured logging
+    'get_logger',
+    'get_certmate_logger',
+    'configure_structured_logging',
+    'LogContext',
+    'set_context',
+    'clear_context',
+    'timed',
+    'log_request',
+    'JSONFormatter'
 ]
