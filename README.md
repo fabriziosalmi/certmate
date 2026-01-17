@@ -2412,6 +2412,11 @@ docker-compose -f docker-compose.yml -f docker-compose.debug.yml up
 
 ### Known Issues (v1.7.2)
 
+#### New in v1.7.2
+- **Structured JSON Logging**: Enable with `LOG_FORMAT=json` for observability platforms
+- **Playwright UI E2E Tests**: Run `python test_ui_e2e.py` for browser-based testing
+- **Documentation Cleanup**: Professional formatting without emojis
+
 #### Resolved in v1.7.2
 - **#54**: Settings Save - API Bearer Token Required (FIXED)
 - **#53**: Local Authentication Support (ADDED)

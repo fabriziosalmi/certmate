@@ -1,3 +1,37 @@
+# Release v1.7.2
+
+## New Features
+
+### Structured JSON Logging for Observability
+- New `StructuredLogger` class in `modules/core/structured_logging.py`
+- JSON-formatted log output for log aggregation systems (ELK, Splunk, etc.)
+- Automatic correlation IDs for request tracing
+- Environment-based configuration (`LOG_FORMAT=json`)
+- Compatible with existing log file output
+
+### Playwright UI E2E Test Suite
+- New `test_ui_e2e.py` with comprehensive browser-based testing
+- Human-readable test output with severity levels
+- Tests for Settings, Certificates, Client Certificates workflows
+- Supports headed/headless modes and screenshots on failure
+- Python 3.9+ compatible
+
+## Improvements
+
+### Documentation Cleanup
+- Removed all emojis from documentation for professional appearance
+- Clean, consistent formatting across all markdown files
+
+### CI/CD Improvements
+- E2E tests excluded from CI (require running server)
+- All unit and integration tests passing on Python 3.9, 3.11, 3.12
+
+## Bug Fixes
+- Fixed Python indentation issues in 47 files
+- Fixed Python 3.9 f-string compatibility in test_ui_e2e.py
+
+---
+
 # Release v1.7.0
 
 ## New Features
