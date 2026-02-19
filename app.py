@@ -2,7 +2,7 @@
 CertMate - Modular SSL Certificate Management Application
 Main application entry point with modular architecture
 """
-
+__version__ = '1.8.0'
 import os
 import sys
 import tempfile
@@ -246,7 +246,7 @@ class CertMateApp:
             # Initialize Flask-RESTX
             self.api = Api(
                 self.app,
-                version='1.8.0',
+                version=__version__,
                 title='CertMate API',
                 description='SSL Certificate Management API',
                 doc='/docs/',

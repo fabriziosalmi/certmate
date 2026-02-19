@@ -217,9 +217,11 @@ def register_web_routes(app, managers):
     def health_check():
         """Simple health check endpoint"""
         try:
+            from app import __version__
             settings = settings_manager.load_settings()
             return jsonify({
                 'status': 'healthy',
+                'version': __version__,
                 'timestamp': str(datetime.now())
             })
         except Exception as e:
