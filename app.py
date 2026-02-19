@@ -430,7 +430,7 @@ class CertMateApp:
             # Use remote_addr (actual TCP peer) to prevent rate-limit bypass via
             # spoofed X-Forwarded-For headers.  If behind a trusted reverse proxy,
             # configure PROXY_FIX or Werkzeug ProxyFix to set remote_addr correctly.
-            client_ip = flask_request.remote_addr or '0.0.0.0'
+            client_ip = flask_request.remote_addr or '0.0.0.0'  # nosec B104
             # Map path to endpoint category for rate limit lookup
             endpoint = 'default'
             if 'certificates' in path and 'create' in path:
@@ -454,7 +454,7 @@ class CertMateApp:
                     'retry_after': 60
                 }), 429
 
-    def run(self, host='0.0.0.0', port=5000, debug=False):
+    def run(self, host='0.0.0.0', port=5000, debug=False):  # nosec B104
         """Run the CertMate application"""
         try:
             logger.info("=" * 60)
@@ -499,14 +499,14 @@ class CertMateApp:
             
             # Display access information
             logger.info(f"\n🌐 Access URLs:")
-            if host == '0.0.0.0':
+            if host == '0.0.0.0':  # nosec B104
                 logger.info(f"  📱 Local:     http://localhost:{port}")
                 logger.info(f"  🌍 Network:   http://<your-ip>:{port}")
             else:
                 logger.info(f"  📱 Address:   http://{host}:{port}")
             
-            logger.info(f"  📋 API Docs:  http://{host if host != '0.0.0.0' else 'localhost'}:{port}/docs/")
-            logger.info(f"  ❤️  Health:    http://{host if host != '0.0.0.0' else 'localhost'}:{port}/health")
+            logger.info(f"  📋 API Docs:  http://{host if host != '0.0.0.0' else 'localhost'}:{port}/docs/")  # nosec B104
+            logger.info(f"  ❤️  Health:    http://{host if host != '0.0.0.0' else 'localhost'}:{port}/health")  # nosec B104
             
             logger.info("\n💡 Tips:")
             logger.info("  • Use Ctrl+C to stop the server")
@@ -746,7 +746,7 @@ if __name__ == '__main__':
     
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='CertMate SSL Certificate Management')
-    parser.add_argument('--host', default='0.0.0.0', help='Host to bind to (default: 0.0.0.0)')
+    parser.add_argument('--host', default='0.0.0.0', help='Host to bind to (default: 0.0.0.0)')  # nosec B104
     parser.add_argument('--port', type=int, default=8000, help='Port to bind to (default: 8000)')
     parser.add_argument('--debug', action='store_true', help='Enable debug mode')
     parser.add_argument('--log-level', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'], 

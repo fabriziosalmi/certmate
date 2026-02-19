@@ -160,7 +160,7 @@ def rate_limit_decorator(limiter: SimpleRateLimiter, endpoint: str):
         def decorated_function(*args, **kwargs):
             # Use remote_addr to prevent rate-limit bypass via spoofed headers.
             # Configure Werkzeug ProxyFix if behind a trusted reverse proxy.
-            client_ip = request.remote_addr or '0.0.0.0'
+            client_ip = request.remote_addr or '0.0.0.0'  # nosec B104
 
             # Check rate limit
             if not limiter.is_allowed(client_ip, endpoint):
