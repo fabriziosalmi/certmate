@@ -28,7 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Revoke certificates with audit trail
 - Renew certificates (same CN, new serial)
 - Auto-renewal scheduling (daily at 3 AM)
-- Support for 30k+ concurrent certificates
+- Directory-based storage for large certificate volumes
 - Metadata storage (JSON per certificate)
 - Certificate statistics and usage breakdown
 
@@ -101,18 +101,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Secure key storage
 
 ### Performance
-- Support for 30k+ certificates
+- Scalable directory-based storage
 - Efficient multi-filter queries
-- Batch operations (100-30k certs)
+- Batch operations for large CSV imports
 - Auto-renewal scheduling
 - Low memory footprint
 
 ### Quality Assurance
-- 27/27 tests passing
-- 100% test coverage for core features
-- Comprehensive error handling
+- 27/27 E2E tests passing
+- Error handling for all API endpoints
 - All deprecation warnings fixed
-- Production-ready code
 
 ### Documentation
 - Complete API reference

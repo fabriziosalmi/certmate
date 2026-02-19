@@ -4,7 +4,7 @@
 
 <img src="certmate_logo.png" alt="CertMate Logo" width="180">
 
-**CertMate** is a powerful SSL certificate management system designed for modern infrastructure. Built with multi-DNS provider support, Docker containerization, and comprehensive REST API, it's the perfect solution for managing certificates across multiple datacenters and cloud environments.
+**CertMate** is an SSL certificate management system with multi-DNS provider support, Docker containerization, and a REST API for managing certificates across multiple environments.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
@@ -25,11 +25,11 @@
 
 ## Why CertMate?
 
-CertMate solves the complexity of SSL certificate management in modern distributed architectures. Whether you're running a single application or managing certificates across multiple datacenters, CertMate provides:
+CertMate simplifies SSL certificate management across DNS providers. Whether you're running a single application or managing certificates across multiple environments, CertMate provides:
 
 - **Zero-Downtime Automation** - Certificates renew automatically 30 days before expiry
 - **Multi-Cloud Support** - Works with **22 DNS providers** (Cloudflare, AWS, Azure, GCP, Hetzner, Porkbun, GoDaddy, and more)
-- **Enterprise-Ready** - Docker, Kubernetes, REST API, and monitoring built-in
+- **Docker & API** - Full containerization with Docker Compose and REST API with Swagger docs
 - **Simple Integration** - One-URL certificate downloads for easy automation
 - **Security-First** - Bearer token authentication, secure file permissions, audit logging
 - **Unified Backup System** - Atomic backups of settings and certificates ensuring data consistency
@@ -57,14 +57,12 @@ CertMate solves the complexity of SSL certificate management in modern distribut
 - **DigitalOcean** - Cloud infrastructure DNS (Multi-Account)
 - **PowerDNS** - Open-source DNS server with REST API (Multi-Account)
 
-### **Enterprise Features**
-- **Multi-Account Management** - Support multiple accounts per DNS provider for enterprise workflows
+### **Deployment & Integration**
+- **Multi-Account Management** - Support multiple accounts per DNS provider
 - **REST API** - Complete programmatic control with Swagger/OpenAPI docs
-- **Web Dashboard** - Modern, responsive UI built with Tailwind CSS
+- **Web Dashboard** - Responsive UI built with Tailwind CSS
 - **Docker Ready** - Full containerization with Docker Compose
-- **Kubernetes Compatible** - Deploy in any Kubernetes cluster
-- **High Availability** - Stateless design for horizontal scaling
-- **Monitoring Integration** - Health checks and structured logging
+- **Monitoring Integration** - Health checks, Prometheus metrics, and structured logging
 
 ### **Backup & Recovery**
 - **Unified Backups** - Atomic snapshots of both settings and certificates ensuring data consistency
@@ -95,10 +93,9 @@ CertMate solves the complexity of SSL certificate management in modern distribut
 ### **Developer Experience**
 - **One-URL Downloads** - Simple certificate retrieval for automation
 - **Multiple Output Formats** - PEM, ZIP, individual files
-- **SDK Examples** - Python, Bash, Ansible, Terraform examples
-- **Webhook Support** - Certificate renewal notifications
+- **Integration Examples** - Python, Bash, and Ansible examples in this README
 - **Backup API** - Programmatic backup creation and restoration
-- **Extensive Documentation** - API docs, guides, and examples
+- **API Documentation** - Swagger UI and ReDoc available at `/docs/` and `/redoc/`
 
 ## Supported DNS Providers
 
@@ -307,7 +304,7 @@ python app.py
 ```
 
 ### Kubernetes
-For container orchestration and high availability deployments.
+Basic example for deploying CertMate in Kubernetes. No official Helm chart is provided yet.
 
 ```yaml
 # Example Kubernetes deployment
@@ -524,7 +521,7 @@ If the service fails to start:
 2. **View logs**: `sudo journalctl -u certmate --lines=100`
 3. **Verify permissions**: Ensure the `certmate` user can read all necessary files
 4. **Test manually**: `sudo -u certmate /opt/certmate/venv/bin/python /opt/certmate/app.py`
-5. **Check dependencies**: `sudo -u certmate /opt/certmate/venv/bin/python validate_dependencies.py`
+5. **Check dependencies**: `sudo -u certmate /opt/certmate/venv/bin/pip check`
 
 For more detailed installation instructions, see the [Installation Guide](docs/installation.md).
 
@@ -553,7 +550,6 @@ GET /redoc/ # ReDoc documentation
 
 # Prometheus/OpenMetrics monitoring
 GET /metrics # Prometheus-compatible metrics
-GET /api/metrics # JSON metrics summary
 ```
 
 #### Settings Management
@@ -816,55 +812,7 @@ curl -H "Authorization: Bearer your_token_here" \
 ```python
 import requests
 import zipfile
-from pathlib import Path
-
-class CertMateClient:
- def __init__(self, base_url, token):
- self.base_url = base_url.rstrip('/')
- self.headers = {"Authorization": f"Bearer {token}"}
- 
- def download_certificate(self, domain, extract_to=None):
- """Download and optionally extract certificate for domain"""
- url = f"{self.base_url}/{domain}/tls"
- 
- response = requests.get(url, headers=self.headers)
- response.raise_for_status()
- 
- zip_path = f"{domain}-tls.zip"
- with open(zip_path, 'wb') as f:
- f.write(response.content)
- 
- if extract_to:
- Path(extract_to).mkdir(parents=True, exist_ok=True)
- with zipfile.ZipFile(zip_path, 'r') as zip_ref:
- zip_ref.extractall(extract_to)
- 
- return zip_path
- 
- def list_certificates(self):
- """List all managed certificates"""
- response = requests.get(f"{self.base_url}/api/certificates", 
- headers=self.headers)
- response.raise_for_status()
- return response.json()
- 
- def create_certificate(self, domain, dns_provider=None):
- """Create new certificate for domain"""
- data = {"domain": domain}
- if dns_provider:
- data["dns_provider"] = dns_provider
- 
- response = requests.post(f"{self.base_url}/api/certificates/create",
- json=data, headers=self.headers)
- response.raise_for_status()
- return response.json()
- 
- def renew_certificate(self, domain):
- """Renew existing certificate"""
- response = requests.post(f"{self.base_url}/api/certificates/{domain}/renew",
- headers=self.headers)
- response.raise_for_status()
- return response.json()
+import io
 
 class CertMateClient:
  def __init__(self, base_url, token):
@@ -944,62 +892,6 @@ client.download_certificate("api.company.com", extract_to="/etc/ssl/certs/api/")
 
 #### Infrastructure as Code Examples
 
-**Terraform Provider Example:**
-```hcl
-# Configure the CertMate provider
-terraform {
- required_providers {
- certmate = {
- source = "local/certmate"
- version = "~> 1.0"
- }
- }
-}
-
-provider "certmate" {
- endpoint = "https://certmate.company.com"
- token = var.certmate_token
-}
-
-# Create certificates for multiple domains with different accounts
-resource "certmate_certificate" "api" {
- domain = "api.company.com"
- dns_provider = "cloudflare"
- account_id = "production"
-}
-
-resource "certmate_certificate" "web" {
- domain = "web.company.com" 
- dns_provider = "route53"
- account_id = "main-aws"
-}
-
-resource "certmate_certificate" "staging" {
- domain = "staging.company.com"
- dns_provider = "cloudflare"
- account_id = "staging"
-}
-
-# Download certificates to local files
-data "certmate_certificate_download" "api" {
- domain = certmate_certificate.api.domain
-}
-
-# Use in nginx configuration
-resource "kubernetes_secret" "api_tls" {
- metadata {
- name = "api-tls"
- namespace = "default"
- }
- 
- type = "kubernetes.io/tls"
- 
- data = {
- "tls.crt" = data.certmate_certificate_download.api.fullchain_pem
- "tls.key" = data.certmate_certificate_download.api.private_key_pem
- }
-}
-```
 **Bash Automation Script:**
 ```bash
 #!/bin/bash
@@ -1550,107 +1442,6 @@ pip install -r requirements-infisical-storage.txt
 - Open-source preference
 - Self-hosted secret management
 - Multi-environment certificate management
-Integrate with AWS Secrets Manager for scalable secret storage:
-
-**Required Dependencies:**
-```bash
-pip install -r requirements-aws-storage.txt
-```
-
-**Configuration:**
-```json
-{
- "certificate_storage": {
- "backend": "aws_secrets_manager",
- "aws_secrets_manager": {
- "region": "us-east-1",
- "access_key_id": "AKIAIOSFODNN7EXAMPLE",
- "secret_access_key": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
- }
- }
-}
-```
-
-**Benefits:**
-- AWS-native secret management
-- Automatic encryption at rest
-- Cross-region replication
-- IAM-based access control
-
-#### HashiCorp Vault
-Use industry-standard HashiCorp Vault for advanced secret management:
-
-**Required Dependencies:**
-```bash
-pip install -r requirements-vault-storage.txt
-```
-
-**Configuration:**
-```json
-{
- "certificate_storage": {
- "backend": "hashicorp_vault",
- "hashicorp_vault": {
- "vault_url": "https://vault.example.com:8200",
- "vault_token": "hvs.xxxxxxxxxxxxxxxxxxxx",
- "mount_point": "secret",
- "engine_version": "v2"
- }
- }
-}
-```
-
-**Benefits:**
-- Industry-standard secret management
-- Secret versioning and rollback capabilities
-- Comprehensive audit logging and monitoring
-- Fine-grained access policies and dynamic secrets
-- Multi-cloud and hybrid cloud support
-- Advanced authentication methods (LDAP, Kubernetes, AWS IAM)
-
-**Use Cases:**
-- Multi-cloud environments
-- Complex organizational security requirements
-- Dynamic secret generation
-- Integration with CI/CD pipelines and Kubernetes
-
-#### 🟣 Infisical
-Modern open-source secret management with team collaboration:
-
-**Required Dependencies:**
-```bash
-pip install -r requirements-infisical-storage.txt
-```
-
-**Configuration:**
-```json
-{
- "certificate_storage": {
- "backend": "infisical",
- "infisical": {
- "site_url": "https://app.infisical.com",
- "client_id": "your_client_id",
- "client_secret": "your_client_secret",
- "project_id": "your_project_id",
- "environment": "prod"
- }
- }
-}
-```
-
-**Benefits:**
-- Open-source secret management with transparency
-- End-to-end encryption for maximum security
-- Team collaboration features and role-based access
-- Multi-environment support (dev, staging, prod)
-- Git-like versioning for secrets
-- Self-hostable for complete control
-
-**Use Cases:**
-- Team-based development workflows
-- Open-source preference
-- Self-hosted secret management
-- Multi-environment certificate management
 
 #### Quick Installation Guide
 
@@ -1758,17 +1549,6 @@ curl -X POST "http://localhost:8000/api/storage/migrate" \
 - Automatic verification of migrated certificates
 - Rollback capability if issues are detected
 - Preservation of certificate metadata and permissions
-curl -X POST "http://localhost:8000/api/storage/migrate" \
- -H "Authorization: Bearer your_token" \
- -H "Content-Type: application/json" \
- -d '{
- "source_backend": "local_filesystem",
- "target_config": {
- "backend": "azure_keyvault",
- "azure_keyvault": {...}
- }
- }'
-```
 
 **Backward Compatibility:**
 - Existing installations continue working without changes
@@ -1843,7 +1623,6 @@ services:
  certmate:
  image: certmate:latest
  deploy:
- replicas: 2
  resources:
  limits:
  cpus: '1.0'
@@ -1853,8 +1632,6 @@ services:
  memory: 256M
  environment:
  - FLASK_ENV=production
- - GUNICORN_WORKERS=4
- - GUNICORN_THREADS=2
  healthcheck:
  test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
  interval: 30s
@@ -1863,12 +1640,13 @@ services:
  start_period: 60s
 ```
 
+> **Note**: CertMate uses a single Gunicorn worker with multiple threads to avoid duplicate APScheduler jobs. For horizontal scaling, run multiple container instances behind a load balancer with a shared storage backend.
+
 #### Load Balancing with Nginx
 ```nginx
 upstream certmate_backend {
  server certmate1:8000;
  server certmate2:8000;
- server certmate3:8000;
 }
 
 server {
@@ -2072,91 +1850,6 @@ docker-compose up -d
 echo "Recovery completed from backup: $BACKUP_DATE"
 ```
 
-#### Recovery Procedures
-
-**Web Interface Recovery:**
-1. Navigate to Settings → Backup Management
-2. Select the backup to restore from
-3. Choose restore type (settings, certificates, or both)
-4. Confirm restoration
-5. Application will restart if settings are restored
-
-**API Recovery:**
-```bash
-# Restore settings from backup
-curl -X POST "http://localhost:8000/api/backup/restore/settings" \
- -H "Authorization: Bearer your_token" \
- -H "Content-Type: application/json" \
- -d '{"backup_id": "settings_20241225_120000"}'
-
-# Restore certificates from backup
-curl -X POST "http://localhost:8000/api/backup/restore/certificates" \
- -H "Authorization: Bearer your_token" \
- -H "Content-Type: application/json" \
- -d '{"backup_id": "certificates_20241225_120000"}'
-```
-
-**Manual Recovery from External Backup:**
-```bash
-#!/bin/bash
-# /opt/scripts/backup-certmate.sh
-
-BACKUP_DIR="/backup/certmate/$(date +%Y%m%d_%H%M%S)"
-CERT_DIR="/opt/certmate/certificates"
-DATA_DIR="/opt/certmate/data"
-RETENTION_DAYS=30
-
-# Create backup directory
-mkdir -p "$BACKUP_DIR"
-
-# Backup certificates
-tar -czf "$BACKUP_DIR/certificates.tar.gz" "$CERT_DIR"
-
-# Backup application data
-tar -czf "$BACKUP_DIR/data.tar.gz" "$DATA_DIR"
-
-# Backup database if using external DB
-# mysqldump certmate > "$BACKUP_DIR/database.sql"
-
-# Encrypt backups
-gpg --cipher-algo AES256 --compress-algo 1 --symmetric \
- --output "$BACKUP_DIR/certificates.tar.gz.gpg" \
- "$BACKUP_DIR/certificates.tar.gz"
-
-# Cleanup old backups
-find /backup/certmate -type d -mtime +$RETENTION_DAYS -exec rm -rf {} \;
-
-echo "Backup completed: $BACKUP_DIR"
-```
-
-#### Recovery Procedure
-```bash
-#!/bin/bash
-# Recovery from backup
-
-BACKUP_DATE="20241225_120000"
-BACKUP_DIR="/backup/certmate/$BACKUP_DATE"
-
-# Stop services
-docker-compose down
-
-# Restore certificates
-gpg --decrypt "$BACKUP_DIR/certificates.tar.gz.gpg" | \
- tar -xzf - -C /opt/certmate/
-
-# Restore data
-tar -xzf "$BACKUP_DIR/data.tar.gz" -C /opt/certmate/
-
-# Set permissions
-chown -R 1000:1000 /opt/certmate/certificates
-chmod -R 700 /opt/certmate/certificates
-
-# Start services
-docker-compose up -d
-
-echo "Recovery completed from backup: $BACKUP_DATE"
-```
-
 ## Monitoring & Observability
 
 ### Health Monitoring
@@ -2171,115 +1864,10 @@ curl -H "Authorization: Bearer your_token" \
  http://localhost:8000/api/certificates
 ```
 
-#### Prometheus Metrics Integration
-```python
-# Add to app.py for Prometheus monitoring
-from prometheus_client import Counter, Histogram, generate_latest
+#### Prometheus Metrics
+CertMate exposes a `/metrics` endpoint with Prometheus-compatible metrics out of the box.
 
-# Metrics
-certificate_requests = Counter('certmate_certificate_requests_total', 
- 'Total certificate requests', ['domain', 'status'])
-certificate_expiry = Histogram('certmate_certificate_expiry_days',
- 'Days until certificate expiry', ['domain'])
-
-@app.route('/metrics')
-def metrics():
- return generate_latest()
-```
-
-#### Log Aggregation
-```yaml
-# docker-compose.logging.yml
-version: '3.8'
-services:
- certmate:
- logging:
- driver: "fluentd"
- options:
- fluentd-address: localhost:24224
- tag: certmate
- fluentd-async-connect: "true"
- 
- fluentd:
- image: fluent/fluentd:v1.14
- volumes:
- - ./fluentd/conf:/fluentd/etc
- - ./logs:/var/log/fluentd
- ports:
- - "24224:24224"
- - "24224:24224/udp"
-```
-
-### Grafana Dashboard Example
-```json
-{
- "dashboard": {
- "title": "CertMate SSL Certificate Monitoring",
- "panels": [{
- "title": "Certificate Expiry Status",
- "targets": [{
- "expr": "certmate_certificate_expiry_days < 30",
- "legendFormat": "Expiring Soon ({{domain}})"
- }
- ],
- "alert": {
- "conditions": [{
- "query": {"queryType": "", "refId": "A"},
- "reducer": {"type": "last", "params": []},
- "evaluator": {"params": [30], "type": "lt"}
- }
- ],
- "executionErrorState": "alerting",
- "frequency": "1h",
- "handler": 1,
- "name": "Certificate Expiring",
- "noDataState": "no_data",
- "notifications": []
- }
- }
- ]
- }
-}
-```
-
-### Alerting Configuration
-
-#### Webhook Notifications
-```python
-# Add webhook notification support
-import requests
-
-def send_webhook_notification(domain, event_type, details):
- webhook_url = os.getenv('WEBHOOK_URL')
- if not webhook_url:
- return
- 
- payload = {
- 'domain': domain,
- 'event': event_type,
- 'timestamp': datetime.now().isoformat(),
- 'details': details
- }
- 
- try:
- requests.post(webhook_url, json=payload, timeout=10)
- except Exception as e:
- logger.error(f"Failed to send webhook: {e}")
-```
-
-#### Slack Integration Example
-```bash
-# Slack notification script
-#!/bin/bash
-SLACK_WEBHOOK="your_slack_webhook_url"
-DOMAIN="$1"
-STATUS="$2"
-MESSAGE="Certificate for $DOMAIN: $STATUS"
-
-curl -X POST -H 'Content-type: application/json' \
- --data "{\"text\":\" $MESSAGE\"}" \
- "$SLACK_WEBHOOK"
-```
+CertMate also supports structured JSON logging (enable with `LOG_FORMAT=json`) for integration with log aggregation systems like ELK or Splunk.
 
 ## Troubleshooting Guide
 
@@ -2481,15 +2069,6 @@ echo "Settings: $(docker exec certmate cat /app/data/settings.json | jq .)"
 - **Docker Hub**: https://hub.docker.com/r/certmate/certmate
 - **Issue Tracker**: https://github.com/fabriziosalmi/certmate/issues
 
-### Examples Repository
-
-Check out our examples repository for:
-- Production deployment configurations
-- Integration scripts for popular tools
-- Terraform modules
-- Kubernetes manifests
-- CI/CD pipeline examples
-
 ### Community Contributions
 
 We welcome contributions! Areas where we need help:
@@ -2520,7 +2099,7 @@ cd certmate
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-pip install -r requirements-dev.txt
+pip install -r requirements-test.txt
 
 # Set up pre-commit hooks
 pre-commit install

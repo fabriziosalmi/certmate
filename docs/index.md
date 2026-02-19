@@ -3,9 +3,7 @@
 <div align="center">
 
 ![CertMate](https://img.shields.io/badge/CertMate-Client%20Certificates-blue?style=for-the-badge)
-![Status](https://img.shields.io/badge/Status-Production%20Ready-green?style=for-the-badge)
 ![Tests](https://img.shields.io/badge/Tests-27%2F27%20Passing-brightgreen?style=for-the-badge)
-![Coverage](https://img.shields.io/badge/Coverage-100%25-brightgreen?style=for-the-badge)
 
 **Complete Client Certificate Management for CertMate**
 
@@ -17,7 +15,7 @@
 
 ## Overview
 
-CertMate Client Certificates is a comprehensive, production-ready solution for managing client certificates with:
+CertMate Client Certificates provides client certificate management with:
 
 - **Self-Signed CA** - Generate and manage your own Certificate Authority
 - **Full Lifecycle Management** - Create, renew, revoke, and monitor client certificates
@@ -41,7 +39,7 @@ CertMate Client Certificates is a comprehensive, production-ready solution for m
 - **Complete Lifecycle**: Create, list, filter, revoke, and renew certificates
 - **Multi-Filter Queries**: Search by usage type, revocation status, common name
 - **Auto-Renewal**: Scheduled daily renewal checks for expiring certificates
-- **Support for 30k+ Certificates**: Directory-based storage for linear scalability
+- **Scalable Storage**: Directory-based storage for linear scalability
 - **Metadata Management**: Track CN, email, organization, usage, expiration dates
 
 ### Phase 3: UI & Advanced Features 
@@ -70,18 +68,18 @@ pip install -r requirements.txt
 python app.py
 ```
 
-The server will start on `http://localhost:5000`
+The server will start on `http://localhost:8000`
 
 ### Basic Usage
 
 #### 1. Access Web Dashboard
 ```
-Navigate to: http://localhost:5000/client-certificates
+Navigate to: http://localhost:8000/client-certificates
 ```
 
 #### 2. Create a Certificate via API
 ```bash
-curl -X POST http://localhost:5000/api/client-certs/create \
+curl -X POST http://localhost:8000/api/client-certs/create \
  -H "Authorization: Bearer YOUR_TOKEN" \
  -H "Content-Type: application/json" \
  -d '{
@@ -96,19 +94,19 @@ curl -X POST http://localhost:5000/api/client-certs/create \
 
 #### 3. List Certificates
 ```bash
-curl http://localhost:5000/api/client-certs \
+curl http://localhost:8000/api/client-certs \
  -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
 #### 4. Download Certificate Files
 ```bash
 # Download certificate
-curl http://localhost:5000/api/client-certs/USER_ID/download/crt \
+curl http://localhost:8000/api/client-certs/USER_ID/download/crt \
  -H "Authorization: Bearer YOUR_TOKEN" \
  -o user.crt
 
 # Download private key
-curl http://localhost:5000/api/client-certs/USER_ID/download/key \
+curl http://localhost:8000/api/client-certs/USER_ID/download/key \
  -H "Authorization: Bearer YOUR_TOKEN" \
  -o user.key
 ```
@@ -225,7 +223,7 @@ See [Architecture Documentation](./architecture.md) for detailed information.
 ## Performance
 
 The implementation is optimized for:
-- **Scalability**: Directory-based storage supports 30k+ concurrent certificates
+- **Scalability**: Directory-based storage designed for large certificate volumes
 - **Speed**: Efficient multi-filter queries
 - **Reliability**: Automatic renewal scheduling
 - **Responsiveness**: Async JavaScript in web UI
@@ -251,7 +249,6 @@ See LICENSE file in the repository
 ## Version
 
 **Current Version**: 1.0.0
-**Status**: Production Ready
 **Last Updated**: 2024-10-30
 
 ---
@@ -260,6 +257,6 @@ See LICENSE file in the repository
 
 Made with for CertMate
 
-[Documentation](.) • [Privacy](./privacy.md) • [License](../LICENSE)
+[Documentation](.) • [License](../LICENSE)
 
 </div>

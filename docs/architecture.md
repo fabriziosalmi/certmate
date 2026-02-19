@@ -388,7 +388,7 @@ save_csr_and_key() # Save CSR and key to files
 - Renew certificates (same CN, new serial)
 - Auto-renewal scheduling
 - Metadata storage (JSON per certificate)
-- Support for 30k+ concurrent certificates
+- Directory-based storage designed for large certificate volumes
 
 **Storage Structure**:
 ```
@@ -711,14 +711,14 @@ Each certificate has a `metadata.json` file containing:
 ### Certificate Storage
 
 - **Linear Scalability**: Directory-based storage
-- **Capacity**: Tested with 30k+ certificates
+- **Capacity**: Designed for large volumes (directory-based storage)
 - **Performance**: Efficient O(n) directory scans
 
 ### API Performance
 
 - **Rate Limiting**: Prevents resource exhaustion
 - **Stateless Design**: Can run multiple instances
-- **Batch Operations**: Handles 100-30k certs per request
+- **Batch Operations**: Handles large CSV imports per request
 
 ### Auto-Renewal
 

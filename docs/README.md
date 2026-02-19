@@ -119,7 +119,7 @@ Test coverage includes:
 
 ## Performance
 
-- Supports **30k+ concurrent certificates**
+- Directory-based storage designed for large certificate volumes
 - Efficient **multi-filter queries**
 - **Auto-renewal** scheduling
 - **Batch operations** with error tracking
@@ -166,9 +166,9 @@ docs/
 
 ## Important Links
 
-- **Web Dashboard**: `http://localhost:5000/client-certificates`
-- **API Docs**: `http://localhost:5000/docs/`
-- **Health Check**: `http://localhost:5000/health`
+- **Web Dashboard**: `http://localhost:8000/client-certificates`
+- **API Docs**: `http://localhost:8000/docs/`
+- **Health Check**: `http://localhost:8000/health`
 - **Audit Logs**: `logs/audit/certificate_audit.log`
 
 ---
@@ -193,7 +193,7 @@ docs/
 ### Create a Certificate via API
 
 ```bash
-curl -X POST http://localhost:5000/api/client-certs/create \
+curl -X POST http://localhost:8000/api/client-certs/create \
  -H "Authorization: Bearer YOUR_TOKEN" \
  -H "Content-Type: application/json" \
  -d '{
@@ -207,14 +207,14 @@ curl -X POST http://localhost:5000/api/client-certs/create \
 ### List Certificates
 
 ```bash
-curl http://localhost:5000/api/client-certs \
+curl http://localhost:8000/api/client-certs \
  -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
 ### Download Certificate
 
 ```bash
-curl http://localhost:5000/api/client-certs/USER_ID/download/crt \
+curl http://localhost:8000/api/client-certs/USER_ID/download/crt \
  -H "Authorization: Bearer YOUR_TOKEN" \
  -o certificate.crt
 ```

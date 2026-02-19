@@ -244,10 +244,9 @@ ls -la data/ certificates/ letsencrypt/
 
 - **GitHub Repository**: https://github.com/fabriziosalmi/certmate
 - **Full README**: https://github.com/fabriziosalmi/certmate/blob/main/README.md
-- **Installation Guide**: https://github.com/fabriziosalmi/certmate/blob/main/INSTALLATION.md
-- **DNS Providers**: https://github.com/fabriziosalmi/certmate/blob/main/DNS_PROVIDERS.md
-- **CA Providers**: https://github.com/fabriziosalmi/certmate/blob/main/CA_PROVIDERS.md
-- **Multi-Account Setup**: https://github.com/fabriziosalmi/certmate/blob/main/MULTI_ACCOUNT_EXAMPLES.md
+- **Installation Guide**: https://github.com/fabriziosalmi/certmate/blob/main/docs/installation.md
+- **DNS Providers**: https://github.com/fabriziosalmi/certmate/blob/main/docs/dns-providers.md
+- **CA Providers**: https://github.com/fabriziosalmi/certmate/blob/main/docs/ca-providers.md
 - **API Documentation**: http://localhost:8000/docs/
 
 ## Contributing
