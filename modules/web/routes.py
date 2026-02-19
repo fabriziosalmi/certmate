@@ -147,6 +147,19 @@ def register_web_routes(app, managers):
         """Serve Apple touch icon"""
         return send_from_directory(app.static_folder or '.', 'apple-touch-icon.png')
 
+    @app.route('/redoc/')
+    @app.route('/redoc')
+    def redoc():
+        """Serve ReDoc API documentation UI"""
+        return '''<!DOCTYPE html>
+<html><head><title>CertMate API - ReDoc</title>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1">
+<link href="https://fonts.googleapis.com/css?family=Montserrat:300,400,700|Roboto:300,400,700" rel="stylesheet">
+<style>body{margin:0;padding:0;}</style></head>
+<body><redoc spec-url="/api/swagger.json"></redoc>
+<script src="https://cdn.redoc.ly/redoc/latest/bundles/redoc.standalone.js"></script>
+</body></html>''', 200, {'Content-Type': 'text/html'}
+
     # Main web interface routes
     @app.route('/')
     @require_web_auth
@@ -482,26 +495,78 @@ def register_web_routes(app, managers):
     @app.route('/<string:domain>/tls')
     @auth_manager.require_auth
     def download_tls(domain):
-        """Simple TLS certificate download endpoint for automation"""
+        """Download all TLS certificate files as a ZIP archive for automation"""
         try:
-            cert_dir, err = _sanitize_domain(domain, file_ops.cert_dir)
+            cert_path, err = _sanitize_domain(domain, file_ops.cert_dir)
             if err:
                 return jsonify({'error': err}), 400
-            fullchain_path = cert_dir / "fullchain.pem"
 
-            if not fullchain_path.exists():
+            # Verify at least one certificate file exists
+            existing_files = [f for f in CERTIFICATE_FILES if (cert_path / f).exists()]
+            if not existing_files:
                 return jsonify({'error': f'Certificate not found for domain: {domain}'}), 404
-            
+
+            # Build ZIP file with all certificate components
+            import tempfile
+            tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.zip')
+            tmp_path = tmp.name
+            tmp.close()
+
+            with zipfile.ZipFile(tmp_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                for cert_file in CERTIFICATE_FILES:
+                    file_path = cert_path / cert_file
+                    if file_path.exists():
+                        zipf.write(file_path, cert_file)
+
             return send_file(
-                fullchain_path,
+                tmp_path,
                 as_attachment=True,
-                download_name=f'{domain}_fullchain.pem',
-                mimetype='application/x-pem-file'
+                download_name=f'{domain}_certificates.zip',
+                mimetype='application/zip'
             )
-            
+
         except Exception as e:
             logger.error(f"Error downloading TLS certificate for {domain}: {e}")
             return jsonify({'error': 'Failed to download certificate'}), 500
+
+    @app.route('/<string:domain>/tls/<string:component>')
+    @auth_manager.require_auth
+    def download_tls_component(domain, component):
+        """Download individual TLS certificate component (cert, key, chain, fullchain)"""
+        try:
+            # Map component names to filenames
+            component_map = {
+                'cert': 'cert.pem',
+                'key': 'privkey.pem',
+                'chain': 'chain.pem',
+                'fullchain': 'fullchain.pem',
+            }
+
+            filename = component_map.get(component)
+            if not filename:
+                return jsonify({
+                    'error': f'Unknown certificate component: {component}',
+                    'valid_components': list(component_map.keys())
+                }), 400
+
+            cert_path, err = _sanitize_domain(domain, file_ops.cert_dir)
+            if err:
+                return jsonify({'error': err}), 400
+
+            file_path = cert_path / filename
+            if not file_path.exists():
+                return jsonify({'error': f'{component} not found for domain: {domain}'}), 404
+
+            return send_file(
+                file_path,
+                as_attachment=True,
+                download_name=f'{domain}_{filename}',
+                mimetype='application/x-pem-file'
+            )
+
+        except Exception as e:
+            logger.error(f"Error downloading TLS {component} for {domain}: {e}")
+            return jsonify({'error': f'Failed to download {component}'}), 500
 
     # Web-specific settings endpoints (no auth required for initial setup)
     @app.route('/api/web/settings', methods=['GET', 'POST'])

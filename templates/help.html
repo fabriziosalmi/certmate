@@ -490,8 +490,12 @@
                                         <code class="text-xs text-gray-600 dark:text-gray-300">POST /api/certificates/{domain}/renew</code>
                                     </div>
                                     <div>
-                                        <div class="text-sm font-medium text-gray-900 dark:text-white">Download Certificate</div>
+                                        <div class="text-sm font-medium text-gray-900 dark:text-white">Download Certificate (ZIP)</div>
                                         <code class="text-xs text-gray-600 dark:text-gray-300">GET /{domain}/tls</code>
+                                    </div>
+                                    <div>
+                                        <div class="text-sm font-medium text-gray-900 dark:text-white">Download Individual Component</div>
+                                        <code class="text-xs text-gray-600 dark:text-gray-300">GET /{domain}/tls/{cert|key|chain|fullchain}</code>
                                     </div>
                                 </div>
                             </div>
@@ -507,10 +511,15 @@
                                     <div class="ml-2">-H "Authorization: Bearer YOUR_TOKEN" \</div>
                                     <div class="ml-2">-H "Content-Type: application/json" \</div>
                                     <div class="ml-2">-d '{"domain": "example.com"}'</div>
-                                    <div class="mt-3"># Download certificate</div>
+                                    <div class="mt-3"># Download certificate (ZIP with all files)</div>
                                     <div>curl -H "Authorization: Bearer YOUR_TOKEN" \</div>
-                                    <div class="ml-2">-o example.com.zip \</div>
+                                    <div class="ml-2">-o example.com_certificates.zip \</div>
                                     <div class="ml-2">http://localhost:8000/example.com/tls</div>
+                                    <div class="mt-3"># Download individual components</div>
+                                    <div>curl -H "Authorization: Bearer YOUR_TOKEN" -o cert.pem http://localhost:8000/example.com/tls/cert</div>
+                                    <div>curl -H "Authorization: Bearer YOUR_TOKEN" -o privkey.pem http://localhost:8000/example.com/tls/key</div>
+                                    <div>curl -H "Authorization: Bearer YOUR_TOKEN" -o chain.pem http://localhost:8000/example.com/tls/chain</div>
+                                    <div>curl -H "Authorization: Bearer YOUR_TOKEN" -o fullchain.pem http://localhost:8000/example.com/tls/fullchain</div>
                                 </div>
                             </div>
                         </div>
