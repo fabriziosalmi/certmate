@@ -75,6 +75,21 @@ def register_web_routes(app, managers):
         """Serve favicon"""
         return send_from_directory(app.static_folder or '.', 'favicon.ico')
 
+    @app.route('/certmate_logo.png')
+    def logo():
+        """Serve logo"""
+        return send_from_directory(app.static_folder or '.', 'certmate_logo.png')
+
+    @app.route('/certmate_logo_256.png')
+    def logo_256():
+        """Serve logo (256px)"""
+        return send_from_directory(app.static_folder or '.', 'certmate_logo_256.png')
+
+    @app.route('/apple-touch-icon.png')
+    def apple_touch_icon():
+        """Serve Apple touch icon"""
+        return send_from_directory(app.static_folder or '.', 'apple-touch-icon.png')
+
     # Main web interface routes
     @app.route('/')
     def index():

@@ -2,6 +2,8 @@
 
 <div align="center">
 
+<img src="certmate_logo.png" alt="CertMate Logo" width="180">
+
 **CertMate** is a powerful SSL certificate management system designed for modern infrastructure. Built with multi-DNS provider support, Docker containerization, and comprehensive REST API, it's the perfect solution for managing certificates across multiple datacenters and cloud environments.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
