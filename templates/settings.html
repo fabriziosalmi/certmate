@@ -2290,8 +2290,21 @@
                             };
                             
                             if (config && typeof config === 'object') {
-                                // Check if this is multi-account format
-                                if (Object.values(config).some(val => typeof val === 'object' && 'name' in val)) {
+                                // Check for canonical multi-account format: { accounts: { id: {...}, ... } }
+                                if (config.accounts && typeof config.accounts === 'object') {
+                                    for (const [accountId, accountConfig] of Object.entries(config.accounts)) {
+                                        if (typeof accountConfig === 'object') {
+                                            dnsProviders[provider].accounts.push({
+                                                id: accountId,
+                                                name: accountConfig.name || accountId,
+                                                description: accountConfig.description || '',
+                                                ...accountConfig
+                                            });
+                                        }
+                                    }
+                                    dnsProviders[provider].configured = dnsProviders[provider].accounts.length > 0;
+                                // Check if this is flat multi-account format (values with 'name')
+                                } else if (Object.values(config).some(val => typeof val === 'object' && 'name' in val)) {
                                     // Multi-account format
                                     for (const [accountId, accountConfig] of Object.entries(config)) {
                                         if (typeof accountConfig === 'object' && accountConfig.name) {
