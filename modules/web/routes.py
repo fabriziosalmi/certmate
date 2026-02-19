@@ -4,14 +4,18 @@ Handles web interface routes and form-based endpoints
 """
 
 import logging
+import os
+import re
 import tempfile
 import zipfile
-import threading
+import concurrent.futures
 from datetime import datetime
+from functools import wraps
 from pathlib import Path
 from collections import defaultdict
 from time import time
-from flask import render_template, request, jsonify, send_file, send_from_directory
+from flask import (render_template, request, jsonify, send_file,
+                   send_from_directory, redirect, url_for, after_this_request)
 
 from ..core.metrics import generate_metrics_response
 
@@ -53,6 +57,42 @@ def _record_login_attempt(ip_address):
 # Import certificate files constant
 from ..core.constants import CERTIFICATE_FILES
 
+# Thread pool for background certificate operations (max 4 concurrent)
+_cert_executor = concurrent.futures.ThreadPoolExecutor(max_workers=4, thread_name_prefix='certmate-cert')
+
+# Domain name validation pattern
+_DOMAIN_RE = re.compile(r'^(\*\.)?([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$')
+
+
+def _is_localhost(addr):
+    """Check if address is localhost (IPv4/IPv6 loopback only)"""
+    if not addr:
+        return False
+    # Only accept true loopback addresses — not entire private ranges
+    return addr in ('127.0.0.1', '::1', '::ffff:127.0.0.1')
+
+
+def _sanitize_domain(domain, cert_base_dir):
+    """Validate domain name and prevent path traversal.
+
+    Returns:
+        tuple: (safe_path, error_message) - safe_path is None if invalid
+    """
+    if not domain or '..' in domain or '/' in domain or '\\' in domain or '\x00' in domain:
+        return None, 'Invalid domain name'
+    if not _DOMAIN_RE.match(domain):
+        return None, 'Invalid domain format'
+    cert_dir = Path(cert_base_dir) / domain
+    # Verify resolved path is within cert_base_dir
+    try:
+        resolved = cert_dir.resolve()
+        base_resolved = Path(cert_base_dir).resolve()
+        if not str(resolved).startswith(str(base_resolved) + os.sep) and resolved != base_resolved:
+            return None, 'Invalid domain path'
+    except (OSError, ValueError):
+        return None, 'Invalid domain path'
+    return cert_dir, None
+
 
 def register_web_routes(app, managers):
     """Register all web interface routes
@@ -68,7 +108,24 @@ def register_web_routes(app, managers):
     file_ops = managers['file_ops']
     cache_manager = managers['cache']
     dns_manager = managers['dns']
-    
+
+    def require_web_auth(f):
+        """Decorator for web pages: redirect to /login if not authenticated"""
+        @wraps(f)
+        def decorated(*args, **kwargs):
+            # Skip auth if local auth is not enabled or no users exist
+            if not auth_manager.is_local_auth_enabled() or not auth_manager.has_any_users():
+                return f(*args, **kwargs)
+            # Check session cookie
+            session_id = request.cookies.get('certmate_session')
+            if session_id:
+                user_info = auth_manager.validate_session(session_id)
+                if user_info:
+                    request.current_user = user_info
+                    return f(*args, **kwargs)
+            return redirect(url_for('login_page'))
+        return decorated
+
     # Static file routes
     @app.route('/favicon.ico')
     def favicon():
@@ -92,24 +149,25 @@ def register_web_routes(app, managers):
 
     # Main web interface routes
     @app.route('/')
+    @require_web_auth
     def index():
         """Main dashboard page"""
         try:
             settings = settings_manager.load_settings()
             certificates = []
-            
+
             # Get all domains from settings
             domains_from_settings = settings.get('domains', [])
-            
+
             # Also check for certificates that exist on disk but might not be in settings
             cert_dirs = []
             cert_dir = certificate_manager.cert_dir
             if cert_dir.exists():
                 cert_dirs = [d for d in cert_dir.iterdir() if d.is_dir()]
-            
+
             # Create a set of all domains to check (from settings and disk)
             all_domains = set()
-            
+
             # Add domains from settings
             for domain_config in domains_from_settings:
                 if isinstance(domain_config, str):
@@ -120,34 +178,28 @@ def register_web_routes(app, managers):
                     continue
                 if domain_name:
                     all_domains.add(domain_name)
-            
+
             # Add domains from disk (for backward compatibility with existing certificates)
             for cert_dir_path in cert_dirs:
                 all_domains.add(cert_dir_path.name)
-            
+
             # Get certificate info for all domains
             for domain_name in all_domains:
                 if domain_name:
                     cert_info = certificate_manager.get_certificate_info(domain_name)
                     if cert_info:
                         certificates.append(cert_info)
-            
-            api_token = settings.get('api_bearer_token', '')
-            return render_template('index.html', certificates=certificates, api_token=api_token)
+
+            return render_template('index.html', certificates=certificates)
         except Exception as e:
             logger.error(f"Failed to load settings for index page: {e}")
-            return render_template('index.html', certificates=[], api_token='')
+            return render_template('index.html', certificates=[])
 
     @app.route('/settings')
+    @require_web_auth
     def settings_page():
         """Settings configuration page"""
-        try:
-            settings = settings_manager.load_settings()
-            api_token = settings.get('api_bearer_token', '')
-            return render_template('settings.html', api_token=api_token)
-        except Exception as e:
-            logger.error(f"Failed to load settings for settings page: {e}")
-            return render_template('settings.html', api_token='')
+        return render_template('settings.html')
 
     @app.route('/help')
     def help_page():
@@ -155,15 +207,10 @@ def register_web_routes(app, managers):
         return render_template('help.html')
 
     @app.route('/client-certificates')
+    @require_web_auth
     def client_certificates_page():
         """Client certificates management page"""
-        try:
-            settings = settings_manager.load_settings()
-            api_token = settings.get('api_bearer_token', '')
-            return render_template('client-certificates.html', api_token=api_token)
-        except Exception as e:
-            logger.error(f"Failed to load settings for client certificates page: {e}")
-            return render_template('client-certificates.html', api_token='')
+        return render_template('client-certificates.html')
 
     # Health check for Docker
     @app.route('/health')
@@ -173,15 +220,15 @@ def register_web_routes(app, managers):
             settings = settings_manager.load_settings()
             return jsonify({
                 'status': 'healthy',
-                'version': '1.2.1',
                 'timestamp': str(datetime.now())
             })
         except Exception as e:
             logger.error(f"Health check failed: {e}")
-            return jsonify({'status': 'unhealthy', 'error': str(e)}), 500
+            return jsonify({'status': 'unhealthy'}), 500
 
-    # Prometheus metrics endpoint
+    # Prometheus metrics endpoint (requires auth to prevent info disclosure)
     @app.route('/metrics')
+    @auth_manager.require_auth
     def metrics():
         """Prometheus metrics endpoint"""
         try:
@@ -197,7 +244,7 @@ def register_web_routes(app, managers):
         # Check if local auth is enabled and has users
         if not auth_manager.is_local_auth_enabled() or not auth_manager.has_any_users():
             # Redirect to main page if local auth not set up
-            return render_template('index.html', api_token='')
+            return redirect(url_for('index'))
         return render_template('login.html')
     
     @app.route('/api/auth/login', methods=['POST'])
@@ -253,7 +300,8 @@ def register_web_routes(app, managers):
                 httponly=True,
                 secure=request.is_secure,  # Auto-enable on HTTPS
                 samesite='Strict',
-                max_age=24 * 60 * 60  # 24 hours
+                path='/',
+                max_age=8 * 60 * 60  # 8 hours
             )
             
             return response
@@ -271,7 +319,13 @@ def register_web_routes(app, managers):
                 auth_manager.invalidate_session(session_id)
             
             response = jsonify({'message': 'Logged out successfully'})
-            response.delete_cookie('certmate_session')
+            response.delete_cookie(
+                'certmate_session',
+                path='/',
+                secure=request.is_secure,
+                httponly=True,
+                samesite='Strict'
+            )
             return response
         except Exception as e:
             logger.error(f"Logout error: {e}")
@@ -292,9 +346,21 @@ def register_web_routes(app, managers):
             logger.error(f"Get current user error: {e}")
             return jsonify({'error': 'Failed to get user info'}), 500
     
+    @app.route('/api/auth/token', methods=['GET'])
+    @auth_manager.require_auth
+    def api_get_token():
+        """Get API bearer token (for settings page reveal button)"""
+        try:
+            settings = settings_manager.load_settings()
+            token = settings.get('api_bearer_token', '')
+            return jsonify({'token': token})
+        except Exception as e:
+            logger.error(f"Get token error: {e}")
+            return jsonify({'error': 'Failed to get token'}), 500
+
     # User management endpoints (admin only)
     @app.route('/api/users', methods=['GET', 'POST'])
-    @auth_manager.require_auth
+    @auth_manager.require_admin
     def api_users():
         """List or create users"""
         if request.method == 'GET':
@@ -330,7 +396,7 @@ def register_web_routes(app, managers):
                 return jsonify({'error': 'Failed to create user'}), 500
     
     @app.route('/api/users/<string:username>', methods=['GET', 'PUT', 'DELETE'])
-    @auth_manager.require_auth
+    @auth_manager.require_admin
     def api_user(username):
         """Get, update, or delete a specific user"""
         if request.method == 'GET':
@@ -415,9 +481,11 @@ def register_web_routes(app, managers):
     def download_tls(domain):
         """Simple TLS certificate download endpoint for automation"""
         try:
-            cert_dir = Path(file_ops.cert_dir) / domain
+            cert_dir, err = _sanitize_domain(domain, file_ops.cert_dir)
+            if err:
+                return jsonify({'error': err}), 400
             fullchain_path = cert_dir / "fullchain.pem"
-            
+
             if not fullchain_path.exists():
                 return jsonify({'error': f'Certificate not found for domain: {domain}'}), 404
             
@@ -462,11 +530,10 @@ def register_web_routes(app, managers):
                 if not auth_manager.validate_api_token(token):
                     return jsonify({'error': 'Invalid token'}), 401
                 
-                # Return full settings (with sensitive data masked)
+                # Return full settings (with sensitive data fully masked)
                 safe_settings = dict(settings)
                 if 'api_bearer_token' in safe_settings:
-                    token = safe_settings['api_bearer_token']
-                    safe_settings['api_bearer_token'] = f"{token[:4]}...{token[-4:]}" if len(token) > 8 else "***"
+                    safe_settings['api_bearer_token'] = '********'
                 
                 return jsonify(safe_settings)
                 
@@ -480,19 +547,31 @@ def register_web_routes(app, managers):
                 if not new_settings:
                     return jsonify({'error': 'No settings provided'}), 400
                 
-                # For initial setup, no auth required
                 current_settings = settings_manager.load_settings()
                 setup_completed = current_settings.get('setup_completed', False)
-                
+
                 if setup_completed:
                     # Require auth for updates after setup
                     auth_header = request.headers.get('Authorization', '')
                     if not auth_header.startswith('Bearer '):
-                        return jsonify({'error': 'Authentication required'}), 401
-                    
-                    token = auth_header[7:]
-                    if not auth_manager.validate_api_token(token):
-                        return jsonify({'error': 'Invalid token'}), 401
+                        # Also accept session cookie auth
+                        session_id = request.cookies.get('certmate_session')
+                        if not session_id or not auth_manager.validate_session(session_id):
+                            return jsonify({'error': 'Authentication required'}), 401
+                    else:
+                        token = auth_header[7:]
+                        if not auth_manager.validate_api_token(token):
+                            return jsonify({'error': 'Invalid token'}), 401
+                else:
+                    # Initial setup: only allow from localhost or with valid token
+                    client_ip = request.remote_addr or ''
+                    auth_header = request.headers.get('Authorization', '')
+                    has_valid_token = False
+                    if auth_header.startswith('Bearer '):
+                        has_valid_token = auth_manager.validate_api_token(auth_header[7:])
+                    if not _is_localhost(client_ip) and not has_valid_token:
+                        logger.warning(f"Setup attempt from non-local IP: {client_ip}")
+                        return jsonify({'error': 'Initial setup only allowed from localhost'}), 403
                 
                 # Merge with existing settings
                 merged_settings = {**current_settings, **new_settings}
@@ -551,6 +630,11 @@ def register_web_routes(app, managers):
     @auth_manager.require_auth
     def web_dns_provider_account(provider, account_id):
         """Manage specific DNS provider account"""
+        # Validate account_id to prevent path traversal
+        if '..' in account_id or '/' in account_id or '\\' in account_id or '\x00' in account_id:
+            return jsonify({'error': 'Invalid account ID'}), 400
+        if '..' in provider or '/' in provider or '\\' in provider or '\x00' in provider:
+            return jsonify({'error': 'Invalid provider'}), 400
         if request.method == 'GET':
             try:
                 config, _ = dns_manager.get_dns_provider_account_config(provider, account_id)
@@ -736,11 +820,11 @@ def register_web_routes(app, managers):
                             'hint': f'Select an account or configure a default account in Settings for {dns_provider}.'
                         }), 400
             
-            # All validations passed, create certificate in background
+            # All validations passed, create certificate in background (bounded pool)
             def create_cert_async():
                 try:
                     certificate_manager.create_certificate(
-                        domain, email, dns_provider, 
+                        domain, email, dns_provider,
                         account_id=account_id,
                         san_domains=san_domains if san_domains else None
                     )
@@ -748,9 +832,8 @@ def register_web_routes(app, managers):
                     logger.info(f"Background certificate creation completed for {domains_info}")
                 except Exception as e:
                     logger.error(f"Background certificate creation failed for {domain}: {e}")
-            
-            thread = threading.Thread(target=create_cert_async)
-            thread.start()
+
+            _cert_executor.submit(create_cert_async)
             
             # Build response message
             if san_domains:
@@ -769,27 +852,38 @@ def register_web_routes(app, managers):
             
         except Exception as e:
             logger.error(f"Certificate creation failed via web: {str(e)}")
-            return jsonify({'error': f'Certificate creation failed: {str(e)}'}), 500
+            return jsonify({'error': 'Certificate creation failed'}), 500
 
     @app.route('/api/web/certificates/<string:domain>/download')
     @auth_manager.require_auth
     def web_download_certificate(domain):
         """Web interface endpoint to download certificate as ZIP file"""
         try:
-            cert_dir = Path(file_ops.cert_dir) / domain
+            cert_dir, err = _sanitize_domain(domain, file_ops.cert_dir)
+            if err:
+                return jsonify({'error': err}), 400
             if not cert_dir.exists():
                 return jsonify({'error': f'Certificate not found for domain: {domain}'}), 404
-            
+
             # Create temporary ZIP file
             with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as tmp_file:
-                with zipfile.ZipFile(tmp_file.name, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                tmp_path = tmp_file.name
+                with zipfile.ZipFile(tmp_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
                     for cert_file in CERTIFICATE_FILES:
                         file_path = cert_dir / cert_file
                         if file_path.exists():
                             zipf.write(file_path, cert_file)
-                
+
+                @after_this_request
+                def remove_file(response):
+                    try:
+                        os.remove(tmp_path)
+                    except Exception:
+                        pass
+                    return response
+
                 return send_file(
-                    tmp_file.name,
+                    tmp_path,
                     as_attachment=True,
                     download_name=f'{domain}_certificates.zip',
                     mimetype='application/zip'
@@ -827,14 +921,13 @@ def register_web_routes(app, managers):
                 except Exception as e:
                     logger.error(f"Background certificate renewal failed for {domain}: {e}")
             
-            thread = threading.Thread(target=renew_cert_async)
-            thread.start()
+            _cert_executor.submit(renew_cert_async)
             
             return jsonify({'success': True, 'message': f'Certificate renewal started for {domain}'})
             
         except Exception as e:
             logger.error(f"Certificate renewal failed via web: {str(e)}")
-            return jsonify({'error': f'Certificate renewal failed: {str(e)}'}), 500
+            return jsonify({'error': 'Certificate renewal failed'}), 500
 
     # Backup management endpoints
     @app.route('/api/web/backups')
@@ -885,13 +978,19 @@ def register_web_routes(app, managers):
         try:
             if backup_type != 'unified':
                 return jsonify({'error': 'Only unified backup download is supported'}), 400
-            
+
+            # Validate filename — reject path traversal attempts
+            if '..' in filename or '/' in filename or '\\' in filename or '\x00' in filename:
+                return jsonify({'error': 'Invalid filename'}), 400
+            if not filename.endswith('.zip'):
+                return jsonify({'error': 'Invalid backup file format'}), 400
+
             backup_path = Path(file_ops.backup_dir) / backup_type / filename
-            
+
             if not backup_path.exists():
                 return jsonify({'error': 'Backup file not found'}), 404
-            
-            # Security check
+
+            # Security check — resolved path must stay within backup_dir
             if not str(backup_path.resolve()).startswith(str(Path(file_ops.backup_dir).resolve())):
                 return jsonify({'error': 'Access denied'}), 403
             
@@ -908,6 +1007,7 @@ def register_web_routes(app, managers):
 
     # Cache management endpoints
     @app.route('/api/web/cache/stats')
+    @auth_manager.require_auth
     def web_cache_stats():
         """Web interface endpoint to get cache statistics"""
         try:
@@ -918,6 +1018,7 @@ def register_web_routes(app, managers):
             return jsonify({'error': 'Failed to get cache statistics'}), 500
 
     @app.route('/api/web/cache/clear', methods=['POST'])
+    @auth_manager.require_auth
     def web_cache_clear():
         """Web interface endpoint to clear cache"""
         try:

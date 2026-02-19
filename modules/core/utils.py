@@ -6,6 +6,7 @@ and the creation of configuration files for certbot DNS plugins. They do not
 depend on the Flask application context or global configuration variables.
 """
 import dataclasses
+import json
 import re
 import secrets
 import string
@@ -348,15 +349,16 @@ def create_infomaniak_config(api_token: str) -> Path:
 
 def create_acme_dns_config(api_url: str, username: str, password: str, subdomain: str) -> Path:
     """Create ACME-DNS credentials file."""
-    content = f"""{{
-    "{subdomain}": {{
-        "username": "{username}",
-        "password": "{password}",
-        "fulldomain": "{subdomain}",
-        "subdomain": "{subdomain}",
-        "allowfrom": []
-    }}
-}}"""
+    config = {
+        subdomain: {
+            "username": username,
+            "password": password,
+            "fulldomain": subdomain,
+            "subdomain": subdomain,
+            "allowfrom": []
+        }
+    }
+    content = json.dumps(config, indent=4)
     return _create_config_file("acme-dns", content)
 
 def create_multi_provider_config(provider: str, config_data: Dict[str, Any]) -> Optional[Path]:
@@ -423,8 +425,10 @@ class _CacheEntry:
 
 class DeploymentStatusCache:
     """
-    A simple, thread-safe, in-memory, time-based cache.
+    A simple, thread-safe, in-memory, time-based cache with max size limit.
     """
+    MAX_ENTRIES = 10000  # Prevent unbounded memory growth
+
     def __init__(self, default_ttl: int = 300):
         self._cache: Dict[str, _CacheEntry] = {}
         self._default_ttl: int = default_ttl
@@ -437,7 +441,7 @@ class DeploymentStatusCache:
             if entry and time.time() <= entry.expires_at:
                 return entry.result
         return None
-        
+
     def set(self, domain: str, result: Any, ttl: Optional[int] = None) -> None:
         """Cache a result for a domain with a specific or default TTL."""
         effective_ttl = ttl if ttl is not None else self._default_ttl
@@ -448,6 +452,13 @@ class DeploymentStatusCache:
             ttl=effective_ttl
         )
         with self._lock:
+            # Evict expired entries if approaching size limit
+            if len(self._cache) >= self.MAX_ENTRIES:
+                self._clean_expired()
+            # If still at limit after cleanup, evict oldest entry
+            if len(self._cache) >= self.MAX_ENTRIES:
+                oldest_key = min(self._cache, key=lambda k: self._cache[k].timestamp)
+                del self._cache[oldest_key]
             self._cache[domain] = entry
         
     def clear(self) -> int:
@@ -487,6 +498,11 @@ class DeploymentStatusCache:
                 'entries': sorted(entries, key=lambda x: x['domain'])
             }
         
+    def remove(self, domain: str) -> None:
+        """Remove a specific domain from the cache."""
+        with self._lock:
+            self._cache.pop(domain, None)
+
     def set_ttl(self, ttl: int) -> bool:
         """Set the default TTL for new cache entries."""
         if isinstance(ttl, (int, float)) and 30 <= ttl <= 3600:

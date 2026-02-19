@@ -7,6 +7,7 @@ Supports both API token and local username/password authentication
 import logging
 import secrets
 import hashlib
+import threading
 import uuid
 import time
 from functools import wraps
@@ -28,7 +29,8 @@ class AuthManager:
     def __init__(self, settings_manager):
         self.settings_manager = settings_manager
         self._sessions = {}  # In-memory session store: {session_id: {user, expires, created}}
-        self._session_timeout = 24 * 60 * 60  # 24 hours in seconds
+        self._session_lock = threading.Lock()  # Thread-safe session access
+        self._session_timeout = 8 * 60 * 60  # 8 hours in seconds
         if not BCRYPT_AVAILABLE:
             logger.warning("bcrypt not available, falling back to SHA-256 (less secure)")
         
@@ -110,7 +112,7 @@ class AuthManager:
             return False, "Failed to save user"
         except Exception as e:
             logger.error(f"Error creating user: {e}")
-            return False, str(e)
+            return False, "An internal error occurred"
     
     def update_user(self, username, password=None, role=None, email=None, enabled=None):
         """Update an existing user"""
@@ -135,7 +137,7 @@ class AuthManager:
             return False, "Failed to save user"
         except Exception as e:
             logger.error(f"Error updating user: {e}")
-            return False, str(e)
+            return False, "An internal error occurred"
     
     def delete_user(self, username):
         """Delete a user"""
@@ -158,7 +160,7 @@ class AuthManager:
             return False, "Failed to delete user"
         except Exception as e:
             logger.error(f"Error deleting user: {e}")
-            return False, str(e)
+            return False, "An internal error occurred"
     
     def list_users(self):
         """List all users (without password hashes)"""
@@ -212,44 +214,46 @@ class AuthManager:
         session_id = secrets.token_urlsafe(32)
         users = self._get_users()
         user = users.get(username, {})
-        
-        self._sessions[session_id] = {
-            'user': username,
-            'role': user.get('role', 'user'),
-            'created': time.time(),
-            'expires': time.time() + self._session_timeout
-        }
-        
-        # Cleanup expired sessions occasionally
-        self._cleanup_sessions()
-        
+
+        with self._session_lock:
+            self._sessions[session_id] = {
+                'user': username,
+                'role': user.get('role', 'user'),
+                'created': time.time(),
+                'expires': time.time() + self._session_timeout
+            }
+            # Cleanup expired sessions occasionally
+            self._cleanup_sessions()
+
         return session_id
-    
+
     def validate_session(self, session_id):
         """Validate a session and return user info if valid"""
-        if not session_id or session_id not in self._sessions:
-            return None
-        
-        session_data = self._sessions[session_id]
-        
-        if time.time() > session_data['expires']:
-            del self._sessions[session_id]
-            return None
-        
-        return {
-            'username': session_data['user'],
-            'role': session_data['role']
-        }
-    
+        with self._session_lock:
+            if not session_id or session_id not in self._sessions:
+                return None
+
+            session_data = self._sessions[session_id]
+
+            if time.time() > session_data['expires']:
+                del self._sessions[session_id]
+                return None
+
+            return {
+                'username': session_data['user'],
+                'role': session_data['role']
+            }
+
     def invalidate_session(self, session_id):
         """Invalidate/logout a session"""
-        if session_id in self._sessions:
-            del self._sessions[session_id]
-            return True
-        return False
-    
+        with self._session_lock:
+            if session_id in self._sessions:
+                del self._sessions[session_id]
+                return True
+            return False
+
     def _cleanup_sessions(self):
-        """Remove expired sessions"""
+        """Remove expired sessions (caller must hold _session_lock)"""
         current_time = time.time()
         expired = [sid for sid, data in self._sessions.items() if current_time > data['expires']]
         for sid in expired:
@@ -346,7 +350,7 @@ class AuthManager:
         try:
             settings = self.settings_manager.load_settings()
             valid_token = settings.get('api_bearer_token')
-            return token == valid_token if valid_token else False
+            return secrets.compare_digest(token, valid_token) if valid_token else False
         except Exception as e:
             logger.error(f"Error validating API token: {e}")
             return False

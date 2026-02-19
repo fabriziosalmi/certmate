@@ -48,6 +48,11 @@ import time
 import random
 import string
 import argparse
+import pytest
+
+# This file is not a pytest test suite — it uses its own TestRunner.
+# Run directly: python test_e2e_real.py
+pytestmark = pytest.mark.e2e
 import hashlib
 import requests
 import subprocess

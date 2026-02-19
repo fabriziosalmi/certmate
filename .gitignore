@@ -66,13 +66,15 @@ Thumbs.db
 
 # Planning and development documents
 NEXT_FEATURES.md
-!MULTI_ACCOUNT_EXAMPLES.md
 
 htmlcov/
 .pytest_cache/
 
 backups/
 app.py.backup
+
+.claude/
+test_screenshots/
 
 # Test files with sensitive data
 test_real_cert_*.py

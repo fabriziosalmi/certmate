@@ -11,7 +11,7 @@ import secrets
 from pathlib import Path
 from datetime import datetime
 from apscheduler.schedulers.background import BackgroundScheduler
-from flask import Flask
+from flask import Flask, request
 from flask_cors import CORS
 from flask_restx import Api, Namespace
 
@@ -99,18 +99,51 @@ class CertMateApp:
         """Initialize Flask application"""
         self.app = Flask(__name__)
         
-        # Generate a secure random secret key if not provided
-        self.app.secret_key = os.getenv('SECRET_KEY') or os.urandom(32).hex()
-        
+        # Ensure a secure SECRET_KEY — reject known insecure defaults
+        secret_key = os.getenv('SECRET_KEY', '')
+        insecure_defaults = {'', 'your-secret-key-here', 'change-me', 'secret'}
+        if secret_key in insecure_defaults:
+            # Try to load a previously generated key from data dir
+            key_file = self.data_dir / '.secret_key'
+            if key_file.exists():
+                secret_key = key_file.read_text().strip()
+            else:
+                secret_key = secrets.token_hex(32)
+                try:
+                    key_file.write_text(secret_key)
+                    key_file.chmod(0o600)
+                except OSError:
+                    pass  # In-memory only if write fails
+                logger.warning("SECRET_KEY was not set or insecure — generated a secure key automatically")
+        self.app.secret_key = secret_key
+
+        # Limit request body size to prevent DoS via large uploads
+        self.app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50 MB
+
+        # Apply ProxyFix when behind a trusted reverse proxy (e.g., nginx)
+        # This ensures request.remote_addr reflects the real client IP
+        if os.getenv('BEHIND_PROXY', '').lower() in ('true', '1', 'yes'):
+            from werkzeug.middleware.proxy_fix import ProxyFix
+            self.app.wsgi_app = ProxyFix(
+                self.app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1
+            )
+            logger.info("ProxyFix enabled (BEHIND_PROXY=true)")
+
         # Enable CORS with security restrictions
         # In production, set CORS_ORIGINS env var to allowed origins (comma-separated)
         # e.g., CORS_ORIGINS=https://example.com,https://app.example.com
-        cors_origins = os.getenv('CORS_ORIGINS', '*').split(',')
-        CORS(self.app, 
-             origins=cors_origins,
+        cors_origins_env = os.getenv('CORS_ORIGINS', '').strip()
+        if cors_origins_env:
+            cors_origins = [o.strip() for o in cors_origins_env.split(',') if o.strip()]
+        else:
+            cors_origins = None  # Same-origin only when not configured
+
+        # Only enable credentials when explicit origins are set (wildcard + credentials is insecure)
+        CORS(self.app,
+             origins=cors_origins if cors_origins else [],
              methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
              allow_headers=['Authorization', 'Content-Type'],
-             supports_credentials=True,
+             supports_credentials=bool(cors_origins),
              max_age=3600)
 
     def _initialize_managers(self):
@@ -337,11 +370,89 @@ class CertMateApp:
         """Register web interface routes"""
         try:
             register_web_routes(self.app, self.managers)
+            self._setup_rate_limiting()
+            self._setup_security_headers()
             logger.info("Web routes registered successfully")
-            
+
         except Exception as e:
             logger.error(f"Failed to register web routes: {e}")
             raise
+
+    def _setup_security_headers(self):
+        """Add security headers to all responses"""
+        @self.app.after_request
+        def add_security_headers(response):
+            # Prevent clickjacking
+            response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+            # Prevent MIME-type sniffing
+            response.headers['X-Content-Type-Options'] = 'nosniff'
+            # XSS protection (legacy browsers)
+            response.headers['X-XSS-Protection'] = '1; mode=block'
+            # Referrer policy
+            response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+            # Content Security Policy — allow inline scripts/styles for the SPA-like UI
+            response.headers['Content-Security-Policy'] = (
+                "default-src 'self'; "
+                "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
+                "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com; "
+                "font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com; "
+                "img-src 'self' data:; "
+                "connect-src 'self'; "
+                "frame-ancestors 'self'; "
+                "form-action 'self'; "
+                "base-uri 'self'; "
+                "object-src 'none'"
+            )
+            # Permissions-Policy — restrict browser features
+            response.headers['Permissions-Policy'] = (
+                'camera=(), microphone=(), geolocation=(), payment=()'
+            )
+            # HSTS — enable on HTTPS responses or when explicitly configured
+            if request.is_secure or \
+               self.app.config.get('PREFERRED_URL_SCHEME') == 'https' or \
+               os.getenv('CERTMATE_ENABLE_HSTS', '').lower() == 'true':
+                response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains; preload'
+            return response
+
+    def _setup_rate_limiting(self):
+        """Apply rate limiter to API endpoints via before_request hook"""
+        from flask import request as flask_request, jsonify as flask_jsonify
+        rate_limiter = self.managers.get('rate_limiter')
+        if not rate_limiter:
+            return
+
+        @self.app.before_request
+        def check_rate_limit():
+            path = flask_request.path
+            # Only rate-limit API endpoints (skip static, health, metrics)
+            if not path.startswith('/api/'):
+                return None
+            # Use remote_addr (actual TCP peer) to prevent rate-limit bypass via
+            # spoofed X-Forwarded-For headers.  If behind a trusted reverse proxy,
+            # configure PROXY_FIX or Werkzeug ProxyFix to set remote_addr correctly.
+            client_ip = flask_request.remote_addr or '0.0.0.0'
+            # Map path to endpoint category for rate limit lookup
+            endpoint = 'default'
+            if 'certificates' in path and 'create' in path:
+                endpoint = 'certificate_create'
+            elif 'certificates' in path and 'batch' in path:
+                endpoint = 'certificate_batch'
+            elif 'certificates' in path and 'renew' in path:
+                endpoint = 'certificate_renew'
+            elif 'certificates' in path and 'revoke' in path:
+                endpoint = 'certificate_revoke'
+            elif 'certificates' in path:
+                endpoint = 'certificate_list'
+            elif 'ocsp' in path:
+                endpoint = 'ocsp_status'
+            elif 'crl' in path:
+                endpoint = 'crl_download'
+            if not rate_limiter.is_allowed(client_ip, endpoint):
+                return flask_jsonify({
+                    'error': 'Rate limit exceeded',
+                    'message': 'Too many requests. Please try again later.',
+                    'retry_after': 60
+                }), 429
 
     def run(self, host='0.0.0.0', port=5000, debug=False):
         """Run the CertMate application"""
@@ -381,10 +492,7 @@ class CertMateApp:
                 logger.info(f"  📝 Domains configured: {domain_count}")
                 logger.info(f"  🔑 API Token: {'✅ set' if api_token_set else '❌ using default'}")
                 
-                if api_token_set:
-                    token = settings.get('api_bearer_token', '')
-                    masked_token = f"{token[:8]}{'*' * (len(token) - 12)}{token[-4:]}" if len(token) > 12 else "****"
-                    logger.info(f"     Token (masked): {masked_token}")
+                # Token value is never logged — use /api/auth/token endpoint to retrieve it
                 
             except Exception as e:
                 logger.info(f"  ❌ Error loading settings: {e}")
@@ -645,7 +753,12 @@ if __name__ == '__main__':
                        default='INFO', help='Set logging level')
     
     args = parser.parse_args()
-    
+
+    # Prevent debug mode in production environments
+    if args.debug and os.getenv('FLASK_ENV') == 'production':
+        print("ERROR: Debug mode cannot be enabled in production (FLASK_ENV=production)")
+        sys.exit(1)
+
     # Set logging level
     logging.getLogger().setLevel(getattr(logging, args.log_level))
     

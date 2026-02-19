@@ -3,16 +3,61 @@ API endpoints module for CertMate
 Defines Flask-RESTX Resource classes for REST API endpoints
 """
 
+import ipaddress
 import logging
+import re
+import socket
 import tempfile
 import zipfile
 import os
 from pathlib import Path
+from urllib.parse import urlparse
 from flask import send_file, after_this_request
 from flask_restx import Resource, fields
 
 from ..core.metrics import generate_metrics_response, get_metrics_summary, is_prometheus_available
 from ..core.constants import CERTIFICATE_FILES, get_domain_name
+
+_DOMAIN_RE = re.compile(r'^(\*\.)?([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$')
+
+
+def _is_safe_url(url: str) -> tuple:
+    """Check if a URL is safe to request (not targeting private/internal networks).
+    Returns (is_safe, error_message)."""
+    try:
+        parsed = urlparse(url)
+        hostname = parsed.hostname
+        if not hostname:
+            return False, "Invalid URL: no hostname"
+        # Resolve hostname to IP
+        try:
+            addr_info = socket.getaddrinfo(hostname, parsed.port or 443, proto=socket.IPPROTO_TCP)
+        except socket.gaierror:
+            return False, "Could not resolve hostname"
+        for family, _, _, _, sockaddr in addr_info:
+            ip = ipaddress.ip_address(sockaddr[0])
+            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+                return False, "URL resolves to a private/internal network address"
+        return True, None
+    except Exception:
+        return False, "Invalid URL"
+
+
+def _validate_domain_path(domain, cert_base_dir):
+    """Validate domain name to prevent path traversal. Returns (Path, error_msg)."""
+    if not domain or '..' in domain or '/' in domain or '\\' in domain or '\x00' in domain:
+        return None, 'Invalid domain name'
+    if not _DOMAIN_RE.match(domain):
+        return None, 'Invalid domain format'
+    cert_dir = Path(cert_base_dir) / domain
+    try:
+        resolved = cert_dir.resolve()
+        base_resolved = Path(cert_base_dir).resolve()
+        if not str(resolved).startswith(str(base_resolved) + os.sep) and resolved != base_resolved:
+            return None, 'Invalid domain path'
+    except (OSError, ValueError):
+        return None, 'Invalid domain path'
+    return cert_dir, None
 
 logger = logging.getLogger(__name__)
 
@@ -42,17 +87,11 @@ def create_api_resources(api, models, managers):
                 settings = settings_manager.load_settings()
                 
                 return {
-                    'status': 'healthy',
-                    'version': '1.2.1',
-                    'services': {
-                        'settings': 'ok' if settings else 'error',
-                        'cache': 'ok',
-                        'metrics': 'ok' if is_prometheus_available() else 'unavailable'
-                    }
+                    'status': 'healthy'
                 }
             except Exception as e:
                 logger.error(f"Health check failed: {e}")
-                return {'status': 'unhealthy', 'error': str(e)}, 500
+                return {'status': 'unhealthy'}, 500
 
     # Metrics endpoints
     class MetricsList(Resource):
@@ -230,7 +269,12 @@ def create_api_resources(api, models, managers):
                 account_id = data.get('account_id')
                 ca_provider = data.get('ca_provider')
                 domain_alias = data.get('domain_alias')  # Optional domain alias
-                
+                if domain_alias:
+                    from ..core.utils import validate_domain
+                    alias_valid, alias_msg = validate_domain(domain_alias)
+                    if not alias_valid:
+                        return {'error': f'Invalid domain_alias: {alias_msg}'}, 400
+
                 # Validate domain
                 if not domain:
                     return {
@@ -354,7 +398,7 @@ def create_api_resources(api, models, managers):
             except Exception as e:
                 logger.error(f"Certificate creation failed: {str(e)}")
                 return {
-                    'error': f'Certificate creation failed: {str(e)}',
+                    'error': 'Certificate creation failed unexpectedly',
                     'hint': 'Check application logs for detailed error information.'
                 }, 500
 
@@ -364,10 +408,12 @@ def create_api_resources(api, models, managers):
         def get(self, domain):
             """Download certificate files as ZIP"""
             try:
-                cert_dir = Path(file_ops.cert_dir) / domain
+                cert_dir, err = _validate_domain_path(domain, file_ops.cert_dir)
+                if err:
+                    return {'error': err}, 400
                 if not cert_dir.exists():
                     return {'error': f'Certificate not found for domain: {domain}'}, 404
-                
+
                 # Create temporary ZIP file
                 with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as tmp_file:
                     tmp_path = tmp_file.name
@@ -413,7 +459,7 @@ def create_api_resources(api, models, managers):
                 
             except Exception as e:
                 logger.error(f"Certificate renewal failed for {domain}: {str(e)}")
-                return {'error': f'Certificate renewal failed: {str(e)}'}, 500
+                return {'error': 'Certificate renewal failed'}, 500
 
     # Backup endpoints (Unified backup system for atomic consistency)
     class BackupList(Resource):
@@ -557,10 +603,11 @@ def create_api_resources(api, models, managers):
             except FileNotFoundError:
                 return {'error': 'Backup file not found'}, 404
             except ValueError as e:
-                return {'error': str(e)}, 400
+                logger.warning(f"Backup restore validation error: {e}")
+                return {'error': 'Invalid backup data'}, 400
             except Exception as e:
                 logger.error(f"Error restoring backup: {e}")
-                return {'error': f'Failed to restore backup: {str(e)}'}, 500
+                return {'error': 'Failed to restore backup'}, 500
 
     class BackupDelete(Resource):
         @api.doc(security='Bearer')
@@ -581,9 +628,9 @@ def create_api_resources(api, models, managers):
                 
                 # Validate the backup file exists and is within the backup directory
                 if not backup_path.exists():
-                    return {'error': f'Backup file not found: {filename}'}, 404
-                
-                if not str(backup_path).startswith(str(backup_dir)):
+                    return {'error': 'Backup file not found'}, 404
+
+                if not str(backup_path.resolve()).startswith(str(backup_dir.resolve())):
                     return {'error': 'Invalid backup path'}, 400
                 
                 # Delete the backup file
@@ -598,7 +645,7 @@ def create_api_resources(api, models, managers):
                 
             except Exception as e:
                 logger.error(f"Error deleting backup: {e}")
-                return {'error': f'Failed to delete backup: {str(e)}'}, 500
+                return {'error': 'Failed to delete backup'}, 500
 
     # Storage Backend Management
     class StorageBackendInfo(Resource):
@@ -631,7 +678,7 @@ def create_api_resources(api, models, managers):
                 }
             except Exception as e:
                 logger.error(f"Error getting storage backend info: {e}")
-                return {'error': str(e)}, 500
+                return {'error': 'Failed to get storage backend info'}, 500
     
     class StorageBackendConfig(Resource):
         @api.doc(security='Bearer')
@@ -689,7 +736,7 @@ def create_api_resources(api, models, managers):
                     
             except Exception as e:
                 logger.error(f"Error updating storage backend config: {e}")
-                return {'error': str(e)}, 500
+                return {'error': 'Failed to update storage backend configuration'}, 500
     
     class StorageBackendTest(Resource):
         @api.doc(security='Bearer')
@@ -740,15 +787,16 @@ def create_api_resources(api, models, managers):
                     }
                     
                 except Exception as test_error:
+                    logger.error(f"Storage backend connection test failed: {test_error}")
                     return {
                         'success': False,
-                        'message': f'Connection test failed: {str(test_error)}',
+                        'message': 'Connection test failed',
                         'backend': backend_type
                     }
-                    
+
             except Exception as e:
                 logger.error(f"Error testing storage backend: {e}")
-                return {'error': str(e)}, 500
+                return {'error': 'Failed to test storage backend'}, 500
     
     class CAProviderTest(Resource):
         @api.doc(security='Bearer')
@@ -875,17 +923,26 @@ def create_api_resources(api, models, managers):
                             import requests
                             import ssl
                             from urllib.parse import urljoin
-                            
+
+                            # SSRF protection: block requests to private/internal networks
+                            is_safe, ssrf_msg = _is_safe_url(acme_url)
+                            if not is_safe:
+                                return {
+                                    'success': False,
+                                    'message': f'ACME URL rejected: {ssrf_msg}',
+                                    'ca_provider': ca_provider
+                                }
+
                             # Test if the ACME directory is accessible
                             timeout = 10
-                            
+
                             # For HTTPS URLs, we might need to handle custom CA certificates
                             verify_ssl = True
                             if ca_cert:
                                 # If a custom CA cert is provided, we should use it for verification
                                 # For now, we'll warn but still allow the connection
                                 logger.info("Custom CA certificate provided for Private CA")
-                            
+
                             response = requests.get(acme_url, timeout=timeout, verify=verify_ssl)
                             
                             if response.status_code == 200:
@@ -907,7 +964,7 @@ def create_api_resources(api, models, managers):
                                             'message': 'Endpoint is accessible but does not appear to be a valid ACME directory',
                                             'ca_provider': ca_provider
                                         }
-                                except:
+                                except Exception:
                                     return {
                                         'success': False,
                                         'message': 'Endpoint is accessible but returned invalid JSON',
@@ -935,29 +992,31 @@ def create_api_resources(api, models, managers):
                         except requests.exceptions.SSLError as ssl_error:
                             return {
                                 'success': False,
-                                'message': f'SSL verification failed: {str(ssl_error)}',
+                                'message': 'SSL verification failed',
                                 'ca_provider': ca_provider
                             }
                         except Exception as conn_error:
+                            logger.error(f"CA provider connection test failed: {conn_error}")
                             return {
                                 'success': False,
-                                'message': f'Connection test failed: {str(conn_error)}',
+                                'message': 'Connection test failed',
                                 'ca_provider': ca_provider
                             }
-                        
+
                     else:
                         return {'error': 'Invalid CA provider type'}, 400
-                    
+
                 except Exception as test_error:
+                    logger.error(f"CA provider test failed: {test_error}")
                     return {
                         'success': False,
-                        'message': f'CA provider test failed: {str(test_error)}',
+                        'message': 'CA provider test failed',
                         'ca_provider': ca_provider
                     }
-                    
+
             except Exception as e:
                 logger.error(f"Error testing CA provider: {e}")
-                return {'error': str(e)}, 500
+                return {'error': 'Failed to test CA provider'}, 500
 
     class StorageBackendMigrate(Resource):
         @api.doc(security='Bearer')
@@ -1022,16 +1081,17 @@ def create_api_resources(api, models, managers):
                     }
                     
                 except Exception as migration_error:
+                    logger.error(f"Storage migration failed: {migration_error}")
                     return {
                         'success': False,
-                        'message': f'Migration failed: {str(migration_error)}',
+                        'message': 'Migration failed',
                         'source_backend': source_backend_type,
                         'target_backend': target_backend_type
                     }
-                    
+
             except Exception as e:
                 logger.error(f"Error during storage migration: {e}")
-                return {'error': str(e)}, 500
+                return {'error': 'Failed to perform storage migration'}, 500
 
     # Register storage backend endpoints
     storage_ns = api.namespace('storage', description='Storage Backend Operations')

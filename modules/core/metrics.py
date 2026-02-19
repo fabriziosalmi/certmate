@@ -522,7 +522,7 @@ def generate_metrics_response(app_context=None):
     except Exception as e:
         logger.error(f"Error generating metrics: {e}")
         return (
-            f"# Error generating metrics: {e}\n",
+            "# Error generating metrics\n",
             500,
             {'Content-Type': 'text/plain'}
         )
@@ -544,7 +544,7 @@ def get_metrics_summary():
         
     except Exception as e:
         logger.error(f"Error getting metrics summary: {e}")
-        return {"error": str(e)}
+        return {"error": "Unable to retrieve metrics"}
 
 # =============================================
 # UTILITY FUNCTIONS  

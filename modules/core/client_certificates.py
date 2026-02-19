@@ -225,7 +225,7 @@ class ClientCertificateManager:
 
         except Exception as e:
             logger.error(f"Error creating client certificate: {str(e)}")
-            return False, str(e), None
+            return False, "An internal error occurred while creating the certificate", None
 
     def list_client_certificates(
         self,
@@ -345,10 +345,17 @@ class ClientCertificateManager:
 
                 logger.info(f"Revoked certificate: {identifier} (reason: {reason})")
 
-                # Update CRL with serial number
-                serial_number = int(metadata.get("serial_number", 0))
-                if serial_number:
-                    revoked_serials = [serial_number]
+                # Update CRL with ALL revoked serials (not just the current one)
+                all_revoked = self.list_client_certificates(revoked=True)
+                revoked_serials = []
+                for cert in all_revoked:
+                    try:
+                        sn = int(cert.get('serial_number', 0))
+                        if sn > 0:
+                            revoked_serials.append(sn)
+                    except (ValueError, TypeError):
+                        continue
+                if revoked_serials:
                     self.private_ca.generate_crl(revoked_serials)
 
                 return True, None
@@ -357,7 +364,7 @@ class ClientCertificateManager:
 
         except Exception as e:
             logger.error(f"Error revoking certificate: {str(e)}")
-            return False, str(e)
+            return False, "An internal error occurred while revoking the certificate"
 
     def renew_certificate(self, identifier: str) -> Tuple[bool, Optional[str], Optional[Dict[str, Any]]]:
         """
@@ -406,7 +413,7 @@ class ClientCertificateManager:
 
         except Exception as e:
             logger.error(f"Error renewing certificate: {str(e)}")
-            return False, str(e), None
+            return False, "An internal error occurred while renewing the certificate", None
 
     def get_certificate_file(self, identifier: str, file_type: str = "crt") -> Optional[bytes]:
         """
@@ -453,8 +460,18 @@ class ClientCertificateManager:
                 if not cert_metadata.get("renewal_enabled", False):
                     continue
 
+                # Validate expires_at before parsing
+                expires_at_str = cert_metadata.get("expires_at")
+                if not expires_at_str:
+                    logger.warning(f"Skipping certificate {cert_metadata.get('identifier')}: missing expires_at")
+                    continue
+                try:
+                    expires_at = datetime.fromisoformat(expires_at_str)
+                except (ValueError, TypeError):
+                    logger.warning(f"Skipping certificate {cert_metadata.get('identifier')}: invalid expires_at format")
+                    continue
+
                 # Check expiration date
-                expires_at = datetime.fromisoformat(cert_metadata.get("expires_at", ""))
                 threshold_days = cert_metadata.get("renewal_threshold_days", 30)
                 renewal_date = expires_at - timedelta(days=threshold_days)
 

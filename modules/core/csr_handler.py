@@ -44,7 +44,8 @@ class CSRHandler:
             try:
                 csr.public_key()  # This validates the signature implicitly
             except Exception as e:
-                return False, f"Invalid CSR signature: {str(e)}", None
+                logger.error(f"Invalid CSR signature: {str(e)}")
+                return False, "Invalid CSR signature", None
 
             # Check subject is present
             if not csr.subject:
@@ -60,7 +61,7 @@ class CSRHandler:
 
         except Exception as e:
             logger.error(f"CSR validation error: {str(e)}")
-            return False, f"CSR validation failed: {str(e)}", None
+            return False, "CSR validation failed", None
 
     @staticmethod
     def get_csr_info(csr: x509.CertificateSigningRequest) -> Dict[str, Any]:
@@ -173,6 +174,11 @@ class CSRHandler:
             if not common_name or len(common_name) > 64:
                 return None, None, "Common name must be 1-64 characters"
 
+            # Reject control characters and null bytes in CN
+            import re
+            if re.search(r'[\x00-\x1f\x7f]', common_name):
+                return None, None, "Common name contains invalid control characters"
+
             # Validate key size
             if key_size not in [2048, 4096]:
                 return None, None, "Key size must be 2048 or 4096"
@@ -207,8 +213,10 @@ class CSRHandler:
             csr_builder = x509.CertificateSigningRequestBuilder()
             csr_builder = csr_builder.subject_name(subject)
 
-            # Add Subject Alternative Names if provided
+            # Add Subject Alternative Names if provided (limit to 100)
             if alternative_names:
+                if len(alternative_names) > 100:
+                    return None, None, "Too many SANs (maximum 100)"
                 san_list = [x509.DNSName(name) for name in alternative_names]
                 csr_builder = csr_builder.add_extension(
                     x509.SubjectAlternativeName(san_list),
@@ -253,7 +261,7 @@ class CSRHandler:
 
         except Exception as e:
             logger.error(f"Error creating CSR: {str(e)}")
-            return None, None, f"CSR creation failed: {str(e)}"
+            return None, None, "CSR creation failed"
 
     @staticmethod
     def save_csr_and_key(
@@ -298,7 +306,7 @@ class CSRHandler:
 
         except Exception as e:
             logger.error(f"Error saving CSR and key: {str(e)}")
-            return False, str(e), None
+            return False, "Failed to save CSR and key", None
 
     @staticmethod
     def load_csr_from_file(csr_path: Path) -> Tuple[bool, Optional[str], Optional[x509.CertificateSigningRequest]]:
@@ -320,4 +328,4 @@ class CSRHandler:
 
         except Exception as e:
             logger.error(f"Error loading CSR: {str(e)}")
-            return False, str(e), None
+            return False, "Failed to load CSR", None

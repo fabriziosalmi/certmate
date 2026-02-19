@@ -14,6 +14,7 @@ from datetime import datetime, timedelta
 from .shell import ShellExecutor
 from .dns_strategies import DNSStrategyFactory
 from .constants import CERTIFICATE_FILES, get_domain_name
+from .utils import validate_domain
 
 logger = logging.getLogger(__name__)
 
@@ -147,8 +148,10 @@ class CertificateManager:
                 try:
                     import os
                     os.unlink(temp_cert_path)
-                except Exception:
-                    pass
+                except FileNotFoundError:
+                    pass  # Already deleted
+                except Exception as cleanup_err:
+                    logger.warning(f"Failed to clean up temp cert file {temp_cert_path}: {cleanup_err}")
                     
         except Exception as e:
             logger.error(f"Error getting certificate info: {e}")
@@ -187,10 +190,8 @@ class CertificateManager:
         """
         # Track timing for metrics
         start_time = time.time()
-        
-        # Track if we set env vars
-        env_vars_set = False
-        
+        credentials_file = None
+
         try:
             logger.info(f"Starting certificate creation for domain: {domain}")
             
@@ -247,13 +248,17 @@ class CertificateManager:
                 for san in san_domains:
                     san = san.strip()
                     if san and san != domain and san not in all_domains:
+                        is_valid, validation_msg = validate_domain(san)
+                        if not is_valid:
+                            raise ValueError(f"Invalid SAN domain '{san}': {validation_msg}")
                         all_domains.append(san)
                 logger.info(f"Creating SAN certificate with domains: {', '.join(all_domains)}")
 
             # Build certbot command
+            ca_extra_env = {}
             if self.ca_manager and ca_account_config:
-                certbot_cmd = self.ca_manager.build_certbot_command(
-                    domain, email, ca_provider, dns_provider, dns_config, 
+                certbot_cmd, ca_extra_env = self.ca_manager.build_certbot_command(
+                    domain, email, ca_provider, dns_provider, dns_config,
                     ca_account_config, staging, cert_dir, san_domains=all_domains[1:] if len(all_domains) > 1 else None
                 )
             else:
@@ -267,60 +272,65 @@ class CertificateManager:
                     '--work-dir', str(cert_output_dir / 'work'),
                     '--logs-dir', str(cert_output_dir / 'logs'),
                 ]
-                
+
                 # Add all domains
                 for d in all_domains:
                     certbot_cmd.extend(['-d', d])
-                
+
                 if staging:
                     certbot_cmd.append('--staging')
-            
-            # Prepare Environment
-            strategy.prepare_environment(os.environ, dns_config)
-            env_vars_set = True
+
+            # Build per-request environment (avoid race conditions with os.environ)
+            process_env = os.environ.copy()
+            process_env.update(ca_extra_env)
+            strategy.prepare_environment(process_env, dns_config)
 
             # Create Config File
             credentials_file = strategy.create_config_file(dns_config)
-            
+
             # Configure Args
             strategy.configure_certbot_arguments(certbot_cmd, credentials_file, domain_alias=domain_alias)
-            
+
             # Set propagation time
             try:
                 settings = self.settings_manager.load_settings()
                 propagation_map = settings.get('dns_propagation_seconds', {}) or {}
             except Exception:
                 propagation_map = {}
-            
+
             # Default to strategy default if not in settings map
             default_seconds = strategy.default_propagation_seconds
             propagation_time = int(propagation_map.get(dns_provider, default_seconds))
-            
+            # Ensure propagation time is within reasonable bounds (1 second to 1 hour)
+            propagation_time = max(1, min(3600, propagation_time))
+
             certbot_cmd.extend([f'--{strategy.plugin_name}-propagation-seconds', str(propagation_time)])
-            
+
             logger.info(f"Running certbot command for {domain} with {dns_provider}")
-            logger.debug(f"Certbot command: {' '.join(str(item) for item in certbot_cmd)}")
-            
-            # Run certbot
+            # Redact sensitive arguments before logging
+            _redact = {'--eab-kid', '--eab-hmac-key', '--email'}
+            safe_cmd = []
+            skip_next = False
+            for part in certbot_cmd:
+                if skip_next:
+                    safe_cmd.append('***')
+                    skip_next = False
+                elif str(part) in _redact:
+                    safe_cmd.append(str(part))
+                    skip_next = True
+                else:
+                    safe_cmd.append(str(part))
+            logger.debug(f"Certbot command: {' '.join(safe_cmd)}")
+
+            # Run certbot with isolated environment
             result = self.shell_executor.run(
                 certbot_cmd,
                 capture_output=True,
                 text=True,
-                timeout=1800  # 30 minute timeout
+                timeout=1800,  # 30 minute timeout
+                env=process_env
             )
-            
-            # Clean up credentials file
-            if credentials_file:
-                try:
-                    os.unlink(credentials_file)
-                except FileNotFoundError:
-                    pass
-            
-            # Cleanup Environment
-            if env_vars_set:
-                strategy.cleanup_environment(os.environ)
-                env_vars_set = False
-            
+
             if result.returncode != 0:
                 logger.error(f"Certbot failed for {domain}: {result.stderr}")
                 raise RuntimeError(f"Certificate creation failed: {result.stderr}")
@@ -385,20 +395,23 @@ class CertificateManager:
             raise RuntimeError("Certificate creation timed out")
             
         except Exception as e:
-            # Clean up env if still set
-            if env_vars_set:
-                # We need to access strategy again, but it might not be defined if error happened early
-                # Best effort cleanup
-                try:
-                    strategy = DNSStrategyFactory.get_strategy(dns_provider) if 'dns_provider' in locals() and dns_provider else None
-                    if strategy:
-                        strategy.cleanup_environment(os.environ)
-                except Exception as cleanup_error:
-                    logger.debug(f"Cleanup error (non-critical): {cleanup_error}")
-            
             duration = time.time() - start_time
             logger.error(f"Certificate creation failed for {domain}: {str(e)} (duration: {duration:.2f}s)")
             raise
+        finally:
+            # Always clean up credential files (even on failure)
+            if credentials_file:
+                try:
+                    os.unlink(credentials_file)
+                except (FileNotFoundError, OSError):
+                    pass
+            # Clean up CA bundle temp file if created
+            ca_bundle = ca_extra_env.get('REQUESTS_CA_BUNDLE')
+            if ca_bundle:
+                try:
+                    os.unlink(ca_bundle)
+                except (FileNotFoundError, OSError):
+                    pass
 
     def renew_certificate(self, domain):
         """Renew a certificate"""

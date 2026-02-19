@@ -16,21 +16,21 @@ certbot-dns-route53==2.10.0
 certbot-dns-digitalocean==2.10.0
 certbot-dns-google==2.10.0
 
-# DNS provider plugins - Additional providers
-certbot-dns-powerdns
-certbot-dns-linode
-certbot-dns-gandi
-certbot-dns-ovh
-certbot-dns-namecheap
-certbot-dns-rfc2136
-certbot-dns-vultr
-certbot-dns-dnsmadeeasy
-certbot-dns-nsone
-certbot-dns-hetzner
-certbot-dns-porkbun
-certbot-dns-godaddy
-certbot-dns-arvancloud
-certbot-acme-dns
+# DNS provider plugins - Additional providers (pinned for reproducible builds)
+certbot-dns-powerdns==0.2.1
+certbot-dns-linode==2.6.0
+certbot-dns-gandi==1.6.1
+certbot-dns-ovh==2.6.0
+certbot-dns-namecheap==1.0.0
+certbot-dns-rfc2136==2.10.0
+certbot-dns-vultr==1.1.0
+certbot-dns-dnsmadeeasy==2.6.0
+certbot-dns-nsone==2.6.0
+certbot-dns-hetzner==1.0.5
+certbot-dns-porkbun==0.11.0
+certbot-dns-godaddy==0.2.2
+certbot-dns-arvancloud==0.1.0
+certbot-acme-dns==0.3.1
 
 # Cloud SDK dependencies
 boto3==1.34.144                    # AWS support
@@ -54,4 +54,4 @@ gunicorn==23.0.0
 prometheus_client==0.21.0
 
 # Testing
-requests_mock
+requests_mock==1.12.1

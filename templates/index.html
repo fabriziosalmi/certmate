@@ -402,12 +402,16 @@
     </div>
 
     <script>
-        // API Configuration
-        const API_TOKEN = '{{ api_token }}';
+        // API Configuration - session cookies are sent automatically
         const API_HEADERS = {
-            'Authorization': `Bearer ${API_TOKEN}`,
             'Content-Type': 'application/json'
         };
+
+        // HTML escape utility — prevents XSS when inserting user data into HTML
+        function escapeHtml(str) {
+            if (str == null) return '';
+            return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+        }
 
         // Show enhanced loading modal with progress
         function showLoadingModal(title = 'Processing Certificate...', message = 'This may take a few minutes') {
@@ -463,7 +467,7 @@
                         <i class="fas ${typeIcons[type] || typeIcons.success} mt-0.5"></i>
                     </div>
                     <div class="ml-3 flex-1">
-                        <p class="text-sm font-medium">${message}</p>
+                        <p class="text-sm font-medium">${escapeHtml(message)}</p>
                     </div>
                     <button onclick="this.parentElement.parentElement.remove()" class="ml-2 flex-shrink-0 text-gray-400 hover:text-gray-600">
                         <i class="fas fa-times text-xs"></i>
@@ -763,14 +767,16 @@
             }
             
             container.innerHTML = certificates.map(cert => {
+                const safeDomain = escapeHtml(cert.domain);
+                const safeDnsProvider = escapeHtml(cert.dns_provider || '');
                 if (!cert.exists) {
                     return `
                         <div class="px-6 py-4">
                             <div class="flex items-center justify-between">
                                 <div>
-                                    <h4 class="text-lg font-medium text-gray-900 dark:text-white">${cert.domain}</h4>
+                                    <h4 class="text-lg font-medium text-gray-900 dark:text-white">${safeDomain}</h4>
                                     <p class="text-sm text-red-600 dark:text-red-400">Certificate not found</p>
-                                    ${cert.dns_provider ? `<p class="text-sm text-gray-500 dark:text-gray-400">DNS Provider: ${cert.dns_provider.charAt(0).toUpperCase() + cert.dns_provider.slice(1)}</p>` : ''}
+                                    ${cert.dns_provider ? `<p class="text-sm text-gray-500 dark:text-gray-400">DNS Provider: ${safeDnsProvider.charAt(0).toUpperCase() + safeDnsProvider.slice(1)}</p>` : ''}
                                 </div>
                             </div>
                         </div>
@@ -812,7 +818,7 @@
                     }
                     
                     deploymentHtml = `
-                        <span id="deployment-status-${cert.domain.replace(/\./g, '-')}" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusClass}">
+                        <span id="deployment-status-${safeDomain.replace(/\./g, '-')}" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusClass}">
                             <i class="fas ${statusIcon} mr-1"></i>
                             ${statusText}
                         </span>
@@ -820,7 +826,7 @@
                 } else {
                     // No cached status, show checking state
                     deploymentHtml = `
-                        <span id="deployment-status-${cert.domain.replace(/\./g, '-')}" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+                        <span id="deployment-status-${safeDomain.replace(/\./g, '-')}" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
                             <i class="fas fa-spinner fa-spin mr-1"></i>
                             Checking...
                         </span>
@@ -838,7 +844,7 @@
                                     </div>
                                 </div>
                                 <div class="min-w-0 flex-1">
-                                    <h4 class="text-lg font-semibold text-gray-900 dark:text-white truncate">${cert.domain}</h4>
+                                    <h4 class="text-lg font-semibold text-gray-900 dark:text-white truncate">${safeDomain}</h4>
                                     <div class="flex flex-wrap items-center gap-2 mt-1">
                                         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                                             isExpired ? 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400' : 
@@ -858,9 +864,9 @@
                                             ${cert.days_until_expiry} days
                                         </span>
                                         ${cert.dns_provider ? `
-                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-white dark:bg-gray-900 text-gray-900 dark:text-white" title="${cert.dns_provider.charAt(0).toUpperCase() + cert.dns_provider.slice(1)} DNS Provider">
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-white dark:bg-gray-900 text-gray-900 dark:text-white" title="${safeDnsProvider.charAt(0).toUpperCase() + safeDnsProvider.slice(1)} DNS Provider">
                                             <i class="fas fa-server mr-1"></i>
-                                            ${cert.dns_provider.charAt(0).toUpperCase() + cert.dns_provider.slice(1)}
+                                            ${safeDnsProvider.charAt(0).toUpperCase() + safeDnsProvider.slice(1)}
                                         </span>
                                         ` : ''}
                                     </div>
@@ -873,17 +879,17 @@
                             
                             <!-- Action Buttons (Compact) -->
                             <div class="flex flex-wrap items-center gap-2">
-                                <button onclick="renewCertificate('${cert.domain}')" 
+                                <button data-action="renew" data-domain="${safeDomain}"
                                         class="inline-flex items-center px-3 py-1.5 border border-gray-300 dark:border-gray-600 shadow-sm text-xs font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors duration-200">
                                     <i class="fas fa-sync-alt mr-1 text-green-600"></i>
                                     Renew
                                 </button>
-                                <button onclick="downloadCertificate('${cert.domain}')" 
+                                <button data-action="download" data-domain="${safeDomain}"
                                         class="inline-flex items-center px-3 py-1.5 border border-gray-300 dark:border-gray-600 shadow-sm text-xs font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors duration-200">
                                     <i class="fas fa-download mr-1 text-blue-600"></i>
                                     Download
                                 </button>
-                                <button onclick="copyCurlCommand('${cert.domain}')" 
+                                <button data-action="curl" data-domain="${safeDomain}"
                                         class="inline-flex items-center px-3 py-1.5 border border-blue-300 dark:border-blue-600 shadow-sm text-xs font-medium rounded-md text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200">
                                     <i class="fas fa-code mr-1"></i>
                                     API
@@ -907,6 +913,18 @@
                 `;
             }).join('');
             
+            // Attach event listeners for cert action buttons (safe: no inline onclick)
+            container.querySelectorAll('button[data-action]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const domain = btn.dataset.domain;
+                    switch (btn.dataset.action) {
+                        case 'renew': renewCertificate(domain); break;
+                        case 'download': downloadCertificate(domain); break;
+                        case 'curl': copyCurlCommand(domain); break;
+                    }
+                });
+            });
+
             // After displaying, trigger deployment checks only for certificates that don't have cached status
             setTimeout(() => {
                 if (Array.isArray(certificates)) {
@@ -941,7 +959,11 @@
             
             const logEntry = document.createElement('div');
             logEntry.className = `${colors[type] || colors.info} mb-1`;
-            logEntry.innerHTML = `<span class="text-gray-500">[${timestamp}]</span> ${message}`;
+            const timeSpan = document.createElement('span');
+            timeSpan.className = 'text-gray-500';
+            timeSpan.textContent = `[${timestamp}]`;
+            logEntry.appendChild(timeSpan);
+            logEntry.appendChild(document.createTextNode(' ' + message));
             
             output.appendChild(logEntry);
             output.scrollTop = output.scrollHeight;
@@ -1055,7 +1077,7 @@
             
             const deployedCount = allCertificates.filter(cert => {
                 if (!cert.exists) return false;
-                const statusElement = document.getElementById(`deployment-status-${cert.domain.replace(/\./g, '-')}`);
+                const statusElement = document.getElementById(`deployment-status-${safeDomain.replace(/\./g, '-')}`);
                 const isDeployed = statusElement && statusElement.textContent.includes('Deployed');
                 
                 if (isDeployed) {
@@ -1623,10 +1645,7 @@
         async function downloadCertificate(domain) {
             try {
                 const response = await fetch(`/api/certificates/${domain}/download`, {
-                    method: 'GET',
-                    headers: {
-                        'Authorization': `Bearer ${API_TOKEN}`
-                    }
+                    method: 'GET'
                 });
                 
                 if (response.ok) {
@@ -1660,7 +1679,6 @@
                 const response = await fetch(`/api/certificates/${domain}/renew`, {
                     method: 'POST',
                     headers: {
-                        'Authorization': `Bearer ${API_TOKEN}`,
                         'Content-Type': 'application/json'
                     }
                 });

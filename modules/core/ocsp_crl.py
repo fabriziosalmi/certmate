@@ -75,7 +75,7 @@ class OCSPResponder:
             return {
                 'serial_number': serial_number,
                 'status': 'unknown',
-                'error': str(e)
+                'error': 'Failed to retrieve OCSP status'
             }
 
     def generate_ocsp_response(self, cert_status: dict) -> dict:
@@ -109,7 +109,7 @@ class OCSPResponder:
             logger.error(f"Error generating OCSP response: {str(e)}")
             return {
                 'response_status': 'internal_error',
-                'error': str(e)
+                'error': 'Failed to generate OCSP response'
             }
 
 
@@ -255,4 +255,4 @@ class CRLManager:
 
         except Exception as e:
             logger.error(f"Error getting CRL info: {str(e)}")
-            return {'status': 'error', 'error': str(e)}
+            return {'status': 'error', 'error': 'Failed to retrieve CRL information'}

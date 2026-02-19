@@ -11,7 +11,6 @@ RUN apt-get update && apt-get install -y \
 
 # Copy requirements first for better caching
 COPY requirements.txt requirements-minimal.txt ./
-RUN ls -la
 
 # Create virtual environment and install dependencies
 RUN python -m venv /opt/venv
@@ -29,9 +28,10 @@ FROM python:3.11-slim
 # Set working directory
 WORKDIR /app
 
-# Install runtime dependencies only
+# Install runtime dependencies + tini for proper PID 1 signal handling
 RUN apt-get update && apt-get install -y \
     curl \
+    tini \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --create-home --shell /bin/bash certmate
 
@@ -46,8 +46,8 @@ COPY . .
 RUN mkdir -p certificates data logs backups && \
     chown -R certmate:certmate /app
 
-# Ensure proper permissions for volume mounts
-RUN chmod 755 /app/certificates /app/data /app/logs
+# Ensure restrictive permissions for volume mounts (contain private keys/tokens)
+RUN chmod 700 /app/certificates /app/data /app/logs
 
 # Set environment variables
 ENV FLASK_APP=app.py
@@ -64,5 +64,10 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
+# Use tini as init process for proper signal handling and zombie reaping
+ENTRYPOINT ["tini", "--"]
+
 # Run the application
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "4", "--timeout", "360", "app:app"]
+# Single worker + threads: avoids duplicate APScheduler jobs and session
+# sharing issues. CertMate is I/O-bound, not CPU-bound.
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "1", "--threads", "4", "--timeout", "120", "--access-logfile", "-", "--error-logfile", "-", "--log-level", "info", "app:app"]

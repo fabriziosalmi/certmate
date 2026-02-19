@@ -81,10 +81,10 @@ class FileOperations:
             # Ensure parent directory exists
             file_path.parent.mkdir(parents=True, exist_ok=True)
             
-            # Use temporary file for atomic writes
+            # Use temporary file for atomic writes with restrictive permissions
             temp_file = Path(f"{file_path}.tmp")
-            
-            with open(temp_file, 'w', encoding='utf-8') as f:
+            fd = os.open(str(temp_file), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, 'w', encoding='utf-8') as f:
                 # Use file locking for safety
                 fcntl.flock(f.fileno(), fcntl.LOCK_EX)
                 try:
@@ -121,7 +121,7 @@ class FileOperations:
     def create_unified_backup(self, settings_data, backup_reason="manual"):
         """Create a unified backup containing both settings and certificates"""
         try:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
             backup_id = f"backup_{timestamp}_{backup_reason}"
             backup_filename = f"{backup_id}.zip"
             backup_path = self.backup_dir / "unified" / backup_filename
@@ -253,32 +253,59 @@ class FileOperations:
                             return False
                 
                 # Then, restore certificates
+                cert_dir_resolved = self.cert_dir.resolve()
                 for file_info in zipf.infolist():
                     if file_info.filename.startswith("certificates/") and file_info.filename != "certificates/":
-                        logger.info(f"Extracting certificate file: {file_info.filename}")
-                        
-                        # Extract to certificates directory
                         # Remove "certificates/" prefix from the path
                         relative_path = file_info.filename[12:]  # len("certificates/") = 12
+
+                        # ZIP Slip protection: reject entries with path traversal
+                        if '..' in relative_path or relative_path.startswith('/'):
+                            logger.warning(f"Skipping suspicious ZIP entry: {file_info.filename}")
+                            continue
+
                         target_path = self.cert_dir / relative_path
-                        
+
+                        # Verify resolved path stays within cert_dir
+                        try:
+                            target_resolved = target_path.resolve()
+                            if not str(target_resolved).startswith(str(cert_dir_resolved) + os.sep) \
+                                    and target_resolved != cert_dir_resolved:
+                                logger.warning(f"ZIP Slip blocked: {file_info.filename} -> {target_resolved}")
+                                continue
+                        except (OSError, ValueError):
+                            logger.warning(f"Invalid path in ZIP: {file_info.filename}")
+                            continue
+
+                        # Decompression bomb protection: reject oversized entries
+                        max_entry_size = 10 * 1024 * 1024  # 10 MB per file
+                        if file_info.file_size > max_entry_size:
+                            logger.warning(f"Skipping oversized ZIP entry: {file_info.filename} ({file_info.file_size} bytes)")
+                            continue
+
+                        logger.info(f"Extracting certificate file: {file_info.filename}")
+
                         # Ensure target directory exists
                         target_path.parent.mkdir(parents=True, exist_ok=True)
-                        
-                        # Extract file using proper handling
+
+                        # Extract file with size limit
                         try:
                             with zipf.open(file_info) as source, open(target_path, 'wb') as target:
-                                target.write(source.read())
+                                data = source.read(max_entry_size + 1)
+                                if len(data) > max_entry_size:
+                                    logger.warning(f"ZIP entry exceeds size limit: {file_info.filename}")
+                                    continue
+                                target.write(data)
                         except Exception as e:
                             logger.error(f"Error extracting {file_info.filename}: {e}")
                             continue
-                        
+
                         # Set appropriate permissions
                         if target_path.name == 'privkey.pem':
                             os.chmod(target_path, 0o600)
                         else:
                             os.chmod(target_path, 0o644)
-                        
+
                         # Track restored domains
                         if '/' in relative_path:
                             domain = relative_path.split('/')[0]

@@ -1,7 +1,7 @@
 {
   "version": "2.0.0",
-  "timestamp": "2026-01-17T17:03:35.459008",
-  "duration_seconds": 0.117461,
+  "timestamp": "2026-01-17T17:07:54.574460",
+  "duration_seconds": 0.102869,
   "summary": {
     "total": 22,
     "passed": 8,
@@ -13,63 +13,63 @@
     {
       "name": "Server Health",
       "status": "passed",
-      "duration": 0.008172035217285156,
+      "duration": 0.0076100826263427734,
       "message": "Server healthy",
       "severity": "critical",
-      "timestamp": "2026-01-17T17:03:35.467235",
+      "timestamp": "2026-01-17T17:07:54.582131",
       "details": {
         "version": "1.2.1",
-        "duration": 0.008157014846801758
+        "duration": 0.007597208023071289
       }
     },
     {
       "name": "Web UI Accessible",
       "status": "passed",
-      "duration": 0.04127001762390137,
+      "duration": 0.0367891788482666,
       "message": "Web UI accessible",
       "severity": "low",
-      "timestamp": "2026-01-17T17:03:35.508527",
+      "timestamp": "2026-01-17T17:07:54.618942",
       "details": {
-        "duration": 0.04126286506652832
+        "duration": 0.03678297996520996
       }
     },
     {
       "name": "API Docs",
       "status": "passed",
-      "duration": 0.009598970413208008,
+      "duration": 0.0019488334655761719,
       "message": "API docs at /docs/",
       "severity": "low",
-      "timestamp": "2026-01-17T17:03:35.518146",
+      "timestamp": "2026-01-17T17:07:54.620910",
       "details": {
         "endpoint": "/docs/",
-        "duration": 0.009595155715942383
+        "duration": 0.0019459724426269531
       }
     },
     {
       "name": "API Authentication",
       "status": "passed",
-      "duration": 0.0020220279693603516,
+      "duration": 0.0021660327911376953,
       "message": "Authentication successful",
       "severity": "critical",
-      "timestamp": "2026-01-17T17:03:35.520181",
+      "timestamp": "2026-01-17T17:07:54.623090",
       "details": {}
     },
     {
       "name": "Invalid Token Rejected",
       "status": "failed",
-      "duration": 0.0014171600341796875,
+      "duration": 0.0014767646789550781,
       "message": "Server not responding",
       "severity": "high",
-      "timestamp": "2026-01-17T17:03:35.521606",
+      "timestamp": "2026-01-17T17:07:54.624577",
       "details": {}
     },
     {
       "name": "DNS Provider Configured",
       "status": "failed",
-      "duration": 0.0018727779388427734,
+      "duration": 0.0017540454864501953,
       "message": "Cloudflare not configured",
       "severity": "critical",
-      "timestamp": "2026-01-17T17:03:35.523490",
+      "timestamp": "2026-01-17T17:07:54.626343",
       "details": {
         "dns_accounts": []
       }
@@ -77,22 +77,22 @@
     {
       "name": "List Certificates",
       "status": "passed",
-      "duration": 0.034667015075683594,
+      "duration": 0.03478384017944336,
       "message": "Listed 5 certificates",
       "severity": "high",
-      "timestamp": "2026-01-17T17:03:35.558176",
+      "timestamp": "2026-01-17T17:07:54.661137",
       "details": {
         "count": 5,
-        "duration": 0.03465104103088379
+        "duration": 0.034767866134643555
       }
     },
     {
       "name": "Settings Endpoint",
       "status": "passed",
-      "duration": 0.0023517608642578125,
+      "duration": 0.0022830963134765625,
       "message": "Settings valid, found: []",
       "severity": "medium",
-      "timestamp": "2026-01-17T17:03:35.560541",
+      "timestamp": "2026-01-17T17:07:54.663433",
       "details": {
         "keys": [
           "cloudflare_token",
@@ -111,7 +111,7 @@
       "duration": 0.0,
       "message": "Skipped (--skip-creation or --quick)",
       "severity": "critical",
-      "timestamp": "2026-01-17T17:03:35.560549",
+      "timestamp": "2026-01-17T17:07:54.663442",
       "details": {}
     },
     {
@@ -120,7 +120,7 @@
       "duration": 0.0,
       "message": "Skipped (no cert created)",
       "severity": "high",
-      "timestamp": "2026-01-17T17:03:35.560552",
+      "timestamp": "2026-01-17T17:07:54.663446",
       "details": {}
     },
     {
@@ -129,25 +129,25 @@
       "duration": 0.0,
       "message": "Skipped (no cert created)",
       "severity": "medium",
-      "timestamp": "2026-01-17T17:03:35.560556",
+      "timestamp": "2026-01-17T17:07:54.663450",
       "details": {}
     },
     {
       "name": "Client CA Exists",
       "status": "failed",
-      "duration": 0.0013899803161621094,
+      "duration": 0.0012111663818359375,
       "message": "Server not responding",
       "severity": "medium",
-      "timestamp": "2026-01-17T17:03:35.561951",
+      "timestamp": "2026-01-17T17:07:54.664665",
       "details": {}
     },
     {
       "name": "List Client Certs",
       "status": "failed",
-      "duration": 0.0012412071228027344,
+      "duration": 0.0009930133819580078,
       "message": "Server not responding",
       "severity": "medium",
-      "timestamp": "2026-01-17T17:03:35.563201",
+      "timestamp": "2026-01-17T17:07:54.665669",
       "details": {}
     },
     {
@@ -156,7 +156,7 @@
       "duration": 0.0,
       "message": "Skipped (--quick)",
       "severity": "medium",
-      "timestamp": "2026-01-17T17:03:35.563206",
+      "timestamp": "2026-01-17T17:07:54.665674",
       "details": {}
     },
     {
@@ -165,59 +165,59 @@
       "duration": 0.0,
       "message": "Skipped (--quick)",
       "severity": "low",
-      "timestamp": "2026-01-17T17:03:35.563209",
+      "timestamp": "2026-01-17T17:07:54.665677",
       "details": {}
     },
     {
       "name": "Invalid Domain Format",
       "status": "failed",
-      "duration": 0.0016939640045166016,
+      "duration": 0.0014472007751464844,
       "message": "Server not responding",
       "severity": "medium",
-      "timestamp": "2026-01-17T17:03:35.564907",
+      "timestamp": "2026-01-17T17:07:54.667129",
       "details": {}
     },
     {
       "name": "Missing Required Fields",
       "status": "failed",
-      "duration": 0.0010828971862792969,
+      "duration": 0.0010190010070800781,
       "message": "Server not responding",
       "severity": "medium",
-      "timestamp": "2026-01-17T17:03:35.565994",
+      "timestamp": "2026-01-17T17:07:54.668156",
       "details": {}
     },
     {
       "name": "Non-existent Certificate",
       "status": "failed",
-      "duration": 0.0010807514190673828,
+      "duration": 0.000843048095703125,
       "message": "Server not responding",
       "severity": "medium",
-      "timestamp": "2026-01-17T17:03:35.567080",
+      "timestamp": "2026-01-17T17:07:54.669006",
       "details": {}
     },
     {
       "name": "Health Response Time",
       "status": "passed",
-      "duration": 0.0043981075286865234,
+      "duration": 0.0035200119018554688,
       "message": "Response time OK: avg=0.001s",
       "severity": "medium",
-      "timestamp": "2026-01-17T17:03:35.571491",
+      "timestamp": "2026-01-17T17:07:54.672536",
       "details": {
         "times": [
-          0.0012660026550292969,
-          0.0017290115356445312,
-          0.0013949871063232422
+          0.0012416839599609375,
+          0.0010879039764404297,
+          0.001184225082397461
         ],
-        "avg": 0.0014633337656656902
+        "avg": 0.0011712710062662761
       }
     },
     {
       "name": "List Backups",
       "status": "passed",
-      "duration": 0.004954814910888672,
+      "duration": 0.004773139953613281,
       "message": "Listed 0 backups",
       "severity": "medium",
-      "timestamp": "2026-01-17T17:03:35.576456",
+      "timestamp": "2026-01-17T17:07:54.677316",
       "details": {
         "count": 0
       }
@@ -228,7 +228,7 @@
       "duration": 0.0,
       "message": "Skipped (--quick)",
       "severity": "medium",
-      "timestamp": "2026-01-17T17:03:35.576464",
+      "timestamp": "2026-01-17T17:07:54.677324",
       "details": {}
     },
     {
@@ -237,7 +237,7 @@
       "duration": 0.0,
       "message": "Skipped (--quick)",
       "severity": "low",
-      "timestamp": "2026-01-17T17:03:35.576467",
+      "timestamp": "2026-01-17T17:07:54.677327",
       "details": {}
     }
   ]

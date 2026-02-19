@@ -7,7 +7,7 @@ import logging
 import os
 import json
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
 
 from cryptography import x509
@@ -106,7 +106,7 @@ class PrivateCAGenerator:
             cert_builder = cert_builder.serial_number(x509.random_serial_number())
 
             # Validity: 10 years for CA
-            not_valid_before = datetime.utcnow()
+            not_valid_before = datetime.now(timezone.utc)
             not_valid_after = not_valid_before + timedelta(days=3650)
             cert_builder = cert_builder.not_valid_before(not_valid_before)
             cert_builder = cert_builder.not_valid_after(not_valid_after)
@@ -206,6 +206,12 @@ class PrivateCAGenerator:
                     backend=default_backend()
                 )
 
+            # Check CA certificate expiry
+            if datetime.now(timezone.utc) > self._ca_cert.not_valid_after_utc:
+                logger.error("CA certificate has expired — cannot sign new certificates")
+                self._ca_loaded = False
+                return False
+
             self._ca_loaded = True
             logger.info("CA loaded successfully")
             return True
@@ -233,7 +239,7 @@ class PrivateCAGenerator:
             metadata = {
                 "type": "ca",
                 "common_name": common_name,
-                "created_at": datetime.utcnow().isoformat(),
+                "created_at": datetime.now(timezone.utc).isoformat(),
                 "expires_at": cert.not_valid_after_utc.isoformat(),
                 "serial_number": str(cert.serial_number),
                 "key_size": key.key_size,
@@ -269,7 +275,7 @@ class PrivateCAGenerator:
             backup_dir = self.ca_dir / "backups"
             backup_dir.mkdir(exist_ok=True)
 
-            timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+            timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
 
             # Backup files
             import shutil
@@ -374,7 +380,7 @@ class PrivateCAGenerator:
             cert_builder = cert_builder.serial_number(x509.random_serial_number())
 
             # Validity
-            not_valid_before = datetime.utcnow()
+            not_valid_before = datetime.now(timezone.utc)
             not_valid_after = not_valid_before + timedelta(days=days_valid)
             cert_builder = cert_builder.not_valid_before(not_valid_before)
             cert_builder = cert_builder.not_valid_after(not_valid_after)
@@ -461,15 +467,15 @@ class PrivateCAGenerator:
             # Build CRL
             crl_builder = x509.CertificateRevocationListBuilder()
             crl_builder = crl_builder.issuer_name(self._ca_cert.issuer)
-            crl_builder = crl_builder.last_update(datetime.utcnow())
-            crl_builder = crl_builder.next_update(datetime.utcnow() + timedelta(days=7))
+            crl_builder = crl_builder.last_update(datetime.now(timezone.utc))
+            crl_builder = crl_builder.next_update(datetime.now(timezone.utc) + timedelta(days=7))
 
             # Add revoked certificates
             if revoked_serials:
                 for serial in revoked_serials:
                     revoked_cert = x509.RevokedCertificateBuilder()
                     revoked_cert = revoked_cert.serial_number(serial)
-                    revoked_cert = revoked_cert.revocation_date(datetime.utcnow())
+                    revoked_cert = revoked_cert.revocation_date(datetime.now(timezone.utc))
                     crl_builder = crl_builder.add_revoked_certificate(revoked_cert.build())
 
             # Sign CRL

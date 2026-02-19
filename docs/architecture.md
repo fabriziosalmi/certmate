@@ -1,4 +1,281 @@
-# CertMate Client Certificates - Architecture
+# CertMate Architecture
+
+This document covers the complete CertMate architecture — both the main server certificate system and the client certificate subsystem.
+
+---
+
+## Table of Contents
+
+- [Main System Architecture](#main-system-architecture)
+- [High-Level Diagram](#high-level-diagram)
+- [Manager Classes](#manager-classes)
+- [Certificate Creation Flow](#certificate-creation-flow)
+- [Storage Architecture](#storage-architecture)
+- [Configuration Structure](#configuration-structure)
+- [API Endpoints](#api-endpoints)
+- [Technology Stack](#technology-stack)
+- [Client Certificates Architecture](#client-certificates-architecture)
+
+---
+
+## Main System Architecture
+
+CertMate is a modular, pluggable SSL/TLS certificate management system built with Python/Flask. It supports multiple CA providers, 22+ DNS providers, and pluggable storage backends.
+
+**Key Facts:**
+- **Language**: Python 3.9+ (Flask, Flask-RESTX)
+- **Storage**: Local filesystem default + 4 cloud backends (Azure Key Vault, AWS Secrets Manager, HashiCorp Vault, Infisical)
+- **CA Providers**: Let's Encrypt, DigiCert ACME, Private CA
+- **DNS Providers**: 22 supported (Cloudflare, AWS Route53, Azure, Google, and more)
+- **API**: REST with Swagger/OpenAPI via Flask-RESTX
+- **Current Certificate Types**: Server-side TLS (DV, OV, EV)
+
+---
+
+## High-Level Diagram
+
+```
+┌─────────────────────────────────────────────────────┐
+│                  CertMate Application               │
+│                                                     │
+│  ┌───────────────────────────────────────────────┐  │
+│  │             Web Layer (Flask)                  │  │
+│  │  Dashboard    Settings    Help    Client Certs │  │
+│  └────────────────────┬──────────────────────────┘  │
+│                       ↓                             │
+│  ┌──────────────────┐   ┌────────────────────────┐  │
+│  │  REST API         │   │  Web Routes            │  │
+│  │  /api/certificates│   │  /api/web/certificates │  │
+│  │  /api/client-certs│   │  /client-certificates  │  │
+│  └────────┬─────────┘   └────────┬───────────────┘  │
+│           └──────────┬───────────┘                   │
+│                      ↓                               │
+│  ┌───────────────────────────────────────────────┐  │
+│  │          Manager Layer (Business Logic)        │  │
+│  │                                               │  │
+│  │  CertificateManager    CAManager              │  │
+│  │  DNSManager            StorageManager         │  │
+│  │  AuthManager           SettingsManager        │  │
+│  │  CacheManager          FileOperations         │  │
+│  │  ClientCertManager     OCSPResponder          │  │
+│  │  CRLManager            AuditLogger            │  │
+│  └────────────────────┬──────────────────────────┘  │
+│                       ↓                             │
+│  ┌───────────────────────────────────────────────┐  │
+│  │          Execution Layer                       │  │
+│  │  Certbot (server certs via DNS-01 ACME)       │  │
+│  │  PrivateCA (client certs via direct signing)  │  │
+│  └────────────────────┬──────────────────────────┘  │
+│                       ↓                             │
+│  ┌───────────────────────────────────────────────┐  │
+│  │          Storage Layer (Pluggable Backends)    │  │
+│  │  Local FS │ Azure KV │ AWS SM │ Vault │ Infis │  │
+│  └───────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────┘
+```
+
+---
+
+## Manager Classes
+
+```
+CertMateApp (main application)
+  ├── FileOperations          # File I/O, backups
+  ├── SettingsManager         # Load/save settings.json
+  ├── AuthManager             # Token validation
+  ├── CertificateManager      # Create/renew/info (server certs)
+  ├── CAManager               # CA provider config, Certbot building
+  ├── DNSManager              # DNS provider accounts
+  ├── CacheManager            # Deployment cache
+  ├── StorageManager          # Backend abstraction
+  ├── ClientCertificateManager # Client cert lifecycle
+  ├── PrivateCAGenerator      # Self-signed CA management
+  ├── OCSPResponder           # Certificate status queries
+  ├── CRLManager              # Revocation list generation
+  └── AuditLogger             # Operation tracking
+```
+
+---
+
+## Certificate Creation Flow
+
+### Server Certificates (via Certbot + ACME)
+
+```
+1. User submits: domain, email, DNS provider, CA provider
+2. Validate inputs (domain format, email, provider existence)
+3. Get CA config (ACME URL, EAB credentials if DigiCert)
+4. Get DNS config (account credentials from settings)
+5. Create directory: certificates/{domain}/
+6. Build certbot command:
+   certbot certonly --non-interactive --agree-tos
+     --server {acme_url}
+     --email {email}
+     --{dns_plugin} --{dns_plugin}-credentials {cred_file}
+     --{dns_plugin}-propagation-seconds {timeout}
+     --eab-kid/--eab-hmac-key (if required)
+     -d {domain}
+7. Create temporary DNS credentials file (600 permissions)
+8. Execute certbot (30-minute timeout)
+9. Resolve symlinks, copy cert files to domain root
+10. Store via configured backend + create metadata.json
+11. Clean up credentials file
+```
+
+### Client Certificates (via Private CA)
+
+```
+1. User submits: common_name, email, organization, cert_usage
+2. Initialize or load existing CA (4096-bit RSA)
+3. Generate CSR (or accept provided CSR)
+4. Sign CSR with private CA
+5. Store cert/key/csr files + metadata.json
+6. Log in audit trail
+```
+
+---
+
+## Storage Architecture
+
+### Server Certificates
+
+```
+certificates/
+  example.com/
+    cert.pem          # Server certificate
+    chain.pem         # Intermediate CA chain
+    fullchain.pem     # cert + chain
+    privkey.pem       # Private key (600 permissions)
+    metadata.json     # Certificate metadata
+```
+
+### Client Certificates
+
+```
+data/certs/
+  ca/
+    ca.crt            # CA certificate
+    ca.key            # CA private key (600 permissions)
+    ca_metadata.json  # CA metadata
+    crl.pem           # Certificate Revocation List
+  client/
+    api-mtls/         # Certificates by usage type
+      cert-001/
+        cert.crt
+        cert.key
+        cert.csr
+        metadata.json
+    vpn/
+      cert-002/
+        ...
+```
+
+### Storage Backends
+
+All backends implement `CertificateStorageBackend`:
+
+| Backend | Storage Location |
+|---------|-----------------|
+| **Local Filesystem** | `certificates/{domain}/` (default) |
+| **Azure Key Vault** | Azure Key Vault secrets |
+| **AWS Secrets Manager** | AWS Secrets Manager |
+| **HashiCorp Vault** | Vault KV v1/v2 |
+| **Infisical** | Infisical secrets |
+
+---
+
+## Configuration Structure
+
+All settings are stored in `data/settings.json`:
+
+```json
+{
+  "email": "admin@example.com",
+  "domains": ["example.com", "*.example.com"],
+  "auto_renew": true,
+  "renewal_threshold_days": 30,
+  "api_bearer_token": "secure-token",
+  "dns_provider": "cloudflare",
+  "dns_providers": {
+    "cloudflare": {
+      "accounts": {
+        "production": {"api_token": "token-prod"},
+        "staging": {"api_token": "token-staging"}
+      }
+    }
+  },
+  "default_accounts": {
+    "cloudflare": "production"
+  },
+  "ca_providers": {
+    "letsencrypt": {
+      "accounts": {
+        "default": {"email": "admin@example.com"}
+      }
+    }
+  },
+  "certificate_storage": {
+    "backend": "local_filesystem",
+    "cert_dir": "certificates"
+  }
+}
+```
+
+---
+
+## API Endpoints
+
+### Server Certificates
+
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| GET | `/api/health` | Health check |
+| GET | `/api/certificates` | List all certificates |
+| POST | `/api/certificates` | Create new certificate |
+| GET | `/api/certificates/{domain}` | Get certificate info |
+| POST | `/api/certificates/{domain}/renew` | Renew certificate |
+| GET | `/api/certificates/{domain}/download` | Download as ZIP |
+| GET | `/{domain}/tls` | Direct fullchain download |
+
+### Client Certificates
+
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| POST | `/api/client-certs/create` | Create certificate |
+| GET | `/api/client-certs` | List with filters |
+| GET | `/api/client-certs/{id}` | Get metadata |
+| GET | `/api/client-certs/{id}/download/{type}` | Download cert/key/csr |
+| POST | `/api/client-certs/{id}/revoke` | Revoke certificate |
+| POST | `/api/client-certs/{id}/renew` | Renew certificate |
+| GET | `/api/client-certs/stats` | Statistics |
+| POST | `/api/client-certs/batch` | Batch CSV import |
+| GET | `/api/ocsp/status/{serial}` | OCSP status |
+| GET | `/api/crl/download/{format}` | Download CRL |
+
+---
+
+## Technology Stack
+
+| Layer | Technologies |
+|-------|-------------|
+| **Backend** | Python 3.9+, Flask, Flask-RESTX, APScheduler, Certbot |
+| **Frontend** | HTML5, Tailwind CSS, Vanilla JavaScript, Font Awesome |
+| **Cloud SDKs** | Azure SDK, boto3, hvac, infisical-python |
+| **Crypto** | cryptography (OpenSSL), certbot plugins |
+| **Deployment** | Docker, Docker Compose, Gunicorn, systemd |
+
+---
+
+## Key Limitations
+
+1. **Certbot-only for server certs**: DNS-01 ACME challenges only
+2. **Domain-centric server storage**: One cert per domain directory
+3. **No DB**: Single JSON file for configuration
+4. **Server cert key usage**: No control over keyUsage/extendedKeyUsage extensions
+
+---
+
+# Client Certificates Architecture
 
 ## System Overview
 

@@ -310,6 +310,12 @@
     </div>
 
     <script>
+        // HTML escape utility — prevents XSS when inserting user data into HTML
+        function escapeHtml(str) {
+            if (str == null) return '';
+            return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+        }
+
         // Global state
         let currentCertId = null;
         let certificatesData = [];
@@ -404,25 +410,40 @@
                 const expiresDate = new Date(cert.expires_at);
                 const createdDate = new Date(cert.created_at);
                 const isExpiringSoon = expiresDate - new Date() < 30 * 24 * 60 * 60 * 1000;
+                const safeCN = escapeHtml(cert.common_name);
+                const safeEmail = escapeHtml(cert.email || '-');
+                const safeUsage = escapeHtml(cert.cert_usage);
+                const safeId = escapeHtml(cert.identifier);
 
                 return `
                     <tr class="hover:bg-gray-50 dark:hover:bg-gray-700 transition">
-                        <td class="px-6 py-4 text-sm font-medium text-gray-900 dark:text-white">${cert.common_name}</td>
-                        <td class="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">${cert.email || '-'}</td>
-                        <td class="px-6 py-4 text-sm"><span class="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded text-xs font-medium">${cert.cert_usage}</span></td>
+                        <td class="px-6 py-4 text-sm font-medium text-gray-900 dark:text-white">${safeCN}</td>
+                        <td class="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">${safeEmail}</td>
+                        <td class="px-6 py-4 text-sm"><span class="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded text-xs font-medium">${safeUsage}</span></td>
                         <td class="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">${createdDate.toLocaleDateString()}</td>
                         <td class="px-6 py-4 text-sm ${isExpiringSoon ? 'text-red-600 dark:text-red-400 font-semibold' : 'text-gray-600 dark:text-gray-300'}">${expiresDate.toLocaleDateString()}</td>
                         <td class="px-6 py-4 text-sm">
                             ${cert.revoked ? '<span class="px-2 py-1 bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 rounded text-xs font-medium">Revoked</span>' : '<span class="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 rounded text-xs font-medium">Active</span>'}
                         </td>
                         <td class="px-6 py-4 text-sm space-x-2">
-                            <button onclick="showCertDetails('${cert.identifier}')" class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"><i class="fas fa-eye"></i></button>
-                            ${!cert.revoked ? `<button onclick="revokeCert('${cert.identifier}')" class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"><i class="fas fa-ban"></i></button>` : ''}
-                            <button onclick="renewCert('${cert.identifier}')" class="text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300"><i class="fas fa-sync"></i></button>
+                            <button data-action="details" data-id="${safeId}" class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"><i class="fas fa-eye"></i></button>
+                            ${!cert.revoked ? `<button data-action="revoke" data-id="${safeId}" class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"><i class="fas fa-ban"></i></button>` : ''}
+                            <button data-action="renew" data-id="${safeId}" class="text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300"><i class="fas fa-sync"></i></button>
                         </td>
                     </tr>
                 `;
             }).join('');
+            // Attach event listeners for cert action buttons (safe: no inline onclick)
+            tbody.querySelectorAll('button[data-action]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const id = btn.dataset.id;
+                    switch (btn.dataset.action) {
+                        case 'details': showCertDetails(id); break;
+                        case 'revoke': revokeCert(id); break;
+                        case 'renew': renewCert(id); break;
+                    }
+                });
+            });
         }
 
         // Tab switching
@@ -486,6 +507,11 @@
 
         // Handle CSV file upload
         function handleCSVFile(file) {
+            const maxSize = 5 * 1024 * 1024; // 5 MB
+            if (file.size > maxSize) {
+                alert('CSV file too large. Maximum size is 5 MB.');
+                return;
+            }
             const reader = new FileReader();
             reader.onload = (e) => {
                 const csv = e.target.result;
@@ -498,9 +524,9 @@
                 const previewBody = document.getElementById('previewBody');
                 const rowCount = document.getElementById('rowCount');
 
-                headerRow.innerHTML = headers.map(h => `<th class="px-3 py-2 text-left">${h}</th>`).join('');
+                headerRow.innerHTML = headers.map(h => `<th class="px-3 py-2 text-left">${escapeHtml(h)}</th>`).join('');
                 previewBody.innerHTML = dataRows.map(row =>
-                    `<tr class="border-t">${row.map(cell => `<td class="px-3 py-2 text-gray-700 dark:text-gray-300">${cell}</td>`).join('')}</tr>`
+                    `<tr class="border-t">${row.map(cell => `<td class="px-3 py-2 text-gray-700 dark:text-gray-300">${escapeHtml(cell)}</td>`).join('')}</tr>`
                 ).join('');
 
                 rowCount.textContent = dataRows.length;
@@ -546,14 +572,14 @@
             const content = document.getElementById('modalContent');
 
             content.innerHTML = `
-                <div><strong>Identifier:</strong> ${cert.identifier}</div>
-                <div><strong>Common Name:</strong> ${cert.common_name}</div>
-                <div><strong>Email:</strong> ${cert.email || 'N/A'}</div>
-                <div><strong>Organization:</strong> ${cert.organization}</div>
-                <div><strong>Usage:</strong> ${cert.cert_usage}</div>
-                <div><strong>Serial:</strong> ${cert.serial_number}</div>
-                <div><strong>Created:</strong> ${new Date(cert.created_at).toLocaleString()}</div>
-                <div><strong>Expires:</strong> ${new Date(cert.expires_at).toLocaleString()}</div>
+                <div><strong>Identifier:</strong> ${escapeHtml(cert.identifier || '')}</div>
+                <div><strong>Common Name:</strong> ${escapeHtml(cert.common_name || '')}</div>
+                <div><strong>Email:</strong> ${escapeHtml(cert.email || 'N/A')}</div>
+                <div><strong>Organization:</strong> ${escapeHtml(cert.organization || '')}</div>
+                <div><strong>Usage:</strong> ${escapeHtml(cert.cert_usage || '')}</div>
+                <div><strong>Serial:</strong> ${escapeHtml(String(cert.serial_number || ''))}</div>
+                <div><strong>Created:</strong> ${escapeHtml(new Date(cert.created_at).toLocaleString())}</div>
+                <div><strong>Expires:</strong> ${escapeHtml(new Date(cert.expires_at).toLocaleString())}</div>
                 <div><strong>Status:</strong> ${cert.revoked ? 'Revoked' : 'Active'}</div>
             `;
 
@@ -566,7 +592,13 @@
 
         function downloadCertFile(type) {
             if (!currentCertId) return;
-            window.location.href = `/api/client-certs/${currentCertId}/download/${type}`;
+            // Validate cert ID format to prevent URL manipulation
+            if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(currentCertId)) {
+                showMessage('Invalid certificate identifier', 'danger');
+                return;
+            }
+            if (!['crt', 'key', 'csr'].includes(type)) return;
+            window.location.href = `/api/client-certs/${encodeURIComponent(currentCertId)}/download/${encodeURIComponent(type)}`;
         }
 
         // Revoke certificate

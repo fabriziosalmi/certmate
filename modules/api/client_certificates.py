@@ -4,12 +4,25 @@ Flask-RESTX endpoints for client certificate management
 """
 
 import logging
+import re
 from flask import request, send_file, Response
 from flask_restx import Resource, fields, abort
 from io import BytesIO
 import json
 
 logger = logging.getLogger(__name__)
+
+# Validation pattern for client certificate identifiers
+_SAFE_IDENTIFIER_RE = re.compile(r'^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$')
+
+
+def _validate_identifier(identifier):
+    """Validate client certificate identifier to prevent path traversal."""
+    if not identifier or '..' in identifier or '/' in identifier or '\\' in identifier or '\x00' in identifier:
+        return False
+    if not _SAFE_IDENTIFIER_RE.match(identifier):
+        return False
+    return True
 
 
 def create_client_certificate_models(api):
@@ -53,6 +66,7 @@ def create_client_certificate_resources(api, managers):
     """Create and register all client certificate resources."""
 
     client_cert_manager = managers.get('client_certificates')
+    auth_manager = managers.get('auth')
     ocsp_responder = managers.get('ocsp')
     crl_manager = managers.get('crl')
 
@@ -62,6 +76,8 @@ def create_client_certificate_resources(api, managers):
 
     # Client Certificate List Resource
     class ClientCertificateList(Resource):
+        method_decorators = [auth_manager.require_auth]
+
         def get(self):
             """Get list of client certificates with optional filtering."""
             try:
@@ -85,10 +101,12 @@ def create_client_certificate_resources(api, managers):
 
             except Exception as e:
                 logger.error(f"Error listing client certificates: {str(e)}")
-                abort(500, f"Error listing certificates: {str(e)}")
+                abort(500, "Failed to list certificates")
 
     # Client Certificate Create Resource
     class ClientCertificateCreate(Resource):
+        method_decorators = [auth_manager.require_auth]
+
         def post(self):
             """Create a new client certificate."""
             try:
@@ -97,13 +115,27 @@ def create_client_certificate_resources(api, managers):
                 if not data or 'common_name' not in data:
                     abort(400, "common_name is required")
 
-                # Get parameters
-                common_name = data.get('common_name')
+                # Get parameters with length validation
+                common_name = data.get('common_name', '')
+                if not common_name or len(common_name) > 64:
+                    abort(400, "common_name must be between 1 and 64 characters")
                 email = data.get('email', '')
+                if len(email) > 254:
+                    abort(400, "email must be 254 characters or less")
                 organization = data.get('organization', 'CertMate')
+                if len(organization) > 64:
+                    abort(400, "organization must be 64 characters or less")
                 organizational_unit = data.get('organizational_unit', 'Users')
+                if len(organizational_unit) > 64:
+                    abort(400, "organizational_unit must be 64 characters or less")
                 cert_usage = data.get('cert_usage', 'api-mtls')
                 days_valid = data.get('days_valid', 365)
+                try:
+                    days_valid = int(days_valid)
+                except (TypeError, ValueError):
+                    abort(400, "days_valid must be an integer")
+                if days_valid < 1 or days_valid > 3650:
+                    abort(400, "days_valid must be between 1 and 3650")
                 generate_key = data.get('generate_key', True)
                 notes = data.get('notes', '')
 
@@ -126,13 +158,17 @@ def create_client_certificate_resources(api, managers):
 
             except Exception as e:
                 logger.error(f"Error creating client certificate: {str(e)}")
-                abort(500, f"Error creating certificate: {str(e)}")
+                abort(500, "Failed to create certificate")
 
     # Client Certificate Detail Resource
     class ClientCertificateDetail(Resource):
+        method_decorators = [auth_manager.require_auth]
+
         def get(self, identifier):
             """Get certificate metadata."""
             try:
+                if not _validate_identifier(identifier):
+                    abort(400, "Invalid certificate identifier")
                 metadata = client_cert_manager.get_certificate_metadata(identifier)
 
                 if not metadata:
@@ -142,13 +178,17 @@ def create_client_certificate_resources(api, managers):
 
             except Exception as e:
                 logger.error(f"Error getting certificate metadata: {str(e)}")
-                abort(500, str(e))
+                abort(500, "Failed to get certificate metadata")
 
     # Client Certificate Download Resource
     class ClientCertificateDownload(Resource):
+        method_decorators = [auth_manager.require_auth]
+
         def get(self, identifier, file_type):
             """Download certificate, key, or CSR."""
             try:
+                if not _validate_identifier(identifier):
+                    abort(400, "Invalid certificate identifier")
                 if file_type not in ['crt', 'key', 'csr']:
                     abort(400, "Invalid file type. Must be 'crt', 'key', or 'csr'")
 
@@ -171,13 +211,17 @@ def create_client_certificate_resources(api, managers):
 
             except Exception as e:
                 logger.error(f"Error downloading certificate file: {str(e)}")
-                abort(500, str(e))
+                abort(500, "Failed to download certificate file")
 
     # Client Certificate Revoke Resource
     class ClientCertificateRevoke(Resource):
+        method_decorators = [auth_manager.require_auth]
+
         def post(self, identifier):
             """Revoke a client certificate."""
             try:
+                if not _validate_identifier(identifier):
+                    abort(400, "Invalid certificate identifier")
                 data = request.get_json() or {}
                 reason = data.get('reason', 'unspecified')
 
@@ -194,13 +238,17 @@ def create_client_certificate_resources(api, managers):
 
             except Exception as e:
                 logger.error(f"Error revoking certificate: {str(e)}")
-                abort(500, str(e))
+                abort(500, "Failed to revoke certificate")
 
     # Client Certificate Renew Resource
     class ClientCertificateRenew(Resource):
+        method_decorators = [auth_manager.require_auth]
+
         def post(self, identifier):
             """Renew a client certificate."""
             try:
+                if not _validate_identifier(identifier):
+                    abort(400, "Invalid certificate identifier")
                 # Renew certificate
                 success, error, cert_data = client_cert_manager.renew_certificate(
                     identifier
@@ -213,10 +261,12 @@ def create_client_certificate_resources(api, managers):
 
             except Exception as e:
                 logger.error(f"Error renewing certificate: {str(e)}")
-                abort(500, str(e))
+                abort(500, "Failed to renew certificate")
 
     # Client Certificate Statistics Resource
     class ClientCertificateStatistics(Resource):
+        method_decorators = [auth_manager.require_auth]
+
         def get(self):
             """Get certificate statistics."""
             try:
@@ -225,10 +275,12 @@ def create_client_certificate_resources(api, managers):
 
             except Exception as e:
                 logger.error(f"Error getting statistics: {str(e)}")
-                abort(500, str(e))
+                abort(500, "Failed to get certificate statistics")
 
     # Client Certificate Batch Resource
     class ClientCertificateBatch(Resource):
+        method_decorators = [auth_manager.require_auth]
+
         def post(self):
             """Create multiple certificates from CSV data."""
             try:
@@ -239,6 +291,11 @@ def create_client_certificate_resources(api, managers):
 
                 rows = data.get('rows', [])
                 headers = data.get('headers', [])
+
+                # Limit batch size to prevent resource exhaustion
+                max_batch = 100
+                if len(rows) > max_batch:
+                    abort(400, f"Batch size exceeds maximum of {max_batch} certificates")
 
                 if not headers or 'common_name' not in headers:
                     abort(400, "CSV must have 'common_name' column")
@@ -260,13 +317,20 @@ def create_client_certificate_resources(api, managers):
                             if i < len(row):
                                 cert_data[header.strip()] = row[i].strip()
 
+                        # Validate and convert days_valid
+                        try:
+                            batch_days = int(cert_data.get('days_valid', 365))
+                        except (TypeError, ValueError):
+                            batch_days = 365
+                        batch_days = max(1, min(batch_days, 3650))
+
                         # Create certificate
                         success, error, cert_info = client_cert_manager.create_client_certificate(
                             common_name=cert_data.get('common_name', ''),
                             email=cert_data.get('email', ''),
                             organization=cert_data.get('organization', 'CertMate'),
                             cert_usage=cert_data.get('cert_usage', 'api-mtls'),
-                            days_valid=int(cert_data.get('days_valid', 365)),
+                            days_valid=batch_days,
                             generate_key=True,
                             notes=cert_data.get('notes', '')
                         )
@@ -285,10 +349,11 @@ def create_client_certificate_resources(api, managers):
                             })
 
                     except Exception as e:
+                        logger.error(f"Batch cert creation error for row {idx + 2}: {str(e)}")
                         results['failed'] += 1
                         results['errors'].append({
                             'row': idx + 2,
-                            'error': str(e)
+                            'error': 'Certificate creation failed'
                         })
 
                 logger.info(f"Batch certificate creation: {results['successful']}/{results['total']} successful")
@@ -296,7 +361,7 @@ def create_client_certificate_resources(api, managers):
 
             except Exception as e:
                 logger.error(f"Error in batch creation: {str(e)}")
-                abort(500, str(e))
+                abort(500, "Failed to process batch certificate creation")
 
     # OCSP Status Resource
     class OCSPStatus(Resource):
@@ -306,7 +371,10 @@ def create_client_certificate_resources(api, managers):
                 if not ocsp_responder:
                     abort(503, "OCSP responder not available")
 
-                cert_status = ocsp_responder.get_cert_status(int(serial_number))
+                serial_num = int(serial_number)
+                if serial_num < 0 or serial_num > 2**160:
+                    abort(400, "Serial number out of valid range")
+                cert_status = ocsp_responder.get_cert_status(serial_num)
                 response = ocsp_responder.generate_ocsp_response(cert_status)
 
                 return response, 200
@@ -315,7 +383,7 @@ def create_client_certificate_resources(api, managers):
                 abort(400, "Invalid serial number")
             except Exception as e:
                 logger.error(f"Error getting OCSP status: {str(e)}")
-                abort(500, str(e))
+                abort(500, "Failed to get OCSP status")
 
     # CRL Distribution Resource
     class CRLDistribution(Resource):
@@ -356,7 +424,7 @@ def create_client_certificate_resources(api, managers):
 
             except Exception as e:
                 logger.error(f"Error getting CRL: {str(e)}")
-                abort(500, str(e))
+                abort(500, "Failed to get CRL")
 
     # Return dictionary of resource classes
     return {

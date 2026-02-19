@@ -16,8 +16,6 @@ README.md
 screenshot_*.png
 CODE_OF_CONDUCT.md
 CONTRIBUTING.md
-DNS_PROVIDERS.md
-INSTALLATION.md
 LICENSE
 
 # Exclude Python cache and temporary files
@@ -43,9 +41,10 @@ docker-compose.yml
 Dockerfile
 .dockerignore
 
-# Exclude test files
+# Exclude test and debug files
 test_*.py
 *_test.py
+debug_*.py
 
 # Exclude setup and validation scripts
 setup.sh

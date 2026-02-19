@@ -67,6 +67,9 @@ class RateLimitConfig:
 class SimpleRateLimiter:
     """Simple in-memory rate limiter (perfect for single-instance apps)."""
 
+    # Maximum number of unique keys to track (prevents memory exhaustion under attack)
+    MAX_KEYS = 10000
+
     def __init__(self, config: RateLimitConfig):
         """
         Initialize Rate Limiter.
@@ -76,6 +79,7 @@ class SimpleRateLimiter:
         """
         self.config = config
         self.requests = defaultdict(list)  # Track request times per IP
+        self._last_cleanup = time()
 
     def is_allowed(self, identifier: str, endpoint: str) -> bool:
         """
@@ -91,6 +95,20 @@ class SimpleRateLimiter:
         limit = self.config.get_limit(endpoint)
         current_time = time()
         window_start = current_time - 60  # 1 minute window
+
+        # Periodic cleanup (every 5 minutes)
+        if current_time - self._last_cleanup > 300:
+            self.cleanup_old_entries()
+            self._last_cleanup = current_time
+
+        # Evict oldest entries if at capacity
+        if len(self.requests) >= self.MAX_KEYS:
+            self.cleanup_old_entries()
+            # If still at capacity after cleanup, evict random entries
+            if len(self.requests) >= self.MAX_KEYS:
+                excess = len(self.requests) - self.MAX_KEYS + 100  # Free 100 slots
+                for evict_key in list(self.requests.keys())[:excess]:
+                    del self.requests[evict_key]
 
         # Get requests for this identifier
         key = f"{identifier}:{endpoint}"
@@ -140,11 +158,9 @@ def rate_limit_decorator(limiter: SimpleRateLimiter, endpoint: str):
     def decorator(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
-            # Get client IP (prefer X-Forwarded-For for proxied requests)
-            client_ip = request.headers.get(
-                'X-Forwarded-For',
-                request.remote_addr
-            ).split(',')[0].strip()
+            # Use remote_addr to prevent rate-limit bypass via spoofed headers.
+            # Configure Werkzeug ProxyFix if behind a trusted reverse proxy.
+            client_ip = request.remote_addr or '0.0.0.0'
 
             # Check rate limit
             if not limiter.is_allowed(client_ip, endpoint):

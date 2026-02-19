@@ -156,15 +156,21 @@ class CAManager:
             logger.error(f"Failed to create CA trust bundle: {e}")
             return None
     
-    def build_certbot_command(self, domain: str, email: str, ca_provider: str, 
-                            dns_provider: str, dns_config: Dict[str, Any], 
+    def build_certbot_command(self, domain: str, email: str, ca_provider: str,
+                            dns_provider: str, dns_config: Dict[str, Any],
                             account_config: Dict[str, Any], staging: bool = False,
-                            cert_dir: Path = None) -> list:
-        """Build certbot command with CA-specific parameters"""
-        
+                            cert_dir: Path = None, san_domains: list = None) -> tuple:
+        """Build certbot command with CA-specific parameters.
+
+        Returns:
+            Tuple of (certbot_cmd list, extra_env dict) — extra_env contains
+            environment variables to pass to the subprocess (e.g. REQUESTS_CA_BUNDLE).
+        """
+        extra_env = {}
+
         # Get ACME server URL
         acme_url = self.get_acme_server_url(ca_provider, staging, account_config)
-        
+
         # Basic certbot command
         certbot_cmd = [
             'certbot', 'certonly',
@@ -175,18 +181,23 @@ class CAManager:
             '--server', acme_url,
             '-d', domain
         ]
-        
+
+        # Add SAN domains
+        if san_domains:
+            for san in san_domains:
+                certbot_cmd.extend(['-d', san])
+
         # Add directory configuration if provided
         if cert_dir:
             cert_output_dir = cert_dir / domain
             cert_output_dir.mkdir(parents=True, exist_ok=True)
-            
+
             certbot_cmd.extend([
                 '--config-dir', str(cert_output_dir),
                 '--work-dir', str(cert_output_dir / 'work'),
                 '--logs-dir', str(cert_output_dir / 'logs')
             ])
-        
+
         # Add EAB credentials if required
         if self.requires_eab(ca_provider):
             eab_key_id, eab_hmac_key = self.get_eab_credentials(ca_provider, account_config)
@@ -195,15 +206,14 @@ class CAManager:
                     '--eab-kid', eab_key_id,
                     '--eab-hmac-key', eab_hmac_key
                 ])
-        
-        # Add CA bundle for private CAs
+
+        # Add CA bundle for private CAs (pass via extra_env, not os.environ)
         if ca_provider == 'private_ca':
             ca_bundle_path = self.create_ca_trust_bundle(ca_provider, account_config)
             if ca_bundle_path:
-                # Use REQUESTS_CA_BUNDLE environment variable for certbot
-                os.environ['REQUESTS_CA_BUNDLE'] = ca_bundle_path
-        
-        return certbot_cmd
+                extra_env['REQUESTS_CA_BUNDLE'] = ca_bundle_path
+
+        return certbot_cmd, extra_env
     
     def validate_ca_configuration(self, ca_provider: str, config: Dict[str, Any]) -> Tuple[bool, str]:
         """Validate CA provider configuration"""

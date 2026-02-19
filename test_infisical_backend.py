@@ -67,6 +67,7 @@ def print_info(text):
 
 def test_infisical_backend():
     """Test the Infisical storage backend"""
+    import pytest
     
     print_header("Infisical Storage Backend Test")
     
@@ -92,13 +93,7 @@ def test_infisical_backend():
     
     # Check required config
     if not all([config['client_id'], config['client_secret'], config['project_id']]):
-        print_error("Missing required configuration!")
-        print_warning("Set environment variables:")
-        print("      export INFISICAL_SITE_URL=https://your-infisical.com")
-        print("      export INFISICAL_CLIENT_ID=your-client-id")
-        print("      export INFISICAL_CLIENT_SECRET=your-client-secret")
-        print("      export INFISICAL_PROJECT_ID=your-project-id")
-        return False
+        pytest.skip("Missing Infisical env vars (INFISICAL_CLIENT_ID, INFISICAL_CLIENT_SECRET, INFISICAL_PROJECT_ID)")
     
     # ==========================================================================
     # Check infisical-python package
@@ -111,7 +106,7 @@ def test_infisical_backend():
     except ImportError:
         print_error("infisical-python not installed!")
         print_warning("Install with: pip install infisical-python")
-        return False
+        pytest.fail("Infisical test step failed")
     
     # ==========================================================================
     # Initialize Backend
@@ -124,7 +119,7 @@ def test_infisical_backend():
         print_success("Backend initialized")
     except Exception as e:
         print_error(f"Failed to initialize: {e}")
-        return False
+        pytest.fail("Infisical test step failed")
     
     # ==========================================================================
     # Test Connection
@@ -136,7 +131,7 @@ def test_infisical_backend():
         print_success("Connected to Infisical!")
     except Exception as e:
         print_error(f"Connection failed: {e}")
-        return False
+        pytest.fail("Infisical test step failed")
     
     # ==========================================================================
     # Test Store Certificate
@@ -169,10 +164,10 @@ def test_infisical_backend():
             print_success(f"Certificate stored for {test_domain}")
         else:
             print_error("Store returned False")
-            return False
+            pytest.fail("Infisical test step failed")
     except Exception as e:
         print_error(f"Store failed: {e}")
-        return False
+        pytest.fail("Infisical test step failed")
     
     # ==========================================================================
     # Test Certificate Exists
@@ -185,10 +180,10 @@ def test_infisical_backend():
             print_success("Certificate exists check passed")
         else:
             print_error("Certificate not found after storing!")
-            return False
+            pytest.fail("Infisical test step failed")
     except Exception as e:
         print_error(f"Exists check failed: {e}")
-        return False
+        pytest.fail("Infisical test step failed")
     
     # ==========================================================================
     # Test List Certificates
@@ -204,7 +199,7 @@ def test_infisical_backend():
             print_warning(f"Test domain {test_domain} not in list (may be naming issue)")
     except Exception as e:
         print_error(f"List failed: {e}")
-        return False
+        pytest.fail("Infisical test step failed")
     
     # ==========================================================================
     # Test Retrieve Certificate
@@ -223,10 +218,10 @@ def test_infisical_backend():
                 print(f"        - {key}: {value}")
         else:
             print_error("Retrieve returned None")
-            return False
+            pytest.fail("Infisical test step failed")
     except Exception as e:
         print_error(f"Retrieve failed: {e}")
-        return False
+        pytest.fail("Infisical test step failed")
     
     # ==========================================================================
     # Test Delete Certificate
@@ -241,7 +236,7 @@ def test_infisical_backend():
             print_warning("Delete returned False (may already be deleted)")
     except Exception as e:
         print_error(f"Delete failed: {e}")
-        return False
+        pytest.fail("Infisical test step failed")
     
     # Verify deletion
     print_step("Verifying deletion...")
@@ -277,10 +272,7 @@ def test_infisical_backend():
         }}
     }}''')
     print()
-    
-    return True
 
 
 if __name__ == '__main__':
-    success = test_infisical_backend()
-    sys.exit(0 if success else 1)
+    test_infisical_backend()

@@ -1,90 +1,67 @@
 # CertMate Documentation
 
-Welcome to the CertMate documentation! This folder contains comprehensive guides for all features.
-
-## Client Certificates Documentation
-
-**Status**: Production Ready | **Version**: 1.0.0 | **Tests**: 27/27 Passing
-
-### Quick Navigation
-
-- **[Start Here](./index.md)** - Main landing page with overview
-- **[Quick Start Guide](./guide.md)** - Get up and running in minutes
-- **[API Reference](./api.md)** - Complete REST API documentation
-- **[Architecture](./architecture.md)** - System design and components
-- **[Changelog](./CHANGELOG.md)** - Version history and updates
+Welcome to the CertMate documentation. This folder contains comprehensive guides for all features.
 
 ---
 
-## Documentation Sections
+## Quick Navigation
+
+### Getting Started
+- **[Installation Guide](./installation.md)** — Setup, dependencies, production deployment
+- **[Docker Guide](./docker.md)** — Docker builds, multi-platform, Docker Compose
+
+### Core Features
+- **[DNS Providers](./dns-providers.md)** — 22 DNS providers, multi-account, domain alias
+- **[CA Providers](./ca-providers.md)** — Let's Encrypt, DigiCert, Private CA
+- **[Client Certificates](./guide.md)** — Client cert lifecycle, web dashboard, batch ops
+
+### Reference
+- **[API Reference](./api.md)** — Complete REST API documentation
+- **[Architecture](./architecture.md)** — System design, components, data flow
+- **[Testing Guide](./testing.md)** — Test framework, CI/CD, coverage
+- **[Changelog](./CHANGELOG.md)** — Version history and updates
+
+---
+
+## Documentation by Audience
 
 ### For New Users
-Start with these if you're new to CertMate Client Certificates:
 
-1. **[Getting Started](./guide.md#getting-started)**
- - Installation and setup
- - First certificate creation
- - Web dashboard tour
-
-2. **[Common Tasks](./guide.md#common-tasks)**
- - Creating certificates
- - Batch importing
- - Downloading files
- - Renewing and revoking
+1. **[Installation](./installation.md)** — Get CertMate running
+2. **[DNS Providers](./dns-providers.md)** — Configure your DNS provider
+3. **[Client Certificates Guide](./guide.md)** — Create your first certificate
 
 ### For Developers
-Use these if you're integrating with the API:
 
-1. **[API Reference](./api.md)**
- - All endpoints documented
- - Request/response examples
- - Error handling
- - Rate limiting info
-
-2. **[Architecture](./architecture.md)**
- - System components
- - Data flow
- - Security model
- - Scalability design
+1. **[API Reference](./api.md)** — All endpoints with examples
+2. **[Architecture](./architecture.md)** — System internals and design
+3. **[Testing Guide](./testing.md)** — How to write and run tests
 
 ### For Administrators
-Use these to manage and monitor the system:
 
-1. **[Audit Logging](./api.md#audit-logging)**
- - How to access audit logs
- - Understanding log entries
-
-2. **[Rate Limiting](./api.md#rate-limiting)**
- - Default limits
- - Configuration
- - Per-endpoint limits
+1. **[Docker Deployment](./docker.md)** — Production Docker setup
+2. **[CA Providers](./ca-providers.md)** — Configure certificate authorities
+3. **[DNS Providers](./dns-providers.md#multi-account-support)** — Enterprise multi-account setup
 
 ---
 
 ## Feature Overview
 
-### Phase 1: CA Foundation 
-- Self-signed Certificate Authority (4096-bit RSA)
-- CSR validation and creation
-- Secure key storage
+### Server Certificates
+- **22 DNS providers** for Let's Encrypt DNS-01 challenges
+- **Multiple CA providers**: Let's Encrypt, DigiCert ACME, Private CA
+- **Multi-account support** per DNS provider
+- **Pluggable storage backends**: Local, Azure Key Vault, AWS, Vault, Infisical
+- **Auto-renewal** with configurable thresholds
+- **Docker support** with multi-platform builds (ARM64 + AMD64)
 
-### Phase 2: Client Certificate Engine 
-- Complete lifecycle management
-- Multi-filter queries and search
-- Auto-renewal scheduling
-- Support for 30k+ certificates
-
-### Phase 3: UI & Advanced Features 
-- Web dashboard at `/client-certificates`
-- OCSP real-time status queries
-- CRL generation and distribution
-- REST API (10 endpoints)
-- Batch CSV import
-
-### Phase 4: Easy Wins 
-- Comprehensive audit logging
-- API rate limiting
-- Production-ready security
+### Client Certificates
+- **Self-signed CA** with 4096-bit RSA keys
+- **Full lifecycle management** — create, renew, revoke, monitor
+- **OCSP & CRL** — real-time status and revocation lists
+- **Web dashboard** at `/client-certificates`
+- **Batch operations** — import 100-30,000 certificates via CSV
+- **Audit logging** and **rate limiting**
 
 ---
 
@@ -162,12 +139,17 @@ Test coverage includes:
 
 ```
 docs/
- README.md ← You are here
- index.md ← Main landing page
- guide.md ← User guide & getting started
- api.md ← Complete API reference
- architecture.md ← System design & components
- CHANGELOG.md ← Version history
+  README.md            ← You are here
+  index.md             ← Client certificates landing page
+  installation.md      ← Installation & setup
+  dns-providers.md     ← DNS providers & multi-account
+  ca-providers.md      ← Certificate Authority providers
+  docker.md            ← Docker build & deployment
+  testing.md           ← Testing framework & CI/CD
+  guide.md             ← Client certificates user guide
+  api.md               ← Complete API reference
+  architecture.md      ← System architecture
+  CHANGELOG.md         ← Version history
 ```
 
 ---

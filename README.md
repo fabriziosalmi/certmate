@@ -17,7 +17,7 @@
 ![screenshot1](screenshot_1.png)
 ![screenshot2](screenshot_2.png)
 
-[Quick Start](#quick-start-with-docker) • [Documentation](#documentation) • [Installation](#installation-methods) • [DNS Providers](#supported-dns-providers) • [CA Providers](CA_PROVIDERS.md) • [Storage Backends](#certificate-storage-configuration) • [Backup & Recovery](#backup--recovery) • [API Reference](#api-usage)
+[Quick Start](#quick-start-with-docker) • [Documentation](#documentation) • [Installation](#installation-methods) • [DNS Providers](#supported-dns-providers) • [CA Providers](docs/ca-providers.md) • [Storage Backends](#certificate-storage-configuration) • [Backup & Recovery](#backup--recovery) • [API Reference](#api-usage)
 
 </div>
 
@@ -149,9 +149,9 @@ For supported providers, you can configure multiple accounts to enable:
 - **Disaster Recovery**: Backup accounts for high-availability scenarios
 - **Permission Scoping**: Accounts with minimal required permissions for security
 
-> **Detailed Setup Instructions**: See [DNS_PROVIDERS.md](DNS_PROVIDERS.md) for provider-specific configuration. 
-> **Step-by-Step Installation**: See [INSTALLATION.md](INSTALLATION.md) for complete setup guide. 
-> **Multi-Account Examples**: See [MULTI_ACCOUNT_EXAMPLES.md](MULTI_ACCOUNT_EXAMPLES.md) for enterprise configuration examples.
+> **Detailed Setup Instructions**: See [DNS Providers Guide](docs/dns-providers.md) for provider-specific configuration. 
+> **Step-by-Step Installation**: See [Installation Guide](docs/installation.md) for complete setup guide. 
+> **Multi-Account Examples**: See [DNS Providers Guide](docs/dns-providers.md#multi-account-support) for enterprise configuration examples.
 
 ## Quick Start with Docker
 
@@ -283,7 +283,7 @@ docker-compose up -d
 docker run --platform linux/arm64 -d --name certmate --env-file .env -p 8000:8000 USERNAME/certmate:latest
 ```
 
-> **Multi-Platform Guide**: See [DOCKER_MULTIPLATFORM.md](DOCKER_MULTIPLATFORM.md) for comprehensive multi-architecture setup instructions.
+> **Multi-Platform Guide**: See [Docker Guide](docs/docker.md) for comprehensive multi-architecture setup instructions.
 
 ### Python Virtual Environment
 Ideal for development and testing environments.
@@ -365,7 +365,7 @@ sudo systemctl enable certmate
 sudo systemctl start certmate
 ```
 
-> **Detailed Instructions**: See [INSTALLATION.md](INSTALLATION.md) for complete setup guides for each method.
+> **Detailed Instructions**: See [Installation Guide](docs/installation.md) for complete setup guides for each method.
 
 ## Service Setup
 
@@ -526,7 +526,7 @@ If the service fails to start:
 4. **Test manually**: `sudo -u certmate /opt/certmate/venv/bin/python /opt/certmate/app.py`
 5. **Check dependencies**: `sudo -u certmate /opt/certmate/venv/bin/python validate_dependencies.py`
 
-For more detailed installation instructions, see [INSTALLATION.md](INSTALLATION.md).
+For more detailed installation instructions, see the [Installation Guide](docs/installation.md).
 
 ## API Usage
 
@@ -1787,9 +1787,8 @@ certmate/
  nginx.conf # Nginx reverse proxy config
  .env.example # Environment template
  README.md # This documentation
- INSTALLATION.md # Detailed installation guide
- DNS_PROVIDERS.md # DNS provider configuration
  CONTRIBUTING.md # Contribution guidelines
+ docs/ # Comprehensive documentation
  certificates/ # Certificate storage
  {domain}/
  cert.pem # Server certificate
@@ -2464,9 +2463,13 @@ echo "Settings: $(docker exec certmate cat /app/data/settings.json | jq .)"
 | Document | Description | Target Audience |
 |----------|-------------|-----------------|
 | **[README.md](README.md)** | Main documentation and quick start | All users |
-| **[INSTALLATION.md](INSTALLATION.md)** | Detailed installation instructions | System administrators |
-| **[DNS_PROVIDERS.md](DNS_PROVIDERS.md)** | DNS provider setup guides | DevOps engineers |
-| **[CA_PROVIDERS.md](CA_PROVIDERS.md)** | Certificate Authority configuration | Enterprise users |
+| **[docs/installation.md](docs/installation.md)** | Installation and deployment | System administrators |
+| **[docs/dns-providers.md](docs/dns-providers.md)** | DNS provider setup (22 providers) | DevOps engineers |
+| **[docs/ca-providers.md](docs/ca-providers.md)** | Certificate Authority configuration | Enterprise users |
+| **[docs/docker.md](docs/docker.md)** | Docker and multi-platform builds | DevOps engineers |
+| **[docs/testing.md](docs/testing.md)** | Testing framework and CI/CD | Developers |
+| **[docs/architecture.md](docs/architecture.md)** | System architecture | Developers |
+| **[docs/api.md](docs/api.md)** | Client certificates API reference | Developers |
 | **[CONTRIBUTING.md](CONTRIBUTING.md)** | Development and contribution guide | Developers |
 | **[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)** | Community guidelines | Contributors |
 

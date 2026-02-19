@@ -7,6 +7,7 @@ local filesystem, Azure Key Vault, AWS Secrets Manager, HashiCorp Vault, and Inf
 import os
 import json
 import logging
+import re
 import tempfile
 import zipfile
 from abc import ABC, abstractmethod
@@ -17,6 +18,18 @@ from typing import Dict, List, Optional, Tuple, Any
 from .constants import CERTIFICATE_FILES
 
 logger = logging.getLogger(__name__)
+
+_SAFE_DOMAIN_RE = re.compile(r'^(\*\.)?[a-zA-Z0-9]([a-zA-Z0-9._-]{0,253}[a-zA-Z0-9])?$')
+
+
+def _validate_storage_domain(domain: str) -> str:
+    """Validate domain name for use in storage backend paths/keys.
+    Raises ValueError if domain contains path traversal or invalid chars."""
+    if not domain or '..' in domain or '/' in domain or '\\' in domain or '\x00' in domain:
+        raise ValueError(f"Invalid domain for storage: contains illegal characters")
+    if not _SAFE_DOMAIN_RE.match(domain):
+        raise ValueError(f"Invalid domain for storage: does not match domain pattern")
+    return domain
 
 
 class CertificateStorageBackend(ABC):
@@ -197,8 +210,9 @@ class AzureKeyVaultBackend(CertificateStorageBackend):
     def store_certificate(self, domain: str, cert_files: Dict[str, bytes], metadata: Dict[str, Any]) -> bool:
         """Store certificate files and metadata to Azure Key Vault"""
         try:
+            _validate_storage_domain(domain)
             client = self._get_client()
-            
+
             # Store certificate files as individual secrets
             for filename, content in cert_files.items():
                 secret_name = self._sanitize_secret_name(f"cert-{domain}-{filename.replace('.', '-')}")
@@ -341,8 +355,9 @@ class AWSSecretsManagerBackend(CertificateStorageBackend):
     def store_certificate(self, domain: str, cert_files: Dict[str, bytes], metadata: Dict[str, Any]) -> bool:
         """Store certificate files and metadata to AWS Secrets Manager"""
         try:
+            _validate_storage_domain(domain)
             client = self._get_client()
-            
+
             # Combine all certificate data into a single secret
             secret_data = {
                 'files': {k: v.decode('utf-8') for k, v in cert_files.items()},
@@ -472,8 +487,9 @@ class HashiCorpVaultBackend(CertificateStorageBackend):
     def store_certificate(self, domain: str, cert_files: Dict[str, bytes], metadata: Dict[str, Any]) -> bool:
         """Store certificate files and metadata to HashiCorp Vault"""
         try:
+            _validate_storage_domain(domain)
             client = self._get_client()
-            
+
             # Prepare secret data
             secret_data = {
                 'files': {k: v.decode('utf-8') for k, v in cert_files.items()},
@@ -635,8 +651,9 @@ class InfisicalBackend(CertificateStorageBackend):
     def store_certificate(self, domain: str, cert_files: Dict[str, bytes], metadata: Dict[str, Any]) -> bool:
         """Store certificate files and metadata to Infisical"""
         try:
+            _validate_storage_domain(domain)
             client = self._get_client()
-            
+
             # Store certificate files as individual secrets
             for filename, content in cert_files.items():
                 secret_key = f"certmate-{domain}-{filename.replace('.', '-')}"

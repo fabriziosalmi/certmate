@@ -1,7 +1,7 @@
 
 services:
   certmate:
-    build: 
+    build:
       context: .
       args:
         REQUIREMENTS_FILE: requirements.txt
@@ -10,10 +10,10 @@ services:
     # platform: linux/amd64  # Optional: force specific platform (linux/amd64, linux/arm64)
     container_name: certmate
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"  # Bind to localhost only; use nginx profile for external access
     environment:
       - FLASK_ENV=production
-      - SECRET_KEY=${SECRET_KEY:-your-secret-key-here}
+      - SECRET_KEY=${SECRET_KEY:-}  # Auto-generated if empty; set a strong value for production
       - CLOUDFLARE_TOKEN=${CLOUDFLARE_TOKEN}
       - API_BEARER_TOKEN=${API_BEARER_TOKEN}
     volumes:
@@ -22,6 +22,20 @@ services:
       - ./data:/app/data:rw
       - ./backups:/app/backups:rw
     restart: unless-stopped
+    cap_drop:
+      - ALL
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.0'
+        reservations:
+          memory: 128M
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -40,8 +54,23 @@ services:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
       - ./certificates:/etc/nginx/ssl:ro
     depends_on:
-      - certmate
+      certmate:
+        condition: service_healthy
     restart: unless-stopped
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
     profiles:
       - nginx
 

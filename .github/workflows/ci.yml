@@ -48,7 +48,7 @@ jobs:
     - name: Security check with bandit
       run: |
         pip install bandit
-        bandit -r . --severity-level medium || true
+        bandit -r . --severity-level medium --exclude ./venv,./tests,./.git
 
     - name: Run tests with coverage
       env:

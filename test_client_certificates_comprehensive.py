@@ -21,8 +21,8 @@ from modules.core.client_certificates import ClientCertificateManager
 from modules.core.ocsp_crl import OCSPResponder, CRLManager
 
 
-class TestResults:
-    """Track test results"""
+class ResultTracker:
+    """Track test results (not a pytest test class)"""
     def __init__(self):
         self.passed = 0
         self.failed = 0
@@ -52,7 +52,7 @@ class TestResults:
 def test_private_ca():
     """Test PrivateCAGenerator"""
     print("\n🔐 Testing PrivateCAGenerator...")
-    results = TestResults()
+    results = ResultTracker()
 
     with tempfile.TemporaryDirectory() as tmpdir:
         ca_dir = Path(tmpdir) / "ca"
@@ -92,13 +92,13 @@ def test_private_ca():
         except Exception as e:
             results.add_fail("CA tests", str(e))
 
-    return results
+    assert results.failed == 0, f"{results.failed} CA test(s) failed: {results.errors}"
 
 
 def test_csr_handler():
     """Test CSRHandler"""
     print("\n📝 Testing CSRHandler...")
-    results = TestResults()
+    results = ResultTracker()
 
     try:
         # Test CSR creation (returns csr_pem, key_pem, error)
@@ -145,13 +145,13 @@ def test_csr_handler():
     except Exception as e:
         results.add_fail("CSR handler tests", str(e))
 
-    return results
+    assert results.failed == 0, f"{results.failed} CSR test(s) failed: {results.errors}"
 
 
 def test_client_certificate_manager():
     """Test ClientCertificateManager"""
     print("\n🎫 Testing ClientCertificateManager...")
-    results = TestResults()
+    results = ResultTracker()
 
     with tempfile.TemporaryDirectory() as tmpdir:
         try:
@@ -179,7 +179,7 @@ def test_client_certificate_manager():
                 identifier = cert_data['identifier']
             else:
                 results.add_fail("Certificate creation", error)
-                return results
+                assert False, f"Certificate creation failed: {error}"
 
             # Test certificate listing
             certs = manager.list_client_certificates()
@@ -258,13 +258,13 @@ def test_client_certificate_manager():
         except Exception as e:
             results.add_fail("Manager tests", str(e))
 
-    return results
+    assert results.failed == 0, f"{results.failed} manager test(s) failed: {results.errors}"
 
 
 def test_ocsp_responder():
     """Test OCSPResponder"""
     print("\n🔍 Testing OCSPResponder...")
-    results = TestResults()
+    results = ResultTracker()
 
     with tempfile.TemporaryDirectory() as tmpdir:
         try:
@@ -288,7 +288,7 @@ def test_ocsp_responder():
 
             if not success:
                 results.add_fail("OCSP setup", "Failed to create certificate")
-                return results
+                assert False, "OCSP setup: Failed to create certificate"
 
             serial = int(cert_data.get('serial_number', 1))
 
@@ -339,13 +339,13 @@ def test_ocsp_responder():
         except Exception as e:
             results.add_fail("OCSP tests", str(e))
 
-    return results
+    assert results.failed == 0, f"{results.failed} OCSP test(s) failed: {results.errors}"
 
 
 def test_crl_manager():
     """Test CRLManager"""
     print("\n📋 Testing CRLManager...")
-    results = TestResults()
+    results = ResultTracker()
 
     with tempfile.TemporaryDirectory() as tmpdir:
         try:
@@ -376,7 +376,7 @@ def test_crl_manager():
 
             if not (success and cert_data1 and cert_data2):
                 results.add_fail("CRL setup", "Failed to create certificates")
-                return results
+                assert False, "CRL setup: Failed to create certificates"
 
             # Revoke both
             manager.revoke_certificate(cert_data1['identifier'])
@@ -424,13 +424,13 @@ def test_crl_manager():
         except Exception as e:
             results.add_fail("CRL tests", str(e))
 
-    return results
+    assert results.failed == 0, f"{results.failed} CRL test(s) failed: {results.errors}"
 
 
 def test_batch_operations():
     """Test batch certificate creation"""
     print("\n📦 Testing Batch Operations...")
-    results = TestResults()
+    results = ResultTracker()
 
     with tempfile.TemporaryDirectory() as tmpdir:
         try:
@@ -477,7 +477,7 @@ def test_batch_operations():
         except Exception as e:
             results.add_fail("Batch tests", str(e))
 
-    return results
+    assert results.failed == 0, f"{results.failed} batch test(s) failed: {results.errors}"
 
 
 def main():
@@ -486,30 +486,29 @@ def main():
     print("🧪 CertMate Client Certificate Comprehensive Test Suite")
     print("="*60)
 
-    all_results = []
+    failed = 0
+    test_funcs = [
+        test_private_ca,
+        test_csr_handler,
+        test_client_certificate_manager,
+        test_ocsp_responder,
+        test_crl_manager,
+        test_batch_operations,
+    ]
 
-    # Run test groups
-    all_results.append(test_private_ca())
-    all_results.append(test_csr_handler())
-    all_results.append(test_client_certificate_manager())
-    all_results.append(test_ocsp_responder())
-    all_results.append(test_crl_manager())
-    all_results.append(test_batch_operations())
-
-    # Summary
-    total_passed = sum(r.passed for r in all_results)
-    total_failed = sum(r.failed for r in all_results)
-    total = total_passed + total_failed
+    for func in test_funcs:
+        try:
+            func()
+        except AssertionError as e:
+            failed += 1
+            print(f"  FAILED: {e}")
 
     print("\n" + "="*60)
-    print(f"📊 Overall Results: {total_passed}/{total} tests passed")
-    print("="*60)
-
-    if total_failed > 0:
-        print(f"\n⚠️  {total_failed} test(s) failed. Please review above.")
+    if failed > 0:
+        print(f"⚠️  {failed} test group(s) failed. Please review above.")
         return 1
     else:
-        print(f"\n✅ All {total} tests passed!")
+        print(f"✅ All test groups passed!")
         return 0
 
 

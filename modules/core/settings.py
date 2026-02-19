@@ -204,8 +204,7 @@ class SettingsManager:
             
         except Exception as e:
             logger.error(f"Error loading settings: {e}")
-            logger.info("Falling back to default settings")
-            self.save_settings(default_settings)
+            logger.warning("Returning default settings in-memory (existing file preserved on disk)")
             return default_settings
 
     def save_settings(self, settings, backup_reason="auto_save"):
@@ -572,7 +571,7 @@ class SettingsManager:
     def _ensure_certificate_metadata(self):
         """Ensure all existing certificates have metadata.json files"""
         try:
-            cert_dir = self.file_ops.base_dir / "certificates"
+            cert_dir = self.file_ops.cert_dir
             if not cert_dir.exists():
                 return
                 
