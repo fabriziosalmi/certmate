@@ -1,3 +1,37 @@
+# Release v1.8.0
+
+## Documentation
+
+### Consolidated Documentation Structure
+- Moved 17 root-level documentation files into organized `/docs/` directory
+- Created `docs/installation.md`, `docs/dns-providers.md`, `docs/ca-providers.md`, `docs/docker.md`, `docs/testing.md`
+- Expanded `docs/architecture.md` with full system architecture overview
+- Updated `docs/README.md` and `docs/index.md` with complete navigation
+- Fixed all cross-references across README and internal docs
+
+## Bug Fixes
+
+### Timezone-Aware DateTime in Private CA
+- Fixed `datetime.utcnow()` (deprecated, naive) to `datetime.now(timezone.utc)` in 8 places
+- Resolves comparison errors with timezone-aware certificate attributes in cryptography >= 42.0
+
+### Test Suite Improvements
+- Added `conftest.py` to exclude server-dependent E2E tests from collection
+- Fixed pytest warnings: renamed `TestResults` class, replaced return values with asserts
+- Removed `testpaths` from `pytest.ini` to avoid collection issues
+- Result: 29 passed, 1 skipped, 0 warnings
+
+## Improvements
+
+### Security Hardening
+- Various module-level security improvements across core modules
+
+### UI
+- Transparent logo with favicon and apple-touch-icon integration
+- Removed `app.py.notmodular` dead code
+
+---
+
 # Release v1.7.2
 
 ## New Features

@@ -18,7 +18,7 @@
       "severity": "critical",
       "timestamp": "2026-01-17T17:07:54.582131",
       "details": {
-        "version": "1.2.1",
+        "version": "1.8.0",
         "duration": 0.007597208023071289
       }
     },

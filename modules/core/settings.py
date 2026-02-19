@@ -589,7 +589,7 @@ class SettingsManager:
                             "domain": domain,
                             "dns_provider": dns_provider,
                             "created_at": "unknown",
-                            "version": "1.2.1",
+                            "version": "1.8.0",
                             "migrated": True
                         }
                         
