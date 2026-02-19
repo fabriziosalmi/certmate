@@ -12,6 +12,7 @@
 [![API Documentation](https://img.shields.io/badge/API-Swagger-green)](http://localhost:8000/docs/)
 [![CI](https://github.com/fabriziosalmi/certmate/actions/workflows/ci.yml/badge.svg)](https://github.com/fabriziosalmi/certmate/actions/workflows/ci.yml)
 [![Build Multi-Platform Docker Images](https://github.com/fabriziosalmi/certmate/actions/workflows/docker-multiplatform.yml/badge.svg)](https://github.com/fabriziosalmi/certmate/actions/workflows/docker-multiplatform.yml)
+[![European Open Source](https://img.shields.io/badge/European%20Open%20Source-Catalogue-0046ad)](https://europeanopensource.eu/)
  
 ![screenshot1](screenshot_1.png)
 ![screenshot2](screenshot_2.png)
@@ -2544,8 +2545,16 @@ This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) 
 
 <div align="center">
 
-**Made with by Fabrizio Salmi**
+**Made with ❤️ by Fabrizio Salmi**
 
 [Star us on GitHub](https://github.com/fabriziosalmi/certmate) • [Report Bug](https://github.com/fabriziosalmi/certmate/issues) • [Request Feature](https://github.com/fabriziosalmi/certmate/issues/new?template=feature_request.md)
+
+<br>
+
+<a href="https://europeanopensource.eu/">
+  <img src="https://raw.githubusercontent.com/European-OpenSource/media-kit/main/assets/logo/light/Logo%20-%20standard.svg" alt="European Open Source" height="28">
+</a>
+<br>
+<sub>Listed in the European Open Source Catalogue</sub>
 
 </div>
