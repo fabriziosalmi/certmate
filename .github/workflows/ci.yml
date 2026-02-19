@@ -58,7 +58,7 @@ jobs:
         pytest -v --tb=short --cov=. --cov-report=xml --cov-report=html --ignore=test_e2e_real.py --ignore=test_ui_e2e.py
 
     - name: Upload coverage reports
-      if: matrix.python-version == '3.11'
+      if: matrix.python-version == '3.12'
       uses: codecov/codecov-action@v3
       with:
         file: ./coverage.xml
@@ -66,6 +66,6 @@ jobs:
         name: codecov-umbrella
 
     - name: Test Docker build
-      if: matrix.python-version == '3.11'
+      if: matrix.python-version == '3.12'
       run: |
         docker build -t certmate:test .

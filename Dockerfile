@@ -1,13 +1,13 @@
 # Multi-stage build for optimized image size and faster builds
-FROM python:3.11-slim AS builder
+FROM python:3.12-slim AS builder
 
 # Set working directory for build stage
 WORKDIR /build
 
 # Install build dependencies
-RUN apt-get update && apt-get install -y \
-    gcc \
-    && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && \
+    apt-get install -y -o Acquire::Retries=3 gcc && \
+    rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
 COPY requirements.txt requirements-minimal.txt ./
@@ -23,17 +23,16 @@ RUN pip install -U pip wheel && \
     pip install --no-cache-dir -r ${REQUIREMENTS_FILE}
 
 # Production stage
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 # Set working directory
 WORKDIR /app
 
 # Install runtime dependencies + tini for proper PID 1 signal handling
-RUN apt-get update && apt-get install -y \
-    curl \
-    tini \
-    && rm -rf /var/lib/apt/lists/* \
-    && useradd --create-home --shell /bin/bash certmate
+RUN apt-get update && \
+    apt-get install -y -o Acquire::Retries=3 curl tini && \
+    rm -rf /var/lib/apt/lists/* && \
+    useradd --create-home --shell /bin/bash certmate
 
 # Copy virtual environment from builder stage
 COPY --from=builder /opt/venv /opt/venv
