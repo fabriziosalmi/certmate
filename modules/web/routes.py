@@ -202,6 +202,7 @@ def register_web_routes(app, managers):
         return render_template('settings.html')
 
     @app.route('/help')
+    @require_web_auth
     def help_page():
         """Help and documentation page"""
         return render_template('help.html')
