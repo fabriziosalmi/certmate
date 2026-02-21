@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}CertMate{% endblock %}</title>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <link href="/static/css/tailwind.min.css" rel="stylesheet">
+    <link href="/static/css/fontawesome.min.css" rel="stylesheet">
+    {% block head %}{% endblock %}
+    <script>
+    // Apply dark mode before paint to prevent flash
+    (function() {
+        var theme = localStorage.getItem('theme');
+        if (theme === 'dark' || (theme !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        }
+    })();
+    </script>
+</head>
+<body class="bg-gray-50 dark:bg-gray-900 min-h-screen pb-16 md:pb-0 transition-colors duration-200">
+    <!-- Top Navigation -->
+    <nav class="bg-white dark:bg-gray-800 shadow-sm border-b dark:border-gray-700">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-14 md:h-16">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <a href="/">
+                            <img src="/static/img/certmate_logo_256.png" alt="CertMate" class="w-9 h-9 md:w-12 md:h-12">
+                        </a>
+                    </div>
+                    <div class="ml-2 md:ml-3">
+                        <h1 class="text-lg md:text-xl font-semibold text-gray-900 dark:text-white">CertMate</h1>
+                        <p class="text-xs md:text-sm text-gray-500 dark:text-gray-400 hidden sm:block">SSL Certificate Manager</p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-1 sm:space-x-4">
+                    <!-- Desktop nav links (hidden on mobile — bottom tab bar used instead) -->
+                    <a href="/" class="hidden md:inline-flex px-3 py-2 rounded-md text-sm font-medium {% if request.path == '/' %}text-primary bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700{% else %}text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700{% endif %}">
+                        <i class="fas fa-certificate mr-1"></i> Certificates
+                    </a>
+                    <a href="/#client" class="hidden md:inline-flex px-3 py-2 rounded-md text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700">
+                        <i class="fas fa-id-card mr-1"></i> Client Certs
+                    </a>
+                    <a href="/settings" class="hidden md:inline-flex px-3 py-2 rounded-md text-sm font-medium {% if request.path == '/settings' %}text-primary bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700{% else %}text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700{% endif %}">
+                        <i class="fas fa-cog mr-1"></i> Settings
+                    </a>
+                    <a href="/help" class="hidden md:inline-flex px-3 py-2 rounded-md text-sm font-medium {% if request.path == '/help' %}text-primary bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700{% else %}text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700{% endif %}">
+                        <i class="fas fa-question-circle mr-1"></i> Help
+                    </a>
+                    <a href="/activity" class="hidden md:inline-flex px-3 py-2 rounded-md text-sm font-medium {% if request.path == '/activity' %}text-primary bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700{% else %}text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700{% endif %}">
+                        <i class="fas fa-history mr-1"></i> Activity
+                    </a>
+                    <!-- Search (Cmd+K) -->
+                    <button type="button" onclick="document.dispatchEvent(new KeyboardEvent('keydown',{key:'k',metaKey:true}))" class="hidden sm:inline-flex items-center px-2.5 py-1.5 text-sm text-gray-400 bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition" title="Search (Cmd+K)">
+                        <i class="fas fa-search mr-1.5 text-xs"></i>
+                        <span class="text-xs">Search</span>
+                        <kbd class="ml-2 px-1.5 py-0.5 text-[10px] bg-white dark:bg-gray-800 rounded border border-gray-300 dark:border-gray-500">&#8984;K</kbd>
+                    </button>
+                    <!-- Notification bell -->
+                    <div class="relative">
+                        <button type="button" id="notifBtn" onclick="toggleNotifications()" class="px-2 py-2 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 relative" title="Notifications">
+                            <i class="fas fa-bell"></i>
+                            <span id="notifBadge" class="hidden absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">0</span>
+                        </button>
+                        <div id="notifPanel" class="hidden absolute right-0 mt-2 w-[calc(100vw-2rem)] max-w-sm md:w-80 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 z-50 max-h-96 overflow-y-auto">
+                            <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+                                <h3 class="text-sm font-semibold text-gray-900 dark:text-white">Notifications</h3>
+                            </div>
+                            <div id="notifList" class="py-2">
+                                <p class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">No notifications</p>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Dark mode toggle -->
+                    <button id="themeToggle" onclick="toggleTheme()" class="px-2 py-2 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700" title="Toggle theme">
+                        <i class="fas fa-moon dark:hidden"></i>
+                        <i class="fas fa-sun hidden dark:inline"></i>
+                    </button>
+                    <!-- Logout -->
+                    <button id="logoutBtn" onclick="doLogout()" style="display:none" class="px-3 py-2 rounded-md text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 border border-red-200 dark:border-red-700" title="Logout">
+                        <i class="fas fa-sign-out-alt mr-1"></i><span class="hidden sm:inline"> Logout</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Bottom Tab Bar (mobile only) -->
+    <nav class="fixed bottom-0 left-0 right-0 md:hidden bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 shadow-[0_-2px_10px_rgba(0,0,0,0.1)] z-40 safe-area-bottom" id="bottomTabBar">
+        <div class="flex justify-around h-14">
+            <a href="/" class="flex flex-col items-center justify-center flex-1 py-1 {% if request.path == '/' %}text-primary{% else %}text-gray-500 dark:text-gray-400{% endif %}">
+                <i class="fas fa-certificate text-lg"></i>
+                <span class="text-[10px] mt-0.5 font-medium">Certs</span>
+            </a>
+            <a href="/#client" class="flex flex-col items-center justify-center flex-1 py-1 text-gray-500 dark:text-gray-400">
+                <i class="fas fa-id-card text-lg"></i>
+                <span class="text-[10px] mt-0.5 font-medium">Client</span>
+            </a>
+            <a href="/settings" class="flex flex-col items-center justify-center flex-1 py-1 {% if request.path == '/settings' %}text-primary{% else %}text-gray-500 dark:text-gray-400{% endif %}">
+                <i class="fas fa-cog text-lg"></i>
+                <span class="text-[10px] mt-0.5 font-medium">Settings</span>
+            </a>
+            <a href="/activity" class="flex flex-col items-center justify-center flex-1 py-1 {% if request.path == '/activity' %}text-primary{% else %}text-gray-500 dark:text-gray-400{% endif %}">
+                <i class="fas fa-history text-lg"></i>
+                <span class="text-[10px] mt-0.5 font-medium">Activity</span>
+            </a>
+        </div>
+    </nav>
+    <script>
+    // Auth check
+    (function(){
+        fetch('/api/auth/me',{credentials:'same-origin'})
+            .then(function(r){return r.json()})
+            .then(function(d){if(d&&d.username)document.getElementById('logoutBtn').style.display='inline-block';})
+            .catch(function(){});
+    })();
+    function doLogout(){
+        fetch('/api/auth/logout',{method:'POST',credentials:'same-origin'})
+            .then(function(){window.location.href='/login'})
+            .catch(function(){window.location.href='/login'});
+    }
+    // Theme toggle
+    function toggleTheme(){
+        var html = document.documentElement;
+        if (html.classList.contains('dark')) {
+            html.classList.remove('dark');
+            localStorage.setItem('theme', 'light');
+        } else {
+            html.classList.add('dark');
+            localStorage.setItem('theme', 'dark');
+        }
+    }
+    // Notifications
+    var _notifOpen = false;
+    function toggleNotifications() {
+        var panel = document.getElementById('notifPanel');
+        _notifOpen = !_notifOpen;
+        panel.classList.toggle('hidden', !_notifOpen);
+    }
+    document.addEventListener('click', function(e) {
+        if (_notifOpen && !e.target.closest('#notifBtn') && !e.target.closest('#notifPanel')) {
+            document.getElementById('notifPanel').classList.add('hidden');
+            _notifOpen = false;
+        }
+    });
+    function renderNotifications(certs) {
+        if (!Array.isArray(certs)) return;
+        var warnings = [];
+        certs.forEach(function(c) {
+            if (!c.exists) return;
+            var days = c.days_until_expiry;
+            if (days !== null && days !== undefined) {
+                if (days <= 0) {
+                    warnings.push({domain: c.domain, days: days, type: 'expired'});
+                } else if (days <= 7) {
+                    warnings.push({domain: c.domain, days: days, type: 'critical'});
+                } else if (days <= 30) {
+                    warnings.push({domain: c.domain, days: days, type: 'warning'});
+                }
+            }
+        });
+        var badge = document.getElementById('notifBadge');
+        var list = document.getElementById('notifList');
+        if (warnings.length === 0) {
+            badge.classList.add('hidden');
+            list.innerHTML = '<p class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400"><i class="fas fa-check-circle text-green-500 mr-2"></i>All certificates healthy</p>';
+            return;
+        }
+        badge.textContent = warnings.length > 9 ? '9+' : warnings.length;
+        badge.classList.remove('hidden');
+        var html = '';
+        warnings.sort(function(a, b) { return a.days - b.days; });
+        warnings.forEach(function(w) {
+            var icon, color, msg;
+            if (w.type === 'expired') {
+                icon = 'fa-times-circle'; color = 'text-red-500'; msg = 'Expired';
+            } else if (w.type === 'critical') {
+                icon = 'fa-exclamation-circle'; color = 'text-red-500'; msg = w.days + 'd left';
+            } else {
+                icon = 'fa-exclamation-triangle'; color = 'text-yellow-500'; msg = w.days + 'd left';
+            }
+            html += '<a href="/" class="block px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-700/50">' +
+                '<div class="flex items-center gap-3">' +
+                '<i class="fas ' + icon + ' ' + color + '"></i>' +
+                '<div class="min-w-0 flex-1">' +
+                '<p class="text-sm font-medium text-gray-900 dark:text-white truncate">' + CertMate.escapeHtml(w.domain) + '</p>' +
+                '<p class="text-xs ' + color + '">' + msg + '</p>' +
+                '</div></div></a>';
+        });
+        list.innerHTML = html;
+        try { sessionStorage.setItem('cm_notif', JSON.stringify({t: Date.now(), d: certs})); } catch(e){}
+    }
+    function checkNotifications(force) {
+        // Use cached data if fresh (< 60s) to avoid extra API calls
+        if (!force) {
+            try {
+                var cached = JSON.parse(sessionStorage.getItem('cm_notif') || '{}');
+                if (cached.t && (Date.now() - cached.t) < 60000) {
+                    renderNotifications(cached.d);
+                    return;
+                }
+            } catch(e){}
+        }
+        fetch('/api/certificates', {credentials: 'same-origin'})
+            .then(function(r) { return r.ok ? r.json() : []; })
+            .then(function(certs) { renderNotifications(certs); })
+            .catch(function() {});
+    }
+    // Check on load (with cache) and refresh every 5 minutes
+    setTimeout(checkNotifications, 2000);
+    setInterval(function() { checkNotifications(true); }, 300000);
+
+    // SSE real-time updates
+    (function() {
+        if (typeof EventSource === 'undefined') return;
+        var sse = null;
+        var retryDelay = 1000;
+
+        function connectSSE() {
+            sse = new EventSource('/api/events/stream');
+            sse.onopen = function() { retryDelay = 1000; };
+            sse.addEventListener('certificate_created', function(e) {
+                try {
+                    var d = JSON.parse(e.data);
+                    CertMate.toast('Certificate created: ' + (d.domain || ''), 'success');
+                    checkNotifications(true);
+                    if (typeof loadCertificates === 'function') loadCertificates();
+                } catch(err) {}
+            });
+            sse.addEventListener('certificate_renewed', function(e) {
+                try {
+                    var d = JSON.parse(e.data);
+                    CertMate.toast('Certificate renewed: ' + (d.domain || ''), 'success');
+                    checkNotifications(true);
+                    if (typeof loadCertificates === 'function') loadCertificates();
+                } catch(err) {}
+            });
+            sse.addEventListener('certificate_revoked', function(e) {
+                try {
+                    var d = JSON.parse(e.data);
+                    CertMate.toast('Certificate revoked: ' + (d.domain || ''), 'warning');
+                    checkNotifications(true);
+                } catch(err) {}
+            });
+            sse.addEventListener('settings_updated', function() {
+                CertMate.toast('Settings updated', 'info');
+            });
+            sse.onerror = function() {
+                sse.close();
+                setTimeout(connectSSE, Math.min(retryDelay, 30000));
+                retryDelay *= 2;
+            };
+        }
+
+        // Delay SSE connection to avoid race with auth
+        setTimeout(connectSSE, 3000);
+    })();
+    </script>
+    <script src="/static/js/htmx.min.js"></script>
+    <script defer src="/static/js/alpine.min.js"></script>
+    <script src="/static/js/certmate.js"></script>
+    <script src="/static/js/cmd-palette.js"></script>
+    <script src="/static/js/setup-wizard.js"></script>
+
+    {% block content %}{% endblock %}
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

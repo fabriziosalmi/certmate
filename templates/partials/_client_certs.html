@@ -1,0 +1,245 @@
+<!-- Client Certificates Partial — included in index.html under "Client" tab -->
+
+<!-- Statistics Bar -->
+<div class="grid grid-cols-1 gap-4 md:grid-cols-4 mb-6">
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 border-l-4 border-blue-500">
+        <div class="flex items-center">
+            <div class="flex-1">
+                <p class="text-gray-500 dark:text-gray-400 text-sm">Total Certificates</p>
+                <p class="text-3xl font-bold text-gray-900 dark:text-white" id="totalCount">0</p>
+            </div>
+            <i class="fas fa-certificate text-blue-500 text-3xl opacity-20"></i>
+        </div>
+    </div>
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 border-l-4 border-green-500">
+        <div class="flex items-center">
+            <div class="flex-1">
+                <p class="text-gray-500 dark:text-gray-400 text-sm">Active</p>
+                <p class="text-3xl font-bold text-gray-900 dark:text-white" id="activeCount">0</p>
+            </div>
+            <i class="fas fa-check-circle text-green-500 text-3xl opacity-20"></i>
+        </div>
+    </div>
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 border-l-4 border-red-500">
+        <div class="flex items-center">
+            <div class="flex-1">
+                <p class="text-gray-500 dark:text-gray-400 text-sm">Revoked</p>
+                <p class="text-3xl font-bold text-gray-900 dark:text-white" id="revokedCount">0</p>
+            </div>
+            <i class="fas fa-ban text-red-500 text-3xl opacity-20"></i>
+        </div>
+    </div>
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 border-l-4 border-purple-500">
+        <div class="flex items-center">
+            <div class="flex-1">
+                <p class="text-gray-500 dark:text-gray-400 text-sm">By Usage</p>
+                <p class="text-sm text-gray-600 dark:text-gray-300 mt-2" id="usageBreakdown">Loading...</p>
+            </div>
+            <i class="fas fa-chart-pie text-purple-500 text-3xl opacity-20"></i>
+        </div>
+    </div>
+</div>
+
+<!-- Create Certificate Form -->
+<div class="bg-white dark:bg-gray-800 shadow-lg rounded-xl mb-6 border border-gray-200 dark:border-gray-700 overflow-hidden">
+    <div class="px-6 py-5 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-700">
+        <div class="flex items-center justify-between">
+            <div>
+                <h3 class="text-xl font-bold text-gray-900 dark:text-white flex items-center">
+                    <i class="fas fa-plus-circle mr-2 text-primary"></i>
+                    Create Client Certificate
+                </h3>
+                <p class="text-sm text-gray-600 dark:text-gray-300 mt-1">For mTLS, VPN, or user authentication</p>
+            </div>
+        </div>
+    </div>
+    <div class="px-6 py-6">
+        <!-- Tab Selection -->
+        <div class="flex space-x-4 mb-6 border-b border-gray-200 dark:border-gray-700">
+            <button id="singleTabBtn" class="px-4 py-2 border-b-2 border-primary text-primary font-medium">
+                <i class="fas fa-user mr-1"></i> Single Certificate
+            </button>
+            <button id="batchTabBtn" class="px-4 py-2 border-b-2 border-transparent text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white font-medium">
+                <i class="fas fa-users mr-1"></i> Bulk Upload (CSV)
+            </button>
+        </div>
+
+        <!-- Single Certificate Form -->
+        <form id="createCertForm" class="space-y-6">
+            <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                <div>
+                    <label for="commonName" class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                        <i class="fas fa-user mr-2 text-blue-500"></i>Common Name (Required)
+                    </label>
+                    <input type="text" id="commonName" name="commonName" placeholder="e.g., john.doe@example.com"
+                           class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-primary"
+                           required>
+                </div>
+                <div>
+                    <label for="email" class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                        <i class="fas fa-envelope mr-2 text-blue-500"></i>Email
+                    </label>
+                    <input type="email" id="email" name="email" placeholder="user@example.com"
+                           class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-primary">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                <div>
+                    <label for="organization" class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                        <i class="fas fa-building mr-2 text-blue-500"></i>Organization
+                    </label>
+                    <input type="text" id="organization" name="organization" value="CertMate" placeholder="Your Organization"
+                           class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-primary">
+                </div>
+                <div>
+                    <label for="certUsage" class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                        <i class="fas fa-tag mr-2 text-blue-500"></i>Usage Type
+                    </label>
+                    <select id="certUsage" name="certUsage"
+                            class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-primary">
+                        <option value="api-mtls">API mTLS</option>
+                        <option value="vpn">VPN Access</option>
+                        <option value="user-auth">User Authentication</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                <div>
+                    <label for="daysValid" class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                        <i class="fas fa-calendar mr-2 text-blue-500"></i>Valid For (Days)
+                    </label>
+                    <input type="number" id="daysValid" name="daysValid" value="365" min="1" max="3650"
+                           class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-primary">
+                </div>
+                <div>
+                    <label for="notes" class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                        <i class="fas fa-sticky-note mr-2 text-blue-500"></i>Notes
+                    </label>
+                    <input type="text" id="notes" name="notes" placeholder="Optional notes..."
+                           class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-primary">
+                </div>
+            </div>
+
+            <div class="flex items-center space-x-2">
+                <input type="checkbox" id="generateKey" name="generateKey" checked
+                       class="w-4 h-4 text-primary bg-gray-100 border-gray-300 rounded focus:ring-2 focus:ring-primary">
+                <label for="generateKey" class="text-sm text-gray-700 dark:text-gray-300">
+                    <i class="fas fa-lock mr-1"></i>Generate private key (recommended)
+                </label>
+            </div>
+
+            <button type="submit" class="w-full bg-primary hover:bg-secondary text-white font-semibold py-3 rounded-lg transition duration-200 flex items-center justify-center">
+                <i class="fas fa-check-circle mr-2"></i> Create Certificate
+            </button>
+        </form>
+
+        <!-- Batch Upload Form (Hidden by default) -->
+        <div id="batchForm" class="hidden space-y-6">
+            <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                <p class="text-sm text-blue-800 dark:text-blue-300">
+                    <i class="fas fa-info-circle mr-2"></i>
+                    Upload a CSV file with columns: common_name, email, organization, cert_usage (optional), notes (optional)
+                </p>
+            </div>
+
+            <div class="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-8 text-center cursor-pointer hover:border-primary transition"
+                 id="dropZone">
+                <i class="fas fa-cloud-upload-alt text-4xl text-gray-400 dark:text-gray-500 mb-3"></i>
+                <p class="text-gray-700 dark:text-gray-300 font-semibold mb-1">Drag and drop CSV file here</p>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">or click to select</p>
+                <input type="file" id="csvFile" name="csvFile" accept=".csv" class="hidden">
+            </div>
+
+            <div id="csvPreview" class="hidden bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+                <p class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Preview (<span id="rowCount">0</span> rows)</p>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm" id="previewTable">
+                        <thead class="bg-gray-200 dark:bg-gray-700">
+                            <tr id="headerRow"></tr>
+                        </thead>
+                        <tbody id="previewBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <button type="button" id="submitBatchBtn" class="w-full bg-primary hover:bg-secondary text-white font-semibold py-3 rounded-lg transition duration-200 flex items-center justify-center hidden">
+                <i class="fas fa-upload mr-2"></i> Upload <span id="certCountText"></span> Certificates
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Certificates List -->
+<div class="bg-white dark:bg-gray-800 shadow-lg rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+    <div class="px-6 py-5 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-700">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <h3 class="text-xl font-bold text-gray-900 dark:text-white flex items-center">
+                <i class="fas fa-list mr-2 text-primary"></i>
+                Client Certificates
+            </h3>
+            <div class="flex flex-wrap items-center gap-2">
+                <input type="text" id="searchInput" placeholder="Search by CN or email..."
+                       class="px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-primary">
+                <select id="filterUsage"
+                        class="px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-primary">
+                    <option value="">All Usage Types</option>
+                    <option value="api-mtls">API mTLS</option>
+                    <option value="vpn">VPN</option>
+                    <option value="user-auth">User Auth</option>
+                </select>
+                <select id="filterStatus"
+                        class="px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-primary">
+                    <option value="">All Status</option>
+                    <option value="active">Active</option>
+                    <option value="revoked">Revoked</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <div class="overflow-x-auto">
+        <table class="w-full">
+            <thead class="bg-gray-100 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
+                <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider">Common Name</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider hidden md:table-cell">Email</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider hidden lg:table-cell">Usage</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider hidden lg:table-cell">Created</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider">Expires</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider">Status</th>
+                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="certTableBody" class="divide-y divide-gray-200 dark:divide-gray-700">
+                <tr><td colspan="7" class="px-6 py-8 text-center text-gray-500 dark:text-gray-400">Loading certificates...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Modal for certificate details -->
+<div id="certModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-lg font-bold text-gray-900 dark:text-white">Certificate Details</h3>
+            <button type="button" onclick="closeCertModal()" class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200" title="Close">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div id="modalContent" class="space-y-3 text-sm"></div>
+        <div class="mt-6 flex space-x-3">
+            <button type="button" onclick="downloadCertFile('crt')" class="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-2 rounded px-3 text-sm font-semibold flex items-center justify-center">
+                <i class="fas fa-download mr-1"></i> .crt
+            </button>
+            <button type="button" onclick="downloadCertFile('key')" class="flex-1 bg-red-500 hover:bg-red-600 text-white py-2 rounded px-3 text-sm font-semibold flex items-center justify-center">
+                <i class="fas fa-download mr-1"></i> .key
+            </button>
+            <button type="button" onclick="downloadCertFile('csr')" class="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 rounded px-3 text-sm font-semibold flex items-center justify-center">
+                <i class="fas fa-download mr-1"></i> .csr
+            </button>
+        </div>
+    </div>
+</div>

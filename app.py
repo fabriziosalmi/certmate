@@ -33,7 +33,8 @@ from modules.core import (
     configure_structured_logging, get_certmate_logger
 )
 from modules.core.shell import ShellExecutor
-# Import CA manager for DigiCert and Private CA support
+from modules.core.notifier import Notifier
+from modules.core.events import EventBus
 # Import CA manager for DigiCert and Private CA support
 from modules.core.ca_manager import CAManager
 from modules.api import create_api_models, create_api_resources
@@ -214,6 +215,10 @@ class CertMateApp:
             rate_limit_config = RateLimitConfig()
             rate_limiter = SimpleRateLimiter(rate_limit_config)
 
+            # Initialize Notifier and Event Bus
+            notifier = Notifier(settings_manager)
+            event_bus = EventBus()
+
             # Store all managers for easy access
             self.managers = {
                 'file_ops': file_ops,
@@ -231,7 +236,9 @@ class CertMateApp:
                 'crl': crl_manager,
                 'audit': audit_logger,
                 'rate_limiter': rate_limiter,
-                'shell_executor': shell_executor
+                'shell_executor': shell_executor,
+                'notifier': notifier,
+                'events': event_bus
             }
             
             logger.info("All managers initialized successfully")
@@ -395,7 +402,7 @@ class CertMateApp:
             if 'Content-Security-Policy' not in response.headers:
                 response.headers['Content-Security-Policy'] = (
                     "default-src 'self'; "
-                    "script-src 'self' 'unsafe-inline'; "
+                    "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
                     "style-src 'self' 'unsafe-inline'; "
                     "font-src 'self'; "
                     "img-src 'self' data:; "
@@ -428,6 +435,9 @@ class CertMateApp:
             path = flask_request.path
             # Only rate-limit API endpoints (skip static, health, metrics)
             if not path.startswith('/api/'):
+                return None
+            # Skip rate limiting for web UI internal calls (settings, auth, backups)
+            if path.startswith(('/api/web/', '/api/auth/', '/api/users', '/api/backups')):
                 return None
             # Use remote_addr (actual TCP peer) to prevent rate-limit bypass via
             # spoofed X-Forwarded-For headers.  If behind a trusted reverse proxy,

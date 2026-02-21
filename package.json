@@ -1,0 +1,13 @@
+{
+  "private": true,
+  "name": "certmate",
+  "version": "2.0.0",
+  "description": "CertMate SSL Certificate Manager - frontend assets",
+  "scripts": {
+    "css:build": "npx tailwindcss -i static/css/input.css -o static/css/tailwind.min.css --minify",
+    "css:watch": "npx tailwindcss -i static/css/input.css -o static/css/tailwind.min.css --watch"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.17"
+  }
+}

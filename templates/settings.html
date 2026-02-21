@@ -1,62 +1,10 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Settings - CertMate</title>
-    <link rel="icon" type="image/x-icon" href="/favicon.ico">
-    <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico">
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-    <link href="/static/css/tailwind.min.css" rel="stylesheet">
-    <link href="/static/css/fontawesome.min.css" rel="stylesheet">
-</head>
-<body class="bg-gray-50 dark:bg-gray-700/50 dark:bg-gray-900 min-h-screen transition-colors duration-200">
-    <!-- Navigation -->
-    <nav class="bg-white dark:bg-gray-800 shadow-sm border-b dark:border-gray-700">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between h-16">
-                <div class="flex items-center">
-                    <div class="flex-shrink-0">
-                        <img src="/static/img/certmate_logo_256.png" alt="CertMate" class="w-12 h-12">
-                    </div>
-                    <div class="ml-3">
-                        <h1 class="text-xl font-semibold text-gray-900 dark:text-white">CertMate</h1>
-                        <p class="text-sm text-gray-500 dark:text-gray-400">SSL Certificate Manager</p>
-                    </div>
-                </div>
-                <div class="flex items-center space-x-4">
-                    <a href="/" class="px-3 py-2 rounded-md text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700">
-                        <i class="fas fa-certificate mr-1"></i> Certificates
-                    </a>
-                    <a href="/settings" class="px-3 py-2 rounded-md text-sm font-medium text-primary bg-blue-50 dark:bg-blue-900/20 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-600 dark:border-blue-700">
-                        <i class="fas fa-cog mr-1"></i> Settings
-                    </a>
-                    <a href="/help" class="px-3 py-2 rounded-md text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700">
-                        <i class="fas fa-question-circle mr-1"></i> Help
-                    </a>
-                    <button id="logoutBtn" onclick="doLogout()" style="display:none" class="ml-2 px-3 py-2 rounded-md text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 border border-red-200 dark:border-red-700" title="Logout">
-                        <i class="fas fa-sign-out-alt mr-1"></i> Logout
-                    </button>
-                </div>
-            </div>
-        </div>
-    </nav>
-    <script>
-    (function(){
-        fetch('/api/auth/me',{credentials:'same-origin'})
-            .then(r=>r.json())
-            .then(d=>{if(d&&d.username)document.getElementById('logoutBtn').style.display='inline-block';})
-            .catch(()=>{});
-    })();
-    function doLogout(){
-        fetch('/api/auth/logout',{method:'POST',credentials:'same-origin'})
-            .then(()=>window.location.href='/login')
-            .catch(()=>window.location.href='/login');
-    }
-    </script>
-
+{% extends "base.html" %}
+{% block title %}Settings - CertMate{% endblock %}
+{% block content %}
     <!-- Main Content -->
-    <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+    <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8"
+         x-data="{ tab: (location.hash.slice(1) || 'dns') }"
+         x-init="$watch('tab', t => history.replaceState(null, '', '#' + t))"
         <!-- Header -->
         <div class="bg-white dark:bg-gray-800 shadow rounded-lg mb-6">
             <div class="px-6 py-4">
@@ -79,14 +27,25 @@
             </div>
         </div>
 
-        <!-- Settings Form -->
+        <!-- Settings Tabs (Alpine.js) -->
         <div class="bg-white dark:bg-gray-800 shadow rounded-lg">
-            <div class="px-6 py-4 border-b dark:border-gray-700">
-                <h3 class="text-lg font-medium text-gray-900 dark:text-white">Configuration</h3>
+            <div class="px-6 py-3 border-b dark:border-gray-700 overflow-x-auto">
+                <nav class="flex space-x-1 min-w-max" role="tablist">
+                    <template x-for="t in [{id:'dns',icon:'fa-server',label:'DNS'},{id:'ca',icon:'fa-shield-alt',label:'CA'},{id:'general',icon:'fa-cogs',label:'General'},{id:'storage',icon:'fa-database',label:'Storage'},{id:'notifications',icon:'fa-bell',label:'Notifications'},{id:'users',icon:'fa-users',label:'Users'},{id:'backup',icon:'fa-archive',label:'Backup'}]">
+                        <button type="button" @click="tab = t.id" role="tab"
+                                :class="tab === t.id
+                                    ? 'px-4 py-2 text-sm font-medium rounded-md text-primary bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700'
+                                    : 'px-4 py-2 text-sm font-medium rounded-md text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700'">
+                            <i class="fas" :class="t.icon" class="mr-1"></i><span class="hidden sm:inline" x-text="' ' + t.label"></span>
+                        </button>
+                    </template>
+                </nav>
             </div>
             <div class="px-6 py-6">
                 <form id="settingsForm" class="space-y-8">
-                    
+
+                    <!-- TAB: DNS Providers -->
+                    <div x-show="tab === 'dns'"
                     <!-- DNS Provider Selection -->
                     <div class="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3" id="dns-provider-label">
@@ -1032,7 +991,10 @@
                             </p>
                         </div>
                     </div>
+                    </div><!-- /tab: dns -->
 
+                    <!-- TAB: CA Providers -->
+                    <div x-show="tab === 'ca'" x-cloak
                     <!-- CA Providers Section -->
                     <div class="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
@@ -1213,7 +1175,10 @@
                             </div>
                         </div>
                     </div>
+                    </div><!-- /tab: ca -->
 
+                    <!-- TAB: General Settings -->
+                    <div x-show="tab === 'general'" x-cloak
                     <!-- General Certificate Settings Section -->
                     <div class="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
@@ -1294,7 +1259,10 @@
                             </div>
                         </div>
                     </div>
+                    </div><!-- /tab: general -->
 
+                    <!-- TAB: Storage -->
+                    <div x-show="tab === 'storage'" x-cloak
                     <!-- Certificate Storage Backend Section -->
                     <div class="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
@@ -1525,27 +1493,216 @@
                             </div>
                         </div>
                     </div>
+                    </div><!-- /tab: storage -->
 
-                    <!-- DNS Provider Test Connection -->
-                    <div id="testConnectionResult" class="mt-4 hidden">
-                        <div class="p-4 rounded-md text-sm" id="testConnectionMessage">
-                            <!-- Test connection message will be displayed here -->
+                    <!-- Form controls (visible on all form tabs) -->
+                    <div id="formControls" x-show="['dns','ca','general','storage'].includes(tab)"
+                        <!-- DNS Provider Test Connection -->
+                        <div id="testConnectionResult" class="mt-4 hidden">
+                            <div class="p-4 rounded-md text-sm" id="testConnectionMessage">
+                                <!-- Test connection message will be displayed here -->
+                            </div>
                         </div>
-                    </div>
 
-                    <!-- Submit Button -->
-                    <div class="flex justify-end">
-                        <button type="submit" id="saveBtn" class="bg-primary text-white px-6 py-2 rounded-md hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition-colors">
-                            <i class="fas fa-save mr-2"></i>
-                            Save Settings
-                        </button>
+                        <!-- Submit Button -->
+                        <div class="flex justify-end mt-6">
+                            <button type="submit" id="saveBtn" class="bg-primary text-white px-6 py-2 rounded-md hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition-colors">
+                                <i class="fas fa-save mr-2"></i>
+                                Save Settings
+                            </button>
+                        </div>
                     </div>
                 </form>
             </div>
         </div>
 
-        <!-- User Management Section -->
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 mt-6">
+        <!-- TAB: Notifications -->
+        <div x-show="tab === 'notifications'" x-cloak class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 mt-6"
+             x-data="notificationSettings()" x-init="loadConfig()">
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center mb-6">
+                <i class="fas fa-bell mr-2 text-yellow-500"></i>
+                Notification Settings
+            </h3>
+
+            <!-- Master toggle -->
+            <div class="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg mb-6">
+                <div>
+                    <p class="font-medium text-gray-900 dark:text-white">Enable Notifications</p>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">Send alerts for certificate events</p>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" x-model="config.enabled" class="sr-only peer" title="Enable notifications">
+                    <div class="w-11 h-6 bg-gray-200 peer-focus:ring-2 peer-focus:ring-primary rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-500 peer-checked:bg-primary"></div>
+                </label>
+            </div>
+
+            <div x-show="config.enabled" class="space-y-6">
+                <!-- Event filter -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"><i class="fas fa-filter mr-1.5 text-blue-500"></i>Notify on Events</label>
+                    <div class="flex flex-wrap gap-2">
+                        <template x-for="evt in ['certificate_created','certificate_renewed','certificate_expiring','certificate_revoked','certificate_failed']">
+                            <label class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium cursor-pointer border transition"
+                                   :class="config.events.includes(evt) ? 'bg-primary/10 border-primary text-primary' : 'bg-gray-100 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300'">
+                                <input type="checkbox" class="sr-only" :value="evt"
+                                       :checked="config.events.includes(evt)"
+                                       @change="toggleEvent(evt)">
+                                <span x-text="evt.replace('certificate_','').replace('_',' ')"></span>
+                            </label>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- SMTP -->
+                <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                    <button type="button" @click="showSmtp = !showSmtp" class="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-700/30 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition">
+                        <span class="font-medium text-gray-900 dark:text-white text-sm"><i class="fas fa-envelope mr-2 text-blue-500"></i>Email (SMTP)</span>
+                        <div class="flex items-center gap-2">
+                            <span x-show="config.channels.smtp.enabled" class="px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded text-xs">Active</span>
+                            <i class="fas fa-chevron-down text-gray-400 transition" :class="showSmtp ? 'rotate-180' : ''"></i>
+                        </div>
+                    </button>
+                    <div x-show="showSmtp" x-cloak class="p-4 space-y-3">
+                        <label class="flex items-center gap-2">
+                            <input type="checkbox" x-model="config.channels.smtp.enabled" class="w-4 h-4 rounded text-primary focus:ring-primary">
+                            <span class="text-sm text-gray-700 dark:text-gray-300">Enable email notifications</span>
+                        </label>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div><label class="block text-xs text-gray-500 mb-1">SMTP Host</label><input type="text" x-model="config.channels.smtp.host" placeholder="smtp.gmail.com" class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"></div>
+                            <div><label class="block text-xs text-gray-500 mb-1">Port</label><input type="number" x-model.number="config.channels.smtp.port" placeholder="587" class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"></div>
+                            <div><label class="block text-xs text-gray-500 mb-1">Username</label><input type="text" x-model="config.channels.smtp.username" placeholder="user@example.com" class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"></div>
+                            <div><label class="block text-xs text-gray-500 mb-1">Password</label><input type="password" x-model="config.channels.smtp.password" placeholder="App password" class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"></div>
+                            <div><label class="block text-xs text-gray-500 mb-1">From Address</label><input type="email" x-model="config.channels.smtp.from_address" placeholder="certmate@example.com" class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"></div>
+                            <div><label class="block text-xs text-gray-500 mb-1">To Addresses (comma-separated)</label><input type="text" x-model="smtpToStr" placeholder="admin@example.com" class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"></div>
+                        </div>
+                        <button type="button" @click="testSmtp()" class="text-sm text-blue-600 dark:text-blue-400 hover:underline"><i class="fas fa-paper-plane mr-1"></i>Send test email</button>
+                    </div>
+                </div>
+
+                <!-- Webhooks -->
+                <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                    <button type="button" @click="showWebhooks = !showWebhooks" class="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-700/30 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition">
+                        <span class="font-medium text-gray-900 dark:text-white text-sm"><i class="fas fa-plug mr-2 text-purple-500"></i>Webhooks</span>
+                        <div class="flex items-center gap-2">
+                            <span x-show="config.channels.webhooks.filter(w=>w.enabled).length > 0" class="px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded text-xs" x-text="config.channels.webhooks.filter(w=>w.enabled).length + ' active'"></span>
+                            <i class="fas fa-chevron-down text-gray-400 transition" :class="showWebhooks ? 'rotate-180' : ''"></i>
+                        </div>
+                    </button>
+                    <div x-show="showWebhooks" x-cloak class="p-4 space-y-4">
+                        <template x-for="(wh, idx) in config.channels.webhooks" :key="idx">
+                            <div class="border border-gray-200 dark:border-gray-600 rounded-lg p-3 space-y-2">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center gap-2">
+                                        <input type="checkbox" x-model="wh.enabled" class="w-4 h-4 rounded text-primary focus:ring-primary">
+                                        <input type="text" x-model="wh.name" placeholder="Webhook name" class="text-sm font-medium bg-transparent border-none p-0 text-gray-900 dark:text-white focus:ring-0 w-32">
+                                    </div>
+                                    <button type="button" @click="config.channels.webhooks.splice(idx, 1)" class="text-red-400 hover:text-red-600 text-sm"><i class="fas fa-trash"></i></button>
+                                </div>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    <div class="sm:col-span-2"><input type="url" x-model="wh.url" placeholder="https://hooks.slack.com/..." class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"></div>
+                                    <div>
+                                        <select x-model="wh.type" class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                                            <option value="generic">Generic</option>
+                                            <option value="slack">Slack</option>
+                                            <option value="discord">Discord</option>
+                                        </select>
+                                    </div>
+                                    <div><input type="text" x-model="wh.secret" placeholder="HMAC secret (optional)" class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"></div>
+                                </div>
+                                <button type="button" @click="testWebhook(wh)" class="text-sm text-blue-600 dark:text-blue-400 hover:underline"><i class="fas fa-paper-plane mr-1"></i>Test</button>
+                            </div>
+                        </template>
+                        <button type="button" @click="config.channels.webhooks.push({enabled:true,name:'',url:'',type:'generic',secret:''})" class="text-sm text-primary hover:underline"><i class="fas fa-plus mr-1"></i>Add webhook</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Save -->
+            <div class="mt-6 flex justify-end">
+                <button type="button" @click="saveConfig()" class="bg-primary text-white px-6 py-2 rounded-md hover:bg-secondary transition text-sm">
+                    <i class="fas fa-save mr-2"></i>Save Notification Settings
+                </button>
+            </div>
+        </div>
+
+        <script>
+        function notificationSettings() {
+            return {
+                config: {
+                    enabled: false,
+                    events: [],
+                    channels: {
+                        smtp: { enabled: false, host: '', port: 587, username: '', password: '', from_address: '', to_addresses: [], use_tls: true },
+                        webhooks: []
+                    }
+                },
+                showSmtp: false,
+                showWebhooks: false,
+                get smtpToStr() { return (this.config.channels.smtp.to_addresses || []).join(', '); },
+                set smtpToStr(v) { this.config.channels.smtp.to_addresses = v.split(',').map(function(s) { return s.trim(); }).filter(Boolean); },
+                toggleEvent: function(evt) {
+                    var idx = this.config.events.indexOf(evt);
+                    if (idx === -1) this.config.events.push(evt);
+                    else this.config.events.splice(idx, 1);
+                },
+                loadConfig: function() {
+                    var self = this;
+                    fetch('/api/notifications/config', { credentials: 'same-origin' })
+                        .then(function(r) { return r.json(); })
+                        .then(function(data) {
+                            if (data && typeof data === 'object' && !data.error) {
+                                // Merge with defaults
+                                self.config.enabled = data.enabled || false;
+                                self.config.events = data.events || [];
+                                if (data.channels) {
+                                    if (data.channels.smtp) Object.assign(self.config.channels.smtp, data.channels.smtp);
+                                    if (data.channels.webhooks) self.config.channels.webhooks = data.channels.webhooks;
+                                }
+                            }
+                        })
+                        .catch(function() {});
+                },
+                saveConfig: function() {
+                    var self = this;
+                    fetch('/api/notifications/config', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'same-origin',
+                        body: JSON.stringify(self.config)
+                    })
+                    .then(function(r) { return r.json(); })
+                    .then(function() { CertMate.toast('Notification settings saved', 'success'); })
+                    .catch(function() { CertMate.toast('Failed to save', 'error'); });
+                },
+                testSmtp: function() {
+                    var self = this;
+                    fetch('/api/notifications/test', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'same-origin',
+                        body: JSON.stringify({ channel_type: 'smtp', config: self.config.channels.smtp })
+                    })
+                    .then(function(r) { return r.json(); })
+                    .then(function(d) { CertMate.toast(d.success ? 'Test email sent!' : ('Email failed: ' + (d.error || 'unknown')), d.success ? 'success' : 'error'); })
+                    .catch(function() { CertMate.toast('Test failed', 'error'); });
+                },
+                testWebhook: function(wh) {
+                    fetch('/api/notifications/test', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'same-origin',
+                        body: JSON.stringify({ channel_type: 'webhook', config: wh })
+                    })
+                    .then(function(r) { return r.json(); })
+                    .then(function(d) { CertMate.toast(d.success ? 'Webhook test sent!' : ('Webhook failed: ' + (d.error || 'unknown')), d.success ? 'success' : 'error'); })
+                    .catch(function() { CertMate.toast('Test failed', 'error'); });
+                }
+            };
+        }
+        </script>
+
+        <!-- TAB: User Management Section -->
+        <div x-show="tab === 'users'" x-cloak class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 mt-6"
             <div class="flex items-center justify-between mb-4">
                 <h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
                     <i class="fas fa-users mr-2 text-purple-500"></i>
@@ -1644,8 +1801,8 @@
             </div>
         </div>
 
-        <!-- Backup & Restore Section -->
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 mt-6">
+        <!-- TAB: Backup & Restore Section -->
+        <div x-show="tab === 'backup'" x-cloak class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 mt-6"
             <div class="flex items-center justify-between mb-4">
                 <h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
                     <i class="fas fa-database mr-2 text-blue-500"></i>
@@ -1878,11 +2035,7 @@
         let dnsProviders = {};
         let isLoading = false;
 
-        // HTML escape utility — prevents XSS when inserting user data into HTML
-        function escapeHtml(str) {
-            if (str == null) return '';
-            return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-        }
+        var escapeHtml = CertMate.escapeHtml;
 
         // DOM Elements
         const form = document.getElementById('settingsForm');
@@ -2923,7 +3076,7 @@
         }
 
         async function deleteAccount(provider, accountId) {
-            if (!confirm('Are you sure you want to delete this account? This action cannot be undone.')) {
+            if (!await CertMate.confirm('Are you sure you want to delete this account? This action cannot be undone.', 'Delete Account')) {
                 return;
             }
             
@@ -3264,7 +3417,7 @@
                 return;
             }
             
-            if (!confirm(`Are you sure you want to restore from "${filename}"? This will atomically restore both settings and certificates, creating a backup of your current configuration first.`)) {
+            if (!await CertMate.confirm(`Are you sure you want to restore from "${escapeHtml(filename)}"? This will atomically restore both settings and certificates, creating a backup of your current configuration first.`, 'Restore Backup')) {
                 return;
             }
             
@@ -3334,7 +3487,7 @@
                 return;
             }
             
-            if (!confirm(`Are you sure you want to delete the backup "${filename}"?\n\nThis action cannot be undone.`)) {
+            if (!await CertMate.confirm(`Are you sure you want to delete the backup "${escapeHtml(filename)}"? This action cannot be undone.`, 'Delete Backup')) {
                 return;
             }
             
@@ -4102,7 +4255,7 @@
         }
 
         async function resetUserPassword(username) {
-            const newPassword = prompt(`Enter new password for '${username}':`);
+            const newPassword = await CertMate.prompt(`Enter new password for '${escapeHtml(username)}':`, 'Reset Password');
             if (!newPassword) return;
             
             try {
@@ -4128,7 +4281,7 @@
         }
 
         async function deleteUser(username) {
-            if (!confirm(`Are you sure you want to delete user '${username}'? This action cannot be undone.`)) {
+            if (!await CertMate.confirm(`Are you sure you want to delete user '${escapeHtml(username)}'? This action cannot be undone.`, 'Delete User')) {
                 return;
             }
             
@@ -4160,5 +4313,4 @@
             }, 500);
         });
     </script>
-</body>
-</html>
+{% endblock %}

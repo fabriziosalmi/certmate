@@ -3,8 +3,16 @@
 @tailwind utilities;
 
 /* Prevent flash of white background in dark mode */
-@media (prefers-color-scheme: dark) {
-    html {
-        background-color: #111827 !important;
-    }
+html.dark {
+    background-color: #111827 !important;
+}
+
+/* Alpine.js: hide elements until Alpine initializes */
+[x-cloak] {
+    display: none !important;
+}
+
+/* iOS safe area for bottom tab bar */
+.safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
 }

@@ -3,6 +3,7 @@ Web routes module for CertMate
 Handles web interface routes and form-based endpoints
 """
 
+import json
 import logging
 import os
 import re
@@ -15,7 +16,8 @@ from pathlib import Path
 from collections import defaultdict
 from time import time
 from flask import (render_template, request, jsonify, send_file,
-                   send_from_directory, redirect, url_for, after_this_request)
+                   send_from_directory, redirect, url_for, after_this_request,
+                   Response, stream_with_context)
 
 from ..core.metrics import generate_metrics_response
 
@@ -241,8 +243,83 @@ def register_web_routes(app, managers):
     @app.route('/client-certificates')
     @require_web_auth
     def client_certificates_page():
-        """Client certificates management page"""
-        return render_template('client-certificates.html')
+        """Redirect to unified certificates page with client tab"""
+        return redirect('/#client')
+
+    @app.route('/activity')
+    @require_web_auth
+    def activity_page():
+        """Activity timeline page"""
+        return render_template('activity.html')
+
+    @app.route('/api/activity')
+    @auth_manager.require_auth
+    def activity_api():
+        """Get recent audit log entries."""
+        audit_logger = managers.get('audit')
+        if not audit_logger:
+            return jsonify({'entries': []})
+        limit = request.args.get('limit', 50, type=int)
+        limit = min(limit, 500)
+        entries = audit_logger.get_recent_entries(limit=limit)
+        # Return newest first
+        entries.reverse()
+        return jsonify({'entries': entries})
+
+    @app.route('/api/notifications/config', methods=['GET', 'POST'])
+    @auth_manager.require_auth
+    def notifications_config():
+        """Get or update notification configuration."""
+        settings = settings_manager.load_settings()
+
+        if request.method == 'GET':
+            notif_config = settings.get('notifications', {})
+            # Strip passwords from response
+            safe = json.loads(json.dumps(notif_config))
+            smtp = safe.get('channels', {}).get('smtp', {})
+            if smtp.get('password'):
+                smtp['password'] = '••••••••'
+            for wh in safe.get('channels', {}).get('webhooks', []):
+                if wh.get('secret'):
+                    wh['secret'] = '••••••••'
+            return jsonify(safe)
+
+        # POST — update notification config
+        data = request.get_json(silent=True) or {}
+        settings['notifications'] = data
+        settings_manager.save_settings(settings)
+        return jsonify({'status': 'saved'})
+
+    @app.route('/api/notifications/test', methods=['POST'])
+    @auth_manager.require_auth
+    def notifications_test():
+        """Test a notification channel."""
+        notifier = managers.get('notifier')
+        if not notifier:
+            return jsonify({'error': 'Notifier not available'}), 500
+        data = request.get_json(silent=True) or {}
+        channel_type = data.get('channel_type', '')
+        config = data.get('config', {})
+        result = notifier.test_channel(channel_type, config)
+        return jsonify(result)
+
+    @app.route('/api/events/stream')
+    @auth_manager.require_auth
+    def event_stream():
+        """SSE endpoint for real-time updates."""
+        event_bus = managers.get('events')
+        if not event_bus:
+            return jsonify({'error': 'Event bus not available'}), 500
+        q = event_bus.subscribe()
+        return Response(
+            stream_with_context(event_bus.stream(q)),
+            mimetype='text/event-stream',
+            headers={
+                'Cache-Control': 'no-cache',
+                'X-Accel-Buffering': 'no',
+                'Connection': 'keep-alive'
+            }
+        )
 
     # Health check for Docker
     @app.route('/health')
@@ -940,8 +1017,13 @@ def register_web_routes(app, managers):
             else:
                 msg = f'Certificate creation started for {domain}'
             
+            # Publish SSE event
+            event_bus = managers.get('events')
+            if event_bus:
+                event_bus.publish('certificate_created', {'domain': domain, 'san_domains': san_domains})
+
             return jsonify({
-                'success': True, 
+                'success': True,
                 'message': msg,
                 'domain': domain,
                 'san_domains': san_domains,
@@ -1021,7 +1103,11 @@ def register_web_routes(app, managers):
                     logger.error(f"Background certificate renewal failed for {domain}: {e}")
             
             _cert_executor.submit(renew_cert_async)
-            
+
+            event_bus = managers.get('events')
+            if event_bus:
+                event_bus.publish('certificate_renewed', {'domain': domain})
+
             return jsonify({'success': True, 'message': f'Certificate renewal started for {domain}'})
             
         except Exception as e:
