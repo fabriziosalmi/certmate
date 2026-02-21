@@ -30,7 +30,11 @@ def browser_page(docker_container):
     """Provide a Playwright browser page."""
     from playwright.sync_api import sync_playwright
     pw = sync_playwright().start()
-    browser = pw.chromium.launch(headless=True)
+    try:
+        browser = pw.chromium.launch(headless=True)
+    except Exception as e:
+        pw.stop()
+        pytest.skip(f"Chromium not available: {e}")
     context = browser.new_context(ignore_https_errors=True)
     page = context.new_page()
     yield page
