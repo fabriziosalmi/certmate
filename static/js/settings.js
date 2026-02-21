@@ -203,7 +203,8 @@
 
             removeDomain: function(domain) {
                 var self = this;
-                CertMate.confirm('Remove all hooks for ' + domain + '?', function() {
+                CertMate.confirm('Remove all hooks for ' + domain + '?', 'Remove Domain').then(function(confirmed) {
+                    if (!confirmed) return;
                     delete self.config.domain_hooks[domain];
                     self.config.domain_hooks = Object.assign({}, self.config.domain_hooks);
                 });

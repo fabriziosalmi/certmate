@@ -74,8 +74,10 @@ class EventBus:
                 except ValueError:
                     pass
 
-        # Invoke listeners in background threads to avoid blocking
-        for listener in self._listeners:
+        # Snapshot listeners under lock, then invoke in background threads
+        with self._lock:
+            listeners = list(self._listeners)
+        for listener in listeners:
             try:
                 threading.Thread(
                     target=listener,

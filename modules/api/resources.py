@@ -21,6 +21,17 @@ from ..core.constants import CERTIFICATE_FILES, get_domain_name
 _DOMAIN_RE = re.compile(r'^(\*\.)?([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$')
 
 
+def _validate_backup_filename(filename):
+    """Reject path traversal attempts in backup filenames. Returns error string or None."""
+    if not filename:
+        return 'Filename is required'
+    if '..' in filename or '/' in filename or '\\' in filename or '\x00' in filename:
+        return 'Invalid filename'
+    if not filename.endswith('.zip'):
+        return 'Invalid backup file format'
+    return None
+
+
 def _is_safe_url(url: str) -> tuple:
     """Check if a URL is safe to request (not targeting private/internal networks).
     Returns (is_safe, error_message)."""
@@ -543,7 +554,11 @@ def create_api_resources(api, models, managers):
             try:
                 if backup_type != 'unified':
                     return {'error': 'Only unified backup download is supported'}, 400
-                
+
+                err = _validate_backup_filename(filename)
+                if err:
+                    return {'error': err}, 400
+
                 backup_path = Path(file_ops.backup_dir) / backup_type / filename
                 
                 if not backup_path.exists():
@@ -585,10 +600,10 @@ def create_api_resources(api, models, managers):
                 filename = data.get('filename')
                 create_backup = data.get('create_backup_before_restore', True)
                 
-                if not filename:
-                    return {'error': 'Filename is required'}, 400
-                
-                # Handle unified backups only
+                err = _validate_backup_filename(filename)
+                if err:
+                    return {'error': err}, 400
+
                 backup_path = Path(file_ops.backup_dir) / "unified" / filename
                 
                 if not backup_path.exists():
@@ -644,8 +659,11 @@ def create_api_resources(api, models, managers):
                 
                 if backup_type != 'unified':
                     return {'error': 'Only unified backup deletion is supported'}, 400
-                
-                # Construct backup path
+
+                err = _validate_backup_filename(filename)
+                if err:
+                    return {'error': err}, 400
+
                 backup_dir = file_ops.backup_dir / backup_type
                 backup_path = backup_dir / filename
                 

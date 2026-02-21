@@ -157,7 +157,7 @@
         }
     }
 
-    async function ccHandleCreateCert(e) {
+    function ccHandleCreateCert(e) {
         e.preventDefault();
         var data = {
             common_name: document.getElementById('commonName').value,
@@ -169,12 +169,11 @@
             notes: document.getElementById('notes').value
         };
 
-        try {
-            var response = await fetch('/api/client-certs', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data)
-            });
+        fetch('/api/client-certs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        }).then(function(response) {
             if (response.ok) {
                 CertMate.toast('Client certificate created!', 'success');
                 document.getElementById('createClientCertForm').reset();
@@ -183,10 +182,9 @@
             } else {
                 CertMate.toast('Error creating certificate', 'error');
             }
-        } catch (err) {
-            console.error('Error:', err);
+        }).catch(function() {
             CertMate.toast('Error creating certificate', 'error');
-        }
+        });
     }
 
     function ccHandleCSVFile(file) {
@@ -264,30 +262,32 @@
         window.location.href = '/api/client-certs/' + encodeURIComponent(currentCertId) + '/download/' + encodeURIComponent(type);
     };
 
-    async function ccRevokeCert(id) {
-        if (!await CertMate.confirm('Are you sure you want to revoke this certificate?', 'Revoke Certificate')) return;
-        try {
-            var response = await fetch('/api/client-certs/' + id + '/revoke', {
+    function ccRevokeCert(id) {
+        CertMate.confirm('Are you sure you want to revoke this certificate?', 'Revoke Certificate').then(function(confirmed) {
+            if (!confirmed) return;
+            fetch('/api/client-certs/' + id + '/revoke', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ reason: 'User requested' })
-            });
-            if (response.ok) {
-                CertMate.toast('Certificate revoked', 'success');
-                ccLoadCertificates();
-                ccLoadStatistics();
-            } else {
+            }).then(function(response) {
+                if (response.ok) {
+                    CertMate.toast('Certificate revoked', 'success');
+                    ccLoadCertificates();
+                    ccLoadStatistics();
+                } else {
+                    CertMate.toast('Error revoking certificate', 'error');
+                }
+            }).catch(function() {
                 CertMate.toast('Error revoking certificate', 'error');
-            }
-        } catch (err) { console.error('Error:', err); }
+            });
+        });
     }
 
-    async function ccRenewCert(id) {
-        try {
-            var response = await fetch('/api/client-certs/' + id + '/renew', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
-            });
+    function ccRenewCert(id) {
+        fetch('/api/client-certs/' + id + '/renew', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        }).then(function(response) {
             if (response.ok) {
                 CertMate.toast('Certificate renewed!', 'success');
                 ccLoadCertificates();
@@ -295,6 +295,8 @@
             } else {
                 CertMate.toast('Error renewing certificate', 'error');
             }
-        } catch (err) { console.error('Error:', err); }
+        }).catch(function() {
+            CertMate.toast('Error renewing certificate', 'error');
+        });
     }
 })();
