@@ -134,6 +134,10 @@ class Notifier:
             if not url:
                 return {'error': 'Webhook URL not configured'}
 
+            # Only allow http/https schemes to prevent file:// or other attacks
+            if not url.startswith(('https://', 'http://')):
+                return {'error': 'Webhook URL must use http or https scheme'}
+
             wh_type = cfg.get('type', 'generic')
             secret = cfg.get('secret', '')
 
@@ -180,7 +184,7 @@ class Notifier:
                 sig = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
                 req.add_header('X-CertMate-Signature', sig)
 
-            with urlopen(req, timeout=10) as resp:
+            with urlopen(req, timeout=10) as resp:  # nosec B310
                 status = resp.status
                 logger.info(f"Webhook '{cfg.get('name', 'webhook')}' sent: HTTP {status}")
                 return {'success': True, 'status': status}
