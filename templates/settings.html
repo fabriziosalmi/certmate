@@ -1639,10 +1639,67 @@
                                     </div>
                                     <div><input type="text" x-model="wh.secret" placeholder="HMAC secret (optional)" class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"></div>
                                 </div>
+                                <!-- Per-webhook event filtering -->
+                                <div class="mt-1">
+                                    <label class="text-xs text-gray-500 dark:text-gray-400 mb-1 block">Events (leave empty for all)</label>
+                                    <div class="flex flex-wrap gap-1.5">
+                                        <template x-for="evt in ['certificate_created','certificate_renewed','certificate_expiring','certificate_revoked','certificate_failed']">
+                                            <label class="inline-flex items-center px-2 py-1 rounded text-xs cursor-pointer border transition"
+                                                   :class="(wh.events||[]).includes(evt) ? 'bg-primary/10 border-primary text-primary' : 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400'">
+                                                <input type="checkbox" class="sr-only" :value="evt"
+                                                       :checked="(wh.events||[]).includes(evt)"
+                                                       @change="toggleWebhookEvent(wh, evt)">
+                                                <span x-text="evt.replace('certificate_','')"></span>
+                                            </label>
+                                        </template>
+                                    </div>
+                                </div>
+                                <!-- Custom headers (generic webhooks only) -->
+                                <div class="mt-1" x-show="wh.type === 'generic'">
+                                    <label class="text-xs text-gray-500 dark:text-gray-400 mb-1 block">Custom Headers</label>
+                                    <template x-for="(val, key) in (wh.headers || {})" :key="key">
+                                        <div class="flex gap-1 mb-1">
+                                            <input type="text" :value="key" disabled class="w-1/3 px-2 py-1 text-xs border border-gray-200 dark:border-gray-600 rounded bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                                            <input type="text" :value="val" disabled class="flex-1 px-2 py-1 text-xs border border-gray-200 dark:border-gray-600 rounded bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                                            <button type="button" @click="delete wh.headers[key]; wh.headers = Object.assign({}, wh.headers)" class="text-red-400 hover:text-red-600 text-xs px-1"><i class="fas fa-times"></i></button>
+                                        </div>
+                                    </template>
+                                    <div class="flex gap-1" x-data="{hk:'',hv:''}">
+                                        <input type="text" x-model="hk" placeholder="Header name" class="w-1/3 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                                        <input type="text" x-model="hv" placeholder="Value" class="flex-1 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                                        <button type="button" @click="if(hk.trim()){if(!wh.headers)wh.headers={};wh.headers[hk.trim()]=hv;wh.headers=Object.assign({},wh.headers);hk='';hv='';}" class="text-primary text-xs px-1"><i class="fas fa-plus"></i></button>
+                                    </div>
+                                </div>
                                 <button type="button" @click="testWebhook(wh)" class="text-sm text-blue-600 dark:text-blue-400 hover:underline"><i class="fas fa-paper-plane mr-1"></i>Test</button>
                             </div>
                         </template>
-                        <button type="button" @click="config.channels.webhooks.push({enabled:true,name:'',url:'',type:'generic',secret:''})" class="text-sm text-primary hover:underline"><i class="fas fa-plus mr-1"></i>Add webhook</button>
+                        <button type="button" @click="config.channels.webhooks.push({enabled:true,name:'',url:'',type:'generic',secret:'',events:[],headers:{}})" class="text-sm text-primary hover:underline"><i class="fas fa-plus mr-1"></i>Add webhook</button>
+                        <!-- Delivery log -->
+                        <div class="border-t border-gray-200 dark:border-gray-700 mt-4 pt-4">
+                            <button type="button" @click="showDeliveries = !showDeliveries; if(showDeliveries) loadDeliveries()" class="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition">
+                                <i class="fas fa-history mr-1.5"></i>Recent Deliveries
+                                <i class="fas fa-chevron-down text-xs ml-1" :class="showDeliveries ? 'rotate-180' : ''"></i>
+                            </button>
+                            <div x-show="showDeliveries" x-cloak class="mt-2 max-h-64 overflow-y-auto">
+                                <table class="w-full text-xs">
+                                    <thead><tr class="text-left text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700"><th class="py-1.5 pr-2">Time</th><th class="py-1.5 pr-2">Webhook</th><th class="py-1.5 pr-2">Event</th><th class="py-1.5 pr-2">Status</th><th class="py-1.5">Tries</th></tr></thead>
+                                    <tbody>
+                                        <template x-for="d in deliveries" :key="d.timestamp+d.webhook_name">
+                                            <tr class="border-t border-gray-100 dark:border-gray-700/50">
+                                                <td class="py-1 pr-2 text-gray-500 dark:text-gray-400 whitespace-nowrap" x-text="new Date(d.timestamp).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})"></td>
+                                                <td class="py-1 pr-2 text-gray-700 dark:text-gray-300" x-text="d.webhook_name"></td>
+                                                <td class="py-1 pr-2 text-gray-600 dark:text-gray-400" x-text="d.event.replace('certificate_','')"></td>
+                                                <td class="py-1 pr-2"><span :class="d.success ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'" x-text="d.success ? 'HTTP ' + d.status : (d.error || 'failed').substring(0, 40)"></span></td>
+                                                <td class="py-1 text-gray-500" x-text="d.attempts"></td>
+                                            </tr>
+                                        </template>
+                                        <template x-if="deliveries.length === 0">
+                                            <tr><td colspan="5" class="py-3 text-center text-gray-400 dark:text-gray-500">No deliveries yet</td></tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

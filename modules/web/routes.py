@@ -322,6 +322,17 @@ def register_web_routes(app, managers):
         result = notifier.test_channel(channel_type, config)
         return jsonify(result)
 
+    @app.route('/api/webhooks/deliveries')
+    @auth_manager.require_auth
+    def webhook_deliveries():
+        """Return recent webhook delivery log entries."""
+        notifier = managers.get('notifier')
+        if not notifier:
+            return jsonify({'error': 'Notifier not available'}), 500
+        limit = request.args.get('limit', 50, type=int)
+        limit = min(max(limit, 1), 200)
+        return jsonify(notifier.get_deliveries(limit=limit))
+
     @app.route('/api/events/stream')
     @auth_manager.require_auth
     def event_stream():

@@ -17,6 +17,8 @@
             },
             showSmtp: false,
             showWebhooks: false,
+            showDeliveries: false,
+            deliveries: [],
             get smtpToStr() { return (this.config.channels.smtp.to_addresses || []).join(', '); },
             set smtpToStr(v) { this.config.channels.smtp.to_addresses = v.split(',').map(function(s) { return s.trim(); }).filter(Boolean); },
             toggleEvent: function(evt) {
@@ -74,6 +76,21 @@
                 .then(function(r) { return r.json(); })
                 .then(function(d) { CertMate.toast(d.success ? 'Webhook test sent!' : ('Webhook failed: ' + (d.error || 'unknown')), d.success ? 'success' : 'error'); })
                 .catch(function() { CertMate.toast('Test failed', 'error'); });
+            },
+            toggleWebhookEvent: function(wh, evt) {
+                if (!wh.events) wh.events = [];
+                var idx = wh.events.indexOf(evt);
+                if (idx === -1) wh.events.push(evt);
+                else wh.events.splice(idx, 1);
+            },
+            loadDeliveries: function() {
+                var self = this;
+                fetch('/api/webhooks/deliveries?limit=50', { credentials: 'same-origin' })
+                    .then(function(r) { return r.json(); })
+                    .then(function(data) {
+                        if (Array.isArray(data)) self.deliveries = data;
+                    })
+                    .catch(function() {});
             }
         };
     }

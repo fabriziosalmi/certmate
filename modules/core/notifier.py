@@ -11,6 +11,7 @@ import hmac
 import time
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from pathlib import Path
 from typing import Optional, Dict, Any, List
 from urllib.request import Request, urlopen
 from urllib.error import URLError
@@ -21,8 +22,11 @@ logger = logging.getLogger(__name__)
 class Notifier:
     """Sends notifications via configured channels."""
 
-    def __init__(self, settings_manager):
+    MAX_DELIVERY_LOG_ENTRIES = 1000
+
+    def __init__(self, settings_manager, data_dir: str = 'data'):
         self.settings_manager = settings_manager
+        self._delivery_log_path = Path(data_dir) / 'webhook_deliveries.jsonl'
 
     def _get_config(self) -> dict:
         """Get notification config from settings."""
@@ -133,17 +137,72 @@ class Notifier:
     def _send_webhook_with_retry(self, cfg: dict, event: str, title: str,
                                 message: str, details: Optional[dict] = None,
                                 max_retries: int = 3) -> dict:
-        """Send webhook with exponential backoff retry."""
+        """Send webhook with exponential backoff retry and delivery logging."""
+        start_ms = int(time.time() * 1000)
         result = {}
+        attempts = 0
         for attempt in range(max_retries):
+            attempts = attempt + 1
             result = self._send_webhook(cfg, event, title, message, details)
             if result.get('success'):
-                return result
+                break
             if attempt < max_retries - 1:
                 delay = 2 ** attempt  # 1s, 2s, 4s
                 time.sleep(delay)
                 logger.debug(f"Webhook retry {attempt + 2}/{max_retries} for '{cfg.get('name', 'webhook')}'")
+
+        duration_ms = int(time.time() * 1000) - start_ms
+        self._log_delivery(cfg, event, result, attempts, duration_ms)
         return result
+
+    def _log_delivery(self, cfg: dict, event: str, result: dict,
+                      attempts: int, duration_ms: int) -> None:
+        """Append a delivery record to the JSONL log file."""
+        entry = {
+            'timestamp': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+            'webhook_name': cfg.get('name', 'webhook'),
+            'webhook_type': cfg.get('type', 'generic'),
+            'event': event,
+            'url': cfg.get('url', ''),
+            'status': result.get('status'),
+            'success': bool(result.get('success')),
+            'attempts': attempts,
+            'error': result.get('error'),
+            'duration_ms': duration_ms,
+        }
+        try:
+            self._delivery_log_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(self._delivery_log_path, 'a') as f:
+                f.write(json.dumps(entry) + '\n')
+            self._truncate_delivery_log()
+        except OSError as e:
+            logger.debug(f"Failed to write delivery log: {e}")
+
+    def _truncate_delivery_log(self) -> None:
+        """Keep only the last MAX_DELIVERY_LOG_ENTRIES entries."""
+        try:
+            lines = self._delivery_log_path.read_text().splitlines()
+            if len(lines) > self.MAX_DELIVERY_LOG_ENTRIES:
+                keep = lines[-self.MAX_DELIVERY_LOG_ENTRIES:]
+                self._delivery_log_path.write_text('\n'.join(keep) + '\n')
+        except OSError:
+            pass
+
+    def get_deliveries(self, limit: int = 50) -> List[dict]:
+        """Read recent delivery log entries, newest first."""
+        try:
+            if not self._delivery_log_path.exists():
+                return []
+            lines = self._delivery_log_path.read_text().splitlines()
+            entries = []
+            for line in reversed(lines[-limit:]):
+                line = line.strip()
+                if line:
+                    entries.append(json.loads(line))
+            return entries
+        except (OSError, json.JSONDecodeError) as e:
+            logger.debug(f"Failed to read delivery log: {e}")
+            return []
 
     def _send_webhook(self, cfg: dict, event: str, title: str,
                       message: str, details: Optional[dict] = None) -> dict:
@@ -198,10 +257,17 @@ class Notifier:
             req.add_header('Content-Type', 'application/json')
             req.add_header('User-Agent', 'CertMate-Webhook/1.0')
 
-            # HMAC signature for generic webhooks
+            # Custom headers for generic webhooks
+            if wh_type == 'generic':
+                for hdr_name, hdr_value in cfg.get('headers', {}).items():
+                    req.add_header(hdr_name, hdr_value)
+
+            # HMAC-SHA256 signature with timestamp for replay protection
             if secret and wh_type == 'generic':
-                sig = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
-                req.add_header('X-CertMate-Signature', sig)
+                timestamp = str(int(time.time()))
+                signed_payload = f'{timestamp}.'.encode() + body
+                sig = hmac.new(secret.encode(), signed_payload, hashlib.sha256).hexdigest()
+                req.add_header('X-CertMate-Signature', f't={timestamp},v1={sig}')
 
             with urlopen(req, timeout=10) as resp:  # nosec B310
                 status = resp.status

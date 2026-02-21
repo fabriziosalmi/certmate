@@ -2,7 +2,7 @@
 CertMate - Modular SSL Certificate Management Application
 Main application entry point with modular architecture
 """
-__version__ = '1.10.4'
+__version__ = '1.10.5'
 import os
 import sys
 import tempfile
@@ -216,7 +216,7 @@ class CertMateApp:
             rate_limiter = SimpleRateLimiter(rate_limit_config)
 
             # Initialize Notifier and Event Bus
-            notifier = Notifier(settings_manager)
+            notifier = Notifier(settings_manager, data_dir=str(self.data_dir))
             event_bus = EventBus()
 
             # Wire notifications to certificate lifecycle events
