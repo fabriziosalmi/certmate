@@ -2,7 +2,7 @@
 CertMate - Modular SSL Certificate Management Application
 Main application entry point with modular architecture
 """
-__version__ = '1.10.2'
+__version__ = '1.10.3'
 import os
 import sys
 import tempfile
@@ -218,6 +218,28 @@ class CertMateApp:
             # Initialize Notifier and Event Bus
             notifier = Notifier(settings_manager)
             event_bus = EventBus()
+
+            # Wire notifications to certificate lifecycle events
+            def _on_event(event, data):
+                event_titles = {
+                    'certificate_created': 'Certificate Created',
+                    'certificate_renewed': 'Certificate Renewed',
+                    'certificate_failed': 'Certificate Failed',
+                }
+                title = event_titles.get(event)
+                if not title:
+                    return  # Only notify on known certificate events
+                domain = data.get('domain', 'unknown')
+                message = f"{title}: {domain}"
+                try:
+                    notifier.notify(event, title, message, details=data)
+                except Exception as e:
+                    logger.debug(f"Notification failed for {event}: {e}")
+
+            event_bus.add_listener(_on_event)
+
+            # Make event bus accessible to API resources via app config
+            self.app.config['EVENT_BUS'] = event_bus
 
             # Store all managers for easy access
             self.managers = {

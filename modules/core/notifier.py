@@ -63,8 +63,12 @@ class Notifier:
         for wh in channels.get('webhooks', []):
             if not wh.get('enabled', False):
                 continue
+            # Per-webhook event filtering
+            wh_events = wh.get('events', [])
+            if wh_events and event not in wh_events:
+                continue
             name = wh.get('name', 'webhook')
-            results[name] = self._send_webhook(wh, event, title, message, details)
+            results[name] = self._send_webhook_with_retry(wh, event, title, message, details)
 
         return results
 
@@ -126,6 +130,21 @@ class Notifier:
             logger.error(f"Email notification failed: {e}")
             return {'error': str(e)}
 
+    def _send_webhook_with_retry(self, cfg: dict, event: str, title: str,
+                                message: str, details: Optional[dict] = None,
+                                max_retries: int = 3) -> dict:
+        """Send webhook with exponential backoff retry."""
+        result = {}
+        for attempt in range(max_retries):
+            result = self._send_webhook(cfg, event, title, message, details)
+            if result.get('success'):
+                return result
+            if attempt < max_retries - 1:
+                delay = 2 ** attempt  # 1s, 2s, 4s
+                time.sleep(delay)
+                logger.debug(f"Webhook retry {attempt + 2}/{max_retries} for '{cfg.get('name', 'webhook')}'")
+        return result
+
     def _send_webhook(self, cfg: dict, event: str, title: str,
                       message: str, details: Optional[dict] = None) -> dict:
         """Send webhook notification (generic, Slack, or Discord format)."""
@@ -171,7 +190,7 @@ class Notifier:
                     'title': title,
                     'message': message,
                     'details': details or {},
-                    'timestamp': int(time.time())
+                    'timestamp': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
                 }
 
             body = json.dumps(payload).encode('utf-8')

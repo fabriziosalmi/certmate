@@ -203,8 +203,8 @@ class FileOperations:
                                     zip_metadata = json.loads(metadata_content.decode('utf-8'))
                                     metadata.update(zip_metadata)
                                     metadata["type"] = "unified"
-                        except Exception:
-                            pass  # Skip if can't read ZIP metadata
+                        except Exception as e:
+                            logger.debug(f"Could not read ZIP metadata from {backup_file}: {e}")
                             
                         backups["unified"].append({
                             "filename": backup_file.name,

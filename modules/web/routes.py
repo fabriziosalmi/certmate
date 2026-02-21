@@ -1008,6 +1008,9 @@ def register_web_routes(app, managers):
                     logger.info(f"Background certificate creation completed for {domains_info}")
                 except Exception as e:
                     logger.error(f"Background certificate creation failed for {domain}: {e}")
+                    evt = managers.get('events')
+                    if evt:
+                        evt.publish('certificate_failed', {'domain': domain, 'error': str(e)})
 
             _cert_executor.submit(create_cert_async)
             
@@ -1059,8 +1062,8 @@ def register_web_routes(app, managers):
                 def remove_file(response):
                     try:
                         os.remove(tmp_path)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.debug(f"Could not remove temp file {tmp_path}: {e}")
                     return response
 
                 return send_file(
@@ -1101,7 +1104,10 @@ def register_web_routes(app, managers):
                     logger.info(f"Background certificate renewal completed for {domain}")
                 except Exception as e:
                     logger.error(f"Background certificate renewal failed for {domain}: {e}")
-            
+                    evt = managers.get('events')
+                    if evt:
+                        evt.publish('certificate_failed', {'domain': domain, 'error': str(e)})
+
             _cert_executor.submit(renew_cert_async)
 
             event_bus = managers.get('events')

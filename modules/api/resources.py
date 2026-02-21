@@ -12,7 +12,7 @@ import zipfile
 import os
 from pathlib import Path
 from urllib.parse import urlparse
-from flask import send_file, after_this_request
+from flask import send_file, after_this_request, current_app
 from flask_restx import Resource, fields
 
 from ..core.metrics import generate_metrics_response, get_metrics_summary, is_prometheus_available
@@ -361,6 +361,15 @@ def create_api_resources(api, models, managers):
                     settings_manager.save_settings(settings, "certificate_created")
                     logger.info(f"Added domain {domain} to settings after certificate creation")
                 
+                event_bus = current_app.config.get('EVENT_BUS')
+                if event_bus:
+                    event_bus.publish('certificate_created', {
+                        'domain': domain,
+                        'san_domains': san_domains,
+                        'dns_provider': result.get('dns_provider'),
+                        'ca_provider': result.get('ca_provider')
+                    })
+
                 return {
                     'message': f'Certificate created successfully for {domain}',
                     'domain': domain,
@@ -368,7 +377,7 @@ def create_api_resources(api, models, managers):
                     'ca_provider': result.get('ca_provider'),
                     'duration': result.get('duration')
                 }, 201
-                
+
             except ValueError as e:
                 # Validation errors from certificate_manager
                 error_msg = str(e)
@@ -427,8 +436,8 @@ def create_api_resources(api, models, managers):
                     def remove_file(response):
                         try:
                             os.remove(tmp_path)
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            logger.debug(f"Could not remove temp file {tmp_path}: {e}")
                         return response
                     
                     return send_file(
@@ -449,16 +458,23 @@ def create_api_resources(api, models, managers):
             """Renew an existing certificate"""
             try:
                 result = certificate_manager.renew_certificate(domain)
-                
+
+                event_bus = current_app.config.get('EVENT_BUS')
+                if event_bus:
+                    event_bus.publish('certificate_renewed', {'domain': domain})
+
                 return {
                     'message': f'Certificate renewed successfully for {domain}',
                     'domain': domain,
                     'dns_provider': result.get('dns_provider'),
                     'duration': result.get('duration')
                 }, 200
-                
+
             except Exception as e:
                 logger.error(f"Certificate renewal failed for {domain}: {str(e)}")
+                event_bus = current_app.config.get('EVENT_BUS')
+                if event_bus:
+                    event_bus.publish('certificate_failed', {'domain': domain, 'error': str(e)})
                 return {'error': 'Certificate renewal failed'}, 500
 
     # Backup endpoints (Unified backup system for atomic consistency)

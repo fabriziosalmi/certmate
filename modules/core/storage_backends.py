@@ -242,20 +242,21 @@ class AzureKeyVaultBackend(CertificateStorageBackend):
                     secret_name = self._sanitize_secret_name(f"cert-{domain}-{filename.replace('.', '-')}")
                     secret = client.get_secret(secret_name)
                     cert_files[filename] = secret.value.encode('utf-8')
-                except Exception:
-                    continue  # File might not exist
-            
+                except Exception as e:
+                    logger.debug(f"Secret {secret_name} not found for {domain}: {e}")
+                    continue
+
             if not cert_files:
                 return None
-            
+
             # Load metadata
             metadata = {}
             try:
                 metadata_name = self._sanitize_secret_name(f"cert-{domain}-metadata")
                 secret = client.get_secret(metadata_name)
                 metadata = json.loads(secret.value)
-            except Exception:
-                pass  # Metadata might not exist
+            except Exception as e:
+                logger.debug(f"Metadata not found in Azure Key Vault for {domain}: {e}")
             
             return cert_files, metadata
             
@@ -292,15 +293,16 @@ class AzureKeyVaultBackend(CertificateStorageBackend):
                 try:
                     secret_name = self._sanitize_secret_name(f"cert-{domain}-{filename.replace('.', '-')}")
                     client.begin_delete_secret(secret_name)
-                except Exception:
-                    continue  # Secret might not exist
-            
+                except Exception as e:
+                    logger.debug(f"Could not delete secret {secret_name} for {domain}: {e}")
+                    continue
+
             # Delete metadata
             try:
                 metadata_name = self._sanitize_secret_name(f"cert-{domain}-metadata")
                 client.begin_delete_secret(metadata_name)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Could not delete metadata for {domain} from Azure Key Vault: {e}")
             
             logger.info(f"Certificate deleted from Azure Key Vault for {domain}")
             return True
@@ -697,12 +699,13 @@ class InfisicalBackend(CertificateStorageBackend):
                         environment=self.environment
                     )
                     cert_files[filename] = secret.secret_value.encode('utf-8')
-                except Exception:
-                    continue  # File might not exist
-            
+                except Exception as e:
+                    logger.debug(f"Secret {secret_key} not found for {domain}: {e}")
+                    continue
+
             if not cert_files:
                 return None
-            
+
             # Load metadata
             metadata = {}
             try:
@@ -713,8 +716,8 @@ class InfisicalBackend(CertificateStorageBackend):
                     environment=self.environment
                 )
                 metadata = json.loads(secret.secret_value)
-            except Exception:
-                pass  # Metadata might not exist
+            except Exception as e:
+                logger.debug(f"Metadata not found in Infisical for {domain}: {e}")
             
             return cert_files, metadata
             
@@ -760,9 +763,10 @@ class InfisicalBackend(CertificateStorageBackend):
                         project_id=self.project_id,
                         environment=self.environment
                     )
-                except Exception:
-                    continue  # Secret might not exist
-            
+                except Exception as e:
+                    logger.debug(f"Could not delete secret {secret_key} for {domain}: {e}")
+                    continue
+
             # Delete metadata
             try:
                 metadata_key = f"certmate-{domain}-metadata"
@@ -771,8 +775,8 @@ class InfisicalBackend(CertificateStorageBackend):
                     project_id=self.project_id,
                     environment=self.environment
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Could not delete metadata for {domain} from Infisical: {e}")
             
             logger.info(f"Certificate deleted from Infisical for {domain}")
             return True

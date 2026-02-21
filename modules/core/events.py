@@ -18,7 +18,13 @@ class EventBus:
 
     def __init__(self):
         self._subscribers = []
+        self._listeners = []
         self._lock = threading.Lock()
+
+    def add_listener(self, callback) -> None:
+        """Register a callback invoked on every publish(). Signature: callback(event, data)."""
+        with self._lock:
+            self._listeners.append(callback)
 
     def subscribe(self) -> queue.Queue:
         """Create a new subscriber queue."""
@@ -67,6 +73,17 @@ class EventBus:
                     self._subscribers.remove(q)
                 except ValueError:
                     pass
+
+        # Invoke listeners in background threads to avoid blocking
+        for listener in self._listeners:
+            try:
+                threading.Thread(
+                    target=listener,
+                    args=(event, message.get('data', {})),
+                    daemon=True
+                ).start()
+            except Exception as e:
+                logger.debug(f"Event listener invocation failed: {e}")
 
     def stream(self, q: queue.Queue):
         """
