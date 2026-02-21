@@ -31,7 +31,7 @@
         <div class="bg-white dark:bg-gray-800 shadow rounded-lg">
             <div class="px-6 py-3 border-b dark:border-gray-700 overflow-x-auto">
                 <nav class="flex space-x-1 min-w-max" role="tablist">
-                    <template x-for="t in [{id:'dns',icon:'fa-server',label:'DNS'},{id:'ca',icon:'fa-shield-alt',label:'CA'},{id:'general',icon:'fa-cogs',label:'General'},{id:'storage',icon:'fa-database',label:'Storage'},{id:'notifications',icon:'fa-bell',label:'Notifications'},{id:'users',icon:'fa-users',label:'Users'},{id:'backup',icon:'fa-archive',label:'Backup'}]">
+                    <template x-for="t in [{id:'dns',icon:'fa-server',label:'DNS'},{id:'ca',icon:'fa-shield-alt',label:'CA'},{id:'general',icon:'fa-cogs',label:'General'},{id:'storage',icon:'fa-database',label:'Storage'},{id:'notifications',icon:'fa-bell',label:'Notifications'},{id:'users',icon:'fa-users',label:'Users'},{id:'apikeys',icon:'fa-key',label:'API Keys'},{id:'backup',icon:'fa-archive',label:'Backup'}]">
                         <button type="button" @click="tab = t.id" role="tab"
                                 :class="tab === t.id
                                     ? 'px-4 py-2 text-sm font-medium rounded-md text-primary bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700'
@@ -1830,6 +1830,135 @@
                     <div class="text-center py-4 text-gray-500 dark:text-gray-400 text-sm">
                         <i class="fas fa-spinner fa-spin mr-2"></i> Loading users...
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB: API Keys Management -->
+        <div x-show="tab === 'apikeys'" x-cloak
+             x-data="apiKeyManager()" x-init="loadKeys()"
+             class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 mt-6">
+
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
+                    <i class="fas fa-key mr-2 text-yellow-500"></i>
+                    API Keys
+                </h3>
+                <span class="text-xs bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 px-2 py-1 rounded-full">Scoped Access</span>
+            </div>
+
+            <p class="text-gray-600 dark:text-gray-400 text-sm mb-6">
+                Create and manage scoped API keys for programmatic access. Each key is assigned a role that controls its permissions.
+            </p>
+
+            <!-- Create Key Form -->
+            <div class="mb-6 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3"><i class="fas fa-plus-circle mr-1"></i> Create New API Key</h4>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Key Name</label>
+                        <input type="text" x-model="newKey.name" placeholder="e.g., CI/CD Pipeline"
+                               class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-gray-700 dark:text-white" maxlength="64">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Role</label>
+                        <select x-model="newKey.role" title="API key role" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-gray-700 dark:text-white">
+                            <option value="viewer">Viewer (read-only)</option>
+                            <option value="operator">Operator (read + write)</option>
+                            <option value="admin">Admin (full access)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Expiration (optional)</label>
+                        <div class="flex items-center space-x-2">
+                            <input type="date" x-model="newKey.expires_at" title="Expiration date"
+                                   class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-gray-700 dark:text-white">
+                            <button type="button" @click="createKey()"
+                                    class="px-4 py-2 bg-yellow-600 text-white rounded-md hover:bg-yellow-700 text-sm whitespace-nowrap">
+                                <i class="fas fa-plus mr-1"></i> Create
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Created Token Display (shown once) -->
+            <div x-show="createdToken" x-cloak class="mb-6 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg">
+                <div class="flex items-start">
+                    <i class="fas fa-exclamation-triangle text-green-600 mt-0.5 mr-3 flex-shrink-0"></i>
+                    <div class="flex-1">
+                        <h4 class="text-sm font-medium text-green-800 dark:text-green-200">API Key Created</h4>
+                        <p class="text-xs text-green-700 dark:text-green-300 mt-1 mb-2">Copy this token now. It will not be shown again.</p>
+                        <div class="flex items-center space-x-2">
+                            <code class="flex-1 px-3 py-2 bg-white dark:bg-gray-800 border border-green-300 dark:border-green-600 rounded text-sm font-mono text-gray-900 dark:text-white break-all" x-text="createdToken"></code>
+                            <button type="button" @click="copyToken()" title="Copy token" class="px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm"><i class="fas fa-copy"></i></button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Keys Table -->
+            <div>
+                <div class="flex items-center justify-between mb-3">
+                    <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300"><i class="fas fa-list mr-1"></i> Existing Keys</h4>
+                    <button type="button" @click="loadKeys()" class="text-sm text-blue-600 dark:text-blue-400 hover:underline"><i class="fas fa-sync-alt mr-1"></i> Refresh</button>
+                </div>
+                <div class="space-y-2 max-h-96 overflow-y-auto">
+                    <template x-if="loading">
+                        <div class="text-center py-4 text-gray-500 dark:text-gray-400 text-sm"><i class="fas fa-spinner fa-spin mr-2"></i> Loading keys...</div>
+                    </template>
+                    <template x-if="!loading && Object.keys(keys).length === 0">
+                        <div class="text-center py-4 text-gray-500 dark:text-gray-400 text-sm"><i class="fas fa-key mr-2"></i> No API keys created yet.</div>
+                    </template>
+                    <template x-for="keyId in Object.keys(keys)" :key="keyId">
+                        <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg"
+                             :class="keys[keyId].revoked ? 'opacity-50' : ''">
+                            <div class="flex items-center space-x-3">
+                                <i class="fas fa-key text-lg" :class="keys[keyId].revoked ? 'text-gray-400' : 'text-yellow-500'"></i>
+                                <div>
+                                    <div class="flex items-center space-x-2">
+                                        <span class="font-medium text-gray-900 dark:text-white" x-text="keys[keyId].name"></span>
+                                        <span class="text-xs px-2 py-0.5 rounded-full"
+                                              :class="keys[keyId].role === 'admin' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300' : keys[keyId].role === 'operator' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300' : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'"
+                                              x-text="keys[keyId].role"></span>
+                                        <template x-if="keys[keyId].revoked">
+                                            <span class="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300">revoked</span>
+                                        </template>
+                                        <template x-if="keys[keyId].is_expired && !keys[keyId].revoked">
+                                            <span class="text-xs px-2 py-0.5 rounded-full bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300">expired</span>
+                                        </template>
+                                    </div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">
+                                        <span class="font-mono" x-text="keys[keyId].token_prefix + '...'"></span>
+                                        <span class="mx-1">&middot;</span>
+                                        <span x-text="'Created ' + new Date(keys[keyId].created_at).toLocaleDateString()"></span>
+                                        <template x-if="keys[keyId].last_used_at">
+                                            <span><span class="mx-1">&middot;</span><span x-text="'Last used ' + new Date(keys[keyId].last_used_at).toLocaleDateString()"></span></span>
+                                        </template>
+                                        <template x-if="keys[keyId].expires_at">
+                                            <span><span class="mx-1">&middot;</span><span x-text="'Expires ' + new Date(keys[keyId].expires_at).toLocaleDateString()"></span></span>
+                                        </template>
+                                    </div>
+                                </div>
+                            </div>
+                            <template x-if="!keys[keyId].revoked">
+                                <button type="button" @click="revokeKey(keyId, keys[keyId].name)"
+                                        class="p-2 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300" title="Revoke key">
+                                    <i class="fas fa-ban"></i>
+                                </button>
+                            </template>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Legacy Token Note -->
+            <div class="mt-6 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
+                <div class="flex items-start">
+                    <i class="fas fa-info-circle text-blue-500 mt-0.5 mr-2 flex-shrink-0"></i>
+                    <p class="text-xs text-blue-700 dark:text-blue-300">
+                        The legacy API token (configured in the General tab) continues to work with full admin access. New integrations should use scoped API keys.
+                    </p>
                 </div>
             </div>
         </div>

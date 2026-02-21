@@ -97,7 +97,168 @@ class AuthManager:
         settings = self.settings_manager.load_settings()
         settings['users'] = users
         return self.settings_manager.save_settings(settings, "user_management")
-    
+
+    # --- Scoped API Key management ---
+
+    def _get_api_keys(self):
+        """Get all API keys from settings."""
+        settings = self.settings_manager.load_settings()
+        return settings.get('api_keys', {})
+
+    def _save_api_keys(self, api_keys):
+        """Save API keys to settings."""
+        settings = self.settings_manager.load_settings()
+        settings['api_keys'] = api_keys
+        return self.settings_manager.save_settings(settings, "api_key_management")
+
+    @staticmethod
+    def _hash_api_token(token):
+        """Hash an API token using SHA-256."""
+        digest = hashlib.sha256(token.encode()).hexdigest()
+        return f"sha256:{digest}"
+
+    @staticmethod
+    def _verify_api_token(token, stored_hash):
+        """Verify an API token against a stored SHA-256 hash."""
+        if not stored_hash or not stored_hash.startswith('sha256:'):
+            return False
+        expected = stored_hash.split(':', 1)[1]
+        actual = hashlib.sha256(token.encode()).hexdigest()
+        return secrets.compare_digest(actual, expected)
+
+    def create_api_key(self, name, role='viewer', expires_at=None, created_by=None):
+        """Create a new scoped API key.
+
+        Returns:
+            tuple: (success, result_dict_or_error_string)
+        """
+        try:
+            if not name or len(name) > 64:
+                return False, "Key name must be 1-64 characters"
+
+            normalized_role = self._normalize_role(role)
+            if role not in ROLE_HIERARCHY:
+                return False, f"Invalid role: {role}. Must be viewer, operator, or admin"
+
+            api_keys = self._get_api_keys()
+
+            # Check name uniqueness among active keys
+            for existing in api_keys.values():
+                if existing.get('name') == name and not existing.get('revoked'):
+                    return False, "An active key with that name already exists"
+
+            key_id = str(uuid.uuid4())
+            plaintext = 'cm_' + secrets.token_hex(20)
+
+            api_keys[key_id] = {
+                'name': name,
+                'role': normalized_role,
+                'token_hash': self._hash_api_token(plaintext),
+                'token_prefix': plaintext[:7],
+                'created_at': datetime.utcnow().isoformat(),
+                'created_by': created_by,
+                'expires_at': expires_at,
+                'last_used_at': None,
+                'revoked': False,
+            }
+
+            if self._save_api_keys(api_keys):
+                logger.info(f"API key '{name}' (role={normalized_role}) created by {created_by}")
+                return True, {
+                    'id': key_id,
+                    'name': name,
+                    'role': normalized_role,
+                    'token': plaintext,
+                    'token_prefix': plaintext[:7],
+                    'created_at': api_keys[key_id]['created_at'],
+                    'expires_at': expires_at,
+                }
+            return False, "Failed to save API key"
+        except Exception as e:
+            logger.error(f"Error creating API key: {e}")
+            return False, "An internal error occurred"
+
+    def list_api_keys(self):
+        """List all API keys without token hashes."""
+        api_keys = self._get_api_keys()
+        now = datetime.utcnow().isoformat()
+        result = {}
+        for key_id, data in api_keys.items():
+            exp = data.get('expires_at')
+            is_expired = bool(exp and exp < now)
+            result[key_id] = {
+                'name': data.get('name'),
+                'role': data.get('role'),
+                'token_prefix': data.get('token_prefix'),
+                'created_at': data.get('created_at'),
+                'created_by': data.get('created_by'),
+                'expires_at': exp,
+                'last_used_at': data.get('last_used_at'),
+                'revoked': data.get('revoked', False),
+                'is_expired': is_expired,
+            }
+        return result
+
+    def revoke_api_key(self, key_id):
+        """Revoke an API key by ID (soft-delete)."""
+        try:
+            api_keys = self._get_api_keys()
+            if key_id not in api_keys:
+                return False, "API key not found"
+            if api_keys[key_id].get('revoked'):
+                return False, "API key is already revoked"
+
+            api_keys[key_id]['revoked'] = True
+            api_keys[key_id]['revoked_at'] = datetime.utcnow().isoformat()
+
+            if self._save_api_keys(api_keys):
+                logger.info(f"API key '{api_keys[key_id].get('name')}' revoked")
+                return True, "API key revoked successfully"
+            return False, "Failed to save changes"
+        except Exception as e:
+            logger.error(f"Error revoking API key: {e}")
+            return False, "An internal error occurred"
+
+    def authenticate_api_token(self, token):
+        """Authenticate a bearer token against legacy token and scoped keys.
+
+        Returns user info dict or None.
+        """
+        try:
+            settings = self.settings_manager.load_settings()
+
+            # 1. Check legacy api_bearer_token (backward compat)
+            legacy_token = settings.get('api_bearer_token')
+            if legacy_token and secrets.compare_digest(token, legacy_token):
+                return {'username': 'api_user', 'role': 'admin'}
+
+            # 2. Check scoped API keys
+            now = datetime.utcnow().isoformat()
+            api_keys = settings.get('api_keys', {})
+            for key_id, key_data in api_keys.items():
+                if key_data.get('revoked'):
+                    continue
+                exp = key_data.get('expires_at')
+                if exp and exp < now:
+                    continue
+                if self._verify_api_token(token, key_data.get('token_hash', '')):
+                    # Update last_used_at
+                    key_data['last_used_at'] = now
+                    settings['api_keys'] = api_keys
+                    try:
+                        self.settings_manager.save_settings(settings, None)
+                    except Exception:
+                        pass  # Non-critical, don't fail auth on last_used update
+                    return {
+                        'username': 'api_key:' + key_data.get('name', key_id),
+                        'role': self._normalize_role(key_data.get('role', 'viewer')),
+                    }
+
+            return None
+        except Exception as e:
+            logger.error(f"Error authenticating API token: {e}")
+            return None
+
     def create_user(self, username, password, role='operator', email=None):
         """Create a new user"""
         try:
@@ -317,26 +478,13 @@ class AuthManager:
                 except ValueError:
                     return {'error': 'Invalid authorization header format. Use: Bearer <token>', 'code': 'INVALID_AUTH_FORMAT'}, 401
                 
-                # Load current settings to get the valid token
-                settings = self.settings_manager.load_settings()
-                expected_token = settings.get('api_bearer_token')
-                
-                if not expected_token:
-                    return {'error': 'Server configuration error: no API token configured', 'code': 'SERVER_CONFIG_ERROR'}, 500
-                
-                # Validate token strength using imported function
-                from modules.core.utils import validate_api_token
-                is_valid, token_or_error = validate_api_token(expected_token)
-                if not is_valid:
-                    logger.error(f"Server has weak API token: {token_or_error}")
-                    return {'error': 'Server security configuration error', 'code': 'WEAK_SERVER_TOKEN'}, 500
-                
-                # Use constant-time comparison to prevent timing attacks
-                if not secrets.compare_digest(token, expected_token):
+                # Authenticate against legacy token and scoped API keys
+                user_info = self.authenticate_api_token(token)
+                if not user_info:
                     logger.warning(f"Invalid API token attempt from {request.remote_addr}")
                     return {'error': 'Invalid or expired token', 'code': 'INVALID_TOKEN'}, 401
-                
-                request.current_user = {'username': 'api_user', 'role': 'admin'}
+
+                request.current_user = user_info
                 return f(*args, **kwargs)
             except Exception as e:
                 logger.error(f"Authentication error: {e}")
@@ -379,14 +527,8 @@ class AuthManager:
         return self.require_role('admin')(f)
 
     def validate_api_token(self, token):
-        """Validate API token against current settings"""
-        try:
-            settings = self.settings_manager.load_settings()
-            valid_token = settings.get('api_bearer_token')
-            return secrets.compare_digest(token, valid_token) if valid_token else False
-        except Exception as e:
-            logger.error(f"Error validating API token: {e}")
-            return False
+        """Validate API token against legacy token and scoped keys."""
+        return self.authenticate_api_token(token) is not None
 
     def get_current_token(self):
         """Get the current API bearer token from settings"""

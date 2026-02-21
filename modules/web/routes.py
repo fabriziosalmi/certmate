@@ -525,6 +525,81 @@ def register_web_routes(app, managers):
             logger.error(f"Get token error: {e}")
             return jsonify({'error': 'Failed to get token'}), 500
 
+    # Scoped API key management (admin only)
+    @app.route('/api/keys', methods=['GET'])
+    @auth_manager.require_role('admin')
+    def api_list_keys():
+        """List all scoped API keys (metadata only, no secrets)."""
+        try:
+            keys = auth_manager.list_api_keys()
+            return jsonify({'keys': keys})
+        except Exception as e:
+            logger.error(f"Error listing API keys: {e}")
+            return jsonify({'error': 'Failed to list API keys'}), 500
+
+    @app.route('/api/keys', methods=['POST'])
+    @auth_manager.require_role('admin')
+    def api_create_key():
+        """Create a new scoped API key. Returns the plaintext token once."""
+        try:
+            data = request.get_json(silent=True) or {}
+            name = data.get('name', '').strip()
+            role = data.get('role', 'viewer')
+            expires_at = data.get('expires_at')
+
+            if not name:
+                return jsonify({'error': 'Key name is required'}), 400
+            if len(name) > 64:
+                return jsonify({'error': 'Key name must be 64 characters or less'}), 400
+            if role not in ('viewer', 'operator', 'admin'):
+                return jsonify({'error': 'Role must be viewer, operator, or admin'}), 400
+
+            created_by = getattr(request, 'current_user', {}).get('username', 'unknown')
+            success, result = auth_manager.create_api_key(
+                name=name, role=role, expires_at=expires_at, created_by=created_by
+            )
+
+            if success:
+                audit_logger = managers.get('audit')
+                if audit_logger:
+                    audit_logger.log_operation(
+                        operation='create',
+                        resource_type='api_key',
+                        resource_id=result['id'],
+                        status='success',
+                        user=created_by,
+                        ip_address=request.remote_addr
+                    )
+                return jsonify(result), 201
+            return jsonify({'error': result}), 400
+        except Exception as e:
+            logger.error(f"Error creating API key: {e}")
+            return jsonify({'error': 'Failed to create API key'}), 500
+
+    @app.route('/api/keys/<string:key_id>', methods=['DELETE'])
+    @auth_manager.require_role('admin')
+    def api_revoke_key(key_id):
+        """Revoke an API key."""
+        try:
+            success, message = auth_manager.revoke_api_key(key_id)
+            if success:
+                audit_logger = managers.get('audit')
+                if audit_logger:
+                    revoked_by = getattr(request, 'current_user', {}).get('username', 'unknown')
+                    audit_logger.log_operation(
+                        operation='revoke',
+                        resource_type='api_key',
+                        resource_id=key_id,
+                        status='success',
+                        user=revoked_by,
+                        ip_address=request.remote_addr
+                    )
+                return jsonify({'message': message})
+            return jsonify({'error': message}), 404
+        except Exception as e:
+            logger.error(f"Error revoking API key: {e}")
+            return jsonify({'error': 'Failed to revoke API key'}), 500
+
     # User management endpoints (admin only)
     @app.route('/api/users', methods=['GET', 'POST'])
     @auth_manager.require_admin
