@@ -9,6 +9,10 @@
 .github
 .vscode
 .idea
+node_modules/
+package.json
+package-lock.json
+tailwind.config.js
 
 # Exclude documentation and metadata
 README.md

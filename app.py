@@ -429,6 +429,9 @@ class CertMateApp:
             # Only rate-limit API endpoints (skip static, health, metrics)
             if not path.startswith('/api/'):
                 return None
+            # Skip rate limiting for web UI internal calls (settings, auth, backups)
+            if path.startswith(('/api/web/', '/api/auth/', '/api/users', '/api/backups')):
+                return None
             # Use remote_addr (actual TCP peer) to prevent rate-limit bypass via
             # spoofed X-Forwarded-For headers.  If behind a trusted reverse proxy,
             # configure PROXY_FIX or Werkzeug ProxyFix to set remote_addr correctly.

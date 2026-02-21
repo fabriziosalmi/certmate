@@ -1,60 +1,6 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Settings - CertMate</title>
-    <link rel="icon" type="image/x-icon" href="/favicon.ico">
-    <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico">
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-    <link href="/static/css/tailwind.min.css" rel="stylesheet">
-    <link href="/static/css/fontawesome.min.css" rel="stylesheet">
-</head>
-<body class="bg-gray-50 dark:bg-gray-700/50 dark:bg-gray-900 min-h-screen transition-colors duration-200">
-    <!-- Navigation -->
-    <nav class="bg-white dark:bg-gray-800 shadow-sm border-b dark:border-gray-700">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between h-16">
-                <div class="flex items-center">
-                    <div class="flex-shrink-0">
-                        <img src="/static/img/certmate_logo_256.png" alt="CertMate" class="w-12 h-12">
-                    </div>
-                    <div class="ml-3">
-                        <h1 class="text-xl font-semibold text-gray-900 dark:text-white">CertMate</h1>
-                        <p class="text-sm text-gray-500 dark:text-gray-400">SSL Certificate Manager</p>
-                    </div>
-                </div>
-                <div class="flex items-center space-x-4">
-                    <a href="/" class="px-3 py-2 rounded-md text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700">
-                        <i class="fas fa-certificate mr-1"></i> Certificates
-                    </a>
-                    <a href="/settings" class="px-3 py-2 rounded-md text-sm font-medium text-primary bg-blue-50 dark:bg-blue-900/20 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-600 dark:border-blue-700">
-                        <i class="fas fa-cog mr-1"></i> Settings
-                    </a>
-                    <a href="/help" class="px-3 py-2 rounded-md text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700">
-                        <i class="fas fa-question-circle mr-1"></i> Help
-                    </a>
-                    <button id="logoutBtn" onclick="doLogout()" style="display:none" class="ml-2 px-3 py-2 rounded-md text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 border border-red-200 dark:border-red-700" title="Logout">
-                        <i class="fas fa-sign-out-alt mr-1"></i> Logout
-                    </button>
-                </div>
-            </div>
-        </div>
-    </nav>
-    <script>
-    (function(){
-        fetch('/api/auth/me',{credentials:'same-origin'})
-            .then(r=>r.json())
-            .then(d=>{if(d&&d.username)document.getElementById('logoutBtn').style.display='inline-block';})
-            .catch(()=>{});
-    })();
-    function doLogout(){
-        fetch('/api/auth/logout',{method:'POST',credentials:'same-origin'})
-            .then(()=>window.location.href='/login')
-            .catch(()=>window.location.href='/login');
-    }
-    </script>
-
+{% extends "base.html" %}
+{% block title %}Settings - CertMate{% endblock %}
+{% block content %}
     <!-- Main Content -->
     <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <!-- Header -->
@@ -1878,11 +1824,7 @@
         let dnsProviders = {};
         let isLoading = false;
 
-        // HTML escape utility — prevents XSS when inserting user data into HTML
-        function escapeHtml(str) {
-            if (str == null) return '';
-            return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-        }
+        var escapeHtml = CertMate.escapeHtml;
 
         // DOM Elements
         const form = document.getElementById('settingsForm');
@@ -2923,7 +2865,7 @@
         }
 
         async function deleteAccount(provider, accountId) {
-            if (!confirm('Are you sure you want to delete this account? This action cannot be undone.')) {
+            if (!await CertMate.confirm('Are you sure you want to delete this account? This action cannot be undone.', 'Delete Account')) {
                 return;
             }
             
@@ -3264,7 +3206,7 @@
                 return;
             }
             
-            if (!confirm(`Are you sure you want to restore from "${filename}"? This will atomically restore both settings and certificates, creating a backup of your current configuration first.`)) {
+            if (!await CertMate.confirm(`Are you sure you want to restore from "${escapeHtml(filename)}"? This will atomically restore both settings and certificates, creating a backup of your current configuration first.`, 'Restore Backup')) {
                 return;
             }
             
@@ -3334,7 +3276,7 @@
                 return;
             }
             
-            if (!confirm(`Are you sure you want to delete the backup "${filename}"?\n\nThis action cannot be undone.`)) {
+            if (!await CertMate.confirm(`Are you sure you want to delete the backup "${escapeHtml(filename)}"? This action cannot be undone.`, 'Delete Backup')) {
                 return;
             }
             
@@ -4102,7 +4044,7 @@
         }
 
         async function resetUserPassword(username) {
-            const newPassword = prompt(`Enter new password for '${username}':`);
+            const newPassword = await CertMate.prompt(`Enter new password for '${escapeHtml(username)}':`, 'Reset Password');
             if (!newPassword) return;
             
             try {
@@ -4128,7 +4070,7 @@
         }
 
         async function deleteUser(username) {
-            if (!confirm(`Are you sure you want to delete user '${username}'? This action cannot be undone.`)) {
+            if (!await CertMate.confirm(`Are you sure you want to delete user '${escapeHtml(username)}'? This action cannot be undone.`, 'Delete User')) {
                 return;
             }
             
@@ -4160,5 +4102,4 @@
             }, 500);
         });
     </script>
-</body>
-</html>
+{% endblock %}

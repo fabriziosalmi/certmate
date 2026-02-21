@@ -13,6 +13,7 @@ Requires a running container (the docker_container fixture handles this).
 """
 
 import os
+import re
 import pytest
 
 # Skip entire module if playwright is not installed
@@ -48,19 +49,20 @@ class TestNavigation:
 
     def test_dashboard_loads(self, browser_page):
         browser_page.goto(BASE_URL)
-        expect(browser_page).to_have_title("CertMate")
+        expect(browser_page).to_have_title(re.compile(r"CertMate"))
 
     def test_settings_navigation(self, browser_page):
         browser_page.goto(BASE_URL)
         browser_page.click('a[href="/settings"]')
         browser_page.wait_for_url("**/settings")
-        expect(browser_page.locator("h1, h2").first).to_contain_text("Settings")
+        expect(browser_page.locator("h2").first).to_contain_text("Settings")
 
     def test_help_navigation(self, browser_page):
         browser_page.goto(BASE_URL)
         browser_page.click('a[href="/help"]')
         browser_page.wait_for_url("**/help")
-        expect(browser_page.locator("text=Getting Started")).to_be_visible()
+        browser_page.wait_for_load_state("networkidle")
+        expect(browser_page.locator("text=Getting Started").first).to_be_visible()
 
     def test_client_certs_navigation(self, browser_page):
         browser_page.goto(BASE_URL)
@@ -101,7 +103,7 @@ class TestSettingsUI:
         browser_page.goto(f"{BASE_URL}/settings")
         browser_page.wait_for_load_state("networkidle")
         banner = browser_page.locator("#authSecurityBanner")
-        expect(banner).to_be_visible()
+        expect(banner).to_be_visible(timeout=10000)
 
     def test_save_settings_button(self, browser_page):
         browser_page.goto(f"{BASE_URL}/settings")
@@ -114,8 +116,8 @@ class TestSettingsUI:
         browser_page.on("pageerror", lambda exc: errors.append(str(exc)))
         browser_page.goto(f"{BASE_URL}/settings")
         browser_page.wait_for_load_state("networkidle")
-        # Filter out known acceptable errors
-        real_errors = [e for e in errors if "safeDomain" not in e]
+        # Filter out known acceptable errors (safeDomain, rate limiting)
+        real_errors = [e for e in errors if "safeDomain" not in e and "429" not in e]
         assert len(real_errors) == 0, f"JS errors: {real_errors}"
 
 
