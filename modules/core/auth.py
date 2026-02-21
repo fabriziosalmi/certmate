@@ -22,6 +22,8 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+ROLE_HIERARCHY = {'viewer': 0, 'operator': 1, 'admin': 2}
+
 
 class AuthManager:
     """Class to handle authentication and authorization"""
@@ -33,7 +35,14 @@ class AuthManager:
         self._session_timeout = 8 * 60 * 60  # 8 hours in seconds
         if not BCRYPT_AVAILABLE:
             logger.warning("bcrypt not available, falling back to SHA-256 (less secure)")
-        
+
+    @staticmethod
+    def _normalize_role(role):
+        """Normalize legacy role names to the current 3-tier model."""
+        if role == 'user':
+            return 'operator'  # backward compat: 'user' → 'operator'
+        return role if role in ROLE_HIERARCHY else 'viewer'
+
     def _hash_password(self, password, salt=None):
         """Hash password using bcrypt (preferred) or SHA-256 with salt (fallback)
         
@@ -89,17 +98,18 @@ class AuthManager:
         settings['users'] = users
         return self.settings_manager.save_settings(settings, "user_management")
     
-    def create_user(self, username, password, role='user', email=None):
+    def create_user(self, username, password, role='operator', email=None):
         """Create a new user"""
         try:
             users = self._get_users()
-            
+
             if username in users:
                 return False, "User already exists"
-            
+
+            normalized = self._normalize_role(role)
             users[username] = {
                 'password_hash': self._hash_password(password),
-                'role': role,
+                'role': normalized,
                 'email': email,
                 'created_at': datetime.utcnow().isoformat(),
                 'last_login': None,
@@ -167,7 +177,7 @@ class AuthManager:
         users = self._get_users()
         return {
             username: {
-                'role': data.get('role', 'user'),
+                'role': self._normalize_role(data.get('role', 'operator')),
                 'email': data.get('email'),
                 'created_at': data.get('created_at'),
                 'last_login': data.get('last_login'),
@@ -199,7 +209,7 @@ class AuthManager:
                 logger.info(f"User '{username}' authenticated successfully")
                 return {
                     'username': username,
-                    'role': user.get('role', 'user'),
+                    'role': self._normalize_role(user.get('role', 'operator')),
                     'email': user.get('email')
                 }
             
@@ -218,7 +228,7 @@ class AuthManager:
         with self._session_lock:
             self._sessions[session_id] = {
                 'user': username,
-                'role': user.get('role', 'user'),
+                'role': self._normalize_role(user.get('role', 'operator')),
                 'created': time.time(),
                 'expires': time.time() + self._session_timeout
             }
@@ -241,7 +251,7 @@ class AuthManager:
 
             return {
                 'username': session_data['user'],
-                'role': session_data['role']
+                'role': self._normalize_role(session_data['role'])
             }
 
     def invalidate_session(self, session_id):
@@ -334,22 +344,39 @@ class AuthManager:
         
         return decorated_function
     
+    def require_role(self, min_role):
+        """Decorator factory requiring a minimum role level.
+
+        Usage::
+
+            @auth_manager.require_role('operator')
+            def create_cert(): ...
+        """
+        def decorator(f):
+            @wraps(f)
+            def decorated_function(*args, **kwargs):
+                # Authenticate first (sets request.current_user)
+                auth_result = self.require_auth(lambda: None)()
+                if isinstance(auth_result, tuple) and len(auth_result) == 2:
+                    return auth_result  # Return auth error
+
+                # Check role level
+                user = getattr(request, 'current_user', None)
+                if not user:
+                    return {'error': 'Authentication required', 'code': 'AUTH_REQUIRED'}, 401
+
+                user_level = ROLE_HIERARCHY.get(user.get('role'), -1)
+                required_level = ROLE_HIERARCHY.get(min_role, 999)
+                if user_level < required_level:
+                    return {'error': f'{min_role} privileges required', 'code': 'INSUFFICIENT_ROLE'}, 403
+
+                return f(*args, **kwargs)
+            return decorated_function
+        return decorator
+
     def require_admin(self, f):
-        """Decorator to require admin role"""
-        @wraps(f)
-        def decorated_function(*args, **kwargs):
-            # First check authentication
-            auth_result = self.require_auth(lambda: None)()
-            if isinstance(auth_result, tuple) and len(auth_result) == 2:
-                return auth_result  # Return auth error
-            
-            # Check admin role
-            user = getattr(request, 'current_user', None)
-            if not user or user.get('role') != 'admin':
-                return {'error': 'Admin privileges required', 'code': 'ADMIN_REQUIRED'}, 403
-            
-            return f(*args, **kwargs)
-        return decorated_function
+        """Decorator to require admin role (backward compat wrapper)."""
+        return self.require_role('admin')(f)
 
     def validate_api_token(self, token):
         """Validate API token against current settings"""

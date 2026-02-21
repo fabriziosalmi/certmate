@@ -114,7 +114,7 @@ def create_api_resources(api, models, managers):
     # Settings endpoints
     class Settings(Resource):
         @api.doc(security='Bearer')
-        @auth_manager.require_auth
+        @auth_manager.require_role('viewer')
         @api.marshal_with(models['settings_model'])
         def get(self):
             """Get current settings"""
@@ -132,7 +132,7 @@ def create_api_resources(api, models, managers):
 
         @api.doc(security='Bearer')
         @api.expect(models['settings_model'])
-        @auth_manager.require_auth
+        @auth_manager.require_role('admin')
         def post(self):
             """Update settings"""
             try:
@@ -163,7 +163,7 @@ def create_api_resources(api, models, managers):
     # DNS Providers endpoint
     class DNSProviders(Resource):
         @api.doc(security='Bearer')
-        @auth_manager.require_auth
+        @auth_manager.require_role('viewer')
         @api.marshal_with(models['dns_providers_model'])
         def get(self):
             """Get DNS provider configurations"""
@@ -180,7 +180,7 @@ def create_api_resources(api, models, managers):
     class CacheStats(Resource):
         @api.doc(security='Bearer')
         @api.marshal_with(models['cache_stats_model'])
-        @auth_manager.require_auth
+        @auth_manager.require_role('viewer')
         def get(self):
             """Get cache statistics"""
             try:
@@ -193,7 +193,7 @@ def create_api_resources(api, models, managers):
     class CacheClear(Resource):
         @api.doc(security='Bearer')
         @api.marshal_with(models['cache_clear_response_model'])
-        @auth_manager.require_auth
+        @auth_manager.require_role('admin')
         def post(self):
             """Clear deployment cache"""
             try:
@@ -215,7 +215,7 @@ def create_api_resources(api, models, managers):
     class CertificateList(Resource):
         @api.doc(security='Bearer')
         @api.marshal_list_with(models['certificate_model'])
-        @auth_manager.require_auth
+        @auth_manager.require_role('viewer')
         def get(self):
             """List all certificates"""
             try:
@@ -258,7 +258,7 @@ def create_api_resources(api, models, managers):
     class CreateCertificate(Resource):
         @api.doc(security='Bearer')
         @api.expect(models['create_cert_model'])
-        @auth_manager.require_auth
+        @auth_manager.require_role('operator')
         def post(self):
             """Create a new certificate"""
             try:
@@ -420,7 +420,7 @@ def create_api_resources(api, models, managers):
 
     class DownloadCertificate(Resource):
         @api.doc(security='Bearer')
-        @auth_manager.require_auth
+        @auth_manager.require_role('viewer')
         def get(self, domain):
             """Download certificate files as ZIP"""
             try:
@@ -460,7 +460,7 @@ def create_api_resources(api, models, managers):
 
     class RenewCertificate(Resource):
         @api.doc(security='Bearer')
-        @auth_manager.require_auth
+        @auth_manager.require_role('operator')
         def post(self, domain):
             """Renew an existing certificate"""
             try:
@@ -488,7 +488,7 @@ def create_api_resources(api, models, managers):
     class BackupList(Resource):
         @api.doc(security='Bearer')
         @api.marshal_with(models['backup_list_model'])
-        @auth_manager.require_auth
+        @auth_manager.require_role('viewer')
         def get(self):
             """List all available backups"""
             try:
@@ -505,7 +505,7 @@ def create_api_resources(api, models, managers):
                                    description='Type of backup to create (unified recommended for data consistency)'),
             'reason': fields.String(description='Reason for backup creation', default='manual')
         }))
-        @auth_manager.require_auth
+        @auth_manager.require_role('admin')
         def post(self):
             """Create a new backup (unified format recommended)"""
             try:
@@ -537,7 +537,7 @@ def create_api_resources(api, models, managers):
 
     class BackupDownload(Resource):
         @api.doc(security='Bearer')
-        @auth_manager.require_auth
+        @auth_manager.require_role('admin')
         def get(self, backup_type, filename):
             """Download a backup file"""
             try:
@@ -574,7 +574,7 @@ def create_api_resources(api, models, managers):
             'filename': fields.String(required=True, description='Backup filename to restore from'),
             'create_backup_before_restore': fields.Boolean(description='Create backup before restore', default=True)
         }))
-        @auth_manager.require_auth
+        @auth_manager.require_role('admin')
         def post(self, backup_type):
             """Restore from a unified backup file (only unified backups supported)"""
             try:
@@ -634,7 +634,7 @@ def create_api_resources(api, models, managers):
 
     class BackupDelete(Resource):
         @api.doc(security='Bearer')
-        @auth_manager.require_auth
+        @auth_manager.require_role('admin')
         def delete(self, backup_type, filename):
             """Delete a unified backup file"""
             try:
@@ -673,7 +673,7 @@ def create_api_resources(api, models, managers):
     # Storage Backend Management
     class StorageBackendInfo(Resource):
         @api.doc(security='Bearer')
-        @auth_manager.require_auth
+        @auth_manager.require_role('viewer')
         def get(self):
             """Get current storage backend information"""
             try:
@@ -705,7 +705,7 @@ def create_api_resources(api, models, managers):
     
     class StorageBackendConfig(Resource):
         @api.doc(security='Bearer')
-        @auth_manager.require_auth
+        @auth_manager.require_role('admin')
         @api.expect(models['StorageConfig'])
         def post(self):
             """Update storage backend configuration"""
@@ -763,7 +763,7 @@ def create_api_resources(api, models, managers):
     
     class StorageBackendTest(Resource):
         @api.doc(security='Bearer')
-        @auth_manager.require_auth
+        @auth_manager.require_role('operator')
         @api.expect(models['StorageTestConfig'])
         def post(self):
             """Test storage backend connection"""
@@ -823,7 +823,7 @@ def create_api_resources(api, models, managers):
     
     class CAProviderTest(Resource):
         @api.doc(security='Bearer')
-        @auth_manager.require_auth
+        @auth_manager.require_role('operator')
         @api.expect(models['CATestConfig'])
         def post(self):
             """Test CA provider connection"""
@@ -1043,7 +1043,7 @@ def create_api_resources(api, models, managers):
 
     class StorageBackendMigrate(Resource):
         @api.doc(security='Bearer')
-        @auth_manager.require_auth
+        @auth_manager.require_role('admin')
         @api.expect(models['StorageMigrationConfig'])
         def post(self):
             """Migrate certificates between storage backends"""

@@ -15,6 +15,7 @@ from functools import wraps
 from pathlib import Path
 from collections import defaultdict
 from time import time
+from modules.core.auth import ROLE_HIERARCHY
 from flask import (render_template, request, jsonify, send_file,
                    send_from_directory, redirect, url_for, after_this_request,
                    Response, stream_with_context)
@@ -272,7 +273,7 @@ def register_web_routes(app, managers):
         return render_template('activity.html')
 
     @app.route('/api/activity')
-    @auth_manager.require_auth
+    @auth_manager.require_role('viewer')
     def activity_api():
         """Get recent audit log entries."""
         audit_logger = managers.get('audit')
@@ -286,9 +287,13 @@ def register_web_routes(app, managers):
         return jsonify({'entries': entries})
 
     @app.route('/api/notifications/config', methods=['GET', 'POST'])
-    @auth_manager.require_auth
+    @auth_manager.require_role('viewer')
     def notifications_config():
         """Get or update notification configuration."""
+        if request.method == 'POST':
+            user = getattr(request, 'current_user', {})
+            if ROLE_HIERARCHY.get(user.get('role'), -1) < ROLE_HIERARCHY['admin']:
+                return jsonify({'error': 'admin privileges required', 'code': 'INSUFFICIENT_ROLE'}), 403
         settings = settings_manager.load_settings()
 
         if request.method == 'GET':
@@ -310,7 +315,7 @@ def register_web_routes(app, managers):
         return jsonify({'status': 'saved'})
 
     @app.route('/api/notifications/test', methods=['POST'])
-    @auth_manager.require_auth
+    @auth_manager.require_role('operator')
     def notifications_test():
         """Test a notification channel."""
         notifier = managers.get('notifier')
@@ -323,7 +328,7 @@ def register_web_routes(app, managers):
         return jsonify(result)
 
     @app.route('/api/webhooks/deliveries')
-    @auth_manager.require_auth
+    @auth_manager.require_role('viewer')
     def webhook_deliveries():
         """Return recent webhook delivery log entries."""
         notifier = managers.get('notifier')
@@ -334,7 +339,7 @@ def register_web_routes(app, managers):
         return jsonify(notifier.get_deliveries(limit=limit))
 
     @app.route('/api/events/stream')
-    @auth_manager.require_auth
+    @auth_manager.require_role('viewer')
     def event_stream():
         """SSE endpoint for real-time updates."""
         event_bus = managers.get('events')
@@ -369,7 +374,7 @@ def register_web_routes(app, managers):
 
     # Prometheus metrics endpoint (requires auth to prevent info disclosure)
     @app.route('/metrics')
-    @auth_manager.require_auth
+    @auth_manager.require_role('viewer')
     def metrics():
         """Prometheus metrics endpoint"""
         try:
@@ -488,7 +493,7 @@ def register_web_routes(app, managers):
             return jsonify({'error': 'Failed to get user info'}), 500
     
     @app.route('/api/auth/token', methods=['GET'])
-    @auth_manager.require_auth
+    @auth_manager.require_role('viewer')
     def api_get_token():
         """Get API bearer token (for settings page reveal button)"""
         try:
@@ -586,9 +591,13 @@ def register_web_routes(app, managers):
                 return jsonify({'error': 'Failed to delete user'}), 500
     
     @app.route('/api/auth/config', methods=['GET', 'POST'])
-    @auth_manager.require_auth
+    @auth_manager.require_role('viewer')
     def api_auth_config():
         """Get or update authentication configuration"""
+        if request.method == 'POST':
+            user = getattr(request, 'current_user', {})
+            if ROLE_HIERARCHY.get(user.get('role'), -1) < ROLE_HIERARCHY['admin']:
+                return jsonify({'error': 'admin privileges required', 'code': 'INSUFFICIENT_ROLE'}), 403
         if request.method == 'GET':
             try:
                 return jsonify({
@@ -618,7 +627,7 @@ def register_web_routes(app, managers):
 
     # Special download endpoint for easy automation
     @app.route('/<string:domain>/tls')
-    @auth_manager.require_auth
+    @auth_manager.require_role('viewer')
     def download_tls(domain):
         """Download all TLS certificate files as a ZIP archive for automation"""
         try:
@@ -655,7 +664,7 @@ def register_web_routes(app, managers):
             return jsonify({'error': 'Failed to download certificate'}), 500
 
     @app.route('/<string:domain>/tls/<string:component>')
-    @auth_manager.require_auth
+    @auth_manager.require_role('viewer')
     def download_tls_component(domain, component):
         """Download individual TLS certificate component (cert, key, chain, fullchain)"""
         try:
@@ -801,9 +810,13 @@ def register_web_routes(app, managers):
 
     # DNS Provider Account Management endpoints for web interface
     @app.route('/api/dns/<string:provider>/accounts', methods=['GET', 'POST'])
-    @auth_manager.require_auth
+    @auth_manager.require_role('viewer')
     def web_dns_provider_accounts(provider):
         """Manage DNS provider accounts"""
+        if request.method == 'POST':
+            user = getattr(request, 'current_user', {})
+            if ROLE_HIERARCHY.get(user.get('role'), -1) < ROLE_HIERARCHY['admin']:
+                return jsonify({'error': 'admin privileges required', 'code': 'INSUFFICIENT_ROLE'}), 403
         if request.method == 'GET':
             try:
                 accounts = dns_manager.list_dns_provider_accounts(provider)
@@ -833,7 +846,7 @@ def register_web_routes(app, managers):
                 return jsonify({'error': 'Failed to create DNS account'}), 500
 
     @app.route('/api/dns/<string:provider>/accounts/<string:account_id>', methods=['GET', 'PUT', 'DELETE'])
-    @auth_manager.require_auth
+    @auth_manager.require_role('viewer')
     def web_dns_provider_account(provider, account_id):
         """Manage specific DNS provider account"""
         # Validate account_id to prevent path traversal
@@ -841,6 +854,10 @@ def register_web_routes(app, managers):
             return jsonify({'error': 'Invalid account ID'}), 400
         if '..' in provider or '/' in provider or '\\' in provider or '\x00' in provider:
             return jsonify({'error': 'Invalid provider'}), 400
+        if request.method in ('PUT', 'DELETE'):
+            user = getattr(request, 'current_user', {})
+            if ROLE_HIERARCHY.get(user.get('role'), -1) < ROLE_HIERARCHY['admin']:
+                return jsonify({'error': 'admin privileges required', 'code': 'INSUFFICIENT_ROLE'}), 403
         if request.method == 'GET':
             try:
                 config, _ = dns_manager.get_dns_provider_account_config(provider, account_id)
@@ -884,7 +901,7 @@ def register_web_routes(app, managers):
 
     # Web Certificate API Routes (for form-based frontend)
     @app.route('/api/web/certificates')
-    @auth_manager.require_auth
+    @auth_manager.require_role('viewer')
     def web_list_certificates():
         """Web interface endpoint to list certificates"""
         try:
@@ -932,7 +949,7 @@ def register_web_routes(app, managers):
             return jsonify([])
 
     @app.route('/api/web/certificates/create', methods=['POST'])
-    @auth_manager.require_auth
+    @auth_manager.require_role('operator')
     def web_create_certificate():
         """Web interface endpoint to create certificate"""
         try:
@@ -1077,7 +1094,7 @@ def register_web_routes(app, managers):
             return jsonify({'error': 'Certificate creation failed'}), 500
 
     @app.route('/api/web/certificates/<string:domain>/download')
-    @auth_manager.require_auth
+    @auth_manager.require_role('viewer')
     def web_download_certificate(domain):
         """Web interface endpoint to download certificate as ZIP file"""
         try:
@@ -1116,7 +1133,7 @@ def register_web_routes(app, managers):
             return jsonify({'error': 'Failed to download certificate'}), 500
 
     @app.route('/api/web/certificates/<string:domain>/renew', methods=['POST'])
-    @auth_manager.require_auth
+    @auth_manager.require_role('operator')
     def web_renew_certificate(domain):
         """Web interface endpoint to renew certificate"""
         try:
@@ -1160,7 +1177,7 @@ def register_web_routes(app, managers):
 
     # Backup management endpoints
     @app.route('/api/web/backups')
-    @auth_manager.require_auth
+    @auth_manager.require_role('viewer')
     def web_list_backups():
         """Web interface endpoint to list backups"""
         try:
@@ -1171,7 +1188,7 @@ def register_web_routes(app, managers):
             return jsonify({'error': 'Failed to list backups'}), 500
 
     @app.route('/api/web/backups/create', methods=['POST'])
-    @auth_manager.require_auth
+    @auth_manager.require_role('admin')
     def web_create_backup():
         """Web interface endpoint to create backup"""
         try:
@@ -1201,7 +1218,7 @@ def register_web_routes(app, managers):
             return jsonify({'error': 'Failed to create backup'}), 500
 
     @app.route('/api/web/backups/download/<backup_type>/<filename>')
-    @auth_manager.require_auth
+    @auth_manager.require_role('admin')
     def web_download_backup(backup_type, filename):
         """Web interface endpoint to download unified backup"""
         try:
@@ -1236,7 +1253,7 @@ def register_web_routes(app, managers):
 
     # Cache management endpoints
     @app.route('/api/web/cache/stats')
-    @auth_manager.require_auth
+    @auth_manager.require_role('viewer')
     def web_cache_stats():
         """Web interface endpoint to get cache statistics"""
         try:
@@ -1247,7 +1264,7 @@ def register_web_routes(app, managers):
             return jsonify({'error': 'Failed to get cache statistics'}), 500
 
     @app.route('/api/web/cache/clear', methods=['POST'])
-    @auth_manager.require_auth
+    @auth_manager.require_role('admin')
     def web_cache_clear():
         """Web interface endpoint to clear cache"""
         try:

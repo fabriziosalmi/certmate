@@ -2321,7 +2321,7 @@
                     document.getElementById('newUserUsername').value = '';
                     document.getElementById('newUserPassword').value = '';
                     document.getElementById('newUserEmail').value = '';
-                    document.getElementById('newUserRole').value = 'user';
+                    document.getElementById('newUserRole').value = 'operator';
                     // Refresh user list
                     refreshUserList();
                 } else {
@@ -2359,7 +2359,7 @@
             var html = '';
             Object.keys(users).forEach(function(username) {
                 var userInfo = users[username];
-                var roleColor = userInfo.role === 'admin' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300' : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
+                var roleColor = userInfo.role === 'admin' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300' : userInfo.role === 'operator' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300' : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
                 var statusColor = userInfo.enabled !== false ? 'text-green-500' : 'text-red-500';
                 var lastLogin = userInfo.last_login ? new Date(userInfo.last_login).toLocaleString() : 'Never';
 
