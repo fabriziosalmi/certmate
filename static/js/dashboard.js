@@ -111,7 +111,6 @@
     function updateStats(certificates) {
         // Ensure certificates is an array
         if (!Array.isArray(certificates)) {
-            console.error('[DEPLOYMENT CHECK] updateStats called with non-array:', certificates);
             certificates = []; // Fallback to empty array
         }
 
@@ -200,10 +199,9 @@
             if (savedSettings) {
                 var settings = JSON.parse(savedSettings);
                 this.defaultTTL = settings.ttl || this.defaultTTL;
-                console.log('[DEPLOYMENT CACHE] Loaded settings: TTL ' + this.defaultTTL + 'ms');
             }
         } catch (error) {
-            console.warn('[DEPLOYMENT CACHE] Failed to load settings:', error);
+            // Ignore settings load failures, defaults will be used
         }
     };
 
@@ -211,9 +209,8 @@
         try {
             this.defaultTTL = ttl;
             localStorage.setItem('deployment-cache-settings', JSON.stringify({ ttl: ttl }));
-            console.log('[DEPLOYMENT CACHE] Saved settings: TTL ' + ttl + 'ms');
         } catch (error) {
-            console.error('[DEPLOYMENT CACHE] Failed to save settings:', error);
+            // Ignore settings save failures
         }
     };
 
@@ -224,7 +221,6 @@
             timestamp: timestamp,
             ttl: this.defaultTTL
         });
-        console.log('[DEPLOYMENT CACHE] Cached result for ' + domain + ', expires in ' + this.defaultTTL + 'ms');
     };
 
     DeploymentCache.prototype.get = function(domain) {
@@ -236,25 +232,18 @@
 
         if (isExpired) {
             this.cache.delete(domain);
-            console.log('[DEPLOYMENT CACHE] Cache expired for ' + domain);
             return null;
         }
 
-        var remainingTime = cached.ttl - (now - cached.timestamp);
-        console.log('[DEPLOYMENT CACHE] Cache hit for ' + domain + ', expires in ' + Math.round(remainingTime/1000) + 's');
         return cached.result;
     };
 
     DeploymentCache.prototype.invalidate = function(domain) {
-        if (this.cache.delete(domain)) {
-            console.log('[DEPLOYMENT CACHE] Invalidated cache for ' + domain);
-        }
+        this.cache.delete(domain);
     };
 
     DeploymentCache.prototype.clear = function() {
-        var size = this.cache.size;
         this.cache.clear();
-        console.log('[DEPLOYMENT CACHE] Cleared ' + size + ' cached entries');
     };
 
     DeploymentCache.prototype.getStatus = function() {
@@ -288,7 +277,6 @@
 
         // Ensure allCertificates is an array
         if (!Array.isArray(allCertificates)) {
-            console.error('[DEPLOYMENT CHECK] allCertificates is not an array:', allCertificates);
             allCertificates = [];
         }
 
@@ -380,7 +368,6 @@
         var thead = document.querySelector('#certificatesTable thead');
 
         if (!Array.isArray(certificates)) {
-            console.error('[DEPLOYMENT CHECK] displayCertificates called with non-array:', certificates);
             certificates = [];
         }
 
@@ -623,32 +610,6 @@
         }
     }
 
-    // Override console methods to also log to debug panel
-    var originalConsoleLog = console.log;
-    var originalConsoleWarn = console.warn;
-    var originalConsoleError = console.error;
-
-    console.log = function() {
-        originalConsoleLog.apply(console, arguments);
-        if (arguments[0] && arguments[0].indexOf && arguments[0].indexOf('[DEPLOYMENT CHECK]') !== -1) {
-            addDebugLog(Array.prototype.join.call(arguments, ' '), 'info');
-        }
-    };
-
-    console.warn = function() {
-        originalConsoleWarn.apply(console, arguments);
-        if (arguments[0] && arguments[0].indexOf && arguments[0].indexOf('[DEPLOYMENT CHECK]') !== -1) {
-            addDebugLog(Array.prototype.join.call(arguments, ' '), 'warn');
-        }
-    };
-
-    console.error = function() {
-        originalConsoleError.apply(console, arguments);
-        if (arguments[0] && arguments[0].indexOf && arguments[0].indexOf('[DEPLOYMENT CHECK]') !== -1) {
-            addDebugLog(Array.prototype.join.call(arguments, ' '), 'error');
-        }
-    };
-
     // Cache management functions
     function showCacheStats() {
         var stats = deploymentCache.getStatus();
@@ -717,11 +678,8 @@
 
     // Update deployment statistics with better counting
     function updateDeploymentStats() {
-        console.log('[DEPLOYMENT CHECK] Updating deployment statistics');
-
         // Ensure allCertificates is an array
         if (!Array.isArray(allCertificates)) {
-            console.error('[DEPLOYMENT CHECK] allCertificates is not an array:', allCertificates);
             allCertificates = [];
         }
 
@@ -729,18 +687,12 @@
             if (!cert.exists) return false;
             var statusElement = document.getElementById('deployment-status-' + cert.domain.replace(/\./g, '-'));
             var isDeployed = statusElement && statusElement.textContent.indexOf('Deployed') !== -1;
-
-            if (isDeployed) {
-                console.log('[DEPLOYMENT CHECK] ' + cert.domain + ' counted as deployed');
-            }
-
             return isDeployed;
         }).length;
 
         var deploymentCountElement = document.getElementById('deploymentCount');
         if (deploymentCountElement) {
             deploymentCountElement.textContent = deployedCount;
-            console.log('[DEPLOYMENT CHECK] Updated statistics: ' + deployedCount + ' certificates deployed');
         }
 
         addDebugLog('Statistics updated: ' + deployedCount + ' certificates actively deployed', 'success');
@@ -753,16 +705,12 @@
         button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Checking...';
         button.disabled = true;
 
-        console.log('[DEPLOYMENT CHECK] Starting bulk deployment check for all certificates');
-
         // Ensure allCertificates is an array
         if (!Array.isArray(allCertificates)) {
-            console.error('[DEPLOYMENT CHECK] allCertificates is not an array:', allCertificates);
             allCertificates = [];
         }
 
         var certificatesToCheck = allCertificates.filter(function(cert) { return cert.exists; });
-        console.log('[DEPLOYMENT CHECK] Found ' + certificatesToCheck.length + ' certificates to check');
 
         if (certificatesToCheck.length === 0) {
             showMessage('No certificates found to check', 'info');
@@ -787,17 +735,13 @@
             batches.push(certificatesToCheck.slice(i, i + batchSize));
         }
 
-        console.log('[DEPLOYMENT CHECK] Processing ' + batches.length + ' batches of ' + batchSize + ' certificates each');
-
         var batchIndex = 0;
         function processBatch() {
             if (batchIndex >= batches.length) {
                 updateDeploymentStats();
-                console.log('[DEPLOYMENT CHECK] Bulk deployment check completed successfully');
                 showMessage('Deployment status updated for ' + total + ' certificates', 'success');
                 button.innerHTML = originalText;
                 button.disabled = false;
-                console.log('[DEPLOYMENT CHECK] Bulk deployment check finished');
                 return;
             }
 
@@ -806,9 +750,7 @@
                 return checkDeploymentStatus(cert.domain).then(function() {
                     completed++;
                     updateProgress();
-                    console.log('[DEPLOYMENT CHECK] Completed check for ' + cert.domain + ' (' + completed + '/' + total + ')');
-                }).catch(function(error) {
-                    console.error('[DEPLOYMENT CHECK] Failed to check ' + cert.domain + ':', error);
+                }).catch(function() {
                     completed++;
                     updateProgress();
                 });
@@ -833,16 +775,12 @@
         var textElement = document.getElementById('deployment-text-' + domain.replace(/\./g, '-'));
 
         if (!statusElement) {
-            console.warn('[DEPLOYMENT CHECK] Status element not found for domain: ' + domain);
             return Promise.resolve();
         }
-
-        console.log('[DEPLOYMENT CHECK] Starting check for: ' + domain);
 
         // Check cache first
         var cachedResult = deploymentCache.get(domain);
         if (cachedResult) {
-            console.log('[DEPLOYMENT CHECK] Using cached result for ' + domain);
             updateDeploymentUI(domain, cachedResult, statusElement);
             return Promise.resolve();
         }
@@ -855,28 +793,21 @@
             textElement.className = 'text-sm font-medium text-blue-600';
         }
 
-        // Method 1: Try dedicated deployment status endpoint (real API)
-        console.log('[DEPLOYMENT CHECK] Method 1: Trying API endpoint for ' + domain);
-
         return fetch('/api/certificates/' + encodeURIComponent(domain) + '/deployment-status', {
             method: 'GET',
             headers: API_HEADERS
         }).then(function(response) {
             if (response.ok) {
                 return response.json().then(function(result) {
-                    console.log('[DEPLOYMENT CHECK] API response for ' + domain + ':', result);
                     deploymentCache.set(domain, result);
                     updateDeploymentUI(domain, result, statusElement);
                 });
             }
-            console.warn('[DEPLOYMENT CHECK] API endpoint failed for ' + domain + ':', response.status, response.statusText);
             throw new Error('API failed');
         }).catch(function(apiError) {
-            // Method 2: Fallback to browser-based certificate check
-            console.log('[DEPLOYMENT CHECK] Method 2: Fallback certificate check for ' + domain);
+            // Fallback to browser-based certificate check
             return checkDeploymentViaBrowser(domain).then(function(result) {
                 if (!result) {
-                    console.log('[DEPLOYMENT CHECK] Method 3: No fallback available for ' + domain);
                     result = {
                         deployed: false,
                         reachable: false,
@@ -889,8 +820,7 @@
                 deploymentCache.set(domain, result);
                 updateDeploymentUI(domain, result, statusElement);
             });
-        }).catch(function(error) {
-            console.error('[DEPLOYMENT CHECK] Fatal error for ' + domain + ':', error);
+        }).catch(function() {
             statusElement.className = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300';
             statusElement.innerHTML = '<i class="fas fa-question-circle mr-1"></i>Error';
         });
@@ -898,8 +828,6 @@
 
     // Browser-based certificate check fallback
     function checkDeploymentViaBrowser(domain) {
-        console.log('[DEPLOYMENT CHECK] Browser check: Testing HTTPS for ' + domain);
-
         var controller = new AbortController();
         var timeoutId = setTimeout(function() { controller.abort(); }, 10000);
 
@@ -909,7 +837,6 @@
             signal: controller.signal
         }).then(function() {
             clearTimeout(timeoutId);
-            console.log('[DEPLOYMENT CHECK] Browser check: ' + domain + ' is reachable via HTTPS');
             return {
                 deployed: true,
                 reachable: true,
@@ -919,7 +846,6 @@
             };
         }).catch(function(browserError) {
             clearTimeout(timeoutId);
-            console.warn('[DEPLOYMENT CHECK] Browser check failed for ' + domain + ':', browserError.message);
             if (browserError.name === 'AbortError') {
                 return {
                     deployed: false,
@@ -936,8 +862,6 @@
 
     // Update deployment UI based on check result
     function updateDeploymentUI(domain, result, statusElement) {
-        console.log('[DEPLOYMENT CHECK] Updating UI for ' + domain + ':', result);
-
         var textElement = document.getElementById('deployment-text-' + domain.replace(/\./g, '-'));
 
         if (result.deployed && result.certificate_match !== false) {
@@ -947,7 +871,6 @@
                 textElement.textContent = 'Active';
                 textElement.className = 'text-sm font-medium text-green-600 dark:text-green-400';
             }
-            console.log('[DEPLOYMENT CHECK] ' + domain + ': Status set to DEPLOYED');
 
         } else if (result.reachable && result.certificate_match === false) {
             statusElement.className = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400';
@@ -956,7 +879,6 @@
                 textElement.textContent = 'Mismatch';
                 textElement.className = 'text-sm font-medium text-yellow-600 dark:text-yellow-400';
             }
-            console.log('[DEPLOYMENT CHECK] ' + domain + ': Status set to MISMATCH');
 
         } else if (result.reachable) {
             statusElement.className = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400';
@@ -965,7 +887,6 @@
                 textElement.textContent = 'Unknown';
                 textElement.className = 'text-sm font-medium text-blue-600 dark:text-blue-400';
             }
-            console.log('[DEPLOYMENT CHECK] ' + domain + ': Status set to UNKNOWN');
 
         } else {
             statusElement.className = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400';
@@ -974,7 +895,6 @@
                 textElement.textContent = 'Unreachable';
                 textElement.className = 'text-sm font-medium text-red-600 dark:text-red-400';
             }
-            console.log('[DEPLOYMENT CHECK] ' + domain + ': Status set to UNREACHABLE');
         }
 
         // Add method info to title for debugging
@@ -988,7 +908,6 @@
 
     // Load certificates with deployment status
     function loadCertificates() {
-        console.log('[DEPLOYMENT CHECK] Loading certificates...');
         addDebugLog('Loading certificates from API...', 'info');
 
         return fetch('/api/certificates', {
@@ -1006,12 +925,10 @@
 
             // Ensure certificates is an array
             if (!Array.isArray(certificates)) {
-                console.error('[DEPLOYMENT CHECK] API returned non-array response:', certificates);
                 addDebugLog('API returned invalid response: ' + JSON.stringify(certificates), 'error');
                 throw new Error('Invalid API response: expected array of certificates');
             }
 
-            console.log('[DEPLOYMENT CHECK] Loaded ' + certificates.length + ' certificates');
             addDebugLog('Loaded ' + certificates.length + ' certificates successfully', 'success');
 
             allCertificates = certificates;
@@ -1019,11 +936,9 @@
             displayCertificates(certificates);
 
             // Check deployment status for all certificates after a short delay
-            console.log('[DEPLOYMENT CHECK] Scheduling automatic deployment checks...');
             addDebugLog('Scheduling automatic deployment status checks...', 'info');
 
             setTimeout(function() {
-                console.log('[DEPLOYMENT CHECK] Starting automatic deployment checks');
                 addDebugLog('Starting automatic deployment status checks for all certificates', 'info');
 
                 var existingCerts = certificates.filter(function(cert) { return cert.exists; });
@@ -1039,7 +954,6 @@
             }, 1500);
 
         }).catch(function(error) {
-            console.error('[DEPLOYMENT CHECK] Failed to load certificates:', error);
             addDebugLog('Failed to load certificates: ' + error.message, 'error');
 
             // Initialize with empty array to prevent further errors
@@ -1067,7 +981,6 @@
             // Check for settings updates
             var currentUpdate = localStorage.getItem('cache-settings-updated');
             if (currentUpdate && currentUpdate !== lastUpdate) {
-                console.log('[DEPLOYMENT CACHE] Settings updated, reloading cache configuration');
                 deploymentCache.loadSettings();
                 addDebugLog('Cache settings updated from settings page', 'info');
                 lastUpdate = currentUpdate;
@@ -1076,7 +989,6 @@
             // Check for cache clear signals
             var currentClearSignal = localStorage.getItem('clear-deployment-cache');
             if (currentClearSignal && currentClearSignal !== lastClearSignal) {
-                console.log('[DEPLOYMENT CACHE] Cache clear requested');
                 deploymentCache.clear();
                 addDebugLog('Deployment cache cleared by admin request', 'warn');
                 // Re-check all certificates
@@ -1114,7 +1026,6 @@
                     });
                 }
             }).catch(function() {
-                console.log('No accounts found for ' + provider);
                 providerAccounts[provider] = [];
             });
         });
@@ -1386,7 +1297,6 @@
                 var channel = new BroadcastChannel('certmate_updates');
                 channel.addEventListener('message', function(event) {
                     if (event.data && event.data.type === 'certificates_restored') {
-                        console.log('Received certificate update notification from another page');
                         addDebugLog('Certificates updated from another page - refreshing list...', 'info');
                         setTimeout(function() {
                             loadCertificates();
@@ -1398,7 +1308,6 @@
 
             window.addEventListener('storage', function(event) {
                 if (event.key === 'certificates_updated') {
-                    console.log('Detected certificate update via localStorage');
                     addDebugLog('Certificates updated detected - refreshing list...', 'info');
                     setTimeout(function() {
                         loadCertificates();
@@ -1409,7 +1318,7 @@
             });
 
         } catch (e) {
-            console.log('Cross-page communication setup failed:', e);
+            // Cross-page communication not available
         }
 
         setupCacheSettingsListener();

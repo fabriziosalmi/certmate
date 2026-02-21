@@ -25,7 +25,7 @@
         if (singleBtn) singleBtn.addEventListener('click', function() { ccSwitchTab('single'); });
         if (batchBtn) batchBtn.addEventListener('click', function() { ccSwitchTab('batch'); });
 
-        var form = document.getElementById('createCertForm');
+        var form = document.getElementById('createClientCertForm');
         if (form) form.addEventListener('submit', ccHandleCreateCert);
 
         var dropZone = document.getElementById('dropZone');
@@ -134,7 +134,7 @@
     }
 
     function ccSwitchTab(tab) {
-        var singleForm = document.getElementById('createCertForm');
+        var singleForm = document.getElementById('createClientCertForm');
         var batchForm = document.getElementById('batchForm');
         var singleBtn = document.getElementById('singleTabBtn');
         var batchBtn = document.getElementById('batchTabBtn');
@@ -177,7 +177,7 @@
             });
             if (response.ok) {
                 CertMate.toast('Client certificate created!', 'success');
-                document.getElementById('createCertForm').reset();
+                document.getElementById('createClientCertForm').reset();
                 ccLoadCertificates();
                 ccLoadStatistics();
             } else {
@@ -230,7 +230,8 @@
                     return matchSearch && matchUsage && matchStatus;
                 });
                 ccRenderCertificates();
-            });
+            })
+            .catch(function(e) { console.error('Error filtering client certificates:', e); });
     }
 
     function ccShowCertDetails(id) {

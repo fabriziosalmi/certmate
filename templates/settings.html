@@ -45,7 +45,7 @@
                 <form id="settingsForm" class="space-y-8">
 
                     <!-- TAB: DNS Providers -->
-                    <div x-show="tab === 'dns'"
+                    <div x-show="tab === 'dns'">
                     <!-- DNS Provider Selection -->
                     <div class="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3" id="dns-provider-label">
@@ -1932,7 +1932,7 @@
     </div>
 
     <!-- Debug Console -->
-    <div id="debugConsole" class="fixed bottom-4 left-4 right-4 bg-black text-green-400 font-mono text-xs rounded-lg shadow-lg border border-gray-600 hidden z-40">
+    <div id="settingsDebugConsole" class="fixed bottom-4 left-4 right-4 bg-black text-green-400 font-mono text-xs rounded-lg shadow-lg border border-gray-600 hidden z-40">
         <div class="flex justify-between items-center px-3 py-2 border-b border-gray-700">
             <span class="text-white font-semibold">Settings Debug Console</span>
             <button onclick="clearDebugConsole()" class="text-yellow-400 hover:text-yellow-300" title="Clear console">
@@ -1942,7 +1942,7 @@
                 <i class="fas fa-times"></i>
             </button>
         </div>
-        <div id="debugOutput" class="p-3 max-h-64 overflow-y-auto">
+        <div id="settingsDebugOutput" class="p-3 max-h-64 overflow-y-auto">
             <div class="text-gray-500">Debug console ready. All settings actions will be logged here...</div>
         </div>
     </div>

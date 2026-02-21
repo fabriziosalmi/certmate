@@ -102,7 +102,7 @@
     // =============================================
 
     function toggleDebugConsole() {
-        var consoleDiv = document.getElementById('debugConsole');
+        var consoleDiv = document.getElementById('settingsDebugConsole');
         if (consoleDiv.classList.contains('hidden')) {
             consoleDiv.classList.remove('hidden');
         } else {
@@ -111,7 +111,7 @@
     }
 
     function clearDebugConsole() {
-        document.getElementById('debugOutput').innerHTML = '<div class="text-gray-500">Debug console cleared. All settings actions will be logged here...</div>';
+        document.getElementById('settingsDebugOutput').innerHTML = '<div class="text-gray-500">Debug console cleared. All settings actions will be logged here...</div>';
     }
 
     // =============================================
@@ -156,7 +156,7 @@
 
     function addDebugLog(message, type) {
         type = type || 'info';
-        var output = document.getElementById('debugOutput');
+        var output = document.getElementById('settingsDebugOutput');
         var color = type === 'error' ? 'text-red-400' : type === 'warn' ? 'text-yellow-400' : 'text-green-400';
         var time = new Date().toLocaleTimeString();
         var entry = document.createElement('div');
@@ -172,7 +172,6 @@
 
     function showMessage(message, type) {
         type = type || 'info';
-        console.log(type.toUpperCase() + ': ' + message);
         addDebugLog(message, type);
 
         if (statusMessage) {
@@ -1859,12 +1858,7 @@
             var selectedConfig = document.getElementById(configId);
             if (selectedConfig) {
                 selectedConfig.style.display = 'block';
-                console.log('Showing storage config for ' + backend + ': ' + configId);
-            } else {
-                console.error('Storage config element not found: ' + configId);
             }
-        } else {
-            console.error('Unknown storage backend: ' + backend);
         }
     }
 
@@ -1872,13 +1866,7 @@
         var backend = document.getElementById('storage-backend').value;
         var config = getStorageBackendConfig(backend);
 
-        console.log('Testing storage backend:', backend);
-        console.log('Configuration:', config);
-        console.log('Settings page initialized');
-        console.log('API Headers:', API_HEADERS);
-
         if (!validateStorageConfig(backend, config)) {
-            console.log('Validation failed for config:', config);
             showMessage('Please fill in all required fields for the selected storage backend.', 'error');
             return;
         }
@@ -1890,17 +1878,12 @@
             config: config
         };
 
-        console.log('Sending request data:', requestData);
-
         fetch('/api/storage/test', {
             method: 'POST',
             headers: API_HEADERS,
             body: JSON.stringify(requestData)
         })
         .then(function(response) {
-            console.log('Response status:', response.status);
-            console.log('Response headers:', response.headers);
-
             if (!response.ok) {
                 throw new Error('HTTP error! status: ' + response.status);
             }
@@ -1908,8 +1891,6 @@
             return response.json();
         })
         .then(function(data) {
-            console.log('Response data:', data);
-
             if (data.success) {
                 showMessage(data.message, 'success');
             } else if (data.message) {
