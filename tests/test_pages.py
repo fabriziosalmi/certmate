@@ -31,15 +31,15 @@ class TestPageLoading:
 
 
 class TestWelcomeBanner:
-    """First-time setup guidance should appear when no certificates exist."""
+    """Dashboard page should load dashboard JS module and key UI elements."""
 
-    def test_index_shows_welcome(self, api):
+    def test_index_loads_dashboard_js(self, api):
         r = api.get("/", allow_redirects=True)
-        assert "Welcome to CertMate" in r.text
+        assert "dashboard.js" in r.text
 
-    def test_index_shows_security_note(self, api):
+    def test_index_has_certificate_toggle(self, api):
         r = api.get("/", allow_redirects=True)
-        assert "Authentication is disabled" in r.text or "security" in r.text.lower()
+        assert "Server Certificates" in r.text
 
 
 class TestHelpPage:
