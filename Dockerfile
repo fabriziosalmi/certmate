@@ -19,7 +19,7 @@ ENV PATH="/opt/venv/bin:$PATH"
 # Install minimal requirements by default (fastest build)
 # Override with --build-arg REQUIREMENTS_FILE=requirements.txt for full install
 ARG REQUIREMENTS_FILE=requirements.txt
-RUN pip install -U pip wheel && \
+RUN pip install -U pip setuptools wheel && \
     pip install --no-cache-dir -r ${REQUIREMENTS_FILE}
 
 # Production stage
@@ -29,7 +29,9 @@ FROM python:3.12-slim
 WORKDIR /app
 
 # Install runtime dependencies + tini for proper PID 1 signal handling
+# apt-get upgrade pulls security patches for glibc, zlib, etc.
 RUN apt-get update && \
+    apt-get upgrade -y -o Acquire::Retries=3 && \
     apt-get install -y -o Acquire::Retries=3 curl tini && \
     rm -rf /var/lib/apt/lists/* && \
     useradd --create-home --shell /bin/bash certmate
