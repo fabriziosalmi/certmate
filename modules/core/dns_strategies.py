@@ -293,9 +293,38 @@ class GenericMultiProviderStrategy(DNSProviderStrategy):
     def plugin_name(self) -> str:
         return f'dns-{self.provider_name}'
 
+class HTTP01Strategy(DNSProviderStrategy):
+    """HTTP-01 challenge using certbot --webroot plugin.
+
+    No DNS credentials needed. CertMate serves challenge files
+    via /.well-known/acme-challenge/<token> and certbot writes
+    them to the webroot directory.
+    """
+
+    WEBROOT_DIR = 'data/acme-challenges'
+
+    @property
+    def plugin_name(self) -> str:
+        return 'webroot'
+
+    def create_config_file(self, config_data: Dict[str, Any]) -> Optional[Path]:
+        return None  # No credentials needed
+
+    def configure_certbot_arguments(self, cmd: list, credentials_file: Optional[Path], domain_alias: Optional[str] = None) -> None:
+        webroot = str(Path(self.WEBROOT_DIR).resolve())
+        cmd.extend(['--webroot', '-w', webroot])
+
+    def prepare_environment(self, env: Dict[str, str], config_data: Dict[str, Any]) -> None:
+        pass  # No env vars needed
+
+    @property
+    def default_propagation_seconds(self) -> int:
+        return 0  # No propagation needed for HTTP-01
+
+
 class DNSStrategyFactory:
     """Factory to get the correct strategy for a provider"""
-    
+
     _strategies = {
         'cloudflare': CloudflareStrategy,
         'route53': Route53Strategy,
@@ -309,7 +338,8 @@ class DNSStrategyFactory:
         'namecheap': NamecheapStrategy,
         'arvancloud': ArvanCloudStrategy,
         'infomaniak': InfomaniakStrategy,
-        'acme-dns': AcmeDNSStrategy
+        'acme-dns': AcmeDNSStrategy,
+        'http-01': HTTP01Strategy,
     }
     
     @classmethod

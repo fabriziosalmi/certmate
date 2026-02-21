@@ -46,8 +46,38 @@
 
                     <!-- TAB: DNS Providers -->
                     <div x-show="tab === 'dns'">
-                    <!-- DNS Provider Selection -->
-                    <div class="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
+                    <!-- Challenge Type Selection -->
+                    <div class="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg mb-4">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                            <i class="fas fa-shield-alt mr-1"></i>
+                            ACME Challenge Type
+                        </label>
+                        <div class="flex gap-4">
+                            <label class="relative cursor-pointer">
+                                <input type="radio" name="challenge_type" value="dns-01" class="sr-only peer" checked>
+                                <div class="px-4 py-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                    <div class="flex items-center gap-2">
+                                        <i class="fas fa-dns text-blue-500"></i>
+                                        <span class="text-sm font-medium dark:text-white">DNS-01</span>
+                                    </div>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Requires DNS provider credentials. Supports wildcards.</p>
+                                </div>
+                            </label>
+                            <label class="relative cursor-pointer">
+                                <input type="radio" name="challenge_type" value="http-01" class="sr-only peer">
+                                <div class="px-4 py-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                    <div class="flex items-center gap-2">
+                                        <i class="fas fa-globe text-green-500"></i>
+                                        <span class="text-sm font-medium dark:text-white">HTTP-01</span>
+                                    </div>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Domain must point to this server. No wildcards.</p>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- DNS Provider Selection (hidden when HTTP-01) -->
+                    <div id="dns-provider-section" class="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3" id="dns-provider-label">
                             <i class="fas fa-server mr-1"></i>
                             DNS Providers

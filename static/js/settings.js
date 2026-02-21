@@ -115,6 +115,21 @@
     }
 
     // =============================================
+    // Challenge type toggle
+    // =============================================
+
+    function toggleChallengeType() {
+        var selected = document.querySelector('input[name="challenge_type"]:checked');
+        var dnsSection = document.getElementById('dns-provider-section');
+        if (!dnsSection) return;
+        if (selected && selected.value === 'http-01') {
+            dnsSection.style.display = 'none';
+        } else {
+            dnsSection.style.display = '';
+        }
+    }
+
+    // =============================================
     // API Token helper functions
     // =============================================
 
@@ -262,6 +277,7 @@
                 auto_renew: formData.get('auto_renew') === 'on',
                 renewal_threshold_days: parseInt(formData.get('renewal_threshold_days')) || 30,
                 dns_provider: formData.get('dns_provider'),
+                challenge_type: formData.get('challenge_type') || 'dns-01',
                 api_bearer_token: tokenValue,
                 cache_ttl: parseInt(formData.get('cache_ttl')) || 300,
                 storage_backend: formData.get('storage_backend'),
@@ -277,7 +293,7 @@
                 throw new Error('Email address is required in the ' + caDisplayName + ' configuration section');
             }
 
-            if (!settings.dns_provider) {
+            if (settings.challenge_type !== 'http-01' && !settings.dns_provider) {
                 throw new Error('DNS provider must be selected');
             }
 
@@ -691,6 +707,16 @@
                     addDebugLog('Cache TTL set to ' + data.cache_ttl, 'info');
                 }
             }
+
+            // Challenge type selection
+            if (data.challenge_type) {
+                var challengeRadio = document.querySelector('input[name="challenge_type"][value="' + data.challenge_type + '"]');
+                if (challengeRadio) {
+                    challengeRadio.checked = true;
+                    addDebugLog('Challenge type set to ' + data.challenge_type, 'info');
+                }
+            }
+            toggleChallengeType();
 
             // DNS provider selection
             if (data.dns_provider) {
@@ -2465,6 +2491,14 @@
 
         addDebugLog('DOM loaded, initializing settings page', 'info');
 
+        // Add challenge type radio listeners
+        document.querySelectorAll('input[name="challenge_type"]').forEach(function(radio) {
+            radio.addEventListener('change', function() {
+                toggleChallengeType();
+                addDebugLog('Challenge type changed to: ' + this.value, 'info');
+            });
+        });
+
         // Add radio button listeners
         document.querySelectorAll('input[name="dns_provider"]').forEach(function(radio) {
             radio.addEventListener('change', function() {
@@ -2534,6 +2568,7 @@
     window.deleteBackup = deleteBackup;
     window.clearDebugConsole = clearDebugConsole;
     window.toggleDebugConsole = toggleDebugConsole;
+    window.toggleChallengeType = toggleChallengeType;
     window.toggleUserStatus = toggleUserStatus;
     window.resetUserPassword = resetUserPassword;
     window.deleteUser = deleteUser;

@@ -83,6 +83,7 @@ class SettingsManager:
             'api_bearer_token': os.getenv('API_BEARER_TOKEN') or generate_secure_token(),
             'setup_completed': False,  # Track if initial setup is done
             'dns_provider': 'cloudflare',
+            'challenge_type': 'dns-01',  # 'dns-01' or 'http-01'
             'dns_providers': {},  # Start with empty DNS providers - only add what's actually configured
             'certificate_storage': {  # New storage backend configuration
                 'backend': 'local_filesystem',  # Default to local filesystem for backward compatibility
@@ -124,6 +125,7 @@ class SettingsManager:
             'api_bearer_token': os.getenv('API_BEARER_TOKEN') or generate_secure_token(),
             'setup_completed': False,
             'dns_provider': 'cloudflare',
+            'challenge_type': 'dns-01',
             'dns_providers': {
                 'cloudflare': {'api_token': ''},
                 'route53': {'access_key_id': '', 'secret_access_key': '', 'region': 'us-east-1'},
@@ -159,7 +161,7 @@ class SettingsManager:
             settings, was_migrated = self._migrate_settings_format(settings)
             
             # Only merge essential missing keys, NOT the full dns_providers template
-            essential_keys = ['cloudflare_token', 'domains', 'email', 'auto_renew', 'renewal_threshold_days', 'api_bearer_token', 'setup_completed', 'dns_provider']
+            essential_keys = ['cloudflare_token', 'domains', 'email', 'auto_renew', 'renewal_threshold_days', 'api_bearer_token', 'setup_completed', 'dns_provider', 'challenge_type']
             for key in essential_keys:
                 if key not in settings:
                     settings[key] = default_settings[key]

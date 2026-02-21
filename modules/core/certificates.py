@@ -12,7 +12,7 @@ import shutil
 from pathlib import Path
 from datetime import datetime, timedelta
 from .shell import ShellExecutor
-from .dns_strategies import DNSStrategyFactory
+from .dns_strategies import DNSStrategyFactory, HTTP01Strategy
 from .constants import CERTIFICATE_FILES, get_domain_name
 from .utils import validate_domain
 
@@ -173,7 +173,7 @@ class CertificateManager:
             'dns_provider': dns_provider
         }
 
-    def create_certificate(self, domain, email, dns_provider=None, dns_config=None, account_id=None, staging=False, ca_provider=None, ca_account_id=None, domain_alias=None, san_domains=None):
+    def create_certificate(self, domain, email, dns_provider=None, dns_config=None, account_id=None, staging=False, ca_provider=None, ca_account_id=None, domain_alias=None, san_domains=None, challenge_type=None):
         """Create SSL certificate using configurable CA with DNS challenge
         
         Args:
@@ -218,28 +218,39 @@ class CertificateManager:
                     logger.warning(f"Could not get CA config, using default Let's Encrypt: {e}")
                     ca_provider = 'letsencrypt'
             
-            # Get DNS configuration
-            if not dns_config:
-                if not dns_provider:
-                    settings = self.settings_manager.load_settings()
-                    dns_provider = self.settings_manager.get_domain_dns_provider(domain, settings)
-                
-                dns_config, used_account_id = self._get_dns_config(
-                    dns_provider, account_id
-                )
-                
+            # Resolve challenge type from settings if not provided
+            if not challenge_type:
+                settings = self.settings_manager.load_settings()
+                challenge_type = settings.get('challenge_type', 'dns-01')
+
+            # HTTP-01 path: skip DNS config entirely
+            if challenge_type == 'http-01':
+                strategy = HTTP01Strategy()
+                dns_config = dns_config or {}
+                dns_provider = dns_provider or 'http-01'
+                # Ensure webroot directory exists
+                webroot = Path(HTTP01Strategy.WEBROOT_DIR)
+                challenge_dir = webroot / '.well-known' / 'acme-challenge'
+                challenge_dir.mkdir(parents=True, exist_ok=True)
+                logger.info("Using HTTP-01 challenge (webroot)")
+            else:
+                # DNS-01 path: get DNS configuration
                 if not dns_config:
-                    raise ValueError(f"DNS provider '{dns_provider}' account '{account_id or 'default'}' not configured")
-                
-                logger.info(f"Using DNS provider: {dns_provider} with account: {used_account_id}")
-            
-            # Create output directory
-            cert_dir = self.cert_dir
-            cert_output_dir = cert_dir / domain
-            cert_output_dir.mkdir(parents=True, exist_ok=True)
-            
-            # Get Strategy
-            strategy = DNSStrategyFactory.get_strategy(dns_provider)
+                    if not dns_provider:
+                        settings = self.settings_manager.load_settings()
+                        dns_provider = self.settings_manager.get_domain_dns_provider(domain, settings)
+
+                    dns_config, used_account_id = self._get_dns_config(
+                        dns_provider, account_id
+                    )
+
+                    if not dns_config:
+                        raise ValueError(f"DNS provider '{dns_provider}' account '{account_id or 'default'}' not configured")
+
+                    logger.info(f"Using DNS provider: {dns_provider} with account: {used_account_id}")
+
+                # Get Strategy
+                strategy = DNSStrategyFactory.get_strategy(dns_provider)
 
             # Build list of all domains (primary + SANs)
             all_domains = [domain]
@@ -253,6 +264,17 @@ class CertificateManager:
                             raise ValueError(f"Invalid SAN domain '{san}': {validation_msg}")
                         all_domains.append(san)
                 logger.info(f"Creating SAN certificate with domains: {', '.join(all_domains)}")
+
+            # HTTP-01 does not support wildcard domains
+            if challenge_type == 'http-01':
+                for d in all_domains:
+                    if d.startswith('*.'):
+                        raise ValueError("HTTP-01 challenge does not support wildcard domains. Use DNS-01 instead.")
+
+            # Create output directory
+            cert_dir = self.cert_dir
+            cert_output_dir = cert_dir / domain
+            cert_output_dir.mkdir(parents=True, exist_ok=True)
 
             # Build certbot command
             ca_extra_env = {}
@@ -291,20 +313,21 @@ class CertificateManager:
             # Configure Args
             strategy.configure_certbot_arguments(certbot_cmd, credentials_file, domain_alias=domain_alias)
 
-            # Set propagation time
-            try:
-                settings = self.settings_manager.load_settings()
-                propagation_map = settings.get('dns_propagation_seconds', {}) or {}
-            except Exception:
-                propagation_map = {}
+            # Set propagation time (DNS-01 only; HTTP-01 has no propagation)
+            if challenge_type != 'http-01':
+                try:
+                    settings = self.settings_manager.load_settings()
+                    propagation_map = settings.get('dns_propagation_seconds', {}) or {}
+                except Exception:
+                    propagation_map = {}
 
-            # Default to strategy default if not in settings map
-            default_seconds = strategy.default_propagation_seconds
-            propagation_time = int(propagation_map.get(dns_provider, default_seconds))
-            # Ensure propagation time is within reasonable bounds (1 second to 1 hour)
-            propagation_time = max(1, min(3600, propagation_time))
+                # Default to strategy default if not in settings map
+                default_seconds = strategy.default_propagation_seconds
+                propagation_time = int(propagation_map.get(dns_provider, default_seconds))
+                # Ensure propagation time is within reasonable bounds (1 second to 1 hour)
+                propagation_time = max(1, min(3600, propagation_time))
 
-            certbot_cmd.extend([f'--{strategy.plugin_name}-propagation-seconds', str(propagation_time)])
+                certbot_cmd.extend([f'--{strategy.plugin_name}-propagation-seconds', str(propagation_time)])
 
             logger.info(f"Running certbot command for {domain} with {dns_provider}")
             # Redact sensitive arguments before logging
@@ -354,6 +377,7 @@ class CertificateManager:
                 'domain': domain,
                 'san_domains': all_domains[1:] if len(all_domains) > 1 else [],
                 'dns_provider': dns_provider,
+                'challenge_type': challenge_type,
                 'created_at': datetime.now().isoformat(),
                 'email': email,
                 'staging': staging,

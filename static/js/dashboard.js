@@ -1079,6 +1079,17 @@
         }
     }
 
+    function toggleDnsProviderVisibility() {
+        var select = document.getElementById('challenge_type_select');
+        var container = document.getElementById('dns-provider-container');
+        if (!container) return;
+        if (select && select.value === 'http-01') {
+            container.style.display = 'none';
+        } else {
+            container.style.display = '';
+        }
+    }
+
     function toggleAdvancedOptions() {
         var optionsDiv = document.getElementById('advanced-options');
         var chevron = document.getElementById('advanced-chevron');
@@ -1098,6 +1109,7 @@
 
         var domain = document.getElementById('domain').value.trim();
         var sanDomainsInput = document.getElementById('san_domains').value.trim();
+        var challengeType = document.getElementById('challenge_type_select').value;
         var dnsProvider = document.getElementById('dns_provider_select').value;
         var accountId = document.getElementById('account_select').value;
         var caProvider = document.getElementById('ca_provider_select').value;
@@ -1110,6 +1122,17 @@
         if (!domain) {
             showMessage('Please enter a domain', 'error');
             return;
+        }
+
+        // Warn: HTTP-01 + wildcard is not supported
+        if (challengeType === 'http-01') {
+            var allDomains = [domain].concat(sanDomains);
+            for (var i = 0; i < allDomains.length; i++) {
+                if (allDomains[i].indexOf('*.') === 0) {
+                    showMessage('HTTP-01 challenge does not support wildcard domains. Use DNS-01 instead.', 'error');
+                    return;
+                }
+            }
         }
 
         // Build display message
@@ -1125,6 +1148,9 @@
         var requestBody = { domain: domain };
         if (sanDomains.length > 0) {
             requestBody.san_domains = sanDomains;
+        }
+        if (challengeType) {
+            requestBody.challenge_type = challengeType;
         }
         if (dnsProvider) {
             requestBody.dns_provider = dnsProvider;
@@ -1146,9 +1172,11 @@
                     showMessage('Certificate created successfully for ' + domainsDisplay + '!');
                     document.getElementById('domain').value = '';
                     document.getElementById('san_domains').value = '';
+                    document.getElementById('challenge_type_select').value = '';
                     document.getElementById('dns_provider_select').value = '';
                     document.getElementById('account_select').value = '';
                     document.getElementById('ca_provider_select').value = '';
+                    toggleDnsProviderVisibility();
                     updateAccountSelection();
                     loadCertificates();
                 } else {
@@ -1343,6 +1371,7 @@
     window.invalidateAllCache = invalidateAllCache;
     window.checkAllDeploymentStatuses = checkAllDeploymentStatuses;
     window.toggleAdvancedOptions = toggleAdvancedOptions;
+    window.toggleDnsProviderVisibility = toggleDnsProviderVisibility;
     window.updateAccountSelection = updateAccountSelection;
     window.updateCAProviderInfo = updateCAProviderInfo;
 })();

@@ -180,6 +180,25 @@ def register_web_routes(app, managers):
         )
         return response
 
+    # ACME HTTP-01 challenge endpoint (no auth — ACME servers must reach it)
+    @app.route('/.well-known/acme-challenge/<token>')
+    def acme_challenge(token):
+        """Serve HTTP-01 ACME challenge response files."""
+        if not re.match(r'^[A-Za-z0-9_-]+$', token):
+            return 'Invalid token', 400
+        challenge_dir = Path(app.config.get('DATA_DIR', 'data')) / 'acme-challenges' / '.well-known' / 'acme-challenge'
+        challenge_file = challenge_dir / token
+        # Prevent path traversal
+        try:
+            challenge_file = challenge_file.resolve()
+            if not str(challenge_file).startswith(str(challenge_dir.resolve())):
+                return 'Invalid token', 400
+        except (OSError, ValueError):
+            return 'Invalid token', 400
+        if not challenge_file.exists():
+            return 'Not found', 404
+        return challenge_file.read_text(), 200, {'Content-Type': 'text/plain'}
+
     # Main web interface routes
     @app.route('/')
     @require_web_auth
@@ -916,6 +935,7 @@ def register_web_routes(app, managers):
             san_domains_raw = data.get('san_domains', '')  # Can be comma-separated string or list
             dns_provider = data.get('dns_provider')  # Optional, uses default from settings
             account_id = data.get('account_id')      # Optional, uses default account
+            challenge_type = data.get('challenge_type')  # Optional: 'dns-01' or 'http-01'
             
             # Parse SAN domains (support both comma-separated string and list)
             san_domains = []
@@ -955,46 +975,52 @@ def register_web_routes(app, managers):
                     'hint': 'Go to Settings and configure your email address first. This is required by certificate authorities.'
                 }), 400
             
-            # Determine DNS provider
-            if not dns_provider:
-                dns_provider = settings_manager.get_domain_dns_provider(domain, settings)
-            
-            if not dns_provider:
-                return jsonify({
-                    'error': 'No DNS provider configured',
-                    'hint': 'Go to Settings and select a DNS provider. Configure the provider credentials to enable certificate creation.'
-                }), 400
-            
-            # Validate DNS provider configuration exists
-            dns_providers_config = settings.get('dns_providers', {})
-            provider_config = dns_providers_config.get(dns_provider, {})
-            
-            # Check if account_id is provided, validate it exists
-            if account_id:
-                config, _ = dns_manager.get_dns_provider_account_config(dns_provider, account_id)
-                if not config:
-                    available_accounts = list(dns_manager.list_dns_provider_accounts(dns_provider).keys())
-                    hint = f"Available accounts: {', '.join(available_accounts)}" if available_accounts else "Configure a DNS account in Settings first."
+            # Resolve challenge type from settings if not provided
+            if not challenge_type:
+                challenge_type = settings.get('challenge_type', 'dns-01')
+
+            # DNS provider validation (skip for HTTP-01)
+            if challenge_type != 'http-01':
+                # Determine DNS provider
+                if not dns_provider:
+                    dns_provider = settings_manager.get_domain_dns_provider(domain, settings)
+
+                if not dns_provider:
                     return jsonify({
-                        'error': f'DNS account "{account_id}" not found for provider {dns_provider}',
-                        'hint': hint
+                        'error': 'No DNS provider configured',
+                        'hint': 'Go to Settings and select a DNS provider. Configure the provider credentials to enable certificate creation.'
                     }), 400
-            else:
-                # Check if default account is configured
-                config, _ = dns_manager.get_dns_provider_account_config(dns_provider, None)
-                if not config:
-                    # Check if there are any accounts for this provider
-                    accounts = dns_manager.list_dns_provider_accounts(dns_provider)
-                    if not accounts:
+
+                # Validate DNS provider configuration exists
+                dns_providers_config = settings.get('dns_providers', {})
+                provider_config = dns_providers_config.get(dns_provider, {})
+
+                # Check if account_id is provided, validate it exists
+                if account_id:
+                    config, _ = dns_manager.get_dns_provider_account_config(dns_provider, account_id)
+                    if not config:
+                        available_accounts = list(dns_manager.list_dns_provider_accounts(dns_provider).keys())
+                        hint = f"Available accounts: {', '.join(available_accounts)}" if available_accounts else "Configure a DNS account in Settings first."
                         return jsonify({
-                            'error': f'No {dns_provider} credentials configured',
-                            'hint': f'Go to Settings → DNS Providers → {dns_provider.title()} and add your API credentials.'
+                            'error': f'DNS account "{account_id}" not found for provider {dns_provider}',
+                            'hint': hint
                         }), 400
-                    else:
-                        return jsonify({
-                            'error': f'No default account set for {dns_provider}',
-                            'hint': f'Select an account or configure a default account in Settings for {dns_provider}.'
-                        }), 400
+                else:
+                    # Check if default account is configured
+                    config, _ = dns_manager.get_dns_provider_account_config(dns_provider, None)
+                    if not config:
+                        # Check if there are any accounts for this provider
+                        accounts = dns_manager.list_dns_provider_accounts(dns_provider)
+                        if not accounts:
+                            return jsonify({
+                                'error': f'No {dns_provider} credentials configured',
+                                'hint': f'Go to Settings → DNS Providers → {dns_provider.title()} and add your API credentials.'
+                            }), 400
+                        else:
+                            return jsonify({
+                                'error': f'No default account set for {dns_provider}',
+                                'hint': f'Select an account or configure a default account in Settings for {dns_provider}.'
+                            }), 400
             
             # All validations passed, create certificate in background (bounded pool)
             def create_cert_async():
@@ -1002,7 +1028,8 @@ def register_web_routes(app, managers):
                     certificate_manager.create_certificate(
                         domain, email, dns_provider,
                         account_id=account_id,
-                        san_domains=san_domains if san_domains else None
+                        san_domains=san_domains if san_domains else None,
+                        challenge_type=challenge_type
                     )
                     domains_info = f"{domain}" + (f" (+ {len(san_domains)} SANs)" if san_domains else "")
                     logger.info(f"Background certificate creation completed for {domains_info}")

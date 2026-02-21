@@ -268,6 +268,7 @@ def create_api_resources(api, models, managers):
                 dns_provider = data.get('dns_provider')
                 account_id = data.get('account_id')
                 ca_provider = data.get('ca_provider')
+                challenge_type = data.get('challenge_type')  # Optional: 'dns-01' or 'http-01'
                 domain_alias = data.get('domain_alias')  # Optional domain alias
                 if domain_alias:
                     from ..core.utils import validate_domain
@@ -322,16 +323,21 @@ def create_api_resources(api, models, managers):
                         'hint': 'Configure email in settings first. Required by certificate authorities for important notifications.'
                     }, 400
                 
-                # Determine DNS provider
-                if not dns_provider:
-                    dns_provider = settings.get('dns_provider')
-                
-                if not dns_provider:
-                    return {
-                        'error': 'No DNS provider specified or configured',
-                        'hint': 'Either specify dns_provider in request or configure a default DNS provider in settings.'
-                    }, 400
-                
+                # Resolve challenge type from settings if not provided
+                if not challenge_type:
+                    challenge_type = settings.get('challenge_type', 'dns-01')
+
+                # DNS provider validation (skip for HTTP-01)
+                if challenge_type != 'http-01':
+                    if not dns_provider:
+                        dns_provider = settings.get('dns_provider')
+
+                    if not dns_provider:
+                        return {
+                            'error': 'No DNS provider specified or configured',
+                            'hint': 'Either specify dns_provider in request or configure a default DNS provider in settings.'
+                        }, 400
+
                 # Create certificate with SAN domains
                 result = certificate_manager.create_certificate(
                     domain=domain,
@@ -340,7 +346,8 @@ def create_api_resources(api, models, managers):
                     account_id=account_id,
                     ca_provider=ca_provider,
                     domain_alias=domain_alias,
-                    san_domains=san_domains  # Pass SAN domains
+                    san_domains=san_domains,
+                    challenge_type=challenge_type
                 )
                 
                 # Ensure domain is in settings for proper listing

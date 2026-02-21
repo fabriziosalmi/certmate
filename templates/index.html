@@ -109,11 +109,30 @@
                         
                         <div class="space-y-4">
                             <div>
+                                <label for="challenge_type_select" class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                                    <i class="fas fa-shield-alt mr-2 text-teal-500"></i>
+                                    Challenge Type
+                                </label>
+                                <select id="challenge_type_select" name="challenge_type"
+                                        class="block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg shadow-sm py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-200"
+                                        onchange="toggleDnsProviderVisibility()">
+                                    <option value="">Use default from settings</option>
+                                    <option value="dns-01">DNS-01 (DNS provider credentials)</option>
+                                    <option value="http-01">HTTP-01 (domain points to this server)</option>
+                                </select>
+                                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                    <i class="fas fa-info-circle mr-1"></i>
+                                    HTTP-01 does not require DNS credentials but cannot issue wildcard certificates
+                                </p>
+                            </div>
+
+                            <div id="dns-provider-container">
+                            <div>
                                 <label for="dns_provider_select" class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                                     <i class="fas fa-server mr-2 text-purple-500"></i>
                                     DNS Provider
                                 </label>
-                                <select id="dns_provider_select" name="dns_provider" 
+                                <select id="dns_provider_select" name="dns_provider"
                                         class="block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg shadow-sm py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-200"
                                         onchange="updateAccountSelection()">
                                     <option value="">🔧 Use default from settings</option>
@@ -148,7 +167,7 @@
                                     <i class="fas fa-user mr-2 text-orange-500"></i>
                                     Account
                                 </label>
-                                <select id="account_select" name="account_id" 
+                                <select id="account_select" name="account_id"
                                         class="block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg shadow-sm py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-200">
                                     <option value="">🔧 Use default account</option>
                                 </select>
@@ -157,6 +176,7 @@
                                     For multi-account DNS provider setups
                                 </p>
                             </div>
+                            </div><!-- /dns-provider-container -->
                         </div>
                     </div>
                     
