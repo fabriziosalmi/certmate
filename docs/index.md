@@ -250,9 +250,9 @@ See LICENSE file in the repository
 
 ## Version
 
-**Current Version**: 1.0.0
+**Current Version**: 2.0.0
 **Status**: Production Ready
-**Last Updated**: 2024-10-30
+**Last Updated**: 2026-02-21
 
 ---
 

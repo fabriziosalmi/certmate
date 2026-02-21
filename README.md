@@ -1506,6 +1506,7 @@ pip install -r requirements-infisical-storage.txt
 - Open-source preference
 - Self-hosted secret management
 - Multi-environment certificate management
+
 #### Quick Installation Guide
 
 **Install All Storage Backends:**
@@ -1612,6 +1613,7 @@ curl -X POST "http://localhost:8000/api/storage/migrate" \
 - Automatic verification of migrated certificates
 - Rollback capability if issues are detected
 - Preservation of certificate metadata and permissions
+
 **Backward Compatibility:**
 - Existing installations continue working without changes
 - New storage backends are opt-in

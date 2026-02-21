@@ -255,7 +255,7 @@ class Notifier:
             body = json.dumps(payload).encode('utf-8')
             req = Request(url, data=body, method='POST')
             req.add_header('Content-Type', 'application/json')
-            req.add_header('User-Agent', 'CertMate-Webhook/1.0')
+            req.add_header('User-Agent', 'CertMate-Webhook/2.0')
 
             # Custom headers for generic webhooks
             if wh_type == 'generic':
