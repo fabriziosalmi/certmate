@@ -33,6 +33,7 @@ from modules.core import (
     configure_structured_logging, get_certmate_logger
 )
 from modules.core.shell import ShellExecutor
+from modules.core.notifier import Notifier
 # Import CA manager for DigiCert and Private CA support
 # Import CA manager for DigiCert and Private CA support
 from modules.core.ca_manager import CAManager
@@ -214,6 +215,9 @@ class CertMateApp:
             rate_limit_config = RateLimitConfig()
             rate_limiter = SimpleRateLimiter(rate_limit_config)
 
+            # Initialize Notifier
+            notifier = Notifier(settings_manager)
+
             # Store all managers for easy access
             self.managers = {
                 'file_ops': file_ops,
@@ -231,7 +235,8 @@ class CertMateApp:
                 'crl': crl_manager,
                 'audit': audit_logger,
                 'rate_limiter': rate_limiter,
-                'shell_executor': shell_executor
+                'shell_executor': shell_executor,
+                'notifier': notifier
             }
             
             logger.info("All managers initialized successfully")

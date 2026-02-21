@@ -3,6 +3,7 @@ Web routes module for CertMate
 Handles web interface routes and form-based endpoints
 """
 
+import json
 import logging
 import os
 import re
@@ -263,6 +264,43 @@ def register_web_routes(app, managers):
         # Return newest first
         entries.reverse()
         return jsonify({'entries': entries})
+
+    @app.route('/api/notifications/config', methods=['GET', 'POST'])
+    @auth_manager.require_auth
+    def notifications_config():
+        """Get or update notification configuration."""
+        settings = settings_manager.load_settings()
+
+        if request.method == 'GET':
+            notif_config = settings.get('notifications', {})
+            # Strip passwords from response
+            safe = json.loads(json.dumps(notif_config))
+            smtp = safe.get('channels', {}).get('smtp', {})
+            if smtp.get('password'):
+                smtp['password'] = '••••••••'
+            for wh in safe.get('channels', {}).get('webhooks', []):
+                if wh.get('secret'):
+                    wh['secret'] = '••••••••'
+            return jsonify(safe)
+
+        # POST — update notification config
+        data = request.get_json(silent=True) or {}
+        settings['notifications'] = data
+        settings_manager.save_settings(settings)
+        return jsonify({'status': 'saved'})
+
+    @app.route('/api/notifications/test', methods=['POST'])
+    @auth_manager.require_auth
+    def notifications_test():
+        """Test a notification channel."""
+        notifier = managers.get('notifier')
+        if not notifier:
+            return jsonify({'error': 'Notifier not available'}), 500
+        data = request.get_json(silent=True) or {}
+        channel_type = data.get('channel_type', '')
+        config = data.get('config', {})
+        result = notifier.test_channel(channel_type, config)
+        return jsonify(result)
 
     # Health check for Docker
     @app.route('/health')
