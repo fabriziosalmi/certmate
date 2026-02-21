@@ -66,6 +66,7 @@ Thumbs.db
 
 # Planning and development documents
 NEXT_FEATURES.md
+PLAN_2.0.md
 
 htmlcov/
 .pytest_cache/
