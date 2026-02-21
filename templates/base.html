@@ -181,6 +181,8 @@
     setTimeout(checkNotifications, 2000);
     setInterval(function() { checkNotifications(true); }, 300000);
     </script>
+    <script src="/static/js/htmx.min.js"></script>
+    <script defer src="/static/js/alpine.min.js"></script>
     <script src="/static/js/certmate.js"></script>
 
     {% block content %}{% endblock %}

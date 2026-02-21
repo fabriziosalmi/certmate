@@ -6,3 +6,8 @@
 html.dark {
     background-color: #111827 !important;
 }
+
+/* Alpine.js: hide elements until Alpine initializes */
+[x-cloak] {
+    display: none !important;
+}

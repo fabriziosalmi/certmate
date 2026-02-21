@@ -102,8 +102,8 @@ class TestSettingsUI:
     def test_auth_security_banner_visible(self, browser_page):
         browser_page.goto(f"{BASE_URL}/settings")
         browser_page.wait_for_load_state("networkidle")
-        # Banner is inside the Users tab — switch to it first
-        browser_page.locator('button[data-tab="users"]').click()
+        # Banner is inside the Users tab — switch to it first (Alpine.js renders tabs)
+        browser_page.locator('button[role="tab"]:has-text("Users")').click(timeout=10000)
         banner = browser_page.locator("#authSecurityBanner")
         expect(banner).to_be_visible(timeout=10000)
 

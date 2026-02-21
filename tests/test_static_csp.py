@@ -14,6 +14,9 @@ class TestStaticFiles:
     @pytest.mark.parametrize("path", [
         "/static/css/tailwind.min.css",
         "/static/css/fontawesome.min.css",
+        "/static/js/htmx.min.js",
+        "/static/js/alpine.min.js",
+        "/static/js/certmate.js",
         "/static/webfonts/fa-solid-900.woff2",
         "/static/webfonts/fa-regular-400.woff2",
         "/static/webfonts/fa-brands-400.woff2",
