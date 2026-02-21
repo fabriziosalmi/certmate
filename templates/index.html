@@ -264,10 +264,13 @@
                     <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Your Certificates</h3>
                     <div class="flex flex-col sm:flex-row items-stretch sm:items-center space-y-2 sm:space-y-0 sm:space-x-2 lg:space-x-3">
                         <div class="relative">
-                            <input type="text" id="certificateSearch" placeholder="Search certificates..." 
-                                   class="pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-primary focus:border-primary text-sm bg-white shadow-sm transition-shadow duration-200 w-full sm:w-48">
+                            <input type="text" id="certificateSearch" placeholder="Search certificates..."
+                                   class="pl-10 pr-8 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-primary focus:border-primary text-sm bg-white shadow-sm transition-shadow duration-200 w-full sm:w-48">
                             <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                 <i class="fas fa-search text-gray-400"></i>
+                            </div>
+                            <div class="absolute inset-y-0 right-0 pr-2 hidden sm:flex items-center pointer-events-none">
+                                <kbd class="px-1.5 py-0.5 text-[10px] text-gray-400 bg-gray-100 dark:bg-gray-600 rounded border border-gray-300 dark:border-gray-500">/</kbd>
                             </div>
                         </div>
                         <select id="statusFilter" class="border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white shadow-sm transition-shadow duration-200">
