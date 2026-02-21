@@ -16,7 +16,8 @@ from pathlib import Path
 from collections import defaultdict
 from time import time
 from flask import (render_template, request, jsonify, send_file,
-                   send_from_directory, redirect, url_for, after_this_request)
+                   send_from_directory, redirect, url_for, after_this_request,
+                   Response, stream_with_context)
 
 from ..core.metrics import generate_metrics_response
 
@@ -301,6 +302,24 @@ def register_web_routes(app, managers):
         config = data.get('config', {})
         result = notifier.test_channel(channel_type, config)
         return jsonify(result)
+
+    @app.route('/api/events/stream')
+    @auth_manager.require_auth
+    def event_stream():
+        """SSE endpoint for real-time updates."""
+        event_bus = managers.get('events')
+        if not event_bus:
+            return jsonify({'error': 'Event bus not available'}), 500
+        q = event_bus.subscribe()
+        return Response(
+            stream_with_context(event_bus.stream(q)),
+            mimetype='text/event-stream',
+            headers={
+                'Cache-Control': 'no-cache',
+                'X-Accel-Buffering': 'no',
+                'Connection': 'keep-alive'
+            }
+        )
 
     # Health check for Docker
     @app.route('/health')
@@ -998,8 +1017,13 @@ def register_web_routes(app, managers):
             else:
                 msg = f'Certificate creation started for {domain}'
             
+            # Publish SSE event
+            event_bus = managers.get('events')
+            if event_bus:
+                event_bus.publish('certificate_created', {'domain': domain, 'san_domains': san_domains})
+
             return jsonify({
-                'success': True, 
+                'success': True,
                 'message': msg,
                 'domain': domain,
                 'san_domains': san_domains,
@@ -1079,7 +1103,11 @@ def register_web_routes(app, managers):
                     logger.error(f"Background certificate renewal failed for {domain}: {e}")
             
             _cert_executor.submit(renew_cert_async)
-            
+
+            event_bus = managers.get('events')
+            if event_bus:
+                event_bus.publish('certificate_renewed', {'domain': domain})
+
             return jsonify({'success': True, 'message': f'Certificate renewal started for {domain}'})
             
         except Exception as e:

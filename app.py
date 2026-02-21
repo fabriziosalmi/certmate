@@ -34,7 +34,7 @@ from modules.core import (
 )
 from modules.core.shell import ShellExecutor
 from modules.core.notifier import Notifier
-# Import CA manager for DigiCert and Private CA support
+from modules.core.events import EventBus
 # Import CA manager for DigiCert and Private CA support
 from modules.core.ca_manager import CAManager
 from modules.api import create_api_models, create_api_resources
@@ -215,8 +215,9 @@ class CertMateApp:
             rate_limit_config = RateLimitConfig()
             rate_limiter = SimpleRateLimiter(rate_limit_config)
 
-            # Initialize Notifier
+            # Initialize Notifier and Event Bus
             notifier = Notifier(settings_manager)
+            event_bus = EventBus()
 
             # Store all managers for easy access
             self.managers = {
@@ -236,7 +237,8 @@ class CertMateApp:
                 'audit': audit_logger,
                 'rate_limiter': rate_limiter,
                 'shell_executor': shell_executor,
-                'notifier': notifier
+                'notifier': notifier,
+                'events': event_bus
             }
             
             logger.info("All managers initialized successfully")

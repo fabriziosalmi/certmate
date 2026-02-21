@@ -212,6 +212,52 @@
     // Check on load (with cache) and refresh every 5 minutes
     setTimeout(checkNotifications, 2000);
     setInterval(function() { checkNotifications(true); }, 300000);
+
+    // SSE real-time updates
+    (function() {
+        if (typeof EventSource === 'undefined') return;
+        var sse = null;
+        var retryDelay = 1000;
+
+        function connectSSE() {
+            sse = new EventSource('/api/events/stream');
+            sse.onopen = function() { retryDelay = 1000; };
+            sse.addEventListener('certificate_created', function(e) {
+                try {
+                    var d = JSON.parse(e.data);
+                    CertMate.toast('Certificate created: ' + (d.domain || ''), 'success');
+                    checkNotifications(true);
+                    if (typeof loadCertificates === 'function') loadCertificates();
+                } catch(err) {}
+            });
+            sse.addEventListener('certificate_renewed', function(e) {
+                try {
+                    var d = JSON.parse(e.data);
+                    CertMate.toast('Certificate renewed: ' + (d.domain || ''), 'success');
+                    checkNotifications(true);
+                    if (typeof loadCertificates === 'function') loadCertificates();
+                } catch(err) {}
+            });
+            sse.addEventListener('certificate_revoked', function(e) {
+                try {
+                    var d = JSON.parse(e.data);
+                    CertMate.toast('Certificate revoked: ' + (d.domain || ''), 'warning');
+                    checkNotifications(true);
+                } catch(err) {}
+            });
+            sse.addEventListener('settings_updated', function() {
+                CertMate.toast('Settings updated', 'info');
+            });
+            sse.onerror = function() {
+                sse.close();
+                setTimeout(connectSSE, Math.min(retryDelay, 30000));
+                retryDelay *= 2;
+            };
+        }
+
+        // Delay SSE connection to avoid race with auth
+        setTimeout(connectSSE, 3000);
+    })();
     </script>
     <script src="/static/js/htmx.min.js"></script>
     <script defer src="/static/js/alpine.min.js"></script>
