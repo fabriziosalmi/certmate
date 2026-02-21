@@ -25,14 +25,35 @@
             </div>
         </div>
 
-        <!-- Settings Form -->
+        <!-- Settings Tabs -->
         <div class="bg-white dark:bg-gray-800 shadow rounded-lg">
-            <div class="px-6 py-4 border-b dark:border-gray-700">
-                <h3 class="text-lg font-medium text-gray-900 dark:text-white">Configuration</h3>
+            <div class="px-6 py-3 border-b dark:border-gray-700 overflow-x-auto">
+                <nav class="flex space-x-1 min-w-max" role="tablist">
+                    <button type="button" onclick="switchSettingsTab('dns')" data-tab="dns" class="settings-tab px-4 py-2 text-sm font-medium rounded-md text-primary bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700" role="tab">
+                        <i class="fas fa-server mr-1"></i><span class="hidden sm:inline"> DNS</span>
+                    </button>
+                    <button type="button" onclick="switchSettingsTab('ca')" data-tab="ca" class="settings-tab px-4 py-2 text-sm font-medium rounded-md text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700" role="tab">
+                        <i class="fas fa-shield-alt mr-1"></i><span class="hidden sm:inline"> CA</span>
+                    </button>
+                    <button type="button" onclick="switchSettingsTab('general')" data-tab="general" class="settings-tab px-4 py-2 text-sm font-medium rounded-md text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700" role="tab">
+                        <i class="fas fa-cogs mr-1"></i><span class="hidden sm:inline"> General</span>
+                    </button>
+                    <button type="button" onclick="switchSettingsTab('storage')" data-tab="storage" class="settings-tab px-4 py-2 text-sm font-medium rounded-md text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700" role="tab">
+                        <i class="fas fa-database mr-1"></i><span class="hidden sm:inline"> Storage</span>
+                    </button>
+                    <button type="button" onclick="switchSettingsTab('users')" data-tab="users" class="settings-tab px-4 py-2 text-sm font-medium rounded-md text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700" role="tab">
+                        <i class="fas fa-users mr-1"></i><span class="hidden sm:inline"> Users</span>
+                    </button>
+                    <button type="button" onclick="switchSettingsTab('backup')" data-tab="backup" class="settings-tab px-4 py-2 text-sm font-medium rounded-md text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700" role="tab">
+                        <i class="fas fa-archive mr-1"></i><span class="hidden sm:inline"> Backup</span>
+                    </button>
+                </nav>
             </div>
             <div class="px-6 py-6">
                 <form id="settingsForm" class="space-y-8">
-                    
+
+                    <!-- TAB: DNS Providers -->
+                    <div data-tab-panel="dns">
                     <!-- DNS Provider Selection -->
                     <div class="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3" id="dns-provider-label">
@@ -978,7 +999,10 @@
                             </p>
                         </div>
                     </div>
+                    </div><!-- /tab: dns -->
 
+                    <!-- TAB: CA Providers -->
+                    <div data-tab-panel="ca" style="display:none">
                     <!-- CA Providers Section -->
                     <div class="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
@@ -1159,7 +1183,10 @@
                             </div>
                         </div>
                     </div>
+                    </div><!-- /tab: ca -->
 
+                    <!-- TAB: General Settings -->
+                    <div data-tab-panel="general" style="display:none">
                     <!-- General Certificate Settings Section -->
                     <div class="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
@@ -1240,7 +1267,10 @@
                             </div>
                         </div>
                     </div>
+                    </div><!-- /tab: general -->
 
+                    <!-- TAB: Storage -->
+                    <div data-tab-panel="storage" style="display:none">
                     <!-- Certificate Storage Backend Section -->
                     <div class="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
@@ -1471,27 +1501,31 @@
                             </div>
                         </div>
                     </div>
+                    </div><!-- /tab: storage -->
 
-                    <!-- DNS Provider Test Connection -->
-                    <div id="testConnectionResult" class="mt-4 hidden">
-                        <div class="p-4 rounded-md text-sm" id="testConnectionMessage">
-                            <!-- Test connection message will be displayed here -->
+                    <!-- Form controls (visible on all form tabs) -->
+                    <div id="formControls">
+                        <!-- DNS Provider Test Connection -->
+                        <div id="testConnectionResult" class="mt-4 hidden">
+                            <div class="p-4 rounded-md text-sm" id="testConnectionMessage">
+                                <!-- Test connection message will be displayed here -->
+                            </div>
                         </div>
-                    </div>
 
-                    <!-- Submit Button -->
-                    <div class="flex justify-end">
-                        <button type="submit" id="saveBtn" class="bg-primary text-white px-6 py-2 rounded-md hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition-colors">
-                            <i class="fas fa-save mr-2"></i>
-                            Save Settings
-                        </button>
+                        <!-- Submit Button -->
+                        <div class="flex justify-end mt-6">
+                            <button type="submit" id="saveBtn" class="bg-primary text-white px-6 py-2 rounded-md hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition-colors">
+                                <i class="fas fa-save mr-2"></i>
+                                Save Settings
+                            </button>
+                        </div>
                     </div>
                 </form>
             </div>
         </div>
 
-        <!-- User Management Section -->
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 mt-6">
+        <!-- TAB: User Management Section -->
+        <div data-tab-panel="users" class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 mt-6" style="display:none">
             <div class="flex items-center justify-between mb-4">
                 <h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
                     <i class="fas fa-users mr-2 text-purple-500"></i>
@@ -1590,8 +1624,8 @@
             </div>
         </div>
 
-        <!-- Backup & Restore Section -->
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 mt-6">
+        <!-- TAB: Backup & Restore Section -->
+        <div data-tab-panel="backup" class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 mt-6" style="display:none">
             <div class="flex items-center justify-between mb-4">
                 <h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
                     <i class="fas fa-database mr-2 text-blue-500"></i>
@@ -1825,6 +1859,36 @@
         let isLoading = false;
 
         var escapeHtml = CertMate.escapeHtml;
+
+        // Tab switching
+        const FORM_TABS = ['dns', 'ca', 'general', 'storage'];
+        function switchSettingsTab(tab) {
+            // Update tab button styles
+            document.querySelectorAll('.settings-tab').forEach(function(btn) {
+                var isActive = btn.getAttribute('data-tab') === tab;
+                if (isActive) {
+                    btn.className = 'settings-tab px-4 py-2 text-sm font-medium rounded-md text-primary bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700';
+                } else {
+                    btn.className = 'settings-tab px-4 py-2 text-sm font-medium rounded-md text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700';
+                }
+            });
+            // Show/hide all tab panels
+            document.querySelectorAll('[data-tab-panel]').forEach(function(panel) {
+                panel.style.display = panel.getAttribute('data-tab-panel') === tab ? '' : 'none';
+            });
+            // Show form controls (save button) only on form tabs
+            var fc = document.getElementById('formControls');
+            if (fc) fc.style.display = FORM_TABS.indexOf(tab) !== -1 ? '' : 'none';
+            // Persist active tab in URL hash
+            history.replaceState(null, '', '#' + tab);
+        }
+        // Restore tab from URL hash on load
+        (function() {
+            var hash = window.location.hash.replace('#', '');
+            if (hash && document.querySelector('[data-tab="' + hash + '"]')) {
+                switchSettingsTab(hash);
+            }
+        })();
 
         // DOM Elements
         const form = document.getElementById('settingsForm');
