@@ -75,6 +75,54 @@
 
         <!-- Content Sections -->
         <div class="space-y-6">
+            <!-- What's New in v2.0 -->
+            <div id="whats-new" class="bg-white dark:bg-gray-800 shadow rounded-lg">
+                <div class="px-6 py-6">
+                    <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+                        <i class="fas fa-sparkles text-yellow-500 mr-2"></i>
+                        What's New in v2.0
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div class="bg-indigo-50 dark:bg-indigo-900/20 p-4 rounded-lg border border-indigo-200 dark:border-indigo-800">
+                            <h4 class="font-medium text-indigo-900 dark:text-indigo-100 mb-2">
+                                <i class="fas fa-user-shield mr-1"></i> RBAC & API Keys
+                            </h4>
+                            <p class="text-sm text-indigo-700 dark:text-indigo-300">Role-based access control (viewer, operator, admin) and scoped API key management with optional expiry.</p>
+                        </div>
+                        <div class="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border border-green-200 dark:border-green-800">
+                            <h4 class="font-medium text-green-900 dark:text-green-100 mb-2">
+                                <i class="fas fa-bell mr-1"></i> Notifications
+                            </h4>
+                            <p class="text-sm text-green-700 dark:text-green-300">Email, Slack, Discord, and webhook notifications with HMAC signatures. Weekly digest for certificate health.</p>
+                        </div>
+                        <div class="bg-orange-50 dark:bg-orange-900/20 p-4 rounded-lg border border-orange-200 dark:border-orange-800">
+                            <h4 class="font-medium text-orange-900 dark:text-orange-100 mb-2">
+                                <i class="fas fa-rocket mr-1"></i> Deploy Hooks
+                            </h4>
+                            <p class="text-sm text-orange-700 dark:text-orange-300">Post-issuance shell commands to reload Nginx, sync CDN, or run custom scripts. Global and per-domain hooks.</p>
+                        </div>
+                        <div class="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg border border-purple-200 dark:border-purple-800">
+                            <h4 class="font-medium text-purple-900 dark:text-purple-100 mb-2">
+                                <i class="fas fa-keyboard mr-1"></i> Keyboard Shortcuts
+                            </h4>
+                            <p class="text-sm text-purple-700 dark:text-purple-300">Press <kbd class="px-1 bg-gray-200 dark:bg-gray-600 rounded text-xs">?</kbd> for help. Cmd+K command palette, <kbd class="px-1 bg-gray-200 dark:bg-gray-600 rounded text-xs">/</kbd> to search, <kbd class="px-1 bg-gray-200 dark:bg-gray-600 rounded text-xs">g+h</kbd> to navigate.</p>
+                        </div>
+                        <div class="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
+                            <h4 class="font-medium text-blue-900 dark:text-blue-100 mb-2">
+                                <i class="fas fa-magic mr-1"></i> Setup Wizard
+                            </h4>
+                            <p class="text-sm text-blue-700 dark:text-blue-300">Guided first-run configuration for DNS providers, CA settings, and authentication setup.</p>
+                        </div>
+                        <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg border border-gray-200 dark:border-gray-600">
+                            <h4 class="font-medium text-gray-900 dark:text-white mb-2">
+                                <i class="fas fa-stream mr-1"></i> Activity Timeline
+                            </h4>
+                            <p class="text-sm text-gray-600 dark:text-gray-300">Chronological event log for all certificate operations, renewals, and system events.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- About CertMate -->
             <div id="about" class="bg-white dark:bg-gray-800 shadow rounded-lg">
                 <div class="px-6 py-6">
@@ -97,7 +145,7 @@
                                 </h4>
                                 <ul class="text-sm text-gray-600 dark:text-gray-300 space-y-1">
                                     <li>• Zero-Downtime Automation</li>
-                                    <li>• Multi-Cloud Support (19 DNS providers)</li>
+                                    <li>• Multi-Cloud Support (22 DNS providers)</li>
                                     <li>• Enterprise-Ready with REST API</li>
                                     <li>• Security-First approach</li>
                                     <li>• Wildcard & Multi-Domain support</li>
@@ -297,7 +345,7 @@
                         Supported DNS Providers
                     </h3>
                     <p class="text-gray-600 dark:text-gray-300 mb-6">
-                        CertMate supports <strong>19 DNS providers</strong> for automated certificate validation. The most popular providers are listed first.
+                        CertMate supports <strong>22 DNS providers</strong> for automated certificate validation. The most popular providers are listed first.
                     </p>
                     
                     <div class="space-y-6">
@@ -384,10 +432,22 @@
                                     <i class="fas fa-sync-alt text-purple-600 text-lg mb-1"></i>
                                     <div class="text-xs font-medium text-gray-900 dark:text-white">Dynu</div>
                                 </div>
+                                <div class="text-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+                                    <i class="fas fa-cloud text-blue-600 text-lg mb-1"></i>
+                                    <div class="text-xs font-medium text-gray-900 dark:text-white">ArvanCloud</div>
+                                </div>
+                                <div class="text-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+                                    <i class="fas fa-globe text-teal-600 text-lg mb-1"></i>
+                                    <div class="text-xs font-medium text-gray-900 dark:text-white">Infomaniak</div>
+                                </div>
+                                <div class="text-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+                                    <i class="fas fa-server text-gray-600 dark:text-gray-400 text-lg mb-1"></i>
+                                    <div class="text-xs font-medium text-gray-900 dark:text-white">ACME-DNS</div>
+                                </div>
                             </div>
                             <p class="text-sm text-gray-500 dark:text-gray-400 mt-4 text-center">
                                 <i class="fas fa-info-circle mr-1"></i>
-                                All 19 providers are available - install additional providers via requirements-extended.txt
+                                All 22 providers are available - install additional providers via requirements-extended.txt
                             </p>
                         </div>
                     </div>
@@ -627,10 +687,11 @@
                                     Security Features
                                 </h4>
                                 <ul class="text-sm text-gray-600 dark:text-gray-300 space-y-1">
+                                    <li>• Role-based access control (viewer/operator/admin)</li>
+                                    <li>• Scoped API key management</li>
                                     <li>• Bearer token API authentication</li>
                                     <li>• Secure file permissions (600/700)</li>
-                                    <li>• Environment variable credential storage</li>
-                                    <li>• Audit logging for all operations</li>
+                                    <li>• Audit logging with activity timeline</li>
                                 </ul>
                             </div>
                         </div>

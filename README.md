@@ -29,12 +29,13 @@
 
 CertMate solves the complexity of SSL certificate management in modern distributed architectures. Whether you're running a single application or managing certificates across multiple datacenters, CertMate provides:
 
-- **Zero-Downtime Automation** - Certificates renew automatically 30 days before expiry
+- **Zero-Downtime Automation** - Certificates renew automatically 30 days before expiry, with deploy hooks to reload services
 - **Multi-Cloud Support** - Works with **22 DNS providers** (Cloudflare, AWS, Azure, GCP, Hetzner, Porkbun, GoDaddy, and more)
-- **Enterprise-Ready** - Docker, Kubernetes, REST API, and monitoring built-in
+- **Enterprise-Ready** - RBAC, scoped API keys, Docker, Kubernetes, REST API, and monitoring built-in
 - **Simple Integration** - One-URL certificate downloads for easy automation
-- **Security-First** - Bearer token authentication, secure file permissions, audit logging
+- **Security-First** - Role-based access control, scoped API keys, audit logging, HMAC-signed webhooks
 - **Unified Backup System** - Atomic backups of settings and certificates ensuring data consistency
+- **Real-Time Dashboard** - SSE-powered live updates, command palette, keyboard shortcuts, dark mode
 
 ## Key Features
 
@@ -60,13 +61,16 @@ CertMate solves the complexity of SSL certificate management in modern distribut
 - **PowerDNS** - Open-source DNS server with REST API (Multi-Account)
 
 ### **Enterprise Features**
+- **Role-Based Access Control** - Three-tier RBAC with viewer, operator, and admin roles
+- **Scoped API Keys** - Create, revoke, and manage API keys with per-key role and optional expiration
 - **Multi-Account Management** - Support multiple accounts per DNS provider for enterprise workflows
 - **REST API** - Complete programmatic control with Swagger/OpenAPI docs
-- **Web Dashboard** - Modern, responsive UI built with Tailwind CSS
+- **Web Dashboard** - Modern, responsive UI built with Tailwind CSS and Alpine.js
+- **Setup Wizard** - Guided first-run configuration for DNS, CA, and authentication
+- **Real-Time Updates** - Server-Sent Events (SSE) push live status to the dashboard
 - **Docker Ready** - Full containerization with Docker Compose
 - **Kubernetes Compatible** - Deploy in any Kubernetes cluster
-- **High Availability** - Stateless design for horizontal scaling
-- **Monitoring Integration** - Health checks and structured logging
+- **Monitoring Integration** - Health checks, Prometheus metrics, and structured JSON logging
 
 ### **Backup & Recovery**
 - **Unified Backups** - Atomic snapshots of both settings and certificates ensuring data consistency
@@ -87,20 +91,38 @@ CertMate solves the complexity of SSL certificate management in modern distribut
 - **Migration Support** - Seamless migration between storage backends without downtime
 - **Backward Compatibility** - Existing installations continue working without changes
 
+### **Notifications & Automation**
+- **Multi-Channel Notifications** - Email (SMTP), Slack, Discord, and generic webhooks
+- **Webhook HMAC Signatures** - SHA-256 signed payloads for secure webhook verification
+- **Deploy Hooks** - Post-issuance shell commands to reload Nginx/Apache or run custom scripts
+- **Weekly Digest** - Scheduled email summary of certificate status and upcoming renewals
+- **SSE Real-Time Events** - Live push updates for certificate operations and deploy hook results
+
 ### **Security & Compliance**
+- **Role-Based Access Control** - Viewer, operator, and admin roles with hierarchical permissions
+- **Scoped API Keys** - Create keys with specific roles and optional expiration dates
 - **Bearer Token Authentication** - Secure API access control
 - **File Permissions** - Proper certificate file security (600/700)
-- **Audit Logging** - Complete certificate lifecycle tracking
+- **Audit Logging** - Complete certificate lifecycle tracking with timeline view
 - **Environment Variables** - Secure credential management
 - **Rate Limit Handling** - Let's Encrypt rate limit awareness
 
+### **User Interface**
+- **Command Palette** - Cmd+K / Ctrl+K quick search and navigation
+- **Keyboard Shortcuts** - Power-user shortcuts for navigation and common actions
+- **Dark Mode** - System-aware dark/light theme toggle
+- **Mobile-Friendly** - Responsive layout with bottom tab bar on small screens
+- **Activity Timeline** - Chronological view of all certificate and system events
+
 ### **Developer Experience**
-- **One-URL Downloads** - Simple certificate retrieval for automation
+- **One-URL Downloads** - Simple certificate retrieval for automation (`/{domain}/tls`)
+- **Individual Component Downloads** - Fetch cert, key, chain, or fullchain separately
 - **Multiple Output Formats** - PEM, ZIP, individual files
 - **SDK Examples** - Python, Bash, Ansible, Terraform examples
-- **Webhook Support** - Certificate renewal notifications
+- **Webhook Support** - Certificate lifecycle notifications with HMAC verification
+- **Deploy Hook API** - Configure and test post-issuance hooks via REST API
 - **Backup API** - Programmatic backup creation and restoration
-- **Extensive Documentation** - API docs, guides, and examples
+- **Swagger & ReDoc** - Interactive API documentation at `/docs/` and `/redoc/`
 
 ## Supported DNS Providers
 
@@ -868,79 +890,11 @@ class CertMateClient:
  response.raise_for_status()
  return response.json()
 
-class CertMateClient:
- def __init__(self, base_url, token):
- self.base_url = base_url
- self.token = token
- self.headers = {"Authorization": f"Bearer {token}"}
- 
- def create_certificate(self, domain, dns_provider=None, account_id=None):
- """Create a new certificate with optional account specification"""
- data = {"domain": domain}
- if dns_provider:
- data["dns_provider"] = dns_provider
- if account_id:
- data["account_id"] = account_id
- 
- response = requests.post(
- f"{self.base_url}/api/certificates/create",
- headers=self.headers,
- json=data
- )
- return response.json()
- 
- def add_dns_account(self, provider, account_id, config):
- """Add a new DNS provider account"""
- response = requests.post(
- f"{self.base_url}/api/settings/dns-providers/{provider}/accounts",
- headers=self.headers,
- json={"account_id": account_id, "config": config}
- )
- return response.json()
- 
- def list_dns_accounts(self, provider):
- """List all accounts for a DNS provider"""
- response = requests.get(
- f"{self.base_url}/api/settings/dns-providers/{provider}/accounts",
- headers=self.headers
- )
- return response.json()
- 
- def download_certificate(self, domain, extract_to=None):
- """Download certificate as ZIP file"""
- response = requests.get(
- f"{self.base_url}/{domain}/tls",
- headers=self.headers
- )
- 
- if extract_to and response.status_code == 200:
- with zipfile.ZipFile(io.BytesIO(response.content)) as zip_file:
- zip_file.extractall(extract_to)
- print(f"Certificate extracted to {extract_to}")
- 
- return response
-
 # Usage example
 client = CertMateClient("https://certmate.company.com", "your_token_here")
 
-# Add multiple Cloudflare accounts
-client.add_dns_account("cloudflare", "production", {
- "name": "Production Environment",
- "description": "Main production account",
- "api_token": "prod_token_here"
-})
-
-client.add_dns_account("cloudflare", "staging", {
- "name": "Staging Environment", 
- "description": "Development and testing",
- "api_token": "staging_token_here"
-})
-
-# Create certificates with specific accounts
-client.create_certificate("api.company.com", "cloudflare", "production")
-client.create_certificate("staging.company.com", "cloudflare", "staging")
-
-# Download certificate
+# List and download certificates
+certs = client.list_certificates()
 client.download_certificate("api.company.com", extract_to="/etc/ssl/certs/api/")
 ```
 
@@ -1552,108 +1506,6 @@ pip install -r requirements-infisical-storage.txt
 - Open-source preference
 - Self-hosted secret management
 - Multi-environment certificate management
-Integrate with AWS Secrets Manager for scalable secret storage:
-
-**Required Dependencies:**
-```bash
-pip install -r requirements-aws-storage.txt
-```
-
-**Configuration:**
-```json
-{
- "certificate_storage": {
- "backend": "aws_secrets_manager",
- "aws_secrets_manager": {
- "region": "us-east-1",
- "access_key_id": "AKIAIOSFODNN7EXAMPLE",
- "secret_access_key": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
- }
- }
-}
-```
-
-**Benefits:**
-- AWS-native secret management
-- Automatic encryption at rest
-- Cross-region replication
-- IAM-based access control
-
-#### HashiCorp Vault
-Use industry-standard HashiCorp Vault for advanced secret management:
-
-**Required Dependencies:**
-```bash
-pip install -r requirements-vault-storage.txt
-```
-
-**Configuration:**
-```json
-{
- "certificate_storage": {
- "backend": "hashicorp_vault",
- "hashicorp_vault": {
- "vault_url": "https://vault.example.com:8200",
- "vault_token": "hvs.xxxxxxxxxxxxxxxxxxxx",
- "mount_point": "secret",
- "engine_version": "v2"
- }
- }
-}
-```
-
-**Benefits:**
-- Industry-standard secret management
-- Secret versioning and rollback capabilities
-- Comprehensive audit logging and monitoring
-- Fine-grained access policies and dynamic secrets
-- Multi-cloud and hybrid cloud support
-- Advanced authentication methods (LDAP, Kubernetes, AWS IAM)
-
-**Use Cases:**
-- Multi-cloud environments
-- Complex organizational security requirements
-- Dynamic secret generation
-- Integration with CI/CD pipelines and Kubernetes
-
-#### 🟣 Infisical
-Modern open-source secret management with team collaboration:
-
-**Required Dependencies:**
-```bash
-pip install -r requirements-infisical-storage.txt
-```
-
-**Configuration:**
-```json
-{
- "certificate_storage": {
- "backend": "infisical",
- "infisical": {
- "site_url": "https://app.infisical.com",
- "client_id": "your_client_id",
- "client_secret": "your_client_secret",
- "project_id": "your_project_id",
- "environment": "prod"
- }
- }
-}
-```
-
-**Benefits:**
-- Open-source secret management with transparency
-- End-to-end encryption for maximum security
-- Team collaboration features and role-based access
-- Multi-environment support (dev, staging, prod)
-- Git-like versioning for secrets
-- Self-hostable for complete control
-
-**Use Cases:**
-- Team-based development workflows
-- Open-source preference
-- Self-hosted secret management
-- Multi-environment certificate management
-
 #### Quick Installation Guide
 
 **Install All Storage Backends:**
@@ -1760,18 +1612,6 @@ curl -X POST "http://localhost:8000/api/storage/migrate" \
 - Automatic verification of migrated certificates
 - Rollback capability if issues are detected
 - Preservation of certificate metadata and permissions
-curl -X POST "http://localhost:8000/api/storage/migrate" \
- -H "Authorization: Bearer your_token" \
- -H "Content-Type: application/json" \
- -d '{
- "source_backend": "local_filesystem",
- "target_config": {
- "backend": "azure_keyvault",
- "azure_keyvault": {...}
- }
- }'
-```
-
 **Backward Compatibility:**
 - Existing installations continue working without changes
 - New storage backends are opt-in
@@ -1804,9 +1644,26 @@ certmate/
  config/ # Certbot configuration
  work/ # Certbot working files
  logs/ # Certbot logs
+ modules/ # Modular backend
+ core/ # Core modules
+ deployer.py # Deploy hooks manager
+ notifier.py # Notification channels
+ events.py # SSE event bus
+ digest.py # Weekly digest
+ audit.py # Audit logger
+ shell.py # Shell executor
+ web/ # Web routes
+ api/ # API resources
  templates/ # Web interface templates
  index.html # Main dashboard
  settings.html # Settings page
+ activity.html # Activity timeline
+ help.html # Help & documentation
+ static/js/ # Frontend modules
+ dashboard.js # Dashboard logic
+ settings.js # Settings components
+ cmd-palette.js # Cmd+K palette
+ shortcuts.js # Keyboard shortcuts
 ```
 
 ## Security & Best Practices
@@ -1814,8 +1671,10 @@ certmate/
 ### Security Considerations
 
 #### Authentication & Authorization
+- **Role-Based Access Control**: Assign viewer, operator, or admin roles to each user
+- **Scoped API Keys**: Create API keys with specific role permissions and optional expiration
 - **Strong Bearer Tokens**: Use cryptographically secure tokens (32+ characters)
-- **Token Rotation**: Regularly rotate API tokens
+- **Token Rotation**: Regularly rotate API tokens and revoke unused keys
 - **Environment Variables**: Never commit tokens to version control
 - **HTTPS Only**: Always use HTTPS in production environments
 - **IP Restrictions**: Implement firewall rules to restrict access
@@ -2074,91 +1933,6 @@ docker-compose up -d
 echo "Recovery completed from backup: $BACKUP_DATE"
 ```
 
-#### Recovery Procedures
-
-**Web Interface Recovery:**
-1. Navigate to Settings → Backup Management
-2. Select the backup to restore from
-3. Choose restore type (settings, certificates, or both)
-4. Confirm restoration
-5. Application will restart if settings are restored
-
-**API Recovery:**
-```bash
-# Restore settings from backup
-curl -X POST "http://localhost:8000/api/backup/restore/settings" \
- -H "Authorization: Bearer your_token" \
- -H "Content-Type: application/json" \
- -d '{"backup_id": "settings_20241225_120000"}'
-
-# Restore certificates from backup
-curl -X POST "http://localhost:8000/api/backup/restore/certificates" \
- -H "Authorization: Bearer your_token" \
- -H "Content-Type: application/json" \
- -d '{"backup_id": "certificates_20241225_120000"}'
-```
-
-**Manual Recovery from External Backup:**
-```bash
-#!/bin/bash
-# /opt/scripts/backup-certmate.sh
-
-BACKUP_DIR="/backup/certmate/$(date +%Y%m%d_%H%M%S)"
-CERT_DIR="/opt/certmate/certificates"
-DATA_DIR="/opt/certmate/data"
-RETENTION_DAYS=30
-
-# Create backup directory
-mkdir -p "$BACKUP_DIR"
-
-# Backup certificates
-tar -czf "$BACKUP_DIR/certificates.tar.gz" "$CERT_DIR"
-
-# Backup application data
-tar -czf "$BACKUP_DIR/data.tar.gz" "$DATA_DIR"
-
-# Backup database if using external DB
-# mysqldump certmate > "$BACKUP_DIR/database.sql"
-
-# Encrypt backups
-gpg --cipher-algo AES256 --compress-algo 1 --symmetric \
- --output "$BACKUP_DIR/certificates.tar.gz.gpg" \
- "$BACKUP_DIR/certificates.tar.gz"
-
-# Cleanup old backups
-find /backup/certmate -type d -mtime +$RETENTION_DAYS -exec rm -rf {} \;
-
-echo "Backup completed: $BACKUP_DIR"
-```
-
-#### Recovery Procedure
-```bash
-#!/bin/bash
-# Recovery from backup
-
-BACKUP_DATE="20241225_120000"
-BACKUP_DIR="/backup/certmate/$BACKUP_DATE"
-
-# Stop services
-docker-compose down
-
-# Restore certificates
-gpg --decrypt "$BACKUP_DIR/certificates.tar.gz.gpg" | \
- tar -xzf - -C /opt/certmate/
-
-# Restore data
-tar -xzf "$BACKUP_DIR/data.tar.gz" -C /opt/certmate/
-
-# Set permissions
-chown -R 1000:1000 /opt/certmate/certificates
-chmod -R 700 /opt/certmate/certificates
-
-# Start services
-docker-compose up -d
-
-echo "Recovery completed from backup: $BACKUP_DATE"
-```
-
 ## Monitoring & Observability
 
 ### Health Monitoring
@@ -2244,44 +2018,17 @@ services:
 }
 ```
 
-### Alerting Configuration
+### Built-in Notifications
 
-#### Webhook Notifications
-```python
-# Add webhook notification support
-import requests
+CertMate includes a built-in notification system configurable from Settings > Notifications:
 
-def send_webhook_notification(domain, event_type, details):
- webhook_url = os.getenv('WEBHOOK_URL')
- if not webhook_url:
- return
- 
- payload = {
- 'domain': domain,
- 'event': event_type,
- 'timestamp': datetime.now().isoformat(),
- 'details': details
- }
- 
- try:
- requests.post(webhook_url, json=payload, timeout=10)
- except Exception as e:
- logger.error(f"Failed to send webhook: {e}")
-```
+- **Email (SMTP)** - Certificate expiry warnings and renewal confirmations
+- **Slack** - Incoming webhook integration for team channels
+- **Discord** - Webhook notifications for Discord servers
+- **Generic Webhooks** - HTTP POST with HMAC-SHA256 signed payloads for custom integrations
+- **Weekly Digest** - Scheduled summary of certificate status and upcoming renewals
 
-#### Slack Integration Example
-```bash
-# Slack notification script
-#!/bin/bash
-SLACK_WEBHOOK="your_slack_webhook_url"
-DOMAIN="$1"
-STATUS="$2"
-MESSAGE="Certificate for $DOMAIN: $STATUS"
-
-curl -X POST -H 'Content-type: application/json' \
- --data "{\"text\":\" $MESSAGE\"}" \
- "$SLACK_WEBHOOK"
-```
+All notification channels support per-event filtering (created, renewed, expiring, failed) and can be tested from the settings UI.
 
 ## Troubleshooting Guide
 
@@ -2414,27 +2161,24 @@ FLASK_ENV=development
 docker-compose -f docker-compose.yml -f docker-compose.debug.yml up
 ```
 
-### Known Issues (v1.8.0)
+### What's New in v2.0.0
 
-#### New in v1.8.0
-- **Structured JSON Logging**: Enable with `LOG_FORMAT=json` for observability platforms
-- **Playwright UI E2E Tests**: Run `python test_ui_e2e.py` for browser-based testing
-- **Documentation Cleanup**: Professional formatting without emojis
+CertMate 2.0 is a major release that adds enterprise-grade access control, a notification system, post-issuance automation, and a modernized UI.
 
-#### Resolved in v1.8.0
-- **#54**: Settings Save - API Bearer Token Required (FIXED)
-- **#53**: Local Authentication Support (ADDED)
-- **#50**: Certificates Not Showing After Generation (FIXED)
-- **#49**: Better Error Messages (IMPROVED)
-- **#48**: SAN Certificates Support (ADDED)
-
-#### API Test Failures
-**Issue**: Some API endpoints may fail during rapid testing 
-**Workaround**: Add delays between API calls in automated tests:
-```bash
-# Add delay between test calls
-sleep 0.1
-```
+**Highlights:**
+- **Role-Based Access Control** - Three-tier RBAC (viewer / operator / admin) with per-user roles
+- **Scoped API Key Management** - Create, list, revoke API keys with role scope and optional expiry
+- **Notification System** - Email (SMTP), Slack, Discord, and webhook channels with HMAC signatures
+- **Deploy Hooks** - Post-issuance shell commands with environment variables, dry-run testing, and execution history
+- **Weekly Digest** - Scheduled email summary of certificate health and upcoming renewals
+- **Setup Wizard** - Guided first-run flow for DNS, CA, and authentication configuration
+- **Command Palette** - Cmd+K / Ctrl+K quick search and navigation
+- **Keyboard Shortcuts** - Power-user shortcuts (`?` help, `/` search, `g+h` home, `g+s` settings, etc.)
+- **Activity Timeline** - Chronological event log for all certificate and system operations
+- **SSE Real-Time Events** - Live push notifications on the dashboard
+- **Dark Mode Toggle** - System-aware theme switching
+- **Mobile Bottom Tab Bar** - Responsive navigation on small screens
+- **HTTP-01 Challenge Support** - Alternative to DNS-01 for simple setups
 
 ### Support Checklist
 
