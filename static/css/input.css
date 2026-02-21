@@ -11,3 +11,8 @@ html.dark {
 [x-cloak] {
     display: none !important;
 }
+
+/* iOS safe area for bottom tab bar */
+.safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+}

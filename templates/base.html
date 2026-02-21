@@ -20,34 +20,35 @@
     })();
     </script>
 </head>
-<body class="bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors duration-200">
-    <!-- Navigation -->
+<body class="bg-gray-50 dark:bg-gray-900 min-h-screen pb-16 md:pb-0 transition-colors duration-200">
+    <!-- Top Navigation -->
     <nav class="bg-white dark:bg-gray-800 shadow-sm border-b dark:border-gray-700">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between h-16">
+            <div class="flex justify-between h-14 md:h-16">
                 <div class="flex items-center">
                     <div class="flex-shrink-0">
                         <a href="/">
-                            <img src="/static/img/certmate_logo_256.png" alt="CertMate" class="w-12 h-12">
+                            <img src="/static/img/certmate_logo_256.png" alt="CertMate" class="w-9 h-9 md:w-12 md:h-12">
                         </a>
                     </div>
-                    <div class="ml-3">
-                        <h1 class="text-xl font-semibold text-gray-900 dark:text-white">CertMate</h1>
-                        <p class="text-sm text-gray-500 dark:text-gray-400">SSL Certificate Manager</p>
+                    <div class="ml-2 md:ml-3">
+                        <h1 class="text-lg md:text-xl font-semibold text-gray-900 dark:text-white">CertMate</h1>
+                        <p class="text-xs md:text-sm text-gray-500 dark:text-gray-400 hidden sm:block">SSL Certificate Manager</p>
                     </div>
                 </div>
                 <div class="flex items-center space-x-1 sm:space-x-4">
-                    <a href="/" class="px-3 py-2 rounded-md text-sm font-medium {% if request.path == '/' %}text-primary bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700{% else %}text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700{% endif %}">
-                        <i class="fas fa-certificate mr-1"></i><span class="hidden sm:inline"> Certificates</span>
+                    <!-- Desktop nav links (hidden on mobile — bottom tab bar used instead) -->
+                    <a href="/" class="hidden md:inline-flex px-3 py-2 rounded-md text-sm font-medium {% if request.path == '/' %}text-primary bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700{% else %}text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700{% endif %}">
+                        <i class="fas fa-certificate mr-1"></i> Certificates
                     </a>
-                    <a href="/#client" class="px-3 py-2 rounded-md text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700">
-                        <i class="fas fa-id-card mr-1"></i><span class="hidden sm:inline"> Client Certs</span>
+                    <a href="/#client" class="hidden md:inline-flex px-3 py-2 rounded-md text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700">
+                        <i class="fas fa-id-card mr-1"></i> Client Certs
                     </a>
-                    <a href="/settings" class="px-3 py-2 rounded-md text-sm font-medium {% if request.path == '/settings' %}text-primary bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700{% else %}text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700{% endif %}">
-                        <i class="fas fa-cog mr-1"></i><span class="hidden sm:inline"> Settings</span>
+                    <a href="/settings" class="hidden md:inline-flex px-3 py-2 rounded-md text-sm font-medium {% if request.path == '/settings' %}text-primary bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700{% else %}text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700{% endif %}">
+                        <i class="fas fa-cog mr-1"></i> Settings
                     </a>
-                    <a href="/help" class="px-3 py-2 rounded-md text-sm font-medium {% if request.path == '/help' %}text-primary bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700{% else %}text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700{% endif %}">
-                        <i class="fas fa-question-circle mr-1"></i><span class="hidden sm:inline"> Help</span>
+                    <a href="/help" class="hidden md:inline-flex px-3 py-2 rounded-md text-sm font-medium {% if request.path == '/help' %}text-primary bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700{% else %}text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700{% endif %}">
+                        <i class="fas fa-question-circle mr-1"></i> Help
                     </a>
                     <!-- Notification bell -->
                     <div class="relative">
@@ -55,7 +56,7 @@
                             <i class="fas fa-bell"></i>
                             <span id="notifBadge" class="hidden absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">0</span>
                         </button>
-                        <div id="notifPanel" class="hidden absolute right-0 mt-2 w-80 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 z-50 max-h-96 overflow-y-auto">
+                        <div id="notifPanel" class="hidden absolute right-0 mt-2 w-[calc(100vw-2rem)] max-w-sm md:w-80 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 z-50 max-h-96 overflow-y-auto">
                             <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
                                 <h3 class="text-sm font-semibold text-gray-900 dark:text-white">Notifications</h3>
                             </div>
@@ -75,6 +76,28 @@
                     </button>
                 </div>
             </div>
+        </div>
+    </nav>
+
+    <!-- Bottom Tab Bar (mobile only) -->
+    <nav class="fixed bottom-0 left-0 right-0 md:hidden bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 shadow-[0_-2px_10px_rgba(0,0,0,0.1)] z-40 safe-area-bottom" id="bottomTabBar">
+        <div class="flex justify-around h-14">
+            <a href="/" class="flex flex-col items-center justify-center flex-1 py-1 {% if request.path == '/' %}text-primary{% else %}text-gray-500 dark:text-gray-400{% endif %}">
+                <i class="fas fa-certificate text-lg"></i>
+                <span class="text-[10px] mt-0.5 font-medium">Certs</span>
+            </a>
+            <a href="/#client" class="flex flex-col items-center justify-center flex-1 py-1 text-gray-500 dark:text-gray-400">
+                <i class="fas fa-id-card text-lg"></i>
+                <span class="text-[10px] mt-0.5 font-medium">Client</span>
+            </a>
+            <a href="/settings" class="flex flex-col items-center justify-center flex-1 py-1 {% if request.path == '/settings' %}text-primary{% else %}text-gray-500 dark:text-gray-400{% endif %}">
+                <i class="fas fa-cog text-lg"></i>
+                <span class="text-[10px] mt-0.5 font-medium">Settings</span>
+            </a>
+            <a href="/help" class="flex flex-col items-center justify-center flex-1 py-1 {% if request.path == '/help' %}text-primary{% else %}text-gray-500 dark:text-gray-400{% endif %}">
+                <i class="fas fa-question-circle text-lg"></i>
+                <span class="text-[10px] mt-0.5 font-medium">Help</span>
+            </a>
         </div>
     </nav>
     <script>

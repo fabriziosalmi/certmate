@@ -61,7 +61,6 @@ class TestSettingsPage:
         assert "authSecurityBanner" in r.text
 
     def test_navbar_logo_size(self, api):
-        """Logo should be w-12 h-12 (48px), not w-9 h-9."""
+        """Logo should be responsive: w-9 h-9 on mobile, md:w-12 md:h-12 on desktop."""
         r = api.get("/settings")
-        assert "w-12 h-12" in r.text
-        assert "w-9 h-9" not in r.text
+        assert "md:w-12 md:h-12" in r.text
