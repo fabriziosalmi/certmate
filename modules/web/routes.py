@@ -241,8 +241,8 @@ def register_web_routes(app, managers):
     @app.route('/client-certificates')
     @require_web_auth
     def client_certificates_page():
-        """Client certificates management page"""
-        return render_template('client-certificates.html')
+        """Redirect to unified certificates page with client tab"""
+        return redirect('/#client')
 
     # Health check for Docker
     @app.route('/health')

@@ -2,7 +2,30 @@
 {% block title %}CertMate - SSL Certificate Manager{% endblock %}
 {% block content %}
     <!-- Main Content -->
-    <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+    <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8"
+         x-data="{ certView: (location.hash === '#client' ? 'client' : 'server') }"
+         x-init="$watch('certView', v => { history.replaceState(null, '', v === 'client' ? '#client' : '#'); if (v === 'client') initClientCerts(); })">
+
+        <!-- Certificate Type Toggle -->
+        <div class="flex items-center space-x-1 mb-6 bg-gray-100 dark:bg-gray-700/50 rounded-lg p-1 w-fit">
+            <button type="button" @click="certView = 'server'"
+                    :class="certView === 'server'
+                        ? 'bg-white dark:bg-gray-800 shadow text-gray-900 dark:text-white'
+                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'"
+                    class="px-4 py-2 text-sm font-medium rounded-md transition-all">
+                <i class="fas fa-globe mr-1.5"></i>Server Certificates
+            </button>
+            <button type="button" @click="certView = 'client'"
+                    :class="certView === 'client'
+                        ? 'bg-white dark:bg-gray-800 shadow text-gray-900 dark:text-white'
+                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'"
+                    class="px-4 py-2 text-sm font-medium rounded-md transition-all">
+                <i class="fas fa-id-card mr-1.5"></i>Client Certificates
+            </button>
+        </div>
+
+        <!-- SERVER CERTIFICATES -->
+        <div x-show="certView === 'server'">
         <!-- Create Certificate Form -->
         <div class="bg-white dark:bg-gray-800 shadow-lg rounded-xl mb-6 border border-gray-200 dark:border-gray-700 overflow-hidden">
             <div class="px-6 py-5 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-700">
@@ -278,7 +301,14 @@
                 </table>
             </div>
         </div>
+    </div><!-- /x-show server -->
+
+    <!-- CLIENT CERTIFICATES -->
+    <div x-show="certView === 'client'" x-cloak x-init="if (certView === 'client') initClientCerts()">
+        {% include 'partials/_client_certs.html' %}
     </div>
+
+    </div><!-- /max-w-7xl Alpine scope -->
 
     <!-- Certificate Detail Slide-out Panel -->
     <div id="certDetailOverlay" class="fixed inset-0 bg-gray-900/50 backdrop-blur-sm z-40 hidden" onclick="closeCertDetail()"></div>
@@ -382,6 +412,7 @@
         </div>
     </div>
 
+    <script src="/static/js/client-certs.js"></script>
     <script>
         // API Configuration - session cookies are sent automatically
         const API_HEADERS = {

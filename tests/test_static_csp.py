@@ -42,7 +42,7 @@ class TestStaticFiles:
 class TestCSPHeaders:
     """CSP headers should be strict (no external CDNs) on normal pages."""
 
-    @pytest.mark.parametrize("path", ["/", "/settings", "/help", "/client-certificates"])
+    @pytest.mark.parametrize("path", ["/", "/settings", "/help"])
     def test_csp_no_external_cdn(self, api, path):
         r = api.get(path, allow_redirects=True)
         assert r.status_code == 200
@@ -50,7 +50,7 @@ class TestCSPHeaders:
         assert "cdn.tailwindcss.com" not in csp
         assert "cdnjs.cloudflare.com" not in csp
 
-    @pytest.mark.parametrize("path", ["/", "/settings", "/help", "/client-certificates"])
+    @pytest.mark.parametrize("path", ["/", "/settings", "/help"])
     def test_csp_self_only(self, api, path):
         r = api.get(path, allow_redirects=True)
         csp = r.headers.get("Content-Security-Policy", "")
@@ -68,14 +68,14 @@ class TestCSPHeaders:
 class TestNoCDNReferences:
     """HTML pages must not reference external CDNs."""
 
-    @pytest.mark.parametrize("path", ["/", "/settings", "/help", "/client-certificates"])
+    @pytest.mark.parametrize("path", ["/", "/settings", "/help"])
     def test_html_no_cdn_scripts(self, api, path):
         r = api.get(path, allow_redirects=True)
         body = r.text
         assert "cdn.tailwindcss.com" not in body
         assert "cdnjs.cloudflare.com" not in body
 
-    @pytest.mark.parametrize("path", ["/", "/settings", "/help", "/client-certificates"])
+    @pytest.mark.parametrize("path", ["/", "/settings", "/help"])
     def test_html_has_local_css(self, api, path):
         r = api.get(path, allow_redirects=True)
         body = r.text

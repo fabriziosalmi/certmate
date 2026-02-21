@@ -66,8 +66,9 @@ class TestNavigation:
 
     def test_client_certs_navigation(self, browser_page):
         browser_page.goto(BASE_URL)
-        browser_page.click('a[href="/client-certificates"]')
-        browser_page.wait_for_url("**/client-certificates")
+        browser_page.click('a[href="/#client"]')
+        browser_page.wait_for_load_state("networkidle")
+        expect(browser_page.locator("text=Client Certificates").first).to_be_visible()
 
 
 class TestDashboardUI:

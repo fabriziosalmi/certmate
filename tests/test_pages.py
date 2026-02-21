@@ -15,13 +15,18 @@ class TestPageLoading:
         "/",
         "/settings",
         "/help",
-        "/client-certificates",
         "/redoc",
         "/health",
     ])
     def test_page_returns_200(self, api, path):
         r = api.get(path, allow_redirects=True)
         assert r.status_code == 200, f"{path} → {r.status_code}"
+
+    def test_client_certificates_redirects(self, api):
+        """Client certificates page redirects to unified certificates page."""
+        r = api.get("/client-certificates", allow_redirects=False)
+        assert r.status_code == 302
+        assert "/#client" in r.headers.get("Location", "")
 
 
 class TestWelcomeBanner:
