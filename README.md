@@ -13,6 +13,9 @@
 [![CI](https://github.com/fabriziosalmi/certmate/actions/workflows/ci.yml/badge.svg)](https://github.com/fabriziosalmi/certmate/actions/workflows/ci.yml)
 [![Build Multi-Platform Docker Images](https://github.com/fabriziosalmi/certmate/actions/workflows/docker-multiplatform.yml/badge.svg)](https://github.com/fabriziosalmi/certmate/actions/workflows/docker-multiplatform.yml)
 [![European Open Source](https://img.shields.io/badge/European%20Open%20Source-Catalogue-0046ad)](https://europeanopensource.eu/)
+[![Listed on Hacker News](https://img.shields.io/badge/Listed%20on-Hacker%20News-F0652F)](https://news.ycombinator.com/item?id=44427452)
+[![Listed on Reddit](https://img.shields.io/badge/Listed%20on-Reddit-FF4500)](https://www.reddit.com/r/selfhosted/comments/1lkvbcj/ssl_certificates_automation/)
+[![Shared on Mastodon](https://img.shields.io/badge/Shared%20on-Mastodon-6364FF)](https://mastodon.social/@nixCraft/114799880340326467)
  
 ![screenshot1](screenshot_1.png)
 
