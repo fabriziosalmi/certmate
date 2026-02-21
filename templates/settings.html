@@ -1609,6 +1609,26 @@
                     </div>
                 </div>
 
+                <!-- Weekly Digest -->
+                <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                    <div class="flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-700/30">
+                        <div class="flex items-center gap-3">
+                            <i class="fas fa-calendar-week text-indigo-500"></i>
+                            <div>
+                                <p class="font-medium text-gray-900 dark:text-white text-sm">Weekly Digest</p>
+                                <p class="text-xs text-gray-500 dark:text-gray-400">Summary email every Sunday at midnight (requires SMTP)</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <button type="button" @click="sendDigest()" x-show="config.digest_enabled !== false && config.channels.smtp.enabled" class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"><i class="fas fa-paper-plane mr-1"></i>Send now</button>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" x-model="config.digest_enabled" class="sr-only peer" :disabled="!config.channels.smtp.enabled" title="Enable weekly digest">
+                                <div class="w-9 h-5 bg-gray-200 peer-focus:ring-2 peer-focus:ring-indigo-500 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-500 peer-checked:bg-indigo-500"></div>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Webhooks -->
                 <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
                     <button type="button" @click="showWebhooks = !showWebhooks" class="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-700/30 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition">

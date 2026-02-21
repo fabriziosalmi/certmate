@@ -338,6 +338,27 @@ def register_web_routes(app, managers):
         limit = min(max(limit, 1), 200)
         return jsonify(notifier.get_deliveries(limit=limit))
 
+    @app.route('/api/digest/send', methods=['POST'])
+    @auth_manager.require_role('admin')
+    def send_digest():
+        """Send weekly digest email on demand."""
+        digest_manager = managers.get('digest')
+        if not digest_manager:
+            return jsonify({'error': 'Digest not available'}), 500
+        result = digest_manager.send()
+        if result.get('error'):
+            return jsonify(result), 500
+        return jsonify(result)
+
+    @app.route('/api/digest/preview')
+    @auth_manager.require_role('viewer')
+    def preview_digest():
+        """Preview weekly digest data without sending."""
+        digest_manager = managers.get('digest')
+        if not digest_manager:
+            return jsonify({'error': 'Digest not available'}), 500
+        return jsonify(digest_manager.build_digest())
+
     @app.route('/api/events/stream')
     @auth_manager.require_role('viewer')
     def event_stream():

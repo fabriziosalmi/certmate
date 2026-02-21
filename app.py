@@ -2,7 +2,7 @@
 CertMate - Modular SSL Certificate Management Application
 Main application entry point with modular architecture
 """
-__version__ = '1.10.6'
+__version__ = '1.10.7'
 import os
 import sys
 import tempfile
@@ -35,6 +35,7 @@ from modules.core import (
 from modules.core.shell import ShellExecutor
 from modules.core.notifier import Notifier
 from modules.core.events import EventBus
+from modules.core.digest import WeeklyDigest
 # Import CA manager for DigiCert and Private CA support
 from modules.core.ca_manager import CAManager
 from modules.api import create_api_models, create_api_resources
@@ -260,7 +261,11 @@ class CertMateApp:
                 'rate_limiter': rate_limiter,
                 'shell_executor': shell_executor,
                 'notifier': notifier,
-                'events': event_bus
+                'events': event_bus,
+                'digest': WeeklyDigest(
+                    certificate_manager, client_cert_manager,
+                    audit_logger, notifier, settings_manager
+                )
             }
             
             logger.info("All managers initialized successfully")
@@ -386,6 +391,17 @@ class CertMateApp:
                 hour=3,
                 minute=0,
                 id='client_certificate_renewal_check',
+                replace_existing=True
+            )
+
+            # Schedule weekly digest email every Sunday at midnight
+            self.scheduler.add_job(
+                func=self.managers['digest'].send,
+                trigger="cron",
+                day_of_week='sun',
+                hour=0,
+                minute=0,
+                id='weekly_digest',
                 replace_existing=True
             )
 
