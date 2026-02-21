@@ -15,6 +15,7 @@ class TestPageLoading:
         "/",
         "/settings",
         "/help",
+        "/activity",
         "/redoc",
         "/health",
     ])

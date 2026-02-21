@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block title %}CertMate - Activity{% endblock %}
+{% block content %}
+    <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-3">
+            <div>
+                <h2 class="text-2xl font-bold text-gray-900 dark:text-white"><i class="fas fa-history mr-2 text-primary"></i>Activity Log</h2>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Recent certificate operations and system events</p>
+            </div>
+            <div class="flex items-center gap-2">
+                <select id="filterOp" class="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary">
+                    <option value="">All Operations</option>
+                    <option value="create">Created</option>
+                    <option value="renew">Renewed</option>
+                    <option value="revoke">Revoked</option>
+                    <option value="download">Downloaded</option>
+                    <option value="api_request">API Request</option>
+                </select>
+                <button type="button" onclick="loadActivity()" class="px-3 py-2 text-sm bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition" title="Refresh">
+                    <i class="fas fa-sync"></i>
+                </button>
+            </div>
+        </div>
+
+        <div class="bg-white dark:bg-gray-800 shadow-sm rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div id="activityList" class="divide-y divide-gray-100 dark:divide-gray-700/50">
+                <div class="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+                    <i class="fas fa-spinner fa-spin mr-2"></i>Loading activity...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    (function() {
+        var escapeHtml = CertMate.escapeHtml;
+
+        var opIcons = {
+            create: { icon: 'fa-plus-circle', color: 'text-green-500', bg: 'bg-green-100 dark:bg-green-900/30' },
+            renew: { icon: 'fa-sync', color: 'text-blue-500', bg: 'bg-blue-100 dark:bg-blue-900/30' },
+            revoke: { icon: 'fa-ban', color: 'text-red-500', bg: 'bg-red-100 dark:bg-red-900/30' },
+            download: { icon: 'fa-download', color: 'text-indigo-500', bg: 'bg-indigo-100 dark:bg-indigo-900/30' },
+            api_request: { icon: 'fa-code', color: 'text-gray-500', bg: 'bg-gray-100 dark:bg-gray-700' },
+            batch_create: { icon: 'fa-layer-group', color: 'text-purple-500', bg: 'bg-purple-100 dark:bg-purple-900/30' },
+            failure: { icon: 'fa-exclamation-circle', color: 'text-red-500', bg: 'bg-red-100 dark:bg-red-900/30' }
+        };
+
+        function getOpStyle(entry) {
+            if (entry.status === 'failure') return opIcons.failure;
+            return opIcons[entry.operation] || { icon: 'fa-circle', color: 'text-gray-400', bg: 'bg-gray-100 dark:bg-gray-700' };
+        }
+
+        function formatTime(ts) {
+            try {
+                var d = new Date(ts);
+                var now = new Date();
+                var diff = (now - d) / 1000;
+                if (diff < 60) return 'just now';
+                if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+                if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+                if (diff < 604800) return Math.floor(diff / 86400) + 'd ago';
+                return d.toLocaleDateString();
+            } catch (e) { return ts; }
+        }
+
+        function opLabel(entry) {
+            var labels = {
+                create: 'Created',
+                renew: 'Renewed',
+                revoke: 'Revoked',
+                download: 'Downloaded',
+                api_request: 'API call',
+                batch_create: 'Batch created'
+            };
+            return labels[entry.operation] || entry.operation;
+        }
+
+        window.loadActivity = function() {
+            var filter = document.getElementById('filterOp').value;
+            fetch('/api/activity?limit=100', { credentials: 'same-origin' })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    var entries = data.entries || [];
+                    if (filter) {
+                        entries = entries.filter(function(e) { return e.operation === filter; });
+                    }
+                    renderEntries(entries);
+                })
+                .catch(function(err) {
+                    console.error('Error loading activity:', err);
+                    document.getElementById('activityList').innerHTML =
+                        '<div class="px-6 py-8 text-center text-gray-500 dark:text-gray-400"><i class="fas fa-exclamation-circle mr-2 text-red-400"></i>Failed to load activity</div>';
+                });
+        };
+
+        function renderEntries(entries) {
+            var list = document.getElementById('activityList');
+            if (entries.length === 0) {
+                list.innerHTML = '<div class="px-6 py-12 text-center text-gray-500 dark:text-gray-400"><i class="fas fa-inbox text-3xl text-gray-300 dark:text-gray-600 mb-3 block"></i>No activity recorded yet</div>';
+                return;
+            }
+
+            list.innerHTML = entries.map(function(entry) {
+                var style = getOpStyle(entry);
+                var details = entry.details || {};
+                var detailParts = [];
+                if (details.common_name) detailParts.push('CN: ' + details.common_name);
+                if (details.usage) detailParts.push(details.usage);
+                if (details.file_type) detailParts.push('.' + details.file_type);
+                if (details.reason) detailParts.push('Reason: ' + details.reason);
+                if (details.method) detailParts.push(details.method);
+                if (details.status_code) detailParts.push('HTTP ' + details.status_code);
+                var detailStr = detailParts.length > 0 ? detailParts.join(' · ') : '';
+
+                return '<div class="flex items-start gap-4 px-4 sm:px-6 py-4 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition">' +
+                    '<div class="flex-shrink-0 mt-0.5">' +
+                        '<div class="w-9 h-9 rounded-full ' + style.bg + ' flex items-center justify-center">' +
+                            '<i class="fas ' + style.icon + ' ' + style.color + ' text-sm"></i>' +
+                        '</div>' +
+                    '</div>' +
+                    '<div class="flex-1 min-w-0">' +
+                        '<div class="flex items-center gap-2">' +
+                            '<span class="text-sm font-medium text-gray-900 dark:text-white">' + escapeHtml(opLabel(entry)) + '</span>' +
+                            (entry.status === 'failure' ? '<span class="px-1.5 py-0.5 text-[10px] font-medium bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded">FAILED</span>' : '') +
+                        '</div>' +
+                        '<p class="text-sm text-gray-600 dark:text-gray-300 truncate">' +
+                            escapeHtml(entry.resource_type) + ': <strong>' + escapeHtml(entry.resource_id) + '</strong>' +
+                        '</p>' +
+                        (detailStr ? '<p class="text-xs text-gray-400 mt-0.5">' + escapeHtml(detailStr) + '</p>' : '') +
+                        (entry.error ? '<p class="text-xs text-red-500 mt-0.5"><i class="fas fa-exclamation-triangle mr-1"></i>' + escapeHtml(entry.error) + '</p>' : '') +
+                    '</div>' +
+                    '<div class="flex-shrink-0 text-right">' +
+                        '<div class="text-xs text-gray-400">' + escapeHtml(formatTime(entry.timestamp)) + '</div>' +
+                        '<div class="text-[10px] text-gray-400 mt-1">' + escapeHtml(entry.user || 'system') + '</div>' +
+                    '</div>' +
+                '</div>';
+            }).join('');
+        }
+
+        document.getElementById('filterOp').addEventListener('change', loadActivity);
+        loadActivity();
+    })();
+    </script>
+{% endblock %}

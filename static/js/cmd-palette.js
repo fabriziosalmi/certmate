@@ -19,6 +19,7 @@
         { type: 'nav', icon: 'fa-id-card', label: 'Client Certificates', desc: 'mTLS, VPN, user auth certificates', url: '/#client' },
         { type: 'nav', icon: 'fa-cog', label: 'Settings', desc: 'Configure DNS, CA, storage', url: '/settings' },
         { type: 'nav', icon: 'fa-question-circle', label: 'Help & Documentation', desc: 'Getting started, guides', url: '/help' },
+        { type: 'nav', icon: 'fa-history', label: 'Activity Log', desc: 'Recent operations and events', url: '/activity' },
         { type: 'nav', icon: 'fa-book', label: 'API Documentation', desc: 'ReDoc API reference', url: '/redoc' },
         { type: 'settings', icon: 'fa-server', label: 'DNS Provider Settings', desc: 'Configure DNS providers', url: '/settings#dns' },
         { type: 'settings', icon: 'fa-shield-alt', label: 'CA Settings', desc: 'Certificate authority configuration', url: '/settings#ca' },

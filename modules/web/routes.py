@@ -244,6 +244,26 @@ def register_web_routes(app, managers):
         """Redirect to unified certificates page with client tab"""
         return redirect('/#client')
 
+    @app.route('/activity')
+    @require_web_auth
+    def activity_page():
+        """Activity timeline page"""
+        return render_template('activity.html')
+
+    @app.route('/api/activity')
+    @auth_manager.require_auth
+    def activity_api():
+        """Get recent audit log entries."""
+        audit_logger = managers.get('audit')
+        if not audit_logger:
+            return jsonify({'entries': []})
+        limit = request.args.get('limit', 50, type=int)
+        limit = min(limit, 500)
+        entries = audit_logger.get_recent_entries(limit=limit)
+        # Return newest first
+        entries.reverse()
+        return jsonify({'entries': entries})
+
     # Health check for Docker
     @app.route('/health')
     def health_check():
