@@ -2,7 +2,7 @@
 CertMate - Modular SSL Certificate Management Application
 Main application entry point with modular architecture
 """
-__version__ = '1.8.0'
+__version__ = '1.9.0'
 import os
 import sys
 import tempfile
@@ -390,19 +390,21 @@ class CertMateApp:
             response.headers['X-XSS-Protection'] = '1; mode=block'
             # Referrer policy
             response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
-            # Content Security Policy — allow inline scripts/styles for the SPA-like UI
-            response.headers['Content-Security-Policy'] = (
-                "default-src 'self'; "
-                "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
-                "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com; "
-                "font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com; "
-                "img-src 'self' data:; "
-                "connect-src 'self'; "
-                "frame-ancestors 'self'; "
-                "form-action 'self'; "
-                "base-uri 'self'; "
-                "object-src 'none'"
-            )
+            # Content Security Policy — all assets are self-hosted
+            # (ReDoc route overrides this with its own CSP for external CDNs)
+            if 'Content-Security-Policy' not in response.headers:
+                response.headers['Content-Security-Policy'] = (
+                    "default-src 'self'; "
+                    "script-src 'self' 'unsafe-inline'; "
+                    "style-src 'self' 'unsafe-inline'; "
+                    "font-src 'self'; "
+                    "img-src 'self' data:; "
+                    "connect-src 'self'; "
+                    "frame-ancestors 'self'; "
+                    "form-action 'self'; "
+                    "base-uri 'self'; "
+                    "object-src 'none'"
+                )
             # Permissions-Policy — restrict browser features
             response.headers['Permissions-Policy'] = (
                 'camera=(), microphone=(), geolocation=(), payment=()'

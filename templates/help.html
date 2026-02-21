@@ -7,29 +7,8 @@
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico">
     <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <style>
-        /* Prevent flash of white background in dark mode */
-        @media (prefers-color-scheme: dark) {
-            html {
-                background-color: #111827 !important;
-            }
-        }
-    </style>
-    <script>
-        tailwind.config = {
-            darkMode: 'media', // Automatically respects system preference
-            theme: {
-                extend: {
-                    colors: {
-                        primary: '#3b82f6',
-                        secondary: '#1e40af',
-                    }
-                }
-            }
-        }
-    </script>
+    <link href="/static/css/tailwind.min.css" rel="stylesheet">
+    <link href="/static/css/fontawesome.min.css" rel="stylesheet">
 </head>
 <body class="bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors duration-200">
     <!-- Navigation -->
@@ -38,7 +17,7 @@
             <div class="flex justify-between h-16">
                 <div class="flex items-center">
                     <div class="flex-shrink-0">
-                        <img src="/certmate_logo_256.png" alt="CertMate" class="w-9 h-9">
+                        <img src="/static/img/certmate_logo_256.png" alt="CertMate" class="w-12 h-12">
                     </div>
                     <div class="ml-3">
                         <h1 class="text-xl font-semibold text-gray-900 dark:text-white">CertMate</h1>
@@ -216,6 +195,26 @@
                                 <li>Set up automatic renewal</li>
                                 <li>Configure backup settings for data protection</li>
                             </ol>
+                        </div>
+
+                        <div class="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border border-green-200 dark:border-green-800">
+                            <h4 class="font-medium text-green-900 dark:text-green-100 mb-2">
+                                <i class="fab fa-docker mr-2"></i>
+                                Docker Quick Start
+                            </h4>
+                            <p class="text-sm text-green-800 dark:text-green-200 mb-3">
+                                CertMate starts with authentication <strong>disabled</strong> for easy initial setup. Follow these steps to get up and running:
+                            </p>
+                            <ol class="text-sm text-green-800 dark:text-green-200 space-y-2 ml-4 list-decimal">
+                                <li><strong>Configure DNS provider</strong> &mdash; Go to <a href="/settings" class="underline hover:no-underline">Settings</a>, select your DNS provider (e.g. Cloudflare), and add your API credentials</li>
+                                <li><strong>Create a certificate</strong> &mdash; Return to the <a href="/" class="underline hover:no-underline">Dashboard</a>, enter a domain, and click Create</li>
+                                <li><strong>Secure your instance</strong> &mdash; In <a href="/settings" class="underline hover:no-underline">Settings</a> &gt; User Management, enable Local Authentication and create an admin user</li>
+                                <li><strong>API access</strong> &mdash; The API Bearer Token (Settings &gt; API Security) is auto-generated on first start. Click "Reveal" to view it for programmatic access</li>
+                            </ol>
+                            <div class="mt-3 p-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded text-xs text-amber-800 dark:text-amber-200">
+                                <i class="fas fa-shield-alt mr-1"></i>
+                                <strong>Important:</strong> Enable authentication before exposing CertMate to the internet. Without it, anyone with network access can manage your certificates.
+                            </div>
                         </div>
 
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">

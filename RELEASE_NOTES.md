@@ -1,3 +1,39 @@
+# Release v1.9.0
+
+## Docker First-Run UX
+
+### Fix: API auth bypass for initial setup
+- `require_auth` decorator now bypasses authentication when local auth is disabled
+  or no users exist, matching `require_web_auth` behavior
+- Fixes all API 401 errors on fresh Docker launch (settings, DNS accounts, certs)
+- Fixed settings POST localhost restriction blocking Docker users
+- Fixed `GET /api/web/settings` returning 401 after first save
+
+### Welcome banner and setup guidance
+- Dashboard shows setup guide when no certificates exist (configure DNS, create cert, enable auth)
+- Help page includes Docker Quick Start section
+- Settings page shows security reminder when authentication is disabled
+
+### Bundled static assets (no more CDN)
+- Tailwind CSS and Font Awesome served from `/static/` — no external CDN requests
+- CSP headers tightened to `'self'` only (ReDoc exempted for its own CDN needs)
+- All pages work fully offline / air-gapped
+
+### Test suite
+- New `tests/` directory with structured e2e test suite (77 tests)
+- Real Cloudflare cert lifecycle with random subdomain per run
+- Static assets, CSP, auth bypass, settings, pages, backups, DNS accounts
+- `tests/run_tests.sh` pre-commit hook script
+- Removed 21 legacy test files from project root
+
+### Bug fixes
+- Fixed `testCAProvider` JS error (undefined `API_HEADERS.Authorization`)
+- Fixed `safeDomain` undefined in `updateDeploymentStats`
+- Navbar logo size increased from w-9 to w-12
+- Fixed `and`/`or` inconsistency between `require_auth` and `require_web_auth`
+
+---
+
 # Release v1.8.0
 
 ## Documentation

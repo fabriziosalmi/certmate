@@ -279,6 +279,12 @@ class AuthManager:
         @wraps(f)
         def decorated_function(*args, **kwargs):
             try:
+                # Allow unauthenticated access during initial setup
+                # (matches require_web_auth: bypass if auth disabled OR no users)
+                if not self.is_local_auth_enabled() or not self.has_any_users():
+                    request.current_user = {'username': 'setup_user', 'role': 'admin'}
+                    return f(*args, **kwargs)
+
                 # Check for session-based auth first (for web UI)
                 session_id = request.cookies.get('certmate_session')
                 if session_id:

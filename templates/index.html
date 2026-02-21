@@ -7,29 +7,8 @@
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico">
     <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <style>
-        /* Prevent flash of white background in dark mode */
-        @media (prefers-color-scheme: dark) {
-            html {
-                background-color: #111827 !important;
-            }
-        }
-    </style>
-    <script>
-        tailwind.config = {
-            darkMode: 'media', // Automatically respects system preference
-            theme: {
-                extend: {
-                    colors: {
-                        primary: '#3b82f6',
-                        secondary: '#1e40af',
-                    }
-                }
-            }
-        }
-    </script>
+    <link href="/static/css/tailwind.min.css" rel="stylesheet">
+    <link href="/static/css/fontawesome.min.css" rel="stylesheet">
 </head>
 <body class="bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors duration-200">
     <!-- Navigation -->
@@ -38,7 +17,7 @@
             <div class="flex justify-between h-16">
                 <div class="flex items-center">
                     <div class="flex-shrink-0">
-                        <img src="/certmate_logo_256.png" alt="CertMate" class="w-9 h-9">
+                        <img src="/static/img/certmate_logo_256.png" alt="CertMate" class="w-12 h-12">
                     </div>
                     <div class="ml-3">
                         <h1 class="text-xl font-semibold text-gray-900 dark:text-white">CertMate</h1>
@@ -748,37 +727,65 @@
                 const isFiltered = document.getElementById('certificateSearch').value || 
                                  document.getElementById('statusFilter').value !== 'all';
                 
-                container.innerHTML = `
-                    <div class="px-6 py-12 text-center">
-                        <div class="mx-auto max-w-sm">
-                            <div class="mx-auto h-16 w-16 flex items-center justify-center bg-gray-100 rounded-full mb-4">
-                                <i class="fas ${isFiltered ? 'fa-search' : 'fa-certificate'} text-gray-400 text-2xl"></i>
-                            </div>
-                            <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
-                                ${isFiltered ? 'No matching certificates' : 'No certificates yet'}
-                            </h3>
-                            <p class="text-gray-500 dark:text-gray-400 mb-6">
-                                ${isFiltered ? 
-                                    'Try adjusting your search criteria or filters to find certificates.' : 
-                                    'Get started by creating your first SSL certificate above.'
-                                }
-                            </p>
-                            ${!isFiltered ? `
-                                <button onclick="document.getElementById('domain').focus()" 
-                                        class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors duration-200">
-                                    <i class="fas fa-plus mr-2"></i>
-                                    Create Certificate
-                                </button>
-                            ` : `
-                                <button onclick="clearFilters()" 
+                if (isFiltered) {
+                    container.innerHTML = `
+                        <div class="px-6 py-12 text-center">
+                            <div class="mx-auto max-w-sm">
+                                <div class="mx-auto h-16 w-16 flex items-center justify-center bg-gray-100 dark:bg-gray-700 rounded-full mb-4">
+                                    <i class="fas fa-search text-gray-400 text-2xl"></i>
+                                </div>
+                                <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">No matching certificates</h3>
+                                <p class="text-gray-500 dark:text-gray-400 mb-6">Try adjusting your search criteria or filters to find certificates.</p>
+                                <button onclick="clearFilters()"
                                         class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors duration-200">
                                     <i class="fas fa-times mr-2"></i>
                                     Clear Filters
                                 </button>
-                            `}
+                            </div>
                         </div>
-                    </div>
-                `;
+                    `;
+                } else {
+                    container.innerHTML = `
+                        <div class="px-6 py-8">
+                            <div class="mx-auto max-w-lg">
+                                <div class="text-center mb-6">
+                                    <div class="mx-auto h-16 w-16 flex items-center justify-center bg-blue-100 dark:bg-blue-900/30 rounded-full mb-4">
+                                        <i class="fas fa-rocket text-blue-500 text-2xl"></i>
+                                    </div>
+                                    <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">Welcome to CertMate</h3>
+                                    <p class="text-gray-500 dark:text-gray-400">Follow these steps to get started:</p>
+                                </div>
+                                <ol class="space-y-3 mb-6 text-sm">
+                                    <li class="flex items-start">
+                                        <span class="flex-shrink-0 w-6 h-6 flex items-center justify-center bg-blue-500 text-white rounded-full text-xs font-bold mr-3 mt-0.5">1</span>
+                                        <span class="text-gray-700 dark:text-gray-300"><a href="/settings" class="text-blue-600 dark:text-blue-400 font-medium hover:underline">Go to Settings</a> and configure your DNS provider (Cloudflare, Route53, etc.)</span>
+                                    </li>
+                                    <li class="flex items-start">
+                                        <span class="flex-shrink-0 w-6 h-6 flex items-center justify-center bg-blue-500 text-white rounded-full text-xs font-bold mr-3 mt-0.5">2</span>
+                                        <span class="text-gray-700 dark:text-gray-300">Add a domain above and create your first SSL certificate</span>
+                                    </li>
+                                    <li class="flex items-start">
+                                        <span class="flex-shrink-0 w-6 h-6 flex items-center justify-center bg-blue-500 text-white rounded-full text-xs font-bold mr-3 mt-0.5">3</span>
+                                        <span class="text-gray-700 dark:text-gray-300">Enable <a href="/settings#user-management" class="text-blue-600 dark:text-blue-400 font-medium hover:underline">Local Authentication</a> in Settings to secure your instance</span>
+                                    </li>
+                                </ol>
+                                <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3 mb-6">
+                                    <p class="text-xs text-amber-800 dark:text-amber-200">
+                                        <i class="fas fa-shield-alt mr-1"></i>
+                                        <strong>Security:</strong> Authentication is disabled by default for easy setup. Enable it in Settings before exposing CertMate to the internet.
+                                    </p>
+                                </div>
+                                <div class="text-center">
+                                    <button onclick="document.getElementById('domain').focus()"
+                                            class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors duration-200">
+                                        <i class="fas fa-plus mr-2"></i>
+                                        Create Certificate
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
                 return;
             }
             
@@ -1093,7 +1100,7 @@
             
             const deployedCount = allCertificates.filter(cert => {
                 if (!cert.exists) return false;
-                const statusElement = document.getElementById(`deployment-status-${safeDomain.replace(/\./g, '-')}`);
+                const statusElement = document.getElementById(`deployment-status-${cert.domain.replace(/\./g, '-')}`);
                 const isDeployed = statusElement && statusElement.textContent.includes('Deployed');
                 
                 if (isDeployed) {

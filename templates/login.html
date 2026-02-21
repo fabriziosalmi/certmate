@@ -7,34 +7,14 @@
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico">
     <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <style>
-        @media (prefers-color-scheme: dark) {
-            html {
-                background-color: #111827 !important;
-            }
-        }
-    </style>
-    <script>
-        tailwind.config = {
-            darkMode: 'media',
-            theme: {
-                extend: {
-                    colors: {
-                        primary: '#3b82f6',
-                        secondary: '#1e40af',
-                    }
-                }
-            }
-        }
-    </script>
+    <link href="/static/css/tailwind.min.css" rel="stylesheet">
+    <link href="/static/css/fontawesome.min.css" rel="stylesheet">
 </head>
 <body class="bg-gray-50 dark:bg-gray-900 min-h-screen flex items-center justify-center transition-colors duration-200">
     <div class="max-w-md w-full mx-4">
         <!-- Logo and Title -->
         <div class="text-center mb-8">
-            <img src="/certmate_logo_256.png" alt="CertMate Logo" class="w-20 h-20 mx-auto mb-4">
+            <img src="/static/img/certmate_logo_256.png" alt="CertMate Logo" class="w-20 h-20 mx-auto mb-4">
             <h1 class="text-3xl font-bold text-gray-900 dark:text-white">CertMate</h1>
             <p class="text-gray-600 dark:text-gray-400 mt-2">SSL Certificate Manager</p>
         </div>

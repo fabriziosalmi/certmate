@@ -7,29 +7,8 @@
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico">
     <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <style>
-        /* Prevent flash of white background in dark mode */
-        @media (prefers-color-scheme: dark) {
-            html {
-                background-color: #111827 !important;
-            }
-        }
-    </style>
-    <script>
-        tailwind.config = {
-            darkMode: 'media', // Automatically respects system preference
-            theme: {
-                extend: {
-                    colors: {
-                        primary: '#3b82f6',
-                        secondary: '#1e40af',
-                    }
-                }
-            }
-        }
-    </script>
+    <link href="/static/css/tailwind.min.css" rel="stylesheet">
+    <link href="/static/css/fontawesome.min.css" rel="stylesheet">
 </head>
 <body class="bg-gray-50 dark:bg-gray-700/50 dark:bg-gray-900 min-h-screen transition-colors duration-200">
     <!-- Navigation -->
@@ -38,7 +17,7 @@
             <div class="flex justify-between h-16">
                 <div class="flex items-center">
                     <div class="flex-shrink-0">
-                        <img src="/certmate_logo_256.png" alt="CertMate" class="w-9 h-9">
+                        <img src="/static/img/certmate_logo_256.png" alt="CertMate" class="w-12 h-12">
                     </div>
                     <div class="ml-3">
                         <h1 class="text-xl font-semibold text-gray-900 dark:text-white">CertMate</h1>
@@ -1580,6 +1559,19 @@
             <p class="text-gray-600 dark:text-gray-400 text-sm mb-6">
                 Manage local user accounts for CertMate. Enable local authentication to require username/password login.
             </p>
+
+            <!-- Security reminder (shown when auth is disabled) -->
+            <div id="authSecurityBanner" class="mb-6 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg" style="display: none;">
+                <div class="flex items-start">
+                    <i class="fas fa-exclamation-triangle text-amber-500 mt-0.5 mr-3 flex-shrink-0"></i>
+                    <div>
+                        <h4 class="text-sm font-medium text-amber-800 dark:text-amber-200">Authentication is disabled</h4>
+                        <p class="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                            Anyone with network access can manage certificates and settings. Enable Local Authentication below and create an admin user to secure your instance.
+                        </p>
+                    </div>
+                </div>
+            </div>
 
             <!-- Local Auth Toggle -->
             <div class="mb-6 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
@@ -3505,8 +3497,7 @@
                 const response = await fetch('/api/settings/test-ca-provider', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${API_HEADERS.Authorization.replace('Bearer ', '')}`
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
                         ca_provider: caProvider,
@@ -3922,6 +3913,8 @@
                 if (response.ok) {
                     const data = await response.json();
                     document.getElementById('localAuthToggle').checked = data.local_auth_enabled;
+                    const banner = document.getElementById('authSecurityBanner');
+                    if (banner) banner.style.display = data.local_auth_enabled ? 'none' : 'block';
                     return data;
                 }
             } catch (error) {
@@ -3947,6 +3940,8 @@
                 
                 if (response.ok) {
                     showMessage(data.message, 'success');
+                    const banner = document.getElementById('authSecurityBanner');
+                    if (banner) banner.style.display = enabled ? 'none' : 'block';
                 } else {
                     showMessage(data.error || 'Failed to update auth config', 'error');
                     toggle.checked = !enabled; // Revert toggle

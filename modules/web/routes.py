@@ -126,39 +126,57 @@ def register_web_routes(app, managers):
             return redirect(url_for('login_page'))
         return decorated
 
-    # Static file routes
+    # Static file routes — serve images from static/img/ for well-known paths
+    _img_dir = os.path.join(app.root_path, 'static', 'img')
+
     @app.route('/favicon.ico')
     def favicon():
         """Serve favicon"""
-        return send_from_directory(app.static_folder or '.', 'favicon.ico')
+        return send_from_directory(_img_dir, 'favicon.ico')
 
     @app.route('/certmate_logo.png')
     def logo():
         """Serve logo"""
-        return send_from_directory(app.static_folder or '.', 'certmate_logo.png')
+        return send_from_directory(_img_dir, 'certmate_logo.png')
 
     @app.route('/certmate_logo_256.png')
     def logo_256():
         """Serve logo (256px)"""
-        return send_from_directory(app.static_folder or '.', 'certmate_logo_256.png')
+        return send_from_directory(_img_dir, 'certmate_logo_256.png')
 
     @app.route('/apple-touch-icon.png')
     def apple_touch_icon():
         """Serve Apple touch icon"""
-        return send_from_directory(app.static_folder or '.', 'apple-touch-icon.png')
+        return send_from_directory(_img_dir, 'apple-touch-icon.png')
 
     @app.route('/redoc/')
     @app.route('/redoc')
     def redoc():
         """Serve ReDoc API documentation UI"""
-        return '''<!DOCTYPE html>
+        # ReDoc uses external CDNs — override CSP for this route only
+        html = '''<!DOCTYPE html>
 <html><head><title>CertMate API - ReDoc</title>
 <meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1">
 <link href="https://fonts.googleapis.com/css?family=Montserrat:300,400,700|Roboto:300,400,700" rel="stylesheet">
 <style>body{margin:0;padding:0;}</style></head>
 <body><redoc spec-url="/api/swagger.json"></redoc>
 <script src="https://cdn.redoc.ly/redoc/latest/bundles/redoc.standalone.js"></script>
-</body></html>''', 200, {'Content-Type': 'text/html'}
+</body></html>'''
+        response = app.make_response((html, 200, {'Content-Type': 'text/html'}))
+        response.headers['Content-Security-Policy'] = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' https://cdn.redoc.ly; "
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+            "font-src 'self' https://fonts.gstatic.com; "
+            "img-src 'self' data: blob:; "
+            "worker-src blob:; "
+            "connect-src 'self'; "
+            "frame-ancestors 'self'; "
+            "form-action 'self'; "
+            "base-uri 'self'; "
+            "object-src 'none'"
+        )
+        return response
 
     # Main web interface routes
     @app.route('/')
@@ -589,14 +607,21 @@ def register_web_routes(app, managers):
                         'domains': []
                     })
                 
-                # For completed setup, require auth
-                auth_header = request.headers.get('Authorization', '')
-                if not auth_header.startswith('Bearer '):
+                # For completed setup, require auth (session cookie or Bearer token)
+                # Allow bypass when auth is disabled (setup mode)
+                authenticated = False
+                if not auth_manager.is_local_auth_enabled() or not auth_manager.has_any_users():
+                    authenticated = True
+                if not authenticated:
+                    session_id = request.cookies.get('certmate_session')
+                    if session_id and auth_manager.validate_session(session_id):
+                        authenticated = True
+                if not authenticated:
+                    auth_header = request.headers.get('Authorization', '')
+                    if auth_header.startswith('Bearer ') and auth_manager.validate_api_token(auth_header[7:]):
+                        authenticated = True
+                if not authenticated:
                     return jsonify({'error': 'Authentication required'}), 401
-                
-                token = auth_header[7:]
-                if not auth_manager.validate_api_token(token):
-                    return jsonify({'error': 'Invalid token'}), 401
                 
                 # Return full settings (with sensitive data fully masked)
                 safe_settings = dict(settings)
@@ -620,26 +645,32 @@ def register_web_routes(app, managers):
 
                 if setup_completed:
                     # Require auth for updates after setup
-                    auth_header = request.headers.get('Authorization', '')
-                    if not auth_header.startswith('Bearer '):
-                        # Also accept session cookie auth
+                    # Allow bypass when auth is disabled (setup mode)
+                    authenticated = False
+                    if not auth_manager.is_local_auth_enabled() or not auth_manager.has_any_users():
+                        authenticated = True
+                    if not authenticated:
                         session_id = request.cookies.get('certmate_session')
-                        if not session_id or not auth_manager.validate_session(session_id):
-                            return jsonify({'error': 'Authentication required'}), 401
-                    else:
-                        token = auth_header[7:]
-                        if not auth_manager.validate_api_token(token):
-                            return jsonify({'error': 'Invalid token'}), 401
+                        if session_id and auth_manager.validate_session(session_id):
+                            authenticated = True
+                    if not authenticated:
+                        auth_header = request.headers.get('Authorization', '')
+                        if auth_header.startswith('Bearer ') and auth_manager.validate_api_token(auth_header[7:]):
+                            authenticated = True
+                    if not authenticated:
+                        return jsonify({'error': 'Authentication required'}), 401
                 else:
-                    # Initial setup: only allow from localhost or with valid token
-                    client_ip = request.remote_addr or ''
-                    auth_header = request.headers.get('Authorization', '')
-                    has_valid_token = False
-                    if auth_header.startswith('Bearer '):
-                        has_valid_token = auth_manager.validate_api_token(auth_header[7:])
-                    if not _is_localhost(client_ip) and not has_valid_token:
-                        logger.warning(f"Setup attempt from non-local IP: {client_ip}")
-                        return jsonify({'error': 'Initial setup only allowed from localhost'}), 403
+                    # Initial setup: allow if auth is disabled (setup mode),
+                    # or from localhost, or with valid token
+                    if not (not auth_manager.is_local_auth_enabled() or not auth_manager.has_any_users()):
+                        client_ip = request.remote_addr or ''
+                        auth_header = request.headers.get('Authorization', '')
+                        has_valid_token = False
+                        if auth_header.startswith('Bearer '):
+                            has_valid_token = auth_manager.validate_api_token(auth_header[7:])
+                        if not _is_localhost(client_ip) and not has_valid_token:
+                            logger.warning(f"Setup attempt from non-local IP: {client_ip}")
+                            return jsonify({'error': 'Initial setup only allowed from localhost'}), 403
                 
                 # Merge with existing settings
                 merged_settings = {**current_settings, **new_settings}
