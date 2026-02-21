@@ -338,6 +338,50 @@ def register_web_routes(app, managers):
         limit = min(max(limit, 1), 200)
         return jsonify(notifier.get_deliveries(limit=limit))
 
+    # --- Deploy Hooks endpoints ---
+
+    @app.route('/api/deploy/config', methods=['GET', 'POST'])
+    @auth_manager.require_role('admin')
+    def deploy_config():
+        """Get or update deploy hooks configuration."""
+        deploy_manager = managers.get('deployer')
+        if not deploy_manager:
+            return jsonify({'error': 'Deploy manager not available'}), 500
+
+        if request.method == 'GET':
+            return jsonify(deploy_manager.get_config())
+
+        data = request.get_json(silent=True) or {}
+        if deploy_manager.save_config(data):
+            return jsonify({'status': 'saved'})
+        return jsonify({'error': 'Invalid configuration'}), 400
+
+    @app.route('/api/deploy/test/<string:hook_id>', methods=['POST'])
+    @auth_manager.require_role('admin')
+    def deploy_test_hook(hook_id):
+        """Dry-run test a deploy hook."""
+        deploy_manager = managers.get('deployer')
+        if not deploy_manager:
+            return jsonify({'error': 'Deploy manager not available'}), 500
+        data = request.get_json(silent=True) or {}
+        domain = data.get('domain', 'test.example.com')
+        result = deploy_manager.test_hook(hook_id, domain=domain)
+        if result.get('error') and 'not found' in result.get('error', '').lower():
+            return jsonify(result), 404
+        return jsonify(result)
+
+    @app.route('/api/deploy/history')
+    @auth_manager.require_role('admin')
+    def deploy_history():
+        """Return recent deploy hook execution history."""
+        deploy_manager = managers.get('deployer')
+        if not deploy_manager:
+            return jsonify({'error': 'Deploy manager not available'}), 500
+        limit = request.args.get('limit', 50, type=int)
+        limit = min(max(limit, 1), 200)
+        domain = request.args.get('domain')
+        return jsonify(deploy_manager.get_history(limit=limit, domain=domain))
+
     @app.route('/api/digest/send', methods=['POST'])
     @auth_manager.require_role('admin')
     def send_digest():

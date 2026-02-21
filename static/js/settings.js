@@ -111,6 +111,140 @@
     }
 
     // =============================================
+    // BLOCK 1b: Alpine.js Deploy Hooks Component
+    // =============================================
+
+    function deployManager() {
+        return {
+            config: {
+                enabled: false,
+                global_hooks: [],
+                domain_hooks: {}
+            },
+            showGlobal: false,
+            showDomain: false,
+            showHistory: false,
+            history: [],
+            newDomain: '',
+
+            loadConfig: function() {
+                var self = this;
+                fetch('/api/deploy/config', { credentials: 'same-origin' })
+                    .then(function(r) { return r.json(); })
+                    .then(function(data) {
+                        if (data && typeof data === 'object' && !data.error) {
+                            self.config.enabled = data.enabled || false;
+                            self.config.global_hooks = data.global_hooks || [];
+                            self.config.domain_hooks = data.domain_hooks || {};
+                        }
+                    })
+                    .catch(function() {});
+            },
+
+            saveConfig: function() {
+                var self = this;
+                fetch('/api/deploy/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify(self.config)
+                })
+                .then(function(r) { return r.json(); })
+                .then(function(d) {
+                    if (d.status === 'saved') CertMate.toast('Deploy settings saved', 'success');
+                    else CertMate.toast('Save failed: ' + (d.error || 'unknown'), 'error');
+                })
+                .catch(function() { CertMate.toast('Failed to save', 'error'); });
+            },
+
+            _generateId: function() {
+                if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+                    return crypto.randomUUID();
+                }
+                return Date.now().toString(36) + Math.random().toString(36).substr(2);
+            },
+
+            addGlobalHook: function() {
+                this.config.global_hooks.push({
+                    id: this._generateId(),
+                    name: '',
+                    command: '',
+                    enabled: true,
+                    timeout: 30,
+                    on_events: ['created', 'renewed']
+                });
+                this.showGlobal = true;
+            },
+
+            addDomainSection: function() {
+                var d = this.newDomain.trim().toLowerCase();
+                if (!d) return;
+                if (!this.config.domain_hooks[d]) {
+                    this.config.domain_hooks[d] = [];
+                    // Force Alpine reactivity
+                    this.config.domain_hooks = Object.assign({}, this.config.domain_hooks);
+                }
+                this.newDomain = '';
+            },
+
+            addDomainHook: function(domain) {
+                if (!this.config.domain_hooks[domain]) {
+                    this.config.domain_hooks[domain] = [];
+                }
+                this.config.domain_hooks[domain].push({
+                    id: this._generateId(),
+                    name: '',
+                    command: '',
+                    enabled: true,
+                    timeout: 30,
+                    on_events: ['created', 'renewed']
+                });
+            },
+
+            removeDomain: function(domain) {
+                var self = this;
+                CertMate.confirm('Remove all hooks for ' + domain + '?', function() {
+                    delete self.config.domain_hooks[domain];
+                    self.config.domain_hooks = Object.assign({}, self.config.domain_hooks);
+                });
+            },
+
+            toggleEvent: function(hook, evt) {
+                if (!hook.on_events) hook.on_events = [];
+                var idx = hook.on_events.indexOf(evt);
+                if (idx === -1) hook.on_events.push(evt);
+                else hook.on_events.splice(idx, 1);
+            },
+
+            testHook: function(hook) {
+                CertMate.toast('Testing hook: ' + hook.name + '...', 'info');
+                fetch('/api/deploy/test/' + hook.id, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ domain: 'test.example.com' })
+                })
+                .then(function(r) { return r.json(); })
+                .then(function(d) {
+                    if (d.success) CertMate.toast('Hook test passed (exit ' + d.exit_code + ')', 'success');
+                    else CertMate.toast('Hook test failed: ' + (d.error || 'exit ' + d.exit_code), 'error');
+                })
+                .catch(function() { CertMate.toast('Test request failed', 'error'); });
+            },
+
+            loadHistory: function() {
+                var self = this;
+                fetch('/api/deploy/history?limit=50', { credentials: 'same-origin' })
+                    .then(function(r) { return r.json(); })
+                    .then(function(data) {
+                        if (Array.isArray(data)) self.history = data;
+                    })
+                    .catch(function() {});
+            }
+        };
+    }
+
+    // =============================================
     // BLOCK 2: Main Settings JavaScript
     // =============================================
 
@@ -2673,6 +2807,7 @@
 
     window.apiKeyManager = apiKeyManager;
     window.notificationSettings = notificationSettings;
+    window.deployManager = deployManager;
     window.showAddAccountModal = showAddAccountModal;
     window.closeAddAccountModal = closeAddAccountModal;
     window.saveAccount = saveAccount;

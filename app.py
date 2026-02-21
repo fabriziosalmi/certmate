@@ -2,7 +2,7 @@
 CertMate - Modular SSL Certificate Management Application
 Main application entry point with modular architecture
 """
-__version__ = '1.11.1'
+__version__ = '1.12.0'
 import os
 import sys
 import tempfile
@@ -36,6 +36,7 @@ from modules.core.shell import ShellExecutor
 from modules.core.notifier import Notifier
 from modules.core.events import EventBus
 from modules.core.digest import WeeklyDigest
+from modules.core.deployer import DeployManager
 # Import CA manager for DigiCert and Private CA support
 from modules.core.ca_manager import CAManager
 from modules.api import create_api_models, create_api_resources
@@ -239,6 +240,17 @@ class CertMateApp:
 
             event_bus.add_listener(_on_event)
 
+            # Initialize DeployManager for post-issuance hooks
+            deploy_manager = DeployManager(
+                settings_manager=settings_manager,
+                shell_executor=shell_executor,
+                audit_logger=audit_logger,
+                event_bus=event_bus,
+                cert_dir=self.cert_dir,
+                data_dir=str(self.data_dir),
+            )
+            event_bus.add_listener(deploy_manager.on_certificate_event)
+
             # Make event bus accessible to API resources via app config
             self.app.config['EVENT_BUS'] = event_bus
 
@@ -265,7 +277,8 @@ class CertMateApp:
                 'digest': WeeklyDigest(
                     certificate_manager, client_cert_manager,
                     audit_logger, notifier, settings_manager
-                )
+                ),
+                'deployer': deploy_manager,
             }
             
             logger.info("All managers initialized successfully")

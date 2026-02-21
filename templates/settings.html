@@ -31,7 +31,7 @@
         <div class="bg-white dark:bg-gray-800 shadow rounded-lg">
             <div class="px-6 py-3 border-b dark:border-gray-700 overflow-x-auto">
                 <nav class="flex space-x-1 min-w-max" role="tablist">
-                    <template x-for="t in [{id:'dns',icon:'fa-server',label:'DNS'},{id:'ca',icon:'fa-shield-alt',label:'CA'},{id:'general',icon:'fa-cogs',label:'General'},{id:'storage',icon:'fa-database',label:'Storage'},{id:'notifications',icon:'fa-bell',label:'Notifications'},{id:'users',icon:'fa-users',label:'Users'},{id:'apikeys',icon:'fa-key',label:'API Keys'},{id:'backup',icon:'fa-archive',label:'Backup'}]">
+                    <template x-for="t in [{id:'dns',icon:'fa-server',label:'DNS'},{id:'ca',icon:'fa-shield-alt',label:'CA'},{id:'general',icon:'fa-cogs',label:'General'},{id:'storage',icon:'fa-database',label:'Storage'},{id:'notifications',icon:'fa-bell',label:'Notifications'},{id:'deploy',icon:'fa-rocket',label:'Deploy'},{id:'users',icon:'fa-users',label:'Users'},{id:'apikeys',icon:'fa-key',label:'API Keys'},{id:'backup',icon:'fa-archive',label:'Backup'}]">
                         <button type="button" @click="tab = t.id" role="tab"
                                 :class="tab === t.id
                                     ? 'px-4 py-2 text-sm font-medium rounded-md text-primary bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700'
@@ -1728,6 +1728,250 @@
             <div class="mt-6 flex justify-end">
                 <button type="button" @click="saveConfig()" class="bg-primary text-white px-6 py-2 rounded-md hover:bg-secondary transition text-sm">
                     <i class="fas fa-save mr-2"></i>Save Notification Settings
+                </button>
+            </div>
+        </div>
+
+
+        <!-- TAB: Deploy Hooks -->
+        <div x-show="tab === 'deploy'" x-cloak
+             class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 mt-6"
+             x-data="deployManager()" x-init="loadConfig()">
+
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center mb-6">
+                <i class="fas fa-rocket mr-2 text-green-500"></i>
+                Deploy Hooks
+            </h3>
+
+            <!-- Master toggle -->
+            <div class="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg mb-6">
+                <div>
+                    <p class="font-medium text-gray-900 dark:text-white">Enable Deploy Hooks</p>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">Run shell commands after certificate issuance or renewal</p>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" x-model="config.enabled" class="sr-only peer" title="Enable deploy hooks">
+                    <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:after:border-gray-500 peer-checked:bg-primary"></div>
+                </label>
+            </div>
+
+            <div x-show="config.enabled" class="space-y-6">
+                <!-- Security banner -->
+                <div class="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg text-sm">
+                    <i class="fas fa-shield-alt text-amber-500 mr-1"></i>
+                    <span class="text-amber-800 dark:text-amber-200">Commands run as the CertMate process user. Only admins can manage hooks.</span>
+                </div>
+
+                <!-- Environment variables reference -->
+                <div class="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg text-sm">
+                    <p class="font-medium text-blue-800 dark:text-blue-200 mb-1"><i class="fas fa-info-circle mr-1"></i>Available Environment Variables</p>
+                    <code class="text-xs text-blue-700 dark:text-blue-300">CERTMATE_DOMAIN</code>,
+                    <code class="text-xs text-blue-700 dark:text-blue-300">CERTMATE_CERT_PATH</code>,
+                    <code class="text-xs text-blue-700 dark:text-blue-300">CERTMATE_KEY_PATH</code>,
+                    <code class="text-xs text-blue-700 dark:text-blue-300">CERTMATE_FULLCHAIN_PATH</code>,
+                    <code class="text-xs text-blue-700 dark:text-blue-300">CERTMATE_EVENT</code>
+                </div>
+
+                <!-- Global Hooks -->
+                <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                    <button type="button" @click="showGlobal = !showGlobal"
+                            class="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-700/30 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition text-left">
+                        <span class="font-medium text-gray-900 dark:text-white text-sm">
+                            <i class="fas fa-globe mr-2 text-blue-500"></i>Global Hooks
+                            <span class="text-gray-400 font-normal ml-1" x-text="'(' + config.global_hooks.length + ')'"></span>
+                        </span>
+                        <i class="fas text-gray-400" :class="showGlobal ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                    </button>
+                    <div x-show="showGlobal" class="p-4 space-y-3">
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">These hooks run for every domain after certificate issuance or renewal.</p>
+                        <template x-for="(hook, idx) in config.global_hooks" :key="hook.id">
+                            <div class="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-4 border border-gray-200 dark:border-gray-600">
+                                <div class="flex items-center justify-between mb-3">
+                                    <div class="flex items-center gap-3 flex-1">
+                                        <label class="relative inline-flex items-center cursor-pointer">
+                                            <input type="checkbox" x-model="hook.enabled" class="sr-only peer" title="Enable hook">
+                                            <div class="w-9 h-5 bg-gray-200 peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+                                        </label>
+                                        <input type="text" x-model="hook.name" placeholder="Hook name"
+                                               class="flex-1 text-sm border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-3 py-1.5 focus:ring-2 focus:ring-primary focus:border-primary">
+                                    </div>
+                                    <div class="flex items-center gap-2 ml-3">
+                                        <button type="button" @click="testHook(hook)" class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-900/50 transition" title="Test hook">
+                                            <i class="fas fa-play mr-1"></i>Test
+                                        </button>
+                                        <button type="button" @click="config.global_hooks.splice(idx, 1)" class="text-red-400 hover:text-red-600 transition" title="Remove hook">
+                                            <i class="fas fa-trash-alt"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <textarea x-model="hook.command" placeholder="e.g. systemctl reload nginx" rows="2"
+                                          class="w-full text-sm font-mono border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary mb-2"></textarea>
+                                <div class="flex items-center gap-4 text-xs">
+                                    <label class="flex items-center gap-1 text-gray-600 dark:text-gray-400">
+                                        <span>Timeout:</span>
+                                        <input type="number" x-model.number="hook.timeout" min="1" max="300"
+                                               class="w-16 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-2 py-1 text-xs" title="Timeout in seconds">
+                                        <span>s</span>
+                                    </label>
+                                    <label class="flex items-center gap-1 text-gray-600 dark:text-gray-400">
+                                        <input type="checkbox" :checked="hook.on_events && hook.on_events.indexOf('created') !== -1"
+                                               @change="toggleEvent(hook, 'created')" class="rounded border-gray-300 text-primary focus:ring-primary" title="Trigger on created">
+                                        <span>Created</span>
+                                    </label>
+                                    <label class="flex items-center gap-1 text-gray-600 dark:text-gray-400">
+                                        <input type="checkbox" :checked="hook.on_events && hook.on_events.indexOf('renewed') !== -1"
+                                               @change="toggleEvent(hook, 'renewed')" class="rounded border-gray-300 text-primary focus:ring-primary" title="Trigger on renewed">
+                                        <span>Renewed</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </template>
+                        <button type="button" @click="addGlobalHook()"
+                                class="w-full py-2 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-500 dark:text-gray-400 hover:border-primary hover:text-primary transition">
+                            <i class="fas fa-plus mr-1"></i>Add Global Hook
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Domain-Specific Hooks -->
+                <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                    <button type="button" @click="showDomain = !showDomain"
+                            class="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-700/30 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition text-left">
+                        <span class="font-medium text-gray-900 dark:text-white text-sm">
+                            <i class="fas fa-sitemap mr-2 text-purple-500"></i>Domain-Specific Hooks
+                            <span class="text-gray-400 font-normal ml-1" x-text="'(' + Object.keys(config.domain_hooks).length + ' domains)'"></span>
+                        </span>
+                        <i class="fas text-gray-400" :class="showDomain ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                    </button>
+                    <div x-show="showDomain" class="p-4 space-y-3">
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">These hooks only run for the specified domain.</p>
+                        <template x-for="domain in Object.keys(config.domain_hooks).sort()" :key="domain">
+                            <div class="border border-gray-200 dark:border-gray-600 rounded-lg p-3 mb-2">
+                                <div class="flex items-center justify-between mb-3">
+                                    <h4 class="font-medium text-sm text-gray-900 dark:text-white">
+                                        <i class="fas fa-globe text-gray-400 mr-1"></i><span x-text="domain"></span>
+                                    </h4>
+                                    <button type="button" @click="removeDomain(domain)" class="text-xs text-red-400 hover:text-red-600 transition" title="Remove domain">
+                                        <i class="fas fa-trash-alt mr-1"></i>Remove
+                                    </button>
+                                </div>
+                                <template x-for="(hook, idx) in config.domain_hooks[domain]" :key="hook.id">
+                                    <div class="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-3 border border-gray-200 dark:border-gray-600 mb-2">
+                                        <div class="flex items-center justify-between mb-2">
+                                            <div class="flex items-center gap-3 flex-1">
+                                                <label class="relative inline-flex items-center cursor-pointer">
+                                                    <input type="checkbox" x-model="hook.enabled" class="sr-only peer" title="Enable hook">
+                                                    <div class="w-9 h-5 bg-gray-200 peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+                                                </label>
+                                                <input type="text" x-model="hook.name" placeholder="Hook name"
+                                                       class="flex-1 text-sm border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-3 py-1.5 focus:ring-2 focus:ring-primary focus:border-primary">
+                                            </div>
+                                            <div class="flex items-center gap-2 ml-3">
+                                                <button type="button" @click="testHook(hook)" class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-900/50 transition" title="Test hook">
+                                                    <i class="fas fa-play mr-1"></i>Test
+                                                </button>
+                                                <button type="button" @click="config.domain_hooks[domain].splice(idx, 1)" class="text-red-400 hover:text-red-600 transition" title="Remove hook">
+                                                    <i class="fas fa-trash-alt"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <textarea x-model="hook.command" placeholder="e.g. /opt/scripts/deploy.sh" rows="2"
+                                                  class="w-full text-sm font-mono border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary mb-2"></textarea>
+                                        <div class="flex items-center gap-4 text-xs">
+                                            <label class="flex items-center gap-1 text-gray-600 dark:text-gray-400">
+                                                <span>Timeout:</span>
+                                                <input type="number" x-model.number="hook.timeout" min="1" max="300"
+                                                       class="w-16 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-2 py-1 text-xs" title="Timeout in seconds">
+                                                <span>s</span>
+                                            </label>
+                                            <label class="flex items-center gap-1 text-gray-600 dark:text-gray-400">
+                                                <input type="checkbox" :checked="hook.on_events && hook.on_events.indexOf('created') !== -1"
+                                                       @change="toggleEvent(hook, 'created')" class="rounded border-gray-300 text-primary focus:ring-primary" title="Trigger on created">
+                                                <span>Created</span>
+                                            </label>
+                                            <label class="flex items-center gap-1 text-gray-600 dark:text-gray-400">
+                                                <input type="checkbox" :checked="hook.on_events && hook.on_events.indexOf('renewed') !== -1"
+                                                       @change="toggleEvent(hook, 'renewed')" class="rounded border-gray-300 text-primary focus:ring-primary" title="Trigger on renewed">
+                                                <span>Renewed</span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </template>
+                                <button type="button" @click="addDomainHook(domain)"
+                                        class="w-full py-1.5 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded text-xs text-gray-500 dark:text-gray-400 hover:border-primary hover:text-primary transition">
+                                    <i class="fas fa-plus mr-1"></i>Add Hook
+                                </button>
+                            </div>
+                        </template>
+                        <!-- Add domain section -->
+                        <div class="flex gap-2">
+                            <input type="text" x-model="newDomain" placeholder="example.com"
+                                   class="flex-1 text-sm border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary"
+                                   @keydown.enter="addDomainSection()">
+                            <button type="button" @click="addDomainSection()"
+                                    class="px-4 py-2 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded text-sm hover:bg-purple-200 dark:hover:bg-purple-900/50 transition">
+                                <i class="fas fa-plus mr-1"></i>Add Domain
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Execution History -->
+                <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                    <button type="button" @click="showHistory = !showHistory; if(showHistory) loadHistory()"
+                            class="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-700/30 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition text-left">
+                        <span class="font-medium text-gray-900 dark:text-white text-sm">
+                            <i class="fas fa-history mr-2 text-gray-500"></i>Recent Executions
+                        </span>
+                        <i class="fas text-gray-400" :class="showHistory ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                    </button>
+                    <div x-show="showHistory" class="p-4">
+                        <div x-show="history.length === 0" class="text-center text-sm text-gray-500 dark:text-gray-400 py-4">
+                            <i class="fas fa-inbox mr-1"></i>No executions yet
+                        </div>
+                        <div x-show="history.length > 0" class="max-h-64 overflow-y-auto">
+                            <table class="w-full text-xs">
+                                <thead>
+                                    <tr class="text-left text-gray-500 dark:text-gray-400 border-b dark:border-gray-700">
+                                        <th class="pb-2 pr-3">Time</th>
+                                        <th class="pb-2 pr-3">Hook</th>
+                                        <th class="pb-2 pr-3">Domain</th>
+                                        <th class="pb-2 pr-3">Event</th>
+                                        <th class="pb-2 pr-3">Status</th>
+                                        <th class="pb-2 text-right">Duration</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <template x-for="entry in history" :key="entry.timestamp + entry.hook_id">
+                                        <tr class="border-b border-gray-100 dark:border-gray-700/50">
+                                            <td class="py-1.5 pr-3 text-gray-500 dark:text-gray-400 whitespace-nowrap" x-text="entry.timestamp ? entry.timestamp.replace('T',' ').replace('Z','') : ''"></td>
+                                            <td class="py-1.5 pr-3 text-gray-900 dark:text-white" x-text="entry.hook_name"></td>
+                                            <td class="py-1.5 pr-3 text-gray-600 dark:text-gray-300 font-mono" x-text="entry.domain"></td>
+                                            <td class="py-1.5 pr-3">
+                                                <span class="px-1.5 py-0.5 rounded text-[10px] font-medium"
+                                                      :class="entry.event === 'test' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'"
+                                                      x-text="entry.event"></span>
+                                            </td>
+                                            <td class="py-1.5 pr-3">
+                                                <span class="px-1.5 py-0.5 rounded text-[10px] font-medium"
+                                                      :class="entry.success ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'"
+                                                      x-text="entry.success ? 'OK' : ('Exit ' + (entry.exit_code !== null ? entry.exit_code : 'err'))"></span>
+                                            </td>
+                                            <td class="py-1.5 text-right text-gray-500 dark:text-gray-400" x-text="entry.duration_ms + 'ms'"></td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Save button -->
+            <div class="mt-6 flex justify-end">
+                <button type="button" @click="saveConfig()"
+                        class="bg-primary text-white px-6 py-2 rounded-md hover:bg-secondary transition text-sm">
+                    <i class="fas fa-save mr-2"></i>Save Deploy Settings
                 </button>
             </div>
         </div>
