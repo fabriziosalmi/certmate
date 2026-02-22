@@ -118,7 +118,7 @@
     (function(){
         fetch('/api/auth/me',{credentials:'same-origin'})
             .then(function(r){return r.json()})
-            .then(function(d){if(d&&d.username)document.getElementById('logoutBtn').style.display='inline-block';})
+            .then(function(d){if(d&&d.user&&d.user.username)document.getElementById('logoutBtn').style.display='inline-block';})
             .catch(function(){});
     })();
     function doLogout(){

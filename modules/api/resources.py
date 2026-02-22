@@ -3,15 +3,12 @@ API endpoints module for CertMate
 Defines Flask-RESTX Resource classes for REST API endpoints
 """
 
-import ipaddress
 import logging
 import re
-import socket
 import tempfile
 import zipfile
 import os
 from pathlib import Path
-from urllib.parse import urlparse
 from flask import send_file, after_this_request, current_app
 from flask_restx import Resource, fields
 
@@ -31,27 +28,6 @@ def _validate_backup_filename(filename):
         return 'Invalid backup file format'
     return None
 
-
-def _is_safe_url(url: str) -> tuple:
-    """Check if a URL is safe to request (not targeting private/internal networks).
-    Returns (is_safe, error_message)."""
-    try:
-        parsed = urlparse(url)
-        hostname = parsed.hostname
-        if not hostname:
-            return False, "Invalid URL: no hostname"
-        # Resolve hostname to IP
-        try:
-            addr_info = socket.getaddrinfo(hostname, parsed.port or 443, proto=socket.IPPROTO_TCP)
-        except socket.gaierror:
-            return False, "Could not resolve hostname"
-        for family, _, _, _, sockaddr in addr_info:
-            ip = ipaddress.ip_address(sockaddr[0])
-            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
-                return False, "URL resolves to a private/internal network address"
-        return True, None
-    except Exception:
-        return False, "Invalid URL"
 
 
 def _validate_domain_path(domain, cert_base_dir):
@@ -965,15 +941,6 @@ def create_api_resources(api, models, managers):
                             import ssl
                             from urllib.parse import urljoin
 
-                            # SSRF protection: block requests to private/internal networks
-                            is_safe, ssrf_msg = _is_safe_url(acme_url)
-                            if not is_safe:
-                                return {
-                                    'success': False,
-                                    'message': f'ACME URL rejected: {ssrf_msg}',
-                                    'ca_provider': ca_provider
-                                }
-
                             # Test if the ACME directory is accessible
                             timeout = 10
 
@@ -984,7 +951,7 @@ def create_api_resources(api, models, managers):
                                 # For now, we'll warn but still allow the connection
                                 logger.info("Custom CA certificate provided for Private CA")
 
-                            response = requests.get(acme_url, timeout=timeout, verify=verify_ssl)
+                            response = requests.get(acme_url, timeout=timeout, verify=verify_ssl, allow_redirects=False)
                             
                             if response.status_code == 200:
                                 try:
