@@ -507,32 +507,35 @@ class SettingsManager:
 
     def get_domain_dns_provider(self, domain, settings=None):
         """Get the DNS provider for a specific domain with backward compatibility
-        
+
         Args:
             domain: The domain name to check
             settings: Current settings dict (optional, loads current if not provided)
-            
+
         Returns:
-            str: DNS provider name (e.g., 'cloudflare', 'route53')
+            str or None: DNS provider name (e.g., 'cloudflare', 'route53'),
+                         or None if no provider is configured.
         """
         try:
             if settings is None:
                 settings = self.load_settings()
-        
+
+            default_provider = settings.get('dns_provider')
+
             # Check if domain has specific provider in new object format
             for domain_config in settings.get('domains', []):
                 if isinstance(domain_config, dict) and domain_config.get('domain') == domain:
-                    return domain_config.get('dns_provider', settings.get('dns_provider', 'cloudflare'))
+                    return domain_config.get('dns_provider', default_provider)
                 elif isinstance(domain_config, str) and domain_config == domain:
                     # Legacy string format - use default provider
-                    return settings.get('dns_provider', 'cloudflare')
-        
+                    return default_provider
+
             # Domain not found in settings, use default provider
-            return settings.get('dns_provider', 'cloudflare')
-            
+            return default_provider
+
         except Exception as e:
             logger.error(f"Error getting DNS provider for domain {domain}: {e}")
-            return 'cloudflare'  # Safe fallback
+            return None
 
     def _migrate_settings_format(self, settings):
         """Migrate settings to handle format changes and ensure backward compatibility"""
@@ -591,7 +594,7 @@ class SettingsManager:
                             "domain": domain,
                             "dns_provider": dns_provider,
                             "created_at": "unknown",
-                            "version": "2.0.0",
+                            "version": "2.0.2",
                             "migrated": True
                         }
                         

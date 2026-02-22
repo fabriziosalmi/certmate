@@ -140,7 +140,7 @@ class FileOperations:
                 "backup_id": backup_id,
                 "timestamp": datetime.now().isoformat(),
                 "backup_reason": backup_reason,
-                "version": "2.0.0",  # New unified format
+                "version": "2.0.2",  # New unified format
                 "type": "unified",
                 "domains": domains,
                 "settings_domains": [d.get('domain') if isinstance(d, dict) else d for d in settings_data.get('domains', [])],

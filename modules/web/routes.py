@@ -1103,6 +1103,7 @@ def register_web_routes(app, managers):
             san_domains_raw = data.get('san_domains', '')  # Can be comma-separated string or list
             dns_provider = data.get('dns_provider')  # Optional, uses default from settings
             account_id = data.get('account_id')      # Optional, uses default account
+            ca_provider = data.get('ca_provider')    # Optional, uses default from settings
             challenge_type = data.get('challenge_type')  # Optional: 'dns-01' or 'http-01'
             
             # Parse SAN domains (support both comma-separated string and list)
@@ -1196,6 +1197,7 @@ def register_web_routes(app, managers):
                     certificate_manager.create_certificate(
                         domain, email, dns_provider,
                         account_id=account_id,
+                        ca_provider=ca_provider if ca_provider else None,
                         san_domains=san_domains if san_domains else None,
                         challenge_type=challenge_type
                     )

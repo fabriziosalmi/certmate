@@ -240,6 +240,9 @@ class CertificateManager:
                         settings = self.settings_manager.load_settings()
                         dns_provider = self.settings_manager.get_domain_dns_provider(domain, settings)
 
+                    if not dns_provider:
+                        raise ValueError("No DNS provider configured. Go to Settings and select a DNS provider.")
+
                     dns_config, used_account_id = self._get_dns_config(
                         dns_provider, account_id
                     )
@@ -278,11 +281,28 @@ class CertificateManager:
 
             # Build certbot command
             ca_extra_env = {}
+            san_list = all_domains[1:] if len(all_domains) > 1 else None
             if self.ca_manager and ca_account_config:
-                certbot_cmd, ca_extra_env = self.ca_manager.build_certbot_command(
-                    domain, email, ca_provider, dns_provider, dns_config,
-                    ca_account_config, staging, cert_dir, san_domains=all_domains[1:] if len(all_domains) > 1 else None
-                )
+                try:
+                    certbot_cmd, ca_extra_env = self.ca_manager.build_certbot_command(
+                        domain, email, ca_provider, dns_provider, dns_config,
+                        ca_account_config, staging, cert_dir, san_domains=san_list
+                    )
+                except TypeError as e:
+                    # Defensive fallback: older build_certbot_command without san_domains
+                    logger.warning(f"build_certbot_command does not accept san_domains, adding manually: {e}")
+                    result = self.ca_manager.build_certbot_command(
+                        domain, email, ca_provider, dns_provider, dns_config,
+                        ca_account_config, staging, cert_dir
+                    )
+                    if isinstance(result, tuple):
+                        certbot_cmd, ca_extra_env = result
+                    else:
+                        certbot_cmd = result
+                    # Manually append SAN domains
+                    if san_list:
+                        for san in san_list:
+                            certbot_cmd.extend(['-d', san])
             else:
                 certbot_cmd = [
                     'certbot', 'certonly',
