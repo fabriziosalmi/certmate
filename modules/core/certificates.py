@@ -347,7 +347,10 @@ class CertificateManager:
                 # Ensure propagation time is within reasonable bounds (1 second to 1 hour)
                 propagation_time = max(1, min(3600, propagation_time))
 
-                certbot_cmd.extend([f'--{strategy.plugin_name}-propagation-seconds', str(propagation_time)])
+                # Some plugins (e.g. certbot-dns-route53 ≥ 1.22) do not accept a
+                # --{plugin}-propagation-seconds flag and handle propagation internally.
+                if strategy.supports_propagation_seconds_flag:
+                    certbot_cmd.extend([f'--{strategy.plugin_name}-propagation-seconds', str(propagation_time)])
 
             logger.info(f"Running certbot command for {domain} with {dns_provider}")
             # Redact sensitive arguments before logging

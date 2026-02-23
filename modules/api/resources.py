@@ -939,17 +939,34 @@ def create_api_resources(api, models, managers):
                         try:
                             import requests
                             import ssl
+                            import tempfile
                             from urllib.parse import urljoin
 
                             # Test if the ACME directory is accessible
                             timeout = 10
 
-                            # For HTTPS URLs, we might need to handle custom CA certificates
-                            verify_ssl = True
+                            # Build SSL verification argument.
+                            # If the user supplied a custom CA certificate (typical for private CAs
+                            # with self-signed roots), write it to a temp file and pass it as the
+                            # `verify` argument so requests can validate the server certificate.
+                            # Without this, requests falls back to the system CA bundle and will
+                            # reject self-signed / private-root certificates.
+                            _ca_bundle_tmp = None
                             if ca_cert:
-                                # If a custom CA cert is provided, we should use it for verification
-                                # For now, we'll warn but still allow the connection
-                                logger.info("Custom CA certificate provided for Private CA")
+                                try:
+                                    _ca_bundle_tmp = tempfile.NamedTemporaryFile(
+                                        mode='w', suffix='.pem', delete=False
+                                    )
+                                    _ca_bundle_tmp.write(ca_cert.strip())
+                                    _ca_bundle_tmp.flush()
+                                    _ca_bundle_tmp.close()
+                                    verify_ssl = _ca_bundle_tmp.name
+                                    logger.info("Using provided CA certificate for ACME endpoint SSL verification")
+                                except Exception as tmp_err:
+                                    logger.warning(f"Could not write CA cert to temp file: {tmp_err}")
+                                    verify_ssl = True
+                            else:
+                                verify_ssl = True
 
                             response = requests.get(acme_url, timeout=timeout, verify=verify_ssl, allow_redirects=False)
                             
@@ -994,22 +1011,36 @@ def create_api_resources(api, models, managers):
                         except requests.exceptions.ConnectionError:
                             return {
                                 'success': False,
-                                'message': 'Connection failed - ACME endpoint is not accessible',
+                                'message': 'Connection failed - ACME endpoint is not accessible. '
+                                           'Ensure the CertMate server can reach the ACME host on the required port.',
                                 'ca_provider': ca_provider
                             }
                         except requests.exceptions.SSLError as ssl_error:
+                            hint = (
+                                ' Provide the private CA certificate in the "CA Certificate" field so it can be used for verification.'
+                                if not ca_cert else
+                                ' The provided CA certificate could not verify the server. Ensure it is the correct root/intermediate PEM.'
+                            )
                             return {
                                 'success': False,
-                                'message': 'SSL verification failed',
+                                'message': f'SSL verification failed.{hint}',
                                 'ca_provider': ca_provider
                             }
                         except Exception as conn_error:
                             logger.error(f"CA provider connection test failed: {conn_error}")
                             return {
                                 'success': False,
-                                'message': 'Connection test failed',
+                                'message': f'Connection test failed: {conn_error}',
                                 'ca_provider': ca_provider
                             }
+                        finally:
+                            # Always remove the temporary CA bundle file if we created one
+                            try:
+                                if _ca_bundle_tmp is not None:
+                                    import os as _os
+                                    _os.unlink(_ca_bundle_tmp.name)
+                            except (NameError, OSError):
+                                pass
 
                     else:
                         return {'error': 'Invalid CA provider type'}, 400

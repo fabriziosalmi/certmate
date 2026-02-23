@@ -37,6 +37,16 @@ class DNSProviderStrategy(ABC):
         """Return default propagation time in seconds"""
         return 120
 
+    @property
+    def supports_propagation_seconds_flag(self) -> bool:
+        """Whether this provider's certbot plugin accepts a --{plugin}-propagation-seconds flag.
+
+        Most plugins support this flag, but some (e.g. certbot-dns-route53 ≥ 1.22)
+        removed it because propagation is handled internally.  Override and return
+        ``False`` in subclasses where the flag is not accepted.
+        """
+        return True
+
     def configure_certbot_arguments(self, cmd: list, credentials_file: Optional[Path], domain_alias: Optional[str] = None) -> None:
         """Add provider-specific arguments to the certbot command
         
@@ -87,7 +97,13 @@ class Route53Strategy(DNSProviderStrategy):
     @property
     def plugin_name(self) -> str:
         return 'dns-route53'
-        
+
+    @property
+    def supports_propagation_seconds_flag(self) -> bool:
+        # certbot-dns-route53 ≥ 1.22 removed --dns-route53-propagation-seconds.
+        # The plugin polls Route53 internally until the record propagates.
+        return False
+
     @property
     def default_propagation_seconds(self) -> int:
         return 60

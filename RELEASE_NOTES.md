@@ -1,3 +1,67 @@
+# Release v2.0.3
+
+## Bug Fixes
+
+### Issue #75 — AWS Route53 DNS Provider: unrecognised argument `--dns-route53-propagation-seconds`
+
+**Root cause:** certbot-dns-route53 ≥ 1.22 removed the `--dns-route53-propagation-seconds`
+CLI flag. The plugin now polls Route53 internally until the TXT record propagates, making
+the flag redundant. Passing it caused an "unrecognised arguments" error that aborted every
+certificate request using the Route53 provider.
+
+**Fix:**
+- Added `supports_propagation_seconds_flag` property to `DNSProviderStrategy` (base class,
+  defaults to `True`).
+- `Route53Strategy` overrides the property to `False`.
+- `CertificateManager.create_certificate()` now only appends the propagation-seconds flag to
+  the certbot command when the strategy's `supports_propagation_seconds_flag` is `True`.
+
+**Files changed:** `modules/core/dns_strategies.py`, `modules/core/certificates.py`
+
+---
+
+### Issue #74 — Private CA ACME endpoint connection test fails with SSL error
+
+**Root cause:** The "Test Connection" API endpoint used `verify=True` (system CA bundle)
+for all HTTPS requests to private ACME servers. Private CAs with self-signed or
+internal-root certificates are not trusted by the system bundle, causing every connection
+test to report "ACME endpoint is not accessible" even when the endpoint was reachable.
+
+**Fix:**
+- When the user provides a CA certificate in the Private CA configuration form, the
+  certificate is written to a temporary PEM file and passed as `verify=<path>` to
+  `requests.get()`, allowing the self-signed / private-root to be properly validated.
+- The temporary file is always removed in a `finally` block to avoid leaking disk state.
+- SSL error messages now include a targeted hint: whether to supply a CA certificate
+  (if none was given) or verify that the provided certificate is the correct root/intermediate.
+
+**Files changed:** `modules/api/resources.py`
+
+---
+
+### Issue #56 — Residual Route53 failures still reported after v2.0.2
+
+The `san_domains` keyword argument and Cloudflare-hardcoded DNS provider fallback were
+already resolved in v2.0.1 and v2.0.2. The remaining failure mode reported by users
+("unrecognised arguments: --dns-route53-propagation-seconds") is the same bug addressed
+by the Issue #75 fix above. Closing as fully resolved in v2.0.3.
+
+---
+
+## Test Suite
+
+- 4 new unit tests added to `tests/test_san_domains.py`:
+  - `TestRoute53PropagationFlag`: verifies `Route53Strategy.supports_propagation_seconds_flag`
+    is `False`, all other strategies are `True`, and the flag is absent from the constructed
+    certbot command for Route53.
+  - `TestAcmeConnectionSSLHandling`: verifies temp-file CA bundle creation and the
+    no-cert system-bundle fallback.
+
+**Full suite result: 161 passed, 9 skipped, 0 failed** (9 skipped require live credentials
+or a real CA; all automatable tests are green).
+
+---
+
 # Release v1.9.0
 
 ## Docker First-Run UX
