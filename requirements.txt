@@ -21,7 +21,9 @@ certbot-dns-powerdns==0.2.1
 certbot-dns-linode==2.6.0
 certbot-dns-gandi==1.6.1
 certbot-dns-ovh==2.6.0
-certbot-dns-namecheap==1.0.0
+# certbot-dns-namecheap removed: only v1.0.0 exists on PyPI (alpha,
+# targets Python 2.7-3.8) and is incompatible with certbot 2.x / Python 3.12.
+# Namecheap users should use acme-dns or manual DNS challenge instead.
 certbot-dns-rfc2136==2.10.0
 certbot-dns-vultr==1.1.0
 certbot-dns-dnsmadeeasy==2.6.0

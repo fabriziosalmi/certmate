@@ -92,7 +92,7 @@ jobs:
         cache-from: type=gha
         cache-to: type=gha,mode=max
         build-args: |
-          REQUIREMENTS_FILE=requirements-minimal.txt
+          REQUIREMENTS_FILE=requirements.txt
           
     - name: Update Docker Hub description
       if: github.ref == 'refs/heads/main' && steps.should_push.outputs.push == 'true'

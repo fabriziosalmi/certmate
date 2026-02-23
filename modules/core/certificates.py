@@ -12,7 +12,7 @@ import shutil
 from pathlib import Path
 from datetime import datetime, timedelta
 from .shell import ShellExecutor
-from .dns_strategies import DNSStrategyFactory, HTTP01Strategy
+from .dns_strategies import DNSStrategyFactory, HTTP01Strategy, check_certbot_plugin_installed
 from .constants import CERTIFICATE_FILES, get_domain_name
 from .utils import validate_domain
 
@@ -254,6 +254,16 @@ class CertificateManager:
 
                 # Get Strategy
                 strategy = DNSStrategyFactory.get_strategy(dns_provider)
+
+                # Verify the certbot plugin is installed before proceeding
+                plugin = strategy.plugin_name
+                if not check_certbot_plugin_installed(plugin):
+                    pkg = f"certbot-{plugin}"
+                    raise RuntimeError(
+                        f"The certbot plugin '{plugin}' is not installed. "
+                        f"Install it with: pip install {pkg}  "
+                        f"(Docker users: rebuild with REQUIREMENTS_FILE=requirements.txt)"
+                    )
 
             # Build list of all domains (primary + SANs)
             all_domains = [domain]

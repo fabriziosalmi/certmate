@@ -4,6 +4,7 @@ Implements the Strategy Pattern for DNS provider configuration and management.
 """
 
 import logging
+import subprocess
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Dict, Any, Optional
@@ -17,6 +18,25 @@ from .utils import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def check_certbot_plugin_installed(plugin_name: str) -> bool:
+    """Check if a certbot plugin is installed and registered.
+
+    Runs ``certbot plugins`` and looks for the given *plugin_name*
+    (e.g. ``dns-route53``) in the output.  Returns ``True`` when found.
+    """
+    try:
+        result = subprocess.run(
+            ['certbot', 'plugins', '--prepare'],
+            capture_output=True, text=True, timeout=30,
+        )
+        # Plugin names appear as "* dns-route53" or "PluginEntryPoint#dns-route53"
+        return plugin_name in result.stdout or plugin_name in result.stderr
+    except Exception:
+        # If we can't check, assume it's available and let certbot fail
+        # with its own error message.
+        return True
 
 class DNSProviderStrategy(ABC):
     """Abstract base class for DNS provider strategies"""
@@ -218,6 +238,13 @@ class OVHStrategy(DNSProviderStrategy):
         return 180
 
 class NamecheapStrategy(DNSProviderStrategy):
+    """Namecheap DNS strategy.
+
+    WARNING: The ``certbot-dns-namecheap`` PyPI package (v1.0.0, alpha) only
+    supports Python 2.7-3.8 and is incompatible with certbot 2.x / Python 3.12.
+    Users should prefer acme-dns or manual DNS challenge for Namecheap domains.
+    """
+
     def create_config_file(self, config_data: Dict[str, Any]) -> Optional[Path]:
         return create_namecheap_config(
             config_data.get('username', ''),
