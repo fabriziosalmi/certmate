@@ -35,7 +35,7 @@ SETTINGS_FILE = DATA_DIR / "settings.json"
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description='CertMate SSL Certificate Management')
-    parser.add_argument('--host', default='0.0.0.0', help='Host to bind to (default: 0.0.0.0)')
+    parser.add_argument('--host', default='0.0.0.0', help='Host to bind to (default: 0.0.0.0)')  # nosec B104
     parser.add_argument('--port', type=int, default=8000, help='Port to bind to (default: 8000)')
     parser.add_argument('--debug', action='store_true', help='Enable debug mode')
     parser.add_argument('--log-level', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'], default='INFO',

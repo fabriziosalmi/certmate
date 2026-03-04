@@ -204,7 +204,7 @@ class CertificateManager:
             # Get CA provider configuration
             if not ca_provider:
                 settings = self.settings_manager.load_settings()
-                ca_provider = settings.get('default_ca_provider', 'letsencrypt')
+                ca_provider = settings.get('default_ca', 'letsencrypt')
             
             logger.info(f"Using CA provider: {ca_provider}")
             

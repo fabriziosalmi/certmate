@@ -363,7 +363,7 @@ def setup_rate_limiting(app, container: AppContainer):
         if path.startswith(('/api/web/', '/api/auth/', '/api/users', '/api/backups')):
             return None
 
-        client_ip = flask_request.remote_addr or '0.0.0.0'
+        client_ip = flask_request.remote_addr or '0.0.0.0'  # nosec B104
         endpoint = 'default'
         if 'certificates' in path and 'create' in path:
             endpoint = 'certificate_create'

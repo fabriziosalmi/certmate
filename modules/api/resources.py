@@ -306,6 +306,10 @@ def create_api_resources(api, models, managers):
                         'hint': 'Configure email in settings first. Required for CA notifications.'
                     }, 400
 
+                # Resolve CA provider from settings if not provided
+                if not ca_provider:
+                    ca_provider = settings.get('default_ca', 'letsencrypt')
+
                 # Resolve challenge type from settings if not provided
                 if not challenge_type:
                     challenge_type = settings.get('challenge_type', 'dns-01')
