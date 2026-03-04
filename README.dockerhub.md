@@ -6,7 +6,7 @@
 
 </div>
 
-**CertMate** is a powerful SSL certificate management system for modern infrastructure. Multi-DNS provider support, Docker-ready, comprehensive REST API.
+**CertMate** is an SSL certificate management system for modern infrastructure. Multi-DNS provider support, Docker-ready, comprehensive REST API.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
@@ -71,30 +71,30 @@ docker run -d \
 
 ## Supported DNS Providers
 
-| Provider | Multi-Account | Status |
-|----------|--------------|--------|
-| Cloudflare | | Stable |
-| AWS Route53 | | Stable |
-| Azure DNS | | Stable |
-| Google Cloud DNS | | Stable |
-| DigitalOcean | | Stable |
-| PowerDNS | | Stable |
-| RFC2136 | | Stable |
-| Linode | | Stable |
-| Gandi | | Stable |
-| OVH | | Stable |
-| Namecheap | | Stable |
-| Vultr | | Stable |
-| DNS Made Easy | | Stable |
-| NS1 | | Stable |
-| Hetzner | | Stable |
-| Porkbun | | Stable |
-| GoDaddy | | Stable |
-| Hurricane Electric | | Stable |
-| Dynu | | Stable |
-| ArvanCloud | | Stable |
-| Infomaniak | | Stable |
-| ACME-DNS | | Stable |
+| Provider           | Multi-Account | Status |
+| ------------------ | ------------- | ------ |
+| Cloudflare         |               | Stable |
+| AWS Route53        |               | Stable |
+| Azure DNS          |               | Stable |
+| Google Cloud DNS   |               | Stable |
+| DigitalOcean       |               | Stable |
+| PowerDNS           |               | Stable |
+| RFC2136            |               | Stable |
+| Linode             |               | Stable |
+| Gandi              |               | Stable |
+| OVH                |               | Stable |
+| Namecheap          |               | Stable |
+| Vultr              |               | Stable |
+| DNS Made Easy      |               | Stable |
+| NS1                |               | Stable |
+| Hetzner            |               | Stable |
+| Porkbun            |               | Stable |
+| GoDaddy            |               | Stable |
+| Hurricane Electric |               | Stable |
+| Dynu               |               | Stable |
+| ArvanCloud         |               | Stable |
+| Infomaniak         |               | Stable |
+| ACME-DNS           |               | Stable |
 
 ## Certificate Authority Providers
 
@@ -148,7 +148,7 @@ curl "http://localhost:8000/api/certificates" \
 - **GCP**: `GOOGLE_PROJECT_ID`, `GOOGLE_APPLICATION_CREDENTIALS`
 - **DigitalOcean**: `DIGITALOCEAN_TOKEN`
 - **Hetzner**: `HETZNER_API_TOKEN`
-- See [documentation](https://github.com/fabriziosalmi/certmate/blob/main/DNS_PROVIDERS.md) for all providers
+- See [documentation](https://github.com/fabriziosalmi/certmate/blob/main/docs/dns-providers.md) for all providers
 
 ### Optional
 - `SECRET_KEY` - Flask secret key (auto-generated if not set)
@@ -212,7 +212,7 @@ curl http://localhost:8000/health
 # Response
 {
  "status": "healthy",
- "version": "1.6.0",
+ "version": "2.1.0",
  "uptime": "24h 15m",
  "certificates": 42,
  "storage": "local_filesystem"
@@ -244,10 +244,10 @@ ls -la data/ certificates/ letsencrypt/
 
 - **GitHub Repository**: https://github.com/fabriziosalmi/certmate
 - **Full README**: https://github.com/fabriziosalmi/certmate/blob/main/README.md
-- **Installation Guide**: https://github.com/fabriziosalmi/certmate/blob/main/INSTALLATION.md
-- **DNS Providers**: https://github.com/fabriziosalmi/certmate/blob/main/DNS_PROVIDERS.md
-- **CA Providers**: https://github.com/fabriziosalmi/certmate/blob/main/CA_PROVIDERS.md
-- **Multi-Account Setup**: https://github.com/fabriziosalmi/certmate/blob/main/MULTI_ACCOUNT_EXAMPLES.md
+- **Installation Guide**: https://github.com/fabriziosalmi/certmate/blob/main/docs/installation.md
+- **DNS Providers**: https://github.com/fabriziosalmi/certmate/blob/main/docs/dns-providers.md
+- **CA Providers**: https://github.com/fabriziosalmi/certmate/blob/main/docs/ca-providers.md
+- **Multi-Account Setup**: https://github.com/fabriziosalmi/certmate/blob/main/docs/dns-providers.md#multi-account-support
 - **API Documentation**: http://localhost:8000/docs/
 
 ## Contributing
@@ -267,4 +267,4 @@ MIT License - see [LICENSE](https://github.com/fabriziosalmi/certmate/blob/main/
 
 ---
 
-**Made with for the DevOps community**
+

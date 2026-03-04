@@ -19,7 +19,6 @@ Welcome to the CertMate documentation. This folder contains comprehensive guides
 - **[API Reference](./api.md)** — Complete REST API documentation
 - **[Architecture](./architecture.md)** — System design, components, data flow
 - **[Testing Guide](./testing.md)** — Test framework, CI/CD, coverage
-- **[Changelog](./CHANGELOG.md)** — Version history and updates
 
 ---
 
@@ -67,18 +66,18 @@ Welcome to the CertMate documentation. This folder contains comprehensive guides
 
 ## API Endpoints Quick Reference
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/client-certs/create` | Create certificate |
-| GET | `/api/client-certs` | List certificates |
-| GET | `/api/client-certs/<id>` | Get metadata |
-| GET | `/api/client-certs/<id>/download/<type>` | Download cert/key/csr |
-| POST | `/api/client-certs/<id>/revoke` | Revoke certificate |
-| POST | `/api/client-certs/<id>/renew` | Renew certificate |
-| GET | `/api/client-certs/stats` | Get statistics |
-| POST | `/api/client-certs/batch` | Batch CSV import |
-| GET | `/api/ocsp/status/<serial>` | OCSP status |
-| GET | `/api/crl/download/<format>` | Download CRL |
+| Method | Endpoint                                 | Description           |
+| ------ | ---------------------------------------- | --------------------- |
+| POST   | `/api/client-certs/create`               | Create certificate    |
+| GET    | `/api/client-certs`                      | List certificates     |
+| GET    | `/api/client-certs/<id>`                 | Get metadata          |
+| GET    | `/api/client-certs/<id>/download/<type>` | Download cert/key/csr |
+| POST   | `/api/client-certs/<id>/revoke`          | Revoke certificate    |
+| POST   | `/api/client-certs/<id>/renew`           | Renew certificate     |
+| GET    | `/api/client-certs/stats`                | Get statistics        |
+| POST   | `/api/client-certs/batch`                | Batch CSV import      |
+| GET    | `/api/ocsp/status/<serial>`              | OCSP status           |
+| GET    | `/api/crl/download/<format>`             | Download CRL          |
 
 See [API Reference](./api.md#endpoints) for full documentation.
 
@@ -89,10 +88,8 @@ See [API Reference](./api.md#endpoints) for full documentation.
 All features are thoroughly tested:
 
 ```bash
-# Run E2E tests
-python test_e2e_complete.py
-
-# Result: 27/27 tests passing
+# Run tests
+python -m pytest tests/ -v
 ```
 
 Test coverage includes:
@@ -131,7 +128,7 @@ Test coverage includes:
 1. **Installation Issues?** → See [Installation Section](./guide.md#installation)
 2. **API Questions?** → See [API Reference](./api.md)
 3. **Architecture Questions?** → See [Architecture Doc](./architecture.md)
-4. **Something Else?** → Check the [Changelog](./CHANGELOG.md)
+4. **Something Else?** → Open an [issue](https://github.com/fabriziosalmi/certmate/issues)
 
 ---
 
@@ -149,7 +146,6 @@ docs/
   guide.md             ← Client certificates user guide
   api.md               ← Complete API reference
   architecture.md      ← System architecture
-  CHANGELOG.md         ← Version history
 ```
 
 ---
@@ -166,25 +162,25 @@ docs/
 
 ## Important Links
 
-- **Web Dashboard**: `http://localhost:5000/client-certificates`
-- **API Docs**: `http://localhost:5000/docs/`
-- **Health Check**: `http://localhost:5000/health`
+- **Web Dashboard**: `http://localhost:8000/client-certificates`
+- **API Docs**: `http://localhost:8000/docs/`
+- **Health Check**: `http://localhost:8000/health`
 - **Audit Logs**: `logs/audit/certificate_audit.log`
 
 ---
 
 ## Status Dashboard
 
-| Component | Status | Tests |
-|-----------|--------|-------|
-| CA Foundation | Ready | 3/3 |
-| CSR Handler | Ready | 3/3 |
-| Cert Manager | Ready | 8/8 |
-| Filtering | Ready | 3/3 |
-| Batch Ops | Ready | 2/2 |
-| OCSP/CRL | Ready | 5/5 |
-| Audit/Rate Limit | Ready | 3/3 |
-| **Total** | **Ready** | **27/27** |
+| Component        | Status    | Tests     |
+| ---------------- | --------- | --------- |
+| CA Foundation    | Ready     | 3/3       |
+| CSR Handler      | Ready     | 3/3       |
+| Cert Manager     | Ready     | 8/8       |
+| Filtering        | Ready     | 3/3       |
+| Batch Ops        | Ready     | 2/2       |
+| OCSP/CRL         | Ready     | 5/5       |
+| Audit/Rate Limit | Ready     | 3/3       |
+| **Total**        | **Ready** | **27/27** |
 
 ---
 
@@ -193,7 +189,7 @@ docs/
 ### Create a Certificate via API
 
 ```bash
-curl -X POST http://localhost:5000/api/client-certs/create \
+curl -X POST http://localhost:8000/api/client-certs/create \
  -H "Authorization: Bearer YOUR_TOKEN" \
  -H "Content-Type: application/json" \
  -d '{
@@ -207,14 +203,14 @@ curl -X POST http://localhost:5000/api/client-certs/create \
 ### List Certificates
 
 ```bash
-curl http://localhost:5000/api/client-certs \
+curl http://localhost:8000/api/client-certs \
  -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
 ### Download Certificate
 
 ```bash
-curl http://localhost:5000/api/client-certs/USER_ID/download/crt \
+curl http://localhost:8000/api/client-certs/USER_ID/download/crt \
  -H "Authorization: Bearer YOUR_TOKEN" \
  -o certificate.crt
 ```
@@ -238,8 +234,6 @@ CertMate is licensed under the MIT License. See LICENSE file in the repository.
 ---
 
 <div align="center">
-
-**Made with for CertMate**
 
 [Home](../README.md) • [Documentation](./) • [GitHub](https://github.com/fabriziosalmi/certmate)
 

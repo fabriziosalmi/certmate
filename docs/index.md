@@ -4,8 +4,6 @@
 
 ![CertMate](https://img.shields.io/badge/CertMate-Client%20Certificates-blue?style=for-the-badge)
 ![Status](https://img.shields.io/badge/Status-Production%20Ready-green?style=for-the-badge)
-![Tests](https://img.shields.io/badge/Tests-27%2F27%20Passing-brightgreen?style=for-the-badge)
-![Coverage](https://img.shields.io/badge/Coverage-100%25-brightgreen?style=for-the-badge)
 
 **Complete Client Certificate Management for CertMate**
 
@@ -70,18 +68,18 @@ pip install -r requirements.txt
 python app.py
 ```
 
-The server will start on `http://localhost:5000`
+The server will start on `http://localhost:8000`
 
 ### Basic Usage
 
 #### 1. Access Web Dashboard
 ```
-Navigate to: http://localhost:5000/client-certificates
+Navigate to: http://localhost:8000/client-certificates
 ```
 
 #### 2. Create a Certificate via API
 ```bash
-curl -X POST http://localhost:5000/api/client-certs/create \
+curl -X POST http://localhost:8000/api/client-certs/create \
  -H "Authorization: Bearer YOUR_TOKEN" \
  -H "Content-Type: application/json" \
  -d '{
@@ -96,19 +94,19 @@ curl -X POST http://localhost:5000/api/client-certs/create \
 
 #### 3. List Certificates
 ```bash
-curl http://localhost:5000/api/client-certs \
+curl http://localhost:8000/api/client-certs \
  -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
 #### 4. Download Certificate Files
 ```bash
 # Download certificate
-curl http://localhost:5000/api/client-certs/USER_ID/download/crt \
+curl http://localhost:8000/api/client-certs/USER_ID/download/crt \
  -H "Authorization: Bearer YOUR_TOKEN" \
  -o user.crt
 
 # Download private key
-curl http://localhost:5000/api/client-certs/USER_ID/download/key \
+curl http://localhost:8000/api/client-certs/USER_ID/download/key \
  -H "Authorization: Bearer YOUR_TOKEN" \
  -o user.key
 ```
@@ -127,7 +125,6 @@ curl http://localhost:5000/api/client-certs/USER_ID/download/key \
 - **[API Reference](./api.md)** - Complete REST API documentation with examples
 - **[Architecture](./architecture.md)** - System design, components, and data flow
 - **[User Guide](./guide.md)** - Step-by-step guide for common tasks
-- **[Changelog](./CHANGELOG.md)** - Version history and updates
 
 ### Quick Links
 
@@ -143,10 +140,8 @@ curl http://localhost:5000/api/client-certs/USER_ID/download/key \
 All features have been extensively tested:
 
 ```bash
-# Run comprehensive test suite
-python test_e2e_complete.py
-
-# Expected result: 27/27 tests passing
+# Run test suite
+python -m pytest tests/ -v
 ```
 
 ### Test Coverage
@@ -162,18 +157,18 @@ python test_e2e_complete.py
 
 ## API Endpoints Summary
 
-| Method | Endpoint | Purpose |
-|--------|----------|---------|
-| `POST` | `/api/client-certs/create` | Create new certificate |
-| `GET` | `/api/client-certs` | List certificates with filters |
-| `GET` | `/api/client-certs/<id>` | Get certificate metadata |
-| `GET` | `/api/client-certs/<id>/download/<type>` | Download cert/key/csr |
-| `POST` | `/api/client-certs/<id>/revoke` | Revoke certificate |
-| `POST` | `/api/client-certs/<id>/renew` | Renew certificate |
-| `GET` | `/api/client-certs/stats` | Get statistics |
-| `POST` | `/api/client-certs/batch` | Batch CSV import |
-| `GET` | `/api/ocsp/status/<serial>` | OCSP status query |
-| `GET` | `/api/crl/download/<format>` | Download CRL (PEM/DER) |
+| Method | Endpoint                                 | Purpose                        |
+| ------ | ---------------------------------------- | ------------------------------ |
+| `POST` | `/api/client-certs/create`               | Create new certificate         |
+| `GET`  | `/api/client-certs`                      | List certificates with filters |
+| `GET`  | `/api/client-certs/<id>`                 | Get certificate metadata       |
+| `GET`  | `/api/client-certs/<id>/download/<type>` | Download cert/key/csr          |
+| `POST` | `/api/client-certs/<id>/revoke`          | Revoke certificate             |
+| `POST` | `/api/client-certs/<id>/renew`           | Renew certificate              |
+| `GET`  | `/api/client-certs/stats`                | Get statistics                 |
+| `POST` | `/api/client-certs/batch`                | Batch CSV import               |
+| `GET`  | `/api/ocsp/status/<serial>`              | OCSP status query              |
+| `GET`  | `/api/crl/download/<format>`             | Download CRL (PEM/DER)         |
 
 ---
 
@@ -250,16 +245,13 @@ See LICENSE file in the repository
 
 ## Version
 
-**Current Version**: 2.0.0
+**Current Version**: 2.1.0
 **Status**: Production Ready
-**Last Updated**: 2026-02-21
 
 ---
 
 <div align="center">
 
-Made with for CertMate
-
-[Documentation](.) • [Privacy](./privacy.md) • [License](../LICENSE)
+[Documentation](.) • [License](../LICENSE)
 
 </div>

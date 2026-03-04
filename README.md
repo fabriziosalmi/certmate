@@ -4,7 +4,7 @@
 
 <img src="certmate_logo.png" alt="CertMate Logo" width="180">
 
-**CertMate** is a powerful SSL certificate management system designed for modern infrastructure. Built with multi-DNS provider support, Docker containerization, and comprehensive REST API, it's the perfect solution for managing certificates across multiple datacenters and cloud environments.
+**CertMate** is an SSL certificate management system designed for modern infrastructure. Built with multi-DNS provider support, Docker containerization, and a comprehensive REST API, it handles certificates across multiple datacenters and cloud environments.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
@@ -128,30 +128,30 @@ CertMate solves the complexity of SSL certificate management in modern distribut
 
 CertMate supports **22 DNS providers** through Let's Encrypt DNS-01 challenge via individual certbot plugins that provide reliable, well-tested DNS challenge support. **Multi-account support** is available for major providers, enabling enterprise-grade deployments with separate accounts for production, staging, and disaster recovery.
 
-| Provider | Credentials Required | Multi-Account | Use Case | Status |
-|----------|---------------------|---------------|----------|---------|
-| **Cloudflare** | API Token | **Yes** | Global CDN, Free tier available | **Stable** |
-| **AWS Route53** | Access Key, Secret Key | **Yes** | AWS infrastructure, Enterprise | **Stable** |
-| **Azure DNS** | Service Principal credentials | **Yes** | Microsoft ecosystem | **Stable** |
-| **Google Cloud DNS** | Service Account JSON | **Yes** | Google Cloud Platform | **Stable** |
-| **DigitalOcean** | API Token | **Yes** | Cloud infrastructure | **Stable** |
-| **PowerDNS** | API URL, API Key | **Yes** | Self-hosted, On-premises | **Stable** |
-| **RFC2136** | Nameserver, TSIG Key/Secret | **Yes** | Standard DNS update protocol | **Stable** |
-| **Linode** | API Key | Single | Cloud hosting | **Stable** |
-| **Gandi** | API Token | Single | Domain registrar | **Stable** |
-| **OVH** | API Credentials | Single | European hosting | **Stable** |
-| **Namecheap** | Username, API Key | Single | Domain registrar | **Stable** |
-| **Vultr** | API Key | Single | Global cloud infrastructure | **Stable** |
-| **DNS Made Easy** | API Key, Secret Key | Single | Enterprise DNS management | **Stable** |
-| **NS1** | API Key | Single | Intelligent DNS platform | **Stable** |
-| **Hetzner** | API Token | Single | European cloud hosting | **Stable** |
-| **Porkbun** | API Key, Secret Key | Single | Domain registrar with DNS | **Stable** |
-| **GoDaddy** | API Key, Secret | Single | Popular domain registrar | **Stable** |
-| **Hurricane Electric** | Username, Password | Single | Free DNS hosting | **Stable** |
-| **Dynu** | API Token | Single | Dynamic DNS service | **Stable** |
-| **ArvanCloud** | API Key | Single | Iranian cloud provider | **Stable** |
-| **Infomaniak** | API Token | Single | Swiss ISP & cloud provider | **Stable** |
-| **ACME-DNS** | JSON Config | Single | Generic ACME-DNS server | **Stable** |
+| Provider               | Credentials Required          | Multi-Account | Use Case                        | Status     |
+| ---------------------- | ----------------------------- | ------------- | ------------------------------- | ---------- |
+| **Cloudflare**         | API Token                     | **Yes**       | Global CDN, Free tier available | **Stable** |
+| **AWS Route53**        | Access Key, Secret Key        | **Yes**       | AWS infrastructure, Enterprise  | **Stable** |
+| **Azure DNS**          | Service Principal credentials | **Yes**       | Microsoft ecosystem             | **Stable** |
+| **Google Cloud DNS**   | Service Account JSON          | **Yes**       | Google Cloud Platform           | **Stable** |
+| **DigitalOcean**       | API Token                     | **Yes**       | Cloud infrastructure            | **Stable** |
+| **PowerDNS**           | API URL, API Key              | **Yes**       | Self-hosted, On-premises        | **Stable** |
+| **RFC2136**            | Nameserver, TSIG Key/Secret   | **Yes**       | Standard DNS update protocol    | **Stable** |
+| **Linode**             | API Key                       | Single        | Cloud hosting                   | **Stable** |
+| **Gandi**              | API Token                     | Single        | Domain registrar                | **Stable** |
+| **OVH**                | API Credentials               | Single        | European hosting                | **Stable** |
+| **Namecheap**          | Username, API Key             | Single        | Domain registrar                | **Stable** |
+| **Vultr**              | API Key                       | Single        | Global cloud infrastructure     | **Stable** |
+| **DNS Made Easy**      | API Key, Secret Key           | Single        | Enterprise DNS management       | **Stable** |
+| **NS1**                | API Key                       | Single        | Intelligent DNS platform        | **Stable** |
+| **Hetzner**            | API Token                     | Single        | European cloud hosting          | **Stable** |
+| **Porkbun**            | API Key, Secret Key           | Single        | Domain registrar with DNS       | **Stable** |
+| **GoDaddy**            | API Key, Secret               | Single        | Popular domain registrar        | **Stable** |
+| **Hurricane Electric** | Username, Password            | Single        | Free DNS hosting                | **Stable** |
+| **Dynu**               | API Token                     | Single        | Dynamic DNS service             | **Stable** |
+| **ArvanCloud**         | API Key                       | Single        | Iranian cloud provider          | **Stable** |
+| **Infomaniak**         | API Token                     | Single        | Swiss ISP & cloud provider      | **Stable** |
+| **ACME-DNS**           | JSON Config                   | Single        | Generic ACME-DNS server         | **Stable** |
 
 ### Provider Categories
 
@@ -239,7 +239,7 @@ PORT=8000
 
 > **Storage Backends**: By default, certificates are stored locally. For enterprise deployments, you can configure Azure Key Vault, AWS Secrets Manager, HashiCorp Vault, or Infisical via the web interface after startup. See [Storage Backends](#certificate-storage-configuration) for details.
 
-> **Backup Best Practices**: CertMate v1.2.0 includes a unified backup system that creates atomic snapshots of both settings and certificates. After setup, create your first backup from Settings → Backup Management.
+> **Backup Best Practices**: CertMate includes a unified backup system that creates atomic snapshots of both settings and certificates. After setup, create your first backup from Settings → Backup Management.
 
 ### 3. Deploy
 
@@ -256,12 +256,12 @@ docker-compose logs -f certmate
 
 ### 4. Access CertMate
 
-| Service | URL | Description |
-|---------|-----|-------------|
-| **Web Dashboard** | http://localhost:8000 | Main certificate management interface |
-| **API Documentation** | http://localhost:8000/docs/ | Interactive Swagger/OpenAPI docs |
-| **Alternative API Docs** | http://localhost:8000/redoc/ | ReDoc documentation |
-| **Health Check** | http://localhost:8000/health | Service health monitoring |
+| Service                  | URL                          | Description                           |
+| ------------------------ | ---------------------------- | ------------------------------------- |
+| **Web Dashboard**        | http://localhost:8000        | Main certificate management interface |
+| **API Documentation**    | http://localhost:8000/docs/  | Interactive Swagger/OpenAPI docs      |
+| **Alternative API Docs** | http://localhost:8000/redoc/ | ReDoc documentation                   |
+| **Health Check**         | http://localhost:8000/health | Service health monitoring             |
 
 ### 5. Create Your First Certificate
 
@@ -813,7 +813,7 @@ Content-Type: application/json
 
 ### Automation-Friendly Download URL
 
-**The most powerful feature for infrastructure automation:**
+**Certificate downloads for infrastructure automation:**
 
 ```bash
 # Download certificates via simple URL pattern
@@ -1242,14 +1242,14 @@ main "$@"
 
 ### Environment Variables
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `API_BEARER_TOKEN` | | - | Bearer token for API authentication |
-| `SECRET_KEY` | | auto-generated | Flask secret key for sessions |
-| `HOST` | | `127.0.0.1` | Server bind address |
-| `PORT` | | `8000` | Server port |
-| `FLASK_ENV` | | `production` | Flask environment |
-| `FLASK_DEBUG` | | `false` | Enable debug mode |
+| Variable           | Required | Default        | Description                         |
+| ------------------ | -------- | -------------- | ----------------------------------- |
+| `API_BEARER_TOKEN` |          | -              | Bearer token for API authentication |
+| `SECRET_KEY`       |          | auto-generated | Flask secret key for sessions       |
+| `HOST`             |          | `127.0.0.1`    | Server bind address                 |
+| `PORT`             |          | `8000`         | Server port                         |
+| `FLASK_ENV`        |          | `production`   | Flask environment                   |
+| `FLASK_DEBUG`      |          | `false`        | Enable debug mode                   |
 
 ### DNS Provider Configuration
 
@@ -1396,7 +1396,7 @@ pip install -r requirements-azure-storage.txt
 - Multi-region Azure deployments
 - Integration with Azure DevOps and ARM templates
 
-#### 🟠 AWS Secrets Manager
+#### AWS Secrets Manager
 Integrate with AWS Secrets Manager for scalable secret storage:
 
 **Required Dependencies:**
@@ -1469,7 +1469,7 @@ pip install -r requirements-vault-storage.txt
 - Dynamic secret generation
 - Integration with CI/CD pipelines and Kubernetes
 
-#### 🟣 Infisical
+#### Infisical
 Modern open-source secret management with team collaboration:
 
 **Required Dependencies:**
@@ -1832,7 +1832,7 @@ curl -H "Authorization: Bearer your_token" \
 unified_backup_20241225_120000.zip
  settings.json # Complete application settings
  timestamp: "2024-12-25T12:00:00Z"
- version: "1.2.0"
+ version: "2.1.0"
  dns_providers: {...}
  domains: [...]
  settings: {...}
@@ -2208,18 +2208,18 @@ echo "Settings: $(docker exec certmate cat /app/data/settings.json | jq .)"
 
 ### Complete Documentation Set
 
-| Document | Description | Target Audience |
-|----------|-------------|-----------------|
-| **[README.md](README.md)** | Main documentation and quick start | All users |
-| **[docs/installation.md](docs/installation.md)** | Installation and deployment | System administrators |
-| **[docs/dns-providers.md](docs/dns-providers.md)** | DNS provider setup (22 providers) | DevOps engineers |
-| **[docs/ca-providers.md](docs/ca-providers.md)** | Certificate Authority configuration | Enterprise users |
-| **[docs/docker.md](docs/docker.md)** | Docker and multi-platform builds | DevOps engineers |
-| **[docs/testing.md](docs/testing.md)** | Testing framework and CI/CD | Developers |
-| **[docs/architecture.md](docs/architecture.md)** | System architecture | Developers |
-| **[docs/api.md](docs/api.md)** | Client certificates API reference | Developers |
-| **[CONTRIBUTING.md](CONTRIBUTING.md)** | Development and contribution guide | Developers |
-| **[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)** | Community guidelines | Contributors |
+| Document                                           | Description                         | Target Audience       |
+| -------------------------------------------------- | ----------------------------------- | --------------------- |
+| **[README.md](README.md)**                         | Main documentation and quick start  | All users             |
+| **[docs/installation.md](docs/installation.md)**   | Installation and deployment         | System administrators |
+| **[docs/dns-providers.md](docs/dns-providers.md)** | DNS provider setup (22 providers)   | DevOps engineers      |
+| **[docs/ca-providers.md](docs/ca-providers.md)**   | Certificate Authority configuration | Enterprise users      |
+| **[docs/docker.md](docs/docker.md)**               | Docker and multi-platform builds    | DevOps engineers      |
+| **[docs/testing.md](docs/testing.md)**             | Testing framework and CI/CD         | Developers            |
+| **[docs/architecture.md](docs/architecture.md)**   | System architecture                 | Developers            |
+| **[docs/api.md](docs/api.md)**                     | Client certificates API reference   | Developers            |
+| **[CONTRIBUTING.md](CONTRIBUTING.md)**             | Development and contribution guide  | Developers            |
+| **[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)**       | Community guidelines                | Contributors          |
 
 ### Online Resources
 
