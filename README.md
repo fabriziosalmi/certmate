@@ -16,6 +16,7 @@
 [![Listed on Hacker News](https://img.shields.io/badge/Listed%20on-Hacker%20News-F0652F)](https://news.ycombinator.com/item?id=44427452)
 [![Listed on Reddit](https://img.shields.io/badge/Listed%20on-Reddit-FF4500)](https://www.reddit.com/r/selfhosted/comments/1lkvbcj/ssl_certificates_automation/)
 [![Shared on Mastodon](https://img.shields.io/badge/Shared%20on-Mastodon-6364FF)](https://mastodon.social/@nixCraft/114799880340326467)
+[![As seen on LinkedIn](https://img.shields.io/badge/As%20seen%20on-LinkedIn-0A66C2)](https://www.linkedin.com/posts/labyrinthlabs_github-fabriziosalmicertmate-ssl-certificate-activity-7434531689097248768-Ac63)
  
 ![screenshot1](screenshot_1.png)
 
