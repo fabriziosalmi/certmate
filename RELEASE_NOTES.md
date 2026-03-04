@@ -1,3 +1,41 @@
+# Release v2.3.0
+
+## Bug Fixes
+
+### Issue #77 — Default Certificate Authority setting ignored during certificate creation
+
+**Root cause:** A triple-failure chain prevented the user-configured default CA from being applied:
+
+1. **Settings key mismatch** — The settings UI saves as `default_ca`, but `certificates.py` looked for `default_ca_provider`, always falling back to `letsencrypt`.
+2. **Missing API resolution** — The `/api/certificates/create` endpoint resolved `challenge_type` and `dns_provider` from settings when empty, but had no equivalent logic for `ca_provider`.
+3. **Combined effect** — When the form sent "Use default from settings" (empty value), neither the API layer nor the core logic retrieved the actual configured default.
+
+**Fix:** Corrected the settings key in `certificates.py` and added CA provider resolution in `resources.py`.
+
+**Files changed:** `modules/core/certificates.py`, `modules/api/resources.py`
+
+### Backup download returning 404 despite file existing
+
+**Root cause:** Flask's `send_file()` resolves relative paths against `app.root_path` (`/app/modules/core` due to the factory pattern), not the process working directory (`/app`). The backup file existed at `/app/backups/unified/...` but `send_file` looked for `/app/modules/core/backups/unified/...`.
+
+**Fix:** Pass the absolute resolved path to `send_file()`.
+
+**Files changed:** `modules/api/resources.py`
+
+### CI bandit security check failure
+
+**Root cause:** Two `B104` (hardcoded bind to all interfaces) findings on legitimate uses: Docker bind address default and client IP fallback.
+
+**Fix:** Added `# nosec B104` inline suppressions.
+
+**Files changed:** `app.py`, `modules/core/factory.py`
+
+## Test Suite
+
+**Full suite result: 77 passed, 0 failed** — including real certificate lifecycle on `certmate.org` via Cloudflare DNS (create, list, download ZIP, download TLS components, renew).
+
+---
+
 # Release v2.2.0
 
 ## 10x Surgical Architecture Refactoring

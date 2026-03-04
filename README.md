@@ -1833,7 +1833,7 @@ curl -H "Authorization: Bearer your_token" \
 unified_backup_20241225_120000.zip
  settings.json # Complete application settings
  timestamp: "2024-12-25T12:00:00Z"
- version: "2.2.0"
+ version: "2.3.0"
  dns_providers: {...}
  domains: [...]
  settings: {...}
