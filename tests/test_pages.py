@@ -33,6 +33,25 @@ class TestPageLoading:
 class TestWelcomeBanner:
     """Dashboard page should load dashboard JS module and key UI elements."""
 
+    @pytest.fixture(autouse=True)
+    def setup_initialized_state(self, api):
+        """Ensure container is out of setup mode and authenticated."""
+        # Step 1: Create admin user
+        api.post_json("/api/web/settings/users", {
+            "username": "admin",
+            "password": "password123",
+            "role": "admin"
+        })
+        # Step 2: Enable local auth
+        api.post_json("/api/auth/config", {
+            "local_auth_enabled": True
+        })
+        # Step 3: Login to get session cookie
+        api.post_json("/api/auth/login", {
+            "username": "admin",
+            "password": "password123"
+        })
+
     def test_index_loads_dashboard_js(self, api):
         r = api.get("/", allow_redirects=True)
         assert "dashboard.js" in r.text

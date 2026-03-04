@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}CertMate - Welcome & Setup{% endblock %}
+{% block content %}
+<div class="max-w-4xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
+    <div
+        class="bg-white dark:bg-gray-800 shadow-xl rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700">
+        <div
+            class="px-6 py-8 sm:p-10 bg-gradient-to-br from-primary/10 to-secondary/10 dark:from-gray-800 dark:to-gray-700 border-b border-gray-200 dark:border-gray-700">
+            <div class="flex items-center justify-center mb-6">
+                <div class="p-3 bg-white dark:bg-gray-800 rounded-2xl shadow-lg">
+                    <i class="fas fa-shield-alt text-4xl text-primary"></i>
+                </div>
+            </div>
+            <div class="text-center">
+                <h2 class="text-3xl font-extrabold text-gray-900 dark:text-white sm:text-4xl">
+                    Welcome to CertMate
+                </h2>
+                <p class="mt-4 text-lg text-gray-600 dark:text-gray-300">
+                    Your automated SSL certificate management system is ready. Let's get started by creating your
+                    administrator account.
+                </p>
+            </div>
+        </div>
+
+        <div class="px-6 py-8 sm:p-10">
+            <form id="setupForm" class="space-y-6">
+                <div>
+                    <label for="username" class="block text-sm font-semibold text-gray-700 dark:text-gray-300">
+                        Admin Username
+                    </label>
+                    <div class="mt-1 relative rounded-md shadow-sm">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <i class="fas fa-user text-gray-400"></i>
+                        </div>
+                        <input type="text" name="username" id="username" required
+                            class="block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg pl-10 py-3 focus:outline-none focus:ring-2 focus:ring-primary transition-all duration-200"
+                            placeholder="admin">
+                    </div>
+                </div>
+
+                <div>
+                    <label for="password" class="block text-sm font-semibold text-gray-700 dark:text-gray-300">
+                        Admin Password
+                    </label>
+                    <div class="mt-1 relative rounded-md shadow-sm">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <i class="fas fa-lock text-gray-400"></i>
+                        </div>
+                        <input type="password" name="password" id="password" required
+                            class="block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg pl-10 py-3 focus:outline-none focus:ring-2 focus:ring-primary transition-all duration-200"
+                            placeholder="••••••••">
+                    </div>
+                    <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                        <i class="fas fa-info-circle mr-1"></i>
+                        Choose a strong password with at least 12 characters.
+                    </p>
+                </div>
+
+                <div class="pt-4">
+                    <button type="submit"
+                        class="w-full flex justify-center py-4 px-4 border border-transparent rounded-xl shadow-lg text-lg font-bold text-white bg-gradient-to-r from-primary to-secondary hover:from-secondary hover:to-primary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transform transition-all duration-200 hover:scale-[1.02]">
+                        Complete Initial Setup
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <div class="px-6 py-4 bg-gray-50 dark:bg-gray-900/50 border-t border-gray-200 dark:border-gray-700">
+            <div class="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+                <span><i class="fas fa-code-branch mr-1"></i>v2.2.0 Stable</span>
+                <span><i class="fas fa-lock mr-1"></i>Secure Installation</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.getElementById('setupForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const username = document.getElementById('username').value;
+        const password = document.getElementById('password').value;
+
+        try {
+            const response = await fetch('/api/web/settings/users', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password, role: 'admin' })
+            });
+
+            const data = await response.json();
+            if (response.ok) {
+                // Enable local auth automatically if it's the first user
+                await fetch('/api/auth/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + btoa(username + ':' + password) },
+                    body: JSON.stringify({ local_auth_enabled: true })
+                });
+                window.location.href = '/login';
+            } else {
+                alert(data.error || 'Setup failed');
+            }
+        } catch (err) {
+            alert('Network error during setup');
+        }
+    });
+</script>
+{% endblock %}

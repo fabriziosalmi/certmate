@@ -163,6 +163,24 @@ class DNSManager:
             logger.error(f"Error listing DNS provider accounts for {provider}: {e}")
             return []
 
+    def list_accounts(self, settings=None):
+        """List all accounts for all providers"""
+        try:
+            if not settings:
+                settings = self.settings_manager.load_settings()
+            settings = self.settings_manager.migrate_dns_providers_to_multi_account(settings)
+            dns_providers = settings.get('dns_providers', {})
+            all_accounts = []
+            for provider in dns_providers:
+                accounts = self.list_dns_provider_accounts(provider, settings=settings)
+                for acc in accounts:
+                    acc['provider'] = provider
+                all_accounts.extend(accounts)
+            return all_accounts
+        except Exception as e:
+            logger.error(f"Error listing all DNS accounts: {e}")
+            return []
+
     def suggest_dns_provider_for_domain(self, domain, settings=None):
         """Suggest DNS provider based on domain patterns and existing configuration
         
@@ -262,6 +280,10 @@ class DNSManager:
             logger.error(f"Error creating DNS account for {provider}: {e}")
             return False
 
+    def add_account(self, account_id, provider, account_config, settings=None):
+        """Alias for create_dns_account with consistent naming"""
+        return self.create_dns_account(provider, account_id, account_config, settings)
+
     def delete_dns_account(self, provider, account_id, settings=None):
         """Delete a DNS provider account
         
@@ -312,6 +334,10 @@ class DNSManager:
         except Exception as e:
             logger.error(f"Error deleting DNS account for {provider}: {e}")
             return False
+
+    def delete_account(self, provider, account_id, settings=None):
+        """Alias for delete_dns_account with consistent naming"""
+        return self.delete_dns_account(provider, account_id, settings)
 
     def set_default_account(self, provider, account_id, settings=None):
         """Set the default account for a DNS provider

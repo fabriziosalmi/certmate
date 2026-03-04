@@ -1,14 +1,8 @@
-"""
-Client Certificates API resources for CertMate
-Flask-RESTX endpoints for client certificate management
-"""
-
 import logging
 import re
 from flask import request, send_file, Response
 from flask_restx import Resource, fields, abort
 from io import BytesIO
-import json
 
 logger = logging.getLogger(__name__)
 

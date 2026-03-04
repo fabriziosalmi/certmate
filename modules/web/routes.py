@@ -3,24 +3,14 @@ Web routes module for CertMate
 Handles web interface routes and form-based endpoints
 """
 
-import json
 import logging
 import os
 import re
-import tempfile
-import zipfile
-import concurrent.futures
-from datetime import datetime
 from functools import wraps
 from pathlib import Path
 from collections import defaultdict
 from time import time
-from modules.core.auth import ROLE_HIERARCHY
-from flask import (render_template, request, jsonify, send_file,
-                   send_from_directory, redirect, url_for, after_this_request,
-                   Response, stream_with_context)
-
-from ..core.metrics import generate_metrics_response
+from flask import request, redirect, url_for
 
 logger = logging.getLogger(__name__)
 
@@ -29,26 +19,25 @@ _login_attempts = defaultdict(list)
 _LOGIN_RATE_LIMIT = 5
 _LOGIN_RATE_WINDOW = 60  # seconds
 
+# Domain name validation pattern
+_DOMAIN_RE = re.compile(r'^(\*\.)?([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$')
+
 
 def _check_login_rate_limit(ip_address):
-    """Check if login attempt is allowed for this IP
-    
-    Returns:
-        tuple: (allowed: bool, retry_after: int or None)
-    """
+    """Check if login attempt is allowed for this IP"""
     current_time = time()
     window_start = current_time - _LOGIN_RATE_WINDOW
-    
+
     # Clean old attempts
     _login_attempts[ip_address] = [
         t for t in _login_attempts[ip_address] if t > window_start
     ]
-    
+
     if len(_login_attempts[ip_address]) >= _LOGIN_RATE_LIMIT:
         oldest = min(_login_attempts[ip_address])
         retry_after = int(oldest + _LOGIN_RATE_WINDOW - current_time) + 1
         return False, retry_after
-    
+
     return True, None
 
 
@@ -57,29 +46,8 @@ def _record_login_attempt(ip_address):
     _login_attempts[ip_address].append(time())
 
 
-# Import certificate files constant
-from ..core.constants import CERTIFICATE_FILES
-
-
-
-# Domain name validation pattern
-_DOMAIN_RE = re.compile(r'^(\*\.)?([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$')
-
-
-def _is_localhost(addr):
-    """Check if address is localhost (IPv4/IPv6 loopback only)"""
-    if not addr:
-        return False
-    # Only accept true loopback addresses — not entire private ranges
-    return addr in ('127.0.0.1', '::1', '::ffff:127.0.0.1')
-
-
 def _sanitize_domain(domain, cert_base_dir):
-    """Validate domain name and prevent path traversal.
-
-    Returns:
-        tuple: (safe_path, error_message) - safe_path is None if invalid
-    """
+    """Validate domain name and prevent path traversal."""
     if not domain or '..' in domain or '/' in domain or '\\' in domain or '\x00' in domain:
         return None, 'Invalid domain name'
     if not _DOMAIN_RE.match(domain):
@@ -97,13 +65,7 @@ def _sanitize_domain(domain, cert_base_dir):
 
 
 def register_web_routes(app, managers):
-    """Register all web interface routes
-    
-    Args:
-        app: Flask app instance
-        managers: Dictionary of manager instances
-    """
-    
+    """Register all web interface routes"""
     auth_manager = managers['auth']
     settings_manager = managers['settings']
     certificate_manager = managers['certificates']
@@ -111,14 +73,15 @@ def register_web_routes(app, managers):
     cache_manager = managers['cache']
     dns_manager = managers['dns']
 
+    # Import constant here to avoid top-level E402
+    from ..core.constants import CERTIFICATE_FILES
+
     def require_web_auth(f):
         """Decorator for web pages: redirect to /login if not authenticated"""
         @wraps(f)
         def decorated(*args, **kwargs):
-            # Skip auth if local auth is not enabled or no users exist
             if not auth_manager.is_local_auth_enabled() or not auth_manager.has_any_users():
                 return f(*args, **kwargs)
-            # Check session cookie
             session_id = request.cookies.get('certmate_session')
             if session_id:
                 user_info = auth_manager.validate_session(session_id)
@@ -128,7 +91,6 @@ def register_web_routes(app, managers):
             return redirect(url_for('login_page'))
         return decorated
 
-
     from .ui_routes import register_ui_routes
     from .misc_routes import register_misc_routes
     from .auth_routes import register_auth_routes
@@ -136,9 +98,14 @@ def register_web_routes(app, managers):
     from .settings_routes import register_settings_routes
     from .backup_cache_routes import register_backup_cache_routes
 
-    register_ui_routes(app, managers, require_web_auth)
+    register_ui_routes(app, managers, require_web_auth, auth_manager)
     register_misc_routes(app, managers, require_web_auth, auth_manager)
-    register_auth_routes(app, managers, require_web_auth, auth_manager, _check_login_rate_limit, _record_login_attempt)
-    register_cert_routes(app, managers, require_web_auth, auth_manager, certificate_manager, _sanitize_domain, file_ops, settings_manager, dns_manager, CERTIFICATE_FILES)
-    register_settings_routes(app, managers, require_web_auth, auth_manager, settings_manager, dns_manager, _is_localhost)
-    register_backup_cache_routes(app, managers, require_web_auth, auth_manager, file_ops, settings_manager, cache_manager)
+    register_auth_routes(app, managers, require_web_auth, auth_manager,
+                         _check_login_rate_limit, _record_login_attempt)
+    register_cert_routes(app, managers, require_web_auth, auth_manager,
+                         certificate_manager, _sanitize_domain, file_ops,
+                         settings_manager, dns_manager, CERTIFICATE_FILES)
+    register_settings_routes(app, managers, require_web_auth, auth_manager,
+                             settings_manager, dns_manager)
+    register_backup_cache_routes(app, managers, require_web_auth, auth_manager,
+                                 file_ops, settings_manager, cache_manager)

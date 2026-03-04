@@ -1,9 +1,5 @@
-"""
-API models module for CertMate
-Defines Flask-RESTX models for API documentation and validation
-"""
-
 from flask_restx import fields
+
 
 class MaskedString(fields.String):
     """Custom field that masks sensitive string values"""
@@ -18,7 +14,7 @@ class MaskedString(fields.String):
 
 def create_api_models(api):
     """Create and register all API models with the Flask-RESTX API instance"""
-    
+
     # DNS Provider models
     cloudflare_model = api.model('CloudflareConfig', {
         'api_token': MaskedString(description='Cloudflare API token')
@@ -107,11 +103,7 @@ def create_api_models(api):
         'subdomain': fields.String(description='ACME-DNS subdomain')
     })
 
-    # Multi-provider model for certbot-dns-multi (117+ providers)
-    multi_provider_model = api.model('MultiProviderConfig', {
-        'provider': fields.String(description='DNS provider name (e.g., hetzner, porkbun, vultr)'),
-        'config': fields.Raw(description='Provider-specific configuration (flexible key-value pairs)')
-    })
+    # multi_provider_model removed as it is now flexible
 
     dns_providers_model = api.model('DNSProviders', {
         'cloudflare': fields.Nested(cloudflare_model),
@@ -146,7 +138,13 @@ def create_api_models(api):
         'days_left': fields.Integer(description='Days until expiry'),
         'days_until_expiry': fields.Integer(description='Days until expiry (alias for days_left)'),
         'needs_renewal': fields.Boolean(description='Whether certificate needs renewal'),
-        'dns_provider': fields.String(description='DNS provider used for the certificate')
+        'dns_provider': fields.String(description='DNS provider used for the certificate'),
+        'total_issued': fields.Integer(description='Total certificates issued'),
+        'total_active': fields.Integer(description='Total active certificates'),
+        'total_revoked': fields.Integer(description='Total revoked certificates'),
+        'total_expired': fields.Integer(description='Total expired certificates'),
+        'latest_issuance': fields.String(description='Latest issuance timestamp'),
+        'oldest_active_issuance': fields.String(description='Oldest active issuance timestamp')
     })
 
     settings_model = api.model('Settings', {
@@ -155,17 +153,37 @@ def create_api_models(api):
         'email': fields.String(description='Email for Let\'s Encrypt'),
         'auto_renew': fields.Boolean(description='Enable auto-renewal'),
         'api_bearer_token': MaskedString(description='API bearer token for authentication'),
-        'dns_provider': fields.String(description='Active DNS provider', enum=['cloudflare', 'route53', 'azure', 'google', 'powerdns', 'digitalocean', 'linode', 'gandi', 'ovh', 'namecheap', 'vultr', 'dnsmadeeasy', 'nsone', 'rfc2136', 'hetzner', 'porkbun', 'godaddy', 'he-ddns', 'dynudns', 'arvancloud', 'acme-dns']),
+        'dns_provider': fields.String(
+            description='Active DNS provider',
+            enum=[
+                'cloudflare', 'route53', 'azure', 'google', 'powerdns',
+                'digitalocean', 'linode', 'gandi', 'ovh', 'namecheap',
+                'vultr', 'dnsmadeeasy', 'nsone', 'rfc2136', 'hetzner',
+                'porkbun', 'godaddy', 'he-ddns', 'dynudns', 'arvancloud',
+                'acme-dns'
+            ]
+        ),
         'dns_providers': fields.Nested(dns_providers_model, description='DNS provider configurations')
     })
 
     create_cert_model = api.model('CreateCertificate', {
         'domain': fields.String(required=True, description='Primary domain name to create certificate for'),
-        'san_domains': fields.List(fields.String, description='Additional Subject Alternative Names (SANs) - e.g., ["www.example.com", "mail.example.com", "*.example.com"]'),
-        'dns_provider': fields.String(description='DNS provider to use (optional, uses default from settings)', enum=['cloudflare', 'route53', 'azure', 'google', 'powerdns', 'digitalocean', 'linode', 'gandi', 'ovh', 'namecheap', 'vultr', 'dnsmadeeasy', 'nsone', 'rfc2136', 'hetzner', 'porkbun', 'godaddy', 'he-ddns', 'dynudns', 'arvancloud', 'acme-dns']),
-        'account_id': fields.String(description='DNS provider account ID to use (optional, uses default account if not specified)'),
-        'ca_provider': fields.String(description='Certificate Authority provider to use (optional, uses default from settings)', enum=['letsencrypt', 'digicert', 'private_ca']),
-        'domain_alias': fields.String(description='Optional domain alias for DNS validation (e.g., _acme-challenge.validation.example.org)')
+        'san_domains': fields.List(fields.String,
+                                   description='Additional SANs (e.g., ["*.example.com"])'),
+        'dns_provider': fields.String(
+            description='DNS provider to use (optional, uses default from settings)',
+            enum=[
+                'cloudflare', 'route53', 'azure', 'google', 'powerdns',
+                'digitalocean', 'linode', 'gandi', 'ovh', 'namecheap',
+                'vultr', 'dnsmadeeasy', 'nsone', 'rfc2136', 'hetzner',
+                'porkbun', 'godaddy', 'he-ddns', 'dynudns', 'arvancloud',
+                'acme-dns'
+            ]
+        ),
+        'account_id': fields.String(description='DNS provider account ID'),
+        'ca_provider': fields.String(description='CA provider (optional)',
+                                     enum=['letsencrypt', 'digicert', 'private_ca']),
+        'domain_alias': fields.String(description='Optional domain alias for DNS validation')
     })
 
     # Cache models
@@ -230,7 +248,9 @@ def create_api_models(api):
     })
 
     storage_config_model = api.model('StorageConfig', {
-        'backend': fields.String(description='Storage backend type', enum=['local_filesystem', 'azure_keyvault', 'aws_secrets_manager', 'hashicorp_vault', 'infisical']),
+        'backend': fields.String(description='Storage backend type',
+                                 enum=['local_filesystem', 'azure_keyvault', 'aws_secrets_manager',
+                                       'hashicorp_vault', 'infisical']),
         'cert_dir': fields.String(description='Certificate directory for local filesystem'),
         'azure_keyvault': fields.Nested(azure_keyvault_storage_model),
         'aws_secrets_manager': fields.Nested(aws_secrets_manager_storage_model),
@@ -256,9 +276,20 @@ def create_api_models(api):
         'config': fields.Raw(description='CA provider-specific configuration', required=True)
     })
 
+    # API Key models
+    api_key_model = api.model('ApiKey', {
+        'id': fields.String(description='API Key ID'),
+        'name': fields.String(description='API Key name'),
+        'role': fields.String(description='Key role (admin, viewer, operator)'),
+        'created_at': fields.String(description='Creation timestamp'),
+        'expires_at': fields.String(description='Expiration timestamp'),
+        'last_used': fields.String(description='Last used timestamp'),
+        'is_revoked': fields.Boolean(description='Whether key is revoked'),
+        'is_expired': fields.Boolean(description='Whether key is expired')
+    })
+
     # Client Certificate models
     client_certificate_model = api.model('ClientCertificate', {
-        'identifier': fields.String(description='Certificate identifier'),
         'common_name': fields.String(description='Common name'),
         'email': fields.String(description='Email address'),
         'organization': fields.String(description='Organization'),
@@ -284,17 +315,29 @@ def create_api_models(api):
         'reason': fields.String(description='Reason for revocation')
     })
 
-    # Return all models as a dict for easy access
+    # Register models
     return {
-        'certificate_model': certificate_model,
         'settings_model': settings_model,
-        'create_cert_model': create_cert_model,
         'dns_providers_model': dns_providers_model,
         'cache_stats_model': cache_stats_model,
         'cache_clear_response_model': cache_clear_response_model,
-        'backup_list_model': backup_list_model,
+        'certificate_model': certificate_model,
+        'create_cert_model': create_cert_model,
+        'cache_entry_model': cache_entry_model,
         'backup_metadata_model': backup_metadata_model,
-        # DNS provider models
+        'backup_list_model': backup_list_model,
+        'storage_config_model': storage_config_model,
+        'storage_test_config_model': storage_test_config_model,
+        'storage_migration_config_model': storage_migration_config_model,
+        'azure_keyvault_storage_model': azure_keyvault_storage_model,
+        'aws_secrets_manager_storage_model': aws_secrets_manager_storage_model,
+        'hashicorp_vault_storage_model': hashicorp_vault_storage_model,
+        'infisical_storage_model': infisical_storage_model,
+        'ca_test_config_model': ca_test_config_model,
+        'api_key_model': api_key_model,
+        'client_certificate_model': client_certificate_model,
+        'client_certificate_request_model': client_certificate_request_model,
+        'client_certificate_revoke_model': client_certificate_revoke_model,
         'cloudflare_model': cloudflare_model,
         'route53_model': route53_model,
         'azure_model': azure_model,
@@ -311,20 +354,5 @@ def create_api_models(api):
         'he_ddns_model': he_ddns_model,
         'dynudns_model': dynudns_model,
         'arvancloud_model': arvancloud_model,
-        'acme_dns_model': acme_dns_model,
-        'multi_provider_model': multi_provider_model,
-        # Storage backend models
-        'StorageConfig': storage_config_model,
-        'StorageTestConfig': storage_test_config_model,
-        'StorageMigrationConfig': storage_migration_config_model,
-        'AzureKeyVaultStorage': azure_keyvault_storage_model,
-        'AWSSecretsManagerStorage': aws_secrets_manager_storage_model,
-        'HashiCorpVaultStorage': hashicorp_vault_storage_model,
-        'InfisicalStorage': infisical_storage_model,
-        # CA Provider models
-        'CATestConfig': ca_test_config_model,
-        # Client Certificate models
-        'ClientCertificate': client_certificate_model,
-        'ClientCertificateRequest': client_certificate_request_model,
-        'ClientCertificateRevoke': client_certificate_revoke_model
+        'acme_dns_model': acme_dns_model
     }

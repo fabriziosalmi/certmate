@@ -50,10 +50,10 @@ def _wait_healthy(timeout=60):
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:
-            r = requests.get(f"{BASE_URL}/health", timeout=3)
+            r = requests.get(f"{BASE_URL}/health", timeout=10)
             if r.status_code == 200:
                 return True
-        except requests.ConnectionError:
+        except requests.RequestException:
             pass
         time.sleep(1)
     raise TimeoutError(f"Container not healthy after {timeout}s")
@@ -111,6 +111,8 @@ def api(docker_container):
 
         # --- HTTP verbs ---------------------------------------------------
         def get(self, path, **kw):
+            if 'timeout' not in kw:
+                kw['timeout'] = 10
             return self.session.get(f"{self.base_url}{path}", **kw)
 
         def post(self, path, **kw):
