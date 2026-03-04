@@ -593,7 +593,7 @@ def create_api_resources(api, models, managers):
                     return {'error': 'Access denied'}, 403
 
                 return send_file(
-                    backup_path,
+                    str(backup_path.resolve()),
                     as_attachment=True,
                     download_name=filename,
                     mimetype='application/octet-stream'
