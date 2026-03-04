@@ -928,6 +928,13 @@ def register_web_routes(app, managers):
                             logger.warning(f"Setup attempt from non-local IP: {client_ip}")
                             return jsonify({'error': 'Initial setup only allowed from localhost'}), 403
                 
+                # Strip masked/sentinel api_bearer_token from incoming data.
+                # The GET endpoint masks it as '********', so if the UI sends
+                # it back unchanged we must preserve the real token.
+                incoming_token = new_settings.get('api_bearer_token', '')
+                if not incoming_token or incoming_token == '********':
+                    new_settings.pop('api_bearer_token', None)
+
                 # Merge with existing settings
                 merged_settings = {**current_settings, **new_settings}
                 

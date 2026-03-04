@@ -241,21 +241,29 @@ class SettingsManager:
                 settings['email'] = email_or_error
                 
             if 'api_bearer_token' in settings:
-                # Use compatibility layer for validation
-                try:
-                    import app
-                    if hasattr(app, 'validate_api_token'):
-                        is_valid, token_or_error = app.validate_api_token(settings['api_bearer_token'])
-                    else:
+                token = settings['api_bearer_token']
+                # Skip validation for masked/placeholder tokens — the real
+                # token is preserved in the file; callers should strip these
+                # before calling save_settings, but this is a safety net.
+                if not token or token == '********':
+                    settings.pop('api_bearer_token')
+                    logger.info("Stripped masked/empty api_bearer_token from settings before save")
+                else:
+                    # Use compatibility layer for validation
+                    try:
+                        import app
+                        if hasattr(app, 'validate_api_token'):
+                            is_valid, token_or_error = app.validate_api_token(token)
+                        else:
+                            from modules.core.utils import validate_api_token
+                            is_valid, token_or_error = validate_api_token(token)
+                    except ImportError:
                         from modules.core.utils import validate_api_token
-                        is_valid, token_or_error = validate_api_token(settings['api_bearer_token'])
-                except ImportError:
-                    from modules.core.utils import validate_api_token
-                    is_valid, token_or_error = validate_api_token(settings['api_bearer_token'])
-                    
-                if not is_valid:
-                    logger.error(f"Invalid API token: {token_or_error}")
-                    return False
+                        is_valid, token_or_error = validate_api_token(token)
+                        
+                    if not is_valid:
+                        logger.error(f"Invalid API token: {token_or_error}")
+                        return False
                     
             # Validate dns_provider against supported set
             supported_providers = {'cloudflare','route53','azure','google','powerdns','digitalocean','linode','gandi','ovh','namecheap','vultr','dnsmadeeasy','nsone','rfc2136','hetzner','porkbun','godaddy','he-ddns','dynudns','arvancloud','infomaniak','acme-dns'}
@@ -594,7 +602,7 @@ class SettingsManager:
                             "domain": domain,
                             "dns_provider": dns_provider,
                             "created_at": "unknown",
-                            "version": "2.0.4",
+                            "version": "2.1.0",
                             "migrated": True
                         }
                         

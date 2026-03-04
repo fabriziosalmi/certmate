@@ -2,7 +2,7 @@
 CertMate - Modular SSL Certificate Management Application
 Main application entry point with modular architecture
 """
-__version__ = '2.0.4'
+__version__ = '2.1.0'
 import os
 import sys
 import tempfile

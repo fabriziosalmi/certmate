@@ -1,3 +1,36 @@
+# Release v2.1.0
+
+## Bug Fixes
+
+### Issue #76 — Unable to save settings (HTTP 500)
+
+**Root cause:** The web UI GET endpoint masks `api_bearer_token` as `'********'`
+before returning settings. When the user saves settings, this 8-character masked
+value is sent back in the POST payload and overwrites the real token during the
+settings merge. `save_settings()` then validates the masked string against a
+32-character minimum length requirement, causing the validation to fail and
+returning HTTP 500.
+
+**Fix (defense-in-depth, two layers):**
+- **`modules/web/routes.py`**: Strip masked or empty `api_bearer_token` from
+  incoming POST data before merging with current settings, preserving the real
+  token already stored on disk.
+- **`modules/core/settings.py`**: Safety net in `save_settings()` — if the
+  token is empty or the `'********'` placeholder, remove it from the dict
+  instead of failing validation. The real token on disk remains untouched.
+
+**Files changed:** `modules/web/routes.py`, `modules/core/settings.py`
+
+## Test Suite
+
+- 4 new unit tests in `tests/test_issue76_masked_token.py`:
+  - Masked token (`'********'`) → save succeeds, placeholder NOT persisted
+  - Empty token → save succeeds
+  - Valid token → validated and persisted correctly
+  - Invalid short token → still properly rejected
+
+---
+
 # Release v2.0.3
 
 ## Bug Fixes
