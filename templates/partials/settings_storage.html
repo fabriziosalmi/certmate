@@ -1,0 +1,252 @@
+<!-- TAB: Storage -->
+                    <div x-show="tab === 'storage'" x-cloak
+                    <!-- Certificate Storage Backend Section -->
+                    <div class="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                            <i class="fas fa-database mr-1"></i>
+                            Certificate Storage Backend
+                        </label>
+                        
+                        <div class="space-y-4">
+                            <!-- Backend Selection -->
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
+                                    Storage Backend Type
+                                </label>
+                                <select id="storage-backend" name="storage_backend" 
+                                        class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm"
+                                        onchange="toggleStorageBackendConfig()">
+                                    <option value="local_filesystem">Local Filesystem (Default)</option>
+                                    <option value="azure_keyvault">Azure Key Vault</option>
+                                    <option value="aws_secrets_manager">AWS Secrets Manager</option>
+                                    <option value="hashicorp_vault">HashiCorp Vault</option>
+                                    <option value="infisical">Infisical</option>
+                                </select>
+                                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                    Choose where to store your SSL certificates. Local filesystem is the default and most compatible option.
+                                </p>
+                            </div>
+
+                            <!-- Local Filesystem Configuration -->
+                            <div id="storage-local-config" class="storage-config">
+                                <div class="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-md border border-blue-200 dark:border-blue-700">
+                                    <h5 class="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
+                                        <i class="fas fa-folder mr-1"></i> Local Filesystem Storage
+                                    </h5>
+                                    <div class="space-y-2">
+                                        <div>
+                                            <label class="block text-xs text-blue-800 dark:text-blue-200 mb-1">Certificate Directory</label>
+                                            <input type="text" id="storage-cert-dir" 
+                                                   class="w-full px-2 py-1 text-sm border border-blue-300 dark:border-blue-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                                   placeholder="certificates" value="certificates">
+                                        </div>
+                                        <p class="text-xs text-blue-700 dark:text-blue-300">
+                                            Certificates are stored locally in the specified directory with secure file permissions.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Azure Key Vault Configuration -->
+                            <div id="storage-azure-config" class="storage-config" style="display: none;">
+                                <div class="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-md border border-blue-200 dark:border-blue-700">
+                                    <h5 class="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
+                                        <i class="fab fa-microsoft mr-1"></i> Azure Key Vault Configuration
+                                    </h5>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        <div>
+                                            <label class="block text-xs text-blue-800 dark:text-blue-200 mb-1">Vault URL</label>
+                                            <input type="text" id="azure-vault-url" 
+                                                   class="w-full px-2 py-1 text-sm border border-blue-300 dark:border-blue-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                                   placeholder="https://yourvault.vault.azure.net/">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs text-blue-800 dark:text-blue-200 mb-1">Tenant ID</label>
+                                            <input type="text" id="azure-tenant-id" 
+                                                   class="w-full px-2 py-1 text-sm border border-blue-300 dark:border-blue-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                                   placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs text-blue-800 dark:text-blue-200 mb-1">Client ID</label>
+                                            <input type="text" id="azure-client-id" 
+                                                   class="w-full px-2 py-1 text-sm border border-blue-300 dark:border-blue-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                                   placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs text-blue-800 dark:text-blue-200 mb-1">Client Secret</label>
+                                            <input type="password" id="azure-client-secret" 
+                                                   class="w-full px-2 py-1 text-sm border border-blue-300 dark:border-blue-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                                   placeholder="Enter client secret"
+                                                   autocomplete="new-password" 
+                                                   spellcheck="false"
+                                                   data-lpignore="true">
+                                        </div>
+                                    </div>
+                                    <p class="text-xs text-blue-700 dark:text-blue-300 mt-2">
+                                        Certificates will be stored as secrets in Azure Key Vault with enhanced security and audit capabilities.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- AWS Secrets Manager Configuration -->
+                            <div id="storage-aws-config" class="storage-config" style="display: none;">
+                                <div class="bg-orange-50 dark:bg-orange-900/20 p-3 rounded-md border border-orange-200 dark:border-orange-700">
+                                    <h5 class="text-sm font-medium text-orange-900 dark:text-orange-100 mb-2">
+                                        <i class="fab fa-aws mr-1"></i> AWS Secrets Manager Configuration
+                                    </h5>
+                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                        <div>
+                                            <label class="block text-xs text-orange-800 dark:text-orange-200 mb-1">Region</label>
+                                            <input type="text" id="aws-region" 
+                                                   class="w-full px-2 py-1 text-sm border border-orange-300 dark:border-orange-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                                   placeholder="us-east-1" value="us-east-1">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs text-orange-800 dark:text-orange-200 mb-1">Access Key ID</label>
+                                            <input type="text" id="aws-access-key-id" 
+                                                   class="w-full px-2 py-1 text-sm border border-orange-300 dark:border-orange-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                                   placeholder="AKIAIOSFODNN7EXAMPLE">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs text-orange-800 dark:text-orange-200 mb-1">Secret Access Key</label>
+                                            <input type="password" id="aws-secret-access-key" 
+                                                   class="w-full px-2 py-1 text-sm border border-orange-300 dark:border-orange-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                                   placeholder="Enter secret access key"
+                                                   autocomplete="new-password" 
+                                                   spellcheck="false"
+                                                   data-lpignore="true">
+                                        </div>
+                                    </div>
+                                    <p class="text-xs text-orange-700 dark:text-orange-300 mt-2">
+                                        Certificates will be stored in AWS Secrets Manager with automatic encryption and access logging.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- HashiCorp Vault Configuration -->
+                            <div id="storage-vault-config" class="storage-config" style="display: none;">
+                                <div class="bg-purple-50 dark:bg-purple-900/20 p-3 rounded-md border border-purple-200 dark:border-purple-700">
+                                    <h5 class="text-sm font-medium text-purple-900 dark:text-purple-100 mb-2">
+                                        <i class="fas fa-vault mr-1"></i> HashiCorp Vault Configuration
+                                    </h5>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        <div>
+                                            <label class="block text-xs text-purple-800 dark:text-purple-200 mb-1">Vault URL</label>
+                                            <input type="text" id="vault-url" 
+                                                   class="w-full px-2 py-1 text-sm border border-purple-300 dark:border-purple-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                                   placeholder="https://vault.example.com:8200">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs text-purple-800 dark:text-purple-200 mb-1">Vault Token</label>
+                                            <input type="password" id="vault-token" 
+                                                   class="w-full px-2 py-1 text-sm border border-purple-300 dark:border-purple-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                                   placeholder="Enter vault token"
+                                                   autocomplete="new-password" 
+                                                   spellcheck="false"
+                                                   data-lpignore="true">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs text-purple-800 dark:text-purple-200 mb-1">Mount Point</label>
+                                            <input type="text" id="vault-mount-point" 
+                                                   class="w-full px-2 py-1 text-sm border border-purple-300 dark:border-purple-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                                   placeholder="secret" value="secret">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs text-purple-800 dark:text-purple-200 mb-1">Engine Version</label>
+                                            <select id="vault-engine-version" 
+                                                    class="w-full px-2 py-1 text-sm border border-purple-300 dark:border-purple-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white">
+                                                <option value="v2">KV v2</option>
+                                                <option value="v1">KV v1</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <p class="text-xs text-purple-700 dark:text-purple-300 mt-2">
+                                        Certificates will be stored in HashiCorp Vault's KV secrets engine with versioning and audit capabilities.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- Infisical Configuration -->
+                            <div id="storage-infisical-config" class="storage-config" style="display: none;">
+                                <div class="bg-green-50 dark:bg-green-900/20 p-3 rounded-md border border-green-200 dark:border-green-700">
+                                    <h5 class="text-sm font-medium text-green-900 dark:text-green-100 mb-2">
+                                        <i class="fas fa-shield-alt mr-1"></i> Infisical Configuration
+                                    </h5>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        <div>
+                                            <label class="block text-xs text-green-800 dark:text-green-200 mb-1">Site URL</label>
+                                            <input type="text" id="infisical-site-url" 
+                                                   class="w-full px-2 py-1 text-sm border border-green-300 dark:border-green-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                                   placeholder="https://app.infisical.com" value="https://app.infisical.com">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs text-green-800 dark:text-green-200 mb-1">Project ID</label>
+                                            <input type="text" id="infisical-project-id" 
+                                                   class="w-full px-2 py-1 text-sm border border-green-300 dark:border-green-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                                   placeholder="Enter project ID">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs text-green-800 dark:text-green-200 mb-1">Client ID</label>
+                                            <input type="text" id="infisical-client-id" 
+                                                   class="w-full px-2 py-1 text-sm border border-green-300 dark:border-green-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                                   placeholder="Enter client ID">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs text-green-800 dark:text-green-200 mb-1">Client Secret</label>
+                                            <input type="password" id="infisical-client-secret" 
+                                                   class="w-full px-2 py-1 text-sm border border-green-300 dark:border-green-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                                   placeholder="Enter client secret"
+                                                   autocomplete="new-password" 
+                                                   spellcheck="false"
+                                                   data-lpignore="true">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs text-green-800 dark:text-green-200 mb-1">Environment</label>
+                                            <input type="text" id="infisical-environment" 
+                                                   class="w-full px-2 py-1 text-sm border border-green-300 dark:border-green-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                                   placeholder="prod" value="prod">
+                                        </div>
+                                    </div>
+                                    <p class="text-xs text-green-700 dark:text-green-300 mt-2">
+                                        Certificates will be stored in Infisical with end-to-end encryption and team collaboration features.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- Storage Backend Actions -->
+                            <div class="flex flex-wrap gap-3 pt-2 border-t border-gray-200 dark:border-gray-600">
+                                <button type="button" onclick="testStorageBackend()" 
+                                        class="bg-blue-600 text-white px-3 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors text-sm">
+                                    <i class="fas fa-plug mr-1"></i> Test Connection
+                                </button>
+                                <button type="button" onclick="showStorageMigrationModal()" 
+                                        class="bg-yellow-600 text-white px-3 py-2 rounded-md hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2 transition-colors text-sm">
+                                    <i class="fas fa-exchange-alt mr-1"></i> Migrate Certificates
+                                </button>
+                                <div class="text-xs text-gray-500 dark:text-gray-400 flex items-center">
+                                    <i class="fas fa-info-circle mr-1"></i>
+                                    Test connection before saving settings
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    </div><!-- /tab: storage -->
+
+                    <!-- Form controls (visible on all form tabs) -->
+                    <div id="formControls" x-show="['dns','ca','general','storage'].includes(tab)"
+                        <!-- DNS Provider Test Connection -->
+                        <div id="testConnectionResult" class="mt-4 hidden">
+                            <div class="p-4 rounded-md text-sm" id="testConnectionMessage">
+                                <!-- Test connection message will be displayed here -->
+                            </div>
+                        </div>
+
+                        <!-- Submit Button -->
+                        <div class="flex justify-end mt-6">
+                            <button type="submit" id="saveBtn" class="bg-primary text-white px-6 py-2 rounded-md hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition-colors">
+                                <i class="fas fa-save mr-2"></i>
+                                Save Settings
+                            </button>
+                        </div>
+                    </div>
+                

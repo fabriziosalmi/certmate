@@ -1,0 +1,185 @@
+<!-- TAB: CA Providers -->
+                    <div x-show="tab === 'ca'" x-cloak
+                    <!-- CA Providers Section -->
+                    <div class="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                            <i class="fas fa-certificate mr-1"></i>
+                            Certificate Authority (CA) Providers
+                        </label>
+                        
+                        <div class="space-y-4">
+                            <!-- Default CA Selection -->
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
+                                    Default Certificate Authority
+                                </label>
+                                <select id="default-ca" name="default_ca" 
+                                        class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm"
+                                        onchange="toggleCAProviderConfig()">
+                                    <option value="letsencrypt">Let's Encrypt (Default)</option>
+                                    <option value="digicert">DigiCert ACME</option>
+                                    <option value="private_ca">Private CA</option>
+                                </select>
+                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                    Select the default CA for new certificate requests. You can override this per-certificate.
+                                </p>
+                            </div>
+
+                            <!-- CA Provider Configurations -->
+                            
+                            <!-- Let's Encrypt Configuration -->
+                            <div id="letsencrypt-config" class="border border-green-300 dark:border-green-600 rounded-lg p-4 bg-green-50 dark:bg-green-900/20">
+                                <h4 class="text-sm font-semibold text-green-800 dark:text-green-200 mb-2 flex items-center">
+                                    <i class="fas fa-leaf mr-2 text-green-600"></i>
+                                    Let's Encrypt Configuration
+                                    <span class="ml-2 text-xs bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 px-2 py-0.5 rounded-full">Free</span>
+                                </h4>
+                                <div class="space-y-3">
+                                    <div>
+                                        <label class="block text-xs text-green-800 dark:text-green-200 mb-1">Environment</label>
+                                        <select id="letsencrypt-environment" 
+                                                class="w-full px-2 py-1 text-sm border border-green-300 dark:border-green-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white">
+                                            <option value="production">Production (Default)</option>
+                                            <option value="staging">Staging (Testing)</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-green-800 dark:text-green-200 mb-1">Email (for notifications)</label>
+                                        <input type="email" id="letsencrypt-email" 
+                                               class="w-full px-2 py-1 text-sm border border-green-300 dark:border-green-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                               placeholder="admin@example.com">
+                                    </div>
+                                </div>
+                                <p class="text-xs text-green-700 dark:text-green-300 mt-2">
+                                    Let's Encrypt provides free SSL certificates with automated renewal.
+                                </p>
+                            </div>
+
+                            <!-- DigiCert Configuration -->
+                            <div id="digicert-config" class="border border-blue-300 dark:border-blue-600 rounded-lg p-4 bg-blue-50 dark:bg-blue-900/20" style="display: none;">
+                                <h4 class="text-sm font-semibold text-blue-800 dark:text-blue-200 mb-2 flex items-center">
+                                    <i class="fas fa-shield-alt mr-2 text-blue-600"></i>
+                                    DigiCert ACME Configuration
+                                    <span class="ml-2 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 px-2 py-0.5 rounded-full">Enterprise</span>
+                                </h4>
+                                <div class="space-y-3">
+                                    <div>
+                                        <label class="block text-xs text-blue-800 dark:text-blue-200 mb-1">ACME Directory URL</label>
+                                        <input type="url" id="digicert-acme-url" 
+                                               class="w-full px-2 py-1 text-sm border border-blue-300 dark:border-blue-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                               placeholder="https://acme.digicert.com/v2/acme/directory"
+                                               value="https://acme.digicert.com/v2/acme/directory">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-blue-800 dark:text-blue-200 mb-1">External Account Binding (EAB) Key ID</label>
+                                        <input type="text" id="digicert-eab-kid" 
+                                               class="w-full px-2 py-1 text-sm border border-blue-300 dark:border-blue-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                               placeholder="Your EAB Key ID from DigiCert">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-blue-800 dark:text-blue-200 mb-1">External Account Binding (EAB) HMAC Key</label>
+                                        <input type="password" id="digicert-eab-hmac" 
+                                               class="w-full px-2 py-1 text-sm border border-blue-300 dark:border-blue-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                               placeholder="Your EAB HMAC Key from DigiCert"
+                                               autocomplete="new-password" 
+                                               spellcheck="false"
+                                               data-lpignore="true">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-blue-800 dark:text-blue-200 mb-1">Email (for notifications)</label>
+                                        <input type="email" id="digicert-email" 
+                                               class="w-full px-2 py-1 text-sm border border-blue-300 dark:border-blue-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                               placeholder="admin@example.com">
+                                    </div>
+                                </div>
+                                <p class="text-xs text-blue-700 dark:text-blue-300 mt-2">
+                                    DigiCert provides enterprise-grade SSL certificates via ACME. Requires EAB credentials from DigiCert.
+                                </p>
+                            </div>
+
+                            <!-- Private CA Configuration -->
+                            <div id="private-ca-config" class="border border-purple-300 dark:border-purple-600 rounded-lg p-4 bg-purple-50 dark:bg-purple-900/20" style="display: none;">
+                                <h4 class="text-sm font-semibold text-purple-800 dark:text-purple-200 mb-2 flex items-center">
+                                    <i class="fas fa-building mr-2 text-purple-600"></i>
+                                    Private CA Configuration
+                                    <span class="ml-2 text-xs bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 px-2 py-0.5 rounded-full">Custom</span>
+                                </h4>
+                                <div class="space-y-3">
+                                    <div>
+                                        <label class="block text-xs text-purple-800 dark:text-purple-200 mb-1">
+                                            ACME Directory URL
+                                            <span class="text-red-500">*</span>
+                                            <i class="fas fa-info-circle ml-1 cursor-help" title="URL to your private CA's ACME directory endpoint (e.g., step-ca, Smallstep, or custom ACME server)"></i>
+                                        </label>
+                                        <input type="url" id="private-ca-acme-url" 
+                                               class="w-full px-2 py-1 text-sm border-2 border-purple-300 dark:border-purple-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
+                                               placeholder="https://step-ca.example.com:9000/acme/directory"
+                                               required>
+                                        <p class="text-xs text-purple-600 dark:text-purple-400 mt-1">
+                                            <strong>Common examples:</strong><br>
+                                            • step-ca: https://step-ca.internal.com:9000/acme/directory<br>
+                                            • Smallstep: https://ca.example.com/acme/directory<br>
+                                            • Boulder: https://boulder.local:4001/acme/directory
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-purple-800 dark:text-purple-200 mb-1">CA Certificate (PEM format) - Optional</label>
+                                        <textarea id="private-ca-cert" rows="3"
+                                                  class="w-full px-2 py-1 text-sm border border-purple-300 dark:border-purple-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                                  placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"></textarea>
+                                        <p class="text-xs text-purple-600 dark:text-purple-400 mt-1">
+                                            Upload your private CA root certificate if using self-signed or internal CA
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-purple-800 dark:text-purple-200 mb-1">External Account Binding (EAB) Key ID - Optional</label>
+                                        <input type="text" id="private-ca-eab-kid" 
+                                               class="w-full px-2 py-1 text-sm border border-purple-300 dark:border-purple-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                               placeholder="EAB Key ID (if required by your CA)">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-purple-800 dark:text-purple-200 mb-1">External Account Binding (EAB) HMAC Key - Optional</label>
+                                        <input type="password" id="private-ca-eab-hmac" 
+                                               class="w-full px-2 py-1 text-sm border border-purple-300 dark:border-purple-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                               placeholder="EAB HMAC Key (if required by your CA)"
+                                               autocomplete="new-password" 
+                                               spellcheck="false"
+                                               data-lpignore="true">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-purple-800 dark:text-purple-200 mb-1">
+                                            Email (for notifications)
+                                            <span class="text-red-500">*</span>
+                                        </label>
+                                        <input type="email" id="private-ca-email" 
+                                               class="w-full px-2 py-1 text-sm border border-purple-300 dark:border-purple-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                               placeholder="admin@example.com"
+                                               required>
+                                    </div>
+                                </div>
+                                <p class="text-xs text-purple-700 dark:text-purple-300 mt-2">
+                                    Configure your private or corporate CA. Supports ACME-compatible CAs like step-ca, Smallstep, Boulder, and others.
+                                    <br><strong>🚀 Quick Start:</strong>
+                                    <br>1. Enter your CA's ACME directory URL above
+                                    <br>2. Enter your email address
+                                    <br>3. Click "Test CA Connection" to verify
+                                    <br>4. Save settings once test succeeds
+                                </p>
+                            </div>
+
+                            <!-- CA Provider Actions -->
+                            <div class="flex flex-wrap gap-3 pt-2 border-t border-gray-200 dark:border-gray-600">
+                                <button type="button" onclick="testCAProvider()" 
+                                        class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-colors text-sm font-medium">
+                                    <i class="fas fa-plug mr-1"></i> Test CA Connection
+                                </button>
+                                <div class="text-xs text-gray-500 dark:text-gray-400 flex items-center">
+                                    <i class="fas fa-info-circle mr-1"></i>
+                                    <span id="ca-test-hint">Select a CA provider and fill in required fields, then test the connection</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    </div><!-- /tab: ca -->
+
+                    

@@ -1,0 +1,980 @@
+<!-- TAB: DNS Providers -->
+                    <div x-show="tab === 'dns'">
+                    <!-- Challenge Type Selection -->
+                    <div class="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg mb-4">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                            <i class="fas fa-shield-alt mr-1"></i>
+                            ACME Challenge Type
+                        </label>
+                        <div class="flex gap-4">
+                            <label class="relative cursor-pointer">
+                                <input type="radio" name="challenge_type" value="dns-01" class="sr-only peer" checked>
+                                <div class="px-4 py-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                    <div class="flex items-center gap-2">
+                                        <i class="fas fa-dns text-blue-500"></i>
+                                        <span class="text-sm font-medium dark:text-white">DNS-01</span>
+                                    </div>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Requires DNS provider credentials. Supports wildcards.</p>
+                                </div>
+                            </label>
+                            <label class="relative cursor-pointer">
+                                <input type="radio" name="challenge_type" value="http-01" class="sr-only peer">
+                                <div class="px-4 py-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                    <div class="flex items-center gap-2">
+                                        <i class="fas fa-globe text-green-500"></i>
+                                        <span class="text-sm font-medium dark:text-white">HTTP-01</span>
+                                    </div>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Domain must point to this server. No wildcards.</p>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- DNS Provider Selection (hidden when HTTP-01) -->
+                    <div id="dns-provider-section" class="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3" id="dns-provider-label">
+                            <i class="fas fa-server mr-1"></i>
+                            DNS Providers
+                        </label>
+                        
+                        <!-- Multi-Account Providers -->
+                        <div class="mb-6">
+                            <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center">
+                                <i class="fas fa-users mr-2 text-blue-500"></i>
+                                Multi-Account Support
+                                <span class="ml-2 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 px-2 py-0.5 rounded-full">Advanced</span>
+                            </h4>
+                            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-7 gap-2 mb-4" role="radiogroup" aria-labelledby="dns-provider-label">
+                                <label class="relative">
+                                    <input type="radio" name="dns_provider" value="cloudflare" class="sr-only peer">
+                                    <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                        <div class="text-center">
+                                            <i class="fab fa-cloudflare text-lg text-orange-500 mb-1"></i>
+                                            <div class="text-xs font-medium dark:text-white">Cloudflare</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="cloudflare-status">Not configured</div>
+                                            <!-- Multi-account indicator -->
+                                            <div class="text-xs text-blue-600 dark:text-blue-400 mt-1 hidden" id="cloudflare-accounts">
+                                                <i class="fas fa-users text-xs mr-1"></i>
+                                                <span id="cloudflare-account-count">0</span> accounts
+                                            </div>
+                                        </div>
+                                    </div>
+                                </label>
+                                <label class="relative">
+                                    <input type="radio" name="dns_provider" value="route53" class="sr-only peer">
+                                    <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                        <div class="text-center">
+                                            <i class="fab fa-aws text-lg text-orange-400 mb-1"></i>
+                                            <div class="text-xs font-medium dark:text-white">Route53</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="route53-status">Not configured</div>
+                                            <!-- Multi-account indicator -->
+                                            <div class="text-xs text-blue-600 dark:text-blue-400 mt-1 hidden" id="route53-accounts">
+                                                <i class="fas fa-users text-xs mr-1"></i>
+                                                <span id="route53-account-count">0</span> accounts
+                                            </div>
+                                        </div>
+                                    </div>
+                                </label>
+                                <label class="relative">
+                                    <input type="radio" name="dns_provider" value="digitalocean" class="sr-only peer">
+                                    <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                        <div class="text-center">
+                                            <i class="fab fa-digital-ocean text-lg text-blue-600 mb-1"></i>
+                                            <div class="text-xs font-medium dark:text-white">DigitalOcean</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="digitalocean-status">Not configured</div>
+                                            <!-- Multi-account indicator -->
+                                            <div class="text-xs text-blue-600 dark:text-blue-400 mt-1 hidden" id="digitalocean-accounts">
+                                                <i class="fas fa-users text-xs mr-1"></i>
+                                                <span id="digitalocean-account-count">0</span> accounts
+                                            </div>
+                                        </div>
+                                    </div>
+                                </label>
+                                <label class="relative">
+                                    <input type="radio" name="dns_provider" value="azure" class="sr-only peer">
+                                    <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                        <div class="text-center">
+                                            <i class="fab fa-microsoft text-lg text-blue-600 mb-1"></i>
+                                            <div class="text-xs font-medium dark:text-white">Azure DNS</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="azure-status">Not configured</div>
+                                            <!-- Multi-account indicator -->
+                                            <div class="text-xs text-blue-600 dark:text-blue-400 mt-1 hidden" id="azure-accounts">
+                                                <i class="fas fa-users text-xs mr-1"></i>
+                                                <span id="azure-account-count">0</span> accounts
+                                            </div>
+                                        </div>
+                                    </div>
+                                </label>
+                                <label class="relative">
+                                    <input type="radio" name="dns_provider" value="google" class="sr-only peer">
+                                    <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                        <div class="text-center">
+                                            <i class="fab fa-google text-lg text-blue-500 mb-1"></i>
+                                            <div class="text-xs font-medium dark:text-white">Google DNS</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="google-status">Not configured</div>
+                                            <!-- Multi-account indicator -->
+                                            <div class="text-xs text-blue-600 dark:text-blue-400 mt-1 hidden" id="google-accounts">
+                                                <i class="fas fa-users text-xs mr-1"></i>
+                                                <span id="google-account-count">0</span> accounts
+                                            </div>
+                                        </div>
+                                    </div>
+                                </label>
+                                <label class="relative">
+                                    <input type="radio" name="dns_provider" value="powerdns" class="sr-only peer">
+                                    <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                        <div class="text-center">
+                                            <i class="fas fa-server text-lg text-gray-600 dark:text-gray-400 mb-1"></i>
+                                            <div class="text-xs font-medium dark:text-white">PowerDNS</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="powerdns-status">Not configured</div>
+                                            <!-- Multi-account indicator -->
+                                            <div class="text-xs text-blue-600 dark:text-blue-400 mt-1 hidden" id="powerdns-accounts">
+                                                <i class="fas fa-users text-xs mr-1"></i>
+                                                <span id="powerdns-account-count">0</span> accounts
+                                            </div>
+                                        </div>
+                                    </div>
+                                </label>
+                                <label class="relative">
+                                    <input type="radio" name="dns_provider" value="rfc2136" class="sr-only peer">
+                                    <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                        <div class="text-center">
+                                            <i class="fas fa-exchange-alt text-lg text-gray-600 dark:text-gray-400 mb-1"></i>
+                                            <div class="text-xs font-medium dark:text-white">RFC2136</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="rfc2136-status">Not configured</div>
+                                            <!-- Multi-account indicator -->
+                                            <div class="text-xs text-blue-600 dark:text-blue-400 mt-1 hidden" id="rfc2136-accounts">
+                                                <i class="fas fa-users text-xs mr-1"></i>
+                                                <span id="rfc2136-account-count">0</span> accounts
+                                            </div>
+                                        </div>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <!-- Single-Account Providers -->
+                        <div>
+                            <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center">
+                                <i class="fas fa-user mr-2 text-gray-500"></i>
+                                Single Account Providers
+                                <span class="ml-2 text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-2 py-0.5 rounded-full">Standard</span>
+                            </h4>
+                            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-2" role="radiogroup" aria-labelledby="dns-provider-label">
+                                <label class="relative">
+                                    <input type="radio" name="dns_provider" value="linode" class="sr-only peer">
+                                    <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                        <div class="text-center">
+                                            <i class="fas fa-cloud text-lg text-green-600 mb-1"></i>
+                                            <div class="text-xs font-medium dark:text-white">Linode</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="linode-status">Not configured</div>
+                                        </div>
+                                    </div>
+                                </label>
+                                <label class="relative">
+                                    <input type="radio" name="dns_provider" value="vultr" class="sr-only peer">
+                                    <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                        <div class="text-center">
+                                            <i class="fas fa-cloud text-lg text-blue-600 mb-1"></i>
+                                            <div class="text-xs font-medium dark:text-white">Vultr</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="vultr-status">Not configured</div>
+                                        </div>
+                                    </div>
+                                </label>
+                                <label class="relative">
+                                    <input type="radio" name="dns_provider" value="hetzner" class="sr-only peer">
+                                    <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                        <div class="text-center">
+                                            <i class="fas fa-server text-lg text-red-600 mb-1"></i>
+                                            <div class="text-xs font-medium dark:text-white">Hetzner</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="hetzner-status">Not configured</div>
+                                        </div>
+                                    </div>
+                                </label>
+                                <label class="relative">
+                                    <input type="radio" name="dns_provider" value="gandi" class="sr-only peer">
+                                    <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                        <div class="text-center">
+                                            <i class="fas fa-globe text-lg text-orange-600 mb-1"></i>
+                                            <div class="text-xs font-medium dark:text-white">Gandi</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="gandi-status">Not configured</div>
+                                        </div>
+                                    </div>
+                                </label>
+                                <label class="relative">
+                                    <input type="radio" name="dns_provider" value="ovh" class="sr-only peer">
+                                    <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                        <div class="text-center">
+                                            <i class="fas fa-server text-lg text-purple-600 mb-1"></i>
+                                            <div class="text-xs font-medium dark:text-white">OVH</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="ovh-status">Not configured</div>
+                                        </div>
+                                    </div>
+                                </label>
+                                <label class="relative">
+                                    <input type="radio" name="dns_provider" value="namecheap" class="sr-only peer">
+                                    <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                        <div class="text-center">
+                                            <i class="fas fa-shopping-cart text-lg text-red-600 mb-1"></i>
+                                            <div class="text-xs font-medium dark:text-white">Namecheap</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="namecheap-status">Not configured</div>
+                                        </div>
+                                    </div>
+                                </label>
+                                <label class="relative">
+                                    <input type="radio" name="dns_provider" value="porkbun" class="sr-only peer">
+                                    <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                        <div class="text-center">
+                                            <i class="fas fa-paw text-lg text-pink-600 mb-1"></i>
+                                            <div class="text-xs font-medium dark:text-white">Porkbun</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="porkbun-status">Not configured</div>
+                                        </div>
+                                    </div>
+                                </label>
+                                <label class="relative">
+                                    <input type="radio" name="dns_provider" value="godaddy" class="sr-only peer">
+                                    <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                        <div class="text-center">
+                                            <i class="fas fa-globe text-lg text-green-600 mb-1"></i>
+                                            <div class="text-xs font-medium dark:text-white">GoDaddy</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="godaddy-status">Not configured</div>
+                                        </div>
+                                    </div>
+                                </label>
+                                <label class="relative">
+                                    <input type="radio" name="dns_provider" value="dnsmadeeasy" class="sr-only peer">
+                                    <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                        <div class="text-center">
+                                            <i class="fas fa-cogs text-lg text-green-600 mb-1"></i>
+                                            <div class="text-xs font-medium dark:text-white">DNS Made Easy</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="dnsmadeeasy-status">Not configured</div>
+                                        </div>
+                                    </div>
+                                </label>
+                                <label class="relative">
+                                    <input type="radio" name="dns_provider" value="nsone" class="sr-only peer">
+                                    <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                        <div class="text-center">
+                                            <i class="fas fa-network-wired text-lg text-indigo-600 mb-1"></i>
+                                            <div class="text-xs font-medium dark:text-white">NS1</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="nsone-status">Not configured</div>
+                                        </div>
+                                    </div>
+                                </label>
+                                <label class="relative">
+                                    <input type="radio" name="dns_provider" value="he-ddns" class="sr-only peer">
+                                    <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                        <div class="text-center">
+                                            <i class="fas fa-bolt text-lg text-yellow-600 mb-1"></i>
+                                            <div class="text-xs font-medium dark:text-white">Hurricane Electric</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="he-ddns-status">Not configured</div>
+                                        </div>
+                                    </div>
+                                </label>
+                                <label class="relative">
+                                    <input type="radio" name="dns_provider" value="dynudns" class="sr-only peer">
+                                    <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                        <div class="text-center">
+                                            <i class="fas fa-sync-alt text-lg text-purple-600 mb-1"></i>
+                                            <div class="text-xs font-medium dark:text-white">Dynu</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="dynudns-status">Not configured</div>
+                                        </div>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- DNS Provider Configurations -->
+                    <!-- Cloudflare Configuration -->
+                    <div id="cloudflare-config" class="dns-config hidden">
+                        <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
+                            <div class="flex items-center justify-between mb-4">
+                                <h4 class="text-lg font-medium text-gray-900 dark:text-white">
+                                    <i class="fab fa-cloudflare mr-2 text-orange-500"></i>
+                                    Cloudflare Configuration
+                                </h4>
+                                <button type="button" id="cloudflare-add-account" onclick="showAddAccountModal('cloudflare')" 
+                                        class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-primary hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                                    <i class="fas fa-plus mr-1"></i>
+                                    Add Account
+                                </button>
+                            </div>
+                            
+                            <!-- Account Management List -->
+                            <div id="cloudflare-accounts-list" class="space-y-3 mb-4">
+                                <!-- Accounts will be populated here -->
+                            </div>
+                            
+                            <!-- Legacy single account fields (hidden when multi-account mode is active) -->
+                            <div id="cloudflare-legacy-config">
+                                <label for="cloudflare_api_token" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    API Token
+                                </label>
+                                <div class="mt-1">
+                                    <input type="password" id="cloudflare_api_token" name="cloudflare_api_token" 
+                                           class="block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                           placeholder="Enter your Cloudflare API token"
+                                           autocomplete="new-password" 
+                                           spellcheck="false"
+                                           data-lpignore="true">
+                                </div>
+                                <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                                    Create an API token at <a href="https://dash.cloudflare.com/profile/api-tokens" target="_blank" class="text-primary hover:underline">Cloudflare Dashboard</a> with <strong>Zone:DNS:Edit</strong> permissions.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- AWS Route53 Configuration -->
+                    <div id="route53-config" class="dns-config hidden">
+                        <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
+                            <div class="flex items-center justify-between mb-4">
+                                <h4 class="text-lg font-medium text-gray-900 dark:text-white">
+                                    <i class="fab fa-aws mr-2 text-orange-400"></i>
+                                    AWS Route53 Configuration
+                                </h4>
+                                <button type="button" id="route53-add-account" onclick="showAddAccountModal('route53')" 
+                                        class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-primary hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                                    <i class="fas fa-plus mr-1"></i>
+                                    Add Account
+                                </button>
+                            </div>
+                            
+                            <!-- Account Management List -->
+                            <div id="route53-accounts-list" class="space-y-3 mb-4">
+                                <!-- Accounts will be populated here -->
+                            </div>
+                            
+                            <!-- Legacy single account fields (hidden when multi-account mode is active) -->
+                            <div id="route53-legacy-config">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label for="route53_access_key_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            Access Key ID
+                                        </label>
+                                        <input type="password" id="route53_access_key_id" name="route53_access_key_id" 
+                                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                               placeholder="AKIAIOSFODNN7EXAMPLE"
+                                               autocomplete="new-password" 
+                                               spellcheck="false"
+                                               data-lpignore="true">
+                                    </div>
+                                    <div>
+                                        <label for="route53_secret_access_key" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            Secret Access Key
+                                        </label>
+                                        <input type="password" id="route53_secret_access_key" name="route53_secret_access_key" 
+                                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                               placeholder="Your AWS secret access key"
+                                               autocomplete="new-password" 
+                                               spellcheck="false"
+                                               data-lpignore="true">
+                                    </div>
+                                    <div>
+                                        <label for="route53_region" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            Region (Optional)
+                                        </label>
+                                        <input type="text" id="route53_region" name="route53_region" 
+                                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                               placeholder="us-east-1" value="us-east-1">
+                                    </div>
+                                </div>
+                                <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                                    Create IAM credentials with <strong>Route53FullAccess</strong> policy or a custom policy with Route53 DNS permissions.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Azure DNS Configuration -->
+                    <div id="azure-config" class="dns-config hidden">
+                        <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
+                            <div class="flex items-center justify-between mb-4">
+                                <h4 class="text-lg font-medium text-gray-900 dark:text-white">
+                                    <i class="fab fa-microsoft mr-2 text-blue-600"></i>
+                                    Azure DNS Configuration
+                                </h4>
+                                <button type="button" id="azure-add-account" onclick="showAddAccountModal('azure')" 
+                                        class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-primary hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                                    <i class="fas fa-plus mr-1"></i>
+                                    Add Account
+                                </button>
+                            </div>
+                            
+                            <!-- Account Management List -->
+                            <div id="azure-accounts-list" class="space-y-3 mb-4">
+                                <!-- Accounts will be populated here -->
+                            </div>
+                            
+                            <!-- Legacy single account fields (hidden when multi-account mode is active) -->
+                            <div id="azure-legacy-config">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label for="azure_subscription_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            Subscription ID
+                                        </label>
+                                        <input type="text" id="azure_subscription_id" name="azure_subscription_id" 
+                                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                               placeholder="12345678-1234-1234-1234-123456789012">
+                                    </div>
+                                    <div>
+                                        <label for="azure_resource_group" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            Resource Group
+                                        </label>
+                                        <input type="text" id="azure_resource_group" name="azure_resource_group" 
+                                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                               placeholder="my-dns-resource-group">
+                                    </div>
+                                    <div>
+                                        <label for="azure_tenant_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            Tenant ID
+                                        </label>
+                                        <input type="text" id="azure_tenant_id" name="azure_tenant_id" 
+                                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                               placeholder="12345678-1234-1234-1234-123456789012">
+                                    </div>
+                                    <div>
+                                        <label for="azure_client_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            Client ID
+                                        </label>
+                                        <input type="text" id="azure_client_id" name="azure_client_id" 
+                                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                               placeholder="12345678-1234-1234-1234-123456789012">
+                                    </div>
+                                    <div class="md:col-span-2">
+                                        <label for="azure_client_secret" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            Client Secret
+                                        </label>
+                                        <input type="password" id="azure_client_secret" name="azure_client_secret" 
+                                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                               placeholder="Your Azure client secret"
+                                               autocomplete="new-password" 
+                                               spellcheck="false"
+                                               data-lpignore="true">
+                                    </div>
+                                </div>
+                                <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                                    Create a Service Principal with <strong>DNS Zone Contributor</strong> role for your DNS zones.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Google Cloud DNS Configuration -->
+                    <div id="google-config" class="dns-config hidden">
+                        <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
+                            <div class="flex items-center justify-between mb-4">
+                                <h4 class="text-lg font-medium text-gray-900 dark:text-white">
+                                    <i class="fab fa-google mr-2 text-blue-500"></i>
+                                    Google Cloud DNS Configuration
+                                </h4>
+                                <button type="button" id="google-add-account" onclick="showAddAccountModal('google')" 
+                                        class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-primary hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                                    <i class="fas fa-plus mr-1"></i>
+                                    Add Account
+                                </button>
+                            </div>
+                            
+                            <!-- Account Management List -->
+                            <div id="google-accounts-list" class="space-y-3 mb-4">
+                                <!-- Accounts will be populated here -->
+                            </div>
+                            
+                            <!-- Legacy single account fields (hidden when multi-account mode is active) -->
+                            <div id="google-legacy-config">
+                                <div class="space-y-4">
+                                    <div>
+                                        <label for="google_project_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            Project ID
+                                        </label>
+                                        <input type="text" id="google_project_id" name="google_project_id" 
+                                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                               placeholder="my-gcp-project-123456">
+                                    </div>
+                                    <div>
+                                        <label for="google_service_account_key" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            Service Account JSON Key
+                                        </label>
+                                        <textarea id="google_service_account_key" name="google_service_account_key" rows="4"
+                                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                               placeholder='{"type": "service_account", "project_id": "...", ...}'></textarea>
+                                    </div>
+                                </div>
+                                <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                                    Create a Service Account with <strong>DNS Administrator</strong> role and download the JSON key file.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- PowerDNS Configuration -->
+                    <div id="powerdns-config" class="dns-config hidden">
+                        <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
+                            <div class="flex items-center justify-between mb-4">
+                                <h4 class="text-lg font-medium text-gray-900 dark:text-white">
+                                    <i class="fas fa-server mr-2 text-gray-600"></i>
+                                    PowerDNS Configuration
+                                </h4>
+                                <button type="button" id="powerdns-add-account" onclick="showAddAccountModal('powerdns')" 
+                                        class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-primary hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                                    <i class="fas fa-plus mr-1"></i>
+                                    Add Account
+                                </button>
+                            </div>
+                            
+                            <!-- Account Management List -->
+                            <div id="powerdns-accounts-list" class="space-y-3 mb-4">
+                                <!-- Accounts will be populated here -->
+                            </div>
+                            
+                            <!-- Legacy single account fields (hidden when multi-account mode is active) -->
+                            <div id="powerdns-legacy-config">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label for="powerdns_api_url" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            API URL
+                                        </label>
+                                        <input type="url" id="powerdns_api_url" name="powerdns_api_url" 
+                                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                               placeholder="https://powerdns.example.com:8081">
+                                    </div>
+                                    <div>
+                                        <label for="powerdns_api_key" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            API Key
+                                        </label>
+                                        <input type="password" id="powerdns_api_key" name="powerdns_api_key" 
+                                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                               placeholder="Your PowerDNS API key"
+                                               autocomplete="new-password" 
+                                               spellcheck="false"
+                                               data-lpignore="true">
+                                    </div>
+                                </div>
+                                <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                                    Configure your PowerDNS server with API access enabled and provide the API endpoint and key.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- DigitalOcean Configuration -->
+                    <div id="digitalocean-config" class="dns-config hidden">
+                        <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
+                            <div class="flex items-center justify-between mb-4">
+                                <h4 class="text-lg font-medium text-gray-900 dark:text-white">
+                                    <i class="fab fa-digital-ocean mr-2 text-blue-600"></i>
+                                    DigitalOcean DNS Configuration
+                                </h4>
+                                <button type="button" id="digitalocean-add-account" onclick="showAddAccountModal('digitalocean')" 
+                                        class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-primary hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                                    <i class="fas fa-plus mr-1"></i>
+                                    Add Account
+                                </button>
+                            </div>
+                            
+                            <!-- Account Management List -->
+                            <div id="digitalocean-accounts-list" class="space-y-3 mb-4">
+                                <!-- Accounts will be populated here -->
+                            </div>
+                            
+                            <!-- Legacy single account fields (hidden when multi-account mode is active) -->
+                            <div id="digitalocean-legacy-config">
+                                <div class="grid grid-cols-1 gap-4">
+                                    <div>
+                                        <label for="digitalocean_api_token" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            API Token
+                                        </label>
+                                        <input type="password" id="digitalocean_api_token" name="digitalocean_api_token" 
+                                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                               placeholder="Your DigitalOcean API token"
+                                               autocomplete="new-password" 
+                                               spellcheck="false"
+                                               data-lpignore="true">
+                                    </div>
+                                </div>
+                                <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                                    Generate a personal access token from your DigitalOcean control panel with read/write permissions for DNS.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Vultr Configuration -->
+                    <div id="vultr-config" class="dns-config hidden">
+                        <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
+                            <div class="flex items-center justify-between mb-4">
+                                <h4 class="text-lg font-medium text-gray-900 dark:text-white">
+                                    <i class="fas fa-cloud mr-2 text-blue-600"></i>
+                                    Vultr DNS Configuration
+                                </h4>
+                                <button type="button" id="vultr-add-account" onclick="showAddAccountModal('vultr')" 
+                                        class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-primary hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                                    <i class="fas fa-plus mr-1"></i>
+                                    Add Account
+                                </button>
+                            </div>
+                            
+                            <!-- Account Management List -->
+                            <div id="vultr-accounts-list" class="space-y-3 mb-4">
+                                <!-- Accounts will be populated here -->
+                            </div>
+                            
+                            <!-- Legacy single account fields (hidden when multi-account mode is active) -->
+                            <div id="vultr-legacy-config">
+                                <label for="vultr_api_key" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    API Key
+                                </label>
+                                <div class="mt-1">
+                                    <input type="password" id="vultr_api_key" name="vultr_api_key" 
+                                           class="block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                           placeholder="Enter your Vultr API key">
+                                </div>
+                                <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                                    Generate an API key from your Vultr control panel with DNS permissions.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Linode Configuration -->
+                    <div id="linode-config" class="dns-config hidden">
+                        <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
+                            <h4 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
+                                <i class="fas fa-cloud mr-2 text-green-600"></i>
+                                Linode DNS Configuration
+                            </h4>
+                            <div class="grid grid-cols-1 gap-4">
+                                <div>
+                                    <label for="linode_api_key" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        API Key
+                                    </label>
+                                    <input type="password" id="linode_api_key" name="linode_api_key" 
+                                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                           placeholder="Your Linode API key">
+                                </div>
+                            </div>
+                            <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                                Create a personal access token from your Linode account with read/write access to DNS records.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Gandi Configuration -->
+                    <div id="gandi-config" class="dns-config hidden">
+                        <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
+                            <h4 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
+                                <i class="fas fa-globe mr-2 text-orange-600"></i>
+                                Gandi DNS Configuration
+                            </h4>
+                            <div class="grid grid-cols-1 gap-4">
+                                <div>
+                                    <label for="gandi_api_token" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        API Token
+                                    </label>
+                                    <input type="password" id="gandi_api_token" name="gandi_api_token" 
+                                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                           placeholder="Your Gandi LiveDNS API token">
+                                </div>
+                            </div>
+                            <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                                Generate a personal access token from your Gandi account with DNS access permissions.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- OVH Configuration -->
+                    <div id="ovh-config" class="dns-config hidden">
+                        <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
+                            <h4 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
+                                <i class="fas fa-server mr-2 text-purple-600"></i>
+                                OVH DNS Configuration
+                            </h4>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label for="ovh_endpoint" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        Endpoint
+                                    </label>
+                                    <select id="ovh_endpoint" name="ovh_endpoint" 
+                                            class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary">
+                                        <option value="">Select endpoint</option>
+                                        <option value="ovh-eu">ovh-eu (Europe)</option>
+                                        <option value="ovh-us">ovh-us (US)</option>
+                                        <option value="ovh-ca">ovh-ca (Canada)</option>
+                                        <option value="kimsufi-eu">kimsufi-eu</option>
+                                        <option value="kimsufi-ca">kimsufi-ca</option>
+                                        <option value="soyoustart-eu">soyoustart-eu</option>
+                                        <option value="soyoustart-ca">soyoustart-ca</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label for="ovh_application_key" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        Application Key
+                                    </label>
+                                    <input type="password" id="ovh_application_key" name="ovh_application_key" 
+                                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                           placeholder="Your application key">
+                                </div>
+                                <div>
+                                    <label for="ovh_application_secret" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        Application Secret
+                                    </label>
+                                    <input type="password" id="ovh_application_secret" name="ovh_application_secret" 
+                                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                           placeholder="Your application secret">
+                                </div>
+                                <div>
+                                    <label for="ovh_consumer_key" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        Consumer Key
+                                    </label>
+                                    <input type="password" id="ovh_consumer_key" name="ovh_consumer_key" 
+                                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                           placeholder="Your consumer key">
+                                </div>
+                            </div>
+                            <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                                Create an OVH application with DNS access permissions and configure the API credentials.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Namecheap Configuration -->
+                    <div id="namecheap-config" class="dns-config hidden">
+                        <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
+                            <h4 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
+                                <i class="fas fa-shopping-cart mr-2 text-red-600"></i>
+                                Namecheap DNS Configuration
+                            </h4>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label for="namecheap_username" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        Username
+                                    </label>
+                                    <input type="text" id="namecheap_username" name="namecheap_username" 
+                                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                           placeholder="Your Namecheap username">
+                                </div>
+                                <div>
+                                    <label for="namecheap_api_key" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        API Key
+                                    </label>
+                                    <input type="password" id="namecheap_api_key" name="namecheap_api_key" 
+                                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                           placeholder="Your Namecheap API key">
+                                </div>
+                            </div>
+                            <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                                Enable API access in your Namecheap account and provide your username and API key.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- RFC2136 Configuration -->
+                    <div id="rfc2136-config" class="dns-config hidden">
+                        <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
+                            <div class="flex items-center justify-between mb-4">
+                                <h4 class="text-lg font-medium text-gray-900 dark:text-white">
+                                    <i class="fas fa-exchange-alt mr-2 text-gray-600"></i>
+                                    RFC2136 DNS Configuration
+                                </h4>
+                                <button type="button" id="rfc2136-add-account" onclick="showAddAccountModal('rfc2136')" 
+                                        class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-primary hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                                    <i class="fas fa-plus mr-1"></i>
+                                    Add Server
+                                </button>
+                            </div>
+                            
+                            <!-- Account Management List -->
+                            <div id="rfc2136-accounts-list" class="space-y-3 mb-4">
+                                <!-- Accounts will be populated here -->
+                            </div>
+                            
+                            <!-- Legacy single account fields (hidden when multi-account mode is active) -->
+                            <div id="rfc2136-legacy-config">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label for="rfc2136_nameserver" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            Nameserver
+                                        </label>
+                                        <input type="text" id="rfc2136_nameserver" name="rfc2136_nameserver" 
+                                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                               placeholder="ns.example.com">
+                                    </div>
+                                    <div>
+                                        <label for="rfc2136_tsig_key" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            TSIG Key Name
+                                        </label>
+                                        <input type="text" id="rfc2136_tsig_key" name="rfc2136_tsig_key" 
+                                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                               placeholder="mykey">
+                                    </div>
+                                    <div>
+                                        <label for="rfc2136_tsig_secret" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            TSIG Secret
+                                        </label>
+                                        <input type="password" id="rfc2136_tsig_secret" name="rfc2136_tsig_secret" 
+                                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                               placeholder="Base64-encoded secret">
+                                    </div>
+                                    <div>
+                                        <label for="rfc2136_tsig_algorithm" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            TSIG Algorithm (Optional)
+                                        </label>
+                                        <select id="rfc2136_tsig_algorithm" name="rfc2136_tsig_algorithm" 
+                                                class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary">
+                                            <option value="">Default (HMAC-MD5)</option>
+                                            <option value="HMAC-MD5">HMAC-MD5</option>
+                                            <option value="HMAC-SHA1">HMAC-SHA1</option>
+                                            <option value="HMAC-SHA224">HMAC-SHA224</option>
+                                            <option value="HMAC-SHA256">HMAC-SHA256</option>
+                                            <option value="HMAC-SHA384">HMAC-SHA384</option>
+                                            <option value="HMAC-SHA512">HMAC-SHA512</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                                    Configure RFC2136 dynamic DNS updates for BIND or compatible DNS servers.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Additional Provider Configurations -->
+                    
+                    <!-- Hetzner Configuration -->
+                    <div id="hetzner-config" class="dns-config hidden">
+                        <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
+                            <h4 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
+                                <i class="fas fa-server mr-2 text-red-600"></i>
+                                Hetzner DNS Configuration
+                            </h4>
+                            <div>
+                                <label for="hetzner_api_token" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    API Token
+                                </label>
+                                <input type="password" id="hetzner_api_token" name="hetzner_api_token" 
+                                       class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                       placeholder="Your Hetzner DNS API token">
+                            </div>
+                            <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                                Create an API token at <a href="https://dns.hetzner.com/" target="_blank" class="text-primary hover:underline">Hetzner DNS Console</a> with DNS zone permissions.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Porkbun Configuration -->
+                    <div id="porkbun-config" class="dns-config hidden">
+                        <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
+                            <h4 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
+                                <i class="fas fa-paw mr-2 text-pink-600"></i>
+                                Porkbun DNS Configuration
+                            </h4>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label for="porkbun_api_key" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        API Key
+                                    </label>
+                                    <input type="password" id="porkbun_api_key" name="porkbun_api_key" 
+                                           class="mt-1 block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                           placeholder="Your Porkbun API key">
+                                </div>
+                                <div>
+                                    <label for="porkbun_secret_key" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        Secret Key
+                                    </label>
+                                    <input type="password" id="porkbun_secret_key" name="porkbun_secret_key" 
+                                           class="mt-1 block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                           placeholder="Your Porkbun secret key">
+                                </div>
+                            </div>
+                            <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                                Get your API credentials from <a href="https://porkbun.com/account/api" target="_blank" class="text-primary hover:underline">Porkbun API page</a>.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- GoDaddy Configuration -->
+                    <div id="godaddy-config" class="dns-config hidden">
+                        <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
+                            <h4 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
+                                <i class="fas fa-globe mr-2 text-green-600"></i>
+                                GoDaddy DNS Configuration
+                            </h4>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label for="godaddy_api_key" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        API Key
+                                    </label>
+                                    <input type="password" id="godaddy_api_key" name="godaddy_api_key" 
+                                           class="mt-1 block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                           placeholder="Your GoDaddy API key">
+                                </div>
+                                <div>
+                                    <label for="godaddy_secret" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        API Secret
+                                    </label>
+                                    <input type="password" id="godaddy_secret" name="godaddy_secret" 
+                                           class="mt-1 block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                           placeholder="Your GoDaddy API secret">
+                                </div>
+                            </div>
+                            <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                                Create API credentials at <a href="https://developer.godaddy.com/keys" target="_blank" class="text-primary hover:underline">GoDaddy Developer Portal</a>.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Hurricane Electric Configuration -->
+                    <div id="he-ddns-config" class="dns-config hidden">
+                        <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
+                            <h4 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
+                                <i class="fas fa-bolt mr-2 text-yellow-600"></i>
+                                Hurricane Electric DNS Configuration
+                            </h4>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label for="he_ddns_username" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        Username
+                                    </label>
+                                    <input type="text" id="he_ddns_username" name="he_ddns_username" 
+                                           class="mt-1 block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                           placeholder="Your Hurricane Electric username">
+                                </div>
+                                <div>
+                                    <label for="he_ddns_password" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        Password
+                                    </label>
+                                    <input type="password" id="he_ddns_password" name="he_ddns_password" 
+                                           class="mt-1 block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                           placeholder="Your Hurricane Electric password">
+                                </div>
+                            </div>
+                            <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                                Use your <a href="https://dns.he.net/" target="_blank" class="text-primary hover:underline">Hurricane Electric DNS</a> account credentials.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Dynu Configuration -->
+                    <div id="dynudns-config" class="dns-config hidden">
+                        <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
+                            <h4 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
+                                <i class="fas fa-sync-alt mr-2 text-purple-600"></i>
+                                Dynu DNS Configuration
+                            </h4>
+                            <div>
+                                <label for="dynudns_token" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    API Token
+                                </label>
+                                <input type="password" id="dynudns_token" name="dynudns_token" 
+                                       class="mt-1 block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                       placeholder="Your Dynu API token">
+                            </div>
+                            <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                                Generate an API token at <a href="https://www.dynu.com/en-US/ControlPanel/APICredentials" target="_blank" class="text-primary hover:underline">Dynu Control Panel</a>.
+                            </p>
+                        </div>
+                    </div>
+                    </div><!-- /tab: dns -->
+
+                    

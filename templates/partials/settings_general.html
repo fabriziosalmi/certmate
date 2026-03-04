@@ -1,0 +1,85 @@
+<!-- TAB: General Settings -->
+                    <div x-show="tab === 'general'" x-cloak
+                    <!-- General Certificate Settings Section -->
+                    <div class="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                            <i class="fas fa-cogs mr-1"></i>
+                            Certificate Management Settings
+                        </label>
+                        
+                        <div class="space-y-4">
+                            <!-- Auto Renewal Setting -->
+                            <div>
+                                <label class="flex items-center">
+                                    <input type="checkbox" id="auto_renew" name="auto_renew" 
+                                           class="rounded border-gray-300 dark:border-gray-600 text-primary focus:ring-primary focus:ring-offset-0 dark:bg-gray-700">
+                                    <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Enable automatic certificate renewal</span>
+                                </label>
+                                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                    Automatically renew certificates when they approach expiration
+                                </p>
+                            </div>
+                            
+                            <!-- Renewal Threshold Setting -->
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
+                                    Certificate Renewal Threshold (days)
+                                </label>
+                                <input type="number" id="renewal_threshold_days" name="renewal_threshold_days" 
+                                       min="1" max="90" value="30"
+                                       class="w-32 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm">
+                                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                    Renew certificates when they have this many days left before expiration (default: 30 days)
+                                </p>
+                            </div>
+
+                            <!-- Cache TTL Setting -->
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
+                                    Cache TTL (seconds)
+                                </label>
+                                <input type="number" id="cache_ttl" name="cache_ttl" 
+                                       min="0" max="86400" value="300"
+                                       class="w-32 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm">
+                                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                    How long to cache DNS responses (default: 300 seconds)
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- API Security Settings Section -->
+                    <div class="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                            <i class="fas fa-key mr-1"></i>
+                            API Security Settings
+                        </label>
+                        
+                        <div class="space-y-4">
+                            <!-- API Bearer Token Setting -->
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
+                                    API Bearer Token
+                                </label>
+                                <div class="flex items-center space-x-2">
+                                    <input type="password" id="api_bearer_token" name="api_bearer_token" 
+                                           placeholder="Enter a secure token for API authentication"
+                                           class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm">
+                                    <button type="button" onclick="toggleTokenVisibility()" 
+                                            class="px-3 py-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
+                                        <i class="fas fa-eye" id="tokenToggleIcon"></i>
+                                    </button>
+                                    <button type="button" onclick="generateToken()" 
+                                            class="px-3 py-2 bg-gray-100 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md hover:bg-gray-200 dark:hover:bg-gray-500 text-sm">
+                                        <i class="fas fa-random mr-1"></i> Generate
+                                    </button>
+                                </div>
+                                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                    Token used for API authentication. Required for API access after initial setup.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    </div><!-- /tab: general -->
+
+                    

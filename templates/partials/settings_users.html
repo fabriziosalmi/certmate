@@ -1,0 +1,102 @@
+<!-- TAB: User Management Section -->
+        <div x-show="tab === 'users'" x-cloak class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 mt-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
+                    <i class="fas fa-users mr-2 text-purple-500"></i>
+                    User Management
+                </h3>
+                <span class="text-xs bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 px-2 py-1 rounded-full">
+                    Local Authentication
+                </span>
+            </div>
+            
+            <p class="text-gray-600 dark:text-gray-400 text-sm mb-6">
+                Manage local user accounts for CertMate. Enable local authentication to require username/password login.
+            </p>
+
+            <!-- Security reminder (shown when auth is disabled) -->
+            <div id="authSecurityBanner" class="mb-6 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg" style="display: none;">
+                <div class="flex items-start">
+                    <i class="fas fa-exclamation-triangle text-amber-500 mt-0.5 mr-3 flex-shrink-0"></i>
+                    <div>
+                        <h4 class="text-sm font-medium text-amber-800 dark:text-amber-200">Authentication is disabled</h4>
+                        <p class="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                            Anyone with network access can manage certificates and settings. Enable Local Authentication below and create an admin user to secure your instance.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Local Auth Toggle -->
+            <div class="mb-6 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Enable Local Authentication</label>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Require username/password login for web access</p>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="localAuthToggle" class="sr-only peer" onchange="toggleLocalAuth()">
+                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Add User Form -->
+            <div class="mb-6">
+                <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+                    <i class="fas fa-user-plus mr-1"></i> Add New User
+                </h4>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div>
+                        <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Username</label>
+                        <input type="text" id="newUserUsername" placeholder="username"
+                               class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-gray-700 dark:text-white">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Password</label>
+                        <input type="password" id="newUserPassword" placeholder="password"
+                               class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-gray-700 dark:text-white">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Email (optional)</label>
+                        <input type="email" id="newUserEmail" placeholder="user@example.com"
+                               class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-gray-700 dark:text-white">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Role</label>
+                        <div class="flex items-center space-x-2">
+                            <select id="newUserRole" 
+                                    class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-gray-700 dark:text-white">
+                                <option value="viewer">Viewer</option>
+                                <option value="operator" selected>Operator</option>
+                                <option value="admin">Admin</option>
+                            </select>
+                            <button type="button" onclick="createUser()" 
+                                    class="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 text-sm">
+                                <i class="fas fa-plus mr-1"></i> Add
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- User List -->
+            <div>
+                <div class="flex items-center justify-between mb-3">
+                    <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                        <i class="fas fa-list mr-1"></i> Existing Users
+                    </h4>
+                    <button type="button" onclick="refreshUserList()" 
+                            class="text-sm text-blue-600 dark:text-blue-400 hover:underline">
+                        <i class="fas fa-sync-alt mr-1"></i> Refresh
+                    </button>
+                </div>
+                <div id="userList" class="space-y-2 max-h-64 overflow-y-auto">
+                    <div class="text-center py-4 text-gray-500 dark:text-gray-400 text-sm">
+                        <i class="fas fa-spinner fa-spin mr-2"></i> Loading users...
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        
