@@ -14,7 +14,7 @@ from flask import render_template, request, jsonify, send_file, send_from_direct
 
 logger = logging.getLogger(__name__)
 
-def register_cert_routes(app, managers, require_web_auth, auth_manager, certificate_manager, _sanitize_domain, file_ops, settings_manager, dns_manager, _cert_executor, CERTIFICATE_FILES):
+def register_cert_routes(app, managers, require_web_auth, auth_manager, certificate_manager, _sanitize_domain, file_ops, settings_manager, dns_manager, CERTIFICATE_FILES):
     # Special download endpoint for easy automation
     @app.route('/<string:domain>/tls')
     @auth_manager.require_role('viewer')
@@ -262,7 +262,7 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager, certific
                     if evt:
                         evt.publish('certificate_failed', {'domain': domain, 'error': str(e)})
 
-            _cert_executor.submit(create_cert_async)
+            managers["scheduler"].add_job(create_cert_async)
             
             # Build response message
             if san_domains:
@@ -358,7 +358,7 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager, certific
                     if evt:
                         evt.publish('certificate_failed', {'domain': domain, 'error': str(e)})
 
-            _cert_executor.submit(renew_cert_async)
+            managers["scheduler"].add_job(renew_cert_async)
 
             event_bus = managers.get('events')
             if event_bus:

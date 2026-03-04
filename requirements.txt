@@ -57,3 +57,4 @@ prometheus_client==0.21.0
 
 # Testing
 requests_mock==1.12.1
+SQLAlchemy>=2.0.0

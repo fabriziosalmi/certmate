@@ -60,8 +60,7 @@ def _record_login_attempt(ip_address):
 # Import certificate files constant
 from ..core.constants import CERTIFICATE_FILES
 
-# Thread pool for background certificate operations (max 4 concurrent)
-_cert_executor = concurrent.futures.ThreadPoolExecutor(max_workers=4, thread_name_prefix='certmate-cert')
+
 
 # Domain name validation pattern
 _DOMAIN_RE = re.compile(r'^(\*\.)?([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$')
@@ -140,6 +139,6 @@ def register_web_routes(app, managers):
     register_ui_routes(app, managers, require_web_auth)
     register_misc_routes(app, managers, require_web_auth, auth_manager)
     register_auth_routes(app, managers, require_web_auth, auth_manager, _check_login_rate_limit, _record_login_attempt)
-    register_cert_routes(app, managers, require_web_auth, auth_manager, certificate_manager, _sanitize_domain, file_ops, settings_manager, dns_manager, _cert_executor, CERTIFICATE_FILES)
+    register_cert_routes(app, managers, require_web_auth, auth_manager, certificate_manager, _sanitize_domain, file_ops, settings_manager, dns_manager, CERTIFICATE_FILES)
     register_settings_routes(app, managers, require_web_auth, auth_manager, settings_manager, dns_manager, _is_localhost)
     register_backup_cache_routes(app, managers, require_web_auth, auth_manager, file_ops, settings_manager, cache_manager)

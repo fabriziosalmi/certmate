@@ -1,4 +1,4 @@
-(function() {
+(function () {
     'use strict';
 
     // =============================================
@@ -21,17 +21,17 @@
             showDeliveries: false,
             deliveries: [],
             get smtpToStr() { return (this.config.channels.smtp.to_addresses || []).join(', '); },
-            set smtpToStr(v) { this.config.channels.smtp.to_addresses = v.split(',').map(function(s) { return s.trim(); }).filter(Boolean); },
-            toggleEvent: function(evt) {
+            set smtpToStr(v) { this.config.channels.smtp.to_addresses = v.split(',').map(function (s) { return s.trim(); }).filter(Boolean); },
+            toggleEvent: function (evt) {
                 var idx = this.config.events.indexOf(evt);
                 if (idx === -1) this.config.events.push(evt);
                 else this.config.events.splice(idx, 1);
             },
-            loadConfig: function() {
+            loadConfig: function () {
                 var self = this;
                 fetch('/api/notifications/config', { credentials: 'same-origin' })
-                    .then(function(r) { return r.json(); })
-                    .then(function(data) {
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) {
                         if (data && typeof data === 'object' && !data.error) {
                             self.config.enabled = data.enabled || false;
                             self.config.digest_enabled = data.digest_enabled !== false;
@@ -42,9 +42,9 @@
                             }
                         }
                     })
-                    .catch(function() {});
+                    .catch(function () { });
             },
-            saveConfig: function() {
+            saveConfig: function () {
                 var self = this;
                 fetch('/api/notifications/config', {
                     method: 'POST',
@@ -52,11 +52,11 @@
                     credentials: 'same-origin',
                     body: JSON.stringify(self.config)
                 })
-                .then(function(r) { return r.json(); })
-                .then(function() { CertMate.toast('Notification settings saved', 'success'); })
-                .catch(function() { CertMate.toast('Failed to save', 'error'); });
+                    .then(function (r) { return r.json(); })
+                    .then(function () { CertMate.toast('Notification settings saved', 'success'); })
+                    .catch(function () { CertMate.toast('Failed to save', 'error'); });
             },
-            testSmtp: function() {
+            testSmtp: function () {
                 var self = this;
                 fetch('/api/notifications/test', {
                     method: 'POST',
@@ -64,48 +64,48 @@
                     credentials: 'same-origin',
                     body: JSON.stringify({ channel_type: 'smtp', config: self.config.channels.smtp })
                 })
-                .then(function(r) { return r.json(); })
-                .then(function(d) { CertMate.toast(d.success ? 'Test email sent!' : ('Email failed: ' + (d.error || 'unknown')), d.success ? 'success' : 'error'); })
-                .catch(function() { CertMate.toast('Test failed', 'error'); });
+                    .then(function (r) { return r.json(); })
+                    .then(function (d) { CertMate.toast(d.success ? 'Test email sent!' : ('Email failed: ' + (d.error || 'unknown')), d.success ? 'success' : 'error'); })
+                    .catch(function () { CertMate.toast('Test failed', 'error'); });
             },
-            sendDigest: function() {
+            sendDigest: function () {
                 fetch('/api/digest/send', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'same-origin'
                 })
-                .then(function(r) { return r.json(); })
-                .then(function(d) {
-                    if (d.success) CertMate.toast('Weekly digest sent!', 'success');
-                    else CertMate.toast('Digest: ' + (d.error || d.skipped || 'unknown error'), d.skipped ? 'warning' : 'error');
-                })
-                .catch(function() { CertMate.toast('Failed to send digest', 'error'); });
+                    .then(function (r) { return r.json(); })
+                    .then(function (d) {
+                        if (d.success) CertMate.toast('Weekly digest sent!', 'success');
+                        else CertMate.toast('Digest: ' + (d.error || d.skipped || 'unknown error'), d.skipped ? 'warning' : 'error');
+                    })
+                    .catch(function () { CertMate.toast('Failed to send digest', 'error'); });
             },
-            testWebhook: function(wh) {
+            testWebhook: function (wh) {
                 fetch('/api/notifications/test', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'same-origin',
                     body: JSON.stringify({ channel_type: 'webhook', config: wh })
                 })
-                .then(function(r) { return r.json(); })
-                .then(function(d) { CertMate.toast(d.success ? 'Webhook test sent!' : ('Webhook failed: ' + (d.error || 'unknown')), d.success ? 'success' : 'error'); })
-                .catch(function() { CertMate.toast('Test failed', 'error'); });
+                    .then(function (r) { return r.json(); })
+                    .then(function (d) { CertMate.toast(d.success ? 'Webhook test sent!' : ('Webhook failed: ' + (d.error || 'unknown')), d.success ? 'success' : 'error'); })
+                    .catch(function () { CertMate.toast('Test failed', 'error'); });
             },
-            toggleWebhookEvent: function(wh, evt) {
+            toggleWebhookEvent: function (wh, evt) {
                 if (!wh.events) wh.events = [];
                 var idx = wh.events.indexOf(evt);
                 if (idx === -1) wh.events.push(evt);
                 else wh.events.splice(idx, 1);
             },
-            loadDeliveries: function() {
+            loadDeliveries: function () {
                 var self = this;
                 fetch('/api/webhooks/deliveries?limit=50', { credentials: 'same-origin' })
-                    .then(function(r) { return r.json(); })
-                    .then(function(data) {
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) {
                         if (Array.isArray(data)) self.deliveries = data;
                     })
-                    .catch(function() {});
+                    .catch(function () { });
             }
         };
     }
@@ -127,21 +127,21 @@
             history: [],
             newDomain: '',
 
-            loadConfig: function() {
+            loadConfig: function () {
                 var self = this;
                 fetch('/api/deploy/config', { credentials: 'same-origin' })
-                    .then(function(r) { return r.json(); })
-                    .then(function(data) {
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) {
                         if (data && typeof data === 'object' && !data.error) {
                             self.config.enabled = data.enabled || false;
                             self.config.global_hooks = data.global_hooks || [];
                             self.config.domain_hooks = data.domain_hooks || {};
                         }
                     })
-                    .catch(function() {});
+                    .catch(function () { });
             },
 
-            saveConfig: function() {
+            saveConfig: function () {
                 var self = this;
                 fetch('/api/deploy/config', {
                     method: 'POST',
@@ -149,22 +149,22 @@
                     credentials: 'same-origin',
                     body: JSON.stringify(self.config)
                 })
-                .then(function(r) { return r.json(); })
-                .then(function(d) {
-                    if (d.status === 'saved') CertMate.toast('Deploy settings saved', 'success');
-                    else CertMate.toast('Save failed: ' + (d.error || 'unknown'), 'error');
-                })
-                .catch(function() { CertMate.toast('Failed to save', 'error'); });
+                    .then(function (r) { return r.json(); })
+                    .then(function (d) {
+                        if (d.status === 'saved') CertMate.toast('Deploy settings saved', 'success');
+                        else CertMate.toast('Save failed: ' + (d.error || 'unknown'), 'error');
+                    })
+                    .catch(function () { CertMate.toast('Failed to save', 'error'); });
             },
 
-            _generateId: function() {
+            _generateId: function () {
                 if (typeof crypto !== 'undefined' && crypto.randomUUID) {
                     return crypto.randomUUID();
                 }
                 return Date.now().toString(36) + Math.random().toString(36).substr(2);
             },
 
-            addGlobalHook: function() {
+            addGlobalHook: function () {
                 this.config.global_hooks.push({
                     id: this._generateId(),
                     name: '',
@@ -176,7 +176,7 @@
                 this.showGlobal = true;
             },
 
-            addDomainSection: function() {
+            addDomainSection: function () {
                 var d = this.newDomain.trim().toLowerCase();
                 if (!d) return;
                 if (!this.config.domain_hooks[d]) {
@@ -187,7 +187,7 @@
                 this.newDomain = '';
             },
 
-            addDomainHook: function(domain) {
+            addDomainHook: function (domain) {
                 if (!this.config.domain_hooks[domain]) {
                     this.config.domain_hooks[domain] = [];
                 }
@@ -201,23 +201,23 @@
                 });
             },
 
-            removeDomain: function(domain) {
+            removeDomain: function (domain) {
                 var self = this;
-                CertMate.confirm('Remove all hooks for ' + domain + '?', 'Remove Domain').then(function(confirmed) {
+                CertMate.confirm('Remove all hooks for ' + domain + '?', 'Remove Domain').then(function (confirmed) {
                     if (!confirmed) return;
                     delete self.config.domain_hooks[domain];
                     self.config.domain_hooks = Object.assign({}, self.config.domain_hooks);
                 });
             },
 
-            toggleEvent: function(hook, evt) {
+            toggleEvent: function (hook, evt) {
                 if (!hook.on_events) hook.on_events = [];
                 var idx = hook.on_events.indexOf(evt);
                 if (idx === -1) hook.on_events.push(evt);
                 else hook.on_events.splice(idx, 1);
             },
 
-            testHook: function(hook) {
+            testHook: function (hook) {
                 CertMate.toast('Testing hook: ' + hook.name + '...', 'info');
                 fetch('/api/deploy/test/' + hook.id, {
                     method: 'POST',
@@ -225,22 +225,22 @@
                     credentials: 'same-origin',
                     body: JSON.stringify({ domain: 'test.example.com' })
                 })
-                .then(function(r) { return r.json(); })
-                .then(function(d) {
-                    if (d.success) CertMate.toast('Hook test passed (exit ' + d.exit_code + ')', 'success');
-                    else CertMate.toast('Hook test failed: ' + (d.error || 'exit ' + d.exit_code), 'error');
-                })
-                .catch(function() { CertMate.toast('Test request failed', 'error'); });
+                    .then(function (r) { return r.json(); })
+                    .then(function (d) {
+                        if (d.success) CertMate.toast('Hook test passed (exit ' + d.exit_code + ')', 'success');
+                        else CertMate.toast('Hook test failed: ' + (d.error || 'exit ' + d.exit_code), 'error');
+                    })
+                    .catch(function () { CertMate.toast('Test request failed', 'error'); });
             },
 
-            loadHistory: function() {
+            loadHistory: function () {
                 var self = this;
                 fetch('/api/deploy/history?limit=50', { credentials: 'same-origin' })
-                    .then(function(r) { return r.json(); })
-                    .then(function(data) {
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) {
                         if (Array.isArray(data)) self.history = data;
                     })
-                    .catch(function() {});
+                    .catch(function () { });
             }
         };
     }
@@ -317,7 +317,7 @@
     function generateRandomToken() {
         var array = new Uint8Array(32);
         crypto.getRandomValues(array);
-        return Array.from(array, function(byte) { return byte.toString(16).padStart(2, '0'); }).join('');
+        return Array.from(array, function (byte) { return byte.toString(16).padStart(2, '0'); }).join('');
     }
 
     function generateToken() {
@@ -355,31 +355,7 @@
     function showMessage(message, type) {
         type = type || 'info';
         addDebugLog(message, type);
-
-        if (statusMessage) {
-            statusMessage.textContent = message;
-            var cls = 'mt-4 p-3 rounded-md text-sm ';
-            if (type === 'success') {
-                cls += 'bg-green-100 text-green-700 border border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-600';
-            } else if (type === 'error') {
-                cls += 'bg-red-100 text-red-700 border border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-600';
-            } else if (type === 'warning') {
-                cls += 'bg-yellow-100 text-yellow-700 border border-yellow-200 dark:bg-yellow-900/20 dark:text-yellow-400 dark:border-yellow-600';
-            } else {
-                cls += 'bg-blue-100 text-blue-700 border border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-600';
-            }
-            statusMessage.className = cls;
-            statusMessage.classList.remove('hidden');
-
-            // Auto-hide success messages after 5 seconds
-            if (type === 'success') {
-                setTimeout(function() {
-                    if (statusMessage) {
-                        statusMessage.classList.add('hidden');
-                    }
-                }, 5000);
-            }
-        }
+        CertMate.toast(message, type);
     }
 
     // =============================================
@@ -388,7 +364,7 @@
 
     function showDNSConfig(provider) {
         // Hide all DNS config sections
-        document.querySelectorAll('.dns-config').forEach(function(config) {
+        document.querySelectorAll('.dns-config').forEach(function (config) {
             config.classList.add('hidden');
         });
 
@@ -433,7 +409,7 @@
             }
 
             var domainsRaw = formData.get('domains');
-            var domainsValue = domainsRaw ? domainsRaw.split('\n').map(function(d) { return d.trim(); }).filter(function(d) { return d; }) : undefined;
+            var domainsValue = domainsRaw ? domainsRaw.split('\n').map(function (d) { return d.trim(); }).filter(function (d) { return d; }) : undefined;
 
             var tokenRaw = formData.get('api_bearer_token');
             var tokenValue = tokenRaw ? tokenRaw.trim() : undefined;
@@ -456,7 +432,7 @@
             // Validate required fields - email comes from the selected CA provider
             if (!settings.email) {
                 var caDisplayName = defaultCA === 'letsencrypt' ? "Let's Encrypt" :
-                                    defaultCA === 'digicert' ? 'DigiCert' : 'Private CA';
+                    defaultCA === 'digicert' ? 'DigiCert' : 'Private CA';
                 throw new Error('Email address is required in the ' + caDisplayName + ' configuration section');
             }
 
@@ -486,7 +462,7 @@
             var provider = settings.dns_provider;
             var legacyFields = getLegacyFieldsForProvider(provider);
 
-            legacyFields.forEach(function(fieldName) {
+            legacyFields.forEach(function (fieldName) {
                 var value = formData.get(fieldName);
                 if (value && value.trim()) {
                     var configKey = fieldName.replace(provider + '_', '');
@@ -500,7 +476,7 @@
                 if (!settings.dns_providers[provider]) settings.dns_providers[provider] = {};
 
                 // Check if we already have multi-account data
-                var hasMultiAccount = Object.values(settings.dns_providers[provider]).some(function(val) {
+                var hasMultiAccount = Object.values(settings.dns_providers[provider]).some(function (val) {
                     return typeof val === 'object' && val.name;
                 });
 
@@ -518,33 +494,33 @@
                 },
                 body: JSON.stringify(settings)
             })
-            .then(function(response) {
-                if (!response.ok) {
-                    return response.text().then(function(errorData) {
-                        throw new Error('HTTP ' + response.status + ': ' + errorData);
-                    });
-                }
-                return response.json();
-            })
-            .then(function(result) {
-                addDebugLog('Settings saved successfully', 'info');
-                showMessage('Settings saved successfully', 'success');
+                .then(function (response) {
+                    if (!response.ok) {
+                        return response.text().then(function (errorData) {
+                            throw new Error('HTTP ' + response.status + ': ' + errorData);
+                        });
+                    }
+                    return response.json();
+                })
+                .then(function (result) {
+                    addDebugLog('Settings saved successfully', 'info');
+                    showMessage('Settings saved successfully', 'success');
 
-                // Reload settings to refresh the UI
-                return loadSettings();
-            })
-            .catch(function(error) {
-                addDebugLog('Error saving settings: ' + error.message, 'error');
-                showMessage('Error saving settings: ' + error.message, 'error');
-            })
-            .then(function() {
-                // finally block equivalent
-                isLoading = false;
-                if (saveBtn) {
-                    saveBtn.disabled = false;
-                    saveBtn.innerHTML = '<i class="fas fa-save mr-2"></i>Save Settings';
-                }
-            });
+                    // Reload settings to refresh the UI
+                    return loadSettings();
+                })
+                .catch(function (error) {
+                    addDebugLog('Error saving settings: ' + error.message, 'error');
+                    showMessage('Error saving settings: ' + error.message, 'error');
+                })
+                .then(function () {
+                    // finally block equivalent
+                    isLoading = false;
+                    if (saveBtn) {
+                        saveBtn.disabled = false;
+                        saveBtn.innerHTML = '<i class="fas fa-save mr-2"></i>Save Settings';
+                    }
+                });
         } catch (error) {
             addDebugLog('Error saving settings: ' + error.message, 'error');
             showMessage('Error saving settings: ' + error.message, 'error');
@@ -593,9 +569,9 @@
         addDebugLog('Refreshing cache stats...', 'info');
 
         return fetch('/api/web/cache/stats')
-            .then(function(response) {
+            .then(function (response) {
                 if (response.ok) {
-                    return response.json().then(function(stats) {
+                    return response.json().then(function (stats) {
                         var entriesEl = document.getElementById('cache-entries');
                         var ttlEl = document.getElementById('cache-current-ttl');
 
@@ -608,7 +584,7 @@
                     addDebugLog('Failed to refresh cache stats', 'warn');
                 }
             })
-            .catch(function(error) {
+            .catch(function (error) {
                 addDebugLog('Error refreshing cache stats: ' + error.message, 'error');
             });
     }
@@ -622,22 +598,22 @@
                 'Content-Type': 'application/json'
             }
         })
-        .then(function(response) {
-            if (response.ok) {
-                return response.json().then(function(result) {
-                    addDebugLog('Cache cleared successfully', 'info');
-                    showMessage('Cache cleared successfully', 'success');
-                    return refreshCacheStats();
-                });
-            } else {
-                addDebugLog('Failed to clear cache', 'warn');
-                showMessage('Failed to clear cache', 'error');
-            }
-        })
-        .catch(function(error) {
-            addDebugLog('Error clearing cache: ' + error.message, 'error');
-            showMessage('Error clearing cache', 'error');
-        });
+            .then(function (response) {
+                if (response.ok) {
+                    return response.json().then(function (result) {
+                        addDebugLog('Cache cleared successfully', 'info');
+                        showMessage('Cache cleared successfully', 'success');
+                        return refreshCacheStats();
+                    });
+                } else {
+                    addDebugLog('Failed to clear cache', 'warn');
+                    showMessage('Failed to clear cache', 'error');
+                }
+            })
+            .catch(function (error) {
+                addDebugLog('Error clearing cache: ' + error.message, 'error');
+                showMessage('Error clearing cache', 'error');
+            });
     }
 
     // =============================================
@@ -652,31 +628,31 @@
             method: 'GET',
             headers: API_HEADERS
         })
-        .then(function(response) {
-            if (!response.ok) {
-                throw new Error('HTTP ' + response.status + ': ' + response.statusText);
-            }
-            return response.json();
-        })
-        .then(function(settings) {
-            addDebugLog('Settings loaded: ' + Object.keys(settings).join(', '), 'info');
+            .then(function (response) {
+                if (!response.ok) {
+                    throw new Error('HTTP ' + response.status + ': ' + response.statusText);
+                }
+                return response.json();
+            })
+            .then(function (settings) {
+                addDebugLog('Settings loaded: ' + Object.keys(settings).join(', '), 'info');
 
-            currentSettings = settings;
-            populateForm(settings);
+                currentSettings = settings;
+                populateForm(settings);
 
-            // Load DNS provider configurations and status
-            return loadDNSProviders();
-        })
-        .then(function() {
-            addDebugLog('Settings loaded and form populated successfully', 'info');
-        })
-        .catch(function(error) {
-            addDebugLog('Failed to load settings: ' + error.message, 'error');
-            console.error('Error loading settings:', error);
-            if (!suppressErrorMessages) {
-                showMessage('Failed to load settings: ' + error.message, 'error');
-            }
-        });
+                // Load DNS provider configurations and status
+                return loadDNSProviders();
+            })
+            .then(function () {
+                addDebugLog('Settings loaded and form populated successfully', 'info');
+            })
+            .catch(function (error) {
+                addDebugLog('Failed to load settings: ' + error.message, 'error');
+                console.error('Error loading settings:', error);
+                if (!suppressErrorMessages) {
+                    showMessage('Failed to load settings: ' + error.message, 'error');
+                }
+            });
     }
 
     // =============================================
@@ -690,7 +666,7 @@
 
             // Load provider configurations from current settings
             if (currentSettings && currentSettings.dns_providers) {
-                Object.keys(currentSettings.dns_providers).forEach(function(provider) {
+                Object.keys(currentSettings.dns_providers).forEach(function (provider) {
                     var config = currentSettings.dns_providers[provider];
                     try {
                         dnsProviders[provider] = {
@@ -701,7 +677,7 @@
                         if (config && typeof config === 'object') {
                             // Check for canonical multi-account format: { accounts: { id: {...}, ... } }
                             if (config.accounts && typeof config.accounts === 'object') {
-                                Object.keys(config.accounts).forEach(function(accountId) {
+                                Object.keys(config.accounts).forEach(function (accountId) {
                                     var accountConfig = config.accounts[accountId];
                                     if (typeof accountConfig === 'object') {
                                         dnsProviders[provider].accounts.push(Object.assign({}, accountConfig, {
@@ -712,10 +688,10 @@
                                     }
                                 });
                                 dnsProviders[provider].configured = dnsProviders[provider].accounts.length > 0;
-                            // Check if this is flat multi-account format (values with 'name')
-                            } else if (Object.values(config).some(function(val) { return typeof val === 'object' && 'name' in val; })) {
+                                // Check if this is flat multi-account format (values with 'name')
+                            } else if (Object.values(config).some(function (val) { return typeof val === 'object' && 'name' in val; })) {
                                 // Multi-account format
-                                Object.keys(config).forEach(function(accountId) {
+                                Object.keys(config).forEach(function (accountId) {
                                     var accountConfig = config[accountId];
                                     if (typeof accountConfig === 'object' && accountConfig.name) {
                                         dnsProviders[provider].accounts.push(Object.assign({}, accountConfig, {
@@ -728,7 +704,7 @@
                                 dnsProviders[provider].configured = dnsProviders[provider].accounts.length > 0;
                             } else {
                                 // Legacy single-account format
-                                var hasCredentials = Object.values(config).some(function(val) { return val && val.trim && val.trim().length > 0; });
+                                var hasCredentials = Object.values(config).some(function (val) { return val && val.trim && val.trim().length > 0; });
                                 dnsProviders[provider].configured = hasCredentials;
 
                                 if (hasCredentials) {
@@ -775,7 +751,7 @@
             'porkbun', 'godaddy', 'he-ddns', 'dynudns'
         ];
 
-        providers.forEach(function(provider) {
+        providers.forEach(function (provider) {
             var statusEl = document.getElementById(provider + '-status');
             var accountsEl = document.getElementById(provider + '-accounts');
             var countEl = document.getElementById(provider + '-account-count');
@@ -835,9 +811,9 @@
                 var domainsField = document.getElementById('domains');
                 if (domainsField) {
                     // Handle both string and object formats
-                    var domainStrings = data.domains.map(function(d) {
+                    var domainStrings = data.domains.map(function (d) {
                         return typeof d === 'string' ? d : (d.domain || '');
-                    }).filter(function(d) { return d; });
+                    }).filter(function (d) { return d; });
                     domainsField.value = domainStrings.join('\n');
                     addDebugLog('Domains field populated with ' + domainStrings.length + ' domains', 'info');
                 }
@@ -897,7 +873,7 @@
 
             // DNS provider configurations (legacy fields)
             var localDnsProviders = data.dns_providers || {};
-            Object.keys(localDnsProviders).forEach(function(provider) {
+            Object.keys(localDnsProviders).forEach(function (provider) {
                 var config = localDnsProviders[provider];
                 if (typeof config === 'object' && config !== null) {
                     // Check if this is old single-account format
@@ -960,7 +936,7 @@
             };
 
             var mappings = fieldMappings[provider] || [];
-            mappings.forEach(function(mapping) {
+            mappings.forEach(function (mapping) {
                 var field = document.getElementById(mapping.field);
                 if (field && config[mapping.config]) {
                     field.value = config[mapping.config];
@@ -1066,7 +1042,7 @@
 
         // Get account data
         var providerData = dnsProviders[provider];
-        var account = (providerData && providerData.accounts) ? providerData.accounts.find(function(acc) { return acc.id === accountId; }) : null;
+        var account = (providerData && providerData.accounts) ? providerData.accounts.find(function (acc) { return acc.id === accountId; }) : null;
 
         if (!account) {
             addDebugLog('Account ' + accountId + ' not found for provider ' + provider, 'error');
@@ -1143,15 +1119,17 @@
                 { name: 'api_token', label: 'API Token', type: 'password', placeholder: 'Your Gandi LiveDNS API token', required: true }
             ],
             'ovh': [
-                { name: 'endpoint', label: 'Endpoint', type: 'select', options: [
-                    { value: 'ovh-eu', label: 'ovh-eu (Europe)' },
-                    { value: 'ovh-us', label: 'ovh-us (US)' },
-                    { value: 'ovh-ca', label: 'ovh-ca (Canada)' },
-                    { value: 'kimsufi-eu', label: 'kimsufi-eu' },
-                    { value: 'kimsufi-ca', label: 'kimsufi-ca' },
-                    { value: 'soyoustart-eu', label: 'soyoustart-eu' },
-                    { value: 'soyoustart-ca', label: 'soyoustart-ca' }
-                ], required: true },
+                {
+                    name: 'endpoint', label: 'Endpoint', type: 'select', options: [
+                        { value: 'ovh-eu', label: 'ovh-eu (Europe)' },
+                        { value: 'ovh-us', label: 'ovh-us (US)' },
+                        { value: 'ovh-ca', label: 'ovh-ca (Canada)' },
+                        { value: 'kimsufi-eu', label: 'kimsufi-eu' },
+                        { value: 'kimsufi-ca', label: 'kimsufi-ca' },
+                        { value: 'soyoustart-eu', label: 'soyoustart-eu' },
+                        { value: 'soyoustart-ca', label: 'soyoustart-ca' }
+                    ], required: true
+                },
                 { name: 'application_key', label: 'Application Key', type: 'password', placeholder: 'Your application key', required: true },
                 { name: 'application_secret', label: 'Application Secret', type: 'password', placeholder: 'Your application secret', required: true },
                 { name: 'consumer_key', label: 'Consumer Key', type: 'password', placeholder: 'Your consumer key', required: true }
@@ -1164,14 +1142,16 @@
                 { name: 'nameserver', label: 'Nameserver', type: 'text', placeholder: 'ns.example.com', required: true },
                 { name: 'tsig_key', label: 'TSIG Key Name', type: 'text', placeholder: 'mykey', required: true },
                 { name: 'tsig_secret', label: 'TSIG Secret', type: 'password', placeholder: 'Base64-encoded secret', required: true },
-                { name: 'tsig_algorithm', label: 'TSIG Algorithm', type: 'select', options: [
-                    { value: 'HMAC-MD5', label: 'HMAC-MD5' },
-                    { value: 'HMAC-SHA1', label: 'HMAC-SHA1' },
-                    { value: 'HMAC-SHA224', label: 'HMAC-SHA224' },
-                    { value: 'HMAC-SHA256', label: 'HMAC-SHA256' },
-                    { value: 'HMAC-SHA384', label: 'HMAC-SHA384' },
-                    { value: 'HMAC-SHA512', label: 'HMAC-SHA512' }
-                ], defaultValue: 'HMAC-SHA256', required: false }
+                {
+                    name: 'tsig_algorithm', label: 'TSIG Algorithm', type: 'select', options: [
+                        { value: 'HMAC-MD5', label: 'HMAC-MD5' },
+                        { value: 'HMAC-SHA1', label: 'HMAC-SHA1' },
+                        { value: 'HMAC-SHA224', label: 'HMAC-SHA224' },
+                        { value: 'HMAC-SHA256', label: 'HMAC-SHA256' },
+                        { value: 'HMAC-SHA384', label: 'HMAC-SHA384' },
+                        { value: 'HMAC-SHA512', label: 'HMAC-SHA512' }
+                    ], defaultValue: 'HMAC-SHA256', required: false
+                }
             ],
             'hetzner': [
                 { name: 'api_token', label: 'API Token', type: 'password', placeholder: 'Your Hetzner DNS API token', required: true }
@@ -1202,7 +1182,7 @@
         var fields = fieldMappings[provider] || [];
         var html = '';
 
-        fields.forEach(function(field) {
+        fields.forEach(function (field) {
             var value = escapeHtml(existingData[field.name] || field.defaultValue || '');
             var fieldId = 'modal-' + field.name;
 
@@ -1216,7 +1196,7 @@
                 if (!field.required) {
                     html += '<option value="">Select ' + field.label.toLowerCase() + '</option>';
                 }
-                field.options.forEach(function(option) {
+                field.options.forEach(function (option) {
                     var selected = value === option.value ? 'selected' : '';
                     html += '<option value="' + option.value + '" ' + selected + '>' + option.label + '</option>';
                 });
@@ -1265,7 +1245,7 @@
         var providerFieldsContainer = document.getElementById('modal-provider-fields');
         var providerFieldElements = providerFieldsContainer.querySelectorAll('input, select, textarea');
 
-        providerFieldElements.forEach(function(field) {
+        providerFieldElements.forEach(function (field) {
             if (field.name && field.value) {
                 accountConfig[field.name] = field.value;
             }
@@ -1304,27 +1284,27 @@
             },
             body: JSON.stringify(payload)
         })
-        .then(function(response) {
-            if (!response.ok) {
-                return response.text().then(function(errorData) {
-                    throw new Error('HTTP ' + response.status + ': ' + errorData);
-                });
-            }
-            return response.json();
-        })
-        .then(function(result) {
-            addDebugLog('Account created: ' + result.account_id, 'info');
-            showMessage('Account "' + accountName + '" created successfully', 'success');
+            .then(function (response) {
+                if (!response.ok) {
+                    return response.text().then(function (errorData) {
+                        throw new Error('HTTP ' + response.status + ': ' + errorData);
+                    });
+                }
+                return response.json();
+            })
+            .then(function (result) {
+                addDebugLog('Account created: ' + result.account_id, 'info');
+                showMessage('Account "' + accountName + '" created successfully', 'success');
 
-            // Refresh settings and close modal
-            return loadSettings().then(function() {
-                closeAddAccountModal();
+                // Refresh settings and close modal
+                return loadSettings().then(function () {
+                    closeAddAccountModal();
+                });
+            })
+            .catch(function (error) {
+                addDebugLog('Error saving account: ' + error.message, 'error');
+                showMessage('Error saving account: ' + error.message, 'error');
             });
-        })
-        .catch(function(error) {
-            addDebugLog('Error saving account: ' + error.message, 'error');
-            showMessage('Error saving account: ' + error.message, 'error');
-        });
     }
 
     // =============================================
@@ -1356,7 +1336,7 @@
         var providerFieldsContainer = document.getElementById('edit-modal-provider-fields');
         var providerFieldElements = providerFieldsContainer.querySelectorAll('input, select, textarea');
 
-        providerFieldElements.forEach(function(field) {
+        providerFieldElements.forEach(function (field) {
             if (field.name && field.value) {
                 accountData[field.name] = field.value;
             }
@@ -1372,27 +1352,27 @@
             },
             body: JSON.stringify(accountData)
         })
-        .then(function(response) {
-            if (!response.ok) {
-                return response.text().then(function(errorData) {
-                    throw new Error('HTTP ' + response.status + ': ' + errorData);
-                });
-            }
-            return response.json();
-        })
-        .then(function(result) {
-            addDebugLog('Account updated: ' + accountId, 'info');
-            showMessage('Account "' + accountData.name + '" updated successfully', 'success');
+            .then(function (response) {
+                if (!response.ok) {
+                    return response.text().then(function (errorData) {
+                        throw new Error('HTTP ' + response.status + ': ' + errorData);
+                    });
+                }
+                return response.json();
+            })
+            .then(function (result) {
+                addDebugLog('Account updated: ' + accountId, 'info');
+                showMessage('Account "' + accountData.name + '" updated successfully', 'success');
 
-            // Refresh settings and close modal
-            return loadSettings().then(function() {
-                closeEditAccountModal();
+                // Refresh settings and close modal
+                return loadSettings().then(function () {
+                    closeEditAccountModal();
+                });
+            })
+            .catch(function (error) {
+                addDebugLog('Error updating account: ' + error.message, 'error');
+                showMessage('Error updating account: ' + error.message, 'error');
             });
-        })
-        .catch(function(error) {
-            addDebugLog('Error updating account: ' + error.message, 'error');
-            showMessage('Error updating account: ' + error.message, 'error');
-        });
     }
 
     // =============================================
@@ -1400,7 +1380,7 @@
     // =============================================
 
     function deleteAccount(provider, accountId) {
-        CertMate.confirm('Are you sure you want to delete this account? This action cannot be undone.', 'Delete Account').then(function(confirmed) {
+        CertMate.confirm('Are you sure you want to delete this account? This action cannot be undone.', 'Delete Account').then(function (confirmed) {
             if (!confirmed) return;
 
             addDebugLog('Deleting account ' + provider + ':' + accountId, 'info');
@@ -1409,23 +1389,23 @@
                 method: 'DELETE',
                 headers: {}
             })
-            .then(function(response) {
-                if (!response.ok) {
-                    return response.text().then(function(t) {
-                        throw new Error('HTTP ' + response.status + ': ' + t);
-                    });
-                }
-                addDebugLog('Account deleted: ' + accountId, 'info');
-                showMessage('Account deleted successfully', 'success');
+                .then(function (response) {
+                    if (!response.ok) {
+                        return response.text().then(function (t) {
+                            throw new Error('HTTP ' + response.status + ': ' + t);
+                        });
+                    }
+                    addDebugLog('Account deleted: ' + accountId, 'info');
+                    showMessage('Account deleted successfully', 'success');
 
-                // Refresh settings
-                return loadSettings();
-            });
+                    // Refresh settings
+                    return loadSettings();
+                });
         })
-        .catch(function(error) {
-            addDebugLog('Error deleting account: ' + error.message, 'error');
-            showMessage('Error deleting account: ' + error.message, 'error');
-        });
+            .catch(function (error) {
+                addDebugLog('Error deleting account: ' + error.message, 'error');
+                showMessage('Error deleting account: ' + error.message, 'error');
+            });
     }
 
     // =============================================
@@ -1435,7 +1415,7 @@
     function updateAccountLists() {
         var providers = Object.keys(dnsProviders);
 
-        providers.forEach(function(provider) {
+        providers.forEach(function (provider) {
             var accountsListContainer = document.getElementById(provider + '-accounts-list');
             var legacyConfigContainer = document.getElementById(provider + '-legacy-config');
 
@@ -1447,14 +1427,14 @@
                 // Show multi-account interface
                 accountsListContainer.innerHTML = '';
 
-                providerData.accounts.forEach(function(account) {
+                providerData.accounts.forEach(function (account) {
                     var isDefault = (currentSettings.default_accounts && currentSettings.default_accounts[provider]) === account.id;
                     var accountCard = createAccountCard(provider, account, isDefault);
                     accountsListContainer.appendChild(accountCard);
                 });
 
                 // Hide legacy config if we have multi-account data
-                if (legacyConfigContainer && providerData.accounts.some(function(acc) { return acc.id !== 'default'; })) {
+                if (legacyConfigContainer && providerData.accounts.some(function (acc) { return acc.id !== 'default'; })) {
                     legacyConfigContainer.style.display = 'none';
                 }
             } else {
@@ -1485,31 +1465,31 @@
 
         card.innerHTML =
             '<div class="flex items-center justify-between">' +
-                '<div class="flex-1">' +
-                    '<div class="flex items-center space-x-2">' +
-                        '<h5 class="text-sm font-medium text-gray-900 dark:text-white">' + safeName + '</h5>' +
-                        defaultBadge +
-                    '</div>' +
-                    descHtml +
-                    '<div class="text-xs text-gray-400 dark:text-gray-500 mt-1">ID: ' + safeId + '</div>' +
-                '</div>' +
-                '<div class="flex items-center space-x-2">' +
-                    '<button type="button" data-action="edit" data-provider="' + safeProvider + '" data-account-id="' + safeId + '"' +
-                            ' class="inline-flex items-center px-2 py-1 border border-gray-300 dark:border-gray-600 shadow-sm text-xs font-medium rounded text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-600 hover:bg-gray-50 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">' +
-                        '<i class="fas fa-edit mr-1"></i>' +
-                        'Edit' +
-                    '</button>' +
-                    '<button type="button" data-action="delete" data-provider="' + safeProvider + '" data-account-id="' + safeId + '"' +
-                            ' class="inline-flex items-center px-2 py-1 border border-red-300 shadow-sm text-xs font-medium rounded text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">' +
-                        '<i class="fas fa-trash mr-1"></i>' +
-                        'Delete' +
-                    '</button>' +
-                '</div>' +
+            '<div class="flex-1">' +
+            '<div class="flex items-center space-x-2">' +
+            '<h5 class="text-sm font-medium text-gray-900 dark:text-white">' + safeName + '</h5>' +
+            defaultBadge +
+            '</div>' +
+            descHtml +
+            '<div class="text-xs text-gray-400 dark:text-gray-500 mt-1">ID: ' + safeId + '</div>' +
+            '</div>' +
+            '<div class="flex items-center space-x-2">' +
+            '<button type="button" data-action="edit" data-provider="' + safeProvider + '" data-account-id="' + safeId + '"' +
+            ' class="inline-flex items-center px-2 py-1 border border-gray-300 dark:border-gray-600 shadow-sm text-xs font-medium rounded text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-600 hover:bg-gray-50 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">' +
+            '<i class="fas fa-edit mr-1"></i>' +
+            'Edit' +
+            '</button>' +
+            '<button type="button" data-action="delete" data-provider="' + safeProvider + '" data-account-id="' + safeId + '"' +
+            ' class="inline-flex items-center px-2 py-1 border border-red-300 shadow-sm text-xs font-medium rounded text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">' +
+            '<i class="fas fa-trash mr-1"></i>' +
+            'Delete' +
+            '</button>' +
+            '</div>' +
             '</div>';
 
         // Attach event listeners safely (no inline onclick with string interpolation)
-        card.querySelector('[data-action="edit"]').addEventListener('click', function() { showEditAccountModal(provider, account.id); });
-        card.querySelector('[data-action="delete"]').addEventListener('click', function() { deleteAccount(provider, account.id); });
+        card.querySelector('[data-action="edit"]').addEventListener('click', function () { showEditAccountModal(provider, account.id); });
+        card.querySelector('[data-action="delete"]').addEventListener('click', function () { deleteAccount(provider, account.id); });
         return card;
     }
 
@@ -1548,41 +1528,41 @@
                 reason: 'manual_backup'
             })
         })
-        .then(function(response) {
-            if (!response.ok) {
-                return response.text().then(function(errorData) {
-                    throw new Error('HTTP ' + response.status + ': ' + errorData);
-                });
-            }
-            return response.json();
-        })
-        .then(function(result) {
-            if (result.message) {
-                addDebugLog('Backup created successfully: ' + result.backups.map(function(b) { return b.filename; }).join(', '), 'info');
-
-                var message = (type === 'unified' ? 'Unified' : type) + ' backup created successfully!';
-                if (result.recommendation) {
-                    message += ' Note: ' + result.recommendation;
+            .then(function (response) {
+                if (!response.ok) {
+                    return response.text().then(function (errorData) {
+                        throw new Error('HTTP ' + response.status + ': ' + errorData);
+                    });
                 }
-                showMessage(message, 'success');
+                return response.json();
+            })
+            .then(function (result) {
+                if (result.message) {
+                    addDebugLog('Backup created successfully: ' + result.backups.map(function (b) { return b.filename; }).join(', '), 'info');
 
-                // Refresh backup list
-                return refreshBackupList();
-            } else {
-                throw new Error(result.error || 'Failed to create backup');
-            }
-        })
-        .catch(function(error) {
-            addDebugLog('Error creating backup: ' + error.message, 'error');
-            showMessage('Error creating backup: ' + error.message, 'error');
-        })
-        .then(function() {
-            // finally block equivalent - restore button state
-            if (button && originalText) {
-                button.disabled = false;
-                button.innerHTML = originalText;
-            }
-        });
+                    var message = (type === 'unified' ? 'Unified' : type) + ' backup created successfully!';
+                    if (result.recommendation) {
+                        message += ' Note: ' + result.recommendation;
+                    }
+                    showMessage(message, 'success');
+
+                    // Refresh backup list
+                    return refreshBackupList();
+                } else {
+                    throw new Error(result.error || 'Failed to create backup');
+                }
+            })
+            .catch(function (error) {
+                addDebugLog('Error creating backup: ' + error.message, 'error');
+                showMessage('Error creating backup: ' + error.message, 'error');
+            })
+            .then(function () {
+                // finally block equivalent - restore button state
+                if (button && originalText) {
+                    button.disabled = false;
+                    button.innerHTML = originalText;
+                }
+            });
     }
 
     // =============================================
@@ -1598,30 +1578,30 @@
                 'Content-Type': 'application/json'
             }
         })
-        .then(function(response) {
-            if (!response.ok) {
-                throw new Error('HTTP ' + response.status + ': ' + response.statusText);
-            }
-            return response.json();
-        })
-        .then(function(backups) {
-            updateBackupList(backups);
-            addDebugLog('Backup list refreshed: ' + backups.unified.length + ' backups', 'info');
-        })
-        .catch(function(error) {
-            addDebugLog('Error refreshing backup list: ' + error.message, 'error');
-            console.error('Error refreshing backup list:', error);
+            .then(function (response) {
+                if (!response.ok) {
+                    throw new Error('HTTP ' + response.status + ': ' + response.statusText);
+                }
+                return response.json();
+            })
+            .then(function (backups) {
+                updateBackupList(backups);
+                addDebugLog('Backup list refreshed: ' + backups.unified.length + ' backups', 'info');
+            })
+            .catch(function (error) {
+                addDebugLog('Error refreshing backup list: ' + error.message, 'error');
+                console.error('Error refreshing backup list:', error);
 
-            // Show error in backup list container
-            var backupList = document.getElementById('unified-backup-list');
-            if (backupList) {
-                backupList.innerHTML =
-                    '<div class="p-4 text-center text-red-500 dark:text-red-400">' +
+                // Show error in backup list container
+                var backupList = document.getElementById('unified-backup-list');
+                if (backupList) {
+                    backupList.innerHTML =
+                        '<div class="p-4 text-center text-red-500 dark:text-red-400">' +
                         '<i class="fas fa-exclamation-triangle mr-2"></i>' +
                         'Error loading backups: ' + error.message +
-                    '</div>';
-            }
-        });
+                        '</div>';
+                }
+            });
     }
 
     // =============================================
@@ -1637,13 +1617,13 @@
         if (backups.unified && backups.unified.length === 0) {
             unifiedBackupList.innerHTML =
                 '<div class="p-4 text-center text-gray-500 dark:text-gray-400">' +
-                    '<i class="fas fa-archive mr-2"></i>' +
-                    'No backups yet' +
-                    '<div class="text-xs mt-1">Create your first backup above!</div>' +
+                '<i class="fas fa-archive mr-2"></i>' +
+                'No backups yet' +
+                '<div class="text-xs mt-1">Create your first backup above!</div>' +
                 '</div>';
         } else if (backups.unified) {
             var unifiedHtml = '';
-            backups.unified.slice(0, 10).forEach(function(backup) {
+            backups.unified.slice(0, 10).forEach(function (backup) {
                 var metadata = backup.metadata || {};
                 var createdDate = new Date(metadata.created || metadata.timestamp).toLocaleString();
                 var sizeMB = Math.round((metadata.size || 0) / (1024 * 1024) * 10) / 10;
@@ -1654,48 +1634,48 @@
                 var safeReason = escapeHtml(reason);
                 unifiedHtml +=
                     '<div class="flex items-center justify-between p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-700">' +
-                        '<div class="flex-1 min-w-0">' +
-                            '<div class="text-sm font-medium text-gray-900 dark:text-white truncate">' + safeFilename + '</div>' +
-                            '<div class="text-xs text-gray-500 dark:text-gray-400 mt-1">' + createdDate + '</div>' +
-                            '<div class="flex items-center space-x-3 text-xs text-gray-400 dark:text-gray-500 mt-1">' +
-                                '<span><i class="fas fa-weight mr-1"></i>' + sizeMB + 'MB</span>' +
-                                '<span><i class="fas fa-archive mr-1"></i>' + domains + ' domains</span>' +
-                                '<span><i class="fas fa-tag mr-1"></i>' + safeReason + '</span>' +
-                            '</div>' +
-                        '</div>' +
-                        '<div class="flex space-x-1 ml-2">' +
-                            '<button data-action="download-backup" data-backup-type="unified" data-filename="' + safeFilename + '"' +
-                                    ' class="p-2 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded transition-colors"' +
-                                    ' title="Download backup">' +
-                                '<i class="fas fa-download text-sm"></i>' +
-                            '</button>' +
-                            '<button data-action="restore-backup" data-backup-type="unified" data-filename="' + safeFilename + '"' +
-                                    ' class="p-2 text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300 hover:bg-green-50 dark:hover:bg-green-900/30 rounded transition-colors"' +
-                                    ' title="Restore backup">' +
-                                '<i class="fas fa-undo text-sm"></i>' +
-                            '</button>' +
-                            '<button data-action="delete-backup" data-backup-type="unified" data-filename="' + safeFilename + '"' +
-                                    ' class="p-2 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30 rounded transition-colors"' +
-                                    ' title="Delete backup">' +
-                                '<i class="fas fa-trash text-sm"></i>' +
-                            '</button>' +
-                        '</div>' +
+                    '<div class="flex-1 min-w-0">' +
+                    '<div class="text-sm font-medium text-gray-900 dark:text-white truncate">' + safeFilename + '</div>' +
+                    '<div class="text-xs text-gray-500 dark:text-gray-400 mt-1">' + createdDate + '</div>' +
+                    '<div class="flex items-center space-x-3 text-xs text-gray-400 dark:text-gray-500 mt-1">' +
+                    '<span><i class="fas fa-weight mr-1"></i>' + sizeMB + 'MB</span>' +
+                    '<span><i class="fas fa-archive mr-1"></i>' + domains + ' domains</span>' +
+                    '<span><i class="fas fa-tag mr-1"></i>' + safeReason + '</span>' +
+                    '</div>' +
+                    '</div>' +
+                    '<div class="flex space-x-1 ml-2">' +
+                    '<button data-action="download-backup" data-backup-type="unified" data-filename="' + safeFilename + '"' +
+                    ' class="p-2 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded transition-colors"' +
+                    ' title="Download backup">' +
+                    '<i class="fas fa-download text-sm"></i>' +
+                    '</button>' +
+                    '<button data-action="restore-backup" data-backup-type="unified" data-filename="' + safeFilename + '"' +
+                    ' class="p-2 text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300 hover:bg-green-50 dark:hover:bg-green-900/30 rounded transition-colors"' +
+                    ' title="Restore backup">' +
+                    '<i class="fas fa-undo text-sm"></i>' +
+                    '</button>' +
+                    '<button data-action="delete-backup" data-backup-type="unified" data-filename="' + safeFilename + '"' +
+                    ' class="p-2 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30 rounded transition-colors"' +
+                    ' title="Delete backup">' +
+                    '<i class="fas fa-trash text-sm"></i>' +
+                    '</button>' +
+                    '</div>' +
                     '</div>';
             });
 
             if (backups.unified.length > 10) {
                 unifiedHtml +=
                     '<div class="text-xs text-gray-500 dark:text-gray-400 text-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">' +
-                        '<i class="fas fa-ellipsis-h mr-1"></i>' +
-                        (backups.unified.length - 10) + ' more backups available' +
+                    '<i class="fas fa-ellipsis-h mr-1"></i>' +
+                    (backups.unified.length - 10) + ' more backups available' +
                     '</div>';
             }
 
             unifiedBackupList.innerHTML = unifiedHtml;
 
             // Bind backup action buttons via event delegation
-            unifiedBackupList.querySelectorAll('button[data-action]').forEach(function(btn) {
-                btn.addEventListener('click', function() {
+            unifiedBackupList.querySelectorAll('button[data-action]').forEach(function (btn) {
+                btn.addEventListener('click', function () {
                     var bType = btn.dataset.backupType;
                     var filename = btn.dataset.filename;
                     switch (btn.dataset.action) {
@@ -1725,32 +1705,32 @@
             method: 'GET',
             headers: {}
         })
-        .then(function(response) {
-            if (!response.ok) {
-                return response.text().then(function(errorText) {
-                    throw new Error('HTTP ' + response.status + ': ' + errorText);
-                });
-            }
-            return response.blob();
-        })
-        .then(function(blob) {
-            // Create download link
-            var url = window.URL.createObjectURL(blob);
-            var a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            window.URL.revokeObjectURL(url);
+            .then(function (response) {
+                if (!response.ok) {
+                    return response.text().then(function (errorText) {
+                        throw new Error('HTTP ' + response.status + ': ' + errorText);
+                    });
+                }
+                return response.blob();
+            })
+            .then(function (blob) {
+                // Create download link
+                var url = window.URL.createObjectURL(blob);
+                var a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
 
-            addDebugLog('Backup downloaded: ' + filename, 'info');
-            showMessage('Backup downloaded: ' + filename, 'success');
-        })
-        .catch(function(error) {
-            addDebugLog('Error downloading backup: ' + error.message, 'error');
-            showMessage('Error downloading backup: ' + error.message, 'error');
-        });
+                addDebugLog('Backup downloaded: ' + filename, 'info');
+                showMessage('Backup downloaded: ' + filename, 'success');
+            })
+            .catch(function (error) {
+                addDebugLog('Error downloading backup: ' + error.message, 'error');
+                showMessage('Error downloading backup: ' + error.message, 'error');
+            });
     }
 
     // =============================================
@@ -1764,7 +1744,7 @@
             return;
         }
 
-        CertMate.confirm('Are you sure you want to restore from "' + escapeHtml(filename) + '"? This will atomically restore both settings and certificates, creating a backup of your current configuration first.', 'Restore Backup').then(function(confirmed) {
+        CertMate.confirm('Are you sure you want to restore from "' + escapeHtml(filename) + '"? This will atomically restore both settings and certificates, creating a backup of your current configuration first.', 'Restore Backup').then(function (confirmed) {
             if (!confirmed) return;
 
             addDebugLog('Restoring from backup: ' + filename, 'info');
@@ -1779,50 +1759,50 @@
                     create_backup_before_restore: true
                 })
             })
-            .then(function(response) {
-                if (!response.ok) {
-                    return response.text().then(function(errorData) {
-                        throw new Error('HTTP ' + response.status + ': ' + errorData);
-                    });
-                }
-                return response.json();
-            })
-            .then(function(result) {
-                addDebugLog('Backup restored successfully from: ' + filename, 'info');
+                .then(function (response) {
+                    if (!response.ok) {
+                        return response.text().then(function (errorData) {
+                            throw new Error('HTTP ' + response.status + ': ' + errorData);
+                        });
+                    }
+                    return response.json();
+                })
+                .then(function (result) {
+                    addDebugLog('Backup restored successfully from: ' + filename, 'info');
 
-                var successMessage = result.message || 'Backup restored successfully!';
-                if (result.pre_restore_backup) {
-                    successMessage += '\n\nA backup of the previous state was created: ' + result.pre_restore_backup;
-                }
+                    var successMessage = result.message || 'Backup restored successfully!';
+                    if (result.pre_restore_backup) {
+                        successMessage += '\n\nA backup of the previous state was created: ' + result.pre_restore_backup;
+                    }
 
-                // Show immediate success message
-                showMessage(successMessage, 'success');
+                    // Show immediate success message
+                    showMessage(successMessage, 'success');
 
-                // Try to reload the settings data and refresh the UI
-                return loadSettings(true)
-                    .then(function() {
-                        return refreshBackupList();
-                    })
-                    .then(function() {
-                        addDebugLog('Settings reloaded successfully after restore', 'info');
-                        showMessage('Backup restored and configuration reloaded successfully!', 'success');
-                    })
-                    .catch(function(reloadError) {
-                        addDebugLog('Settings reload failed after successful restore: ' + reloadError.message, 'warn');
-                        showMessage('Backup restored successfully! Please refresh the page to see all changes.', 'success');
+                    // Try to reload the settings data and refresh the UI
+                    return loadSettings(true)
+                        .then(function () {
+                            return refreshBackupList();
+                        })
+                        .then(function () {
+                            addDebugLog('Settings reloaded successfully after restore', 'info');
+                            showMessage('Backup restored and configuration reloaded successfully!', 'success');
+                        })
+                        .catch(function (reloadError) {
+                            addDebugLog('Settings reload failed after successful restore: ' + reloadError.message, 'warn');
+                            showMessage('Backup restored successfully! Please refresh the page to see all changes.', 'success');
 
-                        // Fallback to page reload after a delay
-                        setTimeout(function() {
-                            addDebugLog('Auto-refreshing page after restore...', 'info');
-                            window.location.reload();
-                        }, 3000);
-                    });
-            });
+                            // Fallback to page reload after a delay
+                            setTimeout(function () {
+                                addDebugLog('Auto-refreshing page after restore...', 'info');
+                                window.location.reload();
+                            }, 3000);
+                        });
+                });
         })
-        .catch(function(error) {
-            addDebugLog('Error during backup restore: ' + error.message, 'error');
-            showMessage('Error restoring backup: ' + error.message, 'error');
-        });
+            .catch(function (error) {
+                addDebugLog('Error during backup restore: ' + error.message, 'error');
+                showMessage('Error restoring backup: ' + error.message, 'error');
+            });
     }
 
     // =============================================
@@ -1836,7 +1816,7 @@
             return;
         }
 
-        CertMate.confirm('Are you sure you want to delete the backup "' + escapeHtml(filename) + '"? This action cannot be undone.', 'Delete Backup').then(function(confirmed) {
+        CertMate.confirm('Are you sure you want to delete the backup "' + escapeHtml(filename) + '"? This action cannot be undone.', 'Delete Backup').then(function (confirmed) {
             if (!confirmed) return;
 
             addDebugLog('Deleting backup: ' + filename, 'info');
@@ -1845,28 +1825,28 @@
                 method: 'DELETE',
                 headers: {}
             })
-            .then(function(response) {
-                if (!response.ok) {
-                    throw new Error('HTTP error! status: ' + response.status);
-                }
-                return response.json();
-            })
-            .then(function(result) {
-                if (result.message) {
-                    addDebugLog('Backup deleted successfully: ' + filename, 'info');
-                    showMessage('Backup "' + filename + '" deleted successfully!', 'success');
+                .then(function (response) {
+                    if (!response.ok) {
+                        throw new Error('HTTP error! status: ' + response.status);
+                    }
+                    return response.json();
+                })
+                .then(function (result) {
+                    if (result.message) {
+                        addDebugLog('Backup deleted successfully: ' + filename, 'info');
+                        showMessage('Backup "' + filename + '" deleted successfully!', 'success');
 
-                    // Refresh backup list
-                    return refreshBackupList();
-                } else {
-                    throw new Error(result.error || 'Failed to delete backup');
-                }
-            });
+                        // Refresh backup list
+                        return refreshBackupList();
+                    } else {
+                        throw new Error(result.error || 'Failed to delete backup');
+                    }
+                });
         })
-        .catch(function(error) {
-            addDebugLog('Error deleting backup: ' + error.message, 'error');
-            showMessage('Error deleting backup: ' + error.message, 'error');
-        });
+            .catch(function (error) {
+                addDebugLog('Error deleting backup: ' + error.message, 'error');
+                showMessage('Error deleting backup: ' + error.message, 'error');
+            });
     }
 
     // =============================================
@@ -1885,13 +1865,13 @@
 
         // Hide all CA configuration panels and disable their required fields
         var caConfigs = ['letsencrypt-config', 'digicert-config', 'private-ca-config'];
-        caConfigs.forEach(function(configId) {
+        caConfigs.forEach(function (configId) {
             var element = document.getElementById(configId);
             if (element) {
                 element.style.display = 'none';
                 // Disable required validation for hidden fields
                 var requiredFields = element.querySelectorAll('[required]');
-                requiredFields.forEach(function(field) {
+                requiredFields.forEach(function (field) {
                     field.removeAttribute('required');
                     field.dataset.wasRequired = 'true';
                 });
@@ -1905,7 +1885,7 @@
             selectedConfig.style.display = 'block';
             // Re-enable required validation for visible fields
             var requiredFields = selectedConfig.querySelectorAll('[data-was-required="true"]');
-            requiredFields.forEach(function(field) {
+            requiredFields.forEach(function (field) {
                 field.setAttribute('required', '');
             });
         }
@@ -2002,25 +1982,25 @@
                 config: config
             })
         })
-        .then(function(response) {
-            return response.json().then(function(result) {
-                if (response.ok && result.success) {
-                    showMessage('CA connection test successful! ' + result.message, 'success');
-                } else {
-                    var errorMsg = result.message || result.error || 'Unknown error occurred';
-                    showMessage('CA connection test failed: ' + errorMsg, 'error');
-                }
+            .then(function (response) {
+                return response.json().then(function (result) {
+                    if (response.ok && result.success) {
+                        showMessage('CA connection test successful! ' + result.message, 'success');
+                    } else {
+                        var errorMsg = result.message || result.error || 'Unknown error occurred';
+                        showMessage('CA connection test failed: ' + errorMsg, 'error');
+                    }
+                });
+            })
+            .catch(function (error) {
+                console.error('Error testing CA provider:', error);
+                showMessage('Error testing CA provider connection. Please check your network connection.', 'error');
+            })
+            .then(function () {
+                // finally block equivalent - restore button state
+                testButton.innerHTML = originalText;
+                testButton.disabled = false;
             });
-        })
-        .catch(function(error) {
-            console.error('Error testing CA provider:', error);
-            showMessage('Error testing CA provider connection. Please check your network connection.', 'error');
-        })
-        .then(function() {
-            // finally block equivalent - restore button state
-            testButton.innerHTML = originalText;
-            testButton.disabled = false;
-        });
     }
 
     // =============================================
@@ -2032,7 +2012,7 @@
         var configs = document.querySelectorAll('.storage-config');
 
         // Hide all configuration panels
-        configs.forEach(function(config) {
+        configs.forEach(function (config) {
             config.style.display = 'none';
         });
 
@@ -2076,28 +2056,28 @@
             headers: API_HEADERS,
             body: JSON.stringify(requestData)
         })
-        .then(function(response) {
-            if (!response.ok) {
-                throw new Error('HTTP error! status: ' + response.status);
-            }
+            .then(function (response) {
+                if (!response.ok) {
+                    throw new Error('HTTP error! status: ' + response.status);
+                }
 
-            return response.json();
-        })
-        .then(function(data) {
-            if (data.success) {
-                showMessage(data.message, 'success');
-            } else if (data.message) {
-                showMessage(data.message, 'error');
-            } else if (data.error) {
-                showMessage(data.error, 'error');
-            } else {
-                showMessage('Unknown error occurred', 'error');
-            }
-        })
-        .catch(function(error) {
-            console.error('Storage backend test error:', error);
-            showMessage('Failed to test storage backend connection: ' + error.message, 'error');
-        });
+                return response.json();
+            })
+            .then(function (data) {
+                if (data.success) {
+                    showMessage(data.message, 'success');
+                } else if (data.message) {
+                    showMessage(data.message, 'error');
+                } else if (data.error) {
+                    showMessage(data.error, 'error');
+                } else {
+                    showMessage('Unknown error occurred', 'error');
+                }
+            })
+            .catch(function (error) {
+                console.error('Storage backend test error:', error);
+                showMessage('Failed to test storage backend connection: ' + error.message, 'error');
+            });
     }
 
     function getStorageBackendConfig(backend) {
@@ -2310,40 +2290,40 @@
         modal.className = 'fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50';
         modal.innerHTML =
             '<div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white dark:bg-gray-800">' +
-                '<div class="mt-3">' +
-                    '<div class="flex items-center justify-between mb-4">' +
-                        '<h3 class="text-lg font-medium text-gray-900 dark:text-white">' +
-                            '<i class="fas fa-exchange-alt mr-2"></i>Certificate Storage Migration' +
-                        '</h3>' +
-                        '<button type="button" onclick="closeStorageMigrationModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">' +
-                            '<i class="fas fa-times"></i>' +
-                        '</button>' +
-                    '</div>' +
-                    '<div class="mb-4">' +
-                        '<p class="text-sm text-gray-600 dark:text-gray-400">' +
-                            'This will migrate all existing certificates from the current storage backend to the newly configured backend.' +
-                        '</p>' +
-                        '<div class="mt-3 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-md">' +
-                            '<div class="flex">' +
-                                '<i class="fas fa-exclamation-triangle text-yellow-400 mt-0.5 mr-2"></i>' +
-                                '<div class="text-sm text-yellow-800 dark:text-yellow-200">' +
-                                    '<strong>Important:</strong> This operation will copy certificates to the new backend. ' +
-                                    'Original certificates will remain in the current location until manually removed.' +
-                                '</div>' +
-                            '</div>' +
-                        '</div>' +
-                    '</div>' +
-                    '<div class="flex justify-end space-x-3">' +
-                        '<button type="button" onclick="closeStorageMigrationModal()" ' +
-                                'class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-600 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-md">' +
-                            'Cancel' +
-                        '</button>' +
-                        '<button type="button" onclick="performStorageMigration()" ' +
-                                'class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md">' +
-                            '<i class="fas fa-play mr-1"></i>Start Migration' +
-                        '</button>' +
-                    '</div>' +
-                '</div>' +
+            '<div class="mt-3">' +
+            '<div class="flex items-center justify-between mb-4">' +
+            '<h3 class="text-lg font-medium text-gray-900 dark:text-white">' +
+            '<i class="fas fa-exchange-alt mr-2"></i>Certificate Storage Migration' +
+            '</h3>' +
+            '<button type="button" onclick="closeStorageMigrationModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">' +
+            '<i class="fas fa-times"></i>' +
+            '</button>' +
+            '</div>' +
+            '<div class="mb-4">' +
+            '<p class="text-sm text-gray-600 dark:text-gray-400">' +
+            'This will migrate all existing certificates from the current storage backend to the newly configured backend.' +
+            '</p>' +
+            '<div class="mt-3 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-md">' +
+            '<div class="flex">' +
+            '<i class="fas fa-exclamation-triangle text-yellow-400 mt-0.5 mr-2"></i>' +
+            '<div class="text-sm text-yellow-800 dark:text-yellow-200">' +
+            '<strong>Important:</strong> This operation will copy certificates to the new backend. ' +
+            'Original certificates will remain in the current location until manually removed.' +
+            '</div>' +
+            '</div>' +
+            '</div>' +
+            '</div>' +
+            '<div class="flex justify-end space-x-3">' +
+            '<button type="button" onclick="closeStorageMigrationModal()" ' +
+            'class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-600 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-md">' +
+            'Cancel' +
+            '</button>' +
+            '<button type="button" onclick="performStorageMigration()" ' +
+            'class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md">' +
+            '<i class="fas fa-play mr-1"></i>Start Migration' +
+            '</button>' +
+            '</div>' +
+            '</div>' +
             '</div>';
         document.body.appendChild(modal);
     }
@@ -2376,18 +2356,18 @@
                 target_config: newConfig
             })
         })
-        .then(function(response) { return response.json(); })
-        .then(function(data) {
-            if (data.success) {
-                showMessage('Migration completed successfully. ' + (data.migrated_count || 0) + ' certificates migrated.', 'success');
-            } else {
-                showMessage('Migration failed: ' + (data.message || 'Unknown error'), 'error');
-            }
-        })
-        .catch(function(error) {
-            console.error('Migration error:', error);
-            showMessage('Failed to perform storage migration.', 'error');
-        });
+            .then(function (response) { return response.json(); })
+            .then(function (data) {
+                if (data.success) {
+                    showMessage('Migration completed successfully. ' + (data.migrated_count || 0) + ' certificates migrated.', 'success');
+                } else {
+                    showMessage('Migration failed: ' + (data.message || 'Unknown error'), 'error');
+                }
+            })
+            .catch(function (error) {
+                console.error('Migration error:', error);
+                showMessage('Failed to perform storage migration.', 'error');
+            });
     }
 
     // =============================================
@@ -2398,21 +2378,21 @@
         return fetch('/api/auth/config', {
             headers: {}
         })
-        .then(function(response) {
-            if (response.ok) {
-                return response.json().then(function(data) {
-                    document.getElementById('localAuthToggle').checked = data.local_auth_enabled;
-                    var banner = document.getElementById('authSecurityBanner');
-                    if (banner) banner.style.display = data.local_auth_enabled ? 'none' : 'block';
-                    return data;
-                });
-            }
-            return null;
-        })
-        .catch(function(error) {
-            console.error('Error loading auth config:', error);
-            return null;
-        });
+            .then(function (response) {
+                if (response.ok) {
+                    return response.json().then(function (data) {
+                        document.getElementById('localAuthToggle').checked = data.local_auth_enabled;
+                        var banner = document.getElementById('authSecurityBanner');
+                        if (banner) banner.style.display = data.local_auth_enabled ? 'none' : 'block';
+                        return data;
+                    });
+                }
+                return null;
+            })
+            .catch(function (error) {
+                console.error('Error loading auth config:', error);
+                return null;
+            });
     }
 
     function toggleLocalAuth() {
@@ -2426,23 +2406,23 @@
             },
             body: JSON.stringify({ local_auth_enabled: enabled })
         })
-        .then(function(response) {
-            return response.json().then(function(data) {
-                if (response.ok) {
-                    showMessage(data.message, 'success');
-                    var banner = document.getElementById('authSecurityBanner');
-                    if (banner) banner.style.display = enabled ? 'none' : 'block';
-                } else {
-                    showMessage(data.error || 'Failed to update auth config', 'error');
-                    toggle.checked = !enabled; // Revert toggle
-                }
+            .then(function (response) {
+                return response.json().then(function (data) {
+                    if (response.ok) {
+                        showMessage(data.message, 'success');
+                        var banner = document.getElementById('authSecurityBanner');
+                        if (banner) banner.style.display = enabled ? 'none' : 'block';
+                    } else {
+                        showMessage(data.error || 'Failed to update auth config', 'error');
+                        toggle.checked = !enabled; // Revert toggle
+                    }
+                });
+            })
+            .catch(function (error) {
+                console.error('Error toggling local auth:', error);
+                showMessage('Failed to update authentication settings', 'error');
+                toggle.checked = !enabled; // Revert toggle
             });
-        })
-        .catch(function(error) {
-            console.error('Error toggling local auth:', error);
-            showMessage('Failed to update authentication settings', 'error');
-            toggle.checked = !enabled; // Revert toggle
-        });
     }
 
     function createUser() {
@@ -2463,26 +2443,26 @@
             },
             body: JSON.stringify({ username: username, password: password, email: email || null, role: role })
         })
-        .then(function(response) {
-            return response.json().then(function(data) {
-                if (response.ok) {
-                    showMessage('User \'' + username + '\' created successfully', 'success');
-                    // Clear form
-                    document.getElementById('newUserUsername').value = '';
-                    document.getElementById('newUserPassword').value = '';
-                    document.getElementById('newUserEmail').value = '';
-                    document.getElementById('newUserRole').value = 'operator';
-                    // Refresh user list
-                    refreshUserList();
-                } else {
-                    showMessage(data.error || 'Failed to create user', 'error');
-                }
+            .then(function (response) {
+                return response.json().then(function (data) {
+                    if (response.ok) {
+                        showMessage('User \'' + username + '\' created successfully', 'success');
+                        // Clear form
+                        document.getElementById('newUserUsername').value = '';
+                        document.getElementById('newUserPassword').value = '';
+                        document.getElementById('newUserEmail').value = '';
+                        document.getElementById('newUserRole').value = 'operator';
+                        // Refresh user list
+                        refreshUserList();
+                    } else {
+                        showMessage(data.error || 'Failed to create user', 'error');
+                    }
+                });
+            })
+            .catch(function (error) {
+                console.error('Error creating user:', error);
+                showMessage('Failed to create user', 'error');
             });
-        })
-        .catch(function(error) {
-            console.error('Error creating user:', error);
-            showMessage('Failed to create user', 'error');
-        });
     }
 
     function refreshUserList() {
@@ -2492,83 +2472,83 @@
         fetch('/api/users', {
             headers: {}
         })
-        .then(function(response) {
-            if (!response.ok) {
-                throw new Error('Failed to fetch users');
-            }
-            return response.json();
-        })
-        .then(function(data) {
-            var users = data.users || {};
+            .then(function (response) {
+                if (!response.ok) {
+                    throw new Error('Failed to fetch users');
+                }
+                return response.json();
+            })
+            .then(function (data) {
+                var users = data.users || {};
 
-            if (Object.keys(users).length === 0) {
-                userListDiv.innerHTML = '<div class="text-center py-4 text-gray-500 dark:text-gray-400 text-sm"><i class="fas fa-users mr-2"></i> No users configured. Add a user above to enable local authentication.</div>';
-                return;
-            }
+                if (Object.keys(users).length === 0) {
+                    userListDiv.innerHTML = '<div class="text-center py-4 text-gray-500 dark:text-gray-400 text-sm"><i class="fas fa-users mr-2"></i> No users configured. Add a user above to enable local authentication.</div>';
+                    return;
+                }
 
-            var html = '';
-            Object.keys(users).forEach(function(username) {
-                var userInfo = users[username];
-                var roleColor = userInfo.role === 'admin' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300' : userInfo.role === 'operator' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300' : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
-                var statusColor = userInfo.enabled !== false ? 'text-green-500' : 'text-red-500';
-                var lastLogin = userInfo.last_login ? new Date(userInfo.last_login).toLocaleString() : 'Never';
+                var html = '';
+                Object.keys(users).forEach(function (username) {
+                    var userInfo = users[username];
+                    var roleColor = userInfo.role === 'admin' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300' : userInfo.role === 'operator' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300' : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
+                    var statusColor = userInfo.enabled !== false ? 'text-green-500' : 'text-red-500';
+                    var lastLogin = userInfo.last_login ? new Date(userInfo.last_login).toLocaleString() : 'Never';
 
-                var emailHtml = userInfo.email ? '<span class="mr-3"><i class="fas fa-envelope mr-1"></i>' + escapeHtml(userInfo.email) + '</span>' : '';
+                    var emailHtml = userInfo.email ? '<span class="mr-3"><i class="fas fa-envelope mr-1"></i>' + escapeHtml(userInfo.email) + '</span>' : '';
 
-                html +=
-                    '<div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">' +
+                    html +=
+                        '<div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">' +
                         '<div class="flex items-center space-x-3">' +
-                            '<i class="fas fa-user-circle text-2xl text-gray-400 dark:text-gray-500"></i>' +
-                            '<div>' +
-                                '<div class="flex items-center space-x-2">' +
-                                    '<span class="font-medium text-gray-900 dark:text-white">' + escapeHtml(username) + '</span>' +
-                                    '<span class="text-xs px-2 py-0.5 rounded-full ' + roleColor + '">' + escapeHtml(userInfo.role || '') + '</span>' +
-                                    '<i class="fas fa-circle text-xs ' + statusColor + '" title="' + (userInfo.enabled !== false ? 'Active' : 'Disabled') + '"></i>' +
-                                '</div>' +
-                                '<div class="text-xs text-gray-500 dark:text-gray-400">' +
-                                    emailHtml +
-                                    '<span><i class="fas fa-clock mr-1"></i>Last login: ' + escapeHtml(lastLogin) + '</span>' +
-                                '</div>' +
-                            '</div>' +
+                        '<i class="fas fa-user-circle text-2xl text-gray-400 dark:text-gray-500"></i>' +
+                        '<div>' +
+                        '<div class="flex items-center space-x-2">' +
+                        '<span class="font-medium text-gray-900 dark:text-white">' + escapeHtml(username) + '</span>' +
+                        '<span class="text-xs px-2 py-0.5 rounded-full ' + roleColor + '">' + escapeHtml(userInfo.role || '') + '</span>' +
+                        '<i class="fas fa-circle text-xs ' + statusColor + '" title="' + (userInfo.enabled !== false ? 'Active' : 'Disabled') + '"></i>' +
+                        '</div>' +
+                        '<div class="text-xs text-gray-500 dark:text-gray-400">' +
+                        emailHtml +
+                        '<span><i class="fas fa-clock mr-1"></i>Last login: ' + escapeHtml(lastLogin) + '</span>' +
+                        '</div>' +
+                        '</div>' +
                         '</div>' +
                         '<div class="flex items-center space-x-2">' +
-                            '<button data-action="toggle-user" data-username="' + escapeHtml(username) + '" data-enable="' + (userInfo.enabled === false) + '"' +
-                                    ' class="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"' +
-                                    ' title="' + (userInfo.enabled !== false ? 'Disable user' : 'Enable user') + '">' +
-                                '<i class="fas fa-' + (userInfo.enabled !== false ? 'ban' : 'check') + '"></i>' +
-                            '</button>' +
-                            '<button data-action="reset-password" data-username="' + escapeHtml(username) + '"' +
-                                    ' class="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"' +
-                                    ' title="Reset password">' +
-                                '<i class="fas fa-key"></i>' +
-                            '</button>' +
-                            '<button data-action="delete-user" data-username="' + escapeHtml(username) + '"' +
-                                    ' class="p-2 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"' +
-                                    ' title="Delete user">' +
-                                '<i class="fas fa-trash"></i>' +
-                            '</button>' +
+                        '<button data-action="toggle-user" data-username="' + escapeHtml(username) + '" data-enable="' + (userInfo.enabled === false) + '"' +
+                        ' class="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"' +
+                        ' title="' + (userInfo.enabled !== false ? 'Disable user' : 'Enable user') + '">' +
+                        '<i class="fas fa-' + (userInfo.enabled !== false ? 'ban' : 'check') + '"></i>' +
+                        '</button>' +
+                        '<button data-action="reset-password" data-username="' + escapeHtml(username) + '"' +
+                        ' class="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"' +
+                        ' title="Reset password">' +
+                        '<i class="fas fa-key"></i>' +
+                        '</button>' +
+                        '<button data-action="delete-user" data-username="' + escapeHtml(username) + '"' +
+                        ' class="p-2 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"' +
+                        ' title="Delete user">' +
+                        '<i class="fas fa-trash"></i>' +
+                        '</button>' +
                         '</div>' +
-                    '</div>';
-            });
-
-            userListDiv.innerHTML = html;
-
-            // Bind user action buttons via event delegation
-            userListDiv.querySelectorAll('button[data-action]').forEach(function(btn) {
-                btn.addEventListener('click', function() {
-                    var user = btn.dataset.username;
-                    switch (btn.dataset.action) {
-                        case 'toggle-user': toggleUserStatus(user, btn.dataset.enable === 'true'); break;
-                        case 'reset-password': resetUserPassword(user); break;
-                        case 'delete-user': deleteUser(user); break;
-                    }
+                        '</div>';
                 });
+
+                userListDiv.innerHTML = html;
+
+                // Bind user action buttons via event delegation
+                userListDiv.querySelectorAll('button[data-action]').forEach(function (btn) {
+                    btn.addEventListener('click', function () {
+                        var user = btn.dataset.username;
+                        switch (btn.dataset.action) {
+                            case 'toggle-user': toggleUserStatus(user, btn.dataset.enable === 'true'); break;
+                            case 'reset-password': resetUserPassword(user); break;
+                            case 'delete-user': deleteUser(user); break;
+                        }
+                    });
+                });
+            })
+            .catch(function (error) {
+                console.error('Error loading users:', error);
+                userListDiv.innerHTML = '<div class="text-center py-4 text-red-500 text-sm"><i class="fas fa-exclamation-triangle mr-2"></i> Failed to load users</div>';
             });
-        })
-        .catch(function(error) {
-            console.error('Error loading users:', error);
-            userListDiv.innerHTML = '<div class="text-center py-4 text-red-500 text-sm"><i class="fas fa-exclamation-triangle mr-2"></i> Failed to load users</div>';
-        });
     }
 
     function toggleUserStatus(username, enable) {
@@ -2579,24 +2559,24 @@
             },
             body: JSON.stringify({ enabled: enable })
         })
-        .then(function(response) {
-            return response.json().then(function(data) {
-                if (response.ok) {
-                    showMessage('User \'' + username + '\' ' + (enable ? 'enabled' : 'disabled'), 'success');
-                    refreshUserList();
-                } else {
-                    showMessage(data.error || 'Failed to update user', 'error');
-                }
+            .then(function (response) {
+                return response.json().then(function (data) {
+                    if (response.ok) {
+                        showMessage('User \'' + username + '\' ' + (enable ? 'enabled' : 'disabled'), 'success');
+                        refreshUserList();
+                    } else {
+                        showMessage(data.error || 'Failed to update user', 'error');
+                    }
+                });
+            })
+            .catch(function (error) {
+                console.error('Error toggling user status:', error);
+                showMessage('Failed to update user status', 'error');
             });
-        })
-        .catch(function(error) {
-            console.error('Error toggling user status:', error);
-            showMessage('Failed to update user status', 'error');
-        });
     }
 
     function resetUserPassword(username) {
-        CertMate.prompt('Enter new password for \'' + escapeHtml(username) + '\':', 'Reset Password').then(function(newPassword) {
+        CertMate.prompt('Enter new password for \'' + escapeHtml(username) + '\':', 'Reset Password').then(function (newPassword) {
             if (!newPassword) return;
 
             fetch('/api/users/' + username, {
@@ -2606,44 +2586,44 @@
                 },
                 body: JSON.stringify({ password: newPassword })
             })
-            .then(function(response) {
-                return response.json().then(function(data) {
-                    if (response.ok) {
-                        showMessage('Password reset for \'' + username + '\'', 'success');
-                    } else {
-                        showMessage(data.error || 'Failed to reset password', 'error');
-                    }
+                .then(function (response) {
+                    return response.json().then(function (data) {
+                        if (response.ok) {
+                            showMessage('Password reset for \'' + username + '\'', 'success');
+                        } else {
+                            showMessage(data.error || 'Failed to reset password', 'error');
+                        }
+                    });
+                })
+                .catch(function (error) {
+                    console.error('Error resetting password:', error);
+                    showMessage('Failed to reset password', 'error');
                 });
-            })
-            .catch(function(error) {
-                console.error('Error resetting password:', error);
-                showMessage('Failed to reset password', 'error');
-            });
         });
     }
 
     function deleteUser(username) {
-        CertMate.confirm('Are you sure you want to delete user \'' + escapeHtml(username) + '\'? This action cannot be undone.', 'Delete User').then(function(confirmed) {
+        CertMate.confirm('Are you sure you want to delete user \'' + escapeHtml(username) + '\'? This action cannot be undone.', 'Delete User').then(function (confirmed) {
             if (!confirmed) return;
 
             fetch('/api/users/' + username, {
                 method: 'DELETE',
                 headers: {}
             })
-            .then(function(response) {
-                return response.json().then(function(data) {
-                    if (response.ok) {
-                        showMessage('User \'' + username + '\' deleted', 'success');
-                        refreshUserList();
-                    } else {
-                        showMessage(data.error || 'Failed to delete user', 'error');
-                    }
+                .then(function (response) {
+                    return response.json().then(function (data) {
+                        if (response.ok) {
+                            showMessage('User \'' + username + '\' deleted', 'success');
+                            refreshUserList();
+                        } else {
+                            showMessage(data.error || 'Failed to delete user', 'error');
+                        }
+                    });
+                })
+                .catch(function (error) {
+                    console.error('Error deleting user:', error);
+                    showMessage('Failed to delete user', 'error');
                 });
-            })
-            .catch(function(error) {
-                console.error('Error deleting user:', error);
-                showMessage('Failed to delete user', 'error');
-            });
         });
     }
 
@@ -2651,7 +2631,7 @@
     // DOMContentLoaded - consolidated
     // =============================================
 
-    document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('DOMContentLoaded', function () {
         form = document.getElementById('settingsForm');
         saveBtn = document.getElementById('saveBtn');
         statusMessage = document.getElementById('statusMessage');
@@ -2659,16 +2639,16 @@
         addDebugLog('DOM loaded, initializing settings page', 'info');
 
         // Add challenge type radio listeners
-        document.querySelectorAll('input[name="challenge_type"]').forEach(function(radio) {
-            radio.addEventListener('change', function() {
+        document.querySelectorAll('input[name="challenge_type"]').forEach(function (radio) {
+            radio.addEventListener('change', function () {
                 toggleChallengeType();
                 addDebugLog('Challenge type changed to: ' + this.value, 'info');
             });
         });
 
         // Add radio button listeners
-        document.querySelectorAll('input[name="dns_provider"]').forEach(function(radio) {
-            radio.addEventListener('change', function() {
+        document.querySelectorAll('input[name="dns_provider"]').forEach(function (radio) {
+            radio.addEventListener('change', function () {
                 if (this.checked) {
                     showDNSConfig(this.value);
                     addDebugLog('DNS provider changed to: ' + this.value, 'info');
@@ -2687,7 +2667,7 @@
 
         // Form submit handler
         if (form) {
-            form.addEventListener('submit', function(e) {
+            form.addEventListener('submit', function (e) {
                 e.preventDefault();
                 addDebugLog('Settings form submitted', 'info');
                 saveSettings();
@@ -2695,10 +2675,10 @@
         }
 
         // Backup list (delayed)
-        setTimeout(function() { refreshBackupList(); }, 1000);
+        setTimeout(function () { refreshBackupList(); }, 1000);
 
         // User management (delayed)
-        setTimeout(function() {
+        setTimeout(function () {
             loadAuthConfig();
             refreshUserList();
         }, 500);
@@ -2715,24 +2695,24 @@
             createdToken: '',
             newKey: { name: '', role: 'viewer', expires_at: '' },
 
-            loadKeys: function() {
+            loadKeys: function () {
                 var self = this;
                 self.loading = true;
                 fetch('/api/keys', { credentials: 'same-origin' })
-                    .then(function(r) {
+                    .then(function (r) {
                         if (!r.ok) throw new Error('HTTP ' + r.status);
                         return r.json();
                     })
-                    .then(function(data) {
+                    .then(function (data) {
                         self.keys = data.keys || {};
                         self.loading = false;
                     })
-                    .catch(function() {
+                    .catch(function () {
                         self.loading = false;
                     });
             },
 
-            createKey: function() {
+            createKey: function () {
                 var self = this;
                 if (!self.newKey.name.trim()) {
                     showMessage('Key name is required', 'error');
@@ -2751,50 +2731,50 @@
                     credentials: 'same-origin',
                     body: JSON.stringify(payload)
                 })
-                .then(function(r) {
-                    return r.json().then(function(data) {
-                        if (r.ok) {
-                            self.createdToken = data.token;
-                            self.newKey = { name: '', role: 'viewer', expires_at: '' };
-                            self.loadKeys();
-                            showMessage('API key "' + data.name + '" created', 'success');
-                        } else {
-                            showMessage(data.error || 'Failed to create API key', 'error');
-                        }
-                    });
-                })
-                .catch(function() { showMessage('Failed to create API key', 'error'); });
+                    .then(function (r) {
+                        return r.json().then(function (data) {
+                            if (r.ok) {
+                                self.createdToken = data.token;
+                                self.newKey = { name: '', role: 'viewer', expires_at: '' };
+                                self.loadKeys();
+                                showMessage('API key "' + data.name + '" created', 'success');
+                            } else {
+                                showMessage(data.error || 'Failed to create API key', 'error');
+                            }
+                        });
+                    })
+                    .catch(function () { showMessage('Failed to create API key', 'error'); });
             },
 
-            revokeKey: function(keyId, keyName) {
+            revokeKey: function (keyId, keyName) {
                 var self = this;
                 CertMate.confirm(
                     'Are you sure you want to revoke API key "' + CertMate.escapeHtml(keyName) + '"? This cannot be undone.',
                     'Revoke API Key'
-                ).then(function(confirmed) {
+                ).then(function (confirmed) {
                     if (!confirmed) return;
                     fetch('/api/keys/' + keyId, {
                         method: 'DELETE',
                         credentials: 'same-origin'
                     })
-                    .then(function(r) {
-                        return r.json().then(function(data) {
-                            if (r.ok) {
-                                showMessage('API key revoked', 'success');
-                                self.loadKeys();
-                            } else {
-                                showMessage(data.error || 'Failed to revoke key', 'error');
-                            }
-                        });
-                    })
-                    .catch(function() { showMessage('Failed to revoke API key', 'error'); });
+                        .then(function (r) {
+                            return r.json().then(function (data) {
+                                if (r.ok) {
+                                    showMessage('API key revoked', 'success');
+                                    self.loadKeys();
+                                } else {
+                                    showMessage(data.error || 'Failed to revoke key', 'error');
+                                }
+                            });
+                        })
+                        .catch(function () { showMessage('Failed to revoke API key', 'error'); });
                 });
             },
 
-            copyToken: function() {
+            copyToken: function () {
                 var self = this;
                 if (navigator.clipboard && self.createdToken) {
-                    navigator.clipboard.writeText(self.createdToken).then(function() {
+                    navigator.clipboard.writeText(self.createdToken).then(function () {
                         showMessage('Token copied to clipboard', 'success');
                     });
                 }

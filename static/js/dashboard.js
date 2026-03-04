@@ -5,7 +5,7 @@
  *
  * static/js/dashboard.js
  */
-(function() {
+(function () {
     'use strict';
 
     // API Configuration - session cookies are sent automatically
@@ -27,7 +27,7 @@
 
         // Simulate progress for better UX
         var progress = 0;
-        var progressInterval = setInterval(function() {
+        var progressInterval = setInterval(function () {
             progress += Math.random() * 15;
             if (progress > 90) progress = 90; // Don't complete until actual completion
             document.getElementById('progressBar').style.width = progress + '%';
@@ -39,7 +39,7 @@
     // Hide loading modal and complete progress
     function hideLoadingModal(progressInterval) {
         document.getElementById('progressBar').style.width = '100%';
-        setTimeout(function() {
+        setTimeout(function () {
             document.getElementById('loadingModal').classList.add('hidden');
             if (progressInterval) clearInterval(progressInterval);
         }, 500);
@@ -47,57 +47,7 @@
 
     // Show message function with improved styling
     function showMessage(message, type) {
-        type = type || 'success';
-        var messagesContainer = document.getElementById('messages');
-        var messageDiv = document.createElement('div');
-
-        var typeStyles = {
-            'success': 'bg-green-50 text-green-800 border border-green-200',
-            'error': 'bg-red-50 text-red-800 border border-red-200',
-            'info': 'bg-blue-50 text-blue-800 border border-blue-200',
-            'warning': 'bg-yellow-50 text-yellow-800 border border-yellow-200'
-        };
-
-        var typeIcons = {
-            'success': 'fa-check-circle',
-            'error': 'fa-exclamation-circle',
-            'info': 'fa-info-circle',
-            'warning': 'fa-exclamation-triangle'
-        };
-
-        messageDiv.className = 'mb-4 p-4 rounded-lg shadow-lg max-w-sm transform transition-all duration-300 ease-in-out ' + (typeStyles[type] || typeStyles.success);
-        messageDiv.innerHTML =
-            '<div class="flex items-start">' +
-                '<div class="flex-shrink-0">' +
-                    '<i class="fas ' + (typeIcons[type] || typeIcons.success) + ' mt-0.5"></i>' +
-                '</div>' +
-                '<div class="ml-3 flex-1">' +
-                    '<p class="text-sm font-medium">' + escapeHtml(message) + '</p>' +
-                '</div>' +
-                '<button onclick="this.parentElement.parentElement.remove()" class="ml-2 flex-shrink-0 text-gray-400 hover:text-gray-600">' +
-                    '<i class="fas fa-times text-xs"></i>' +
-                '</button>' +
-            '</div>';
-
-        // Add animation
-        messageDiv.style.transform = 'translateX(100%)';
-        messageDiv.style.opacity = '0';
-        messagesContainer.appendChild(messageDiv);
-
-        // Trigger animation
-        setTimeout(function() {
-            messageDiv.style.transform = 'translateX(0)';
-            messageDiv.style.opacity = '1';
-        }, 10);
-
-        // Auto-remove after 5 seconds
-        setTimeout(function() {
-            if (messageDiv.parentNode) {
-                messageDiv.style.transform = 'translateX(100%)';
-                messageDiv.style.opacity = '0';
-                setTimeout(function() { messageDiv.remove(); }, 300);
-            }
-        }, 5000);
+        CertMate.toast(message, type);
     }
 
     // Clear filters function
@@ -115,74 +65,74 @@
         }
 
         var total = certificates.length;
-        var valid = certificates.filter(function(cert) { return cert.exists && cert.days_until_expiry > 30; }).length;
-        var expiring = certificates.filter(function(cert) { return cert.exists && cert.days_until_expiry > 0 && cert.days_until_expiry <= 30; }).length;
-        var expired = certificates.filter(function(cert) { return cert.exists && cert.days_until_expiry <= 0; }).length;
+        var valid = certificates.filter(function (cert) { return cert.exists && cert.days_until_expiry > 30; }).length;
+        var expiring = certificates.filter(function (cert) { return cert.exists && cert.days_until_expiry > 0 && cert.days_until_expiry <= 30; }).length;
+        var expired = certificates.filter(function (cert) { return cert.exists && cert.days_until_expiry <= 0; }).length;
 
         var statsContainer = document.getElementById('statsCards');
         statsContainer.innerHTML =
             '<div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow duration-200">' +
-                '<div class="p-6">' +
-                    '<div class="flex items-center">' +
-                        '<div class="flex-shrink-0">' +
-                            '<div class="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">' +
-                                '<i class="fas fa-certificate text-blue-600 dark:text-blue-400 text-xl"></i>' +
-                            '</div>' +
-                        '</div>' +
-                        '<div class="ml-4 flex-1">' +
-                            '<p class="text-sm font-medium text-gray-600 dark:text-gray-400">Total Certificates</p>' +
-                            '<p class="text-2xl font-bold text-gray-900 dark:text-white">' + total + '</p>' +
-                        '</div>' +
-                    '</div>' +
-                '</div>' +
+            '<div class="p-6">' +
+            '<div class="flex items-center">' +
+            '<div class="flex-shrink-0">' +
+            '<div class="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">' +
+            '<i class="fas fa-certificate text-blue-600 dark:text-blue-400 text-xl"></i>' +
+            '</div>' +
+            '</div>' +
+            '<div class="ml-4 flex-1">' +
+            '<p class="text-sm font-medium text-gray-600 dark:text-gray-400">Total Certificates</p>' +
+            '<p class="text-2xl font-bold text-gray-900 dark:text-white">' + total + '</p>' +
+            '</div>' +
+            '</div>' +
+            '</div>' +
             '</div>' +
 
             '<div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow duration-200">' +
-                '<div class="p-6">' +
-                    '<div class="flex items-center">' +
-                        '<div class="flex-shrink-0">' +
-                            '<div class="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">' +
-                                '<i class="fas fa-check-circle text-green-600 dark:text-green-400 text-xl"></i>' +
-                            '</div>' +
-                        '</div>' +
-                        '<div class="ml-4 flex-1">' +
-                            '<p class="text-sm font-medium text-gray-600 dark:text-gray-400">Valid</p>' +
-                            '<p class="text-2xl font-bold text-green-600 dark:text-green-400">' + valid + '</p>' +
-                        '</div>' +
-                    '</div>' +
-                '</div>' +
+            '<div class="p-6">' +
+            '<div class="flex items-center">' +
+            '<div class="flex-shrink-0">' +
+            '<div class="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">' +
+            '<i class="fas fa-check-circle text-green-600 dark:text-green-400 text-xl"></i>' +
+            '</div>' +
+            '</div>' +
+            '<div class="ml-4 flex-1">' +
+            '<p class="text-sm font-medium text-gray-600 dark:text-gray-400">Valid</p>' +
+            '<p class="text-2xl font-bold text-green-600 dark:text-green-400">' + valid + '</p>' +
+            '</div>' +
+            '</div>' +
+            '</div>' +
             '</div>' +
 
             '<div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow duration-200">' +
-                '<div class="p-6">' +
-                    '<div class="flex items-center">' +
-                        '<div class="flex-shrink-0">' +
-                            '<div class="w-12 h-12 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg flex items-center justify-center">' +
-                                '<i class="fas fa-exclamation-triangle text-yellow-600 dark:text-yellow-400 text-xl"></i>' +
-                            '</div>' +
-                        '</div>' +
-                        '<div class="ml-4 flex-1">' +
-                            '<p class="text-sm font-medium text-gray-600 dark:text-gray-400">Expiring Soon</p>' +
-                            '<p class="text-2xl font-bold text-yellow-600 dark:text-yellow-400">' + expiring + '</p>' +
-                        '</div>' +
-                    '</div>' +
-                '</div>' +
+            '<div class="p-6">' +
+            '<div class="flex items-center">' +
+            '<div class="flex-shrink-0">' +
+            '<div class="w-12 h-12 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg flex items-center justify-center">' +
+            '<i class="fas fa-exclamation-triangle text-yellow-600 dark:text-yellow-400 text-xl"></i>' +
+            '</div>' +
+            '</div>' +
+            '<div class="ml-4 flex-1">' +
+            '<p class="text-sm font-medium text-gray-600 dark:text-gray-400">Expiring Soon</p>' +
+            '<p class="text-2xl font-bold text-yellow-600 dark:text-yellow-400">' + expiring + '</p>' +
+            '</div>' +
+            '</div>' +
+            '</div>' +
             '</div>' +
 
             '<div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow duration-200">' +
-                '<div class="p-6">' +
-                    '<div class="flex items-center">' +
-                        '<div class="flex-shrink-0">' +
-                            '<div class="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg flex items-center justify-center">' +
-                                '<i class="fas fa-globe text-indigo-600 dark:text-indigo-400 text-xl"></i>' +
-                            '</div>' +
-                        '</div>' +
-                        '<div class="ml-4 flex-1">' +
-                            '<p class="text-sm font-medium text-gray-600 dark:text-gray-400">Deployment</p>' +
-                            '<p class="text-2xl font-bold text-indigo-600 dark:text-indigo-400" id="deploymentCount">--</p>' +
-                        '</div>' +
-                    '</div>' +
-                '</div>' +
+            '<div class="p-6">' +
+            '<div class="flex items-center">' +
+            '<div class="flex-shrink-0">' +
+            '<div class="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg flex items-center justify-center">' +
+            '<i class="fas fa-globe text-indigo-600 dark:text-indigo-400 text-xl"></i>' +
+            '</div>' +
+            '</div>' +
+            '<div class="ml-4 flex-1">' +
+            '<p class="text-sm font-medium text-gray-600 dark:text-gray-400">Deployment</p>' +
+            '<p class="text-2xl font-bold text-indigo-600 dark:text-indigo-400" id="deploymentCount">--</p>' +
+            '</div>' +
+            '</div>' +
+            '</div>' +
             '</div>';
     }
 
@@ -193,7 +143,7 @@
         this.loadSettings();
     }
 
-    DeploymentCache.prototype.loadSettings = function() {
+    DeploymentCache.prototype.loadSettings = function () {
         try {
             var savedSettings = localStorage.getItem('deployment-cache-settings');
             if (savedSettings) {
@@ -205,7 +155,7 @@
         }
     };
 
-    DeploymentCache.prototype.saveSettings = function(ttl) {
+    DeploymentCache.prototype.saveSettings = function (ttl) {
         try {
             this.defaultTTL = ttl;
             localStorage.setItem('deployment-cache-settings', JSON.stringify({ ttl: ttl }));
@@ -214,7 +164,7 @@
         }
     };
 
-    DeploymentCache.prototype.set = function(domain, result) {
+    DeploymentCache.prototype.set = function (domain, result) {
         var timestamp = Date.now();
         this.cache.set(domain, {
             result: result,
@@ -223,7 +173,7 @@
         });
     };
 
-    DeploymentCache.prototype.get = function(domain) {
+    DeploymentCache.prototype.get = function (domain) {
         var cached = this.cache.get(domain);
         if (!cached) return null;
 
@@ -238,18 +188,18 @@
         return cached.result;
     };
 
-    DeploymentCache.prototype.invalidate = function(domain) {
+    DeploymentCache.prototype.invalidate = function (domain) {
         this.cache.delete(domain);
     };
 
-    DeploymentCache.prototype.clear = function() {
+    DeploymentCache.prototype.clear = function () {
         this.cache.clear();
     };
 
-    DeploymentCache.prototype.getStatus = function() {
+    DeploymentCache.prototype.getStatus = function () {
         var now = Date.now();
         var entries = [];
-        this.cache.forEach(function(data, domain) {
+        this.cache.forEach(function (data, domain) {
             entries.push({
                 domain: domain,
                 age: Math.round((now - data.timestamp) / 1000),
@@ -280,7 +230,7 @@
             allCertificates = [];
         }
 
-        var filteredCerts = allCertificates.filter(function(cert) {
+        var filteredCerts = allCertificates.filter(function (cert) {
             // Search filter
             var matchesSearch = cert.domain.toLowerCase().indexOf(searchTerm) !== -1;
 
@@ -321,7 +271,7 @@
             currentSort.dir = 'asc';
         }
         // Update sort icons
-        document.querySelectorAll('[id^="sort-icon-"]').forEach(function(icon) {
+        document.querySelectorAll('[id^="sort-icon-"]').forEach(function (icon) {
             icon.className = 'fas fa-sort ml-1 text-gray-400';
         });
         var activeIcon = document.getElementById('sort-icon-' + field);
@@ -334,7 +284,7 @@
     function applySorting(certs) {
         var field = currentSort.field;
         var dir = currentSort.dir === 'asc' ? 1 : -1;
-        return certs.slice().sort(function(a, b) {
+        return certs.slice().sort(function (a, b) {
             if (field === 'domain') return dir * a.domain.localeCompare(b.domain);
             if (field === 'status') return dir * ((a.days_until_expiry || 0) - (b.days_until_expiry || 0));
             if (field === 'expiry') return dir * ((a.days_until_expiry || 0) - (b.days_until_expiry || 0));
@@ -373,43 +323,43 @@
 
         if (certificates.length === 0) {
             var isFiltered = document.getElementById('certificateSearch').value ||
-                             document.getElementById('statusFilter').value !== 'all';
+                document.getElementById('statusFilter').value !== 'all';
             thead.style.display = 'none';
 
             if (isFiltered) {
                 container.innerHTML = '<tr><td colspan="6">' +
                     '<div class="px-6 py-12 text-center">' +
-                        '<div class="mx-auto max-w-sm">' +
-                            '<div class="mx-auto h-16 w-16 flex items-center justify-center bg-gray-100 dark:bg-gray-700 rounded-full mb-4">' +
-                                '<i class="fas fa-search text-gray-400 text-2xl"></i>' +
-                            '</div>' +
-                            '<h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">No matching certificates</h3>' +
-                            '<p class="text-gray-500 dark:text-gray-400 mb-6">Try adjusting your search criteria or filters.</p>' +
-                            '<button onclick="clearFilters()" class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">' +
-                                '<i class="fas fa-times mr-2"></i>Clear Filters</button>' +
-                        '</div>' +
+                    '<div class="mx-auto max-w-sm">' +
+                    '<div class="mx-auto h-16 w-16 flex items-center justify-center bg-gray-100 dark:bg-gray-700 rounded-full mb-4">' +
+                    '<i class="fas fa-search text-gray-400 text-2xl"></i>' +
+                    '</div>' +
+                    '<h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">No matching certificates</h3>' +
+                    '<p class="text-gray-500 dark:text-gray-400 mb-6">Try adjusting your search criteria or filters.</p>' +
+                    '<button onclick="clearFilters()" class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">' +
+                    '<i class="fas fa-times mr-2"></i>Clear Filters</button>' +
+                    '</div>' +
                     '</div>' +
                     '</td></tr>';
             } else {
                 container.innerHTML = '<tr><td colspan="6">' +
                     '<div class="px-6 py-8"><div class="mx-auto max-w-lg">' +
-                        '<div class="text-center mb-6">' +
-                            '<div class="mx-auto h-16 w-16 flex items-center justify-center bg-blue-100 dark:bg-blue-900/30 rounded-full mb-4"><i class="fas fa-rocket text-blue-500 text-2xl"></i></div>' +
-                            '<h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">Welcome to CertMate</h3>' +
-                            '<p class="text-gray-500 dark:text-gray-400">Follow these steps to get started:</p>' +
-                        '</div>' +
-                        '<ol class="space-y-3 mb-6 text-sm">' +
-                            '<li class="flex items-start"><span class="flex-shrink-0 w-6 h-6 flex items-center justify-center bg-blue-500 text-white rounded-full text-xs font-bold mr-3 mt-0.5">1</span>' +
-                                '<span class="text-gray-700 dark:text-gray-300"><a href="/settings" class="text-blue-600 dark:text-blue-400 font-medium hover:underline">Go to Settings</a> and configure your DNS provider</span></li>' +
-                            '<li class="flex items-start"><span class="flex-shrink-0 w-6 h-6 flex items-center justify-center bg-blue-500 text-white rounded-full text-xs font-bold mr-3 mt-0.5">2</span>' +
-                                '<span class="text-gray-700 dark:text-gray-300">Add a domain above and create your first SSL certificate</span></li>' +
-                            '<li class="flex items-start"><span class="flex-shrink-0 w-6 h-6 flex items-center justify-center bg-blue-500 text-white rounded-full text-xs font-bold mr-3 mt-0.5">3</span>' +
-                                '<span class="text-gray-700 dark:text-gray-300">Enable <a href="/settings#users" class="text-blue-600 dark:text-blue-400 font-medium hover:underline">Local Authentication</a> in Settings to secure your instance</span></li>' +
-                        '</ol>' +
-                        '<div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3 mb-6">' +
-                            '<p class="text-xs text-amber-800 dark:text-amber-200"><i class="fas fa-shield-alt mr-1"></i><strong>Security:</strong> Authentication is disabled by default. Enable it before exposing CertMate to the internet.</p>' +
-                        '</div>' +
-                        '<div class="text-center"><button onclick="document.getElementById(\'domain\').focus()" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary hover:bg-secondary"><i class="fas fa-plus mr-2"></i>Create Certificate</button></div>' +
+                    '<div class="text-center mb-6">' +
+                    '<div class="mx-auto h-16 w-16 flex items-center justify-center bg-blue-100 dark:bg-blue-900/30 rounded-full mb-4"><i class="fas fa-rocket text-blue-500 text-2xl"></i></div>' +
+                    '<h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">Welcome to CertMate</h3>' +
+                    '<p class="text-gray-500 dark:text-gray-400">Follow these steps to get started:</p>' +
+                    '</div>' +
+                    '<ol class="space-y-3 mb-6 text-sm">' +
+                    '<li class="flex items-start"><span class="flex-shrink-0 w-6 h-6 flex items-center justify-center bg-blue-500 text-white rounded-full text-xs font-bold mr-3 mt-0.5">1</span>' +
+                    '<span class="text-gray-700 dark:text-gray-300"><a href="/settings" class="text-blue-600 dark:text-blue-400 font-medium hover:underline">Go to Settings</a> and configure your DNS provider</span></li>' +
+                    '<li class="flex items-start"><span class="flex-shrink-0 w-6 h-6 flex items-center justify-center bg-blue-500 text-white rounded-full text-xs font-bold mr-3 mt-0.5">2</span>' +
+                    '<span class="text-gray-700 dark:text-gray-300">Add a domain above and create your first SSL certificate</span></li>' +
+                    '<li class="flex items-start"><span class="flex-shrink-0 w-6 h-6 flex items-center justify-center bg-blue-500 text-white rounded-full text-xs font-bold mr-3 mt-0.5">3</span>' +
+                    '<span class="text-gray-700 dark:text-gray-300">Enable <a href="/settings#users" class="text-blue-600 dark:text-blue-400 font-medium hover:underline">Local Authentication</a> in Settings to secure your instance</span></li>' +
+                    '</ol>' +
+                    '<div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3 mb-6">' +
+                    '<p class="text-xs text-amber-800 dark:text-amber-200"><i class="fas fa-shield-alt mr-1"></i><strong>Security:</strong> Authentication is disabled by default. Enable it before exposing CertMate to the internet.</p>' +
+                    '</div>' +
+                    '<div class="text-center"><button onclick="document.getElementById(\'domain\').focus()" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary hover:bg-secondary"><i class="fas fa-plus mr-2"></i>Create Certificate</button></div>' +
                     '</div></div>' +
                     '</td></tr>';
             }
@@ -419,7 +369,7 @@
         thead.style.display = '';
         var sorted = applySorting(certificates);
 
-        container.innerHTML = sorted.map(function(cert) {
+        container.innerHTML = sorted.map(function (cert) {
             var safeDomain = escapeHtml(cert.domain);
             var safeDnsProvider = escapeHtml(cert.dns_provider || '');
             var providerLabel = safeDnsProvider ? safeDnsProvider.charAt(0).toUpperCase() + safeDnsProvider.slice(1) : '';
@@ -432,7 +382,7 @@
                     '<td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-gray-500 dark:text-gray-400">' + (providerLabel || '\u2014') + '</td>' +
                     '<td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell">\u2014</td>' +
                     '<td class="px-4 py-4 whitespace-nowrap text-right"></td>' +
-                '</tr>';
+                    '</tr>';
             }
 
             var isExpired = cert.days_until_expiry <= 0;
@@ -447,35 +397,35 @@
             }
 
             var expiryDate = new Date(cert.expiry_date);
-            var expiryStr = expiryDate.toLocaleDateString(undefined, {month: 'short', day: 'numeric', year: 'numeric'});
+            var expiryStr = expiryDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
             var daysClass = isExpired ? 'text-red-600 dark:text-red-400' : isExpiringSoon ? 'text-yellow-600 dark:text-yellow-400' : 'text-gray-500 dark:text-gray-400';
 
             return '<tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors duration-150 cursor-pointer" onclick="openCertDetail(\'' + safeDomain + '\')">' +
                 '<td class="px-6 py-4 whitespace-nowrap">' +
-                    '<div class="flex items-center">' +
-                        '<div class="flex-shrink-0 w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center mr-3">' +
-                            '<i class="fas fa-certificate text-blue-600 dark:text-blue-400 text-sm"></i>' +
-                        '</div>' +
-                        '<div class="text-sm font-medium text-gray-900 dark:text-white">' + safeDomain + '</div>' +
-                    '</div>' +
+                '<div class="flex items-center">' +
+                '<div class="flex-shrink-0 w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center mr-3">' +
+                '<i class="fas fa-certificate text-blue-600 dark:text-blue-400 text-sm"></i>' +
+                '</div>' +
+                '<div class="text-sm font-medium text-gray-900 dark:text-white">' + safeDomain + '</div>' +
+                '</div>' +
                 '</td>' +
                 '<td class="px-4 py-4 whitespace-nowrap"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ' + statusClass + '"><i class="fas ' + statusIcon + ' mr-1"></i>' + statusText + '</span></td>' +
                 '<td class="px-4 py-4 whitespace-nowrap hidden md:table-cell"><div class="text-sm text-gray-900 dark:text-white">' + expiryStr + '</div><div class="text-xs ' + daysClass + '">' + cert.days_until_expiry + ' days</div></td>' +
                 '<td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-gray-500 dark:text-gray-400">' + (providerLabel || '\u2014') + '</td>' +
                 '<td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell">' + deploymentBadgeHtml(cert) + '</td>' +
                 '<td class="px-4 py-4 whitespace-nowrap text-right">' +
-                    '<div class="flex items-center justify-end gap-1">' +
-                        '<button type="button" data-action="renew" data-domain="' + safeDomain + '" onclick="event.stopPropagation()" class="p-1.5 text-gray-400 hover:text-green-600 dark:hover:text-green-400 rounded hover:bg-gray-100 dark:hover:bg-gray-700" title="Renew"><i class="fas fa-sync-alt"></i></button>' +
-                        '<button type="button" data-action="download" data-domain="' + safeDomain + '" onclick="event.stopPropagation()" class="p-1.5 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 rounded hover:bg-gray-100 dark:hover:bg-gray-700" title="Download"><i class="fas fa-download"></i></button>' +
-                        '<button type="button" data-action="curl" data-domain="' + safeDomain + '" onclick="event.stopPropagation()" class="p-1.5 text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded hover:bg-gray-100 dark:hover:bg-gray-700" title="API"><i class="fas fa-code"></i></button>' +
-                    '</div>' +
+                '<div class="flex items-center justify-end gap-1">' +
+                '<button type="button" data-action="renew" data-domain="' + safeDomain + '" onclick="event.stopPropagation()" class="p-1.5 text-gray-400 hover:text-green-600 dark:hover:text-green-400 rounded hover:bg-gray-100 dark:hover:bg-gray-700" title="Renew"><i class="fas fa-sync-alt"></i></button>' +
+                '<button type="button" data-action="download" data-domain="' + safeDomain + '" onclick="event.stopPropagation()" class="p-1.5 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 rounded hover:bg-gray-100 dark:hover:bg-gray-700" title="Download"><i class="fas fa-download"></i></button>' +
+                '<button type="button" data-action="curl" data-domain="' + safeDomain + '" onclick="event.stopPropagation()" class="p-1.5 text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded hover:bg-gray-100 dark:hover:bg-gray-700" title="API"><i class="fas fa-code"></i></button>' +
+                '</div>' +
                 '</td>' +
-            '</tr>';
+                '</tr>';
         }).join('');
 
         // Attach event listeners for cert action buttons
-        container.querySelectorAll('button[data-action]').forEach(function(btn) {
-            btn.addEventListener('click', function() {
+        container.querySelectorAll('button[data-action]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
                 var domain = btn.dataset.domain;
                 switch (btn.dataset.action) {
                     case 'renew': renewCertificate(domain); break;
@@ -486,9 +436,9 @@
         });
 
         // Trigger deployment checks for uncached certs
-        setTimeout(function() {
+        setTimeout(function () {
             if (Array.isArray(certificates)) {
-                certificates.filter(function(c) { return c.exists; }).forEach(function(c) {
+                certificates.filter(function (c) { return c.exists; }).forEach(function (c) {
                     if (!deploymentCache.get(c.domain)) {
                         checkDeploymentStatus(c.domain);
                     }
@@ -499,7 +449,7 @@
 
     // Certificate detail slide-out panel
     function openCertDetail(domain) {
-        var cert = allCertificates.find(function(c) { return c.domain === domain; });
+        var cert = allCertificates.find(function (c) { return c.domain === domain; });
         if (!cert) return;
 
         var panel = document.getElementById('certDetailPanel');
@@ -524,38 +474,38 @@
 
             content.innerHTML =
                 '<div class="space-y-6">' +
-                    // Status banner
-                    '<div class="flex items-center justify-between p-4 rounded-lg ' +
-                        (isExpired ? 'bg-red-50 dark:bg-red-900/20' : isExpiringSoon ? 'bg-yellow-50 dark:bg-yellow-900/20' : 'bg-green-50 dark:bg-green-900/20') + '">' +
-                        '<div><div class="text-sm font-medium ' + statusClass + '">' + statusText + '</div>' +
-                        '<div class="text-2xl font-bold ' + statusClass + '">' + cert.days_until_expiry + ' days</div></div>' +
-                        '<i class="fas ' + (isExpired ? 'fa-times-circle' : isExpiringSoon ? 'fa-exclamation-triangle' : 'fa-check-circle') + ' text-3xl ' + statusClass + '"></i>' +
-                    '</div>' +
-                    // Details grid
-                    '<div class="space-y-3">' +
-                        '<h4 class="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wider">Details</h4>' +
-                        '<dl class="space-y-2">' +
-                            '<div class="flex justify-between py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">Domain</dt><dd class="text-sm font-medium text-gray-900 dark:text-white">' + safeDomain + '</dd></div>' +
-                            '<div class="flex justify-between py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">Expires</dt><dd class="text-sm font-medium text-gray-900 dark:text-white">' + expiryDate.toLocaleDateString(undefined, {weekday:'short', month:'long', day:'numeric', year:'numeric'}) + '</dd></div>' +
-                            (providerLabel ? '<div class="flex justify-between py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">DNS Provider</dt><dd class="text-sm font-medium text-gray-900 dark:text-white">' + providerLabel + '</dd></div>' : '') +
-                            '<div class="flex justify-between py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">Deployment</dt><dd>' + deploymentBadgeHtml(cert) + '</dd></div>' +
-                        '</dl>' +
-                    '</div>' +
-                    // Actions
-                    '<div class="space-y-3">' +
-                        '<h4 class="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wider">Actions</h4>' +
-                        '<div class="grid grid-cols-1 gap-2">' +
-                            '<button type="button" onclick="renewCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-sync-alt mr-2 text-green-600"></i>Renew Certificate</button>' +
-                            '<button type="button" onclick="downloadCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-download mr-2 text-blue-600"></i>Download Certificate</button>' +
-                            '<button type="button" onclick="copyCurlCommand(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-blue-300 dark:border-blue-600 shadow-sm text-sm font-medium rounded-md text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50"><i class="fas fa-code mr-2"></i>Show API Command</button>' +
-                            '<button type="button" onclick="checkDeploymentStatus(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-globe mr-2 text-indigo-600"></i>Check Deployment</button>' +
-                        '</div>' +
-                    '</div>' +
+                // Status banner
+                '<div class="flex items-center justify-between p-4 rounded-lg ' +
+                (isExpired ? 'bg-red-50 dark:bg-red-900/20' : isExpiringSoon ? 'bg-yellow-50 dark:bg-yellow-900/20' : 'bg-green-50 dark:bg-green-900/20') + '">' +
+                '<div><div class="text-sm font-medium ' + statusClass + '">' + statusText + '</div>' +
+                '<div class="text-2xl font-bold ' + statusClass + '">' + cert.days_until_expiry + ' days</div></div>' +
+                '<i class="fas ' + (isExpired ? 'fa-times-circle' : isExpiringSoon ? 'fa-exclamation-triangle' : 'fa-check-circle') + ' text-3xl ' + statusClass + '"></i>' +
+                '</div>' +
+                // Details grid
+                '<div class="space-y-3">' +
+                '<h4 class="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wider">Details</h4>' +
+                '<dl class="space-y-2">' +
+                '<div class="flex justify-between py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">Domain</dt><dd class="text-sm font-medium text-gray-900 dark:text-white">' + safeDomain + '</dd></div>' +
+                '<div class="flex justify-between py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">Expires</dt><dd class="text-sm font-medium text-gray-900 dark:text-white">' + expiryDate.toLocaleDateString(undefined, { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' }) + '</dd></div>' +
+                (providerLabel ? '<div class="flex justify-between py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">DNS Provider</dt><dd class="text-sm font-medium text-gray-900 dark:text-white">' + providerLabel + '</dd></div>' : '') +
+                '<div class="flex justify-between py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">Deployment</dt><dd>' + deploymentBadgeHtml(cert) + '</dd></div>' +
+                '</dl>' +
+                '</div>' +
+                // Actions
+                '<div class="space-y-3">' +
+                '<h4 class="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wider">Actions</h4>' +
+                '<div class="grid grid-cols-1 gap-2">' +
+                '<button type="button" onclick="renewCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-sync-alt mr-2 text-green-600"></i>Renew Certificate</button>' +
+                '<button type="button" onclick="downloadCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-download mr-2 text-blue-600"></i>Download Certificate</button>' +
+                '<button type="button" onclick="copyCurlCommand(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-blue-300 dark:border-blue-600 shadow-sm text-sm font-medium rounded-md text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50"><i class="fas fa-code mr-2"></i>Show API Command</button>' +
+                '<button type="button" onclick="checkDeploymentStatus(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-globe mr-2 text-indigo-600"></i>Check Deployment</button>' +
+                '</div>' +
+                '</div>' +
                 '</div>';
         }
 
         overlay.classList.remove('hidden');
-        requestAnimationFrame(function() {
+        requestAnimationFrame(function () {
             panel.classList.remove('translate-x-full');
         });
     }
@@ -564,11 +514,11 @@
         var panel = document.getElementById('certDetailPanel');
         var overlay = document.getElementById('certDetailOverlay');
         panel.classList.add('translate-x-full');
-        setTimeout(function() { overlay.classList.add('hidden'); }, 300);
+        setTimeout(function () { overlay.classList.add('hidden'); }, 300);
     }
 
     // Close detail panel on Escape key
-    document.addEventListener('keydown', function(e) {
+    document.addEventListener('keydown', function (e) {
         if (e.key === 'Escape') closeCertDetail();
     });
 
@@ -629,7 +579,7 @@
 
         if (stats.entries.length > 0) {
             addDebugLog('Recent entries:', 'info');
-            stats.entries.slice(0, 5).forEach(function(entry) {
+            stats.entries.slice(0, 5).forEach(function (entry) {
                 addDebugLog('  ' + entry.domain + ': ' + entry.status + ' (' + entry.remaining + 's remaining)', 'info');
             });
             if (stats.entries.length > 5) {
@@ -642,7 +592,7 @@
     }
 
     function invalidateAllCache() {
-        CertMate.confirm('Clear all cached deployment status data? This will force a fresh check for all certificates.', 'Clear Cache', {danger: false}).then(function(confirmed) {
+        CertMate.confirm('Clear all cached deployment status data? This will force a fresh check for all certificates.', 'Clear Cache', { danger: false }).then(function (confirmed) {
             if (!confirmed) return;
             deploymentCache.clear();
             addDebugLog('All cache entries cleared by user request', 'warn');
@@ -651,9 +601,9 @@
             // Ensure allCertificates is an array before checking
             if (Array.isArray(allCertificates) && allCertificates.length > 0) {
                 addDebugLog('Re-checking all certificates after cache clear...', 'info');
-                setTimeout(function() {
-                    var existingCerts = allCertificates.filter(function(cert) { return cert.exists; });
-                    existingCerts.forEach(function(cert) { checkDeploymentStatus(cert.domain); });
+                setTimeout(function () {
+                    var existingCerts = allCertificates.filter(function (cert) { return cert.exists; });
+                    existingCerts.forEach(function (cert) { checkDeploymentStatus(cert.domain); });
                 }, 1000);
             }
         });
@@ -683,7 +633,7 @@
             allCertificates = [];
         }
 
-        var deployedCount = allCertificates.filter(function(cert) {
+        var deployedCount = allCertificates.filter(function (cert) {
             if (!cert.exists) return false;
             var statusElement = document.getElementById('deployment-status-' + cert.domain.replace(/\./g, '-'));
             var isDeployed = statusElement && statusElement.textContent.indexOf('Deployed') !== -1;
@@ -710,7 +660,7 @@
             allCertificates = [];
         }
 
-        var certificatesToCheck = allCertificates.filter(function(cert) { return cert.exists; });
+        var certificatesToCheck = allCertificates.filter(function (cert) { return cert.exists; });
 
         if (certificatesToCheck.length === 0) {
             showMessage('No certificates found to check', 'info');
@@ -746,17 +696,17 @@
             }
 
             var batch = batches[batchIndex];
-            var batchPromises = batch.map(function(cert) {
-                return checkDeploymentStatus(cert.domain).then(function() {
+            var batchPromises = batch.map(function (cert) {
+                return checkDeploymentStatus(cert.domain).then(function () {
                     completed++;
                     updateProgress();
-                }).catch(function() {
+                }).catch(function () {
                     completed++;
                     updateProgress();
                 });
             });
 
-            Promise.all(batchPromises).then(function() {
+            Promise.all(batchPromises).then(function () {
                 batchIndex++;
                 if (batchIndex < batches.length) {
                     setTimeout(processBatch, 500);
@@ -796,17 +746,17 @@
         return fetch('/api/certificates/' + encodeURIComponent(domain) + '/deployment-status', {
             method: 'GET',
             headers: API_HEADERS
-        }).then(function(response) {
+        }).then(function (response) {
             if (response.ok) {
-                return response.json().then(function(result) {
+                return response.json().then(function (result) {
                     deploymentCache.set(domain, result);
                     updateDeploymentUI(domain, result, statusElement);
                 });
             }
             throw new Error('API failed');
-        }).catch(function(apiError) {
+        }).catch(function (apiError) {
             // Fallback to browser-based certificate check
-            return checkDeploymentViaBrowser(domain).then(function(result) {
+            return checkDeploymentViaBrowser(domain).then(function (result) {
                 if (!result) {
                     result = {
                         deployed: false,
@@ -820,7 +770,7 @@
                 deploymentCache.set(domain, result);
                 updateDeploymentUI(domain, result, statusElement);
             });
-        }).catch(function() {
+        }).catch(function () {
             statusElement.className = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300';
             statusElement.innerHTML = '<i class="fas fa-question-circle mr-1"></i>Error';
         });
@@ -829,13 +779,13 @@
     // Browser-based certificate check fallback
     function checkDeploymentViaBrowser(domain) {
         var controller = new AbortController();
-        var timeoutId = setTimeout(function() { controller.abort(); }, 10000);
+        var timeoutId = setTimeout(function () { controller.abort(); }, 10000);
 
         return fetch('https://' + domain, {
             method: 'HEAD',
             mode: 'no-cors',
             signal: controller.signal
-        }).then(function() {
+        }).then(function () {
             clearTimeout(timeoutId);
             return {
                 deployed: true,
@@ -844,7 +794,7 @@
                 method: 'browser-fallback',
                 timestamp: new Date().toISOString()
             };
-        }).catch(function(browserError) {
+        }).catch(function (browserError) {
             clearTimeout(timeoutId);
             if (browserError.name === 'AbortError') {
                 return {
@@ -912,12 +862,12 @@
 
         return fetch('/api/certificates', {
             headers: API_HEADERS
-        }).then(function(response) {
+        }).then(function (response) {
             if (!response.ok) {
                 throw new Error('HTTP ' + response.status + ': ' + response.statusText);
             }
             return response.json();
-        }).then(function(certificates) {
+        }).then(function (certificates) {
             // Check if the response is an error object
             if (certificates && certificates.error) {
                 throw new Error('API Error: ' + certificates.error + ' (' + (certificates.code || 'unknown') + ')');
@@ -938,13 +888,13 @@
             // Check deployment status for all certificates after a short delay
             addDebugLog('Scheduling automatic deployment status checks...', 'info');
 
-            setTimeout(function() {
+            setTimeout(function () {
                 addDebugLog('Starting automatic deployment status checks for all certificates', 'info');
 
-                var existingCerts = certificates.filter(function(cert) { return cert.exists; });
+                var existingCerts = certificates.filter(function (cert) { return cert.exists; });
                 if (existingCerts.length > 0) {
-                    var promises = existingCerts.map(function(cert) { return checkDeploymentStatus(cert.domain); });
-                    Promise.all(promises).then(function() {
+                    var promises = existingCerts.map(function (cert) { return checkDeploymentStatus(cert.domain); });
+                    Promise.all(promises).then(function () {
                         updateDeploymentStats();
                         addDebugLog('Automatic deployment check completed for ' + existingCerts.length + ' certificates', 'success');
                     });
@@ -953,7 +903,7 @@
                 }
             }, 1500);
 
-        }).catch(function(error) {
+        }).catch(function (error) {
             addDebugLog('Failed to load certificates: ' + error.message, 'error');
 
             // Initialize with empty array to prevent further errors
@@ -977,7 +927,7 @@
         var lastUpdate = localStorage.getItem('cache-settings-updated');
         var lastClearSignal = localStorage.getItem('clear-deployment-cache');
 
-        setInterval(function() {
+        setInterval(function () {
             // Check for settings updates
             var currentUpdate = localStorage.getItem('cache-settings-updated');
             if (currentUpdate && currentUpdate !== lastUpdate) {
@@ -992,11 +942,11 @@
                 deploymentCache.clear();
                 addDebugLog('Deployment cache cleared by admin request', 'warn');
                 // Re-check all certificates
-                setTimeout(function() {
+                setTimeout(function () {
                     if (Array.isArray(allCertificates) && allCertificates.length > 0) {
                         addDebugLog('Re-checking all certificates after cache clear...', 'info');
-                        var existingCerts = allCertificates.filter(function(cert) { return cert.exists; });
-                        existingCerts.forEach(function(cert) { checkDeploymentStatus(cert.domain); });
+                        var existingCerts = allCertificates.filter(function (cert) { return cert.exists; });
+                        existingCerts.forEach(function (cert) { checkDeploymentStatus(cert.domain); });
                     }
                 }, 1000);
                 lastClearSignal = currentClearSignal;
@@ -1010,14 +960,14 @@
     function loadProviderAccounts() {
         var providers = ['cloudflare', 'route53', 'digitalocean', 'azure', 'google', 'powerdns', 'rfc2136'];
 
-        providers.forEach(function(provider) {
+        providers.forEach(function (provider) {
             fetch('/api/settings/dns-providers/' + provider + '/accounts', {
                 headers: API_HEADERS
-            }).then(function(response) {
+            }).then(function (response) {
                 if (response.ok) {
-                    return response.json().then(function(data) {
+                    return response.json().then(function (data) {
                         var accounts = data.accounts || {};
-                        var accountsArray = Object.keys(accounts).map(function(accountId) {
+                        var accountsArray = Object.keys(accounts).map(function (accountId) {
                             var account = accounts[accountId];
                             account.account_id = accountId;
                             return account;
@@ -1025,7 +975,7 @@
                         providerAccounts[provider] = accountsArray;
                     });
                 }
-            }).catch(function() {
+            }).catch(function () {
                 providerAccounts[provider] = [];
             });
         });
@@ -1042,7 +992,7 @@
             accountContainer.style.display = 'block';
             accountSelect.innerHTML = '<option value="">Use default account</option>';
 
-            providerAccounts[selectedProvider].forEach(function(account) {
+            providerAccounts[selectedProvider].forEach(function (account) {
                 var option = document.createElement('option');
                 option.value = account.account_id;
                 option.textContent = account.name || account.account_id;
@@ -1104,7 +1054,7 @@
     }
 
     // Create certificate
-    document.getElementById('createCertForm').addEventListener('submit', function(e) {
+    document.getElementById('createCertForm').addEventListener('submit', function (e) {
         e.preventDefault();
 
         var domain = document.getElementById('domain').value.trim();
@@ -1116,7 +1066,7 @@
 
         // Parse SAN domains from comma-separated input
         var sanDomains = sanDomainsInput
-            ? sanDomainsInput.split(',').map(function(d) { return d.trim(); }).filter(function(d) { return d; })
+            ? sanDomainsInput.split(',').map(function (d) { return d.trim(); }).filter(function (d) { return d; })
             : [];
 
         if (!domain) {
@@ -1166,8 +1116,8 @@
             method: 'POST',
             headers: API_HEADERS,
             body: JSON.stringify(requestBody)
-        }).then(function(response) {
-            return response.json().then(function(result) {
+        }).then(function (response) {
+            return response.json().then(function (result) {
                 if (response.ok && result.success !== false) {
                     showMessage('Certificate created successfully for ' + domainsDisplay + '!');
                     document.getElementById('domain').value = '';
@@ -1187,10 +1137,10 @@
                     showMessage(errorMsg, 'error');
                 }
             });
-        }).catch(function(error) {
+        }).catch(function (error) {
             console.error('Error creating certificate:', error);
             showMessage('Failed to create certificate. Please check your network connection and try again.', 'error');
-        }).then(function() {
+        }).then(function () {
             hideLoadingModal(progressInterval);
         });
     });
@@ -1199,9 +1149,9 @@
     function downloadCertificate(domain) {
         fetch('/api/certificates/' + encodeURIComponent(domain) + '/download', {
             method: 'GET'
-        }).then(function(response) {
+        }).then(function (response) {
             if (response.ok) {
-                return response.blob().then(function(blob) {
+                return response.blob().then(function (blob) {
                     var url = window.URL.createObjectURL(blob);
                     var a = document.createElement('a');
                     a.href = url;
@@ -1213,11 +1163,11 @@
                     showMessage('Certificate downloaded for ' + domain, 'success');
                 });
             } else {
-                return response.json().then(function(errorData) {
+                return response.json().then(function (errorData) {
                     showMessage(errorData.error || 'Failed to download certificate', 'error');
                 });
             }
-        }).catch(function(error) {
+        }).catch(function (error) {
             console.error('Error downloading certificate:', error);
             showMessage('Failed to download certificate', 'error');
         });
@@ -1232,19 +1182,19 @@
         fetch('/api/certificates/' + encodeURIComponent(domain) + '/renew', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' }
-        }).then(function(response) {
+        }).then(function (response) {
             return response.json();
-        }).then(function(result) {
+        }).then(function (result) {
             if (result.success) {
                 showMessage('Certificate renewal started for ' + domain + '!', 'success');
-                setTimeout(function() { loadCertificates(); }, 2000);
+                setTimeout(function () { loadCertificates(); }, 2000);
             } else {
                 showMessage(result.message || 'Failed to renew certificate', 'error');
             }
-        }).catch(function(error) {
+        }).catch(function (error) {
             console.error('Error renewing certificate:', error);
             showMessage('Failed to renew certificate. Please try again.', 'error');
-        }).then(function() {
+        }).then(function () {
             hideLoadingModal(progressInterval);
         });
     }
@@ -1267,9 +1217,9 @@
         var commandText = document.getElementById('curlCommandText').textContent;
 
         if (navigator.clipboard) {
-            navigator.clipboard.writeText(commandText).then(function() {
+            navigator.clipboard.writeText(commandText).then(function () {
                 showMessage('Curl command copied to clipboard!', 'success');
-            }).catch(function(err) {
+            }).catch(function (err) {
                 console.error('Failed to copy: ', err);
                 fallbackCopyTextToClipboard(commandText);
             });
@@ -1304,7 +1254,7 @@
     }
 
     // Initialize on page load
-    document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('DOMContentLoaded', function () {
         loadCertificates();
         loadProviderAccounts();
 
@@ -1313,7 +1263,7 @@
         document.getElementById('statusFilter').addEventListener('change', filterCertificates);
 
         // Close modal on outside click
-        document.getElementById('curlModal').addEventListener('click', function(e) {
+        document.getElementById('curlModal').addEventListener('click', function (e) {
             if (e.target === this) {
                 this.classList.add('hidden');
             }
@@ -1323,10 +1273,10 @@
         try {
             if (typeof BroadcastChannel !== 'undefined') {
                 var channel = new BroadcastChannel('certmate_updates');
-                channel.addEventListener('message', function(event) {
+                channel.addEventListener('message', function (event) {
                     if (event.data && event.data.type === 'certificates_restored') {
                         addDebugLog('Certificates updated from another page - refreshing list...', 'info');
-                        setTimeout(function() {
+                        setTimeout(function () {
                             loadCertificates();
                             showMessage('Certificate list refreshed - certificates have been restored!', 'success');
                         }, 1000);
@@ -1334,10 +1284,10 @@
                 });
             }
 
-            window.addEventListener('storage', function(event) {
+            window.addEventListener('storage', function (event) {
                 if (event.key === 'certificates_updated') {
                     addDebugLog('Certificates updated detected - refreshing list...', 'info');
-                    setTimeout(function() {
+                    setTimeout(function () {
                         loadCertificates();
                         showMessage('Certificate list refreshed - certificates have been updated!', 'success');
                     }, 1000);
