@@ -34,13 +34,13 @@ curl -X GET http://localhost:5000/api/client-certs \
 
 API endpoints have rate limits to prevent abuse:
 
-| Endpoint | Limit | Per |
-|----------|-------|-----|
-| General | 100 | minute |
-| Create Certificate | 30 | minute |
-| Batch Operations | 10 | minute |
-| OCSP Status | 200 | minute |
-| CRL Download | 60 | minute |
+| Endpoint           | Limit | Per    |
+| ------------------ | ----- | ------ |
+| General            | 100   | minute |
+| Create Certificate | 30    | minute |
+| Batch Operations   | 10    | minute |
+| OCSP Status        | 200   | minute |
+| CRL Download       | 60    | minute |
 
 ### Rate Limit Response
 
@@ -489,16 +489,16 @@ curl http://localhost:5000/api/crl/download/info \
 
 ### Common HTTP Status Codes
 
-| Code | Meaning | Example |
-|------|---------|---------|
-| 200 | Success | Certificate listed |
-| 201 | Created | Certificate created |
-| 400 | Bad Request | Missing required field |
-| 401 | Unauthorized | Invalid/missing token |
-| 404 | Not Found | Certificate doesn't exist |
-| 429 | Too Many Requests | Rate limit exceeded |
-| 500 | Server Error | Internal error |
-| 503 | Service Unavailable | OCSP/CRL not available |
+| Code | Meaning             | Example                   |
+| ---- | ------------------- | ------------------------- |
+| 200  | Success             | Certificate listed        |
+| 201  | Created             | Certificate created       |
+| 400  | Bad Request         | Missing required field    |
+| 401  | Unauthorized        | Invalid/missing token     |
+| 404  | Not Found           | Certificate doesn't exist |
+| 429  | Too Many Requests   | Rate limit exceeded       |
+| 500  | Server Error        | Internal error            |
+| 503  | Service Unavailable | OCSP/CRL not available    |
 
 ### Example Error
 
@@ -623,13 +623,6 @@ cert_usage: "custom-application"
 
 ---
 
-## Webhook Integration (Future)
-
-Coming in v1.1:
-- Certificate expiration notifications
-- Revocation alerts
-- Auto-renewal status
-- Rate limit notifications
 
 ---
 
