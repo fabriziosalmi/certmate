@@ -141,7 +141,7 @@ class CAManager:
         if ca_provider != 'private_ca' or not account_config:
             return None
         
-        ca_cert_content = account_config.get('ca_certificate', '')
+        ca_cert_content = account_config.get('ca_cert', '')
         if not ca_cert_content:
             logger.warning("No CA certificate provided for private CA")
             return None
@@ -257,7 +257,7 @@ class CAManager:
             display_info['eab_configured'] = bool(config.get('eab_key_id'))
         elif ca_provider == 'private_ca':
             display_info['acme_url'] = config.get('acme_url', '')
-            display_info['ca_cert_configured'] = bool(config.get('ca_certificate'))
+            display_info['ca_cert_configured'] = bool(config.get('ca_cert'))
         
         return display_info
 
