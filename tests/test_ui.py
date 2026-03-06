@@ -29,6 +29,37 @@ BASE_URL = f"http://localhost:{os.environ.get('CERTMATE_TEST_PORT', '18888')}"
 @pytest.fixture(scope="module")
 def browser_page(docker_container):
     """Provide a Playwright browser page."""
+    import requests
+
+    session_cookie = None
+    try:
+        # Step 1: Create admin user (no auth required in setup mode)
+        requests.post(f"{BASE_URL}/api/web/settings/users", json={
+            "username": "admin", "password": "password123", "role": "admin"
+        })
+
+        # Step 2: Enable local auth (still bypassed — auth not enabled yet)
+        requests.post(f"{BASE_URL}/api/auth/config", json={
+            "local_auth_enabled": True
+        })
+
+        # Step 3: Login to get session cookie (auth is now enabled)
+        login_r = requests.post(f"{BASE_URL}/api/auth/login", json={
+            "username": "admin", "password": "password123"
+        })
+        session_cookie = login_r.cookies.get("certmate_session")
+
+        # Step 4: Mark setup as completed (using session cookie)
+        s = requests.Session()
+        s.cookies.set("certmate_session", session_cookie)
+        r = s.get(f"{BASE_URL}/api/web/settings")
+        if r.status_code == 200:
+            data = r.json()
+            data["setup_completed"] = True
+            s.post(f"{BASE_URL}/api/web/settings", json=data)
+    except Exception as e:
+        print(f"Warning: could not complete setup via API: {e}")
+
     from playwright.sync_api import sync_playwright
     pw = sync_playwright().start()
     try:
@@ -37,6 +68,15 @@ def browser_page(docker_container):
         pw.stop()
         pytest.skip(f"Chromium not available: {e}")
     context = browser.new_context(ignore_https_errors=True)
+
+    # Inject session cookie into Playwright browser context
+    if session_cookie:
+        context.add_cookies([{
+            "name": "certmate_session",
+            "value": session_cookie,
+            "url": BASE_URL
+        }])
+
     page = context.new_page()
     yield page
     context.close()
@@ -77,7 +117,7 @@ class TestDashboardUI:
     def test_welcome_banner_visible(self, browser_page):
         browser_page.goto(BASE_URL)
         browser_page.wait_for_load_state("networkidle")
-        expect(browser_page.locator("text=Welcome to CertMate")).to_be_visible()
+        expect(browser_page.locator("text=Welcome to CertMate").first).to_be_visible()
 
     def test_create_cert_form_exists(self, browser_page):
         browser_page.goto(BASE_URL)
@@ -103,10 +143,36 @@ class TestSettingsUI:
     def test_auth_security_banner_visible(self, browser_page):
         browser_page.goto(f"{BASE_URL}/settings")
         browser_page.wait_for_load_state("networkidle")
-        # Banner is inside the Users tab — switch to it first (Alpine.js renders tabs)
+
+        # Disable local auth via browser fetch (authenticated via session cookie)
+        browser_page.evaluate("""
+            fetch('/api/auth/config', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({local_auth_enabled: false})
+            })
+        """)
+        browser_page.wait_for_timeout(500)
+
+        # Reload to pick up change
+        browser_page.reload()
+        browser_page.wait_for_load_state("networkidle")
+
+        # Banner is inside the Users tab — switch to it first
         browser_page.locator('button[role="tab"]:has-text("Users")').click(timeout=10000)
+        browser_page.wait_for_timeout(500)
+
         banner = browser_page.locator("#authSecurityBanner")
         expect(banner).to_be_visible(timeout=10000)
+
+        # Re-enable auth for subsequent tests
+        browser_page.evaluate("""
+            fetch('/api/auth/config', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({local_auth_enabled: true})
+            })
+        """)
 
     def test_save_settings_button(self, browser_page):
         browser_page.goto(f"{BASE_URL}/settings")
