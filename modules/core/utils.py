@@ -71,7 +71,7 @@ _MULTI_PROVIDER_TEMPLATE_MAP = {
     'dnsmadeeasy': {'dns_dnsmadeeasy_api_key': 'api_key', 'dns_dnsmadeeasy_secret_key': 'secret_key'},
     'nsone': {'dns_nsone_api_key': 'api_key'},
     'rfc2136': {
-        'dns_rfc2136_nameserver': 'nameserver',
+        'dns_rfc2136_server': 'nameserver',
         'dns_rfc2136_name': 'tsig_key',
         'dns_rfc2136_secret': 'tsig_secret',
         'dns_rfc2136_algorithm': ('tsig_algorithm', 'HMAC-SHA512')
