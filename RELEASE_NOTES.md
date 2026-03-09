@@ -1,3 +1,21 @@
+# Release v2.1.2
+
+## Bug Fixes
+
+### Issue #82 — RFC2136 credentials file generated with wrong certbot key
+
+**Root cause:** The RFC2136 credentials writer generated `dns_rfc2136_nameserver`, but certbot expects `dns_rfc2136_server` in `rfc2136.ini`. This caused RFC2136-based DNS-01 validation to fail when certbot loaded the generated credentials file.
+
+**Fix:** Corrected the RFC2136 INI key generation in `modules/core/utils.py` and added a regression test to verify the generated credentials file content and permissions.
+
+**Files changed:** `modules/core/utils.py`, `tests/test_issue82_rfc2136_config.py`
+
+## Test Suite
+
+**Full suite result: 166 passed, 9 skipped, 0 failed**.
+
+---
+
 # Release v2.3.0
 
 ## Bug Fixes
