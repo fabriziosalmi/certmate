@@ -10,42 +10,43 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
     """Register miscellaneous routes"""
 
     @app.route('/api/activity')
+    @auth_manager.require_role('viewer')
     def activity_api():
         """Activity log endpoint"""
         try:
-            # Simple activity stream or recent audit logs
             audit_logger = managers['audit']
-            logs = audit_logger.get_recent_logs(limit=50)
+            logs = audit_logger.get_recent_entries(limit=50)
             return jsonify(logs)
         except Exception as e:
             logger.error(f"Activity API error: {e}")
             return jsonify({'error': 'Failed to fetch activity'}), 500
 
     @app.route('/metrics')
+    @auth_manager.require_role('admin')
     def metrics():
         """Prometheus metrics endpoint"""
         try:
             return generate_metrics_response()
         except Exception as e:
             logger.error(f"Metrics error: {e}")
-            return "Internal Server Error", 500
+            return jsonify({'error': 'Internal Server Error'}), 500
 
     @app.route('/health')
     def health_check():
-        """Health check endpoint"""
+        """Health check endpoint — intentionally public for load balancers"""
         return jsonify({
             'status': 'healthy',
             'version': app.config.get('VERSION', 'unknown')
         })
 
     @app.route('/api/web/logs/stream')
+    @auth_manager.require_role('admin')
     def stream_logs():
-        """Stream application logs"""
+        """Stream application logs — admin only (logs may contain credentials)"""
         def generate():
             log_file = managers['file_ops'].logs_dir / 'certmate.log'
             if log_file.exists():
                 with open(log_file, 'r') as f:
-                    # Seek to end
                     f.seek(0, 2)
                     while True:
                         line = f.readline()
@@ -62,9 +63,9 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
     def get_audit_logs():
         """Get audit logs"""
         try:
-            limit = request.args.get('limit', 100, type=int)
+            limit = min(max(request.args.get('limit', 100, type=int), 1), 1000)
             audit_logger = managers['audit']
-            logs = audit_logger.get_recent_logs(limit=limit)
+            logs = audit_logger.get_recent_entries(limit=limit)
             return jsonify(logs)
         except Exception as e:
             logger.error(f"Audit log fetch failed: {e}")

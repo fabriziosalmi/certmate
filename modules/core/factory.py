@@ -93,10 +93,10 @@ def configure_app(container: AppContainer, app, test_config=None):
     if cors_origins_env:
         cors_origins = [o.strip() for o in cors_origins_env.split(',') if o.strip()]
     else:
-        cors_origins = None
+        cors_origins = []  # empty list = deny all cross-origin requests (safe default)
 
     CORS(app,
-         origins=cors_origins if cors_origins else [],
+         origins=cors_origins,
          methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
          allow_headers=['Authorization', 'Content-Type'],
          supports_credentials=bool(cors_origins),
@@ -418,5 +418,6 @@ def create_app(test_config=None):
     register_web_routes(app, container.managers)
     setup_security_headers(app)
     setup_rate_limiting(app, container)
+    setup_scheduler(container)
 
     return app, container

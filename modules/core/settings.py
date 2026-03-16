@@ -193,9 +193,18 @@ class SettingsManager:
                 logger.info("Settings migrated, saving updated format")
                 self._save_settings_compat(settings, backup_reason="migration")
             
-            # Override settings with environment variables
-            if os.getenv('LETSENCRYPT_EMAIL'):
-                settings['email'] = os.getenv('LETSENCRYPT_EMAIL')
+            # Override settings with environment variables.
+            # LETSENCRYPT_EMAIL takes precedence over the value saved via the UI.
+            # Set it in docker-compose.yml or as -e LETSENCRYPT_EMAIL=... to pin the email.
+            letsencrypt_email = os.getenv('LETSENCRYPT_EMAIL')
+            if letsencrypt_email:
+                if settings.get('email') and settings['email'] != letsencrypt_email:
+                    logger.warning(
+                        "LETSENCRYPT_EMAIL env var (%s) overrides the email saved in settings (%s). "
+                        "Unset LETSENCRYPT_EMAIL to use the UI-configured value.",
+                        letsencrypt_email, settings['email']
+                    )
+                settings['email'] = letsencrypt_email
 
             if os.getenv('CLOUDFLARE_TOKEN'):
                 if 'cloudflare' not in settings['dns_providers']:
@@ -212,9 +221,18 @@ class SettingsManager:
     def save_settings(self, settings, backup_reason="auto_save"):
         """Save settings to file with improved error handling, validation, and automatic backup"""
         try:
-            # Create backup before saving (if settings file exists)
+            # Create backup before saving (if settings file exists).
+            # A failed backup is logged as a warning but does not block the save —
+            # the caller's changes should not be lost just because disk is temporarily full.
             if self.settings_file.exists():
-                self.file_ops.create_unified_backup(settings, backup_reason)
+                try:
+                    result = self.file_ops.create_unified_backup(settings, backup_reason)
+                    if not result:
+                        logger.warning("Pre-save backup failed (disk full or permission error?). "
+                                       "Proceeding with save, but no restore point was created.")
+                except Exception as backup_err:
+                    logger.warning("Pre-save backup raised an exception: %s. "
+                                   "Proceeding with save.", backup_err)
             
             # Validate settings structure
             if not isinstance(settings, dict):
@@ -602,7 +620,7 @@ class SettingsManager:
                             "domain": domain,
                             "dns_provider": dns_provider,
                             "created_at": "unknown",
-                            "version": "2.1.0",
+                            "version": "2.2.0",
                             "migrated": True
                         }
                         

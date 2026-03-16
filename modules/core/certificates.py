@@ -9,6 +9,7 @@ import tempfile
 import time
 import logging
 import shutil
+import threading
 from pathlib import Path
 from datetime import datetime, timedelta
 from .shell import ShellExecutor
@@ -29,6 +30,28 @@ class CertificateManager:
         self.storage_manager = storage_manager
         self.ca_manager = ca_manager
         self.shell_executor = shell_executor or ShellExecutor()
+        # Per-domain locks to prevent concurrent create/renew on the same domain
+        self._domain_locks: dict[str, threading.Lock] = {}
+        self._domain_locks_mutex = threading.Lock()
+
+    @staticmethod
+    def _atomic_json_write(path: Path, data: dict) -> None:
+        """Write JSON atomically via a temp file + rename to avoid partial writes on crash."""
+        import json
+        tmp = path.with_suffix('.tmp')
+        try:
+            tmp.write_text(json.dumps(data, indent=2), encoding='utf-8')
+            tmp.replace(path)
+        except Exception:
+            tmp.unlink(missing_ok=True)
+            raise
+
+    def _get_domain_lock(self, domain: str) -> threading.Lock:
+        """Return the per-domain lock, creating it on first use."""
+        with self._domain_locks_mutex:
+            if domain not in self._domain_locks:
+                self._domain_locks[domain] = threading.Lock()
+            return self._domain_locks[domain]
 
 
 
@@ -188,6 +211,11 @@ class CertificateManager:
             domain_alias: Optional domain alias for DNS validation (e.g., '_acme-challenge.validation.example.org')
             san_domains: Optional list of additional domains for Subject Alternative Names (SAN)
         """
+        # Acquire per-domain lock to prevent concurrent create/renew operations
+        domain_lock = self._get_domain_lock(domain)
+        if not domain_lock.acquire(blocking=False):
+            raise RuntimeError(f"A certificate operation for {domain} is already in progress")
+
         # Track timing for metrics
         start_time = time.time()
         credentials_file = None
@@ -429,9 +457,7 @@ class CertificateManager:
             
             metadata_file = cert_output_dir / 'metadata.json'
             try:
-                import json
-                with open(metadata_file, 'w') as f:
-                    json.dump(metadata, f, indent=2)
+                self._atomic_json_write(metadata_file, metadata)
                 logger.info(f"Saved certificate metadata to {metadata_file}")
             except Exception as e:
                 logger.warning(f"Failed to save metadata for {domain}: {e}")
@@ -456,6 +482,7 @@ class CertificateManager:
             logger.error(f"Certificate creation failed for {domain}: {str(e)} (duration: {duration:.2f}s)")
             raise
         finally:
+            domain_lock.release()
             # Always clean up credential files (even on failure)
             if credentials_file:
                 try:
@@ -472,6 +499,9 @@ class CertificateManager:
 
     def renew_certificate(self, domain):
         """Renew a certificate"""
+        domain_lock = self._get_domain_lock(domain)
+        if not domain_lock.acquire(blocking=False):
+            raise RuntimeError(f"A certificate operation for {domain} is already in progress")
         try:
             # Use the same config/work/log directories as during creation
             cert_dir = self.cert_dir
@@ -509,8 +539,7 @@ class CertificateManager:
                         with open(metadata_file, 'r') as f:
                             metadata = json.load(f)
                         metadata['renewed_at'] = datetime.now().isoformat()
-                        with open(metadata_file, 'w') as f:
-                            json.dump(metadata, f, indent=2)
+                        self._atomic_json_write(metadata_file, metadata)
                         logger.info(f"Updated renewal timestamp in metadata for {domain}")
                     except Exception as e:
                         logger.warning(f"Failed to update metadata for {domain}: {e}")
@@ -529,6 +558,8 @@ class CertificateManager:
             error_msg = str(e)
             logger.error(f"Exception during certificate renewal for {domain}: {error_msg}")
             raise RuntimeError(f"Exception: {error_msg}")
+        finally:
+            domain_lock.release()
 
     def check_renewals(self):
         """Check and renew certificates that are about to expire"""
@@ -616,9 +647,7 @@ class CertificateManager:
             }
             
             try:
-                import json
-                with open(metadata_file, 'w') as f:
-                    json.dump(metadata, f, indent=2)
+                self._atomic_json_write(metadata_file, metadata)
                 logger.info(f"Created metadata for {domain} with inferred DNS provider: {dns_provider}")
                 created_count += 1
             except Exception as e:

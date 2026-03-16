@@ -269,15 +269,25 @@ class AzureKeyVaultBackend(CertificateStorageBackend):
         try:
             client = self._get_client()
             domains = set()
-            
+
             for secret_properties in client.list_properties_of_secrets():
-                if secret_properties.name.startswith('cert-') and secret_properties.name.endswith('-cert-pem'):
-                    # Extract domain from secret name
-                    domain = secret_properties.name.replace('cert-', '').replace('-cert-pem', '').replace('-', '.')
-                    domains.add(domain)
-            
+                if not (secret_properties.name.startswith('cert-') and secret_properties.name.endswith('-metadata')):
+                    continue
+                # Read the metadata secret to get the authoritative domain name.
+                # Simple name-reversal (replacing '-' with '.') is lossy for domains
+                # that contain hyphens (e.g. my-app.example.com), so we always read
+                # the stored metadata JSON which contains the original domain string.
+                try:
+                    secret = client.get_secret(secret_properties.name)
+                    meta = json.loads(secret.value)
+                    domain = meta.get('domain')
+                    if domain:
+                        domains.add(domain)
+                except Exception as inner_e:
+                    logger.warning(f"Could not read metadata secret {secret_properties.name}: {inner_e}")
+
             return sorted(list(domains))
-            
+
         except Exception as e:
             logger.error(f"Failed to list certificates from Azure Key Vault: {e}")
             return []
@@ -656,24 +666,42 @@ class InfisicalBackend(CertificateStorageBackend):
             _validate_storage_domain(domain)
             client = self._get_client()
 
-            # Store certificate files as individual secrets
+            # Store certificate files as individual secrets (upsert: update if exists, create otherwise)
             for filename, content in cert_files.items():
                 secret_key = f"certmate-{domain}-{filename.replace('.', '-')}"
-                client.create_secret(
-                    secret_name=secret_key,
-                    secret_value=content.decode('utf-8'),
+                secret_value = content.decode('utf-8')
+                try:
+                    client.update_secret(
+                        secret_name=secret_key,
+                        secret_value=secret_value,
+                        project_id=self.project_id,
+                        environment=self.environment
+                    )
+                except Exception:
+                    client.create_secret(
+                        secret_name=secret_key,
+                        secret_value=secret_value,
+                        project_id=self.project_id,
+                        environment=self.environment
+                    )
+
+            # Store metadata (upsert)
+            metadata_key = f"certmate-{domain}-metadata"
+            metadata_value = json.dumps(metadata)
+            try:
+                client.update_secret(
+                    secret_name=metadata_key,
+                    secret_value=metadata_value,
                     project_id=self.project_id,
                     environment=self.environment
                 )
-            
-            # Store metadata
-            metadata_key = f"certmate-{domain}-metadata"
-            client.create_secret(
-                secret_name=metadata_key,
-                secret_value=json.dumps(metadata),
-                project_id=self.project_id,
-                environment=self.environment
-            )
+            except Exception:
+                client.create_secret(
+                    secret_name=metadata_key,
+                    secret_value=metadata_value,
+                    project_id=self.project_id,
+                    environment=self.environment
+                )
             
             logger.info(f"Certificate stored successfully in Infisical for {domain}")
             return True
@@ -737,10 +765,22 @@ class InfisicalBackend(CertificateStorageBackend):
             )
             
             for secret in secrets:
-                if secret.secret_name.startswith('certmate-') and secret.secret_name.endswith('-cert-pem'):
-                    # Extract domain from secret name
-                    domain = secret.secret_name.replace('certmate-', '').replace('-cert-pem', '').replace('-', '.')
-                    domains.add(domain)
+                if not (secret.secret_name.startswith('certmate-') and secret.secret_name.endswith('-metadata')):
+                    continue
+                # Read each metadata secret to get the authoritative domain name instead
+                # of reversing the sanitized key (which is lossy for hyphenated domains).
+                try:
+                    meta_secret = client.get_secret(
+                        secret_name=secret.secret_name,
+                        project_id=self.project_id,
+                        environment=self.environment
+                    )
+                    meta = json.loads(meta_secret.secret_value)
+                    domain = meta.get('domain')
+                    if domain:
+                        domains.add(domain)
+                except Exception as inner_e:
+                    logger.warning(f"Could not read metadata secret {secret.secret_name}: {inner_e}")
             
             return sorted(list(domains))
             
@@ -851,8 +891,12 @@ class StorageManager:
             logger.info(f"Storage backend initialized: {self._backend.get_backend_name()}")
             
         except Exception as e:
-            logger.error(f"Failed to initialize storage backend: {e}")
-            # Fallback to local filesystem
+            logger.error(
+                "Failed to initialize storage backend '%s': %s. "
+                "FALLING BACK to local filesystem — cloud/remote storage is NOT active. "
+                "Fix the configuration and restart to activate the intended backend.",
+                backend_type, e
+            )
             self._backend = LocalFileSystemBackend(Path('certificates'))
             self._initialized = True
     

@@ -54,16 +54,21 @@ RUN chmod 700 /app/certificates /app/data /app/logs
 ENV FLASK_APP=app.py
 ENV FLASK_ENV=production
 ENV PYTHONPATH=/app
+# Configurable listen port (issue #80). Override with -e PORT=9000 or in .env.
+ENV PORT=8000
+# Gunicorn worker timeout in seconds. ACME DNS-01 challenges can take up to
+# 5 minutes on slow providers (Namecheap, Infomaniak). Default: 300s.
+ENV GUNICORN_TIMEOUT=300
 
 # Switch to non-root user
 USER certmate
 
-# Expose port
+# Expose port (documents the default; actual port is controlled by $PORT)
 EXPOSE 8000
 
-# Health check
+# Health check uses $PORT so it works when the port is overridden
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+    CMD curl -f http://localhost:${PORT}/health || exit 1
 
 # Use tini as init process for proper signal handling and zombie reaping
 ENTRYPOINT ["tini", "--"]
@@ -71,4 +76,5 @@ ENTRYPOINT ["tini", "--"]
 # Run the application
 # Single worker + threads: avoids duplicate APScheduler jobs and session
 # sharing issues. CertMate is I/O-bound, not CPU-bound.
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "1", "--threads", "4", "--timeout", "120", "--access-logfile", "-", "--error-logfile", "-", "--log-level", "info", "app:app"]
+# $PORT defaults to 8000 and can be overridden via environment variable.
+CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${PORT} --workers 1 --threads 4 --timeout ${GUNICORN_TIMEOUT} --access-logfile - --error-logfile - --log-level info app:app"]

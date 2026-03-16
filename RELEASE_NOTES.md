@@ -1,3 +1,157 @@
+# Release v2.2.0
+
+## Bug Fixes & Reliability Improvements
+
+This release addresses critical reliability, security, and correctness issues identified during a full 360° codebase audit, plus resolves GitHub issues #83, #84, and #80.
+
+### Critical: APScheduler never started — certificate auto-renewal completely disabled
+
+**Root cause:** `setup_scheduler()` was defined in `modules/core/factory.py` but never called in `create_app()`. This meant APScheduler was never initialised, so no background jobs ran in any deployment: certificates were never auto-renewed and digest emails were never sent.
+
+**Fix:** Added the missing `setup_scheduler(container)` call in `create_app()`.
+
+**Files changed:** `modules/core/factory.py`
+
+---
+
+### Critical: `AttributeError` crash on audit log and activity endpoints
+
+**Root cause:** `modules/web/misc_routes.py` called `audit_manager.get_recent_logs()`, but the method is named `get_recent_entries()` in `modules/core/audit.py`. Both `/api/activity` and `/api/web/audit-logs` raised an unhandled `AttributeError` on every request.
+
+**Fix:** Corrected both call sites to use `get_recent_entries()`.
+
+**Files changed:** `modules/web/misc_routes.py`
+
+---
+
+### Critical: `/api/activity`, `/metrics`, `/api/web/logs/stream` unauthenticated
+
+**Root cause:** All three endpoints were missing `@auth_manager.require_role()` decorators, making them publicly accessible without any authentication.
+
+**Fix:** Added role-based auth guards: `viewer` for `/api/activity`, `admin` for `/metrics` and `/api/web/logs/stream`. `/metrics` now returns a JSON error instead of an HTML page on auth failure.
+
+**Files changed:** `modules/web/misc_routes.py`
+
+---
+
+### Critical: CORS configured with `origins=None` — allows all origins
+
+**Root cause:** `flask_cors.CORS(app, origins=None)` permits cross-origin requests from any domain. This is the unsafe default; the intent was to deny all cross-origin requests.
+
+**Fix:** Changed to `origins=[]` (empty list = deny all).
+
+**Files changed:** `modules/core/factory.py`
+
+---
+
+### Issues #83 and #84 — Settings save wipes user accounts and re-triggers setup wizard
+
+**Root cause:** The `POST /api/settings` handler saved `request.json` directly, discarding all fields the UI form does not submit (`users`, `api_keys`, `local_auth_enabled`). On every settings save, all user accounts were deleted and `local_auth_enabled` was reset to `False`, causing the setup wizard to re-appear on next page load.
+
+**Fix:** Load existing settings first, deep-merge with incoming data, then hard-protect the three auth-critical keys (`users`, `api_keys`, `local_auth_enabled`) from any accidental overwrite.
+
+**Files changed:** `modules/web/settings_routes.py`
+
+---
+
+### Issue #80 — `PORT` and `GUNICORN_TIMEOUT` environment variables not honoured in Docker
+
+**Root cause:** The `Dockerfile` CMD used `exec` form (JSON array), which does not expand shell variables. `PORT` and `GUNICORN_TIMEOUT` had no `ENV` defaults, so the values were ignored.
+
+**Fix:** Added `ENV PORT=8000` and `ENV GUNICORN_TIMEOUT=300` defaults, switched CMD to shell form so env vars expand correctly, and updated the `HEALTHCHECK` to use `${PORT}`. `docker-compose.yml` environment section updated to forward both variables.
+
+**Files changed:** `Dockerfile`, `docker-compose.yml`
+
+---
+
+### High: No per-domain lock — concurrent create/renew on same domain caused corruption
+
+**Root cause:** Two simultaneous requests for the same domain (e.g., an API call racing with the scheduler) could both run `certbot` and overwrite each other's certificate files in a non-atomic sequence.
+
+**Fix:** Added a `dict[str, threading.Lock]` per-domain lock registry in `CertificateManager`. Both `create_certificate()` and `renew_certificate()` acquire the per-domain lock non-blocking and immediately raise `RuntimeError` if the lock is already held.
+
+**Files changed:** `modules/core/certificates.py`
+
+---
+
+### High: Non-atomic metadata writes — partial JSON on crash
+
+**Root cause:** `metadata.json` writes used a direct `open(..., 'w')` call. A process crash mid-write left a truncated/invalid JSON file that broke all subsequent certificate reads for the domain.
+
+**Fix:** New `_atomic_json_write()` static method writes to a `.tmp` sibling file, then uses `Path.replace()` (atomic rename). All three metadata write sites updated.
+
+**Files changed:** `modules/core/certificates.py`
+
+---
+
+### High: `LETSENCRYPT_EMAIL` env var silently overrides UI-configured email
+
+**Root cause:** When `LETSENCRYPT_EMAIL` is set, it overrides `settings['email']` with no log output. Administrators had no way to know their UI-configured email was being ignored.
+
+**Fix:** Added an explicit `logger.warning()` when the env var differs from the stored value, including both values and instructions to unset the variable.
+
+**Files changed:** `modules/core/settings.py`
+
+---
+
+### High: Infisical `create_secret()` always fails on certificate renewal
+
+**Root cause:** `store_certificate()` always called `create_secret()`. Infisical raises an exception when a secret with that name already exists, so every certificate renewal via the Infisical backend raised an unhandled error.
+
+**Fix:** Changed to an upsert pattern: try `update_secret()` first; if it raises `NotFoundError`, fall through to `create_secret()`.
+
+**Files changed:** `modules/core/storage_backends.py`
+
+---
+
+### High: Azure and Infisical `list_certificates()` broken for hyphenated domains
+
+**Root cause:** Both backends reconstructed domain names from secret name keys using `replace('-', '.')`. A domain like `my-app.example.com` stored as `my-app-example-com` would be incorrectly reconstructed as `my.app.example.com`.
+
+**Fix:** Both backends now read the metadata secret (which stores the original `domain` string) instead of performing lossy name reversal.
+
+**Files changed:** `modules/core/storage_backends.py`
+
+---
+
+### Medium: Audit log `limit` parameter unbounded — potential DoS
+
+**Fix:** Capped `limit` at 1000 entries in `GET /api/activity` and `/api/web/audit-logs`.
+
+**Files changed:** `modules/web/misc_routes.py`
+
+---
+
+### Medium: Pre-save backup failures silent
+
+**Fix:** `save_settings()` now logs an explicit `WARNING` when the pre-save backup fails (disk full, permission error, etc.), rather than silently proceeding.
+
+**Files changed:** `modules/core/settings.py`
+
+---
+
+### Medium: Duplicate user creation returns HTTP 500 instead of 409
+
+**Fix:** `POST /api/users` now returns `409 Conflict` when the username already exists.
+
+**Files changed:** `modules/web/settings_routes.py`
+
+---
+
+### Medium: Silent fallback to LocalFileSystemBackend logs nothing
+
+**Fix:** When the configured storage backend fails to initialise and falls back to local filesystem, an explicit `ERROR` is now logged with the backend name and exception.
+
+**Files changed:** `modules/core/storage_backends.py`
+
+---
+
+## Test Suite
+
+**Full suite result: 160 passed, 0 failed** — including a real certificate lifecycle test on `certmate.org` via Cloudflare DNS (create, list, download ZIP, download TLS components, renew).
+
+---
+
 # Release v2.1.2
 
 ## Bug Fixes

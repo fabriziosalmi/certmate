@@ -19,7 +19,21 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
 
         try:
             data = request.json
-            if settings_manager.save_settings(data):
+            # Merge incoming data with existing settings to preserve fields that
+            # the frontend never submits (users, api_keys, local_auth_enabled).
+            # Without this merge, saving settings from the UI would wipe all
+            # user accounts and reset local_auth_enabled to False, causing the
+            # setup wizard to re-appear on every settings save (issues #83, #84).
+            existing = settings_manager.load_settings()
+            merged = {**existing, **data}
+            # Hard-protect auth-critical fields — the settings form has no inputs
+            # for these, so any value in `data` would be accidental/incomplete.
+            for key in ('users', 'api_keys', 'local_auth_enabled'):
+                if key in existing:
+                    merged[key] = existing[key]
+                elif key in merged:
+                    del merged[key]
+            if settings_manager.save_settings(merged):
                 return jsonify({'message': 'Settings updated'})
             return jsonify({'error': 'Update failed'}), 500
         except Exception as e:
@@ -42,9 +56,12 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
         if not username or not password:
             return jsonify({'error': 'Username and password required'}), 400
 
-        if auth_manager.create_user(username, password, role):
-            return jsonify({'message': 'User created'})
-        return jsonify({'error': 'User creation failed'}), 500
+        success, msg = auth_manager.create_user(username, password, role)
+        if success:
+            return jsonify({'message': 'User created'}), 201
+        if 'already exists' in msg.lower():
+            return jsonify({'error': msg}), 409
+        return jsonify({'error': msg}), 500
 
     @app.route('/api/users/<string:username>', methods=['DELETE', 'PUT'])
     @app.route('/api/web/settings/users/<string:username>',

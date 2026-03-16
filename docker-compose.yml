@@ -16,6 +16,9 @@ services:
       - SECRET_KEY=${SECRET_KEY:-}  # Auto-generated if empty; set a strong value for production
       - CLOUDFLARE_TOKEN=${CLOUDFLARE_TOKEN}
       - API_BEARER_TOKEN=${API_BEARER_TOKEN}
+      - PORT=${PORT:-8000}                      # Internal listen port; also update ports: mapping if changed
+      - GUNICORN_TIMEOUT=${GUNICORN_TIMEOUT:-300}  # Worker timeout; increase for slow DNS providers
+      - LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL:-}    # Overrides the email set via the web UI when set
     volumes:
       - ./certificates:/app/certificates:rw
       - ./logs:/app/logs:rw
@@ -37,7 +40,7 @@ services:
         reservations:
           memory: 128M
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "sh", "-c", "curl -f http://localhost:${PORT:-8000}/health"]
       interval: 30s
       timeout: 10s
       retries: 3
