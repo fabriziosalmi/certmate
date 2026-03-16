@@ -34,9 +34,44 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
     @app.route('/health')
     def health_check():
         """Health check endpoint — intentionally public for load balancers"""
+        import shutil
+        checks = {}
+        overall = 'healthy'
+
+        # Scheduler
+        scheduler = managers.get('scheduler')
+        checks['scheduler'] = 'running' if (scheduler and scheduler.running) else 'not_running'
+        if checks['scheduler'] != 'running':
+            overall = 'degraded'
+
+        # Cert directory
+        file_ops = managers.get('file_ops')
+        if file_ops:
+            cert_dir_ok = file_ops.cert_dir.exists()
+            checks['cert_dir'] = 'ok' if cert_dir_ok else 'missing'
+            if not cert_dir_ok:
+                overall = 'degraded'
+
+            # Disk space (warn if less than 100 MB free)
+            try:
+                usage = shutil.disk_usage(str(file_ops.cert_dir.parent))
+                free_mb = usage.free // (1024 * 1024)
+                checks['disk_free_mb'] = free_mb
+                if free_mb < 100:
+                    checks['disk_space'] = 'low'
+                    overall = 'degraded'
+                else:
+                    checks['disk_space'] = 'ok'
+            except Exception:
+                checks['disk_space'] = 'unknown'
+
+        # Always return 200 — Flask is serving requests.
+        # Load balancers and the conftest health-wait both check for 200.
+        # The 'status' field ('healthy'/'degraded') is for monitoring systems.
         return jsonify({
-            'status': 'healthy',
-            'version': app.config.get('VERSION', 'unknown')
+            'status': overall,
+            'version': app.config.get('VERSION', 'unknown'),
+            'checks': checks
         })
 
     @app.route('/api/web/logs/stream')

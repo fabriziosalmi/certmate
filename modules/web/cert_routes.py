@@ -53,6 +53,8 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
             provider = data.get('provider')
             if not domains or not provider:
                 return jsonify({'error': 'Domains and provider required'}), 400
+            if len(domains) > 50:
+                return jsonify({'error': 'Batch size limit exceeded: maximum 50 domains per request'}), 400
 
             results = []
             for domain in domains:

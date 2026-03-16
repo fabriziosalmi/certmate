@@ -35,6 +35,17 @@ class CertificateManager:
         self._domain_locks_mutex = threading.Lock()
 
     @staticmethod
+    def _atomic_binary_copy(src: Path, dest: Path) -> None:
+        """Copy a binary file atomically via a temp sibling + rename."""
+        tmp = dest.with_suffix('.tmp')
+        try:
+            tmp.write_bytes(src.read_bytes())
+            tmp.replace(dest)
+        except Exception:
+            tmp.unlink(missing_ok=True)
+            raise
+
+    @staticmethod
     def _atomic_json_write(path: Path, data: dict) -> None:
         """Write JSON atomically via a temp file + rename to avoid partial writes on crash."""
         import json
@@ -153,7 +164,8 @@ class CertificateManager:
                         # Parse the date
                         try:
                             expiry_date = datetime.strptime(not_after, '%b %d %H:%M:%S %Y %Z')
-                            days_left = (expiry_date - datetime.now()).days
+                            now_utc = datetime.utcnow()
+                            days_left = (expiry_date - now_utc).days
                             
                             return {
                                 'domain': domain,
@@ -221,6 +233,11 @@ class CertificateManager:
         credentials_file = None
 
         try:
+            # Return conflict if cert already exists (use renew to refresh it)
+            existing_cert = self.cert_dir / domain / 'cert.pem'
+            if existing_cert.exists():
+                raise FileExistsError(f"Certificate for {domain} already exists. Use renew to refresh it.")
+
             logger.info(f"Starting certificate creation for domain: {domain}")
             
             # ... (Validation and CA setup remains the same until DNS config)
@@ -506,6 +523,8 @@ class CertificateManager:
             # Use the same config/work/log directories as during creation
             cert_dir = self.cert_dir
             domain_dir = cert_dir / domain
+            if not domain_dir.exists() or not (domain_dir / 'cert.pem').exists():
+                raise FileNotFoundError(f"No certificate found for domain: {domain}")
             work_dir = domain_dir / 'work'
             logs_dir = domain_dir / 'logs'
             
@@ -528,8 +547,7 @@ class CertificateManager:
                     src_file = src_dir / file_name
                     dest_file = dest_dir / file_name
                     if src_file.exists():
-                        with open(src_file, 'rb') as src, open(dest_file, 'wb') as dest:
-                            dest.write(src.read())
+                        self._atomic_binary_copy(src_file, dest_file)
                 
                 # Update metadata with renewal timestamp
                 metadata_file = dest_dir / 'metadata.json'
@@ -656,6 +674,20 @@ class CertificateManager:
         logger.info(f"Created metadata files for {created_count} certificates")
         return created_count
     
+    def delete_certificate(self, domain: str) -> bool:
+        """Delete a certificate directory, blocking if a create/renew is in progress."""
+        # Block delete if a create/renew operation is in progress for this domain
+        domain_lock = self._get_domain_lock(domain)
+        if domain_lock.locked():
+            raise RuntimeError(f"Cannot delete certificate for {domain}: an operation is currently in progress")
+        import shutil
+        domain_dir = self.cert_dir / domain
+        if domain_dir.exists():
+            shutil.rmtree(domain_dir)
+            logger.info(f"Certificate deleted for {domain}")
+            return True
+        return False
+
     def _infer_dns_provider(self, domain, settings):
         """Infer DNS provider based on domain patterns and settings"""
         # Check domain-specific patterns

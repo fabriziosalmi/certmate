@@ -32,7 +32,9 @@ class AuthManager:
         self.settings_manager = settings_manager
         self._sessions = {}  # In-memory session store: {session_id: {user, expires, created}}
         self._session_lock = threading.Lock()  # Thread-safe session access
-        self._session_timeout = 8 * 60 * 60  # 8 hours in seconds
+        import os
+        _timeout_hours = int(os.getenv('SESSION_TIMEOUT_HOURS', '8'))
+        self._session_timeout = max(1, _timeout_hours) * 60 * 60
         if not BCRYPT_AVAILABLE:
             logger.warning("bcrypt not available, falling back to SHA-256 (less secure)")
 
@@ -319,7 +321,8 @@ class AuthManager:
                 return False, "User not found"
             
             # Prevent deleting the last admin
-            admin_count = sum(1 for u in users.values() if u.get('role') == 'admin' and u.get('enabled', True))
+            # Count ALL admins (enabled or not) to prevent locking out by disabling the last one
+            admin_count = sum(1 for u in users.values() if u.get('role') == 'admin')
             if users[username].get('role') == 'admin' and admin_count <= 1:
                 return False, "Cannot delete the last admin user"
             

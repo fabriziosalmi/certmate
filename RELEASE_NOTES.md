@@ -1,4 +1,120 @@
-# Release v2.2.0
+# Release v2.2.2
+
+## Comprehensive Security and Reliability Hardening
+
+Full remediation of all Critical, High, and Medium findings from the 360-degree codebase audit. Zero regressions: 166 tests passed, 9 skipped.
+
+### Critical: TOCTOU race in settings read-modify-write
+
+Concurrent `POST /api/settings` requests could silently overwrite each other's changes. Added a `threading.Lock` to `SettingsManager` and a new `atomic_update()` method that performs the load → merge → protect → save cycle atomically under the lock. The settings route now calls `atomic_update()` instead of the separate load+save pattern.
+
+### Critical: Non-atomic certificate file writes during renewal
+
+`renew_certificate()` copied cert files using direct `open()` writes. A process kill mid-copy left partially written `cert.pem`/`privkey.pem` files that could not be parsed. Added `_atomic_binary_copy()` (write to `.tmp` sibling, then atomic rename) and replaced all copy sites.
+
+### High: Create certificate not idempotent
+
+`create_certificate()` silently overwrote an existing certificate on a duplicate request. It now raises `FileExistsError` with a clear message directing the caller to use the renew endpoint.
+
+### High: Renew certificate had no existence check
+
+`renew_certificate()` called certbot without verifying the certificate directory or `cert.pem` existed, producing confusing certbot errors instead of a 404-style response. An explicit existence check now raises `FileNotFoundError` before any external process is spawned.
+
+### High: Delete during active renewal not blocked
+
+Added a check in `delete_certificate()` that reads the per-domain lock state; if a create/renew is in progress for the domain, the delete raises `RuntimeError` immediately.
+
+### High: Deploy hook command validation
+
+Added a 1024-character length cap and a blocklist regex that rejects commands referencing CertMate's own credential/settings files (`settings.json`, `api_bearer_token`, `vault_token`, etc.). Every hook execution is now logged at INFO level.
+
+### High: UTC datetime in certificate expiry calculation
+
+`_parse_certificate_info()` compared `notAfter` (UTC from openssl) against `datetime.now()` (local clock). On servers in non-UTC timezones this produced incorrect `days_left`. Changed to `datetime.utcnow()`.
+
+### High: HashiCorp Vault token not renewed
+
+The Vault client was initialized once at startup and never renewed. After token TTL expiry all operations failed silently. `_get_client()` now calls `auth.token.renew_self()` every 6 hours and re-authenticates if the renewal fails.
+
+### High: Retry on transient cloud backend errors
+
+Added `_with_retry()` decorator (3 attempts, exponential back-off) applied to `store_certificate`, `retrieve_certificate`, and `list_certificates` on all three cloud backends (Azure, AWS, Vault). Non-transient errors are re-raised immediately; transient ones (timeout, rate-limit, 429, 503, connection reset) are retried.
+
+### High: Credential validation ignored leading/trailing whitespace
+
+All four cloud backends (`AzureKeyVaultBackend`, `AWSSecretsManagerBackend`, `HashiCorpVaultBackend`, `InfisicalBackend`) now strip whitespace from credential fields before the emptiness check, so a value like `"  "` is correctly rejected at initialization time rather than failing silently at first use.
+
+### Medium: Settings GET exposed secrets in plain text
+
+`GET /api/settings` returned raw values for DNS tokens, client secrets, passwords, and API keys. The response is now deep-copied and all string values whose key matches `(token|secret|password|key|credential)` are replaced with `'********'` before the JSON is sent to the client.
+
+### Medium: Session timeout hardcoded at 8 hours
+
+`AuthManager` session lifetime is now configurable via the `SESSION_TIMEOUT_HOURS` environment variable (default: 8). Set a shorter value (e.g. `SESSION_TIMEOUT_HOURS=1`) for high-security deployments.
+
+### Medium: Last-admin protection ignored disabled accounts
+
+The "cannot delete the last admin" guard counted only `enabled=True` admins. Disabling the last admin left no active admins without triggering the guard. The count now includes all admins regardless of enabled state.
+
+### Medium: Relative cert/data paths could break on CWD change
+
+`cert_dir` and `data_dir` were constructed as `Path("certificates")` and `Path("data")` (relative to CWD). They are now resolved to absolute paths anchored to the project root at startup, so they remain valid if the process CWD changes.
+
+### Medium: Orphan `.tmp` files from previous crashes not cleaned
+
+On startup, `setup_directories()` now scans `cert_dir` and `data_dir` recursively and removes any `*.tmp` files left by a previous hard kill.
+
+### Medium: Corrupt `settings.json` fell back to factory defaults
+
+On JSON parse failure, `load_settings()` now attempts to restore from the five most recent unified backup archives before falling back to factory defaults. The attempted and successful restores are logged.
+
+### Medium: Azure secret name collisions for hyphenated domains
+
+`_sanitize_secret_name()` converted all non-alphanumeric characters to hyphens. Two different domains could produce the same key (e.g. `my-app.example.com` and `my.app-example.com` both became `my-app-example-com`). A CRC32 suffix of the original name is now appended, guaranteeing uniqueness.
+
+### Medium: UTF-8 decode errors on binary certificate data
+
+All `.decode('utf-8')` calls in `storage_backends.py` now use `errors='replace'` to prevent `UnicodeDecodeError` on non-UTF-8 binary content.
+
+### Medium: LocalFS `metadata.json` lacked restrictive permissions
+
+`LocalFileSystemBackend.store_certificate()` now calls `os.chmod(metadata_file, 0o600)` after writing, consistent with the private key and certificate file permissions.
+
+### Medium: SQLite APScheduler without WAL mode
+
+The APScheduler SQLite job store now runs in WAL (Write-Ahead Logging) mode with `synchronous=NORMAL`. This eliminates writer-blocks-readers contention under concurrent renewal load.
+
+### Medium: Batch endpoint accepted unlimited domain lists
+
+`POST /api/web/certificates/batch` with a 100,000-element domain list was accepted without limit. The batch size is now capped at 50 domains per request.
+
+### Medium: Health endpoint was minimal
+
+`GET /health` now reports scheduler state, cert directory presence, and available disk space (warns below 100 MB free) in a structured `checks` object. The HTTP status is always 200 (Flask is serving), and `status` is `"healthy"` or `"degraded"` for monitoring systems.
+
+### Medium: Nginx container lacked a health check
+
+The optional `nginx` Docker Compose profile now includes a `healthcheck` directive that verifies the proxy is serving responses.
+
+### Low: Username/password length not bounded
+
+`POST /api/users` now rejects usernames over 64 characters and passwords over 256 characters.
+
+### Low: Mixed-type domain list caused migration panic
+
+The domain format migration guard used `isinstance(domains[0], str)` which panicked on mixed-type lists. Changed to `all(isinstance(d, str) for d in domains)`.
+
+### Low: Module-level import cleanup in storage backends
+
+`shutil` and `re` are now imported at module level in `storage_backends.py` rather than inside individual methods.
+
+## Test Suite
+
+**166 passed, 9 skipped, 0 failed** — including a real certificate lifecycle on `certmate.org` via Cloudflare DNS.
+
+---
+
+# Release v2.2.1
 
 ## Bug Fixes & Reliability Improvements
 

@@ -13,27 +13,28 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
         if request.method == 'GET':
             try:
                 settings = settings_manager.load_settings()
-                return jsonify(settings)
+                import copy, re
+                masked = copy.deepcopy(settings)
+                _SECRET_KEYS = re.compile(
+                    r'(token|secret|password|key|credential)',
+                    re.IGNORECASE
+                )
+                def _mask_dict(d):
+                    if not isinstance(d, dict):
+                        return
+                    for k in list(d.keys()):
+                        if _SECRET_KEYS.search(k) and isinstance(d[k], str) and d[k]:
+                            d[k] = '********'
+                        elif isinstance(d[k], dict):
+                            _mask_dict(d[k])
+                _mask_dict(masked)
+                return jsonify(masked)
             except Exception as e:
                 return jsonify({'error': f"Failed to load settings: {e}"}), 500
 
         try:
             data = request.json
-            # Merge incoming data with existing settings to preserve fields that
-            # the frontend never submits (users, api_keys, local_auth_enabled).
-            # Without this merge, saving settings from the UI would wipe all
-            # user accounts and reset local_auth_enabled to False, causing the
-            # setup wizard to re-appear on every settings save (issues #83, #84).
-            existing = settings_manager.load_settings()
-            merged = {**existing, **data}
-            # Hard-protect auth-critical fields — the settings form has no inputs
-            # for these, so any value in `data` would be accidental/incomplete.
-            for key in ('users', 'api_keys', 'local_auth_enabled'):
-                if key in existing:
-                    merged[key] = existing[key]
-                elif key in merged:
-                    del merged[key]
-            if settings_manager.save_settings(merged):
+            if settings_manager.atomic_update(data):
                 return jsonify({'message': 'Settings updated'})
             return jsonify({'error': 'Update failed'}), 500
         except Exception as e:
@@ -55,6 +56,8 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
 
         if not username or not password:
             return jsonify({'error': 'Username and password required'}), 400
+        if len(username) > 64 or len(password) > 256:
+            return jsonify({'error': 'Username must be ≤ 64 chars, password ≤ 256 chars'}), 400
 
         success, msg = auth_manager.create_user(username, password, role)
         if success:

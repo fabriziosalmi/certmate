@@ -20,6 +20,25 @@ class SettingsManager:
     def __init__(self, file_ops: FileOperations, settings_file: Path):
         self.file_ops = file_ops
         self.settings_file = settings_file
+        import threading
+        self._lock = threading.Lock()
+
+    def atomic_update(self, incoming: dict, protected_keys=('users', 'api_keys', 'local_auth_enabled')) -> bool:
+        """Thread-safe read-merge-write for settings.
+
+        Loads the current on-disk settings, merges *incoming* on top, restores
+        any *protected_keys* from the on-disk copy, then saves — all under a
+        module-level lock so concurrent requests cannot race.
+        """
+        with self._lock:
+            existing = self.load_settings()
+            merged = {**existing, **incoming}
+            for key in protected_keys:
+                if key in existing:
+                    merged[key] = existing[key]
+                elif key in merged:
+                    del merged[key]
+            return self.save_settings(merged)
 
     def _generate_secure_token_compat(self):
         """Generate secure token with compatibility layer for tests"""
@@ -61,6 +80,30 @@ class SettingsManager:
         except ImportError:
             pass
         return self.settings_file.exists()
+
+    def _try_restore_from_backup(self):
+        """Attempt to restore settings from the most recent unified backup."""
+        try:
+            import zipfile, json
+            backup_dir = self.file_ops.backup_dir / "unified"
+            if not backup_dir.exists():
+                return None
+            backups = sorted(backup_dir.glob("backup_*.zip"), key=lambda p: p.stat().st_mtime, reverse=True)
+            for backup_path in backups[:5]:  # try the 5 most recent
+                try:
+                    with zipfile.ZipFile(backup_path, 'r') as zf:
+                        if "settings.json" not in zf.namelist():
+                            continue
+                        raw = json.loads(zf.read("settings.json").decode('utf-8'))
+                        settings = raw.get('settings') if isinstance(raw, dict) and 'settings' in raw else raw
+                        if isinstance(settings, dict) and settings:
+                            logger.info(f"Restored settings from backup: {backup_path.name}")
+                            return settings
+                except Exception as e:
+                    logger.debug(f"Could not read backup {backup_path.name}: {e}")
+        except Exception as e:
+            logger.error(f"Backup restore failed: {e}")
+        return None
 
     def _save_settings_compat(self, settings, backup_reason="auto"):
         """Save settings with compatibility layer for tests"""
@@ -153,9 +196,13 @@ class SettingsManager:
         try:
             settings = self._safe_file_read_compat(self.settings_file, is_json=True)
             if settings is None:
-                logger.warning("Settings file exists but is empty or corrupted, recreating with defaults")
-                self._save_settings_compat(first_time_template)
-                return first_time_template
+                logger.warning("Settings file exists but is empty or corrupted, attempting backup restore")
+                settings = self._try_restore_from_backup()
+                if settings is None:
+                    logger.warning("No usable backup found, recreating settings with defaults")
+                    self._save_settings_compat(first_time_template)
+                    return first_time_template
+                logger.info("Settings restored successfully from backup")
             
             # Apply migrations for backward compatibility
             settings, was_migrated = self._migrate_settings_format(settings)
@@ -576,7 +623,7 @@ class SettingsManager:
         # Migration 2: Handle domains format transition (string array <-> object array)
         if 'domains' in settings:
             domains = settings['domains']
-            if domains and isinstance(domains[0], str):
+            if domains and all(isinstance(d, str) for d in domains):
                 # Convert simple string array to object array for new multi-account support
                 logger.info("Migrating domains from string array to object array format")
                 default_provider = settings.get('dns_provider', 'cloudflare')

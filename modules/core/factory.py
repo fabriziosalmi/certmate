@@ -44,10 +44,11 @@ class AppContainer:
 
 def setup_directories(container: AppContainer, test_config=None):
     try:
-        container.cert_dir = Path("certificates")
-        container.data_dir = Path("data")
-        container.backup_dir = Path("backups")
-        container.logs_dir = Path("logs")
+        _base = Path(__file__).resolve().parent.parent.parent
+        container.cert_dir = (_base / "certificates").resolve()
+        container.data_dir = (_base / "data").resolve()
+        container.backup_dir = (_base / "backups").resolve()
+        container.logs_dir = (_base / "logs").resolve()
 
         for directory in [
             container.cert_dir, container.data_dir,
@@ -56,6 +57,19 @@ def setup_directories(container: AppContainer, test_config=None):
             directory.mkdir(exist_ok=True)
 
         (container.backup_dir / "unified").mkdir(exist_ok=True)
+
+        # Clean up any orphan .tmp files left by a previous hard crash
+        for _search_dir in (container.cert_dir, container.data_dir):
+            try:
+                if _search_dir.exists():
+                    for _tmp in _search_dir.rglob('*.tmp'):
+                        try:
+                            _tmp.unlink()
+                            logger.debug(f"Cleaned up orphan temp file: {_tmp}")
+                        except OSError:
+                            pass
+            except Exception:
+                pass
     except Exception as e:
         logger.error(f"Failed to create dirs: {e}")
         container.cert_dir = Path(tempfile.mkdtemp(prefix="certmate_certs_"))
@@ -77,8 +91,8 @@ def configure_app(container: AppContainer, app, test_config=None):
             try:
                 key_file.write_text(secret_key)
                 key_file.chmod(0o600)
-            except OSError:
-                pass
+            except OSError as e:
+                logger.warning(f"Could not persist SECRET_KEY to {key_file}: {e}. Sessions will not survive restarts.")
     app.secret_key = secret_key
     app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
 
@@ -229,8 +243,17 @@ def _weekly_digest_job():
 def setup_scheduler(container: AppContainer):
     """Set up APScheduler for background tasks with persistent store."""
     try:
+        from sqlalchemy import create_engine, event as _sa_event
+        _db_path = container.data_dir / 'scheduler_jobs.sqlite'
+        _engine = create_engine(f'sqlite:///{_db_path}', connect_args={'check_same_thread': False})
+
+        @_sa_event.listens_for(_engine, 'connect')
+        def _set_wal_mode(dbapi_conn, _record):
+            dbapi_conn.execute('PRAGMA journal_mode=WAL')
+            dbapi_conn.execute('PRAGMA synchronous=NORMAL')
+
         jobstores = {
-            'default': SQLAlchemyJobStore(url=f'sqlite:///{container.data_dir}/scheduler_jobs.sqlite')
+            'default': SQLAlchemyJobStore(engine=_engine)
         }
         scheduler = BackgroundScheduler(jobstores=jobstores)
         scheduler.start()
@@ -329,6 +352,10 @@ def setup_security_headers(app):
         if 'Content-Security-Policy' not in response.headers:
             response.headers['Content-Security-Policy'] = (
                 "default-src 'self'; "
+                # Alpine.js v3 requires 'unsafe-eval' (uses new Function() for expression
+                # evaluation). Removing it breaks the UI. The risk is mitigated by
+                # 'unsafe-inline' already being required for inline <script> blocks.
+                # To eliminate unsafe-eval, migrate to the @alpinejs/csp build.
                 "script-src 'self' 'unsafe-inline' 'unsafe-eval' cdn.redoc.ly; "
                 "style-src 'self' 'unsafe-inline' cdn.redoc.ly fonts.googleapis.com; "
                 "font-src 'self' fonts.gstatic.com; "

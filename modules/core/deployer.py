@@ -83,6 +83,7 @@ class DeployManager:
         hook_id = hook.get('id', '')
         hook_name = hook.get('name', 'unnamed')
         command = hook.get('command', '')
+        logger.info("Running deploy hook '%s' for %s: %s", hook_name, domain, command[:120])
         timeout = min(max(hook.get('timeout', DEFAULT_TIMEOUT), 1), MAX_TIMEOUT)
 
         deploy_env = os.environ.copy()
@@ -256,6 +257,20 @@ class DeployManager:
         if not hook.get('name', '').strip():
             return False
         if not hook.get('command', '').strip():
+            return False
+        command = hook['command'].strip()
+        # Enforce a maximum command length to limit injection surface
+        if len(command) > 1024:
+            logger.warning("Deploy hook command exceeds 1024 character limit")
+            return False
+        # Block attempts to read CertMate's own credential/settings files
+        import re
+        _BLOCKED = re.compile(
+            r'(settings\.json|api_bearer_token|client_secret|vault_token|\.env\b)',
+            re.IGNORECASE
+        )
+        if _BLOCKED.search(command):
+            logger.warning("Deploy hook command references sensitive CertMate files — blocked")
             return False
         hook['timeout'] = min(max(int(hook.get('timeout', DEFAULT_TIMEOUT)), 1), MAX_TIMEOUT)
         if not isinstance(hook.get('on_events'), list):

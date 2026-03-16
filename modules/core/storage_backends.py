@@ -8,6 +8,7 @@ import os
 import json
 import logging
 import re
+import shutil
 import tempfile
 import zipfile
 from abc import ABC, abstractmethod
@@ -20,6 +21,31 @@ from .constants import CERTIFICATE_FILES
 logger = logging.getLogger(__name__)
 
 _SAFE_DOMAIN_RE = re.compile(r'^(\*\.)?[a-zA-Z0-9]([a-zA-Z0-9._-]{0,253}[a-zA-Z0-9])?$')
+
+
+def _with_retry(max_attempts=3, delay=1.0, exceptions=(Exception,)):
+    """Decorator that retries a method on transient errors (rate limits, timeouts, etc.)"""
+    import functools, time as _time
+    def decorator(fn):
+        @functools.wraps(fn)
+        def wrapper(*args, **kwargs):
+            last_exc = None
+            for attempt in range(1, max_attempts + 1):
+                try:
+                    return fn(*args, **kwargs)
+                except exceptions as exc:
+                    last_exc = exc
+                    msg = str(exc).lower()
+                    # Only retry on transient/rate-limit errors
+                    if any(k in msg for k in ('timeout', 'rate', 'throttl', '429', '503', 'service unavailable', 'connection')):
+                        if attempt < max_attempts:
+                            logger.warning(f"{fn.__name__} attempt {attempt} failed (transient): {exc}. Retrying in {delay * attempt:.1f}s...")
+                            _time.sleep(delay * attempt)
+                            continue
+                    raise  # non-transient — re-raise immediately
+            raise last_exc
+        return wrapper
+    return decorator
 
 
 def _validate_storage_domain(domain: str) -> str:
@@ -95,7 +121,8 @@ class LocalFileSystemBackend(CertificateStorageBackend):
             metadata_file = domain_dir / 'metadata.json'
             with open(metadata_file, 'w') as f:
                 json.dump(metadata, f, indent=2)
-            
+            os.chmod(metadata_file, 0o600)
+
             logger.info(f"Certificate stored successfully for {domain}")
             return True
             
@@ -148,7 +175,6 @@ class LocalFileSystemBackend(CertificateStorageBackend):
     def delete_certificate(self, domain: str) -> bool:
         """Delete certificate from local filesystem"""
         try:
-            import shutil
             domain_dir = self.cert_dir / domain
             if domain_dir.exists():
                 shutil.rmtree(domain_dir)
@@ -177,6 +203,10 @@ class AzureKeyVaultBackend(CertificateStorageBackend):
         self.client_secret = config.get('client_secret')
         self.tenant_id = config.get('tenant_id')
         
+        self.vault_url = (self.vault_url or '').strip()
+        self.client_id = (self.client_id or '').strip()
+        self.client_secret = (self.client_secret or '').strip()
+        self.tenant_id = (self.tenant_id or '').strip()
         if not all([self.vault_url, self.client_id, self.client_secret, self.tenant_id]):
             raise ValueError("Azure Key Vault backend requires vault_url, client_id, client_secret, and tenant_id")
         
@@ -201,12 +231,22 @@ class AzureKeyVaultBackend(CertificateStorageBackend):
         return self._client
     
     def _sanitize_secret_name(self, name: str) -> str:
-        """Sanitize name for Azure Key Vault secret naming requirements"""
-        # Azure Key Vault secret names can only contain alphanumeric characters and hyphens
-        import re
-        sanitized = re.sub(r'[^a-zA-Z0-9-]', '-', name)
-        return sanitized.strip('-')
+        """Sanitize name for Azure Key Vault secret naming requirements.
+
+        Azure secret names support only alphanumerics and hyphens (max 127 chars).
+        A 6-char CRC32 suffix prevents two different domain names from mapping to
+        the same sanitized key (e.g. 'my-app.example.com' vs 'my.app-example.com').
+        """
+        import binascii
+        sanitized = re.sub(r'[^a-zA-Z0-9-]', '-', name).strip('-')
+        # Append a short hash of the ORIGINAL name to avoid collisions
+        crc = binascii.crc32(name.encode()) & 0xFFFFFFFF
+        suffix = f"-{crc:08x}"
+        # Azure allows max 127 chars
+        max_base = 127 - len(suffix)
+        return sanitized[:max_base] + suffix
     
+    @_with_retry()
     def store_certificate(self, domain: str, cert_files: Dict[str, bytes], metadata: Dict[str, Any]) -> bool:
         """Store certificate files and metadata to Azure Key Vault"""
         try:
@@ -216,7 +256,7 @@ class AzureKeyVaultBackend(CertificateStorageBackend):
             # Store certificate files as individual secrets
             for filename, content in cert_files.items():
                 secret_name = self._sanitize_secret_name(f"cert-{domain}-{filename.replace('.', '-')}")
-                client.set_secret(secret_name, content.decode('utf-8'))
+                client.set_secret(secret_name, content.decode('utf-8', errors='replace'))
             
             # Store metadata
             metadata_name = self._sanitize_secret_name(f"cert-{domain}-metadata")
@@ -229,6 +269,7 @@ class AzureKeyVaultBackend(CertificateStorageBackend):
             logger.error(f"Failed to store certificate in Azure Key Vault for {domain}: {e}")
             return False
     
+    @_with_retry()
     def retrieve_certificate(self, domain: str) -> Optional[Tuple[Dict[str, bytes], Dict[str, Any]]]:
         """Retrieve certificate files and metadata from Azure Key Vault"""
         try:
@@ -264,6 +305,7 @@ class AzureKeyVaultBackend(CertificateStorageBackend):
             logger.error(f"Failed to retrieve certificate from Azure Key Vault for {domain}: {e}")
             return None
     
+    @_with_retry()
     def list_certificates(self) -> List[str]:
         """List all certificate domains in Azure Key Vault"""
         try:
@@ -343,6 +385,9 @@ class AWSSecretsManagerBackend(CertificateStorageBackend):
         self.access_key_id = config.get('access_key_id')
         self.secret_access_key = config.get('secret_access_key')
         
+        self.region = (self.region or 'us-east-1').strip()
+        self.access_key_id = (self.access_key_id or '').strip()
+        self.secret_access_key = (self.secret_access_key or '').strip()
         if not all([self.access_key_id, self.secret_access_key]):
             raise ValueError("AWS Secrets Manager backend requires access_key_id and secret_access_key")
         
@@ -364,6 +409,7 @@ class AWSSecretsManagerBackend(CertificateStorageBackend):
                 raise ImportError("AWS Secrets Manager backend requires 'boto3' package")
         return self._client
     
+    @_with_retry()
     def store_certificate(self, domain: str, cert_files: Dict[str, bytes], metadata: Dict[str, Any]) -> bool:
         """Store certificate files and metadata to AWS Secrets Manager"""
         try:
@@ -372,7 +418,7 @@ class AWSSecretsManagerBackend(CertificateStorageBackend):
 
             # Combine all certificate data into a single secret
             secret_data = {
-                'files': {k: v.decode('utf-8') for k, v in cert_files.items()},
+                'files': {k: v.decode('utf-8', errors='replace') for k, v in cert_files.items()},
                 'metadata': metadata
             }
             
@@ -399,6 +445,7 @@ class AWSSecretsManagerBackend(CertificateStorageBackend):
             logger.error(f"Failed to store certificate in AWS Secrets Manager for {domain}: {e}")
             return False
     
+    @_with_retry()
     def retrieve_certificate(self, domain: str) -> Optional[Tuple[Dict[str, bytes], Dict[str, Any]]]:
         """Retrieve certificate files and metadata from AWS Secrets Manager"""
         try:
@@ -417,6 +464,7 @@ class AWSSecretsManagerBackend(CertificateStorageBackend):
             logger.error(f"Failed to retrieve certificate from AWS Secrets Manager for {domain}: {e}")
             return None
     
+    @_with_retry()
     def list_certificates(self) -> List[str]:
         """List all certificate domains in AWS Secrets Manager"""
         try:
@@ -478,24 +526,41 @@ class HashiCorpVaultBackend(CertificateStorageBackend):
         self.mount_point = config.get('mount_point', 'secret')
         self.engine_version = config.get('engine_version', 'v2')
         
+        self.vault_url = (self.vault_url or '').strip()
+        self.vault_token = (self.vault_token or '').strip()
         if not all([self.vault_url, self.vault_token]):
             raise ValueError("HashiCorp Vault backend requires vault_url and vault_token")
         
         self._client = None
+        self._token_renewed_at = 0
         logger.info(f"HashiCorpVaultBackend initialized for vault: {self.vault_url}")
-    
+
     def _get_client(self):
-        """Get HashiCorp Vault client with lazy initialization"""
+        """Get HashiCorp Vault client with lazy initialization and token renewal."""
         if self._client is None:
             try:
                 import hvac
                 self._client = hvac.Client(url=self.vault_url, token=self.vault_token)
                 if not self._client.is_authenticated():
                     raise ValueError("Failed to authenticate with HashiCorp Vault")
+                self._token_renewed_at = __import__('time').time()
             except ImportError:
                 raise ImportError("HashiCorp Vault backend requires 'hvac' package")
+        else:
+            # Renew token every 6 hours to prevent expiry
+            import time
+            if time.time() - getattr(self, '_token_renewed_at', 0) > 6 * 3600:
+                try:
+                    self._client.auth.token.renew_self()
+                    self._token_renewed_at = time.time()
+                    logger.info("HashiCorp Vault token renewed successfully")
+                except Exception as e:
+                    logger.warning(f"Vault token renewal failed, re-authenticating: {e}")
+                    self._client = None
+                    return self._get_client()
         return self._client
     
+    @_with_retry()
     def store_certificate(self, domain: str, cert_files: Dict[str, bytes], metadata: Dict[str, Any]) -> bool:
         """Store certificate files and metadata to HashiCorp Vault"""
         try:
@@ -504,7 +569,7 @@ class HashiCorpVaultBackend(CertificateStorageBackend):
 
             # Prepare secret data
             secret_data = {
-                'files': {k: v.decode('utf-8') for k, v in cert_files.items()},
+                'files': {k: v.decode('utf-8', errors='replace') for k, v in cert_files.items()},
                 'metadata': metadata
             }
             
@@ -530,6 +595,7 @@ class HashiCorpVaultBackend(CertificateStorageBackend):
             logger.error(f"Failed to store certificate in HashiCorp Vault for {domain}: {e}")
             return False
     
+    @_with_retry()
     def retrieve_certificate(self, domain: str) -> Optional[Tuple[Dict[str, bytes], Dict[str, Any]]]:
         """Retrieve certificate files and metadata from HashiCorp Vault"""
         try:
@@ -558,6 +624,7 @@ class HashiCorpVaultBackend(CertificateStorageBackend):
             logger.error(f"Failed to retrieve certificate from HashiCorp Vault for {domain}: {e}")
             return None
     
+    @_with_retry()
     def list_certificates(self) -> List[str]:
         """List all certificate domains in HashiCorp Vault"""
         try:
@@ -638,6 +705,9 @@ class InfisicalBackend(CertificateStorageBackend):
         self.project_id = config.get('project_id')
         self.environment = config.get('environment', 'prod')
         
+        self.client_id = (self.client_id or '').strip()
+        self.client_secret = (self.client_secret or '').strip()
+        self.project_id = (self.project_id or '').strip()
         if not all([self.client_id, self.client_secret, self.project_id]):
             raise ValueError("Infisical backend requires client_id, client_secret, and project_id")
         
@@ -669,7 +739,7 @@ class InfisicalBackend(CertificateStorageBackend):
             # Store certificate files as individual secrets (upsert: update if exists, create otherwise)
             for filename, content in cert_files.items():
                 secret_key = f"certmate-{domain}-{filename.replace('.', '-')}"
-                secret_value = content.decode('utf-8')
+                secret_value = content.decode('utf-8', errors='replace')
                 try:
                     client.update_secret(
                         secret_name=secret_key,
