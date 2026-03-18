@@ -115,14 +115,40 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
             return jsonify({'error': str(e)}), 500
 
     @app.route('/api/dns/<string:provider>/accounts/<string:account_id>',
-               methods=['DELETE'])
+               methods=['DELETE', 'PUT'])
     @app.route('/api/dns-providers/accounts/<string:account_id>',
-               methods=['DELETE'])
+               methods=['DELETE', 'PUT'])
     @app.route('/api/web/settings/accounts/<string:account_id>',
-               methods=['DELETE'])
+               methods=['DELETE', 'PUT'])
     @auth_manager.require_role('admin')
-    def api_dns_account_delete(account_id, provider=None):
-        """Route for deleting a DNS provider account"""
-        if dns_manager.delete_account(provider, account_id):
-            return jsonify({'message': 'Account deleted'})
-        return jsonify({'error': 'Failure to delete account'}), 500
+    def api_dns_account_detail(account_id, provider=None):
+        """Route for updating or deleting a DNS provider account"""
+        if request.method == 'DELETE':
+            if dns_manager.delete_account(provider, account_id):
+                return jsonify({'message': 'Account deleted'})
+            return jsonify({'error': 'Failure to delete account'}), 500
+
+        # PUT: update existing account
+        try:
+            data = request.json or {}
+            current_settings = settings_manager.load_settings()
+            current_settings = settings_manager.migrate_dns_providers_to_multi_account(current_settings)
+            existing = (current_settings.get('dns_providers', {})
+                        .get(provider, {})
+                        .get('accounts', {})
+                        .get(account_id, {}))
+            # Merge: keep existing secret values when masked placeholder is sent
+            set_as_default = data.get('set_as_default', False)
+            merged = dict(existing)
+            for k, v in data.items():
+                if k == 'set_as_default':
+                    continue
+                if v != '********':
+                    merged[k] = v
+            if dns_manager.add_account(account_id, provider, merged):
+                if set_as_default:
+                    dns_manager.set_default_account(provider, account_id)
+                return jsonify({'message': 'Account updated', 'id': account_id})
+            return jsonify({'error': 'Failed to update account'}), 500
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500

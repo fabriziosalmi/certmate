@@ -143,7 +143,8 @@ class DNSManager:
                         'name': account_config.get('name', account_id.title()),
                         'description': account_config.get('description', ''),
                         'configured': bool(any(account_config.get(key) for key in [
-                            'api_token', 'access_key_id', 'api_key', 'api_url', 'username', 'token'
+                            'api_token', 'access_key_id', 'api_key', 'api_url', 'username', 'token',
+                            'nameserver', 'tsig_key', 'tsig_secret', 'secret_key', 'password'
                         ]))
                     })
             elif provider_config:
@@ -153,7 +154,8 @@ class DNSManager:
                     'name': f'Default {provider.title()} Account',
                     'description': 'Legacy single-account configuration',
                     'configured': bool(any(provider_config.get(key) for key in [
-                        'api_token', 'access_key_id', 'api_key', 'api_url', 'username', 'token'
+                        'api_token', 'access_key_id', 'api_key', 'api_url', 'username', 'token',
+                        'nameserver', 'tsig_key', 'tsig_secret', 'secret_key', 'password'
                     ]))
                 })
                 

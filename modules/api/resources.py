@@ -560,6 +560,35 @@ def create_api_resources(api, models, managers):
     class DNSAccountDetail(Resource):
         @api.doc(security='Bearer')
         @auth_manager.require_role('admin')
+        def put(self, provider, account_id):
+            """Update a DNS provider account"""
+            try:
+                data = api.payload or {}
+                settings = dns_manager.settings_manager.load_settings()
+                settings = dns_manager.settings_manager.migrate_dns_providers_to_multi_account(settings)
+                existing = (settings.get('dns_providers', {})
+                            .get(provider, {})
+                            .get('accounts', {})
+                            .get(account_id, {}))
+                # Merge: keep existing masked/secret values when placeholder is sent
+                set_as_default = data.get('set_as_default', False)
+                merged = dict(existing)
+                for k, v in data.items():
+                    if k == 'set_as_default':
+                        continue
+                    if v != '********':
+                        merged[k] = v
+                if dns_manager.add_account(account_id, provider, merged):
+                    if set_as_default:
+                        dns_manager.set_default_account(provider, account_id)
+                    return {'success': True, 'message': 'Account updated'}
+                return {'error': 'Failed to update account'}, 500
+            except Exception as e:
+                logger.error(f"Error updating DNS account: {e}")
+                return {'error': str(e)}, 500
+
+        @api.doc(security='Bearer')
+        @auth_manager.require_role('admin')
         def delete(self, provider, account_id):
             """Delete a DNS provider account"""
             try:
