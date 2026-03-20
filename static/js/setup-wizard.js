@@ -229,7 +229,8 @@
             email: state.email,
             dns_provider: state.provider,
             dns_providers: dnsProviders,
-            auto_renew: true
+            auto_renew: true,
+            setup_completed: true
         };
 
         fetch('/api/web/settings', {
