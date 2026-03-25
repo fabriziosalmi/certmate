@@ -217,6 +217,21 @@
                                     </p>
                                 </div>
                             </div>
+
+                            <!-- DNS Alias Mode -->
+                            <div class="mt-4">
+                                <label for="dns_alias_domain" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                    <i class="fas fa-random mr-1 text-blue-500"></i>
+                                    DNS Alias Domain <span class="text-xs font-normal text-gray-500 dark:text-gray-400">(optional)</span>
+                                </label>
+                                <input type="text" id="dns_alias_domain" name="dns_alias_domain"
+                                       class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm"
+                                       placeholder="e.g. _acme-challenge.validation.example.org">
+                                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                    Use DNS Alias Mode when <code class="font-mono bg-gray-100 dark:bg-gray-600 px-1 rounded">_acme-challenge.yourdomain.com</code>
+                                    is CNAMEd to a validation zone you control. Enter the target FQDN (without the <code class="font-mono bg-gray-100 dark:bg-gray-600 px-1 rounded">_acme-challenge.</code> prefix).
+                                </p>
+                            </div>
                         </div>
                     </div>
                     

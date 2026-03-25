@@ -2211,7 +2211,8 @@
                 break;
 
             case 'azure_keyvault':
-                var azureConfig = storageConfig.azure_keyvault || {};
+                // Support both nested ({azure_keyvault:{...}}) and legacy flat format
+                var azureConfig = storageConfig.azure_keyvault || storageConfig;
                 document.getElementById('azure-vault-url').value = azureConfig.vault_url || '';
                 document.getElementById('azure-tenant-id').value = azureConfig.tenant_id || '';
                 document.getElementById('azure-client-id').value = azureConfig.client_id || '';
@@ -2219,14 +2220,16 @@
                 break;
 
             case 'aws_secrets_manager':
-                var awsConfig = storageConfig.aws_secrets_manager || {};
+                // Support both nested ({aws_secrets_manager:{...}}) and legacy flat format
+                var awsConfig = storageConfig.aws_secrets_manager || storageConfig;
                 document.getElementById('aws-region').value = awsConfig.region || 'us-east-1';
                 document.getElementById('aws-access-key-id').value = awsConfig.access_key_id || '';
                 // Don't populate secret_access_key for security
                 break;
 
             case 'hashicorp_vault':
-                var vaultConfig = storageConfig.hashicorp_vault || {};
+                // Support both nested ({hashicorp_vault:{...}}) and legacy flat format
+                var vaultConfig = storageConfig.hashicorp_vault || storageConfig;
                 document.getElementById('vault-url').value = vaultConfig.vault_url || '';
                 document.getElementById('vault-mount-point').value = vaultConfig.mount_point || 'secret';
                 document.getElementById('vault-engine-version').value = vaultConfig.engine_version || 'v2';
@@ -2234,7 +2237,8 @@
                 break;
 
             case 'infisical':
-                var infisicalConfig = storageConfig.infisical || {};
+                // Support both nested ({infisical:{...}}) and legacy flat format
+                var infisicalConfig = storageConfig.infisical || storageConfig;
                 document.getElementById('infisical-site-url').value = infisicalConfig.site_url || 'https://app.infisical.com';
                 document.getElementById('infisical-project-id').value = infisicalConfig.project_id || '';
                 document.getElementById('infisical-environment').value = infisicalConfig.environment || 'prod';
@@ -2276,7 +2280,27 @@
         var backend = document.getElementById('storage-backend').value;
         var config = getStorageBackendConfig(backend);
 
-        return Object.assign({ backend: backend }, config);
+        // Nest backend-specific config under its own key so loadStorageBackendSettings
+        // can reliably read it back (e.g. storageConfig.hashicorp_vault.vault_url).
+        var result = { backend: backend };
+        switch (backend) {
+            case 'local_filesystem':
+                result.cert_dir = config.cert_dir;
+                break;
+            case 'azure_keyvault':
+                result.azure_keyvault = config;
+                break;
+            case 'aws_secrets_manager':
+                result.aws_secrets_manager = config;
+                break;
+            case 'hashicorp_vault':
+                result.hashicorp_vault = config;
+                break;
+            case 'infisical':
+                result.infisical = config;
+                break;
+        }
+        return result;
     }
 
     // =============================================

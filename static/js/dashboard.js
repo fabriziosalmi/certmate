@@ -67,7 +67,7 @@
         var total = certificates.length;
         var valid = certificates.filter(function (cert) { return cert.exists && cert.days_until_expiry > 30; }).length;
         var expiring = certificates.filter(function (cert) { return cert.exists && cert.days_until_expiry > 0 && cert.days_until_expiry <= 30; }).length;
-        var expired = certificates.filter(function (cert) { return cert.exists && cert.days_until_expiry <= 0; }).length;
+        var expired = certificates.filter(function (cert) { return cert.exists && cert.days_until_expiry !== null && cert.days_until_expiry !== undefined && cert.days_until_expiry <= 0; }).length;
 
         var statsContainer = document.getElementById('statsCards');
         statsContainer.innerHTML =
@@ -237,9 +237,9 @@
             // Status filter
             var matchesStatus = true;
             if (statusFilter !== 'all') {
-                var isExpired = cert.exists && cert.days_until_expiry <= 0;
-                var isExpiringSoon = cert.exists && cert.days_until_expiry > 0 && cert.days_until_expiry <= 30;
-                var isValid = cert.exists && cert.days_until_expiry > 30;
+                var isExpired = cert.exists && cert.days_until_expiry !== null && cert.days_until_expiry !== undefined && cert.days_until_expiry <= 0;
+                var isExpiringSoon = cert.exists && cert.days_until_expiry !== null && cert.days_until_expiry !== undefined && cert.days_until_expiry > 0 && cert.days_until_expiry <= 30;
+                var isValid = cert.exists && cert.days_until_expiry !== null && cert.days_until_expiry !== undefined && cert.days_until_expiry > 30;
 
                 switch (statusFilter) {
                     case 'valid':
@@ -385,10 +385,13 @@
                     '</tr>';
             }
 
-            var isExpired = cert.days_until_expiry <= 0;
-            var isExpiringSoon = cert.days_until_expiry <= 30;
+            var daysKnown = cert.days_until_expiry !== null && cert.days_until_expiry !== undefined;
+            var isExpired = cert.exists && daysKnown && cert.days_until_expiry <= 0;
+            var isExpiringSoon = cert.exists && daysKnown && cert.days_until_expiry > 0 && cert.days_until_expiry <= 30;
             var statusClass, statusIcon, statusText;
-            if (isExpired) {
+            if (!cert.exists) {
+                statusClass = 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'; statusIcon = 'fa-question-circle'; statusText = 'Unknown';
+            } else if (isExpired) {
                 statusClass = 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400'; statusIcon = 'fa-times-circle'; statusText = 'Expired';
             } else if (isExpiringSoon) {
                 statusClass = 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400'; statusIcon = 'fa-exclamation-triangle'; statusText = 'Expiring';
@@ -464,8 +467,9 @@
         if (!cert.exists) {
             content.innerHTML = '<div class="text-center py-8"><i class="fas fa-exclamation-triangle text-red-400 text-3xl mb-3"></i><p class="text-gray-500 dark:text-gray-400">Certificate not found on disk.</p></div>';
         } else {
-            var isExpired = cert.days_until_expiry <= 0;
-            var isExpiringSoon = cert.days_until_expiry <= 30;
+            var daysKnown2 = cert.days_until_expiry !== null && cert.days_until_expiry !== undefined;
+            var isExpired = daysKnown2 && cert.days_until_expiry <= 0;
+            var isExpiringSoon = daysKnown2 && cert.days_until_expiry > 0 && cert.days_until_expiry <= 30;
             var expiryDate = new Date(cert.expiry_date);
             var statusClass, statusText;
             if (isExpired) { statusClass = 'text-red-600 dark:text-red-400'; statusText = 'Expired'; }
@@ -1063,6 +1067,8 @@
         var dnsProvider = document.getElementById('dns_provider_select').value;
         var accountId = document.getElementById('account_select').value;
         var caProvider = document.getElementById('ca_provider_select').value;
+        var dnsAliasDomain = (document.getElementById('dns_alias_domain') || {}).value;
+        dnsAliasDomain = dnsAliasDomain ? dnsAliasDomain.trim() : '';
 
         // Parse SAN domains from comma-separated input
         var sanDomains = sanDomainsInput
@@ -1111,6 +1117,9 @@
         if (caProvider) {
             requestBody.ca_provider = caProvider;
         }
+        if (dnsAliasDomain) {
+            requestBody.domain_alias = dnsAliasDomain;
+        }
 
         fetch('/api/certificates/create', {
             method: 'POST',
@@ -1126,6 +1135,8 @@
                     document.getElementById('dns_provider_select').value = '';
                     document.getElementById('account_select').value = '';
                     document.getElementById('ca_provider_select').value = '';
+                    var aliasField = document.getElementById('dns_alias_domain');
+                    if (aliasField) { aliasField.value = ''; }
                     toggleDnsProviderVisibility();
                     updateAccountSelection();
                     loadCertificates();
@@ -1183,13 +1194,15 @@
             method: 'POST',
             headers: { 'Content-Type': 'application/json' }
         }).then(function (response) {
-            return response.json();
-        }).then(function (result) {
-            if (result.success) {
-                showMessage('Certificate renewal started for ' + domain + '!', 'success');
+            return response.json().then(function (result) {
+                return { ok: response.ok, result: result };
+            });
+        }).then(function (data) {
+            if (data.ok) {
+                showMessage('Certificate renewed successfully for ' + domain + '!', 'success');
                 setTimeout(function () { loadCertificates(); }, 2000);
             } else {
-                showMessage(result.message || 'Failed to renew certificate', 'error');
+                showMessage(data.result.error || data.result.message || 'Failed to renew certificate', 'error');
             }
         }).catch(function (error) {
             console.error('Error renewing certificate:', error);

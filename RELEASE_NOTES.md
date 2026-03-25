@@ -1,3 +1,51 @@
+# Release v2.2.4
+
+## Bug Fixes — Settings, Certificate Status & DNS Alias Mode
+
+Three community-reported issues (#88, #89, #90) fixed. Zero regressions: 165 tests passed, 10 skipped.
+
+### Fix: API Key management and Deploy hooks returning 404 (#90)
+
+The Settings → API Keys tab called `/api/keys` (GET/POST/DELETE) and the Settings → Deploy tab called `/api/deploy/config`, `/api/deploy/test/<id>`, and `/api/deploy/history` — none of which had registered routes in the web layer, producing 404 errors for all operations.
+
+**Fix:** Added all missing routes in `modules/web/settings_routes.py`, wiring them to the existing `AuthManager` (API key CRUD) and `DeployManager` (hook config, test, history).
+
+**Files changed:** `modules/web/settings_routes.py`
+
+### Fix: HashiCorp Vault / OpenBao address not shown after save (#90)
+
+Storage backend config was saved flat at the top level of `certificate_storage` (e.g. `certificate_storage.vault_url`) but the UI loader expected it nested under the backend key (`certificate_storage.hashicorp_vault.vault_url`), so the URL disappeared from the form on next page load.
+
+**Fix:** `collectStorageBackendSettings()` now nests backend-specific config under its key. `loadStorageBackendSettings()` additionally falls back to the legacy flat format for existing config files.
+
+**Files changed:** `static/js/settings.js`
+
+### Fix: Newly created certificates displayed as "Expired" (#88)
+
+JavaScript's `null <= 0` evaluates to `true`, so any certificate whose `days_until_expiry` was `null` (cert info parse failed or cert does not exist on disk) was shown as red "Expired" instead of a neutral state. Stats counters, filter logic, table rows, and the detail panel were all affected.
+
+**Fix:** All four comparison sites now guard with `days_until_expiry !== null && days_until_expiry !== undefined` before the `<= 0` test. Certificates that don't exist show as "Unknown" rather than "Expired".
+
+**Files changed:** `static/js/dashboard.js`
+
+### Fix: Renewal always reported as failure despite succeeding (#88)
+
+The renewal API response contains `{message, domain, duration}` — no `success` field. The JS checked `result.success` (always `undefined` → falsy) and branched to the error path, showing the success message text styled as an error and never reloading the certificate list.
+
+**Fix:** Response check now uses `response.ok` (HTTP 2xx) instead of `result.success`.
+
+**Files changed:** `static/js/dashboard.js`
+
+### Feature: DNS Alias Mode configurable via Web UI (#89)
+
+The `--domain-alias` certbot flag (for CNAME-based DNS delegation) was already supported by the backend but had no UI entry point.
+
+**Fix:** Added a "DNS Alias Domain" text field in the Advanced Options section of the certificate creation form. When filled, the value is passed as `domain_alias` in the creation request.
+
+**Files changed:** `templates/index.html`, `static/js/dashboard.js`
+
+---
+
 # Release v2.2.3
 
 ## Security Hardening — Authentication, Injection & Data Integrity

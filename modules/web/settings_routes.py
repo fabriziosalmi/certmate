@@ -7,6 +7,8 @@ logger = logging.getLogger(__name__)
 def register_settings_routes(app, managers, require_web_auth, auth_manager,
                              settings_manager, dns_manager):
     """Register settings-related routes"""
+    auth_manager_ref = auth_manager
+    deploy_manager = managers.get('deployer')
 
     @app.route('/api/settings', methods=['GET', 'POST'])
     @app.route('/api/web/settings', methods=['GET', 'POST'])
@@ -159,3 +161,115 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
         except Exception as e:
             logger.error(f"Failed to update DNS account: {e}")
             return jsonify({'error': 'Failed to update account'}), 500
+
+    # ------------------------------------------------------------------ #
+    # API Key management routes                                            #
+    # ------------------------------------------------------------------ #
+
+    @app.route('/api/keys', methods=['GET', 'POST'])
+    @auth_manager_ref.require_role('admin')
+    def api_keys():
+        """List or create API keys"""
+        if request.method == 'GET':
+            try:
+                keys = auth_manager_ref.list_api_keys()
+                return jsonify({'keys': keys})
+            except Exception as e:
+                logger.error(f"Failed to list API keys: {e}")
+                return jsonify({'error': 'Failed to list API keys'}), 500
+
+        try:
+            data = request.json or {}
+            name = data.get('name', '').strip()
+            role = data.get('role', 'viewer')
+            expires_at = data.get('expires_at')
+
+            if not name:
+                return jsonify({'error': 'Key name is required'}), 400
+            if len(name) > 64:
+                return jsonify({'error': 'Key name must be ≤ 64 characters'}), 400
+
+            user = getattr(request, 'current_user', {})
+            result = auth_manager_ref.create_api_key(
+                name, role=role, expires_at=expires_at,
+                created_by=user.get('username')
+            )
+            if result:
+                return jsonify(result), 201
+            return jsonify({'error': 'Failed to create API key'}), 500
+        except Exception as e:
+            logger.error(f"Failed to create API key: {e}")
+            return jsonify({'error': 'Failed to create API key'}), 500
+
+    @app.route('/api/keys/<string:key_id>', methods=['DELETE'])
+    @auth_manager_ref.require_role('admin')
+    def api_key_detail(key_id):
+        """Revoke an API key"""
+        try:
+            if auth_manager_ref.revoke_api_key(key_id):
+                return jsonify({'message': 'API key revoked'})
+            return jsonify({'error': 'Key not found or already revoked'}), 404
+        except Exception as e:
+            logger.error(f"Failed to revoke API key {key_id}: {e}")
+            return jsonify({'error': 'Failed to revoke API key'}), 500
+
+    # ------------------------------------------------------------------ #
+    # Deploy hooks routes                                                  #
+    # ------------------------------------------------------------------ #
+
+    @app.route('/api/deploy/config', methods=['GET', 'POST'])
+    @auth_manager_ref.require_role('admin')
+    def api_deploy_config():
+        """Get or update deploy hooks configuration"""
+        if not deploy_manager:
+            return jsonify({'error': 'Deploy manager not available'}), 503
+
+        if request.method == 'GET':
+            try:
+                return jsonify(deploy_manager.get_config())
+            except Exception as e:
+                logger.error(f"Failed to get deploy config: {e}")
+                return jsonify({'error': 'Failed to get deploy config'}), 500
+
+        try:
+            data = request.json
+            if deploy_manager.save_config(data):
+                return jsonify({'message': 'Deploy configuration saved'})
+            return jsonify({'error': 'Invalid configuration or save failed'}), 400
+        except Exception as e:
+            logger.error(f"Failed to save deploy config: {e}")
+            return jsonify({'error': 'Failed to save deploy config'}), 500
+
+    @app.route('/api/deploy/test/<string:hook_id>', methods=['POST'])
+    @auth_manager_ref.require_role('admin')
+    def api_deploy_test(hook_id):
+        """Dry-run a deploy hook"""
+        if not deploy_manager:
+            return jsonify({'error': 'Deploy manager not available'}), 503
+
+        try:
+            data = request.json or {}
+            domain = data.get('domain', 'test.example.com')
+            result = deploy_manager.test_hook(hook_id, domain=domain)
+            if 'error' in result:
+                return jsonify(result), 404
+            return jsonify(result)
+        except Exception as e:
+            logger.error(f"Failed to test deploy hook {hook_id}: {e}")
+            return jsonify({'error': 'Failed to test deploy hook'}), 500
+
+    @app.route('/api/deploy/history', methods=['GET'])
+    @auth_manager_ref.require_role('admin')
+    def api_deploy_history():
+        """Get deploy hook execution history"""
+        if not deploy_manager:
+            return jsonify({'error': 'Deploy manager not available'}), 503
+
+        try:
+            limit = min(int(request.args.get('limit', 50)), 200)
+            domain = request.args.get('domain')
+            history = deploy_manager.get_history(limit=limit, domain=domain)
+            return jsonify({'history': history})
+        except Exception as e:
+            logger.error(f"Failed to get deploy history: {e}")
+            return jsonify({'error': 'Failed to get deploy history'}), 500
