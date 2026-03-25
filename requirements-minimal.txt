@@ -15,6 +15,7 @@ certbot-dns-cloudflare==2.10.0
 cloudflare==2.19.4
 
 # Core application dependencies
+urllib3>=2.6.0,!=2.2.0,<3      # CVE-2025-66418, CVE-2025-66471, CVE-2026-21441 (HIGH)
 requests==2.32.5
 python-dotenv==1.0.1
 APScheduler==3.10.4
