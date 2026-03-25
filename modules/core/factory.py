@@ -276,7 +276,13 @@ def setup_scheduler(container: AppContainer):
         container.scheduler = scheduler
         container.managers['scheduler'] = scheduler
     except Exception as e:
-        logger.error(f"Scheduler error: {e}")
+        logger.error(f"Scheduler setup failed — automatic certificate renewal will NOT run: {e}")
+        import warnings
+        warnings.warn(
+            f"CertMate scheduler failed to start: {e}. "
+            "Automatic certificate renewal is DISABLED.",
+            RuntimeWarning, stacklevel=2,
+        )
 
 
 def setup_api(container: AppContainer, app):
@@ -387,7 +393,8 @@ def setup_rate_limiting(app, container: AppContainer):
         path = flask_request.path
         if not path.startswith('/api/'):
             return None
-        if path.startswith(('/api/web/', '/api/auth/', '/api/users', '/api/backups')):
+        # Only skip rate limiting for auth endpoints (login needs its own limiter)
+        if path.startswith('/api/auth/'):
             return None
 
         client_ip = flask_request.remote_addr or '0.0.0.0'  # nosec B104

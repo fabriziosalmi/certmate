@@ -249,15 +249,19 @@ Generated {digest['generated_at']} by CertMate
 
             use_tls = smtp_cfg.get('use_tls', True)
             server = smtplib.SMTP(host, port, timeout=10)
-            if use_tls:
-                server.starttls()
-            if username and password:
-                server.login(username, password)
-            server.sendmail(from_addr, to_addrs, msg.as_string())
-            server.quit()
-
-            logger.info("Weekly digest email sent successfully")
-            return {'success': True}
+            try:
+                if use_tls:
+                    server.starttls()
+                if username and password:
+                    server.login(username, password)
+                server.sendmail(from_addr, to_addrs, msg.as_string())
+                logger.info("Weekly digest email sent successfully")
+                return {'success': True}
+            finally:
+                try:
+                    server.quit()
+                except Exception:
+                    pass
 
         except Exception as e:
             logger.error(f"Weekly digest email failed: {e}")

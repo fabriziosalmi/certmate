@@ -398,7 +398,10 @@ class CertificateManager:
 
                 # Default to strategy default if not in settings map
                 default_seconds = strategy.default_propagation_seconds
-                propagation_time = int(propagation_map.get(dns_provider, default_seconds))
+                try:
+                    propagation_time = int(propagation_map.get(dns_provider, default_seconds))
+                except (ValueError, TypeError):
+                    propagation_time = default_seconds
                 # Ensure propagation time is within reasonable bounds (1 second to 1 hour)
                 propagation_time = max(1, min(3600, propagation_time))
 
@@ -676,17 +679,20 @@ class CertificateManager:
     
     def delete_certificate(self, domain: str) -> bool:
         """Delete a certificate directory, blocking if a create/renew is in progress."""
-        # Block delete if a create/renew operation is in progress for this domain
         domain_lock = self._get_domain_lock(domain)
-        if domain_lock.locked():
+        # Acquire lock to ensure no create/renew is in progress (non-blocking)
+        if not domain_lock.acquire(blocking=False):
             raise RuntimeError(f"Cannot delete certificate for {domain}: an operation is currently in progress")
-        import shutil
-        domain_dir = self.cert_dir / domain
-        if domain_dir.exists():
-            shutil.rmtree(domain_dir)
-            logger.info(f"Certificate deleted for {domain}")
-            return True
-        return False
+        try:
+            import shutil
+            domain_dir = self.cert_dir / domain
+            if domain_dir.exists():
+                shutil.rmtree(domain_dir)
+                logger.info(f"Certificate deleted for {domain}")
+                return True
+            return False
+        finally:
+            domain_lock.release()
 
     def _infer_dns_provider(self, domain, settings):
         """Infer DNS provider based on domain patterns and settings"""

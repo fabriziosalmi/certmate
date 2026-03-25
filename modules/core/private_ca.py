@@ -294,7 +294,12 @@ class PrivateCAGenerator:
             return False
 
     def is_ca_loaded(self) -> bool:
-        """Check if CA is loaded in memory."""
+        """Check if CA is loaded in memory and not expired."""
+        if self._ca_loaded and self._ca_cert is not None:
+            if datetime.now(timezone.utc) > self._ca_cert.not_valid_after_utc:
+                logger.error("CA certificate has expired at runtime — marking as unloaded")
+                self._ca_loaded = False
+                return False
         return self._ca_loaded and self._ca_key is not None and self._ca_cert is not None
 
     def get_ca_certificate(self) -> Optional[x509.Certificate]:

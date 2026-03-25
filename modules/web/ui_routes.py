@@ -48,11 +48,13 @@ def register_ui_routes(app, managers, require_web_auth, auth_manager):
         return render_template('activity.html')
 
     @app.route('/redoc')
+    @auth_manager.require_role('viewer')
     def redoc_page():
         """Redoc API documentation"""
         return render_template('redoc.html')
 
     @app.route('/client-certificates')
+    @auth_manager.require_role('viewer')
     def client_certificates_page():
         """Client certificates page (alias) - redirects to unified view"""
         return redirect(url_for('index', _anchor='client'))

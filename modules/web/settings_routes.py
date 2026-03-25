@@ -1,4 +1,7 @@
+import logging
 from flask import request, jsonify
+
+logger = logging.getLogger(__name__)
 
 
 def register_settings_routes(app, managers, require_web_auth, auth_manager,
@@ -30,7 +33,8 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
                 _mask_dict(masked)
                 return jsonify(masked)
             except Exception as e:
-                return jsonify({'error': f"Failed to load settings: {e}"}), 500
+                logger.error(f"Failed to load settings: {e}")
+                return jsonify({'error': 'Failed to load settings'}), 500
 
         try:
             data = request.json
@@ -38,7 +42,8 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
                 return jsonify({'message': 'Settings updated'})
             return jsonify({'error': 'Update failed'}), 500
         except Exception as e:
-            return jsonify({'error': f"Failed to update settings: {e}"}), 500
+            logger.error(f"Failed to update settings: {e}")
+            return jsonify({'error': 'Failed to update settings'}), 500
 
     @app.route('/api/users', methods=['GET', 'POST'])
     @app.route('/api/web/settings/users', methods=['GET', 'POST'])
@@ -112,7 +117,8 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
                 return jsonify({'message': 'Account added', 'id': name})
             return jsonify({'error': 'Failed to add account'}), 500
         except Exception as e:
-            return jsonify({'error': str(e)}), 500
+            logger.error(f"Failed to add DNS account: {e}")
+            return jsonify({'error': 'Failed to add account'}), 500
 
     @app.route('/api/dns/<string:provider>/accounts/<string:account_id>',
                methods=['DELETE', 'PUT'])
@@ -151,4 +157,5 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
                 return jsonify({'message': 'Account updated', 'id': account_id})
             return jsonify({'error': 'Failed to update account'}), 500
         except Exception as e:
-            return jsonify({'error': str(e)}), 500
+            logger.error(f"Failed to update DNS account: {e}")
+            return jsonify({'error': 'Failed to update account'}), 500

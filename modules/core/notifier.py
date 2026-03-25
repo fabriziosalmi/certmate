@@ -5,6 +5,7 @@ Supports SMTP email and webhook (Slack, Discord, generic) notifications.
 
 import json
 import logging
+import os
 import smtplib
 import hashlib
 import hmac
@@ -117,18 +118,20 @@ class Notifier:
             msg.attach(MIMEText(html_body, 'html'))
 
             use_tls = cfg.get('use_tls', True)
-            if use_tls:
-                server = smtplib.SMTP(host, port, timeout=10)
-                server.starttls()
-            else:
-                server = smtplib.SMTP(host, port, timeout=10)
-
-            if username and password:
-                server.login(username, password)
-            server.sendmail(from_addr, to_addrs, msg.as_string())
-            server.quit()
-            logger.info(f"Email notification sent: {subject}")
-            return {'success': True}
+            server = smtplib.SMTP(host, port, timeout=10)
+            try:
+                if use_tls:
+                    server.starttls()
+                if username and password:
+                    server.login(username, password)
+                server.sendmail(from_addr, to_addrs, msg.as_string())
+                logger.info(f"Email notification sent: {subject}")
+                return {'success': True}
+            finally:
+                try:
+                    server.quit()
+                except Exception:
+                    pass
 
         except Exception as e:
             logger.error(f"Email notification failed: {e}")
@@ -179,12 +182,24 @@ class Notifier:
             logger.debug(f"Failed to write delivery log: {e}")
 
     def _truncate_delivery_log(self) -> None:
-        """Keep only the last MAX_DELIVERY_LOG_ENTRIES entries."""
+        """Keep only the last MAX_DELIVERY_LOG_ENTRIES entries (atomic)."""
         try:
             lines = self._delivery_log_path.read_text().splitlines()
             if len(lines) > self.MAX_DELIVERY_LOG_ENTRIES:
                 keep = lines[-self.MAX_DELIVERY_LOG_ENTRIES:]
-                self._delivery_log_path.write_text('\n'.join(keep) + '\n')
+                import tempfile as _tmpmod
+                tmp_fd, tmp_path = _tmpmod.mkstemp(
+                    dir=str(self._delivery_log_path.parent), suffix='.tmp')
+                try:
+                    with os.fdopen(tmp_fd, 'w') as f:
+                        f.write('\n'.join(keep) + '\n')
+                    os.replace(tmp_path, str(self._delivery_log_path))
+                except Exception:
+                    try:
+                        os.unlink(tmp_path)
+                    except OSError:
+                        pass
+                    raise
         except OSError:
             pass
 

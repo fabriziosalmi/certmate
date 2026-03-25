@@ -10,6 +10,7 @@ import logging
 import re
 import shutil
 import tempfile
+import time
 import zipfile
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -543,12 +544,11 @@ class HashiCorpVaultBackend(CertificateStorageBackend):
                 self._client = hvac.Client(url=self.vault_url, token=self.vault_token)
                 if not self._client.is_authenticated():
                     raise ValueError("Failed to authenticate with HashiCorp Vault")
-                self._token_renewed_at = __import__('time').time()
+                self._token_renewed_at = time.time()
             except ImportError:
                 raise ImportError("HashiCorp Vault backend requires 'hvac' package")
         else:
             # Renew token every 6 hours to prevent expiry
-            import time
             if time.time() - getattr(self, '_token_renewed_at', 0) > 6 * 3600:
                 try:
                     self._client.auth.token.renew_self()

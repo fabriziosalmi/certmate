@@ -82,7 +82,10 @@ class FileOperations:
             file_path.parent.mkdir(parents=True, exist_ok=True)
             
             # Use temporary file for atomic writes with restrictive permissions
-            temp_file = Path(f"{file_path}.tmp")
+            import tempfile as _tmpmod
+            _tmp_fd, _tmp_name = _tmpmod.mkstemp(dir=str(file_path.parent), suffix='.tmp')
+            os.close(_tmp_fd)
+            temp_file = Path(_tmp_name)
             fd = os.open(str(temp_file), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
             with os.fdopen(fd, 'w', encoding='utf-8') as f:
                 # Use file locking for safety
@@ -269,11 +272,11 @@ class FileOperations:
                         # Verify resolved path stays within cert_dir
                         try:
                             target_resolved = target_path.resolve()
-                            if not str(target_resolved).startswith(str(cert_dir_resolved) + os.sep) \
-                                    and target_resolved != cert_dir_resolved:
-                                logger.warning(f"ZIP Slip blocked: {file_info.filename} -> {target_resolved}")
-                                continue
-                        except (OSError, ValueError):
+                            target_resolved.relative_to(cert_dir_resolved)
+                        except ValueError:
+                            logger.warning(f"ZIP Slip blocked: {file_info.filename} -> {target_path}")
+                            continue
+                        except OSError:
                             logger.warning(f"Invalid path in ZIP: {file_info.filename}")
                             continue
 

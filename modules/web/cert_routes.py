@@ -15,6 +15,7 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
 
     @app.route('/api/certificates', methods=['GET'])
     @app.route('/api/web/certificates', methods=['GET'])
+    @auth_manager.require_role('viewer')
     def list_certificates_web():
         """List all certificates via web"""
         try:
@@ -26,6 +27,7 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
 
     @app.route('/api/certificates/create', methods=['POST'])
     @app.route('/api/web/certificates/create', methods=['POST'])
+    @auth_manager.require_role('operator')
     def create_certificate_web():
         """Create certificate via web"""
         try:
@@ -45,6 +47,7 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
             return jsonify({'error': 'Failed to create certificate'}), 500
 
     @app.route('/api/web/certificates/batch', methods=['POST'])
+    @auth_manager.require_role('operator')
     def batch_create_web():
         """Batch create certificates"""
         try:
@@ -69,6 +72,7 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
             return jsonify({'error': 'Batch creation failed'}), 500
 
     @app.route('/api/web/certificates/download/batch', methods=['POST'])
+    @auth_manager.require_role('viewer')
     def download_batch_web():
         """Download multiple certificates as zip"""
         try:
@@ -82,10 +86,13 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
 
             with zipfile.ZipFile(temp_zip.name, 'w') as zf:
                 for domain in domains:
+                    cert_dir, error = _sanitize_domain(domain, file_ops.cert_dir)
+                    if error:
+                        continue
                     cert_path = certificate_manager.get_certificate_path(
-                        domain)
+                        cert_dir.name)
                     if os.path.exists(cert_path):
-                        zf.write(cert_path, arcname=f"{domain}.crt")
+                        zf.write(cert_path, arcname=f"{cert_dir.name}.crt")
 
             @after_this_request
             def cleanup(response):
@@ -96,12 +103,14 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
                 return response
 
             return send_file(temp_zip.name, as_attachment=True,
-                             download_name='certificates.zip')
+                             download_name='certificates.zip',
+                             mimetype='application/zip')
         except Exception as e:
             logger.error(f"Batch download failed: {e}")
             return jsonify({'error': 'Batch download failed'}), 500
 
     @app.route('/api/web/certificates/dns-providers', methods=['GET'])
+    @auth_manager.require_role('viewer')
     def list_dns_providers_web():
         """List available DNS providers"""
         try:
@@ -112,6 +121,7 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
             return jsonify({'error': 'Failed to list DNS providers'}), 500
 
     @app.route('/api/web/certificates/test-provider', methods=['POST'])
+    @auth_manager.require_role('admin')
     def test_dns_provider_web():
         """Test DNS provider configuration"""
         try:
@@ -130,6 +140,7 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
             return jsonify({'error': 'Provider test failed'}), 500
 
     @app.route('/api/web/certificates/<string:domain>/renew', methods=['POST'])
+    @auth_manager.require_role('operator')
     def renew_certificate_web(domain):
         """Renew certificate via web"""
         try:

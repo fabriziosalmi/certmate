@@ -1,3 +1,125 @@
+# Release v2.2.3
+
+## Security Hardening — Authentication, Injection & Data Integrity
+
+Full-stack security audit with 16 fixes across authentication bypass, shell injection, path traversal, race conditions, and information leakage. Zero regressions: 165 tests passed, 10 skipped.
+
+### Critical: Unauthenticated certificate management endpoints
+
+All web route endpoints for certificate CRUD (`/api/certificates`, `/api/web/certificates/create`, `/api/web/certificates/batch`, `/api/web/certificates/download/batch`, `/api/web/certificates/dns-providers`, `/api/web/certificates/test-provider`, `/api/web/certificates/<domain>/renew`) were missing `@auth_manager.require_role()` decorators. Any unauthenticated user could create, renew, list, and download certificates.
+
+**Fix:** Added role-based auth guards: `viewer` for read operations, `operator` for create/renew, `admin` for provider testing.
+
+**Files changed:** `modules/web/cert_routes.py`
+
+### Critical: Unauthenticated backup and cache endpoints
+
+All backup and cache routes (`/api/web/backups`, `/api/web/backups/create`, `/api/cache/stats`, `/api/cache/clear`) had no authentication.
+
+**Fix:** Added `admin` role requirement for backup create/list and cache clear, `viewer` for cache stats.
+
+**Files changed:** `modules/web/backup_cache_routes.py`
+
+### Critical: Deploy hook shell injection via metacharacters
+
+Deploy hook commands were passed to `sh -c` with only a blocklist of sensitive filenames. Shell metacharacters like `` ` ``, `$()`, `&&`, `||`, `;`, `|` were not blocked, allowing command chaining.
+
+**Fix:** Added regex-based shell metacharacter blocking (`_DANGEROUS_SHELL`) that rejects commands containing backticks, `$()`, `&&`, `||`, `;`, `|`, and redirects to root paths.
+
+**Files changed:** `modules/core/deployer.py`
+
+### High: Path traversal in backup restore via string prefix bypass
+
+`restore_from_backup()` validated ZIP entry paths using `str.startswith(str(cert_dir) + os.sep)`, which is bypassable with crafted paths. Replaced with `Path.relative_to()` which raises `ValueError` on any path outside the target directory.
+
+**Files changed:** `modules/core/file_operations.py`
+
+### High: Rate limiting bypassed for all web routes
+
+The rate limiter explicitly excluded `/api/web/`, `/api/users`, and `/api/backups` paths. Certificate creation, backup operations, and user management were completely unthrottled.
+
+**Fix:** Removed the blanket exclusion; only `/api/auth/` (which has its own dedicated login rate limiter) is now exempt.
+
+**Files changed:** `modules/core/factory.py`
+
+### High: Race condition in `delete_certificate()` using unreliable `lock.locked()`
+
+`delete_certificate()` used `domain_lock.locked()` to check if an operation was in progress. `Lock.locked()` is unreliable for cross-thread coordination. Replaced with `lock.acquire(blocking=False)` + `try/finally/release` for correct mutual exclusion.
+
+**Files changed:** `modules/core/certificates.py`
+
+### High: Scheduler failure completely silent
+
+If APScheduler failed to start (e.g., corrupted SQLite DB), the application continued without automatic certificate renewal and no visible warning was emitted. Added `warnings.warn()` with `RuntimeWarning` so operators are alerted.
+
+**Files changed:** `modules/core/factory.py`
+
+### High: `__import__('time')` anti-pattern in Vault backend
+
+`HashiCorpVaultBackend._get_client()` used `__import__('time').time()` instead of a standard import. Replaced with a module-level `import time` and removed the redundant inline import.
+
+**Files changed:** `modules/core/storage_backends.py`
+
+### Medium: Batch download accepted unsanitized domain names
+
+`download_batch_web()` passed user-supplied domain strings directly to `certificate_manager.get_certificate_path()` without validation. Now validates each domain through `_sanitize_domain()` before use. Also added explicit `mimetype='application/zip'` to the response.
+
+**Files changed:** `modules/web/cert_routes.py`
+
+### Medium: Role validation was dead code
+
+In `create_api_key()`, the role was normalized via `_normalize_role()` before checking `if role not in ROLE_HIERARCHY`. Since `_normalize_role()` maps invalid roles to `'viewer'`, the validation always passed. Moved the validation before normalization.
+
+**Files changed:** `modules/core/auth.py`
+
+### Medium: DNS propagation `int()` crash on invalid settings
+
+`int(propagation_map.get(dns_provider, default_seconds))` crashed with `ValueError`/`TypeError` if the settings value was a non-numeric string or `None`. Wrapped in `try/except` with fallback to the strategy default.
+
+**Files changed:** `modules/core/certificates.py`
+
+### Medium: SMTP connection leak on send failure
+
+Both `NotifierManager._send_email()` and `DigestManager.send()` called `server.quit()` outside a `finally` block. If `sendmail()` or `login()` raised an exception, the SMTP connection was never closed. Wrapped in `try/finally`.
+
+**Files changed:** `modules/core/notifier.py`, `modules/core/digest.py`
+
+### Medium: Non-atomic file truncation in delivery/deploy logs
+
+`_truncate_delivery_log()` and `_truncate_history()` read all lines, then wrote back directly. A crash between read and write caused data loss. Now uses `tempfile.mkstemp()` + `os.replace()` for atomic truncation.
+
+**Files changed:** `modules/core/notifier.py`, `modules/core/deployer.py`
+
+### Medium: Predictable temporary file path in `safe_file_write()`
+
+Temporary files were created at `{file_path}.tmp` (predictable path, symlink attack vector). Replaced with `tempfile.mkstemp()` in the same directory for unpredictable names.
+
+**Files changed:** `modules/core/file_operations.py`
+
+### Medium: CA certificate expiry not rechecked at runtime
+
+`is_ca_loaded()` only checked `_ca_loaded` flag set during initial load. If the CA certificate expired while CertMate was running, new signing operations would fail with cryptic errors. `is_ca_loaded()` now checks expiry on every call.
+
+**Files changed:** `modules/core/private_ca.py`
+
+### Medium: Error messages leaked internal details to HTTP clients
+
+Settings, backup, cache, and DNS account routes returned `str(e)` in JSON error responses, exposing file paths, stack traces, and configuration details. Replaced with generic messages; full errors logged server-side only.
+
+**Files changed:** `modules/web/settings_routes.py`, `modules/web/backup_cache_routes.py`
+
+### Low: Missing auth on `/redoc` and `/client-certificates` UI routes
+
+Both pages were accessible without authentication. Added `viewer` role requirement.
+
+**Files changed:** `modules/web/ui_routes.py`
+
+## Test Suite
+
+**165 passed, 10 skipped, 0 failed**.
+
+---
+
 # Release v2.2.2
 
 ## Comprehensive Security and Reliability Hardening

@@ -182,12 +182,24 @@ class DeployManager:
             logger.debug(f"Failed to write deploy history: {e}")
 
     def _truncate_history(self):
-        """Keep only the last MAX_HISTORY_ENTRIES entries."""
+        """Keep only the last MAX_HISTORY_ENTRIES entries (atomic)."""
         try:
             lines = self._history_path.read_text().splitlines()
             if len(lines) > MAX_HISTORY_ENTRIES:
                 keep = lines[-MAX_HISTORY_ENTRIES:]
-                self._history_path.write_text('\n'.join(keep) + '\n')
+                import tempfile as _tmpmod
+                tmp_fd, tmp_path = _tmpmod.mkstemp(
+                    dir=str(self._history_path.parent), suffix='.tmp')
+                try:
+                    with os.fdopen(tmp_fd, 'w') as f:
+                        f.write('\n'.join(keep) + '\n')
+                    os.replace(tmp_path, str(self._history_path))
+                except Exception:
+                    try:
+                        os.unlink(tmp_path)
+                    except OSError:
+                        pass
+                    raise
         except OSError:
             pass
 
@@ -263,8 +275,13 @@ class DeployManager:
         if len(command) > 1024:
             logger.warning("Deploy hook command exceeds 1024 character limit")
             return False
-        # Block attempts to read CertMate's own credential/settings files
+        # Block dangerous shell metacharacters that enable chaining/injection
         import re
+        _DANGEROUS_SHELL = re.compile(r'[`$]|\$\(|&&|\|\||[;|]|>\s*/')
+        if _DANGEROUS_SHELL.search(command):
+            logger.warning("Deploy hook command contains dangerous shell metacharacters — blocked")
+            return False
+        # Block attempts to read CertMate's own credential/settings files
         _BLOCKED = re.compile(
             r'(settings\.json|api_bearer_token|client_secret|vault_token|\.env\b)',
             re.IGNORECASE

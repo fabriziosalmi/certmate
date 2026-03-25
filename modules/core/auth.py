@@ -138,9 +138,9 @@ class AuthManager:
             if not name or len(name) > 64:
                 return False, "Key name must be 1-64 characters"
 
-            normalized_role = self._normalize_role(role)
             if role not in ROLE_HIERARCHY:
                 return False, f"Invalid role: {role}. Must be viewer, operator, or admin"
+            normalized_role = self._normalize_role(role)
 
             api_keys = self._get_api_keys()
 
