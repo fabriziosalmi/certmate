@@ -1,3 +1,99 @@
+# Release v2.2.6
+
+## Security Hardening and Code Quality
+
+Seven fixes addressing security, correctness, and reliability across authentication, deploy hooks, certificate routes, and storage backends. All 83 unit tests pass with zero regressions.
+
+### Critical: Web certificate routes passed DNS provider as email to certbot
+
+The `/api/certificates/create` and `/api/web/certificates/create` routes in `cert_routes.py` called `certificate_manager.create_certificate(domain, provider)`, passing the DNS provider name as the `email` positional argument. This caused certbot to receive a provider name (e.g., "cloudflare") where it expected an email address, resulting in silent failures or malformed certificate requests. The batch creation route had the same defect.
+
+**Fix:** Rewrote both routes to match the calling convention used by the REST API resource layer: resolve email, CA provider, challenge type, and DNS provider from settings when not explicitly provided, and pass all parameters as keyword arguments.
+
+**Files changed:** `modules/web/cert_routes.py`
+
+### Critical: Deploy hook command validation expanded
+
+The existing deploy hook command blocklist did not cover `eval`, `source`, here-documents (`<<`), parameter expansion (`${}`), or references to `.pem` private key files. An admin-level account compromise could have leveraged these to exfiltrate credentials or escalate privileges.
+
+**Fix:** Extended the validation regex to block `eval`, `source`, `. /path` (source shorthand), here-documents, and `${}` parameter expansion. Added `.pem` and `private.*key` to the sensitive file pattern. Validation is now also enforced at execution time (defense in depth), not only at hook save time.
+
+**Files changed:** `modules/core/deployer.py`
+
+### High: API token hashing upgraded from SHA-256 to HMAC-SHA256
+
+Scoped API tokens were hashed with plain SHA-256. If an attacker obtained the `settings.json` file, they could brute-force the 40-character hex tokens offline. HMAC-SHA256 with the application's `SECRET_KEY` as the HMAC key makes offline brute-force infeasible without the server-side secret.
+
+**Fix:** New tokens are hashed as `hmac-sha256:<digest>`. Verification falls back to plain `sha256:<digest>` for tokens created before this release, so no existing API keys are invalidated.
+
+**Files changed:** `modules/core/auth.py`, `modules/core/factory.py`
+
+### High: Broad exception handling in authentication module
+
+All CRUD methods in `AuthManager` (`create_api_key`, `revoke_api_key`, `create_user`, `update_user`, `delete_user`, `authenticate_user`, `authenticate_api_token`) caught bare `Exception`, masking programming errors such as `TypeError` or `AttributeError` behind generic "internal error" messages and making debugging difficult.
+
+**Fix:** Narrowed exception handlers to `(OSError, ValueError, KeyError)` -- the specific exception types that can legitimately occur during settings I/O and data validation. Unexpected errors now propagate with a full traceback.
+
+**Files changed:** `modules/core/auth.py`
+
+### Medium: Retry decorator relied on error message string matching
+
+The `_with_retry` decorator in `storage_backends.py` determined whether an error was transient by searching for keywords like "timeout" and "429" in the exception message string. This approach is fragile and locale-dependent, and could retry non-transient errors or miss transient ones.
+
+**Fix:** Added `_is_transient()` which checks exception types first (`ConnectionError`, `TimeoutError`, `OSError`), then HTTP status codes on cloud-SDK exception objects (429, 500, 502, 503, 504), and only falls back to keyword matching as a last resort.
+
+**Files changed:** `modules/core/storage_backends.py`
+
+### Low: Deploy history loaded entire file into memory
+
+Both `_truncate_history()` and `get_history()` called `read_text().splitlines()`, loading the complete JSONL file into memory. With the default 500-entry limit this is manageable, but unnecessary.
+
+**Fix:** Replaced with `collections.deque(f, maxlen=N)` which streams the file and retains only the tail, reducing peak memory usage from O(total lines) to O(retained lines).
+
+**Files changed:** `modules/core/deployer.py`
+
+## Test Suite
+
+**83 unit tests passed, 0 failed**. Integration tests (Docker-dependent) excluded from this run.
+
+---
+
+# Release v2.2.5
+
+## Bug Fixes -- Issues #91, #92, #93
+
+Three community-reported issues fixed. All 83 unit tests pass with zero regressions.
+
+### Fix: Scoped API Keys never display (#91)
+
+`create_api_key()` returns a `(bool, dict)` tuple, but the route handler in `settings_routes.py` passed the entire tuple to `jsonify()`. The frontend received `[true, {...}]` instead of the expected `{...}` object, so `data.token` was always `undefined` and the newly created key was never shown to the user.
+
+**Fix:** Unpacked the tuple before serialization: `success, result_data = auth_manager.create_api_key(...)`. The error path now returns the actual error message from the auth layer with a 400 status instead of a generic 500.
+
+**Files changed:** `modules/web/settings_routes.py`
+
+### Fix: Newly created certificate still shows expired (#92)
+
+The certificate date parser in `_parse_certificate_info()` used a single `strptime` format (`%b %d %H:%M:%S %Y %Z`) that fails silently on certain platforms or OpenSSL versions (double-space padding for single-digit days, missing timezone suffix). When parsing failed, the method returned `exists: False`, causing the dashboard to either hide the certificate or display it with a null/expired status.
+
+**Fix:** Added `_parse_openssl_date()` with three format fallbacks for cross-platform compatibility. Switched from `openssl -dates` to `openssl -enddate` for cleaner single-line output. When a certificate file exists but its expiry cannot be parsed, the response now returns `exists: True` with `needs_renewal: True`, preventing false "expired" status on the dashboard. Improved error logging to capture the actual OpenSSL output on failure.
+
+**Files changed:** `modules/core/certificates.py`
+
+### Fix: certbot does not support dns alias mode (#93)
+
+The code passed `--domain-alias` as a certbot CLI flag in all DNS provider strategy classes. Certbot does not have this argument -- it is a concept from tools like acme.sh and lego. Certbot failed immediately with `unrecognized arguments: --domain-alias`.
+
+**Fix:** Removed the invalid flag from all six `configure_certbot_arguments()` implementations (base class, PowerDNS, Namecheap, Infomaniak, ACME-DNS, HTTP-01). When a domain alias is specified, CertMate now logs an informational message guiding the user to set up the required CNAME delegation. DNS alias validation with certbot works transparently via CNAME records: create a CNAME from `_acme-challenge.<domain>` pointing to `_acme-challenge.<alias-domain>`, and certbot follows the chain automatically during the DNS-01 challenge.
+
+**Files changed:** `modules/core/dns_strategies.py`
+
+## Test Suite
+
+**83 unit tests passed, 0 failed**. Integration tests (Docker-dependent) excluded from this run.
+
+---
+
 # Release v2.2.4
 
 ## Bug Fixes — Settings, Certificate Status & DNS Alias Mode
@@ -38,9 +134,11 @@ The renewal API response contains `{message, domain, duration}` — no `success`
 
 ### Feature: DNS Alias Mode configurable via Web UI (#89)
 
-The `--domain-alias` certbot flag (for CNAME-based DNS delegation) was already supported by the backend but had no UI entry point.
+DNS alias validation via CNAME delegation was already supported by the backend but had no UI entry point.
 
 **Fix:** Added a "DNS Alias Domain" text field in the Advanced Options section of the certificate creation form. When filled, the value is passed as `domain_alias` in the creation request.
+
+**Note:** v2.2.5 subsequently removed an invalid `--domain-alias` certbot flag that was added in this release. DNS alias validation works via standard CNAME delegation and requires no special certbot flags. See the v2.2.5 release notes for details.
 
 **Files changed:** `templates/index.html`, `static/js/dashboard.js`
 

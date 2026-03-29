@@ -47,7 +47,7 @@ CertMate solves the complexity of SSL certificate management in modern distribut
 - **Private CA Support** - Internal/corporate CAs with custom trust bundles and ACME compatibility
 - **Wildcard Support** - Single certificate for `*.example.com` and `example.com`
 - **Multi-Domain Certificates** - SAN certificates for multiple domains
-- **Domain Alias Support** - Use alternative domains for DNS validation (e.g., centralized validation domain)
+- **DNS Alias via CNAME Delegation** - Delegate ACME DNS validation to an alternative domain using standard CNAME records
 - **Automatic Renewal** - Smart renewal 30 days before expiry
 - **Certificate Validation** - Real-time SSL certificate status checking
 - **Per-Certificate CA Selection** - Choose different CAs for different certificates
@@ -652,7 +652,7 @@ Content-Type: application/json
  "account_id": "staging"
 }
 
-# Create certificate with domain alias (centralized DNS validation)
+# Create certificate with DNS alias via CNAME delegation
 POST /api/certificates/create
 Authorization: Bearer your_token_here
 Content-Type: application/json
@@ -660,13 +660,18 @@ Content-Type: application/json
 {
  "domain": "example.com",
  "dns_provider": "cloudflare",
- "domain_alias": "_acme-challenge.validation.example.org"
+ "domain_alias": "validation.example.org"
 }
-# This creates a certificate for example.com but performs DNS validation
-# on _acme-challenge.validation.example.org instead. Useful when:
-# - The primary domain doesn't support DNS API
-# - You want to centralize DNS validations on a single domain
-# - There are DNS restrictions on the primary domain
+# DNS alias validation works via CNAME delegation. Before issuing, create
+# a CNAME record in your DNS zone:
+#
+#   _acme-challenge.example.com  CNAME  _acme-challenge.validation.example.org
+#
+# Certbot follows the CNAME chain automatically during the DNS-01 challenge.
+# This is useful when:
+# - The primary domain's DNS does not support an API
+# - You want to centralize ACME validations on a dedicated domain
+# - There are DNS restrictions on the primary zone
 
 # Renew certificate
 POST /api/certificates/example.com/renew
@@ -1676,6 +1681,7 @@ certmate/
 #### Authentication & Authorization
 - **Role-Based Access Control**: Assign viewer, operator, or admin roles to each user
 - **Scoped API Keys**: Create API keys with specific role permissions and optional expiration
+- **HMAC-SHA256 Token Hashing**: API tokens are hashed with a server-side HMAC secret, preventing offline brute-force even if the settings file is leaked (backward compatible with pre-2.2.6 SHA-256 hashes)
 - **Strong Bearer Tokens**: Use cryptographically secure tokens (32+ characters)
 - **Token Rotation**: Regularly rotate API tokens and revoke unused keys
 - **Environment Variables**: Never commit tokens to version control

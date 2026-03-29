@@ -470,22 +470,24 @@ Existing single-account configurations are automatically migrated to multi-accou
 
 ---
 
-## Multi-Master DNS & Domain Alias
+## Multi-Master DNS & Domain Alias (CNAME Delegation)
 
-When your domain is managed by multiple DNS providers simultaneously (multi-master setup), use CertMate's **domain alias** feature.
+When your domain is managed by multiple DNS providers simultaneously (multi-master setup), use standard **CNAME delegation** to centralize ACME DNS validation on a single provider.
 
 ### The Problem
 
-With multi-master DNS (e.g., deSEC + gcore), you can only configure one DNS provider per certificate request — but ACME validation requires creating `_acme-challenge` TXT records.
+With multi-master DNS (e.g., deSEC + gcore), you can only configure one DNS provider per certificate request, but ACME validation requires creating `_acme-challenge` TXT records.
 
 ### The Solution
+
+DNS alias validation works via CNAME delegation. Certbot follows CNAME chains automatically during the DNS-01 challenge -- no special flags are required.
 
 1. **Create a validation domain** on a CertMate-supported provider (e.g., `validation.example.org` on Cloudflare)
 2. **Add CNAME records** in all your DNS providers pointing to the validation domain:
    ```dns
    _acme-challenge.example.com. 300 IN CNAME _acme-challenge.validation.example.org.
    ```
-3. **Request the certificate** with `domain_alias`:
+3. **Request the certificate**, specifying the Cloudflare provider that manages the validation domain:
    ```bash
    curl -X POST http://localhost:8000/api/certificates/create \
      -H "Authorization: Bearer YOUR_TOKEN" \
@@ -493,16 +495,19 @@ With multi-master DNS (e.g., deSEC + gcore), you can only configure one DNS prov
      -d '{
        "domain": "example.com",
        "dns_provider": "cloudflare",
-       "domain_alias": "_acme-challenge.validation.example.org"
+       "domain_alias": "validation.example.org"
      }'
    ```
+
+   The `domain_alias` field is informational: it is logged by CertMate for auditing purposes. The actual delegation happens at the DNS level through the CNAME record created in step 2. Certbot writes the TXT record on the target zone (Cloudflare) and the CNAME ensures the ACME server finds it when querying `_acme-challenge.example.com`.
 
 ### Benefits
 
 - Works regardless of which DNS provider serves the query
 - No synchronization needed between providers
 - Works with providers not natively supported by CertMate (deSEC, gcore)
-- Keep DNS API credentials limited to the validation domain
+- DNS API credentials are limited to the validation domain only
+- Compatible with all certbot DNS plugins -- no special certbot flags needed
 
 ### Wildcard Certificates with Domain Alias
 
@@ -513,8 +518,14 @@ curl -X POST http://localhost:8000/api/certificates/create \
   -d '{
     "domain": "*.example.com",
     "dns_provider": "cloudflare",
-    "domain_alias": "_acme-challenge.validation.example.org"
+    "domain_alias": "validation.example.org"
   }'
+```
+
+Ensure the CNAME is in place before requesting the certificate:
+
+```dns
+_acme-challenge.example.com. 300 IN CNAME _acme-challenge.validation.example.org.
 ```
 
 ### Troubleshooting Domain Alias
@@ -522,10 +533,11 @@ curl -X POST http://localhost:8000/api/certificates/create \
 ```bash
 # Verify CNAME propagation
 dig @8.8.8.8 _acme-challenge.example.com CNAME +short
-# Should return: _acme-challenge.validation.example.org.
+# Expected: _acme-challenge.validation.example.org.
 
-# Check TXT record creation after requesting a certificate
-dig _acme-challenge.validation.example.org TXT
+# After requesting a certificate, verify the TXT record on the validation domain
+dig _acme-challenge.validation.example.org TXT +short
+# Expected: a base64-encoded ACME challenge token
 ```
 
 ---
