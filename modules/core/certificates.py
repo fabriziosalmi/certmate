@@ -126,72 +126,95 @@ class CertificateManager:
             logger.error(f"Failed to read certificate file for {domain}: {e}")
             return self._create_empty_cert_info(domain)
     
+    @staticmethod
+    def _parse_openssl_date(date_str):
+        """Parse openssl date string, trying multiple formats for cross-platform compatibility."""
+        formats = [
+            '%b %d %H:%M:%S %Y %Z',   # Most common: "Jan  1 00:00:00 2026 GMT"
+            '%b  %d %H:%M:%S %Y %Z',  # Double-space variant for single-digit days
+            '%b %d %H:%M:%S %Y',       # Without timezone
+        ]
+        for fmt in formats:
+            try:
+                return datetime.strptime(date_str.strip(), fmt)
+            except ValueError:
+                continue
+        raise ValueError(f"Unable to parse certificate date: {date_str!r}")
+
     def _parse_certificate_info(self, domain, cert_content, metadata=None):
         """Parse certificate information from certificate content"""
         if metadata is None:
             metadata = {}
-        
+
         dns_provider = metadata.get('dns_provider')
         settings = self.settings_manager.load_settings()
         if not dns_provider:
             # Fall back to current settings
             dns_provider = self.settings_manager.get_domain_dns_provider(domain, settings)
-        
+
         # Get configurable renewal threshold (default 30 days for backward compatibility)
         renewal_threshold_days = settings.get('renewal_threshold_days', 30)
-        
+
         try:
             # Write cert content to temporary file for openssl processing
             with tempfile.NamedTemporaryFile(mode='wb', suffix='.pem', delete=False) as temp_cert:
                 temp_cert.write(cert_content)
                 temp_cert_path = temp_cert.name
-            
+
             try:
-                # Get certificate expiry using openssl
+                # Get certificate expiry using openssl — prefer -enddate for simpler parsing
                 result = self.shell_executor.run([
-                    'openssl', 'x509', '-in', temp_cert_path, '-noout', '-dates'
+                    'openssl', 'x509', '-in', temp_cert_path, '-noout', '-enddate'
                 ], capture_output=True, text=True)
-                
+
+                not_after = None
                 if result.returncode == 0:
-                    lines = result.stdout.strip().split('\n')
-                    not_after = None
-                    for line in lines:
-                        if line.startswith('notAfter='):
-                            not_after = line.split('=', 1)[1]
-                            break
-                    
-                    if not_after:
-                        # Parse the date
-                        try:
-                            expiry_date = datetime.strptime(not_after, '%b %d %H:%M:%S %Y %Z')
-                            now_utc = datetime.utcnow()
-                            days_left = (expiry_date - now_utc).days
-                            
-                            return {
-                                'domain': domain,
-                                'exists': True,
-                                'expiry_date': expiry_date.strftime('%Y-%m-%d %H:%M:%S'),
-                                'days_left': days_left,
-                                'days_until_expiry': days_left,
-                                'needs_renewal': days_left < renewal_threshold_days,
-                                'dns_provider': dns_provider
-                            }
-                        except Exception as e:
-                            logger.error(f"Error parsing certificate date: {e}")
+                    output = result.stdout.strip()
+                    # Output format: "notAfter=Jan  1 00:00:00 2026 GMT"
+                    if '=' in output:
+                        not_after = output.split('=', 1)[1]
+
+                if not_after:
+                    try:
+                        expiry_date = self._parse_openssl_date(not_after)
+                        now_utc = datetime.utcnow()
+                        days_left = (expiry_date - now_utc).days
+
+                        return {
+                            'domain': domain,
+                            'exists': True,
+                            'expiry_date': expiry_date.strftime('%Y-%m-%d %H:%M:%S'),
+                            'days_left': days_left,
+                            'days_until_expiry': days_left,
+                            'needs_renewal': days_left < renewal_threshold_days,
+                            'dns_provider': dns_provider
+                        }
+                    except ValueError as e:
+                        logger.error(f"Error parsing certificate date for {domain}: {e}")
+                else:
+                    logger.error(f"openssl returned no expiry for {domain}: rc={result.returncode} stderr={result.stderr}")
             finally:
                 # Clean up temporary file
                 try:
-                    import os
                     os.unlink(temp_cert_path)
                 except FileNotFoundError:
-                    pass  # Already deleted
+                    pass
                 except Exception as cleanup_err:
                     logger.warning(f"Failed to clean up temp cert file {temp_cert_path}: {cleanup_err}")
-                    
+
         except Exception as e:
-            logger.error(f"Error getting certificate info: {e}")
-        
-        return self._create_empty_cert_info(domain)
+            logger.error(f"Error getting certificate info for {domain}: {e}")
+
+        # Certificate file exists but we couldn't parse the expiry — still mark exists=True
+        return {
+            'domain': domain,
+            'exists': True,
+            'expiry_date': None,
+            'days_left': None,
+            'days_until_expiry': None,
+            'needs_renewal': True,
+            'dns_provider': dns_provider
+        }
 
     def _create_empty_cert_info(self, domain):
         """Create empty certificate info structure"""

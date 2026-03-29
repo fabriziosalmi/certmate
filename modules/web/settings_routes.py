@@ -190,13 +190,13 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
                 return jsonify({'error': 'Key name must be ≤ 64 characters'}), 400
 
             user = getattr(request, 'current_user', {})
-            result = auth_manager_ref.create_api_key(
+            success, result_data = auth_manager_ref.create_api_key(
                 name, role=role, expires_at=expires_at,
                 created_by=user.get('username')
             )
-            if result:
-                return jsonify(result), 201
-            return jsonify({'error': 'Failed to create API key'}), 500
+            if success:
+                return jsonify(result_data), 201
+            return jsonify({'error': result_data}), 400
         except Exception as e:
             logger.error(f"Failed to create API key: {e}")
             return jsonify({'error': 'Failed to create API key'}), 500

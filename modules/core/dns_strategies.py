@@ -69,19 +69,27 @@ class DNSProviderStrategy(ABC):
 
     def configure_certbot_arguments(self, cmd: list, credentials_file: Optional[Path], domain_alias: Optional[str] = None) -> None:
         """Add provider-specific arguments to the certbot command
-        
+
         Args:
             cmd: Certbot command list to append arguments to
             credentials_file: Path to credentials file
-            domain_alias: Optional domain alias for DNS validation
+            domain_alias: Optional domain alias for DNS validation.
+                Certbot does not have a native ``--domain-alias`` flag.
+                DNS alias validation works via CNAME delegation:
+                create a CNAME from ``_acme-challenge.<domain>`` pointing to
+                ``_acme-challenge.<alias-domain>`` in your DNS zone, and certbot
+                will follow the CNAME transparently.
         """
         cmd.extend([f'--{self.plugin_name}'])
         if credentials_file:
             cmd.extend([f'--{self.plugin_name}-credentials', str(credentials_file)])
-        
-        # Add domain alias if provided
+
         if domain_alias:
-            cmd.extend(['--domain-alias', domain_alias])
+            logger.info(
+                f"DNS alias '{domain_alias}' requested — ensure a CNAME "
+                f"from _acme-challenge.<domain> to _acme-challenge.{domain_alias} "
+                f"exists in your DNS zone. Certbot follows CNAMEs automatically."
+            )
 
     def prepare_environment(self, env: Dict[str, str], config_data: Dict[str, Any]) -> None:
         """Set up environment variables if needed"""
@@ -178,7 +186,7 @@ class PowerDNSStrategy(DNSProviderStrategy):
     @property
     def plugin_name(self) -> str:
         return 'dns-powerdns'
-    
+
     @property
     def default_propagation_seconds(self) -> int:
         return 60
@@ -187,10 +195,12 @@ class PowerDNSStrategy(DNSProviderStrategy):
         cmd.extend(['--authenticator', self.plugin_name])
         if credentials_file:
             cmd.extend([f'--{self.plugin_name}-credentials', str(credentials_file)])
-        
-        # Add domain alias if provided
+
         if domain_alias:
-            cmd.extend(['--domain-alias', domain_alias])
+            logger.info(
+                f"DNS alias '{domain_alias}' requested for PowerDNS — ensure a CNAME "
+                f"from _acme-challenge.<domain> to _acme-challenge.{domain_alias} exists."
+            )
 
 class DigitalOceanStrategy(DNSProviderStrategy):
     def create_config_file(self, config_data: Dict[str, Any]) -> Optional[Path]:
@@ -263,10 +273,12 @@ class NamecheapStrategy(DNSProviderStrategy):
         cmd.extend(['--authenticator', self.plugin_name])
         if credentials_file:
             cmd.extend([f'--{self.plugin_name}-credentials', str(credentials_file)])
-        
-        # Add domain alias if provided
+
         if domain_alias:
-            cmd.extend(['--domain-alias', domain_alias])
+            logger.info(
+                f"DNS alias '{domain_alias}' requested for Namecheap — ensure a CNAME "
+                f"from _acme-challenge.<domain> to _acme-challenge.{domain_alias} exists."
+            )
 
 class ArvanCloudStrategy(DNSProviderStrategy):
     def create_config_file(self, config_data: Dict[str, Any]) -> Optional[Path]:
@@ -292,10 +304,12 @@ class InfomaniakStrategy(DNSProviderStrategy):
         cmd.extend(['--authenticator', self.plugin_name])
         if credentials_file:
             cmd.extend([f'--{self.plugin_name}-credentials', str(credentials_file)])
-        
-        # Add domain alias if provided
+
         if domain_alias:
-            cmd.extend(['--domain-alias', domain_alias])
+            logger.info(
+                f"DNS alias '{domain_alias}' requested for Infomaniak — ensure a CNAME "
+                f"from _acme-challenge.<domain> to _acme-challenge.{domain_alias} exists."
+            )
 
 class AcmeDNSStrategy(DNSProviderStrategy):
     def create_config_file(self, config_data: Dict[str, Any]) -> Optional[Path]:
@@ -320,10 +334,12 @@ class AcmeDNSStrategy(DNSProviderStrategy):
         cmd.extend(['--authenticator', 'acme-dns'])
         if credentials_file:
             cmd.extend(['--acme-dns-credentials', str(credentials_file)])
-        
-        # Add domain alias if provided
+
         if domain_alias:
-            cmd.extend(['--domain-alias', domain_alias])
+            logger.info(
+                f"DNS alias '{domain_alias}' requested for ACME-DNS — ensure a CNAME "
+                f"from _acme-challenge.<domain> to _acme-challenge.{domain_alias} exists."
+            )
 
 class GenericMultiProviderStrategy(DNSProviderStrategy):
     def __init__(self, provider_name: str):
