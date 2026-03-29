@@ -128,6 +128,7 @@ def initialize_managers(container: AppContainer, app):
     settings_manager = SettingsManager(file_ops, container.data_dir / "settings.json")
     dns_manager = DNSManager(settings_manager)
     auth_manager = AuthManager(settings_manager)
+    auth_manager.set_hmac_key(app.secret_key)
     cache_manager = CacheManager(settings_manager)
     storage_manager = StorageManager(settings_manager)
     ca_manager = CAManager(settings_manager)

@@ -119,6 +119,11 @@ class DeployManager:
         }
 
         try:
+            # Defense in depth: re-validate command at execution time
+            safe, reason = self._is_command_safe(command)
+            if not safe:
+                raise ValueError(f"Command blocked at runtime: {reason}")
+
             proc = self.shell_executor.run(
                 ['sh', '-c', command],
                 check=False,
@@ -184,37 +189,57 @@ class DeployManager:
     def _truncate_history(self):
         """Keep only the last MAX_HISTORY_ENTRIES entries (atomic)."""
         try:
-            lines = self._history_path.read_text().splitlines()
-            if len(lines) > MAX_HISTORY_ENTRIES:
-                keep = lines[-MAX_HISTORY_ENTRIES:]
-                import tempfile as _tmpmod
-                tmp_fd, tmp_path = _tmpmod.mkstemp(
-                    dir=str(self._history_path.parent), suffix='.tmp')
+            from collections import deque
+            import tempfile as _tmpmod
+
+            with open(self._history_path, 'r') as f:
+                tail = deque(f, maxlen=MAX_HISTORY_ENTRIES)
+
+            if len(tail) < MAX_HISTORY_ENTRIES:
+                return  # Nothing to truncate
+
+            tmp_fd, tmp_path = _tmpmod.mkstemp(
+                dir=str(self._history_path.parent), suffix='.tmp')
+            try:
+                with os.fdopen(tmp_fd, 'w') as f:
+                    f.writelines(tail)
+                os.replace(tmp_path, str(self._history_path))
+            except Exception:
                 try:
-                    with os.fdopen(tmp_fd, 'w') as f:
-                        f.write('\n'.join(keep) + '\n')
-                    os.replace(tmp_path, str(self._history_path))
-                except Exception:
-                    try:
-                        os.unlink(tmp_path)
-                    except OSError:
-                        pass
-                    raise
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
+                raise
         except OSError:
             pass
 
     def get_history(self, limit=50, domain=None):
-        """Read recent deploy history entries, newest first."""
+        """Read recent deploy history entries, newest first.
+
+        Uses a bounded deque to avoid loading the entire file when only
+        the tail is needed (the common case when domain=None).
+        """
         try:
             if not self._history_path.exists():
                 return []
-            lines = self._history_path.read_text().splitlines()
+
+            # When filtering by domain we must scan the whole file;
+            # otherwise read only the last `limit` lines.
+            from collections import deque
+            if domain:
+                max_lines = None  # scan all
+            else:
+                max_lines = limit
+
+            with open(self._history_path, 'r') as f:
+                tail = deque(f, maxlen=max_lines)
+
             entries = []
-            for line in reversed(lines):
-                line = line.strip()
-                if not line:
+            for raw in reversed(tail):
+                raw = raw.strip()
+                if not raw:
                     continue
-                entry = json.loads(line)
+                entry = json.loads(raw)
                 if domain and entry.get('domain') != domain:
                     continue
                 entries.append(entry)
@@ -260,6 +285,47 @@ class DeployManager:
         self.settings_manager.save_settings(settings)
         return True
 
+    @staticmethod
+    def _is_command_safe(command):
+        """Check a deploy hook command for dangerous patterns.
+
+        Returns (safe: bool, reason: str | None).
+        """
+        import re
+
+        if len(command) > 1024:
+            return False, "command exceeds 1024 character limit"
+
+        # Block shell metacharacters that enable chaining, sub-shells, or
+        # redirection to absolute paths (which could overwrite system files).
+        _DANGEROUS_SHELL = re.compile(
+            r'[`]'              # backtick sub-shell
+            r'|\$\('            # $() sub-shell
+            r'|\$\{'            # ${} parameter expansion
+            r'|&&'              # logical AND chaining
+            r'|\|\|'            # logical OR chaining
+            r'|[;]'             # statement separator
+            r'|\|'              # pipe
+            r'|>\s*/'           # redirect to absolute path
+            r'|<<'              # here-doc
+            r'|\beval\b'        # eval built-in
+            r'|\bsource\b'     # source built-in
+            r'|\b\.\s+/'       # ". /path" (source shorthand)
+        )
+        if _DANGEROUS_SHELL.search(command):
+            return False, "contains dangerous shell metacharacters"
+
+        # Block access to CertMate's own sensitive files.
+        _BLOCKED_FILES = re.compile(
+            r'(settings\.json|api_bearer_token|client_secret'
+            r'|vault_token|\.env\b|private.*key|\.pem\b)',
+            re.IGNORECASE,
+        )
+        if _BLOCKED_FILES.search(command):
+            return False, "references sensitive CertMate files"
+
+        return True, None
+
     def _validate_hook(self, hook):
         """Validate a single hook dict. Returns True if valid."""
         if not isinstance(hook, dict):
@@ -270,25 +336,13 @@ class DeployManager:
             return False
         if not hook.get('command', '').strip():
             return False
+
         command = hook['command'].strip()
-        # Enforce a maximum command length to limit injection surface
-        if len(command) > 1024:
-            logger.warning("Deploy hook command exceeds 1024 character limit")
+        safe, reason = self._is_command_safe(command)
+        if not safe:
+            logger.warning("Deploy hook command rejected: %s", reason)
             return False
-        # Block dangerous shell metacharacters that enable chaining/injection
-        import re
-        _DANGEROUS_SHELL = re.compile(r'[`$]|\$\(|&&|\|\||[;|]|>\s*/')
-        if _DANGEROUS_SHELL.search(command):
-            logger.warning("Deploy hook command contains dangerous shell metacharacters — blocked")
-            return False
-        # Block attempts to read CertMate's own credential/settings files
-        _BLOCKED = re.compile(
-            r'(settings\.json|api_bearer_token|client_secret|vault_token|\.env\b)',
-            re.IGNORECASE
-        )
-        if _BLOCKED.search(command):
-            logger.warning("Deploy hook command references sensitive CertMate files — blocked")
-            return False
+
         hook['timeout'] = min(max(int(hook.get('timeout', DEFAULT_TIMEOUT)), 1), MAX_TIMEOUT)
         if not isinstance(hook.get('on_events'), list):
             hook['on_events'] = ['created', 'renewed']

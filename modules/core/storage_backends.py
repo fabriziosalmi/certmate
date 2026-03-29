@@ -24,6 +24,39 @@ logger = logging.getLogger(__name__)
 _SAFE_DOMAIN_RE = re.compile(r'^(\*\.)?[a-zA-Z0-9]([a-zA-Z0-9._-]{0,253}[a-zA-Z0-9])?$')
 
 
+def _is_transient(exc):
+    """Determine whether an exception is transient and worth retrying.
+
+    Checks exception type first (preferred), then falls back to HTTP
+    status codes on cloud-SDK response objects, and finally to message
+    keywords as a last resort.
+    """
+    # 1. Well-known transient exception types (no SDK import required)
+    _TRANSIENT_TYPES = (
+        ConnectionError, TimeoutError, OSError,
+    )
+    if isinstance(exc, _TRANSIENT_TYPES):
+        return True
+
+    # 2. Cloud SDK exceptions that carry an HTTP status code
+    status = getattr(exc, 'status_code', None) or getattr(exc, 'code', None)
+    if isinstance(status, int) and status in (429, 500, 502, 503, 504):
+        return True
+    # boto3 wraps status in response metadata
+    response = getattr(exc, 'response', None)
+    if isinstance(response, dict):
+        http_code = response.get('ResponseMetadata', {}).get('HTTPStatusCode')
+        if isinstance(http_code, int) and http_code in (429, 500, 502, 503, 504):
+            return True
+
+    # 3. Fallback: keyword matching on the error message
+    msg = str(exc).lower()
+    return any(k in msg for k in (
+        'timeout', 'rate', 'throttl', '429', '503',
+        'service unavailable', 'connection',
+    ))
+
+
 def _with_retry(max_attempts=3, delay=1.0, exceptions=(Exception,)):
     """Decorator that retries a method on transient errors (rate limits, timeouts, etc.)"""
     import functools, time as _time
@@ -36,13 +69,10 @@ def _with_retry(max_attempts=3, delay=1.0, exceptions=(Exception,)):
                     return fn(*args, **kwargs)
                 except exceptions as exc:
                     last_exc = exc
-                    msg = str(exc).lower()
-                    # Only retry on transient/rate-limit errors
-                    if any(k in msg for k in ('timeout', 'rate', 'throttl', '429', '503', 'service unavailable', 'connection')):
-                        if attempt < max_attempts:
-                            logger.warning(f"{fn.__name__} attempt {attempt} failed (transient): {exc}. Retrying in {delay * attempt:.1f}s...")
-                            _time.sleep(delay * attempt)
-                            continue
+                    if _is_transient(exc) and attempt < max_attempts:
+                        logger.warning(f"{fn.__name__} attempt {attempt} failed (transient): {exc}. Retrying in {delay * attempt:.1f}s...")
+                        _time.sleep(delay * attempt)
+                        continue
                     raise  # non-transient — re-raise immediately
             raise last_exc
         return wrapper

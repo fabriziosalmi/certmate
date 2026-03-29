@@ -31,17 +31,48 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
     def create_certificate_web():
         """Create certificate via web"""
         try:
-            data = request.json
-            domain = data.get('domain')
-            provider = data.get('provider')
-            if not domain or not provider:
-                return jsonify({'error': 'Domain and provider required'}), 400
+            data = request.json or {}
+            domain = (data.get('domain') or '').strip()
+            san_domains = data.get('san_domains', [])
+            dns_provider = data.get('dns_provider')
+            account_id = data.get('account_id')
+            ca_provider = data.get('ca_provider')
+            challenge_type = data.get('challenge_type')
+            domain_alias = data.get('domain_alias')
 
-            success, message = certificate_manager.create_certificate(
-                domain, provider)
-            if success:
-                return jsonify({'message': message})
-            return jsonify({'error': message}), 400
+            if not domain:
+                return jsonify({'error': 'Domain is required'}), 400
+
+            settings = settings_manager.load_settings()
+            email = settings.get('email')
+            if not email:
+                return jsonify({'error': 'Email not configured. Set it in Settings first.'}), 400
+
+            if not ca_provider:
+                ca_provider = settings.get('default_ca', 'letsencrypt')
+            if not challenge_type:
+                challenge_type = settings.get('challenge_type', 'dns-01')
+            if challenge_type != 'http-01' and not dns_provider:
+                dns_provider = settings.get('dns_provider')
+                if not dns_provider:
+                    return jsonify({'error': 'No DNS provider specified'}), 400
+
+            result = certificate_manager.create_certificate(
+                domain=domain,
+                email=email,
+                dns_provider=dns_provider,
+                account_id=account_id,
+                ca_provider=ca_provider,
+                domain_alias=domain_alias,
+                san_domains=san_domains,
+                challenge_type=challenge_type,
+            )
+            return jsonify(result)
+        except (ValueError, FileExistsError) as e:
+            return jsonify({'error': str(e)}), 400
+        except RuntimeError as e:
+            logger.error(f"Certificate creation failed: {e}")
+            return jsonify({'error': str(e)}), 500
         except Exception as e:
             logger.error(f"Failed to create certificate: {e}")
             return jsonify({'error': 'Failed to create certificate'}), 500
@@ -51,21 +82,36 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
     def batch_create_web():
         """Batch create certificates"""
         try:
-            data = request.json
+            data = request.json or {}
             domains = data.get('domains', [])
-            provider = data.get('provider')
-            if not domains or not provider:
-                return jsonify({'error': 'Domains and provider required'}), 400
+            if not domains:
+                return jsonify({'error': 'Domains list required'}), 400
             if len(domains) > 50:
                 return jsonify({'error': 'Batch size limit exceeded: maximum 50 domains per request'}), 400
 
+            settings = settings_manager.load_settings()
+            email = settings.get('email')
+            if not email:
+                return jsonify({'error': 'Email not configured. Set it in Settings first.'}), 400
+
+            dns_provider = data.get('dns_provider') or settings.get('dns_provider')
+            ca_provider = data.get('ca_provider') or settings.get('default_ca', 'letsencrypt')
+            challenge_type = data.get('challenge_type') or settings.get('challenge_type', 'dns-01')
+
             results = []
             for domain in domains:
-                success, message = certificate_manager.create_certificate(
-                    domain, provider)
-                results.append({
-                    'domain': domain, 'success': success, 'message': message
-                })
+                domain = (domain if isinstance(domain, str) else '').strip()
+                if not domain:
+                    continue
+                try:
+                    result = certificate_manager.create_certificate(
+                        domain=domain, email=email,
+                        dns_provider=dns_provider, ca_provider=ca_provider,
+                        challenge_type=challenge_type,
+                    )
+                    results.append({'domain': domain, 'success': True, 'message': 'Certificate created'})
+                except Exception as e:
+                    results.append({'domain': domain, 'success': False, 'message': str(e)})
             return jsonify(results)
         except Exception as e:
             logger.error(f"Batch creation failed: {e}")

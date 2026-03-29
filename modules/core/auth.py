@@ -7,6 +7,7 @@ Supports both API token and local username/password authentication
 import logging
 import secrets
 import hashlib
+import hmac
 import threading
 import uuid
 import time
@@ -32,11 +33,21 @@ class AuthManager:
         self.settings_manager = settings_manager
         self._sessions = {}  # In-memory session store: {session_id: {user, expires, created}}
         self._session_lock = threading.Lock()  # Thread-safe session access
+        self._hmac_key = None  # Set by set_hmac_key() after app init
         import os
         _timeout_hours = int(os.getenv('SESSION_TIMEOUT_HOURS', '8'))
         self._session_timeout = max(1, _timeout_hours) * 60 * 60
         if not BCRYPT_AVAILABLE:
             logger.warning("bcrypt not available, falling back to SHA-256 (less secure)")
+
+    def set_hmac_key(self, key):
+        """Set the server-side secret used for HMAC-based API token hashing.
+
+        Must be called after the Flask app's secret_key is available.
+        New tokens will be hashed with HMAC; verification falls back to
+        plain SHA-256 for tokens created before this change.
+        """
+        self._hmac_key = key.encode() if isinstance(key, str) else key
 
     @staticmethod
     def _normalize_role(role):
@@ -113,20 +124,30 @@ class AuthManager:
         settings['api_keys'] = api_keys
         return self.settings_manager.save_settings(settings, "api_key_management")
 
-    @staticmethod
-    def _hash_api_token(token):
-        """Hash an API token using SHA-256."""
+    def _hash_api_token(self, token):
+        """Hash an API token using HMAC-SHA256 (with server secret) or plain SHA-256 as fallback."""
+        if self._hmac_key:
+            digest = hmac.new(self._hmac_key, token.encode(), hashlib.sha256).hexdigest()
+            return f"hmac-sha256:{digest}"
         digest = hashlib.sha256(token.encode()).hexdigest()
         return f"sha256:{digest}"
 
-    @staticmethod
-    def _verify_api_token(token, stored_hash):
-        """Verify an API token against a stored SHA-256 hash."""
-        if not stored_hash or not stored_hash.startswith('sha256:'):
+    def _verify_api_token(self, token, stored_hash):
+        """Verify an API token against a stored hash.
+
+        Supports both HMAC-SHA256 (preferred) and legacy plain SHA-256.
+        """
+        if not stored_hash:
             return False
-        expected = stored_hash.split(':', 1)[1]
-        actual = hashlib.sha256(token.encode()).hexdigest()
-        return secrets.compare_digest(actual, expected)
+        if stored_hash.startswith('hmac-sha256:') and self._hmac_key:
+            expected = stored_hash.split(':', 1)[1]
+            actual = hmac.new(self._hmac_key, token.encode(), hashlib.sha256).hexdigest()
+            return secrets.compare_digest(actual, expected)
+        if stored_hash.startswith('sha256:'):
+            expected = stored_hash.split(':', 1)[1]
+            actual = hashlib.sha256(token.encode()).hexdigest()
+            return secrets.compare_digest(actual, expected)
+        return False
 
     def create_api_key(self, name, role='viewer', expires_at=None, created_by=None):
         """Create a new scoped API key.
@@ -176,7 +197,7 @@ class AuthManager:
                     'expires_at': expires_at,
                 }
             return False, "Failed to save API key"
-        except Exception as e:
+        except (OSError, ValueError, KeyError) as e:
             logger.error(f"Error creating API key: {e}")
             return False, "An internal error occurred"
 
@@ -217,7 +238,7 @@ class AuthManager:
                 logger.info(f"API key '{api_keys[key_id].get('name')}' revoked")
                 return True, "API key revoked successfully"
             return False, "Failed to save changes"
-        except Exception as e:
+        except (OSError, ValueError, KeyError) as e:
             logger.error(f"Error revoking API key: {e}")
             return False, "An internal error occurred"
 
@@ -257,7 +278,7 @@ class AuthManager:
                     }
 
             return None
-        except Exception as e:
+        except (OSError, ValueError, KeyError) as e:
             logger.error(f"Error authenticating API token: {e}")
             return None
 
@@ -283,7 +304,7 @@ class AuthManager:
                 logger.info(f"User '{username}' created successfully")
                 return True, "User created successfully"
             return False, "Failed to save user"
-        except Exception as e:
+        except (OSError, ValueError, KeyError) as e:
             logger.error(f"Error creating user: {e}")
             return False, "An internal error occurred"
     
@@ -308,7 +329,7 @@ class AuthManager:
                 logger.info(f"User '{username}' updated successfully")
                 return True, "User updated successfully"
             return False, "Failed to save user"
-        except Exception as e:
+        except (OSError, ValueError, KeyError) as e:
             logger.error(f"Error updating user: {e}")
             return False, "An internal error occurred"
     
@@ -332,7 +353,7 @@ class AuthManager:
                 logger.info(f"User '{username}' deleted successfully")
                 return True, "User deleted successfully"
             return False, "Failed to delete user"
-        except Exception as e:
+        except (OSError, ValueError, KeyError) as e:
             logger.error(f"Error deleting user: {e}")
             return False, "An internal error occurred"
     
@@ -379,7 +400,7 @@ class AuthManager:
             
             logger.warning(f"Failed login attempt for user: {username}")
             return None
-        except Exception as e:
+        except (OSError, ValueError, KeyError) as e:
             logger.error(f"Error authenticating user: {e}")
             return None
     
