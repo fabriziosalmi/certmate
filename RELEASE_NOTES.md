@@ -1,3 +1,35 @@
+# Release v2.2.7
+
+## Hetzner Cloud DNS Provider Support
+
+Adds the new Hetzner Cloud API DNS provider (`hetzner-cloud`) to address the upcoming shutdown of the legacy Hetzner DNS console API ([#95](https://github.com/fabriziosalmi/certmate/issues/95)).
+
+### New: Hetzner Cloud DNS provider plugin
+
+The legacy `certbot-dns-hetzner` plugin relies on the Hetzner DNS console API, which [Hetzner is deprecating in May 2025](https://status.hetzner.com/incident/c2146c42-6dd2-4454-916a-19f07e0e5a44). The new `certbot-dns-hetzner-cloud` plugin (v1.0.5) uses the replacement [Hetzner Cloud API](https://docs.hetzner.cloud/reference/cloud) for DNS record management.
+
+Both providers are available simultaneously so existing users can migrate at their own pace. New users should use `hetzner-cloud` directly.
+
+**Configuration:**
+```json
+{
+  "dns_provider": "hetzner-cloud",
+  "dns_providers": {
+    "hetzner-cloud": {
+      "api_token": "your_hetzner_cloud_api_token"
+    }
+  }
+}
+```
+
+**Files changed:** `requirements.txt`, `requirements-extended.txt`, `modules/core/utils.py`, `modules/core/settings.py`, `docs/dns-providers.md`
+
+## Test Suite
+
+All existing unit tests pass with zero regressions. Provider integration verified via config generation and credential validation checks.
+
+---
+
 # Release v2.2.6
 
 ## Security Hardening and Code Quality
