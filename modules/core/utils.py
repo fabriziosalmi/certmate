@@ -50,6 +50,7 @@ _DNS_PROVIDER_CREDENTIALS = {
     'nsone': ['api_key'],
     'rfc2136': ['nameserver', 'tsig_key', 'tsig_secret'],
     'hetzner': ['api_token'],
+    'hetzner-cloud': ['api_token'],
     'porkbun': ['api_key', 'secret_key'],
     'godaddy': ['api_key', 'secret'],
     'he-ddns': ['username', 'password'],
@@ -59,8 +60,9 @@ _DNS_PROVIDER_CREDENTIALS = {
 # A mapping of multi-provider names to their certbot plugin .ini filename.
 _MULTI_PROVIDER_PLUGIN_FILES = {
     'vultr': 'vultr.ini', 'dnsmadeeasy': 'dnsmadeeasy.ini', 'nsone': 'nsone.ini',
-    'rfc2136': 'rfc2136.ini', 'hetzner': 'hetzner.ini', 'porkbun': 'porkbun.ini',
-    'godaddy': 'godaddy.ini', 'he-ddns': 'he-ddns.ini', 'dynudns': 'dynudns.ini'
+    'rfc2136': 'rfc2136.ini', 'hetzner': 'hetzner.ini', 'hetzner-cloud': 'hetzner-cloud.ini',
+    'porkbun': 'porkbun.ini', 'godaddy': 'godaddy.ini', 'he-ddns': 'he-ddns.ini',
+    'dynudns': 'dynudns.ini'
 }
 
 # A data-driven template for building multi-provider config files.
@@ -77,6 +79,7 @@ _MULTI_PROVIDER_TEMPLATE_MAP = {
         'dns_rfc2136_algorithm': ('tsig_algorithm', 'HMAC-SHA512')
     },
     'hetzner': {'dns_hetzner_api_token': 'api_token'},
+    'hetzner-cloud': {'dns_hetzner_cloud_api_token': 'api_token'},
     'porkbun': {'dns_porkbun_api_key': 'api_key', 'dns_porkbun_secret_key': 'secret_key'},
     'godaddy': {'dns_godaddy_key': 'api_key', 'dns_godaddy_secret': 'secret'},
     'he-ddns': {'dns_he_ddns_username': 'username', 'dns_he_ddns_password': 'password'},

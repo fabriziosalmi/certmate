@@ -1,6 +1,6 @@
 # DNS Providers
 
-CertMate supports **22 DNS providers** for Let's Encrypt DNS-01 challenges through individual certbot plugins.
+CertMate supports **23 DNS providers** for Let's Encrypt DNS-01 challenges through individual certbot plugins.
 
 ---
 
@@ -18,7 +18,8 @@ CertMate supports **22 DNS providers** for Let's Encrypt DNS-01 challenges throu
 | **DigitalOcean** | `certbot-dns-digitalocean` | API Token | Cloud |
 | **Linode** | `certbot-dns-linode` | API Key | Cloud |
 | **Vultr** | `certbot-dns-vultr` | API Key | Cloud |
-| **Hetzner** | `certbot-dns-hetzner` | API Token | Cloud |
+| **Hetzner (legacy DNS)** | `certbot-dns-hetzner` | API Token | Cloud |
+| **Hetzner Cloud** | `certbot-dns-hetzner-cloud` | API Token | Cloud |
 | **Gandi** | `certbot-dns-gandi` | API Token | Registrar |
 | **Namecheap** | `certbot-dns-namecheap` | Username, API Key | Registrar |
 | **Porkbun** | `certbot-dns-porkbun` | API Key, Secret Key | Registrar |
@@ -195,18 +196,37 @@ For BIND or other RFC2136-compatible DNS servers (including **Technitium DNS Ser
 
 > **Technitium DNS**: Enable Dynamic Updates in Zone Options, create a TSIG Key (e.g., `certmate-key` with HMAC-SHA512), then use the generated secret in the configuration above.
 
-### Hetzner
+### Hetzner (legacy DNS API)
+
+> **Deprecation notice:** The Hetzner DNS console API is being shut down in May 2025. New users should use the **Hetzner Cloud** provider below. Existing users should migrate to `hetzner-cloud` before the shutdown date. See [Hetzner status page](https://status.hetzner.com/incident/c2146c42-6dd2-4454-916a-19f07e0e5a44) for details.
 
 ```json
 {
   "dns_provider": "hetzner",
   "dns_providers": {
     "hetzner": {
-      "api_token": "your_hetzner_api_token"
+      "api_token": "your_hetzner_dns_api_token"
     }
   }
 }
 ```
+
+### Hetzner Cloud
+
+Uses the new [Hetzner Cloud API](https://docs.hetzner.cloud/reference/cloud) which replaces the deprecated Hetzner DNS console. This is the recommended provider for all Hetzner users.
+
+```json
+{
+  "dns_provider": "hetzner-cloud",
+  "dns_providers": {
+    "hetzner-cloud": {
+      "api_token": "your_hetzner_cloud_api_token"
+    }
+  }
+}
+```
+
+> Generate a Hetzner Cloud API token from the [Hetzner Cloud Console](https://console.hetzner.cloud/) under your project's API tokens section. The token needs DNS read/write permissions.
 
 ### Infomaniak
 

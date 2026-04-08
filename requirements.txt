@@ -31,6 +31,7 @@ certbot-dns-vultr==1.1.0
 certbot-dns-dnsmadeeasy==2.10.0
 certbot-dns-nsone==2.10.0
 certbot-dns-hetzner==3.0.0
+certbot-dns-hetzner-cloud==1.0.5
 certbot-dns-porkbun==0.11.0
 certbot-dns-godaddy==2.8.0
 certbot-dns-arvancloud==0.1.0
