@@ -1,3 +1,9 @@
+## v2.3.2 (Patch)
+
+- Fix #96: Resolve setup loop due to cache, fix download curl link, and persist domains created via web UI
+- Fix #97: Add native ACME providers: ZeroSSL, Google Trust Services, BuyPass Go, SSL.com
+- Fix #98: Clarify Linode DNS provider as Akamai Connected Cloud (not Akamai Edge)
+
 # Release v2.2.7
 
 ## Hetzner Cloud DNS Provider Support
