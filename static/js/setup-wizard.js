@@ -14,7 +14,7 @@
         digitalocean:  { label: 'DigitalOcean', icon: 'fa-digital-ocean', fields: [{ key: 'api_token', label: 'API Token', type: 'password' }] },
         hetzner:       { label: 'Hetzner', icon: 'fa-server', fields: [{ key: 'api_token', label: 'API Token', type: 'password' }] },
         gandi:         { label: 'Gandi', icon: 'fa-globe', fields: [{ key: 'api_token', label: 'API Token', type: 'password' }] },
-        linode:        { label: 'Linode/Akamai', icon: 'fa-cloud', fields: [{ key: 'api_key', label: 'API Key', type: 'password' }] },
+        linode:        { label: 'Akamai Connected Cloud (Linode)', icon: 'fa-cloud', fields: [{ key: 'api_key', label: 'API Key', type: 'password' }] },
         porkbun:       { label: 'Porkbun', icon: 'fa-globe', fields: [{ key: 'api_key', label: 'API Key', type: 'password' }, { key: 'secret_api_key', label: 'Secret API Key', type: 'password' }] },
         godaddy:       { label: 'GoDaddy', icon: 'fa-globe', fields: [{ key: 'api_key', label: 'API Key', type: 'password' }, { key: 'api_secret', label: 'API Secret', type: 'password' }] },
         namecheap:     { label: 'Namecheap', icon: 'fa-globe', fields: [{ key: 'username', label: 'Username', type: 'text' }, { key: 'api_key', label: 'API Key', type: 'password' }] },

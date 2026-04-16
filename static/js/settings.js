@@ -987,7 +987,7 @@
             'google': 'Google Cloud DNS',
             'powerdns': 'PowerDNS',
             'digitalocean': 'DigitalOcean',
-            'linode': 'Linode',
+            'linode': 'Akamai Connected Cloud (Linode)',
             'gandi': 'Gandi',
             'ovh': 'OVH',
             'namecheap': 'Namecheap',
