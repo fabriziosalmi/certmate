@@ -1214,9 +1214,8 @@
 
     // Copy curl command modal functions
     function copyCurlCommand(domain) {
-        var curlCommand = 'curl -H "Authorization: Bearer YOUR_API_TOKEN" \\\n' +
-            '     -o ' + domain + '-tls.zip \\\n' +
-            '     ' + window.location.origin + '/' + domain + '/tls';
+        var curlCommand = 'curl -O -H "Authorization: Bearer YOUR_API_TOKEN" \\\n' +
+            '     ' + window.location.origin + '/api/certificates/' + encodeURIComponent(domain) + '/download';
 
         document.getElementById('curlCommandText').textContent = curlCommand;
         document.getElementById('curlModal').classList.remove('hidden');

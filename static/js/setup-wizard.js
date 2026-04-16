@@ -27,7 +27,8 @@
     var state = { step: 1, email: '', provider: '', credentials: {} };
 
     function checkSetup() {
-        fetch('/api/web/settings', { credentials: 'same-origin' })
+        var t = new Date().getTime();
+        fetch('/api/web/settings?t=' + t, { credentials: 'same-origin', cache: 'no-store' })
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 if (data && data.setup_completed === false) {

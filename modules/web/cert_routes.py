@@ -67,6 +67,24 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
                 san_domains=san_domains,
                 challenge_type=challenge_type,
             )
+
+            # Ensure domain is in settings for proper listing
+            domains_list = settings.get('domains', [])
+            domain_exists = any(
+                (d == domain if isinstance(d, str) else d.get('domain') == domain)
+                for d in domains_list
+            )
+            if not domain_exists:
+                domain_config = {
+                    'domain': domain,
+                    'dns_provider': dns_provider or settings.get('dns_provider'),
+                    'dns_account_id': account_id
+                }
+                domains_list.append(domain_config)
+                settings['domains'] = domains_list
+                settings_manager.save_settings(settings, "certificate_created_web")
+                logger.info(f"Added domain {domain} to settings after certificate creation")
+
             return jsonify(result)
         except (ValueError, FileExistsError) as e:
             return jsonify({'error': str(e)}), 400

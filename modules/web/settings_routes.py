@@ -33,7 +33,11 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
                         elif isinstance(d[k], dict):
                             _mask_dict(d[k])
                 _mask_dict(masked)
-                return jsonify(masked)
+                response = jsonify(masked)
+                response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, post-check=0, pre-check=0, max-age=0'
+                response.headers['Pragma'] = 'no-cache'
+                response.headers['Expires'] = '-1'
+                return response
             except Exception as e:
                 logger.error(f"Failed to load settings: {e}")
                 return jsonify({'error': 'Failed to load settings'}), 500
