@@ -1,3 +1,7 @@
+## v2.3.3 (Patch)
+
+- Fix #98: Add Akamai Edge DNS as a dedicated DNS provider (separate from Linode / Akamai Connected Cloud), backed by `certbot-plugin-edgedns` and a standard `.edgerc` credentials file.
+
 ## v2.3.2 (Patch)
 
 - Fix #96: Resolve setup loop due to cache, fix download curl link, and persist domains created via web UI
