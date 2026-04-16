@@ -177,6 +177,7 @@ class SettingsManager:
                 'powerdns': {'api_url': '', 'api_key': ''},
                 'digitalocean': {'api_token': ''},
                 'linode': {'api_key': ''},
+                'edgedns': {'client_token': '', 'client_secret': '', 'access_token': '', 'host': ''},
                 'gandi': {'api_token': ''},
                 'ovh': {'endpoint': '', 'application_key': '', 'application_secret': '', 'consumer_key': ''},
                 'namecheap': {'username': '', 'api_key': ''},

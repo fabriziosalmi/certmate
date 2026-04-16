@@ -31,7 +31,7 @@
 CertMate solves the complexity of SSL certificate management in modern distributed architectures. Whether you're running a single application or managing certificates across multiple datacenters, CertMate provides:
 
 - **Zero-Downtime Automation** - Certificates renew automatically 30 days before expiry, with deploy hooks to reload services
-- **Multi-Cloud Support** - Works with **22 DNS providers** (Cloudflare, AWS, Azure, GCP, Hetzner, Porkbun, GoDaddy, and more)
+- **Multi-Cloud Support** - Works with **23 DNS providers** (Cloudflare, AWS, Azure, GCP, Akamai Edge DNS, Hetzner, Porkbun, GoDaddy, and more)
 - **Enterprise-Ready** - RBAC, scoped API keys, Docker, Kubernetes, REST API, and monitoring built-in
 - **Simple Integration** - One-URL certificate downloads for easy automation
 - **Security-First** - Role-based access control, scoped API keys, audit logging, HMAC-signed webhooks
@@ -127,7 +127,7 @@ CertMate solves the complexity of SSL certificate management in modern distribut
 
 ## Supported DNS Providers
 
-CertMate supports **22 DNS providers** through Let's Encrypt DNS-01 challenge via individual certbot plugins that provide reliable, well-tested DNS challenge support. **Multi-account support** is available for major providers, enabling enterprise-grade deployments with separate accounts for production, staging, and disaster recovery.
+CertMate supports **23 DNS providers** through Let's Encrypt DNS-01 challenge via individual certbot plugins that provide reliable, well-tested DNS challenge support. **Multi-account support** is available for major providers, enabling enterprise-grade deployments with separate accounts for production, staging, and disaster recovery.
 
 | Provider               | Credentials Required          | Multi-Account | Use Case                        | Status     |
 | ---------------------- | ----------------------------- | ------------- | ------------------------------- | ---------- |
@@ -138,7 +138,8 @@ CertMate supports **22 DNS providers** through Let's Encrypt DNS-01 challenge vi
 | **DigitalOcean**       | API Token                     | **Yes**       | Cloud infrastructure            | **Stable** |
 | **PowerDNS**           | API URL, API Key              | **Yes**       | Self-hosted, On-premises        | **Stable** |
 | **RFC2136**            | Nameserver, TSIG Key/Secret   | **Yes**       | Standard DNS update protocol    | **Stable** |
-| **Linode**             | API Key                       | Single        | Cloud hosting                   | **Stable** |
+| **Linode** (Akamai Connected Cloud) | API Key             | Single        | Cloud hosting                   | **Stable** |
+| **Akamai Edge DNS**    | EdgeGrid (.edgerc) credentials| Single        | Enterprise managed DNS          | **Stable** |
 | **Gandi**              | API Token                     | Single        | Domain registrar                | **Stable** |
 | **OVH**                | API Credentials               | Single        | European hosting                | **Stable** |
 | **Namecheap**          | Username, API Key             | Single        | Domain registrar                | **Stable** |
@@ -157,7 +158,7 @@ CertMate supports **22 DNS providers** through Let's Encrypt DNS-01 challenge vi
 ### Provider Categories
 
 - **Enterprise Multi-Account**: Cloudflare, AWS Route53, Azure DNS, Google Cloud DNS, DigitalOcean, PowerDNS, RFC2136
-- **Cloud Providers**: AWS Route53, Azure DNS, Google Cloud DNS, DigitalOcean, Linode, Vultr, Hetzner
+- **Cloud Providers**: AWS Route53, Azure DNS, Google Cloud DNS, DigitalOcean, Linode, Akamai Edge DNS, Vultr, Hetzner
 - **Enterprise DNS**: Cloudflare, DNS Made Easy, NS1, PowerDNS
 - **Domain Registrars**: Gandi, OVH, Namecheap, Porkbun, GoDaddy 
 - **European Providers**: OVH, Gandi, Hetzner

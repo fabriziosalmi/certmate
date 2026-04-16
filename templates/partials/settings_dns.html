@@ -172,6 +172,16 @@
                                     </div>
                                 </label>
                                 <label class="relative">
+                                    <input type="radio" name="dns_provider" value="edgedns" class="sr-only peer">
+                                    <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                        <div class="text-center">
+                                            <i class="fas fa-cloud text-lg text-orange-600 mb-1"></i>
+                                            <div class="text-xs font-medium dark:text-white">Akamai Edge DNS</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="edgedns-status">Not configured</div>
+                                        </div>
+                                    </div>
+                                </label>
+                                <label class="relative">
                                     <input type="radio" name="dns_provider" value="vultr" class="sr-only peer">
                                     <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
                                         <div class="text-center">
@@ -649,13 +659,63 @@
                                     <label for="linode_api_key" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
                                         API Key
                                     </label>
-                                    <input type="password" id="linode_api_key" name="linode_api_key" 
+                                    <input type="password" id="linode_api_key" name="linode_api_key"
                                            class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
                                            placeholder="Your Linode API key">
                                 </div>
                             </div>
                             <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
-                                Create a personal access token from your Akamai Connected Cloud (Linode) account with read/write access to DNS records. Note: This is NOT for Akamai Edge DNS.
+                                Create a personal access token from your Akamai Connected Cloud (Linode) account with read/write access to DNS records. For Akamai Edge DNS (enterprise), select the dedicated <em>Akamai Edge DNS</em> provider instead.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Akamai Edge DNS Configuration -->
+                    <div id="edgedns-config" class="dns-config hidden">
+                        <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
+                            <h4 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
+                                <i class="fas fa-cloud mr-2 text-orange-600"></i>
+                                Akamai Edge DNS Configuration
+                            </h4>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label for="edgedns_client_token" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        Client Token
+                                    </label>
+                                    <input type="password" id="edgedns_client_token" name="edgedns_client_token"
+                                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                           placeholder="akab-XXXXXXXXXXXXXXXX-XXXXXXXXXXXXXXXX">
+                                </div>
+                                <div>
+                                    <label for="edgedns_client_secret" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        Client Secret
+                                    </label>
+                                    <input type="password" id="edgedns_client_secret" name="edgedns_client_secret"
+                                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                           placeholder="Your Akamai client secret">
+                                </div>
+                                <div>
+                                    <label for="edgedns_access_token" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        Access Token
+                                    </label>
+                                    <input type="password" id="edgedns_access_token" name="edgedns_access_token"
+                                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                           placeholder="akab-XXXXXXXXXXXXXXXX-XXXXXXXXXXXXXXXX">
+                                </div>
+                                <div>
+                                    <label for="edgedns_host" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        API Host
+                                    </label>
+                                    <input type="text" id="edgedns_host" name="edgedns_host"
+                                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                           placeholder="akab-XXXX.luna.akamaiapis.net">
+                                </div>
+                            </div>
+                            <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                                Create an API client with <em>DNS - Zone Record Management</em> permissions in the
+                                <a href="https://control.akamai.com/" target="_blank" rel="noopener" class="text-primary hover:underline">Akamai Control Center</a>.
+                                Credentials are written to a standard <code>.edgerc</code> file used by the
+                                <a href="https://github.com/akamai/certbot-plugin-edgedns" target="_blank" rel="noopener" class="text-primary hover:underline">certbot-dns-edgedns</a> plugin.
                             </p>
                         </div>
                     </div>

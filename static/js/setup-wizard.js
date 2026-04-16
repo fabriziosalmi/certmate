@@ -15,6 +15,7 @@
         hetzner:       { label: 'Hetzner', icon: 'fa-server', fields: [{ key: 'api_token', label: 'API Token', type: 'password' }] },
         gandi:         { label: 'Gandi', icon: 'fa-globe', fields: [{ key: 'api_token', label: 'API Token', type: 'password' }] },
         linode:        { label: 'Akamai Connected Cloud (Linode)', icon: 'fa-cloud', fields: [{ key: 'api_key', label: 'API Key', type: 'password' }] },
+        edgedns:       { label: 'Akamai Edge DNS', icon: 'fa-cloud', fields: [{ key: 'client_token', label: 'Client Token', type: 'password' }, { key: 'client_secret', label: 'Client Secret', type: 'password' }, { key: 'access_token', label: 'Access Token', type: 'password' }, { key: 'host', label: 'API Host', type: 'text', placeholder: 'akab-XXXX.luna.akamaiapis.net' }] },
         porkbun:       { label: 'Porkbun', icon: 'fa-globe', fields: [{ key: 'api_key', label: 'API Key', type: 'password' }, { key: 'secret_api_key', label: 'Secret API Key', type: 'password' }] },
         godaddy:       { label: 'GoDaddy', icon: 'fa-globe', fields: [{ key: 'api_key', label: 'API Key', type: 'password' }, { key: 'api_secret', label: 'API Secret', type: 'password' }] },
         namecheap:     { label: 'Namecheap', icon: 'fa-globe', fields: [{ key: 'username', label: 'Username', type: 'text' }, { key: 'api_key', label: 'API Key', type: 'password' }] },

@@ -1,6 +1,6 @@
 # DNS Providers
 
-CertMate supports **23 DNS providers** for Let's Encrypt DNS-01 challenges through individual certbot plugins.
+CertMate supports **24 DNS providers** for Let's Encrypt DNS-01 challenges through individual certbot plugins.
 
 ---
 
@@ -16,7 +16,8 @@ CertMate supports **23 DNS providers** for Let's Encrypt DNS-01 challenges throu
 | **DNS Made Easy** | `certbot-dns-dnsmadeeasy` | API Key, Secret Key | Enterprise |
 | **NS1** | `certbot-dns-nsone` | API Key | Enterprise |
 | **DigitalOcean** | `certbot-dns-digitalocean` | API Token | Cloud |
-| **Linode** | `certbot-dns-linode` | API Key | Cloud |
+| **Linode** (Akamai Connected Cloud) | `certbot-dns-linode` | API Key | Cloud |
+| **Akamai Edge DNS** | `certbot-plugin-edgedns` | EdgeGrid `.edgerc` (client_token, client_secret, access_token, host) | Enterprise |
 | **Vultr** | `certbot-dns-vultr` | API Key | Cloud |
 | **Hetzner (legacy DNS)** | `certbot-dns-hetzner` | API Token | Cloud |
 | **Hetzner Cloud** | `certbot-dns-hetzner-cloud` | API Token | Cloud |

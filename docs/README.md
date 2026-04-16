@@ -11,7 +11,7 @@ Welcome to the CertMate documentation. This folder contains comprehensive guides
 - **[Docker Guide](./docker.md)** — Docker builds, multi-platform, Docker Compose
 
 ### Core Features
-- **[DNS Providers](./dns-providers.md)** — 22 DNS providers, multi-account, domain alias
+- **[DNS Providers](./dns-providers.md)** — 23 DNS providers, multi-account, domain alias
 - **[CA Providers](./ca-providers.md)** — Let's Encrypt, DigiCert, Private CA
 - **[Client Certificates](./guide.md)** — Client cert lifecycle, web dashboard, batch ops
 
@@ -47,7 +47,7 @@ Welcome to the CertMate documentation. This folder contains comprehensive guides
 ## Feature Overview
 
 ### Server Certificates
-- **22 DNS providers** for Let's Encrypt DNS-01 challenges
+- **23 DNS providers** for Let's Encrypt DNS-01 challenges
 - **Multiple CA providers**: Let's Encrypt, DigiCert ACME, Private CA
 - **Multi-account support** per DNS provider
 - **Pluggable storage backends**: Local, Azure Key Vault, AWS, Vault, Infisical

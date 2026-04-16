@@ -54,7 +54,8 @@ _DNS_PROVIDER_CREDENTIALS = {
     'porkbun': ['api_key', 'secret_key'],
     'godaddy': ['api_key', 'secret'],
     'he-ddns': ['username', 'password'],
-    'dynudns': ['token']
+    'dynudns': ['token'],
+    'edgedns': ['client_token', 'client_secret', 'access_token', 'host']
 }
 
 # A mapping of multi-provider names to their certbot plugin .ini filename.
@@ -321,6 +322,17 @@ def create_linode_config(api_key: str) -> Path:
     """Create Linode DNS credentials file."""
     content = f"dns_linode_key = {api_key}\ndns_linode_version = 4\n"
     return _create_config_file("linode", content)
+
+def create_edgedns_config(client_token: str, client_secret: str, access_token: str, host: str) -> Path:
+    """Create Akamai Edge DNS credentials file in standard ``.edgerc`` format."""
+    content = (
+        f"[default]\n"
+        f"client_token = {client_token}\n"
+        f"client_secret = {client_secret}\n"
+        f"access_token = {access_token}\n"
+        f"host = {host}\n"
+    )
+    return _create_config_file("edgedns", content)
 
 def create_gandi_config(api_token: str) -> Path:
     """Create Gandi DNS credentials file."""

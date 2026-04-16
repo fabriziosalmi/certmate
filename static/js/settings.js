@@ -557,6 +557,7 @@
             'powerdns': ['powerdns_api_url', 'powerdns_api_key'],
             'digitalocean': ['digitalocean_api_token'],
             'linode': ['linode_api_key'],
+            'edgedns': ['edgedns_client_token', 'edgedns_client_secret', 'edgedns_access_token', 'edgedns_host'],
             'gandi': ['gandi_api_token'],
             'ovh': ['ovh_endpoint', 'ovh_application_key', 'ovh_application_secret', 'ovh_consumer_key'],
             'namecheap': ['namecheap_username', 'namecheap_api_key'],
@@ -758,7 +759,7 @@
     function updateProviderStatusIndicators() {
         var providers = [
             'cloudflare', 'route53', 'azure', 'google', 'powerdns',
-            'digitalocean', 'linode', 'gandi', 'ovh', 'namecheap',
+            'digitalocean', 'linode', 'edgedns', 'gandi', 'ovh', 'namecheap',
             'vultr', 'dnsmadeeasy', 'nsone', 'rfc2136', 'hetzner',
             'porkbun', 'godaddy', 'he-ddns', 'dynudns'
         ];
@@ -889,7 +890,7 @@
                 var config = localDnsProviders[provider];
                 if (typeof config === 'object' && config !== null) {
                     // Check if this is old single-account format
-                    if (config.api_token || config.access_key_id || config.api_key) {
+                    if (config.api_token || config.access_key_id || config.api_key || config.client_token) {
                         populateLegacyProviderFields(provider, config);
                     }
                 }
@@ -944,6 +945,12 @@
                 'powerdns': [
                     { field: 'powerdns_api_url', config: 'api_url' },
                     { field: 'powerdns_api_key', config: 'api_key' }
+                ],
+                'edgedns': [
+                    { field: 'edgedns_client_token', config: 'client_token' },
+                    { field: 'edgedns_client_secret', config: 'client_secret' },
+                    { field: 'edgedns_access_token', config: 'access_token' },
+                    { field: 'edgedns_host', config: 'host' }
                 ]
             };
 
@@ -988,6 +995,7 @@
             'powerdns': 'PowerDNS',
             'digitalocean': 'DigitalOcean',
             'linode': 'Akamai Connected Cloud (Linode)',
+            'edgedns': 'Akamai Edge DNS',
             'gandi': 'Gandi',
             'ovh': 'OVH',
             'namecheap': 'Namecheap',
@@ -1126,6 +1134,12 @@
             ],
             'linode': [
                 { name: 'api_key', label: 'API Key', type: 'password', placeholder: 'Your Linode API key', required: true }
+            ],
+            'edgedns': [
+                { name: 'client_token', label: 'Client Token', type: 'password', placeholder: 'akab-XXXXXXXXXXXXXXXX-XXXXXXXXXXXXXXXX', required: true },
+                { name: 'client_secret', label: 'Client Secret', type: 'password', placeholder: 'Your Akamai client secret', required: true },
+                { name: 'access_token', label: 'Access Token', type: 'password', placeholder: 'akab-XXXXXXXXXXXXXXXX-XXXXXXXXXXXXXXXX', required: true },
+                { name: 'host', label: 'API Host', type: 'text', placeholder: 'akab-XXXX.luna.akamaiapis.net', required: true }
             ],
             'gandi': [
                 { name: 'api_token', label: 'API Token', type: 'password', placeholder: 'Your Gandi LiveDNS API token', required: true }

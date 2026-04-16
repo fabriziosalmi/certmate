@@ -14,7 +14,7 @@ from .utils import (
     create_powerdns_config, create_digitalocean_config, create_linode_config,
     create_gandi_config, create_ovh_config, create_namecheap_config,
     create_arvancloud_config, create_infomaniak_config, create_acme_dns_config,
-    create_multi_provider_config, _create_config_file
+    create_edgedns_config, create_multi_provider_config, _create_config_file
 )
 
 logger = logging.getLogger(__name__)
@@ -218,6 +218,42 @@ class LinodeStrategy(DNSProviderStrategy):
     def plugin_name(self) -> str:
         return 'dns-linode'
 
+class EdgeDNSStrategy(DNSProviderStrategy):
+    """Akamai Edge DNS strategy.
+
+    Uses the certbot-plugin-edgedns package (akamai/certbot-plugin-edgedns),
+    which registers itself with certbot under the plugin name ``edgedns`` and
+    expects a standard Akamai EdgeGrid ``.edgerc`` credentials file with a
+    ``[default]`` section.
+    """
+
+    def create_config_file(self, config_data: Dict[str, Any]) -> Optional[Path]:
+        return create_edgedns_config(
+            config_data.get('client_token', ''),
+            config_data.get('client_secret', ''),
+            config_data.get('access_token', ''),
+            config_data.get('host', ''),
+        )
+
+    @property
+    def plugin_name(self) -> str:
+        return 'edgedns'
+
+    @property
+    def default_propagation_seconds(self) -> int:
+        return 90
+
+    def configure_certbot_arguments(self, cmd: list, credentials_file: Optional[Path], domain_alias: Optional[str] = None) -> None:
+        cmd.extend(['--authenticator', self.plugin_name])
+        if credentials_file:
+            cmd.extend([f'--{self.plugin_name}-credentials', str(credentials_file)])
+
+        if domain_alias:
+            logger.info(
+                f"DNS alias '{domain_alias}' requested for Akamai Edge DNS — ensure a CNAME "
+                f"from _acme-challenge.<domain> to _acme-challenge.{domain_alias} exists."
+            )
+
 class GandiStrategy(DNSProviderStrategy):
     def create_config_file(self, config_data: Dict[str, Any]) -> Optional[Path]:
         return create_gandi_config(config_data.get('api_token', ''))
@@ -392,6 +428,7 @@ class DNSStrategyFactory:
         'powerdns': PowerDNSStrategy,
         'digitalocean': DigitalOceanStrategy,
         'linode': LinodeStrategy,
+        'edgedns': EdgeDNSStrategy,
         'gandi': GandiStrategy,
         'ovh': OVHStrategy,
         'namecheap': NamecheapStrategy,
