@@ -1019,8 +1019,20 @@
                 case 'letsencrypt':
                     infoText = '<i class="fas fa-leaf mr-1 text-green-500"></i> Free certificates with 90-day validity and automatic renewal';
                     break;
+                case 'zerossl':
+                    infoText = '<i class="fas fa-certificate mr-1 text-yellow-500"></i> Free certificates with 90-day validity via ZeroSSL (requires EAB)';
+                    break;
+                case 'google':
+                    infoText = '<i class="fab fa-google mr-1 text-blue-500"></i> Free certificates from Google Trust Services (requires EAB)';
+                    break;
+                case 'buypass':
+                    infoText = '<i class="fas fa-lock mr-1 text-green-500"></i> Free certificates with 180-day validity from BuyPass Go';
+                    break;
                 case 'digicert':
                     infoText = '<i class="fas fa-shield-alt mr-1 text-blue-500"></i> Enterprise certificates (requires EAB credentials configured in Settings)';
+                    break;
+                case 'sslcom':
+                    infoText = '<i class="fas fa-shield-alt mr-1 text-indigo-500"></i> Enterprise certificates from SSL.com (requires EAB)';
                     break;
                 case 'private_ca':
                     infoText = '<i class="fas fa-building mr-1 text-purple-500"></i> Internal CA certificates (requires ACME URL configured in Settings)';

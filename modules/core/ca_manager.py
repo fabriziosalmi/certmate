@@ -46,6 +46,42 @@ class CAManager:
                 'supports_wildcard': True,
                 'certificate_types': ['Private'],
                 'description': 'Internal Certificate Authority for private networks'
+            },
+            'zerossl': {
+                'name': 'ZeroSSL',
+                'production_url': 'https://acme.zerossl.com/v2/DV90',
+                'staging_url': 'https://acme.zerossl.com/v2/DV90',
+                'requires_eab': True,
+                'supports_wildcard': True,
+                'certificate_types': ['DV'],
+                'description': 'Free SSL certificates with 90-day validity from ZeroSSL'
+            },
+            'google': {
+                'name': 'Google Trust Services',
+                'production_url': 'https://dv.acme-v02.api.pki.goog/directory',
+                'staging_url': 'https://dv.acme-staging.api.pki.goog/directory',
+                'requires_eab': True,
+                'supports_wildcard': True,
+                'certificate_types': ['DV'],
+                'description': 'Free SSL certificates from Google Trust Services'
+            },
+            'buypass': {
+                'name': 'BuyPass Go',
+                'production_url': 'https://api.buypass.com/acme/directory',
+                'staging_url': 'https://api.test4.buypass.no/acme/directory',
+                'requires_eab': False,
+                'supports_wildcard': False,
+                'certificate_types': ['DV'],
+                'description': 'Free SSL certificates with 180-day validity from BuyPass'
+            },
+            'sslcom': {
+                'name': 'SSL.com',
+                'production_url': 'https://acme.ssl.com/sslcom-dv-rsa',
+                'staging_url': 'https://acme.ssl.com/sslcom-dv-rsa',
+                'requires_eab': True,
+                'supports_wildcard': True,
+                'certificate_types': ['DV', 'OV', 'EV'],
+                'description': 'Enterprise SSL certificates from SSL.com'
             }
         }
     
@@ -223,9 +259,9 @@ class CAManager:
         ca_info = self.ca_providers[ca_provider]
         
         # Check required fields based on CA provider
-        if ca_provider == 'digicert':
+        if ca_provider in ['digicert', 'zerossl', 'google', 'sslcom']:
             if not config.get('eab_key_id') or not config.get('eab_hmac_key'):
-                return False, "DigiCert requires EAB Key ID and HMAC Key"
+                return False, f"{ca_info['name']} requires EAB Key ID and HMAC Key"
         
         elif ca_provider == 'private_ca':
             if not config.get('acme_url'):
@@ -253,7 +289,7 @@ class CAManager:
         }
         
         # Add provider-specific display info
-        if ca_provider == 'digicert':
+        if ca_provider in ['digicert', 'zerossl', 'google', 'sslcom']:
             display_info['eab_configured'] = bool(config.get('eab_key_id'))
         elif ca_provider == 'private_ca':
             display_info['acme_url'] = config.get('acme_url', '')

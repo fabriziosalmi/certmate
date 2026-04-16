@@ -402,6 +402,14 @@
             var email = '';
             if (defaultCA === 'letsencrypt') {
                 email = (caProviders.letsencrypt && caProviders.letsencrypt.email) || '';
+            } else if (defaultCA === 'zerossl') {
+                email = (caProviders.zerossl && caProviders.zerossl.email) || '';
+            } else if (defaultCA === 'google') {
+                email = (caProviders.google && caProviders.google.email) || '';
+            } else if (defaultCA === 'buypass') {
+                email = (caProviders.buypass && caProviders.buypass.email) || '';
+            } else if (defaultCA === 'sslcom') {
+                email = (caProviders.sslcom && caProviders.sslcom.email) || '';
             } else if (defaultCA === 'digicert') {
                 email = (caProviders.digicert && caProviders.digicert.email) || '';
             } else if (defaultCA === 'private_ca') {
@@ -432,6 +440,10 @@
             // Validate required fields - email comes from the selected CA provider
             if (!settings.email) {
                 var caDisplayName = defaultCA === 'letsencrypt' ? "Let's Encrypt" :
+                    defaultCA === 'zerossl' ? 'ZeroSSL' :
+                    defaultCA === 'google' ? 'Google Trust Services' :
+                    defaultCA === 'buypass' ? 'BuyPass Go' :
+                    defaultCA === 'sslcom' ? 'SSL.com' :
                     defaultCA === 'digicert' ? 'DigiCert' : 'Private CA';
                 throw new Error('Email address is required in the ' + caDisplayName + ' configuration section');
             }
@@ -1859,12 +1871,16 @@
         // Map CA provider values to config IDs
         var caProviderToConfigId = {
             'letsencrypt': 'letsencrypt-config',
+            'zerossl': 'zerossl-config',
+            'google': 'google-config',
+            'buypass': 'buypass-config',
             'digicert': 'digicert-config',
+            'sslcom': 'sslcom-config',
             'private_ca': 'private-ca-config'
         };
 
         // Hide all CA configuration panels and disable their required fields
-        var caConfigs = ['letsencrypt-config', 'digicert-config', 'private-ca-config'];
+        var caConfigs = ['letsencrypt-config', 'zerossl-config', 'google-config', 'buypass-config', 'digicert-config', 'sslcom-config', 'private-ca-config'];
         caConfigs.forEach(function (configId) {
             var element = document.getElementById(configId);
             if (element) {
@@ -1897,8 +1913,20 @@
                 case 'letsencrypt':
                     hintElement.textContent = 'Enter your email address and test Let\'s Encrypt connection';
                     break;
+                case 'zerossl':
+                    hintElement.textContent = 'Enter EAB credentials and email, then test ZeroSSL connection';
+                    break;
+                case 'google':
+                    hintElement.textContent = 'Enter EAB credentials and email, then test Google Trust Services connection';
+                    break;
+                case 'buypass':
+                    hintElement.textContent = 'Enter your email address and test BuyPass Go connection';
+                    break;
                 case 'digicert':
                     hintElement.textContent = 'Enter ACME URL, EAB credentials, and email, then test DigiCert connection';
+                    break;
+                case 'sslcom':
+                    hintElement.textContent = 'Enter EAB credentials and email, then test SSL.com connection';
                     break;
                 case 'private_ca':
                     hintElement.textContent = 'Enter your ACME directory URL and email, then test Private CA connection';
@@ -1927,6 +1955,34 @@
                 environment: document.getElementById('letsencrypt-environment').value,
                 email: leEmail
             };
+        } else if (caProvider === 'zerossl') {
+            var zsEabKid = document.getElementById('zerossl-eab-kid').value;
+            var zsEabHmac = document.getElementById('zerossl-eab-hmac').value;
+            var zsEmail = document.getElementById('zerossl-email').value;
+            if (!zsEabKid.trim()) missingFields.push('EAB Key ID');
+            if (!zsEabHmac.trim()) missingFields.push('EAB HMAC Key');
+            if (!zsEmail.trim()) missingFields.push('Email');
+            config = { eab_key_id: zsEabKid, eab_hmac_key: zsEabHmac, email: zsEmail };
+        } else if (caProvider === 'google') {
+            var gEabKid = document.getElementById('google-eab-kid').value;
+            var gEabHmac = document.getElementById('google-eab-hmac').value;
+            var gEmail = document.getElementById('google-email').value;
+            if (!gEabKid.trim()) missingFields.push('EAB Key ID');
+            if (!gEabHmac.trim()) missingFields.push('EAB HMAC Key');
+            if (!gEmail.trim()) missingFields.push('Email');
+            config = { eab_key_id: gEabKid, eab_hmac_key: gEabHmac, email: gEmail };
+        } else if (caProvider === 'buypass') {
+            var bpEmail = document.getElementById('buypass-email').value;
+            if (!bpEmail.trim()) missingFields.push('Email');
+            config = { email: bpEmail };
+        } else if (caProvider === 'sslcom') {
+            var sEabKid = document.getElementById('sslcom-eab-kid').value;
+            var sEabHmac = document.getElementById('sslcom-eab-hmac').value;
+            var sEmail = document.getElementById('sslcom-email').value;
+            if (!sEabKid.trim()) missingFields.push('EAB Key ID');
+            if (!sEabHmac.trim()) missingFields.push('EAB HMAC Key');
+            if (!sEmail.trim()) missingFields.push('Email');
+            config = { eab_key_id: sEabKid, eab_hmac_key: sEabHmac, email: sEmail };
         } else if (caProvider === 'digicert') {
             var dcAcmeUrl = document.getElementById('digicert-acme-url').value;
             var dcEabKid = document.getElementById('digicert-eab-kid').value;
@@ -2164,6 +2220,30 @@
             document.getElementById('letsencrypt-email').value = letsencryptConfig.email;
         }
 
+        // Load ZeroSSL settings
+        var zerosslConfig = caProviders.zerossl || {};
+        if (zerosslConfig.eab_kid) {
+            document.getElementById('zerossl-eab-kid').value = zerosslConfig.eab_kid;
+        }
+        if (zerosslConfig.email) {
+            document.getElementById('zerossl-email').value = zerosslConfig.email;
+        }
+
+        // Load Google settings
+        var googleConfig = caProviders.google || {};
+        if (googleConfig.eab_kid) {
+            document.getElementById('google-eab-kid').value = googleConfig.eab_kid;
+        }
+        if (googleConfig.email) {
+            document.getElementById('google-email').value = googleConfig.email;
+        }
+
+        // Load BuyPass settings
+        var buypassConfig = caProviders.buypass || {};
+        if (buypassConfig.email) {
+            document.getElementById('buypass-email').value = buypassConfig.email;
+        }
+
         // Load DigiCert settings
         var digicertConfig = caProviders.digicert || {};
         if (digicertConfig.acme_url) {
@@ -2171,6 +2251,15 @@
         }
         if (digicertConfig.eab_kid) {
             document.getElementById('digicert-eab-kid').value = digicertConfig.eab_kid;
+        }
+
+        // Load SSL.com settings
+        var sslcomConfig = caProviders.sslcom || {};
+        if (sslcomConfig.eab_kid) {
+            document.getElementById('sslcom-eab-kid').value = sslcomConfig.eab_kid;
+        }
+        if (sslcomConfig.email) {
+            document.getElementById('sslcom-email').value = sslcomConfig.email;
         }
         // Don't populate HMAC key for security reasons - user needs to re-enter
         if (digicertConfig.email) {
@@ -2251,9 +2340,29 @@
         var caProviders = {};
 
         // Let's Encrypt configuration
+        // Let's Encrypt configuration
         caProviders.letsencrypt = {
             environment: document.getElementById('letsencrypt-environment').value || 'production',
             email: document.getElementById('letsencrypt-email').value || ''
+        };
+
+        // ZeroSSL configuration
+        caProviders.zerossl = {
+            eab_kid: document.getElementById('zerossl-eab-kid').value || '',
+            eab_hmac: document.getElementById('zerossl-eab-hmac').value || '',
+            email: document.getElementById('zerossl-email').value || ''
+        };
+
+        // Google Trust Services configuration
+        caProviders.google = {
+            eab_kid: document.getElementById('google-eab-kid').value || '',
+            eab_hmac: document.getElementById('google-eab-hmac').value || '',
+            email: document.getElementById('google-email').value || ''
+        };
+
+        // BuyPass Go configuration
+        caProviders.buypass = {
+            email: document.getElementById('buypass-email').value || ''
         };
 
         // DigiCert configuration
@@ -2262,6 +2371,13 @@
             eab_kid: document.getElementById('digicert-eab-kid').value || '',
             eab_hmac: document.getElementById('digicert-eab-hmac').value || '',
             email: document.getElementById('digicert-email').value || ''
+        };
+
+        // SSL.com configuration
+        caProviders.sslcom = {
+            eab_kid: document.getElementById('sslcom-eab-kid').value || '',
+            eab_hmac: document.getElementById('sslcom-eab-hmac').value || '',
+            email: document.getElementById('sslcom-email').value || ''
         };
 
         // Private CA configuration
