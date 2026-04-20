@@ -1,3 +1,8 @@
+## v2.3.5 (Patch — security)
+
+- Security: bump build-time dependency `picomatch` from 2.3.1 to 2.3.2 ([#94](https://github.com/fabriziosalmi/certmate/pull/94)) to address [CVE-2026-33671](https://github.com/micromatch/picomatch/security/advisories/GHSA-c2c7-rcm5-vvqj) and [CVE-2026-33672](https://github.com/micromatch/picomatch/security/advisories/GHSA-3v7f-55p6-f55p). The dependency is dev-only (transitive of `tailwindcss`, used at CSS build time) — runtime image and end-user installations are not exposed, but the bump keeps SCA scanners and CI clean.
+- Security: bump runtime dependency `pyopenssl` from 25.3.0 to 26.0.0 ([#86](https://github.com/fabriziosalmi/certmate/pull/86)). Routine maintenance — no known CVEs at the previous pin, but the new version closes a moderate-severity advisory in upstream OpenSSL bindings and is what fresh installs get by default.
+
 ## v2.3.4 (Patch)
 
 - New: DuckDNS DNS-01 provider — first-class support for free `*.duckdns.org` subdomains via `certbot-dns-duckdns`. Enables publicly-trusted Let's Encrypt certificates for homelabs, self-hosted services and IoT devices without owning a domain. Includes UI integration (provider tile + dedicated config section + multi-account modal), settings/API/Swagger wiring, and 14 unit tests covering strategy, INI format, validation and certbot-arg shape. Smoke-tested end-to-end against Let's Encrypt staging.
