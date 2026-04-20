@@ -20,7 +20,7 @@ requests==2.32.5
 python-dotenv==1.0.1
 APScheduler==3.10.4
 cryptography==46.0.5
-pyopenssl==25.3.0
+pyopenssl==26.0.0
 
 # Production server
 gunicorn==23.0.0
