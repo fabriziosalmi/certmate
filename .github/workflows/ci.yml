@@ -12,7 +12,12 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ['3.12', '3.14']
+        # 3.12 matches the production Dockerfile. Python 3.14 is temporarily
+        # out of the matrix: the current pin of josepy 1.13.0 (required by
+        # certbot 2.10.0 → acme 3.3.0) raises ValueError at class definition
+        # under PEP 649 evaluation. Tracked in #103 — restore when the
+        # certbot/josepy/acme stack is upgraded.
+        python-version: ['3.12']
 
     steps:
     - name: Checkout code
