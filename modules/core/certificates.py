@@ -254,6 +254,11 @@ class CertificateManager:
         # Track timing for metrics
         start_time = time.time()
         credentials_file = None
+        # Initialized early: the finally block reads ca_extra_env to clean up
+        # the REQUESTS_CA_BUNDLE temp file, and an exception raised before the
+        # ca_manager.build_certbot_command call (e.g. plugin-not-installed)
+        # would otherwise surface as UnboundLocalError, masking the real cause.
+        ca_extra_env = {}
 
         try:
             # Return conflict if cert already exists (use renew to refresh it)
@@ -357,8 +362,8 @@ class CertificateManager:
             cert_output_dir = cert_dir / domain
             cert_output_dir.mkdir(parents=True, exist_ok=True)
 
-            # Build certbot command
-            ca_extra_env = {}
+            # Build certbot command (ca_extra_env was hoisted above the try
+            # so the finally block can clean up safely on early failure)
             san_list = all_domains[1:] if len(all_domains) > 1 else None
             if self.ca_manager and ca_account_config:
                 try:
