@@ -13,6 +13,8 @@ from email.mime.multipart import MIMEMultipart
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 
+from .constants import iter_cert_domain_dirs
+
 logger = logging.getLogger(__name__)
 
 
@@ -44,10 +46,8 @@ class WeeklyDigest:
                 if d:
                     all_domains.add(d)
 
-        if cert_dir.exists():
-            for p in cert_dir.iterdir():
-                if p.is_dir():
-                    all_domains.add(p.name)
+        for p in iter_cert_domain_dirs(cert_dir):
+            all_domains.add(p.name)
 
         total = 0
         valid = 0

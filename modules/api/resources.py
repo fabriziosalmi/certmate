@@ -13,7 +13,7 @@ from flask import send_file, after_this_request, current_app
 from flask_restx import Resource, fields
 
 from ..core.metrics import get_metrics_summary, is_prometheus_available
-from ..core.constants import CERTIFICATE_FILES
+from ..core.constants import CERTIFICATE_FILES, iter_cert_domain_dirs
 
 _DOMAIN_RE = re.compile(r'^(\*\.)?([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$')
 
@@ -219,12 +219,12 @@ def create_api_resources(api, models, managers):
                     if domain:
                         all_domains.add(domain)
 
-                # Also check for certificates that exist on disk but might not be in settings
-                cert_dir = certificate_manager.cert_dir
-                if cert_dir.exists():
-                    for cert_dir_path in cert_dir.iterdir():
-                        if cert_dir_path.is_dir():
-                            all_domains.add(cert_dir_path.name)
+                # Also check for certificates that exist on disk but might not be in settings.
+                # Use iter_cert_domain_dirs so FS artifacts (lost+found, hidden dirs,
+                # non-cert subdirectories when cert_dir is a volume mount point) don't
+                # surface as ghost "Not Found" entries in the dashboard.
+                for cert_dir_path in iter_cert_domain_dirs(certificate_manager.cert_dir):
+                    all_domains.add(cert_dir_path.name)
 
                 # Get certificate info for all domains
                 for domain in all_domains:

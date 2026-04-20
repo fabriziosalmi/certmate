@@ -8,6 +8,7 @@ import logging
 from pathlib import Path
 from datetime import datetime
 
+from .constants import iter_cert_domain_dirs
 from .file_operations import FileOperations
 from .utils import generate_secure_token
 
@@ -659,35 +660,33 @@ class SettingsManager:
         """Ensure all existing certificates have metadata.json files"""
         try:
             cert_dir = self.file_ops.cert_dir
-            if not cert_dir.exists():
-                return
-                
             settings = self.load_settings()
-            
-            for cert_path in cert_dir.iterdir():
-                if cert_path.is_dir():
-                    metadata_file = cert_path / "metadata.json"
-                    if not metadata_file.exists():
-                        # Create metadata from settings or defaults
-                        domain = cert_path.name
-                        dns_provider = self._get_domain_provider_from_settings(domain, settings)
-                        
-                        metadata = {
-                            "domain": domain,
-                            "dns_provider": dns_provider,
-                            "created_at": "unknown",
-                            "version": "2.2.0",
-                            "migrated": True
-                        }
-                        
-                        try:
-                            with open(metadata_file, 'w') as f:
-                                import json
-                                json.dump(metadata, f, indent=2)
-                            logger.info(f"Created metadata for certificate: {domain}")
-                        except Exception as e:
-                            logger.warning(f"Failed to create metadata for {domain}: {e}")
-                            
+
+            # iter_cert_domain_dirs already requires a cert.pem, so we never
+            # try to write metadata into lost+found or other non-cert dirs.
+            for cert_path in iter_cert_domain_dirs(cert_dir):
+                metadata_file = cert_path / "metadata.json"
+                if metadata_file.exists():
+                    continue
+                domain = cert_path.name
+                dns_provider = self._get_domain_provider_from_settings(domain, settings)
+
+                metadata = {
+                    "domain": domain,
+                    "dns_provider": dns_provider,
+                    "created_at": "unknown",
+                    "version": "2.2.0",
+                    "migrated": True
+                }
+
+                try:
+                    with open(metadata_file, 'w') as f:
+                        import json
+                        json.dump(metadata, f, indent=2)
+                    logger.info(f"Created metadata for certificate: {domain}")
+                except Exception as e:
+                    logger.warning(f"Failed to create metadata for {domain}: {e}")
+
         except Exception as e:
             logger.error(f"Error ensuring certificate metadata: {e}")
     

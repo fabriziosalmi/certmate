@@ -11,6 +11,8 @@ from pathlib import Path
 from typing import Dict, List, Any, Optional
 import logging
 
+from .constants import iter_cert_domain_dirs
+
 logger = logging.getLogger(__name__)
 
 # Prometheus client library
@@ -314,10 +316,9 @@ class CertMateMetricsCollector:
                 'renewal_failed': 0
             }
             
-            # Check existing certificate directories
-            cert_dirs = []
-            if cert_dir and cert_dir.exists():
-                cert_dirs = [d for d in cert_dir.iterdir() if d.is_dir()]
+            # Check existing certificate directories (filters out FS artifacts
+            # like lost+found when cert_dir is a volume mount point).
+            cert_dirs = list(iter_cert_domain_dirs(cert_dir)) if cert_dir else []
             
             # Process all domains (from settings and disk)
             all_domains = set()
