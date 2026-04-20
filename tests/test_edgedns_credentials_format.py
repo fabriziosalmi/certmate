@@ -95,8 +95,14 @@ def test_certbot_credentials_parser_reads_all_four_keys(edgedns_ini):
     raises the "Either an edgerc_path or individual edgegrid credentials"
     error reported in issue #99.
     """
-    pytest.importorskip('certbot.plugins.dns_common')
-    from certbot.plugins.dns_common import CredentialsConfiguration
+    # Skip on Python 3.14 where josepy 1.13.0 raises a ValueError at class
+    # definition time during certbot.plugins.dns_common import (PEP 649
+    # annotation evaluation change; tracked separately). Production runs
+    # on Python 3.12 per Dockerfile, so this only affects CI matrix.
+    try:
+        from certbot.plugins.dns_common import CredentialsConfiguration
+    except (ImportError, ValueError) as e:
+        pytest.skip(f"certbot.plugins.dns_common unavailable: {e}")
 
     # The plugin's auth namespace is "edgedns"; the mapper certbot installs
     # is roughly lambda var: f"edgedns_{var}".  Replicate that exact lookup.
