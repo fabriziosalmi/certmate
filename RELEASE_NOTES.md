@@ -1,3 +1,7 @@
+## v2.3.6 (Patch)
+
+- Fix #99 (follow-up): Akamai Edge DNS certificate issuance failed with `Either an edgerc_path or individual edgegrid credentials are required when using the EdgeDNS API` even after the v2.3.4 settings fix. CertMate was writing the credentials INI in raw Akamai `.edgerc` format (`[default]` section + unprefixed keys), but `certbot-plugin-edgedns` v0.1.0 uses certbot's standard `dns_common.CredentialsConfiguration` parser, which reads a flat INI with keys prefixed by the plugin namespace (`edgedns_*`). The fix rewrites the credentials file as `edgedns_client_token`, `edgedns_client_secret`, `edgedns_access_token`, `edgedns_host` at top level (no section header). Verified by reading the v0.1.0 plugin source and feeding the regenerated INI through certbot's own `CredentialsConfiguration` in a regression test. Reported by @SpeeDFireCZE.
+
 ## v2.3.5 (Patch — security)
 
 - Security: bump build-time dependency `picomatch` from 2.3.1 to 2.3.2 ([#94](https://github.com/fabriziosalmi/certmate/pull/94)) to address [CVE-2026-33671](https://github.com/micromatch/picomatch/security/advisories/GHSA-c2c7-rcm5-vvqj) and [CVE-2026-33672](https://github.com/micromatch/picomatch/security/advisories/GHSA-3v7f-55p6-f55p). The dependency is dev-only (transitive of `tailwindcss`, used at CSS build time) — runtime image and end-user installations are not exposed, but the bump keeps SCA scanners and CI clean.

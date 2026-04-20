@@ -325,13 +325,23 @@ def create_linode_config(api_key: str) -> Path:
     return _create_config_file("linode", content)
 
 def create_edgedns_config(client_token: str, client_secret: str, access_token: str, host: str) -> Path:
-    """Create Akamai Edge DNS credentials file in standard ``.edgerc`` format."""
+    """Create Akamai Edge DNS credentials file for certbot-plugin-edgedns.
+
+    The plugin (akamai/certbot-plugin-edgedns v0.1.x) uses certbot's standard
+    ``dns_common.CredentialsConfiguration``: a flat INI with no section header
+    and keys prefixed by the plugin namespace (``edgedns_``). It does NOT
+    consume a raw Akamai ``.edgerc`` file at this path — that path is reserved
+    for the optional ``edgedns_edgerc_path`` indirection.
+
+    Source: certbot_plugin_edgedns/edgedns.py:_validate_credentials reads
+    self.credentials.conf('client_token') etc., which dns_common translates to
+    the ``edgedns_<key>`` lookup against the INI.
+    """
     content = (
-        f"[default]\n"
-        f"client_token = {client_token}\n"
-        f"client_secret = {client_secret}\n"
-        f"access_token = {access_token}\n"
-        f"host = {host}\n"
+        f"edgedns_client_token = {client_token}\n"
+        f"edgedns_client_secret = {client_secret}\n"
+        f"edgedns_access_token = {access_token}\n"
+        f"edgedns_host = {host}\n"
     )
     return _create_config_file("edgedns", content)
 
