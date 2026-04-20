@@ -400,6 +400,21 @@ class DuckDNSStrategy(DNSProviderStrategy):
         # that under load; 60s gives a safer margin without being disruptive.
         return 60
 
+    def configure_certbot_arguments(self, cmd: list, credentials_file: Optional[Path], domain_alias: Optional[str] = None) -> None:
+        # certbot-dns-duckdns exposes multiple --dns-duckdns-* options
+        # (credentials, token, token-env, propagation-seconds, no-txt-restore),
+        # which makes the bare --dns-duckdns selector flag ambiguous to
+        # certbot's argparse. Select the plugin via --authenticator instead.
+        cmd.extend(['--authenticator', 'dns-duckdns'])
+        if credentials_file:
+            cmd.extend(['--dns-duckdns-credentials', str(credentials_file)])
+
+        if domain_alias:
+            logger.info(
+                f"DNS alias '{domain_alias}' requested for DuckDNS — ensure a CNAME "
+                f"from _acme-challenge.<domain> to _acme-challenge.{domain_alias} exists."
+            )
+
 
 class GenericMultiProviderStrategy(DNSProviderStrategy):
     def __init__(self, provider_name: str):

@@ -75,9 +75,19 @@ class TestDuckDNSCertbotArguments:
         cmd = []
         strategy.configure_certbot_arguments(cmd, credentials_file)
 
-        # certbot-dns-duckdns follows the standard convention: the plugin
-        # name itself is a flag, paired with --{plugin}-credentials.
-        assert '--dns-duckdns' in cmd
+        # certbot-dns-duckdns exposes multiple --dns-duckdns-* options,
+        # which makes the bare --dns-duckdns selector ambiguous to argparse.
+        # The plugin must be selected via --authenticator dns-duckdns.
+        assert '--authenticator' in cmd, f"expected --authenticator in {cmd}"
+        auth_idx = cmd.index('--authenticator')
+        assert cmd[auth_idx + 1] == 'dns-duckdns'
+
+        # The bare --dns-duckdns flag must NOT appear — it would crash
+        # certbot with "ambiguous option" (reproduced in smoke test).
+        assert '--dns-duckdns' not in cmd, (
+            f"--dns-duckdns is ambiguous for this plugin; use --authenticator instead: {cmd}"
+        )
+
         assert '--dns-duckdns-credentials' in cmd
         cred_idx = cmd.index('--dns-duckdns-credentials')
         assert cmd[cred_idx + 1] == str(credentials_file)
