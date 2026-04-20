@@ -1,3 +1,11 @@
+## v2.3.4 (Patch)
+
+- New: DuckDNS DNS-01 provider — first-class support for free `*.duckdns.org` subdomains via `certbot-dns-duckdns`. Enables publicly-trusted Let's Encrypt certificates for homelabs, self-hosted services and IoT devices without owning a domain. Includes UI integration (provider tile + dedicated config section + multi-account modal), settings/API/Swagger wiring, and 14 unit tests covering strategy, INI format, validation and certbot-arg shape. Smoke-tested end-to-end against Let's Encrypt staging.
+- Fix #99: Akamai Edge DNS (`edgedns`) configuration could not be saved via the web UI or API — `save_settings()` rejected it with `Invalid dns_provider: edgedns` because the provider was not registered in `supported_providers`, the propagation defaults, the multi-account migration map, or the Swagger/REST enums. Reported by @SpeeDFireCZE.
+- Fix: DuckDNS plugin selection now uses `--authenticator dns-duckdns` instead of the bare `--dns-duckdns` flag, which certbot rejected as ambiguous (the plugin exposes multiple `--dns-duckdns-*` options).
+- Fix: `CertificateManager.create_certificate()` no longer raises `UnboundLocalError` from its finally block when an early failure occurs (e.g. plugin-not-installed). The original `RuntimeError` now surfaces correctly to API clients. Regression tests pinned.
+- Test: New cross-validation suite (`tests/test_provider_wiring_consistency.py`) breaks the build the moment a future DNS provider is registered in the strategy factory but missed in the settings or credential validation surfaces — preventing any recurrence of the #99 wiring gap.
+
 ## v2.3.3 (Patch)
 
 - Fix #98: Add Akamai Edge DNS as a dedicated DNS provider (separate from Linode / Akamai Connected Cloud), backed by `certbot-plugin-edgedns` and a standard `.edgerc` credentials file.
