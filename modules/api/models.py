@@ -107,6 +107,13 @@ def create_api_models(api):
         'api_token': MaskedString(description='DuckDNS account token (UUID format, from https://www.duckdns.org)')
     })
 
+    edgedns_model = api.model('EdgeDNSConfig', {
+        'client_token': MaskedString(description='Akamai EdgeGrid client_token'),
+        'client_secret': MaskedString(description='Akamai EdgeGrid client_secret'),
+        'access_token': MaskedString(description='Akamai EdgeGrid access_token'),
+        'host': fields.String(description='Akamai EdgeGrid host (e.g. akab-xxx.luna.akamaiapis.net)')
+    })
+
     # multi_provider_model removed as it is now flexible
 
     dns_providers_model = api.model('DNSProviders', {
@@ -132,6 +139,7 @@ def create_api_models(api):
         'arvancloud': fields.Nested(arvancloud_model),
         'acme-dns': fields.Nested(acme_dns_model),
         'duckdns': fields.Nested(duckdns_model),
+        'edgedns': fields.Nested(edgedns_model),
         # Support for any other provider via certbot-dns-multi
         'multi': fields.Raw(description='Configuration for any DNS provider via certbot-dns-multi')
     })
@@ -165,7 +173,7 @@ def create_api_models(api):
                 'digitalocean', 'linode', 'gandi', 'ovh', 'namecheap',
                 'vultr', 'dnsmadeeasy', 'nsone', 'rfc2136', 'hetzner',
                 'porkbun', 'godaddy', 'he-ddns', 'dynudns', 'arvancloud',
-                'acme-dns', 'duckdns'
+                'acme-dns', 'duckdns', 'edgedns'
             ]
         ),
         'dns_providers': fields.Nested(dns_providers_model, description='DNS provider configurations')
@@ -182,7 +190,7 @@ def create_api_models(api):
                 'digitalocean', 'linode', 'gandi', 'ovh', 'namecheap',
                 'vultr', 'dnsmadeeasy', 'nsone', 'rfc2136', 'hetzner',
                 'porkbun', 'godaddy', 'he-ddns', 'dynudns', 'arvancloud',
-                'acme-dns', 'duckdns'
+                'acme-dns', 'duckdns', 'edgedns'
             ]
         ),
         'account_id': fields.String(description='DNS provider account ID'),
@@ -360,5 +368,6 @@ def create_api_models(api):
         'dynudns_model': dynudns_model,
         'arvancloud_model': arvancloud_model,
         'acme_dns_model': acme_dns_model,
-        'duckdns_model': duckdns_model
+        'duckdns_model': duckdns_model,
+        'edgedns_model': edgedns_model
     }

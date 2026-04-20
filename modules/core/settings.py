@@ -334,7 +334,7 @@ class SettingsManager:
                         return False
                     
             # Validate dns_provider against supported set
-            supported_providers = {'cloudflare','route53','azure','google','powerdns','digitalocean','linode','gandi','ovh','namecheap','vultr','dnsmadeeasy','nsone','rfc2136','hetzner','hetzner-cloud','porkbun','godaddy','he-ddns','dynudns','arvancloud','infomaniak','acme-dns','duckdns'}
+            supported_providers = {'cloudflare','route53','azure','google','powerdns','digitalocean','linode','edgedns','gandi','ovh','namecheap','vultr','dnsmadeeasy','nsone','rfc2136','hetzner','hetzner-cloud','porkbun','godaddy','he-ddns','dynudns','arvancloud','infomaniak','acme-dns','duckdns'}
             if 'dns_provider' in settings and settings['dns_provider'] not in supported_providers:
                 logger.error(f"Invalid dns_provider: {settings['dns_provider']}")
                 return False
@@ -402,6 +402,7 @@ class SettingsManager:
                 'infomaniak': 300,
                 'acme-dns': 30,
                 'duckdns': 60,
+                'edgedns': 90,
                 'hetzner-cloud': 120
             }
             if 'dns_propagation_seconds' not in settings or not isinstance(settings['dns_propagation_seconds'], dict):
@@ -499,7 +500,8 @@ class SettingsManager:
                 'arvancloud': ['api_key'],
                 'infomaniak': ['api_token'],
                 'acme-dns': ['api_url', 'username', 'password', 'subdomain'],
-                'duckdns': ['api_token']
+                'duckdns': ['api_token'],
+                'edgedns': ['client_token', 'client_secret', 'access_token', 'host']
             }
             
             # Check if migration is needed
