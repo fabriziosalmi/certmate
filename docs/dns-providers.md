@@ -32,6 +32,7 @@ CertMate supports **24 DNS providers** for Let's Encrypt DNS-01 challenges throu
 | **ACME-DNS** | `certbot-acme-dns` | API URL, Username, Password | Specialized |
 | **Hurricane Electric** | `certbot-dns-he-ddns` | Username, Password | Free DNS |
 | **Dynu** | `certbot-dns-dynudns` | API Token | Dynamic DNS |
+| **DuckDNS** | `certbot-dns-duckdns` | Account Token | Free DDNS (no domain required) |
 
 ---
 
@@ -344,6 +345,34 @@ Uses the new [Hetzner Cloud API](https://docs.hetzner.cloud/reference/cloud) whi
 }
 ```
 
+### DuckDNS (no domain required)
+
+DuckDNS hands out free `<name>.duckdns.org` subdomains — the simplest way
+to obtain a publicly-trusted certificate when you don't own a domain.
+Typical use cases: homelabs, self-hosted services, IoT devices, internal
+dashboards previously stuck on self-signed certs.
+
+1. Sign in at <https://www.duckdns.org/> (Google / GitHub / Twitter / Reddit SSO).
+2. Pick a subdomain (e.g. `mybox` → `mybox.duckdns.org`).
+3. Copy the account token displayed at the top of the page.
+
+```json
+{
+  "dns_provider": "duckdns",
+  "domains": ["mybox.duckdns.org"],
+  "dns_providers": {
+    "duckdns": {
+      "api_token": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+    }
+  }
+}
+```
+
+Wildcards such as `*.mybox.duckdns.org` are supported via the same token.
+Because DuckDNS only stores one TXT record per domain at a time, a single
+certbot run per DuckDNS subdomain is required — SAN certificates that span
+multiple DuckDNS subdomains are not supported.
+
 ---
 
 ## Creating Certificates
@@ -607,7 +636,7 @@ POWERDNS_API_KEY=your_api_key
 | Speed | Providers | Seconds |
 |-------|-----------|---------|
 | Very Fast | ACME-DNS | 30 |
-| Fast | Cloudflare, Route53, PowerDNS | 60 |
+| Fast | Cloudflare, Route53, PowerDNS, DuckDNS | 60 |
 | Medium | DigitalOcean, Linode, Google, ArvanCloud | 120 |
 | Slow | Azure, Gandi, OVH | 180 |
 | Very Slow | Namecheap | 300 |

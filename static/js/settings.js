@@ -567,6 +567,7 @@
             'godaddy': ['godaddy_api_key', 'godaddy_secret'],
             'he-ddns': ['he_ddns_username', 'he_ddns_password'],
             'dynudns': ['dynudns_token'],
+            'duckdns': ['duckdns_api_token'],
             'dnsmadeeasy': ['dnsmadeeasy_api_key', 'dnsmadeeasy_secret_key'],
             'nsone': ['nsone_api_key']
         };
@@ -761,7 +762,7 @@
             'cloudflare', 'route53', 'azure', 'google', 'powerdns',
             'digitalocean', 'linode', 'edgedns', 'gandi', 'ovh', 'namecheap',
             'vultr', 'dnsmadeeasy', 'nsone', 'rfc2136', 'hetzner',
-            'porkbun', 'godaddy', 'he-ddns', 'dynudns'
+            'porkbun', 'godaddy', 'he-ddns', 'dynudns', 'duckdns'
         ];
 
         providers.forEach(function (provider) {
@@ -1006,7 +1007,8 @@
             'he-ddns': 'Hurricane Electric',
             'dynudns': 'Dynu',
             'dnsmadeeasy': 'DNS Made Easy',
-            'nsone': 'NS1'
+            'nsone': 'NS1',
+            'duckdns': 'DuckDNS'
         };
         modalTitle.textContent = 'Add ' + (providerNames[provider] || provider) + ' Account';
 
@@ -1202,6 +1204,9 @@
             ],
             'nsone': [
                 { name: 'api_token', label: 'API Token', type: 'password', placeholder: 'Your NS1 API token', required: true }
+            ],
+            'duckdns': [
+                { name: 'api_token', label: 'Account Token', type: 'password', placeholder: 'UUID-format token from your DuckDNS account page', required: true }
             ]
         };
 

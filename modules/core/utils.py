@@ -45,6 +45,7 @@ _DNS_PROVIDER_CREDENTIALS = {
     'arvancloud': ['api_key'],
     'infomaniak': ['api_token'],
     'acme-dns': ['api_url', 'username', 'password', 'subdomain'],
+    'duckdns': ['api_token'],
     'vultr': ['api_key'],
     'dnsmadeeasy': ['api_key', 'secret_key'],
     'nsone': ['api_key'],
@@ -361,6 +362,16 @@ def create_arvancloud_config(api_key: str) -> Path:
 def create_infomaniak_config(api_token: str) -> Path:
     """Create Infomaniak DNS credentials file."""
     return _create_config_file("infomaniak", f"dns_infomaniak_token = {api_token}\n")
+
+def create_duckdns_config(api_token: str) -> Path:
+    """Create DuckDNS credentials file.
+
+    DuckDNS uses a single per-account token that grants write access to every
+    subdomain owned by the account. The token is passed to certbot via the
+    ``dns_duckdns_token`` INI key.
+    """
+    return _create_config_file("duckdns", f"dns_duckdns_token = {api_token}\n")
+
 
 def create_acme_dns_config(api_url: str, username: str, password: str, subdomain: str) -> Path:
     """Create ACME-DNS credentials file."""

@@ -291,6 +291,16 @@
                                         </div>
                                     </div>
                                 </label>
+                                <label class="relative">
+                                    <input type="radio" name="dns_provider" value="duckdns" class="sr-only peer">
+                                    <div class="p-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                        <div class="text-center">
+                                            <i class="fas fa-feather text-lg text-yellow-500 mb-1"></i>
+                                            <div class="text-xs font-medium dark:text-white">DuckDNS</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="duckdns-status">Not configured</div>
+                                        </div>
+                                    </div>
+                                </label>
                             </div>
                         </div>
                     </div>
@@ -1026,13 +1036,51 @@
                                 <label for="dynudns_token" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
                                     API Token
                                 </label>
-                                <input type="password" id="dynudns_token" name="dynudns_token" 
+                                <input type="password" id="dynudns_token" name="dynudns_token"
                                        class="mt-1 block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
                                        placeholder="Your Dynu API token">
                             </div>
                             <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
                                 Generate an API token at <a href="https://www.dynu.com/en-US/ControlPanel/APICredentials" target="_blank" class="text-primary hover:underline">Dynu Control Panel</a>.
                             </p>
+                        </div>
+                    </div>
+
+                    <!-- DuckDNS Configuration -->
+                    <div id="duckdns-config" class="dns-config hidden">
+                        <div class="border border-yellow-200 dark:border-yellow-600 rounded-lg p-4 bg-yellow-50 dark:bg-yellow-900/20">
+                            <div class="flex items-center justify-between mb-4">
+                                <h4 class="text-lg font-medium text-gray-900 dark:text-white">
+                                    <i class="fas fa-feather mr-2 text-yellow-500"></i>
+                                    DuckDNS Configuration
+                                </h4>
+                                <button type="button" id="duckdns-add-account" onclick="showAddAccountModal('duckdns')"
+                                        class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-primary hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                                    <i class="fas fa-plus mr-1"></i>
+                                    Add Account
+                                </button>
+                            </div>
+
+                            <div id="duckdns-accounts-list" class="space-y-3 mb-4">
+                                <!-- Accounts will be populated here -->
+                            </div>
+
+                            <!-- Legacy single account fields -->
+                            <div id="duckdns-legacy-fields">
+                                <div>
+                                    <label for="duckdns_api_token" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        Account Token
+                                    </label>
+                                    <input type="password" id="duckdns_api_token" name="duckdns_api_token"
+                                           class="mt-1 block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                           placeholder="UUID-format token from your DuckDNS account page">
+                                </div>
+                            </div>
+
+                            <div class="mt-3 p-3 rounded-md bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-700 text-sm text-gray-700 dark:text-gray-200">
+                                <p class="font-medium mb-1"><i class="fas fa-info-circle mr-1"></i> No domain? No problem.</p>
+                                <p>DuckDNS gives you a free <code class="text-xs bg-yellow-200 dark:bg-yellow-800 px-1 rounded">&lt;name&gt;.duckdns.org</code> subdomain — ideal for homelabs, self-hosted services, and IoT devices. Sign in at <a href="https://www.duckdns.org/" target="_blank" rel="noopener" class="text-primary hover:underline">duckdns.org</a>, pick a name, and copy the account token from the top of the page. The same token grants access to every subdomain owned by your account, including wildcards (<code class="text-xs bg-yellow-200 dark:bg-yellow-800 px-1 rounded">*.mybox.duckdns.org</code>).</p>
+                            </div>
                         </div>
                     </div>
                     </div><!-- /tab: dns -->

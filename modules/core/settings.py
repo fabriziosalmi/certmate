@@ -184,6 +184,7 @@ class SettingsManager:
                 'arvancloud': {'api_key': ''},
                 'infomaniak': {'api_token': ''},
                 'acme-dns': {'api_url': '', 'username': '', 'password': '', 'subdomain': ''},
+                'duckdns': {'api_token': ''},
                 'hetzner-cloud': {'api_token': ''}
             },
             'certificate_storage': default_settings['certificate_storage']
@@ -333,7 +334,7 @@ class SettingsManager:
                         return False
                     
             # Validate dns_provider against supported set
-            supported_providers = {'cloudflare','route53','azure','google','powerdns','digitalocean','linode','gandi','ovh','namecheap','vultr','dnsmadeeasy','nsone','rfc2136','hetzner','hetzner-cloud','porkbun','godaddy','he-ddns','dynudns','arvancloud','infomaniak','acme-dns'}
+            supported_providers = {'cloudflare','route53','azure','google','powerdns','digitalocean','linode','gandi','ovh','namecheap','vultr','dnsmadeeasy','nsone','rfc2136','hetzner','hetzner-cloud','porkbun','godaddy','he-ddns','dynudns','arvancloud','infomaniak','acme-dns','duckdns'}
             if 'dns_provider' in settings and settings['dns_provider'] not in supported_providers:
                 logger.error(f"Invalid dns_provider: {settings['dns_provider']}")
                 return False
@@ -400,6 +401,7 @@ class SettingsManager:
                 'arvancloud': 120,
                 'infomaniak': 300,
                 'acme-dns': 30,
+                'duckdns': 60,
                 'hetzner-cloud': 120
             }
             if 'dns_propagation_seconds' not in settings or not isinstance(settings['dns_propagation_seconds'], dict):
@@ -496,7 +498,8 @@ class SettingsManager:
                 'he-ddns': ['username', 'password'],
                 'arvancloud': ['api_key'],
                 'infomaniak': ['api_token'],
-                'acme-dns': ['api_url', 'username', 'password', 'subdomain']
+                'acme-dns': ['api_url', 'username', 'password', 'subdomain'],
+                'duckdns': ['api_token']
             }
             
             # Check if migration is needed

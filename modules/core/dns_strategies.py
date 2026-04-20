@@ -14,7 +14,8 @@ from .utils import (
     create_powerdns_config, create_digitalocean_config, create_linode_config,
     create_gandi_config, create_ovh_config, create_namecheap_config,
     create_arvancloud_config, create_infomaniak_config, create_acme_dns_config,
-    create_edgedns_config, create_multi_provider_config, _create_config_file
+    create_duckdns_config, create_edgedns_config, create_multi_provider_config,
+    _create_config_file
 )
 
 logger = logging.getLogger(__name__)
@@ -377,6 +378,29 @@ class AcmeDNSStrategy(DNSProviderStrategy):
                 f"from _acme-challenge.<domain> to _acme-challenge.{domain_alias} exists."
             )
 
+class DuckDNSStrategy(DNSProviderStrategy):
+    """DuckDNS free DDNS provider via certbot-dns-duckdns plugin.
+
+    DuckDNS gives anyone a free ``<name>.duckdns.org`` subdomain, which is
+    the canonical "I don't own a domain" path to a publicly-trusted cert.
+    Only the apex account token is required; the same token can issue
+    certificates for any subdomain the account owns, including wildcards.
+    """
+
+    def create_config_file(self, config_data: Dict[str, Any]) -> Optional[Path]:
+        return create_duckdns_config(config_data.get('api_token', ''))
+
+    @property
+    def plugin_name(self) -> str:
+        return 'dns-duckdns'
+
+    @property
+    def default_propagation_seconds(self) -> int:
+        # Plugin default is 30s but DuckDNS propagation occasionally exceeds
+        # that under load; 60s gives a safer margin without being disruptive.
+        return 60
+
+
 class GenericMultiProviderStrategy(DNSProviderStrategy):
     def __init__(self, provider_name: str):
         self.provider_name = provider_name
@@ -435,6 +459,7 @@ class DNSStrategyFactory:
         'arvancloud': ArvanCloudStrategy,
         'infomaniak': InfomaniakStrategy,
         'acme-dns': AcmeDNSStrategy,
+        'duckdns': DuckDNSStrategy,
         'http-01': HTTP01Strategy,
     }
     

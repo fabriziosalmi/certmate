@@ -36,6 +36,9 @@ certbot-dns-porkbun==0.11.0
 certbot-dns-godaddy==2.8.0
 certbot-dns-arvancloud==0.1.0
 certbot-acme-dns==0.3.1
+# DuckDNS: free DDNS subdomain provider. Enables "no-domain" cert issuance
+# for homelabs / self-hosted services via *.duckdns.org.
+certbot-dns-duckdns==1.8.0
 # Akamai Edge DNS (enterprise) — separate from certbot-dns-linode (Akamai Connected Cloud).
 # Pinned at 0.1.0 because 0.2.0 requires certbot>=5.2.2 (incompatible with our certbot==2.10.0).
 certbot-plugin-edgedns==0.1.0
