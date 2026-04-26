@@ -428,7 +428,10 @@ def create_api_resources(api, models, managers):
             Does NOT revoke the certificate at the CA — call the CA's revoke
             endpoint separately if revocation is required.
             """
-            cert_dir, err = _validate_domain_path(domain, file_ops.cert_dir)
+            # Path is only validated for the side-effect of rejecting
+            # traversal attempts; the actual delete is keyed on the domain
+            # name and handled by certificate_manager.
+            _, err = _validate_domain_path(domain, file_ops.cert_dir)
             if err:
                 return {'error': err}, 400
             try:

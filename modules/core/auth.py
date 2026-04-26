@@ -125,13 +125,18 @@ class AuthManager:
         settings['api_keys'] = api_keys
         return self.settings_manager.save_settings(settings, "api_key_management")
 
-    def _hash_api_token(self, token):
-        """Hash an API token using HMAC-SHA256 (with server secret) or plain SHA-256 as fallback."""
+    def hash_api_token(self, token):
+        """Hash an API token using HMAC-SHA256 (with server secret) or plain
+        SHA-256 as fallback. Public so SettingsManager can migrate the legacy
+        api_bearer_token without depending on a private symbol."""
         if self._hmac_key:
             digest = hmac.new(self._hmac_key, token.encode(), hashlib.sha256).hexdigest()
             return f"hmac-sha256:{digest}"
         digest = hashlib.sha256(token.encode()).hexdigest()
         return f"sha256:{digest}"
+
+    # Backwards-compat alias for callers that imported the private name.
+    _hash_api_token = hash_api_token
 
     def _verify_api_token(self, token, stored_hash):
         """Verify an API token against a stored hash.

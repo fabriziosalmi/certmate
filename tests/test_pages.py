@@ -39,7 +39,7 @@ class TestWelcomeBanner:
         # Step 1: Create admin user
         api.post_json("/api/web/settings/users", {
             "username": "admin",
-            "password": "password123",
+            "password": "Password123!",
             "role": "admin"
         })
         # Step 2: Enable local auth
@@ -49,7 +49,7 @@ class TestWelcomeBanner:
         # Step 3: Login to get session cookie
         api.post_json("/api/auth/login", {
             "username": "admin",
-            "password": "password123"
+            "password": "Password123!"
         })
 
     def test_index_loads_dashboard_js(self, api):

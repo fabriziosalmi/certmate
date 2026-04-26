@@ -1,3 +1,12 @@
+## v2.3.9 (Patch — v2.3.8 follow-up)
+
+Addresses a CI regression and four review comments on [#105](https://github.com/fabriziosalmi/certmate/pull/105).
+
+- **Fix CI regression in `tests/test_pages.py`**: `TestWelcomeBanner.setup_initialized_state` created the admin user with `password123`, which the new password policy from v2.3.8 (≥12 chars + digit + symbol) rejects with 400 → no admin → page stays in welcome/setup mode → `dashboard.js` not in response. Bumped the fixture password to `Password123!`.
+- **CSRF host comparison handles ports**: Origin/Referer comparison previously did a literal string match against `request.host`, which gave false 403s when one side included a default port (`:443`/`:80`) and the other didn't. Both sides are now normalized — default ports stripped, explicit non-default ports preserved.
+- **`AuthManager.hash_api_token` is now public**: `SettingsManager.set_token_hasher()` was wired to `auth_manager._hash_api_token` (a private symbol). Renamed to `hash_api_token` and kept `_hash_api_token` as a backwards-compat alias.
+- **Removed unused `cert_dir` local in `DELETE /api/certificates/<domain>`**: the path was validated for the side-effect of rejecting traversal attempts but the resolved `Path` was never used. Replaced with `_, err = ...`.
+
 ## v2.3.8 (Patch — security & robustness)
 
 Audit-driven hardening pass. No new features; everything below addresses a verified defect, race condition, missing endpoint, or piece of dead code.
