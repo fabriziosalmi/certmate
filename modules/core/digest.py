@@ -8,6 +8,7 @@ import logging
 import smtplib
 import time
 from datetime import datetime, timedelta
+from .utils import utc_now
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from pathlib import Path
@@ -94,7 +95,7 @@ class WeeklyDigest:
 
     def _get_weekly_activity(self) -> Dict[str, int]:
         """Count operations in the last 7 days from the audit log."""
-        cutoff = datetime.utcnow() - timedelta(days=7)
+        cutoff = utc_now() - timedelta(days=7)
         cutoff_str = cutoff.isoformat()
 
         entries = self.audit_logger.get_recent_entries(limit=500)
@@ -127,7 +128,7 @@ class WeeklyDigest:
             'server_certs': server,
             'client_certs': client,
             'activity': activity,
-            'generated_at': datetime.utcnow().isoformat() + 'Z',
+            'generated_at': utc_now().isoformat() + 'Z',
         }
 
     def _format_text(self, digest: Dict[str, Any]) -> str:

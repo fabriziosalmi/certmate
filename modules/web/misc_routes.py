@@ -74,6 +74,29 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
             'checks': checks
         })
 
+    @app.route('/api/events/stream')
+    def events_stream():
+        """SSE: stream certificate lifecycle events to authenticated browsers.
+
+        SSE cannot send custom headers, so this only accepts the cookie session.
+        When local auth is enabled and the request has no valid session, this
+        returns a 401 JSON error and does not expose the event stream.
+        """
+        from flask import Response, stream_with_context, request as _req
+        if auth_manager.is_local_auth_enabled() and auth_manager.has_any_users():
+            session_id = _req.cookies.get('certmate_session')
+            if not session_id or not auth_manager.validate_session(session_id):
+                return jsonify({'error': 'Unauthenticated'}), 401
+        event_bus = managers.get('events')
+        if event_bus is None:
+            return jsonify({'error': 'Event bus not available'}), 503
+        q = event_bus.subscribe()
+        return Response(
+            stream_with_context(event_bus.stream(q)),
+            mimetype='text/event-stream',
+            headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'},
+        )
+
     @app.route('/api/web/logs/stream')
     @auth_manager.require_role('admin')
     def stream_logs():

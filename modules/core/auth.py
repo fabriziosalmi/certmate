@@ -14,6 +14,7 @@ import time
 from functools import wraps
 from flask import request, jsonify, session
 from datetime import datetime, timedelta
+from .utils import utc_now
 
 try:
     import bcrypt
@@ -178,7 +179,7 @@ class AuthManager:
                 'role': normalized_role,
                 'token_hash': self._hash_api_token(plaintext),
                 'token_prefix': plaintext[:7],
-                'created_at': datetime.utcnow().isoformat(),
+                'created_at': utc_now().isoformat(),
                 'created_by': created_by,
                 'expires_at': expires_at,
                 'last_used_at': None,
@@ -204,7 +205,7 @@ class AuthManager:
     def list_api_keys(self):
         """List all API keys without token hashes."""
         api_keys = self._get_api_keys()
-        now = datetime.utcnow().isoformat()
+        now = utc_now().isoformat()
         result = {}
         for key_id, data in api_keys.items():
             exp = data.get('expires_at')
@@ -232,7 +233,7 @@ class AuthManager:
                 return False, "API key is already revoked"
 
             api_keys[key_id]['revoked'] = True
-            api_keys[key_id]['revoked_at'] = datetime.utcnow().isoformat()
+            api_keys[key_id]['revoked_at'] = utc_now().isoformat()
 
             if self._save_api_keys(api_keys):
                 logger.info(f"API key '{api_keys[key_id].get('name')}' revoked")
@@ -250,13 +251,18 @@ class AuthManager:
         try:
             settings = self.settings_manager.load_settings()
 
-            # 1. Check legacy api_bearer_token (backward compat)
+            # 1. Check legacy api_bearer_token (backward compat).
+            # Prefer the hashed form (api_bearer_token_hash); fall back to
+            # plaintext compare for installs that have not yet been migrated.
+            legacy_hash = settings.get('api_bearer_token_hash')
+            if legacy_hash and self._verify_api_token(token, legacy_hash):
+                return {'username': 'api_user', 'role': 'admin'}
             legacy_token = settings.get('api_bearer_token')
             if legacy_token and secrets.compare_digest(token, legacy_token):
                 return {'username': 'api_user', 'role': 'admin'}
 
             # 2. Check scoped API keys
-            now = datetime.utcnow().isoformat()
+            now = utc_now().isoformat()
             api_keys = settings.get('api_keys', {})
             for key_id, key_data in api_keys.items():
                 if key_data.get('revoked'):
@@ -295,7 +301,7 @@ class AuthManager:
                 'password_hash': self._hash_password(password),
                 'role': normalized,
                 'email': email,
-                'created_at': datetime.utcnow().isoformat(),
+                'created_at': utc_now().isoformat(),
                 'last_login': None,
                 'enabled': True
             }
@@ -388,7 +394,7 @@ class AuthManager:
             
             if self._verify_password(password, user.get('password_hash', '')):
                 # Update last login
-                user['last_login'] = datetime.utcnow().isoformat()
+                user['last_login'] = utc_now().isoformat()
                 self._save_users(users)
                 
                 logger.info(f"User '{username}' authenticated successfully")

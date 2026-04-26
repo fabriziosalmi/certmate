@@ -30,6 +30,7 @@ import time
 import threading
 import os
 from datetime import datetime
+from .utils import utc_now
 from typing import Any, Dict, Optional
 from contextvars import ContextVar
 from functools import wraps
@@ -65,7 +66,7 @@ class JSONFormatter(logging.Formatter):
         
         # Build base log entry
         log_entry = {
-            'timestamp': datetime.utcnow().isoformat() + 'Z',
+            'timestamp': utc_now().isoformat() + 'Z',
             'level': record.levelname.lower(),
             'logger': record.name,
             'message': record.getMessage(),

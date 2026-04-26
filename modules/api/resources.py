@@ -68,17 +68,28 @@ def create_api_resources(api, models, managers):
     # Health check endpoint
     class HealthCheck(Resource):
         def get(self):
-            """Health check endpoint"""
+            """Health check: settings readable + background scheduler running."""
+            checks = {}
+            overall = 'healthy'
             try:
-                # Basic health checks
                 settings_manager.load_settings()
-
-                return {
-                    'status': 'healthy'
-                }
+                checks['settings'] = 'ok'
             except Exception as e:
-                logger.error(f"Health check failed: {e}")
-                return {'status': 'unhealthy'}, 500
+                logger.error(f"Health check failed (settings): {e}")
+                checks['settings'] = 'error'
+                overall = 'unhealthy'
+
+            scheduler = managers.get('scheduler')
+            scheduler_running = bool(scheduler and getattr(scheduler, 'running', False))
+            checks['scheduler'] = 'running' if scheduler_running else 'not_running'
+            if not scheduler_running:
+                # The scheduler being down means renewals stop firing — surface it
+                # as 'degraded' so monitoring catches it without flapping liveness.
+                if overall == 'healthy':
+                    overall = 'degraded'
+
+            status_code = 200 if overall != 'unhealthy' else 500
+            return {'status': overall, 'checks': checks}, status_code
 
     # Metrics endpoints
     class MetricsList(Resource):
@@ -133,8 +144,10 @@ def create_api_resources(api, models, managers):
                     if field not in new_settings:
                         return {'error': f'Missing required field: {field}'}, 400
 
-                # Save settings
-                success = settings_manager.save_settings(new_settings, "api_update")
+                # Use atomic_update so concurrent writes from the web UI cannot
+                # race, and so users/api_keys are preserved (the API payload
+                # rarely contains them).
+                success = settings_manager.atomic_update(new_settings)
 
                 if success:
                     return {'message': 'Settings updated successfully'}, 200
@@ -404,6 +417,49 @@ def create_api_resources(api, models, managers):
                     'error': 'Certificate creation failed unexpectedly',
                     'hint': 'Check application logs for detailed error information.'
                 }, 500
+
+    class CertificateDetail(Resource):
+        @api.doc(security='Bearer')
+        @auth_manager.require_role('admin')
+        def delete(self, domain):
+            """Delete a certificate's files from disk.
+
+            Refuses if a create or renew is currently holding the domain lock.
+            Does NOT revoke the certificate at the CA — call the CA's revoke
+            endpoint separately if revocation is required.
+            """
+            cert_dir, err = _validate_domain_path(domain, file_ops.cert_dir)
+            if err:
+                return {'error': err}, 400
+            try:
+                deleted = certificate_manager.delete_certificate(domain)
+                if not deleted:
+                    return {'error': f'Certificate not found for domain: {domain}'}, 404
+
+                # Best-effort: drop the domain from settings so the dashboard
+                # stops listing it.
+                try:
+                    settings = settings_manager.load_settings()
+                    domains = settings.get('domains', []) or []
+                    new_domains = [
+                        d for d in domains
+                        if (isinstance(d, str) and d != domain)
+                        or (isinstance(d, dict) and d.get('domain') != domain)
+                    ]
+                    if len(new_domains) != len(domains):
+                        settings_manager.atomic_update({'domains': new_domains})
+                except Exception as e:
+                    logger.warning(f"Removed cert for {domain} but failed to update settings: {e}")
+
+                event_bus = current_app.config.get('EVENT_BUS')
+                if event_bus:
+                    event_bus.publish('certificate_deleted', {'domain': domain})
+                return {'message': f'Certificate deleted for {domain}', 'domain': domain}, 200
+            except RuntimeError as e:
+                return {'error': str(e)}, 409
+            except Exception as e:
+                logger.error(f"Certificate deletion failed for {domain}: {e}")
+                return {'error': 'Certificate deletion failed'}, 500
 
     class DownloadCertificate(Resource):
         @api.doc(security='Bearer')
@@ -790,37 +846,24 @@ def create_api_resources(api, models, managers):
                 if backend_type not in valid_backends:
                     return {'error': 'Invalid backend type'}, 400
 
-                settings = settings_manager.load_settings()
+                # Build only the storage subtree and merge atomically so we
+                # don't race with concurrent writes or wipe other settings keys.
+                current = settings_manager.load_settings()
+                storage = dict(current.get('certificate_storage') or {})
+                storage['backend'] = backend_type
 
-                # Update storage configuration
-                if 'certificate_storage' not in settings:
-                    settings['certificate_storage'] = {}
-
-                settings['certificate_storage']['backend'] = backend_type
-
-                # Update backend-specific configuration
                 if backend_type == 'local_filesystem':
-                    cert_dir = data.get('cert_dir', 'certificates')
-                    settings['certificate_storage']['cert_dir'] = cert_dir
-
+                    storage['cert_dir'] = data.get('cert_dir', 'certificates')
                 elif backend_type == 'azure_keyvault':
-                    azure_config = data.get('azure_keyvault', {})
-                    settings['certificate_storage']['azure_keyvault'] = azure_config
-
+                    storage['azure_keyvault'] = data.get('azure_keyvault', {})
                 elif backend_type == 'aws_secrets_manager':
-                    aws_config = data.get('aws_secrets_manager', {})
-                    settings['certificate_storage']['aws_secrets_manager'] = aws_config
-
+                    storage['aws_secrets_manager'] = data.get('aws_secrets_manager', {})
                 elif backend_type == 'hashicorp_vault':
-                    vault_config = data.get('hashicorp_vault', {})
-                    settings['certificate_storage']['hashicorp_vault'] = vault_config
-
+                    storage['hashicorp_vault'] = data.get('hashicorp_vault', {})
                 elif backend_type == 'infisical':
-                    infisical_config = data.get('infisical', {})
-                    settings['certificate_storage']['infisical'] = infisical_config
+                    storage['infisical'] = data.get('infisical', {})
 
-                # Save settings
-                success = settings_manager.save_settings(settings, backup_reason="storage_backend_update")
+                success = settings_manager.atomic_update({'certificate_storage': storage})
 
                 if success:
                     return {
@@ -1057,33 +1100,32 @@ def create_api_resources(api, models, managers):
                             if directory_response.status_code == 200:
                                 try:
                                     directory_data = directory_response.json()
-                                    # Check if it looks like an ACME directory
-                                    if 'newAccount' in directory_data or 'keyChange' in directory_data:
-                                        return {
-                                            'success': True,
-                                            'message': 'ACME endpoint appears valid',
-                                            'ca_provider': ca_provider,
-                                            'acme_url': acme_url,
-                                            'has_ca_cert': bool(ca_cert),
-                                            'urls': list(directory_data.keys()) if directory_data else []
-                                        }
-                                    else:
-                                        return {
-                                            'success': False,
-                                            'message': 'Endpoint does not appear to be a valid ACME directory',
-                                            'ca_provider': ca_provider
-                                        }
                                 except Exception:
                                     return {
                                         'success': False,
                                         'message': 'Endpoint is accessible but returned invalid JSON',
                                         'ca_provider': ca_provider
                                     }
+                                # Check if it looks like an ACME directory
+                                if 'newAccount' in directory_data or 'keyChange' in directory_data:
+                                    return {
+                                        'success': True,
+                                        'message': 'ACME endpoint appears valid',
+                                        'ca_provider': ca_provider,
+                                        'acme_url': acme_url,
+                                        'has_ca_cert': bool(ca_cert),
+                                        'urls': list(directory_data.keys()) if directory_data else []
+                                    }
                                 return {
                                     'success': False,
-                                    'message': f'ACME endpoint returned HTTP {directory_response.status_code}',
+                                    'message': 'Endpoint does not appear to be a valid ACME directory',
                                     'ca_provider': ca_provider
                                 }
+                            return {
+                                'success': False,
+                                'message': f'ACME endpoint returned HTTP {directory_response.status_code}',
+                                'ca_provider': ca_provider
+                            }
 
                         except requests.exceptions.Timeout:
                             return {
@@ -1237,6 +1279,7 @@ def create_api_resources(api, models, managers):
         'CacheClear': CacheClear,
         'CertificateList': CertificateList,
         'CreateCertificate': CreateCertificate,
+        'CertificateDetail': CertificateDetail,
         'DownloadCertificate': DownloadCertificate,
         'RenewCertificate': RenewCertificate,
         'BackupList': BackupList,

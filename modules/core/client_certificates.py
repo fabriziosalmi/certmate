@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 from datetime import datetime, timedelta
+from .utils import utc_now
 from typing import Optional, List, Dict, Any, Tuple
 from uuid import uuid4
 
@@ -188,8 +189,8 @@ class ClientCertificateManager:
                 "cert_usage": cert_usage,
                 "key_usage": ["digitalSignature", "keyEncipherment"],
                 "extended_key_usage": ["clientAuth"],
-                "created_at": datetime.utcnow().isoformat(),
-                "expires_at": (datetime.utcnow() + timedelta(days=days_valid)).isoformat(),
+                "created_at": utc_now().isoformat(),
+                "expires_at": (utc_now() + timedelta(days=days_valid)).isoformat(),
                 "serial_number": str(signed_cert.serial_number),
                 "renewal_enabled": True,
                 "renewal_threshold_days": 30,
@@ -335,7 +336,7 @@ class ClientCertificateManager:
 
             # Update metadata
             metadata["revoked"] = True
-            metadata["revoked_at"] = datetime.utcnow().isoformat()
+            metadata["revoked_at"] = utc_now().isoformat()
             metadata["reason_revoked"] = reason
 
             # Save updated metadata
@@ -400,7 +401,7 @@ class ClientCertificateManager:
             if success:
                 # Update old metadata to mark as superseded
                 old_metadata["superseded_by"] = cert_data["identifier"]
-                old_metadata["superseded_at"] = datetime.utcnow().isoformat()
+                old_metadata["superseded_at"] = utc_now().isoformat()
 
                 for metadata_file in self.client_certs_dir.glob(f"*/{identifier}/metadata.json"):
                     with open(metadata_file, 'w') as f:
@@ -475,7 +476,7 @@ class ClientCertificateManager:
                 threshold_days = cert_metadata.get("renewal_threshold_days", 30)
                 renewal_date = expires_at - timedelta(days=threshold_days)
 
-                if datetime.utcnow() >= renewal_date:
+                if utc_now() >= renewal_date:
                     identifier = cert_metadata.get("identifier")
                     success, error, _ = self.renew_certificate(identifier)
 

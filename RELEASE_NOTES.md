@@ -1,3 +1,29 @@
+## v2.3.8 (Patch — security & robustness)
+
+Audit-driven hardening pass. No new features; everything below addresses a verified defect, race condition, missing endpoint, or piece of dead code.
+
+**Data integrity**
+- Race condition in `SettingsManager`: `save_settings()` and `load_settings()` were unprotected, while `atomic_update()` held a `Lock` only on its own merge — concurrent writes from API + scheduler + UI could lose data. Lock is now `RLock` and wraps both methods, with internal callers (load → save during migration) re-entering safely.
+- `SettingsManager` `_compat` shims (`_save_settings_compat`, `_safe_file_write_compat`, …) removed. They were dead code — `app.py` no longer exposes any of the functions they probed.
+- API Settings `POST /api/settings` and Storage Backend `POST /api/storage/config` now route through `atomic_update`; the previous `save_settings(payload)` could wipe `users` / `api_keys` if absent from the payload.
+- Backup rotation: `MAX_BACKUPS_PER_TYPE=50` and `BACKUP_RETENTION_DAYS=30` were defined but never enforced. `_prune_unified_backups()` now runs after each `create_unified_backup()`.
+
+**Security**
+- Legacy `api_bearer_token` is hashed (HMAC-SHA256) and the plaintext is dropped from `settings.json` on the next save. Auth still accepts the original token via `api_bearer_token_hash` compare; rotate via the API Keys UI. Backwards compatible: installs that haven't migrated yet still authenticate via plaintext fallback.
+- CSRF defense: `before_request` middleware rejects state-changing requests carrying the session cookie when `Origin`/`Referer` don't match `Host`. Bearer-token API clients are unaffected. Defense-in-depth on top of the existing `SameSite=Strict` cookie.
+- Web `POST /api/users` now enforces a minimum password policy (≥12 chars + a digit + a symbol).
+- Web `DELETE /api/users/<username>` refuses if the caller is deleting their own account.
+
+**Missing endpoints / endpoints in wrong shape**
+- `DELETE /api/certificates/<domain>` exposed (admin role). The underlying `CertificateManager.delete_certificate()` already existed; only the route was missing.
+- `GET /api/events/stream` (SSE) implemented. The browser was already opening an `EventSource` to this URL; the route did not exist, so every page load entered a 404 retry loop.
+- `GET /api/health` now reports scheduler status alongside settings load (the Flask-level `/health` already did; the namespaced API one was a stub).
+- `POST /api/settings/test-ca-provider`: dead `return` after the inner `if` is now reachable, and the missing branch for HTTP non-200 ACME directory responses is now handled.
+
+**Cleanup**
+- `CertificateManager._infer_dns_provider()` no longer hardcodes user-specific patterns (`test.certmate.org`, `*.audiolibri.org`, `aws-*`, `cf-*`). It now defers to `SettingsManager.get_domain_dns_provider()`.
+- `datetime.utcnow()` (deprecated in 3.12) replaced with a `utc_now()` helper that returns a *naive* UTC datetime — same shape as `utcnow()` so existing on-disk timestamps remain comparable. 7 modules migrated.
+
 ## v2.3.7 (Patch)
 
 - Fix #99 (cosmetic follow-up): Dashboard no longer surfaces filesystem artifacts (`lost+found`, hidden `.cache` / `.git`, and unrelated subdirectories like `certs` or `config`) as "Not Found" certificate rows when the cert storage root is a volume mount point. Introduced a single `iter_cert_domain_dirs()` helper in `modules/core/constants.py` that filters to subdirectories actually containing `cert.pem`, and applied it at every domain-enumeration call site: the `/api/certificates` list endpoint, weekly digest, metrics collection, and the startup `_ensure_certificate_metadata` rescue path (which previously wrote stray `metadata.json` files into non-cert directories). 7 regression tests pin the filter. Reported by @SpeeDFireCZE.
