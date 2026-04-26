@@ -173,11 +173,39 @@ class FileOperations:
                 zipf.writestr("backup_metadata.json", json.dumps(metadata, indent=2))
             
             logger.info(f"Unified backup created: {backup_filename} (contains {len(domains)} domains)")
+            self._prune_unified_backups()
             return backup_filename
-                
+
         except Exception as e:
             logger.error(f"Error creating unified backup: {e}")
             return None
+
+    def _prune_unified_backups(self):
+        """Enforce backup retention: keep at most MAX_BACKUPS_PER_TYPE files,
+        and delete files older than BACKUP_RETENTION_DAYS regardless of count."""
+        try:
+            backup_dir = self.backup_dir / "unified"
+            if not backup_dir.exists():
+                return
+            backups = sorted(
+                backup_dir.glob("backup_*.zip"),
+                key=lambda p: p.stat().st_mtime,
+                reverse=True,
+            )
+            cutoff = datetime.now() - timedelta(days=BACKUP_RETENTION_DAYS)
+            removed = 0
+            for idx, path in enumerate(backups):
+                try:
+                    mtime = datetime.fromtimestamp(path.stat().st_mtime)
+                    if idx >= MAX_BACKUPS_PER_TYPE or mtime < cutoff:
+                        path.unlink()
+                        removed += 1
+                except OSError as e:
+                    logger.debug(f"Could not prune backup {path.name}: {e}")
+            if removed:
+                logger.info(f"Pruned {removed} old unified backup(s)")
+        except Exception as e:
+            logger.warning(f"Backup pruning failed: {e}")
 
 
 

@@ -6,6 +6,7 @@ Handles OCSP responses and Certificate Revocation List generation/distribution
 import logging
 from pathlib import Path
 from datetime import datetime
+from .utils import utc_now
 from typing import Optional, List
 
 logger = logging.getLogger(__name__)
@@ -51,14 +52,14 @@ class OCSPResponder:
                             'status': 'revoked',
                             'revoked_at': cert.get('revoked_at'),
                             'reason': cert.get('reason_revoked', 'unspecified'),
-                            'this_update': datetime.utcnow().isoformat(),
+                            'this_update': utc_now().isoformat(),
                             'next_update': None  # OCSP responses are generated on-demand
                         }
                     else:
                         return {
                             'serial_number': serial_number,
                             'status': 'good',
-                            'this_update': datetime.utcnow().isoformat(),
+                            'this_update': utc_now().isoformat(),
                             'next_update': None
                         }
 
@@ -66,7 +67,7 @@ class OCSPResponder:
             return {
                 'serial_number': serial_number,
                 'status': 'unknown',
-                'this_update': datetime.utcnow().isoformat(),
+                'this_update': utc_now().isoformat(),
                 'next_update': None
             }
 

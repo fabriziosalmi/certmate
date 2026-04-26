@@ -129,6 +129,9 @@ def initialize_managers(container: AppContainer, app):
     dns_manager = DNSManager(settings_manager)
     auth_manager = AuthManager(settings_manager)
     auth_manager.set_hmac_key(app.secret_key)
+    # Let SettingsManager hash the legacy api_bearer_token on save using the
+    # same HMAC scheme as scoped API keys.
+    settings_manager.set_token_hasher(auth_manager._hash_api_token)
     cache_manager = CacheManager(settings_manager)
     storage_manager = StorageManager(settings_manager)
     ca_manager = CAManager(settings_manager)
@@ -325,6 +328,7 @@ def setup_api(container: AppContainer, app):
     ns_cache.add_resource(api_resources['CacheClear'], '/clear')
     ns_certificates.add_resource(api_resources['CertificateList'], '')
     ns_certificates.add_resource(api_resources['CreateCertificate'], '/create')
+    ns_certificates.add_resource(api_resources['CertificateDetail'], '/<string:domain>')
     ns_certificates.add_resource(api_resources['DownloadCertificate'], '/<string:domain>/download')
     ns_certificates.add_resource(api_resources['RenewCertificate'], '/<string:domain>/renew')
     ns_backups.add_resource(api_resources['BackupList'], '')
@@ -347,6 +351,47 @@ def setup_api(container: AppContainer, app):
     ns_crl.add_resource(api_resources['CRLDistribution'], '/download/<string:format_type>')
 
     container.api = api
+
+
+def setup_csrf_protection(app):
+    """Reject cookie-authenticated state-changing requests whose Origin/Referer
+    doesn't match the host. Bearer-token API clients are unaffected. Combined
+    with SameSite=Strict on the session cookie, this is a defense-in-depth
+    backstop against CSRF — it blocks the attack on browsers whose SameSite
+    enforcement was bypassed (e.g. via subdomain confusion or legacy issues).
+    """
+    from urllib.parse import urlparse
+    SAFE_METHODS = {'GET', 'HEAD', 'OPTIONS'}
+
+    @app.before_request
+    def _csrf_origin_check():
+        if request.method in SAFE_METHODS:
+            return None
+        # Bearer-token requests are API clients, not browsers — they pick the
+        # token themselves and aren't subject to ambient cookie auth.
+        auth_header = request.headers.get('Authorization', '')
+        if auth_header.lower().startswith('bearer '):
+            return None
+        # Only enforce for cookie-authenticated sessions. Unauthenticated
+        # requests are rejected later by the auth decorators if needed.
+        if not request.cookies.get('certmate_session'):
+            return None
+
+        expected_host = (request.host or '').lower()
+        origin = request.headers.get('Origin') or ''
+        referer = request.headers.get('Referer') or ''
+        source = origin or referer
+        if not source:
+            from flask import jsonify
+            return jsonify({'error': 'CSRF protection: missing Origin/Referer'}), 403
+        try:
+            source_host = urlparse(source).netloc.lower()
+        except Exception:
+            source_host = ''
+        if source_host != expected_host:
+            from flask import jsonify
+            return jsonify({'error': 'CSRF protection: Origin/Referer mismatch'}), 403
+        return None
 
 
 def setup_security_headers(app):
@@ -451,6 +496,7 @@ def create_app(test_config=None):
     initialize_managers(container, app)
     setup_api(container, app)
     register_web_routes(app, container.managers)
+    setup_csrf_protection(app)
     setup_security_headers(app)
     setup_rate_limiting(app, container)
     setup_scheduler(container)

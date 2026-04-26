@@ -69,6 +69,16 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
             return jsonify({'error': 'Username and password required'}), 400
         if len(username) > 64 or len(password) > 256:
             return jsonify({'error': 'Username must be ≤ 64 chars, password ≤ 256 chars'}), 400
+        # Password policy: 12 chars minimum with at least one digit and one
+        # non-alphanumeric character. Aligns with the OWASP ASVS L1 guidance
+        # for shared-credential apps.
+        import re
+        if (len(password) < 12
+                or not re.search(r'\d', password)
+                or not re.search(r'[^A-Za-z0-9]', password)):
+            return jsonify({
+                'error': 'Password must be at least 12 characters and include a digit and a symbol'
+            }), 400
 
         success, msg = auth_manager.create_user(username, password, role)
         if success:
@@ -84,6 +94,11 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
     def api_user_edit(username):
         """Edit or delete user"""
         if request.method == 'DELETE':
+            current = getattr(request, 'current_user', None) or {}
+            if current.get('username') == username:
+                return jsonify({
+                    'error': 'Cannot delete your own account; ask another admin'
+                }), 400
             if auth_manager.delete_user(username):
                 return jsonify({'message': 'User deleted'})
             return jsonify({'error': 'Deletion failed'}), 500

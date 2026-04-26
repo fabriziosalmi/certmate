@@ -15,7 +15,7 @@ from datetime import datetime, timedelta
 from .shell import ShellExecutor
 from .dns_strategies import DNSStrategyFactory, HTTP01Strategy, check_certbot_plugin_installed
 from .constants import CERTIFICATE_FILES, get_domain_name
-from .utils import validate_domain
+from .utils import validate_domain, utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -177,7 +177,7 @@ class CertificateManager:
                 if not_after:
                     try:
                         expiry_date = self._parse_openssl_date(not_after)
-                        now_utc = datetime.utcnow()
+                        now_utc = utc_now()
                         days_left = (expiry_date - now_utc).days
 
                         return {
@@ -723,16 +723,7 @@ class CertificateManager:
             domain_lock.release()
 
     def _infer_dns_provider(self, domain, settings):
-        """Infer DNS provider based on domain patterns and settings"""
-        # Check domain-specific patterns
-        if 'test.certmate.org' in domain:
-            return 'route53'
-        elif domain.endswith('.audiolibri.org'):
-            return 'cloudflare'
-        elif domain.startswith('aws-'):
-            return 'route53'
-        elif domain.startswith('cf-'):
-            return 'cloudflare'
-        
-        # Fall back to current settings default
-        return settings.get('dns_provider', 'cloudflare')
+        """Infer the DNS provider for a domain, preferring its explicit
+        per-domain setting over the global default."""
+        provider = self.settings_manager.get_domain_dns_provider(domain, settings)
+        return provider or settings.get('dns_provider') or 'cloudflare'

@@ -7,6 +7,7 @@ import logging
 import json
 from pathlib import Path
 from datetime import datetime
+from .utils import utc_now
 from typing import Optional, Dict, Any
 
 logger = logging.getLogger(__name__)
@@ -66,7 +67,7 @@ class AuditLogger:
         """
         try:
             audit_entry = {
-                'timestamp': datetime.utcnow().isoformat(),
+                'timestamp': utc_now().isoformat(),
                 'operation': operation,
                 'resource_type': resource_type,
                 'resource_id': resource_id,

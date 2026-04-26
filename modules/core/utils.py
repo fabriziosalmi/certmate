@@ -12,9 +12,22 @@ import secrets
 import string
 import threading
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
+
+
+def utc_now() -> datetime:
+    """Drop-in replacement for the deprecated datetime.utcnow(): a UTC-now
+    timestamp returned as a *naive* datetime, preserving on-disk format
+    compatibility with timestamps written by older versions of CertMate."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def utc_now_iso() -> str:
+    """ISO-8601 string of the current UTC time, naive shape (no offset)."""
+    return utc_now().isoformat()
 
 # =============================================
 # MODULE-LEVEL CONSTANTS
