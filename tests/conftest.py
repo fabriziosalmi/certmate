@@ -108,6 +108,12 @@ def api(docker_container):
             self.base_url = base_url
             self.session = requests.Session()
             self.session.headers["Content-Type"] = "application/json"
+            # The CSRF middleware (v2.3.8+) requires Origin/Referer on
+            # cookie-authenticated state-changing requests. Real browsers
+            # always send Origin on POSTs; the requests library does not.
+            # Setting it here makes our test client behave like a same-origin
+            # browser without each test needing to remember the header.
+            self.session.headers["Origin"] = base_url
 
         # --- HTTP verbs ---------------------------------------------------
         def get(self, path, **kw):

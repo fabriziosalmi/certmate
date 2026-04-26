@@ -131,7 +131,7 @@ def initialize_managers(container: AppContainer, app):
     auth_manager.set_hmac_key(app.secret_key)
     # Let SettingsManager hash the legacy api_bearer_token on save using the
     # same HMAC scheme as scoped API keys.
-    settings_manager.set_token_hasher(auth_manager._hash_api_token)
+    settings_manager.set_token_hasher(auth_manager.hash_api_token)
     cache_manager = CacheManager(settings_manager)
     storage_manager = StorageManager(settings_manager)
     ca_manager = CAManager(settings_manager)
@@ -362,6 +362,26 @@ def setup_csrf_protection(app):
     """
     from urllib.parse import urlparse
     SAFE_METHODS = {'GET', 'HEAD', 'OPTIONS'}
+    DEFAULT_PORTS = {'http': 80, 'https': 443}
+
+    def _normalize(scheme: str, netloc: str) -> str:
+        """Return a canonical "host:port" string with default ports stripped.
+
+        Same-origin comparison must treat https://example.com and
+        https://example.com:443 as identical — and similarly for http on :80.
+        """
+        netloc = (netloc or '').lower()
+        scheme = (scheme or '').lower()
+        if ':' in netloc:
+            host, _, port = netloc.partition(':')
+            try:
+                port_int = int(port)
+            except ValueError:
+                return netloc
+            if DEFAULT_PORTS.get(scheme) == port_int:
+                return host
+            return f'{host}:{port_int}'
+        return netloc
 
     @app.before_request
     def _csrf_origin_check():
@@ -377,7 +397,7 @@ def setup_csrf_protection(app):
         if not request.cookies.get('certmate_session'):
             return None
 
-        expected_host = (request.host or '').lower()
+        expected = _normalize(request.scheme, request.host or '')
         origin = request.headers.get('Origin') or ''
         referer = request.headers.get('Referer') or ''
         source = origin or referer
@@ -385,10 +405,11 @@ def setup_csrf_protection(app):
             from flask import jsonify
             return jsonify({'error': 'CSRF protection: missing Origin/Referer'}), 403
         try:
-            source_host = urlparse(source).netloc.lower()
+            parsed = urlparse(source)
+            source_host = _normalize(parsed.scheme, parsed.netloc)
         except Exception:
             source_host = ''
-        if source_host != expected_host:
+        if source_host != expected:
             from flask import jsonify
             return jsonify({'error': 'CSRF protection: Origin/Referer mismatch'}), 403
         return None
