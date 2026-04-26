@@ -79,8 +79,8 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
         """SSE: stream certificate lifecycle events to authenticated browsers.
 
         SSE cannot send custom headers, so this only accepts the cookie session.
-        It is a no-op (404) when local auth is enabled but the request has no
-        valid session — we don't want to leak events to unauthenticated visitors.
+        When local auth is enabled and the request has no valid session, this
+        returns a 401 JSON error and does not expose the event stream.
         """
         from flask import Response, stream_with_context, request as _req
         if auth_manager.is_local_auth_enabled() and auth_manager.has_any_users():
