@@ -151,6 +151,7 @@ def create_api_models(api):
         'days_left': fields.Integer(description='Days until expiry'),
         'days_until_expiry': fields.Integer(description='Days until expiry (alias for days_left)'),
         'needs_renewal': fields.Boolean(description='Whether certificate needs renewal'),
+        'auto_renew': fields.Boolean(description='Whether automatic renewal is enabled for this certificate'),
         'dns_provider': fields.String(description='DNS provider used for the certificate'),
         'total_issued': fields.Integer(description='Total certificates issued'),
         'total_active': fields.Integer(description='Total active certificates'),

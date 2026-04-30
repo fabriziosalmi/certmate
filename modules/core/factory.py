@@ -331,6 +331,7 @@ def setup_api(container: AppContainer, app):
     ns_certificates.add_resource(api_resources['CertificateDetail'], '/<string:domain>')
     ns_certificates.add_resource(api_resources['DownloadCertificate'], '/<string:domain>/download')
     ns_certificates.add_resource(api_resources['RenewCertificate'], '/<string:domain>/renew')
+    ns_certificates.add_resource(api_resources['CertificateAutoRenew'], '/<string:domain>/auto-renew')
     ns_backups.add_resource(api_resources['BackupList'], '')
     ns_backups.add_resource(api_resources['BackupCreate'], '/create')
     ns_backups.add_resource(api_resources['BackupDownload'], '/download/<backup_type>/<filename>')

@@ -627,17 +627,26 @@ class CertificateManager:
                 # Handle both old and new domain formats
                 if isinstance(domain_entry, str):
                     domain = domain_entry
+                    per_cert_auto_renew = True
                 elif isinstance(domain_entry, dict):
                     domain = domain_entry.get('domain')
+                    per_cert_auto_renew = domain_entry.get('auto_renew', True)
                 else:
                     logger.warning(f"Invalid domain entry format: {domain_entry}")
                     continue
-                
+
                 if not domain:
                     continue
-                
+
+                # Per-certificate opt-out: skip when auto_renew is explicitly
+                # disabled on this domain entry. The global auto_renew flag is
+                # checked above; this is the per-cert override (issue #111).
+                if not per_cert_auto_renew:
+                    logger.info(f"Skipping renewal for {domain}: auto_renew disabled for this certificate")
+                    continue
+
                 cert_info = self.get_certificate_info(domain)
-                
+
                 if cert_info and cert_info.get('needs_renewal'):
                     logger.info(f"Renewing certificate for {domain}")
                     try:
@@ -705,6 +714,34 @@ class CertificateManager:
         logger.info(f"Created metadata files for {created_count} certificates")
         return created_count
     
+    def set_auto_renew(self, domain: str, enabled: bool) -> bool:
+        """Enable or disable automatic renewal for a single domain (issue #111).
+
+        Returns True if the domain was found in settings and updated, False
+        otherwise. Legacy string-form entries are upgraded to dict form so the
+        flag can be persisted.
+        """
+        settings = self.settings_manager.load_settings()
+        # Migrate so every entry is a dict and the flag has somewhere to live.
+        settings = self.settings_manager.migrate_domains_format(settings)
+
+        new_domains = []
+        found = False
+        for entry in settings.get('domains', []):
+            if isinstance(entry, dict) and entry.get('domain') == domain:
+                entry = {**entry, 'auto_renew': bool(enabled)}
+                found = True
+            new_domains.append(entry)
+
+        if not found:
+            return False
+
+        # atomic_update merges under a lock, avoiding a load/mutate/save race
+        # with concurrent settings writes.
+        self.settings_manager.atomic_update({'domains': new_domains})
+        logger.info(f"auto_renew set to {bool(enabled)} for {domain}")
+        return True
+
     def delete_certificate(self, domain: str) -> bool:
         """Delete a certificate directory, blocking if a create/renew is in progress."""
         domain_lock = self._get_domain_lock(domain)

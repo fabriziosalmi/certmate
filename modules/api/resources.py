@@ -218,19 +218,24 @@ def create_api_resources(api, models, managers):
                 settings = settings_manager.load_settings()
                 certificates = []
 
-                # Create a set of all domains to check (from settings and disk)
+                # Map domain -> per-cert auto_renew flag (default True). Domains
+                # that exist only on disk and are not in settings get True too.
+                auto_renew_by_domain = {}
                 all_domains = set()
 
                 # Add domains from settings
                 for domain_entry in settings.get('domains', []):
                     if isinstance(domain_entry, str):
                         domain = domain_entry
+                        per_cert_auto_renew = True
                     elif isinstance(domain_entry, dict):
                         domain = domain_entry.get('domain')
+                        per_cert_auto_renew = domain_entry.get('auto_renew', True)
                     else:
                         continue
                     if domain:
                         all_domains.add(domain)
+                        auto_renew_by_domain[domain] = bool(per_cert_auto_renew)
 
                 # Also check for certificates that exist on disk but might not be in settings.
                 # Use iter_cert_domain_dirs so FS artifacts (lost+found, hidden dirs,
@@ -244,6 +249,7 @@ def create_api_resources(api, models, managers):
                     if domain:
                         cert_info = certificate_manager.get_certificate_info(domain)
                         if cert_info:
+                            cert_info['auto_renew'] = auto_renew_by_domain.get(domain, True)
                             certificates.append(cert_info)
 
                 return certificates
@@ -529,6 +535,46 @@ def create_api_resources(api, models, managers):
                 if event_bus:
                     event_bus.publish('certificate_failed', {'domain': domain, 'error': str(e)})
                 return {'error': 'Certificate renewal failed'}, 500
+
+    class CertificateAutoRenew(Resource):
+        @api.doc(security='Bearer')
+        @auth_manager.require_role('operator')
+        def put(self, domain):
+            """Enable or disable automatic renewal for a single certificate (issue #111).
+
+            Body: {"enabled": true|false}
+            """
+            _, err = _validate_domain_path(domain, file_ops.cert_dir)
+            if err:
+                return {'error': err}, 400
+            try:
+                data = api.payload or {}
+                if 'enabled' not in data:
+                    return {'error': 'Missing "enabled" boolean in request body'}, 400
+                enabled = bool(data.get('enabled'))
+
+                updated = certificate_manager.set_auto_renew(domain, enabled)
+                if not updated:
+                    return {
+                        'error': f'Domain {domain} not found in settings',
+                        'hint': 'Only domains tracked in settings can have auto-renew toggled.'
+                    }, 404
+
+                event_bus = current_app.config.get('EVENT_BUS')
+                if event_bus:
+                    event_bus.publish('certificate_auto_renew_changed', {
+                        'domain': domain,
+                        'enabled': enabled,
+                    })
+
+                return {
+                    'message': f'Auto-renew {"enabled" if enabled else "disabled"} for {domain}',
+                    'domain': domain,
+                    'auto_renew': enabled,
+                }, 200
+            except Exception as e:
+                logger.error(f"Failed to toggle auto-renew for {domain}: {e}")
+                return {'error': 'Failed to update auto-renew setting'}, 500
 
     # Backup endpoints (Unified backup system for atomic consistency)
     class BackupList(Resource):
@@ -1285,6 +1331,7 @@ def create_api_resources(api, models, managers):
         'CertificateDetail': CertificateDetail,
         'DownloadCertificate': DownloadCertificate,
         'RenewCertificate': RenewCertificate,
+        'CertificateAutoRenew': CertificateAutoRenew,
         'BackupList': BackupList,
         'BackupCreate': BackupCreate,
         'BackupDownload': BackupDownload,

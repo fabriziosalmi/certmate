@@ -292,6 +292,19 @@
         });
     }
 
+    // Per-cert auto-renew toggle button (issue #111).
+    function autoRenewButtonHtml(safeDomain, autoRenewEnabled) {
+        var icon = autoRenewEnabled ? 'fa-toggle-on' : 'fa-toggle-off';
+        var color = autoRenewEnabled
+            ? 'text-gray-400 hover:text-purple-600 dark:hover:text-purple-400'
+            : 'text-amber-500 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300';
+        var title = autoRenewEnabled ? 'Disable auto-renew' : 'Enable auto-renew';
+        return '<button type="button" data-action="toggle-auto-renew" data-domain="' + safeDomain +
+            '" data-auto-renew="' + (autoRenewEnabled ? 'true' : 'false') + '" onclick="event.stopPropagation()" ' +
+            'class="p-1.5 ' + color + ' rounded hover:bg-gray-100 dark:hover:bg-gray-700" ' +
+            'title="' + title + '"><i class="fas ' + icon + '"></i></button>';
+    }
+
     // Build deployment status badge HTML
     function deploymentBadgeHtml(cert) {
         var safeDomain = escapeHtml(cert.domain);
@@ -381,7 +394,11 @@
                     '<td class="px-4 py-4 whitespace-nowrap hidden md:table-cell text-sm text-gray-500 dark:text-gray-400">\u2014</td>' +
                     '<td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-gray-500 dark:text-gray-400">' + (providerLabel || '\u2014') + '</td>' +
                     '<td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell">\u2014</td>' +
-                    '<td class="px-4 py-4 whitespace-nowrap text-right"></td>' +
+                    '<td class="px-4 py-4 whitespace-nowrap text-right">' +
+                    '<div class="flex items-center justify-end gap-1">' +
+                    '<button type="button" data-action="delete" data-domain="' + safeDomain + '" onclick="event.stopPropagation()" class="p-1.5 text-gray-400 hover:text-red-600 dark:hover:text-red-400 rounded hover:bg-gray-100 dark:hover:bg-gray-700" title="Remove from list"><i class="fas fa-trash-alt"></i></button>' +
+                    '</div>' +
+                    '</td>' +
                     '</tr>';
             }
 
@@ -421,6 +438,8 @@
                 '<button type="button" data-action="renew" data-domain="' + safeDomain + '" onclick="event.stopPropagation()" class="p-1.5 text-gray-400 hover:text-green-600 dark:hover:text-green-400 rounded hover:bg-gray-100 dark:hover:bg-gray-700" title="Renew"><i class="fas fa-sync-alt"></i></button>' +
                 '<button type="button" data-action="download" data-domain="' + safeDomain + '" onclick="event.stopPropagation()" class="p-1.5 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 rounded hover:bg-gray-100 dark:hover:bg-gray-700" title="Download"><i class="fas fa-download"></i></button>' +
                 '<button type="button" data-action="curl" data-domain="' + safeDomain + '" onclick="event.stopPropagation()" class="p-1.5 text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded hover:bg-gray-100 dark:hover:bg-gray-700" title="API"><i class="fas fa-code"></i></button>' +
+                autoRenewButtonHtml(safeDomain, cert.auto_renew !== false) +
+                '<button type="button" data-action="delete" data-domain="' + safeDomain + '" onclick="event.stopPropagation()" class="p-1.5 text-gray-400 hover:text-red-600 dark:hover:text-red-400 rounded hover:bg-gray-100 dark:hover:bg-gray-700" title="Delete certificate"><i class="fas fa-trash-alt"></i></button>' +
                 '</div>' +
                 '</td>' +
                 '</tr>';
@@ -434,6 +453,10 @@
                     case 'renew': renewCertificate(domain); break;
                     case 'download': downloadCertificate(domain); break;
                     case 'curl': copyCurlCommand(domain); break;
+                    case 'toggle-auto-renew':
+                        toggleAutoRenew(domain, btn.dataset.autoRenew === 'true');
+                        break;
+                    case 'delete': deleteCertificate(domain); break;
                 }
             });
         });
@@ -465,7 +488,10 @@
         var providerLabel = safeDnsProvider ? safeDnsProvider.charAt(0).toUpperCase() + safeDnsProvider.slice(1) : '';
 
         if (!cert.exists) {
-            content.innerHTML = '<div class="text-center py-8"><i class="fas fa-exclamation-triangle text-red-400 text-3xl mb-3"></i><p class="text-gray-500 dark:text-gray-400">Certificate not found on disk.</p></div>';
+            content.innerHTML = '<div class="text-center py-8"><i class="fas fa-exclamation-triangle text-red-400 text-3xl mb-3"></i>' +
+                '<p class="text-gray-500 dark:text-gray-400 mb-6">Certificate not found on disk.</p>' +
+                '<button type="button" onclick="deleteCertificate(\'' + safeDomain + '\')" class="inline-flex items-center px-4 py-2 border border-red-300 dark:border-red-700 shadow-sm text-sm font-medium rounded-md text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40"><i class="fas fa-trash-alt mr-2"></i>Remove from List</button>' +
+                '</div>';
         } else {
             var daysKnown2 = cert.days_until_expiry !== null && cert.days_until_expiry !== undefined;
             var isExpired = daysKnown2 && cert.days_until_expiry <= 0;
@@ -492,6 +518,7 @@
                 '<div class="flex justify-between py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">Domain</dt><dd class="text-sm font-medium text-gray-900 dark:text-white">' + safeDomain + '</dd></div>' +
                 '<div class="flex justify-between py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">Expires</dt><dd class="text-sm font-medium text-gray-900 dark:text-white">' + expiryDate.toLocaleDateString(undefined, { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' }) + '</dd></div>' +
                 (providerLabel ? '<div class="flex justify-between py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">DNS Provider</dt><dd class="text-sm font-medium text-gray-900 dark:text-white">' + providerLabel + '</dd></div>' : '') +
+                '<div class="flex justify-between py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">Auto-Renew</dt><dd class="text-sm font-medium ' + (cert.auto_renew !== false ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400') + '">' + (cert.auto_renew !== false ? 'Enabled' : 'Disabled') + '</dd></div>' +
                 '<div class="flex justify-between py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">Deployment</dt><dd>' + deploymentBadgeHtml(cert) + '</dd></div>' +
                 '</dl>' +
                 '</div>' +
@@ -503,6 +530,8 @@
                 '<button type="button" onclick="downloadCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-download mr-2 text-blue-600"></i>Download Certificate</button>' +
                 '<button type="button" onclick="copyCurlCommand(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-blue-300 dark:border-blue-600 shadow-sm text-sm font-medium rounded-md text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50"><i class="fas fa-code mr-2"></i>Show API Command</button>' +
                 '<button type="button" onclick="checkDeploymentStatus(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-globe mr-2 text-indigo-600"></i>Check Deployment</button>' +
+                '<button type="button" onclick="toggleAutoRenew(\'' + safeDomain + '\', ' + (cert.auto_renew !== false ? 'true' : 'false') + ')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas ' + (cert.auto_renew !== false ? 'fa-toggle-on text-purple-600' : 'fa-toggle-off text-amber-600') + ' mr-2"></i>' + (cert.auto_renew !== false ? 'Disable Auto-Renew' : 'Enable Auto-Renew') + '</button>' +
+                '<button type="button" onclick="deleteCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-red-300 dark:border-red-700 shadow-sm text-sm font-medium rounded-md text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40"><i class="fas fa-trash-alt mr-2"></i>Delete Certificate</button>' +
                 '</div>' +
                 '</div>' +
                 '</div>';
@@ -1196,6 +1225,59 @@
         });
     }
 
+    // Toggle per-cert auto-renew (issue #111).
+    function toggleAutoRenew(domain, currentlyEnabled) {
+        var nextState = !currentlyEnabled;
+        var verb = nextState ? 'Enable' : 'Disable';
+        if (!window.confirm(verb + ' automatic renewal for ' + domain + '?')) {
+            return;
+        }
+        fetch('/api/certificates/' + encodeURIComponent(domain) + '/auto-renew', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled: nextState })
+        }).then(function (response) {
+            return response.json().then(function (result) {
+                return { ok: response.ok, result: result };
+            });
+        }).then(function (data) {
+            if (data.ok) {
+                showMessage('Auto-renew ' + (nextState ? 'enabled' : 'disabled') + ' for ' + domain, 'success');
+                loadCertificates();
+            } else {
+                showMessage(data.result.error || 'Failed to update auto-renew', 'error');
+            }
+        }).catch(function (error) {
+            console.error('Error toggling auto-renew:', error);
+            showMessage('Failed to update auto-renew. Please try again.', 'error');
+        });
+    }
+
+    // Delete a certificate and its settings entry (issue #111).
+    function deleteCertificate(domain) {
+        if (!window.confirm('Delete certificate for ' + domain + '?\n\nThis removes the certificate files from disk and removes the domain from settings. This action cannot be undone.')) {
+            return;
+        }
+        fetch('/api/certificates/' + encodeURIComponent(domain), {
+            method: 'DELETE'
+        }).then(function (response) {
+            return response.json().then(function (result) {
+                return { ok: response.ok, result: result };
+            });
+        }).then(function (data) {
+            if (data.ok) {
+                showMessage('Certificate deleted for ' + domain, 'success');
+                closeCertDetail();
+                loadCertificates();
+            } else {
+                showMessage(data.result.error || 'Failed to delete certificate', 'error');
+            }
+        }).catch(function (error) {
+            console.error('Error deleting certificate:', error);
+            showMessage('Failed to delete certificate. Please try again.', 'error');
+        });
+    }
+
     function renewCertificate(domain) {
         var progressInterval = showLoadingModal(
             'Renewing Certificate for ' + domain,
@@ -1331,6 +1413,8 @@
     window.openCertDetail = openCertDetail;
     window.closeCertDetail = closeCertDetail;
     window.renewCertificate = renewCertificate;
+    window.toggleAutoRenew = toggleAutoRenew;
+    window.deleteCertificate = deleteCertificate;
     window.downloadCertificate = downloadCertificate;
     window.copyCurlCommand = copyCurlCommand;
     window.checkDeploymentStatus = checkDeploymentStatus;
