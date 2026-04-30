@@ -423,9 +423,11 @@
             return '<tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors duration-150 cursor-pointer" onclick="openCertDetail(\'' + safeDomain + '\')">' +
                 '<td class="px-6 py-4 whitespace-nowrap">' +
                 '<div class="flex items-center">' +
-                '<div class="flex-shrink-0 w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center mr-3">' +
-                '<i class="fas fa-certificate text-blue-600 dark:text-blue-400 text-sm"></i>' +
-                '</div>' +
+                // Inline subtle glyph instead of a rounded blue panel — the
+                // rounded panel read like an interactive control to users
+                // (issue #100) but it had no handler. The whole row is the
+                // affordance for opening the detail panel.
+                '<i class="fas fa-certificate text-gray-400 dark:text-gray-500 mr-2 text-sm" aria-hidden="true"></i>' +
                 '<div class="text-sm font-medium text-gray-900 dark:text-white">' + safeDomain + '</div>' +
                 '</div>' +
                 '</td>' +
