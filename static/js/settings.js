@@ -130,31 +130,64 @@
             loadConfig: function () {
                 var self = this;
                 fetch('/api/deploy/config', { credentials: 'same-origin' })
-                    .then(function (r) { return r.json(); })
-                    .then(function (data) {
-                        if (data && typeof data === 'object' && !data.error) {
-                            self.config.enabled = data.enabled || false;
-                            self.config.global_hooks = data.global_hooks || [];
-                            self.config.domain_hooks = data.domain_hooks || {};
+                    .then(function (r) {
+                        return r.json().then(function (data) {
+                            return { ok: r.ok, body: data };
+                        });
+                    })
+                    .then(function (res) {
+                        if (res.ok && res.body && !res.body.error) {
+                            self.config.enabled = res.body.enabled || false;
+                            self.config.global_hooks = res.body.global_hooks || [];
+                            self.config.domain_hooks = res.body.domain_hooks || {};
+                            addDebugLog('Loaded deploy config: '
+                                + (self.config.global_hooks.length) + ' global hooks, '
+                                + Object.keys(self.config.domain_hooks).length + ' domain section(s)',
+                                'info');
+                        } else {
+                            addDebugLog('Failed to load deploy config: '
+                                + ((res.body && res.body.error) || 'HTTP ' + (res.ok ? 'OK' : 'error')),
+                                'error');
                         }
                     })
-                    .catch(function () { });
+                    .catch(function (err) {
+                        addDebugLog('Deploy config request failed: ' + (err && err.message || err), 'error');
+                    });
             },
 
             saveConfig: function () {
                 var self = this;
+                addDebugLog('Saving deploy config…', 'info');
                 fetch('/api/deploy/config', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'same-origin',
                     body: JSON.stringify(self.config)
                 })
-                    .then(function (r) { return r.json(); })
-                    .then(function (d) {
-                        if (d.status === 'saved') CertMate.toast('Deploy settings saved', 'success');
-                        else CertMate.toast('Save failed: ' + (d.error || 'unknown'), 'error');
+                    // Use HTTP status as source of truth — the previous code
+                    // checked d.status === 'saved' but the server returns
+                    // {message: ...} on success, so the success branch never
+                    // ran and users always saw a "Save failed: unknown"
+                    // toast even when the save actually worked (issue #110).
+                    .then(function (r) {
+                        return r.json().then(function (body) {
+                            return { ok: r.ok, body: body };
+                        });
                     })
-                    .catch(function () { CertMate.toast('Failed to save', 'error'); });
+                    .then(function (res) {
+                        if (res.ok) {
+                            addDebugLog('Deploy settings saved', 'info');
+                            CertMate.toast('Deploy settings saved', 'success');
+                        } else {
+                            var msg = (res.body && res.body.error) || 'unknown error';
+                            addDebugLog('Deploy settings save failed: ' + msg, 'error');
+                            CertMate.toast('Save failed: ' + msg, 'error');
+                        }
+                    })
+                    .catch(function (err) {
+                        addDebugLog('Deploy settings save request failed: ' + (err && err.message || err), 'error');
+                        CertMate.toast('Failed to save', 'error');
+                    });
             },
 
             _generateId: function () {
@@ -218,7 +251,9 @@
             },
 
             testHook: function (hook) {
-                CertMate.toast('Testing hook: ' + hook.name + '...', 'info');
+                var hookLabel = hook.name || hook.id || 'unnamed';
+                addDebugLog('Testing hook: ' + hookLabel, 'info');
+                CertMate.toast('Testing hook: ' + hookLabel + '...', 'info');
                 fetch('/api/deploy/test/' + hook.id, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -227,20 +262,42 @@
                 })
                     .then(function (r) { return r.json(); })
                     .then(function (d) {
-                        if (d.success) CertMate.toast('Hook test passed (exit ' + d.exit_code + ')', 'success');
-                        else CertMate.toast('Hook test failed: ' + (d.error || 'exit ' + d.exit_code), 'error');
+                        if (d.success) {
+                            addDebugLog('Hook "' + hookLabel + '" test passed (exit ' + d.exit_code + ')', 'info');
+                            CertMate.toast('Hook test passed (exit ' + d.exit_code + ')', 'success');
+                        } else {
+                            var detail = d.error || 'exit ' + d.exit_code;
+                            addDebugLog('Hook "' + hookLabel + '" test failed: ' + detail, 'error');
+                            CertMate.toast('Hook test failed: ' + detail, 'error');
+                        }
                     })
-                    .catch(function () { CertMate.toast('Test request failed', 'error'); });
+                    .catch(function (err) {
+                        addDebugLog('Test request failed for hook "' + hookLabel + '": ' + (err && err.message || err), 'error');
+                        CertMate.toast('Test request failed', 'error');
+                    });
             },
 
             loadHistory: function () {
                 var self = this;
                 fetch('/api/deploy/history?limit=50', { credentials: 'same-origin' })
-                    .then(function (r) { return r.json(); })
-                    .then(function (data) {
-                        if (Array.isArray(data)) self.history = data;
+                    .then(function (r) {
+                        return r.json().then(function (data) {
+                            return { ok: r.ok, body: data };
+                        });
                     })
-                    .catch(function () { });
+                    .then(function (res) {
+                        if (res.ok && Array.isArray(res.body)) {
+                            self.history = res.body;
+                            addDebugLog('Loaded deploy history: ' + res.body.length + ' entries', 'info');
+                        } else {
+                            addDebugLog('Failed to load deploy history: '
+                                + ((res.body && res.body.error) || 'unexpected response'),
+                                'error');
+                        }
+                    })
+                    .catch(function (err) {
+                        addDebugLog('Deploy history request failed: ' + (err && err.message || err), 'error');
+                    });
             }
         };
     }

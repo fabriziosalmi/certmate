@@ -359,7 +359,23 @@ class DeployManager:
         config = self.get_config()
         hook = self._find_hook(config, hook_id)
         if not hook:
-            return {'error': 'Hook not found', 'hook_id': hook_id}
+            # Be specific about *why* the hook went missing — the two real
+            # causes (issue #101) are stale UI state and a silent save-time
+            # rejection by the safety validator. Generic "not found" leaves
+            # users guessing.
+            return {
+                'error': (
+                    f'Hook {hook_id} is no longer in settings. This usually '
+                    'means the page is out of sync with the server, or the '
+                    "hook's command was rejected by the safety validator at "
+                    'save time. Refresh the Settings page and re-check '
+                    'Settings → Deploy Hooks; if the hook is missing, '
+                    're-create it and check the toast for any rejection '
+                    'message when you save.'
+                ),
+                'hook_id': hook_id,
+                'reason': 'hook_missing_from_config',
+            }
         return self._run_hook(hook, domain, 'test', dry_run=True)
 
     def _find_hook(self, config, hook_id):
