@@ -71,12 +71,30 @@ def register_auth_routes(app, managers, require_web_auth, auth_manager,
 
     @app.route('/api/auth/me', methods=['GET'])
     def api_current_user():
-        """Current user info"""
+        """Current user info — used by the UI to hide controls for which
+        the caller doesn't have the required role.
+
+        Mirrors the bypass logic in AuthManager.require_auth: when local
+        auth is disabled or no users have been created yet, every caller
+        is treated as admin so the dashboard can render. Otherwise
+        validates the session cookie. Returns 200 in the bypass case so
+        clients don't need to special-case 401 during onboarding.
+        """
+        try:
+            if not auth_manager.is_local_auth_enabled() or not auth_manager.has_any_users():
+                return jsonify({
+                    'user': {'username': 'setup_user', 'role': 'admin'},
+                    'auth_mode': 'bypass',
+                })
+        except Exception as e:
+            logger.error(f"Failed to evaluate auth bypass: {e}")
+            # Fall through and require a session.
+
         session_id = request.cookies.get('certmate_session')
         if session_id:
             user_info = auth_manager.validate_session(session_id)
             if user_info:
-                return jsonify({'user': user_info})
+                return jsonify({'user': user_info, 'auth_mode': 'session'})
         return jsonify({'user': None}), 401
 
     @app.route('/api/auth/config', methods=['GET', 'POST'])

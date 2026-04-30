@@ -15,6 +15,33 @@
 
     var escapeHtml = CertMate.escapeHtml;
 
+    // --- Role-aware UI gating (audit punch-list M2) -----------------------
+    // Default to viewer until /api/auth/me responds. The server is the
+    // source of truth — these checks only suppress controls the user
+    // would get a 403 from anyway, so a brief mis-render at startup is
+    // safe. We refresh on every loadCertificates() so a session role
+    // change between requests doesn't leave the UI stuck.
+    var ROLE_LEVELS = { viewer: 0, operator: 1, admin: 2 };
+    var currentRole = 'viewer';
+
+    function roleAtLeast(name) {
+        return (ROLE_LEVELS[currentRole] || 0) >= (ROLE_LEVELS[name] || 0);
+    }
+
+    function refreshCurrentRole() {
+        return fetch('/api/auth/me', { credentials: 'same-origin' })
+            .then(function (r) {
+                if (!r.ok) return null;
+                return r.json();
+            })
+            .then(function (data) {
+                if (data && data.user && data.user.role) {
+                    currentRole = data.user.role;
+                }
+            })
+            .catch(function () { /* keep last-known role */ });
+    }
+
     // Show enhanced loading modal with progress
     function showLoadingModal(title, message) {
         title = title || 'Processing Certificate...';
@@ -396,7 +423,9 @@
                     '<td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell">\u2014</td>' +
                     '<td class="px-4 py-4 whitespace-nowrap text-right">' +
                     '<div class="flex items-center justify-end gap-1">' +
-                    '<button type="button" data-action="delete" data-domain="' + safeDomain + '" onclick="event.stopPropagation()" class="p-1.5 text-gray-400 hover:text-red-600 dark:hover:text-red-400 rounded hover:bg-gray-100 dark:hover:bg-gray-700" title="Remove from list"><i class="fas fa-trash-alt"></i></button>' +
+                    (roleAtLeast('admin')
+                        ? '<button type="button" data-action="delete" data-domain="' + safeDomain + '" onclick="event.stopPropagation()" class="p-1.5 text-gray-400 hover:text-red-600 dark:hover:text-red-400 rounded hover:bg-gray-100 dark:hover:bg-gray-700" title="Remove from list"><i class="fas fa-trash-alt"></i></button>'
+                        : '') +
                     '</div>' +
                     '</td>' +
                     '</tr>';
@@ -437,11 +466,20 @@
                 '<td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell">' + deploymentBadgeHtml(cert) + '</td>' +
                 '<td class="px-4 py-4 whitespace-nowrap text-right">' +
                 '<div class="flex items-center justify-end gap-1">' +
-                '<button type="button" data-action="renew" data-domain="' + safeDomain + '" onclick="event.stopPropagation()" class="p-1.5 text-gray-400 hover:text-green-600 dark:hover:text-green-400 rounded hover:bg-gray-100 dark:hover:bg-gray-700" title="Renew"><i class="fas fa-sync-alt"></i></button>' +
+                // Role-aware: hide controls the user can't use to avoid
+                // showing buttons that would just 403. Server still
+                // enforces the role; this is UX only.
+                (roleAtLeast('operator')
+                    ? '<button type="button" data-action="renew" data-domain="' + safeDomain + '" onclick="event.stopPropagation()" class="p-1.5 text-gray-400 hover:text-green-600 dark:hover:text-green-400 rounded hover:bg-gray-100 dark:hover:bg-gray-700" title="Renew"><i class="fas fa-sync-alt"></i></button>'
+                    : '') +
                 '<button type="button" data-action="download" data-domain="' + safeDomain + '" onclick="event.stopPropagation()" class="p-1.5 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 rounded hover:bg-gray-100 dark:hover:bg-gray-700" title="Download"><i class="fas fa-download"></i></button>' +
                 '<button type="button" data-action="curl" data-domain="' + safeDomain + '" onclick="event.stopPropagation()" class="p-1.5 text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded hover:bg-gray-100 dark:hover:bg-gray-700" title="API"><i class="fas fa-code"></i></button>' +
-                autoRenewButtonHtml(safeDomain, cert.auto_renew !== false) +
-                '<button type="button" data-action="delete" data-domain="' + safeDomain + '" onclick="event.stopPropagation()" class="p-1.5 text-gray-400 hover:text-red-600 dark:hover:text-red-400 rounded hover:bg-gray-100 dark:hover:bg-gray-700" title="Delete certificate"><i class="fas fa-trash-alt"></i></button>' +
+                (roleAtLeast('operator')
+                    ? autoRenewButtonHtml(safeDomain, cert.auto_renew !== false)
+                    : '') +
+                (roleAtLeast('admin')
+                    ? '<button type="button" data-action="delete" data-domain="' + safeDomain + '" onclick="event.stopPropagation()" class="p-1.5 text-gray-400 hover:text-red-600 dark:hover:text-red-400 rounded hover:bg-gray-100 dark:hover:bg-gray-700" title="Delete certificate"><i class="fas fa-trash-alt"></i></button>'
+                    : '') +
                 '</div>' +
                 '</td>' +
                 '</tr>';
@@ -492,7 +530,9 @@
         if (!cert.exists) {
             content.innerHTML = '<div class="text-center py-8"><i class="fas fa-exclamation-triangle text-red-400 text-3xl mb-3"></i>' +
                 '<p class="text-gray-500 dark:text-gray-400 mb-6">Certificate not found on disk.</p>' +
-                '<button type="button" onclick="deleteCertificate(\'' + safeDomain + '\')" class="inline-flex items-center px-4 py-2 border border-red-300 dark:border-red-700 shadow-sm text-sm font-medium rounded-md text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40"><i class="fas fa-trash-alt mr-2"></i>Remove from List</button>' +
+                (roleAtLeast('admin')
+                    ? '<button type="button" onclick="deleteCertificate(\'' + safeDomain + '\')" class="inline-flex items-center px-4 py-2 border border-red-300 dark:border-red-700 shadow-sm text-sm font-medium rounded-md text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40"><i class="fas fa-trash-alt mr-2"></i>Remove from List</button>'
+                    : '<p class="text-xs text-gray-400">Ask an admin to remove this entry.</p>') +
                 '</div>';
         } else {
             var daysKnown2 = cert.days_until_expiry !== null && cert.days_until_expiry !== undefined;
@@ -528,13 +568,21 @@
                 '<div class="space-y-3">' +
                 '<h4 class="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wider">Actions</h4>' +
                 '<div class="grid grid-cols-1 gap-2">' +
-                '<button type="button" onclick="renewCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-sync-alt mr-2 text-green-600"></i>Renew Certificate</button>' +
+                (roleAtLeast('operator')
+                    ? '<button type="button" onclick="renewCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-sync-alt mr-2 text-green-600"></i>Renew Certificate</button>'
+                    : '') +
                 '<button type="button" onclick="downloadCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-download mr-2 text-blue-600"></i>Download Certificate</button>' +
                 '<button type="button" onclick="copyCurlCommand(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-blue-300 dark:border-blue-600 shadow-sm text-sm font-medium rounded-md text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50"><i class="fas fa-code mr-2"></i>Show API Command</button>' +
                 '<button type="button" onclick="checkDeploymentStatus(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-globe mr-2 text-indigo-600"></i>Check Deployment</button>' +
-                '<button type="button" onclick="runDeployHooks(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-rocket mr-2 text-green-600"></i>Run Deploy Hooks Now</button>' +
-                '<button type="button" onclick="toggleAutoRenew(\'' + safeDomain + '\', ' + (cert.auto_renew !== false ? 'true' : 'false') + ')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas ' + (cert.auto_renew !== false ? 'fa-toggle-on text-purple-600' : 'fa-toggle-off text-amber-600') + ' mr-2"></i>' + (cert.auto_renew !== false ? 'Disable Auto-Renew' : 'Enable Auto-Renew') + '</button>' +
-                '<button type="button" onclick="deleteCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-red-300 dark:border-red-700 shadow-sm text-sm font-medium rounded-md text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40"><i class="fas fa-trash-alt mr-2"></i>Delete Certificate</button>' +
+                (roleAtLeast('admin')
+                    ? '<button type="button" onclick="runDeployHooks(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-rocket mr-2 text-green-600"></i>Run Deploy Hooks Now</button>'
+                    : '') +
+                (roleAtLeast('operator')
+                    ? '<button type="button" onclick="toggleAutoRenew(\'' + safeDomain + '\', ' + (cert.auto_renew !== false ? 'true' : 'false') + ')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas ' + (cert.auto_renew !== false ? 'fa-toggle-on text-purple-600' : 'fa-toggle-off text-amber-600') + ' mr-2"></i>' + (cert.auto_renew !== false ? 'Disable Auto-Renew' : 'Enable Auto-Renew') + '</button>'
+                    : '') +
+                (roleAtLeast('admin')
+                    ? '<button type="button" onclick="deleteCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-red-300 dark:border-red-700 shadow-sm text-sm font-medium rounded-md text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40"><i class="fas fa-trash-alt mr-2"></i>Delete Certificate</button>'
+                    : '') +
                 '</div>' +
                 '</div>' +
                 '</div>';
@@ -1407,7 +1455,10 @@
 
     // Initialize on page load
     document.addEventListener('DOMContentLoaded', function () {
-        loadCertificates();
+        // Resolve the caller's role first so the initial cert list can
+        // already render with the right buttons hidden — avoids the
+        // viewer briefly seeing admin-only controls before they vanish.
+        refreshCurrentRole().then(function () { loadCertificates(); });
         loadProviderAccounts();
 
         // Initialize search and filters
