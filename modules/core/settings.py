@@ -254,10 +254,23 @@ class SettingsManager:
                     settings['api_bearer_token'] = generate_secure_token()
                     was_migrated = True
 
-                # Save migrated settings if any changes were made
+                # Save migrated settings if any changes were made.
+                # If the save fails (disk full, permission denied, validation
+                # rejection of a field migrated up from an older format),
+                # the in-memory copy diverges from disk: callers receive the
+                # migrated dict but the next process to load_settings will
+                # re-run migration. Log at ERROR so the operator notices —
+                # the previous behavior swallowed save_settings's bool and
+                # the next save attempt would silently fail too.
                 if was_migrated:
                     logger.info("Settings migrated, saving updated format")
-                    self.save_settings(settings, backup_reason="migration")
+                    if not self.save_settings(settings, backup_reason="migration"):
+                        logger.error(
+                            "Migration save failed — in-memory settings are "
+                            "now ahead of settings.json on disk. The next "
+                            "save will retry; check earlier log lines for "
+                            "the validation or I/O error that blocked it."
+                        )
 
                 # Override settings with environment variables.
                 # LETSENCRYPT_EMAIL takes precedence over the value saved via the UI.

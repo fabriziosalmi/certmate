@@ -42,7 +42,12 @@
                             }
                         }
                     })
-                    .catch(function () { });
+                    .catch(function (err) {
+                        // Don't toast — this fires on tab switch and a stale
+                        // session would spam the user. Devs still want it in
+                        // the console for triage.
+                        console.error('Failed to load notification config:', err);
+                    });
             },
             saveConfig: function () {
                 var self = this;
@@ -105,7 +110,9 @@
                     .then(function (data) {
                         if (Array.isArray(data)) self.deliveries = data;
                     })
-                    .catch(function () { });
+                    .catch(function (err) {
+                        console.error('Failed to load webhook deliveries:', err);
+                    });
             }
         };
     }

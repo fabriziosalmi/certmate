@@ -36,7 +36,13 @@
                     showWizard();
                 }
             })
-            .catch(function() {});
+            .catch(function(err) {
+                // Wizard auto-detect is best-effort: if the request fails
+                // (e.g. user is on /login and hits 401) we silently skip.
+                // Log for triage but don't show a toast — the page may
+                // legitimately be in a state where /api/web/settings 401s.
+                console.error('Setup-detection request failed:', err);
+            });
     }
 
     function showWizard() {

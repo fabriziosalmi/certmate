@@ -1289,12 +1289,31 @@
             method: 'POST',
             headers: { 'Content-Type': 'application/json' }
         }).then(function (response) {
-            return response.json().then(function (body) {
-                return { ok: response.ok, body: body };
+            return response.text().then(function (text) {
+                var body = null;
+                try { body = text ? JSON.parse(text) : null; } catch (e) { /* non-JSON */ }
+                return { ok: response.ok, status: response.status, body: body };
             });
         }).then(function (data) {
+            // Discriminate the failure modes so the toast tells the user
+            // *what* to do next instead of a generic "deploy hook run failed".
+            if (data.status === 401 || data.status === 403) {
+                showMessage(
+                    'Insufficient privileges to run deploy hooks. '
+                    + 'Sign in as admin to use this action.',
+                    'error'
+                );
+                return;
+            }
+            if (data.status === 404) {
+                showMessage('Certificate not found for ' + domain, 'error');
+                return;
+            }
             if (!data.ok) {
-                showMessage(data.body.error || 'Deploy hook run failed', 'error');
+                var msg = (data.body && data.body.error)
+                    ? data.body.error
+                    : ('Deploy hook run failed (HTTP ' + data.status + ')');
+                showMessage(msg, 'error');
                 return;
             }
             var s = data.body || {};
