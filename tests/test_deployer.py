@@ -369,6 +369,66 @@ class TestTestHook:
         assert 'nonexistent' in result['error']
 
 
+class TestRunManualDeploy:
+    """Test the manual deploy entrypoint added for issue #109."""
+
+    def test_runs_global_and_domain_hooks_for_domain(self, deploy_manager, shell_executor):
+        # Two enabled hooks will fire (g1 global + d1 example.com), g2 is disabled.
+        shell_executor.set_next_result(returncode=0)
+        shell_executor.set_next_result(returncode=0)
+        result = deploy_manager.run_manual_deploy('example.com')
+        assert result['ok'] is True
+        assert result['total'] == 2
+        assert result['succeeded'] == 2
+        assert result['failed'] == 0
+        # Both hooks should have been invoked exactly once.
+        assert shell_executor.call_count == 2
+        # CERTMATE_EVENT must be 'manual' for hooks that branch on it.
+        assert all(r['event'] == 'manual' for r in result['results'])
+
+    def test_ignores_on_events_filter(self, deploy_manager, shell_executor):
+        """A manual trigger must run hooks even if their on_events list
+        only mentions 'created' or 'renewed' — that's the whole point
+        (the user explicitly asked to fire them now)."""
+        shell_executor.set_next_result(returncode=0)
+        shell_executor.set_next_result(returncode=0)
+        result = deploy_manager.run_manual_deploy('example.com')
+        # d1 has on_events=['created'] — must still run.
+        hook_names = [r['hook_name'] for r in result['results']]
+        assert 'Sync CDN' in hook_names
+
+    def test_failure_aggregated(self, deploy_manager, shell_executor):
+        shell_executor.set_next_result(returncode=0)        # g1 ok
+        shell_executor.set_next_result(returncode=2, stderr='oops')  # d1 fail
+        result = deploy_manager.run_manual_deploy('example.com')
+        assert result['ok'] is False
+        assert result['succeeded'] == 1
+        assert result['failed'] == 1
+
+    def test_no_hooks_for_domain_returns_friendly_error(self, deploy_manager):
+        # No global hooks fire for unknown.com because g1 IS global, so it'd run.
+        # Use a fresh deploy_manager without global hooks for this case.
+        deploy_manager.settings_manager.load_settings.return_value = {
+            'deploy_hooks': {
+                'enabled': True,
+                'global_hooks': [],
+                'domain_hooks': {'other.com': []},
+            }
+        }
+        result = deploy_manager.run_manual_deploy('unknown.com')
+        assert result['ok'] is False
+        assert result['total'] == 0
+        assert 'unknown.com' in result['error']
+
+    def test_returns_disabled_error_when_feature_off(self, deploy_manager):
+        deploy_manager.settings_manager.load_settings.return_value = {
+            'deploy_hooks': {'enabled': False, 'global_hooks': [], 'domain_hooks': {}}
+        }
+        result = deploy_manager.run_manual_deploy('example.com')
+        assert result['ok'] is False
+        assert 'disabled' in result['error'].lower()
+
+
 class TestEventListener:
     """Test on_certificate_event."""
 

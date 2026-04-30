@@ -64,6 +64,7 @@ def create_api_resources(api, models, managers):
     file_ops = managers['file_ops']
     cache_manager = managers['cache']
     dns_manager = managers['dns']
+    deploy_manager = managers.get('deployer')
 
     # Health check endpoint
     class HealthCheck(Resource):
@@ -575,6 +576,46 @@ def create_api_resources(api, models, managers):
             except Exception as e:
                 logger.error(f"Failed to toggle auto-renew for {domain}: {e}")
                 return {'error': 'Failed to update auto-renew setting'}, 500
+
+    class CertificateRunDeploy(Resource):
+        @api.doc(security='Bearer')
+        @auth_manager.require_role('admin')
+        def post(self, domain):
+            """Manually run all enabled deploy hooks for a domain (issue #109).
+
+            Aligns with the role of /api/deploy/* (admin-only). Hooks run
+            with CERTMATE_EVENT=manual; the on_events filter is ignored
+            since the user explicitly requested execution.
+            """
+            if deploy_manager is None:
+                return {'error': 'Deploy manager not available'}, 503
+
+            cert_dir, err = _validate_domain_path(domain, file_ops.cert_dir)
+            if err:
+                return {'error': err}, 400
+            if not cert_dir.exists():
+                return {'error': f'Certificate not found for domain: {domain}'}, 404
+
+            try:
+                summary = deploy_manager.run_manual_deploy(domain)
+            except Exception as e:
+                logger.error(f"Manual deploy hook run failed for {domain}: {e}")
+                return {'error': 'Manual deploy hook run failed'}, 500
+
+            event_bus = current_app.config.get('EVENT_BUS')
+            if event_bus:
+                event_bus.publish('certificate_deploy_manual', {
+                    'domain': domain,
+                    'ok': summary.get('ok'),
+                    'total': summary.get('total'),
+                    'succeeded': summary.get('succeeded'),
+                    'failed': summary.get('failed'),
+                })
+
+            # 200 even when ok=False (e.g. no hooks configured) so the
+            # client can read the structured summary; the route only
+            # returns non-2xx for path validation / server errors.
+            return summary, 200
 
     # Backup endpoints (Unified backup system for atomic consistency)
     class BackupList(Resource):
@@ -1332,6 +1373,7 @@ def create_api_resources(api, models, managers):
         'DownloadCertificate': DownloadCertificate,
         'RenewCertificate': RenewCertificate,
         'CertificateAutoRenew': CertificateAutoRenew,
+        'CertificateRunDeploy': CertificateRunDeploy,
         'BackupList': BackupList,
         'BackupCreate': BackupCreate,
         'BackupDownload': BackupDownload,

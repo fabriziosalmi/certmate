@@ -532,6 +532,7 @@
                 '<button type="button" onclick="downloadCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-download mr-2 text-blue-600"></i>Download Certificate</button>' +
                 '<button type="button" onclick="copyCurlCommand(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-blue-300 dark:border-blue-600 shadow-sm text-sm font-medium rounded-md text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50"><i class="fas fa-code mr-2"></i>Show API Command</button>' +
                 '<button type="button" onclick="checkDeploymentStatus(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-globe mr-2 text-indigo-600"></i>Check Deployment</button>' +
+                '<button type="button" onclick="runDeployHooks(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-rocket mr-2 text-green-600"></i>Run Deploy Hooks Now</button>' +
                 '<button type="button" onclick="toggleAutoRenew(\'' + safeDomain + '\', ' + (cert.auto_renew !== false ? 'true' : 'false') + ')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas ' + (cert.auto_renew !== false ? 'fa-toggle-on text-purple-600' : 'fa-toggle-off text-amber-600') + ' mr-2"></i>' + (cert.auto_renew !== false ? 'Disable Auto-Renew' : 'Enable Auto-Renew') + '</button>' +
                 '<button type="button" onclick="deleteCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-red-300 dark:border-red-700 shadow-sm text-sm font-medium rounded-md text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40"><i class="fas fa-trash-alt mr-2"></i>Delete Certificate</button>' +
                 '</div>' +
@@ -1227,6 +1228,49 @@
         });
     }
 
+    // Manually trigger deploy hooks for a domain (issue #109).
+    function runDeployHooks(domain) {
+        if (!window.confirm('Run deploy hooks for ' + domain + ' now?\n\nAll enabled global and domain-specific hooks will execute with CERTMATE_EVENT=manual.')) {
+            return;
+        }
+        var progressInterval = showLoadingModal(
+            'Running Deploy Hooks for ' + domain,
+            'Executing each enabled hook…'
+        );
+        fetch('/api/certificates/' + encodeURIComponent(domain) + '/deploy', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        }).then(function (response) {
+            return response.json().then(function (body) {
+                return { ok: response.ok, body: body };
+            });
+        }).then(function (data) {
+            if (!data.ok) {
+                showMessage(data.body.error || 'Deploy hook run failed', 'error');
+                return;
+            }
+            var s = data.body || {};
+            if (s.total === 0) {
+                // Backend returned 200 with ok:false + a helpful error
+                // (deploy disabled, no hooks for this domain, etc.).
+                showMessage(s.error || 'No deploy hooks ran', 'warn');
+                return;
+            }
+            if (s.ok) {
+                showMessage('Deploy hooks ran for ' + domain + ': ' + s.succeeded + '/' + s.total + ' succeeded', 'success');
+            } else {
+                showMessage('Deploy hooks ran with errors for ' + domain + ': '
+                    + s.succeeded + '/' + s.total + ' succeeded, ' + s.failed + ' failed. '
+                    + 'Check Settings → Deploy → Recent Executions for details.', 'error');
+            }
+        }).catch(function (error) {
+            console.error('Error running deploy hooks:', error);
+            showMessage('Failed to run deploy hooks. Please try again.', 'error');
+        }).then(function () {
+            hideLoadingModal(progressInterval);
+        });
+    }
+
     // Toggle per-cert auto-renew (issue #111).
     function toggleAutoRenew(domain, currentlyEnabled) {
         var nextState = !currentlyEnabled;
@@ -1417,6 +1461,7 @@
     window.renewCertificate = renewCertificate;
     window.toggleAutoRenew = toggleAutoRenew;
     window.deleteCertificate = deleteCertificate;
+    window.runDeployHooks = runDeployHooks;
     window.downloadCertificate = downloadCertificate;
     window.copyCurlCommand = copyCurlCommand;
     window.checkDeploymentStatus = checkDeploymentStatus;

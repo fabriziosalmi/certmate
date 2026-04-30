@@ -56,6 +56,58 @@ class DeployManager:
     # Hook execution
     # ------------------------------------------------------------------
 
+    def run_manual_deploy(self, domain):
+        """Run every enabled hook for *domain* on demand (issue #109).
+
+        The on_events filter is ignored: a manual trigger means "fire all
+        hooks applicable to this domain right now", regardless of whether
+        they'd normally only run on create or renew. Hooks see
+        CERTMATE_EVENT=manual so they can branch if they care.
+
+        Returns a dict {ok, total, succeeded, failed, results} with
+        per-hook results. ok is True iff all hooks exited 0 and at least
+        one hook ran. ok is False if no hooks were configured for the
+        domain so the caller can surface a useful "nothing to do" message.
+        """
+        config = self.get_config()
+        if not config.get('enabled'):
+            return {
+                'ok': False,
+                'total': 0, 'succeeded': 0, 'failed': 0,
+                'results': [],
+                'error': 'Deploy hooks are disabled. Enable them in Settings → Deploy.',
+            }
+
+        hooks = []
+        for hook in config.get('global_hooks', []):
+            if hook.get('enabled'):
+                hooks.append(hook)
+        for hook in config.get('domain_hooks', {}).get(domain, []):
+            if hook.get('enabled'):
+                hooks.append(hook)
+
+        if not hooks:
+            return {
+                'ok': False,
+                'total': 0, 'succeeded': 0, 'failed': 0,
+                'results': [],
+                'error': (
+                    f'No enabled hooks configured for {domain}. Add a '
+                    'global or domain-specific hook in Settings → Deploy.'
+                ),
+            }
+
+        results = [self._run_hook(h, domain, 'manual') for h in hooks]
+        succeeded = sum(1 for r in results if r.get('success'))
+        failed = len(results) - succeeded
+        return {
+            'ok': failed == 0,
+            'total': len(results),
+            'succeeded': succeeded,
+            'failed': failed,
+            'results': results,
+        }
+
     def _execute_hooks(self, domain, event_type):
         """Collect and run all matching hooks for a domain/event."""
         config = self.get_config()
