@@ -50,10 +50,15 @@ class TestAuthConfig:
         data = r.json()
         assert "local_auth_enabled" in data
 
-    def test_auth_me_returns_401_without_session(self, api):
-        """/api/auth/me should return 401 when no session exists."""
+    def test_auth_me_returns_bypass_user_in_setup_mode(self, api):
+        """/api/auth/me returns 200 with admin role during setup mode
+        (no users yet / local_auth disabled) so the dashboard can
+        render. Updated for v2.4.0 — see issue #109/M2 audit fix."""
         r = api.get("/api/auth/me")
-        assert r.status_code == 401
+        assert r.status_code == 200
+        body = r.json()
+        assert body['user']['role'] == 'admin'
+        assert body['auth_mode'] == 'bypass'
 
 
 class TestUserManagement:

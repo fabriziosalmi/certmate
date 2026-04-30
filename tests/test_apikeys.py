@@ -25,6 +25,15 @@ def auth(settings_store):
     sm = MagicMock()
     sm.load_settings.side_effect = lambda: settings_store
     sm.save_settings.side_effect = lambda s, reason: True
+    # Mirror SettingsManager.update: load → mutate → save. AuthManager now
+    # routes _save_users / _save_api_keys / last_used_at through update()
+    # to take the lock on the read-modify-write; the mock has to apply the
+    # mutator or settings_store stays untouched and the tests false-fail.
+    def _update(mutator, reason="auto_save"):
+        s = sm.load_settings()
+        mutator(s)
+        return sm.save_settings(s, reason)
+    sm.update.side_effect = _update
     return AuthManager(sm)
 
 
