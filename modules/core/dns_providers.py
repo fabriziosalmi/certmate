@@ -229,55 +229,41 @@ class DNSManager:
         return settings.get('dns_provider', 'cloudflare'), 30
 
     def create_dns_account(self, provider, account_id, account_config, settings=None):
-        """Create or update a DNS provider account
-        
-        Args:
-            provider: DNS provider name
-            account_id: Account identifier
-            account_config: Account configuration dict
-            settings: Settings dict (optional, loads current if not provided)
-            
-        Returns:
-            bool: Success status
+        """Create or update a DNS provider account.
+
+        The ``settings`` parameter is accepted for backward compatibility
+        but ignored — the read/modify/write happens under the settings
+        manager's lock so two concurrent admins editing different
+        accounts can no longer race and lose each other's changes.
         """
         try:
-            if not settings:
-                settings = self.settings_manager.load_settings()
-                
-            # Ensure migration is applied
-            settings = self.settings_manager.migrate_dns_providers_to_multi_account(settings)
-            
-            # Initialize provider structure if it doesn't exist
-            if 'dns_providers' not in settings:
-                settings['dns_providers'] = {}
-            
-            if provider not in settings['dns_providers']:
-                settings['dns_providers'][provider] = {}
-            
-            provider_config = settings['dns_providers'][provider]
-            
-            # Ensure accounts structure exists
-            if 'accounts' not in provider_config:
-                provider_config['accounts'] = {}
-            
-            # Add or update the account
-            provider_config['accounts'][account_id] = account_config
-            
-            # Set as default account if it's the first one
-            if 'default_accounts' not in settings:
-                settings['default_accounts'] = {}
-            
-            if provider not in settings['default_accounts']:
-                settings['default_accounts'][provider] = account_id
-            
-            # Save settings
-            success = self.settings_manager.save_settings(settings, f"dns_account_create_{provider}_{account_id}")
-            
+            def _mutate(settings):
+                # Migration mutates the settings dict in place.
+                self.settings_manager.migrate_dns_providers_to_multi_account(settings)
+
+                if 'dns_providers' not in settings:
+                    settings['dns_providers'] = {}
+                if provider not in settings['dns_providers']:
+                    settings['dns_providers'][provider] = {}
+
+                provider_config = settings['dns_providers'][provider]
+                if 'accounts' not in provider_config:
+                    provider_config['accounts'] = {}
+                provider_config['accounts'][account_id] = account_config
+
+                # First account for this provider becomes the default.
+                if 'default_accounts' not in settings:
+                    settings['default_accounts'] = {}
+                if provider not in settings['default_accounts']:
+                    settings['default_accounts'][provider] = account_id
+
+            success = self.settings_manager.update(
+                _mutate, f"dns_account_create_{provider}_{account_id}"
+            )
             if success:
                 logger.info(f"Created/updated DNS account '{account_id}' for provider '{provider}'")
-            
             return success
-            
+
         except Exception as e:
             logger.error(f"Error creating DNS account for {provider}: {e}")
             return False
@@ -287,52 +273,44 @@ class DNSManager:
         return self.create_dns_account(provider, account_id, account_config, settings)
 
     def delete_dns_account(self, provider, account_id, settings=None):
-        """Delete a DNS provider account
-        
-        Args:
-            provider: DNS provider name
-            account_id: Account identifier to delete
-            settings: Settings dict (optional, loads current if not provided)
-            
-        Returns:
-            bool: Success status
+        """Delete a DNS provider account.
+
+        The ``settings`` parameter is accepted for backward compatibility
+        but ignored — read/modify/write happens under the settings lock.
         """
         try:
-            if not settings:
-                settings = self.settings_manager.load_settings()
-                
-            dns_providers = settings.get('dns_providers', {})
-            provider_config = dns_providers.get(provider, {})
-            
-            if 'accounts' not in provider_config:
-                logger.warning(f"No accounts found for provider '{provider}'")
+            outcome = {'ok': False}
+
+            def _mutate(settings):
+                dns_providers = settings.get('dns_providers', {})
+                provider_config = dns_providers.get(provider, {})
+                if 'accounts' not in provider_config:
+                    logger.warning(f"No accounts found for provider '{provider}'")
+                    return
+                if account_id not in provider_config['accounts']:
+                    logger.warning(f"Account '{account_id}' not found for provider '{provider}'")
+                    return
+
+                del provider_config['accounts'][account_id]
+
+                default_accounts = settings.get('default_accounts', {})
+                if default_accounts.get(provider) == account_id:
+                    remaining = list(provider_config['accounts'].keys())
+                    if remaining:
+                        default_accounts[provider] = remaining[0]
+                    else:
+                        del default_accounts[provider]
+                outcome['ok'] = True
+
+            saved = self.settings_manager.update(
+                _mutate, f"dns_account_delete_{provider}_{account_id}"
+            )
+            if not outcome['ok']:
                 return False
-            
-            if account_id not in provider_config['accounts']:
-                logger.warning(f"Account '{account_id}' not found for provider '{provider}'")
-                return False
-            
-            # Remove the account
-            del provider_config['accounts'][account_id]
-            
-            # Update default account if this was the default
-            default_accounts = settings.get('default_accounts', {})
-            if default_accounts.get(provider) == account_id:
-                # Set new default to first available account or remove default
-                remaining_accounts = list(provider_config['accounts'].keys())
-                if remaining_accounts:
-                    default_accounts[provider] = remaining_accounts[0]
-                else:
-                    del default_accounts[provider]
-            
-            # Save settings
-            success = self.settings_manager.save_settings(settings, f"dns_account_delete_{provider}_{account_id}")
-            
-            if success:
+            if saved:
                 logger.info(f"Deleted DNS account '{account_id}' for provider '{provider}'")
-            
-            return success
-            
+            return saved
+
         except Exception as e:
             logger.error(f"Error deleting DNS account for {provider}: {e}")
             return False
@@ -342,40 +320,35 @@ class DNSManager:
         return self.delete_dns_account(provider, account_id, settings)
 
     def set_default_account(self, provider, account_id, settings=None):
-        """Set the default account for a DNS provider
-        
-        Args:
-            provider: DNS provider name
-            account_id: Account identifier to set as default
-            settings: Settings dict (optional, loads current if not provided)
-            
-        Returns:
-            bool: Success status
+        """Set the default account for a DNS provider (atomic).
+
+        The ``settings`` parameter is accepted for backward compatibility
+        but ignored — read/modify/write happens under the settings lock.
         """
         try:
-            if not settings:
-                settings = self.settings_manager.load_settings()
-                
-            # Verify account exists
-            _, existing_account_id = self.get_dns_provider_account_config(provider, account_id, settings)
-            if not existing_account_id:
-                logger.warning(f"Account '{account_id}' not found for provider '{provider}'")
+            outcome = {'ok': False}
+
+            def _mutate(settings):
+                _, existing_account_id = self.get_dns_provider_account_config(
+                    provider, account_id, settings
+                )
+                if not existing_account_id:
+                    logger.warning(f"Account '{account_id}' not found for provider '{provider}'")
+                    return
+                if 'default_accounts' not in settings:
+                    settings['default_accounts'] = {}
+                settings['default_accounts'][provider] = account_id
+                outcome['ok'] = True
+
+            saved = self.settings_manager.update(
+                _mutate, f"dns_default_account_{provider}_{account_id}"
+            )
+            if not outcome['ok']:
                 return False
-            
-            # Set default account
-            if 'default_accounts' not in settings:
-                settings['default_accounts'] = {}
-            
-            settings['default_accounts'][provider] = account_id
-            
-            # Save settings
-            success = self.settings_manager.save_settings(settings, f"dns_default_account_{provider}_{account_id}")
-            
-            if success:
+            if saved:
                 logger.info(f"Set default DNS account '{account_id}' for provider '{provider}'")
-            
-            return success
-            
+            return saved
+
         except Exception as e:
             logger.error(f"Error setting default DNS account for {provider}: {e}")
             return False

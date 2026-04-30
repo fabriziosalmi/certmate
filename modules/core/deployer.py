@@ -340,9 +340,12 @@ class DeployManager:
                 if not ok:
                     return False, f"Hook for domain '{domain}' rejected: {err}"
 
-        settings = self.settings_manager.load_settings()
-        settings['deploy_hooks'] = config
-        self.settings_manager.save_settings(settings)
+        # Atomic via settings_manager.update so two concurrent admin saves
+        # (e.g. one editing deploy hooks, another editing DNS providers)
+        # cannot lose each other's changes.
+        def _mutate(settings):
+            settings['deploy_hooks'] = config
+        self.settings_manager.update(_mutate, "deploy_hooks_save")
         return True, None
 
     @staticmethod
@@ -365,6 +368,7 @@ class DeployManager:
             r'|&&'              # logical AND chaining
             r'|\|\|'            # logical OR chaining
             r'|[;]'             # statement separator
+            r'|[\r\n]'          # newline / CR — sh -c treats them as `;`
             r'|\|'              # pipe
             r'|>\s*/'           # redirect to absolute path
             r'|<<'              # here-doc

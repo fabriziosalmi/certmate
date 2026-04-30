@@ -60,6 +60,23 @@ class SettingsManager:
         hashed form on the next save. None disables migration."""
         self._token_hasher = hasher
 
+    def update(self, mutator, reason="auto_save"):
+        """Atomic read-modify-write under the settings lock.
+
+        Use this when atomic_update's shallow merge isn't enough — e.g. a
+        deeply-nested mutation to dns_providers, or a write to a protected
+        key (users, api_keys) that atomic_update would silently strip.
+
+        ``mutator`` receives the current settings dict and is expected to
+        mutate it in place. The merged result is then validated and
+        persisted atomically. Returns the bool from save_settings so
+        callers can react to validation failures.
+        """
+        with self._lock:
+            settings = self.load_settings()
+            mutator(settings)
+            return self.save_settings(settings, reason)
+
     def atomic_update(self, incoming: dict, protected_keys=('users', 'api_keys', 'local_auth_enabled')) -> bool:
         """Thread-safe read-merge-write for settings.
 

@@ -107,10 +107,15 @@ class AuthManager:
         return settings.get('users', {})
     
     def _save_users(self, users):
-        """Save users to settings"""
-        settings = self.settings_manager.load_settings()
-        settings['users'] = users
-        return self.settings_manager.save_settings(settings, "user_management")
+        """Save users to settings.
+
+        Uses settings_manager.update so the read-modify-write happens
+        under the settings lock — two concurrent admin requests creating
+        different users no longer race and lose one of them.
+        """
+        def _mutate(settings):
+            settings['users'] = users
+        return self.settings_manager.update(_mutate, "user_management")
 
     # --- Scoped API Key management ---
 
@@ -120,10 +125,10 @@ class AuthManager:
         return settings.get('api_keys', {})
 
     def _save_api_keys(self, api_keys):
-        """Save API keys to settings."""
-        settings = self.settings_manager.load_settings()
-        settings['api_keys'] = api_keys
-        return self.settings_manager.save_settings(settings, "api_key_management")
+        """Save API keys to settings (atomic under the settings lock)."""
+        def _mutate(settings):
+            settings['api_keys'] = api_keys
+        return self.settings_manager.update(_mutate, "api_key_management")
 
     def hash_api_token(self, token):
         """Hash an API token using HMAC-SHA256 (with server secret) or plain
@@ -276,11 +281,20 @@ class AuthManager:
                 if exp and exp < now:
                     continue
                 if self._verify_api_token(token, key_data.get('token_hash', '')):
-                    # Update last_used_at
-                    key_data['last_used_at'] = now
-                    settings['api_keys'] = api_keys
+                    # Update last_used_at via settings_manager.update so a
+                    # concurrent admin creating a new API key on a parallel
+                    # request can't be silently overwritten by our stale
+                    # in-memory api_keys snapshot. Best-effort: failure
+                    # must NOT block authentication.
+                    matched_id = key_id
+                    def _touch(s):
+                        keys = s.get('api_keys') or {}
+                        target = keys.get(matched_id)
+                        if target is not None:
+                            target['last_used_at'] = now
+                            s['api_keys'] = keys
                     try:
-                        self.settings_manager.save_settings(settings, None)
+                        self.settings_manager.update(_touch, None)
                     except Exception:
                         pass  # Non-critical, don't fail auth on last_used update
                     return {
@@ -471,10 +485,10 @@ class AuthManager:
         return settings.get('local_auth_enabled', False)
     
     def enable_local_auth(self, enable=True):
-        """Enable or disable local authentication"""
-        settings = self.settings_manager.load_settings()
-        settings['local_auth_enabled'] = enable
-        return self.settings_manager.save_settings(settings, "auth_config")
+        """Enable or disable local authentication (atomic)."""
+        def _mutate(settings):
+            settings['local_auth_enabled'] = enable
+        return self.settings_manager.update(_mutate, "auth_config")
     
     def has_any_users(self):
         """Check if any users exist"""

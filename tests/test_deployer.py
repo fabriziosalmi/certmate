@@ -19,6 +19,15 @@ def shell_executor():
 @pytest.fixture
 def settings_manager():
     mgr = MagicMock()
+    # Mirror SettingsManager.update: load → mutate → save. Keeps existing
+    # save_settings assertions valid after the deployer was migrated to
+    # the atomic update helper.
+    def _update(mutator, reason="auto_save"):
+        s = mgr.load_settings()
+        mutator(s)
+        return mgr.save_settings(s, reason)
+    mgr.update.side_effect = _update
+    mgr.save_settings.return_value = True
     mgr.load_settings.return_value = {
         'deploy_hooks': {
             'enabled': True,

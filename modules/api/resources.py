@@ -357,23 +357,28 @@ def create_api_resources(api, models, managers):
                     challenge_type=challenge_type
                 )
 
-                # Ensure domain is in settings for proper listing
-                domains_list = settings.get('domains', [])
-                domain_exists = any(
-                    (d == domain if isinstance(d, str) else d.get('domain') == domain)
-                    for d in domains_list
-                )
-                if not domain_exists:
-                    # Add domain with its configuration
-                    domain_config = {
+                # Append the new domain to settings under the manager's
+                # lock so two parallel cert creations for different domains
+                # cannot race and silently drop one of the entries.
+                _resolved_dns_provider = dns_provider or settings.get('dns_provider')
+
+                def _add_domain(s):
+                    domains_list = s.get('domains', []) or []
+                    already_present = any(
+                        (d == domain if isinstance(d, str) else d.get('domain') == domain)
+                        for d in domains_list
+                    )
+                    if already_present:
+                        return
+                    domains_list.append({
                         'domain': domain,
-                        'dns_provider': dns_provider or settings.get('dns_provider'),
-                        'dns_account_id': account_id
-                    }
-                    domains_list.append(domain_config)
-                    settings['domains'] = domains_list
-                    settings_manager.save_settings(settings, "certificate_created")
-                    logger.info(f"Added domain {domain} to settings after certificate creation")
+                        'dns_provider': _resolved_dns_provider,
+                        'dns_account_id': account_id,
+                    })
+                    s['domains'] = domains_list
+
+                settings_manager.update(_add_domain, "certificate_created")
+                logger.info(f"Ensured domain {domain} is in settings after certificate creation")
 
                 event_bus = current_app.config.get('EVENT_BUS')
                 if event_bus:
