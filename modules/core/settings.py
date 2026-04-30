@@ -15,6 +15,33 @@ from .utils import generate_secure_token, validate_email, validate_api_token, va
 logger = logging.getLogger(__name__)
 
 
+def _bearer_token_from_env_or_generate():
+    """Return a valid api_bearer_token for the default settings template.
+
+    Reads API_BEARER_TOKEN from the environment. If it is missing OR fails
+    validate_api_token (too short, weak pattern, insufficient entropy) we
+    fall back to a freshly generated secure token. This prevents a
+    misconfigured env var (issue #108: docker-compose passing an empty or
+    weak ${API_BEARER_TOKEN}) from poisoning every subsequent save_settings
+    call with a misleading "API token length must be between 32 and 512
+    characters" rejection.
+    """
+    env_token = os.getenv('API_BEARER_TOKEN')
+    if env_token:
+        is_valid, reason = validate_api_token(env_token)
+        if is_valid:
+            return env_token
+        logger.warning(
+            "API_BEARER_TOKEN environment variable is invalid (%s); "
+            "ignoring it and generating a fresh random bearer token. "
+            "Set a valid token (32-512 chars, no weak patterns, >=12 unique "
+            "chars) in your .env file or unset API_BEARER_TOKEN to silence "
+            "this warning.",
+            reason,
+        )
+    return generate_secure_token()
+
+
 class SettingsManager:
     """Class to handle settings management and migrations"""
 
@@ -87,7 +114,7 @@ class SettingsManager:
                 'email': '',
                 'auto_renew': True,
                 'renewal_threshold_days': 30,  # Configurable certificate expiry threshold (days)
-                'api_bearer_token': os.getenv('API_BEARER_TOKEN') or generate_secure_token(),
+                'api_bearer_token': _bearer_token_from_env_or_generate(),
                 'setup_completed': False,  # Track if initial setup is done
                 'dns_provider': 'cloudflare',
                 'challenge_type': 'dns-01',  # 'dns-01' or 'http-01'
@@ -129,7 +156,7 @@ class SettingsManager:
                 'email': '',
                 'auto_renew': True,
                 'renewal_threshold_days': 30,  # Configurable certificate expiry threshold (days)
-                'api_bearer_token': os.getenv('API_BEARER_TOKEN') or generate_secure_token(),
+                'api_bearer_token': _bearer_token_from_env_or_generate(),
                 'setup_completed': False,
                 'dns_provider': 'cloudflare',
                 'challenge_type': 'dns-01',
@@ -288,7 +315,12 @@ class SettingsManager:
                     else:
                         is_valid, token_or_error = validate_api_token(token)
                         if not is_valid:
-                            logger.error(f"Invalid API token: {token_or_error}")
+                            logger.error(
+                                "Invalid api_bearer_token (the application's "
+                                "internal API authentication token, distinct "
+                                "from any DNS provider credential): %s",
+                                token_or_error,
+                            )
                             return False
                         # Hash the legacy token and drop the plaintext from disk.
                         # Auth still accepts the original token because authenticate_api_token
