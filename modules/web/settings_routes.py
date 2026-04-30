@@ -252,9 +252,14 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
 
         try:
             data = request.json
-            if deploy_manager.save_config(data):
+            ok, err = deploy_manager.save_config(data)
+            if ok:
                 return jsonify({'message': 'Deploy configuration saved'})
-            return jsonify({'error': 'Invalid configuration or save failed'}), 400
+            # Surface the specific reason (issue #102) so users see *why*
+            # a hook was rejected rather than a generic save failure.
+            return jsonify({
+                'error': err or 'Invalid configuration or save failed'
+            }), 400
         except Exception as e:
             logger.error(f"Failed to save deploy config: {e}")
             return jsonify({'error': 'Failed to save deploy config'}), 500

@@ -34,7 +34,30 @@
                     <code class="text-xs text-blue-700 dark:text-blue-300">CERTMATE_CERT_PATH</code>,
                     <code class="text-xs text-blue-700 dark:text-blue-300">CERTMATE_KEY_PATH</code>,
                     <code class="text-xs text-blue-700 dark:text-blue-300">CERTMATE_FULLCHAIN_PATH</code>,
-                    <code class="text-xs text-blue-700 dark:text-blue-300">CERTMATE_EVENT</code>
+                    <code class="text-xs text-blue-700 dark:text-blue-300">CERTMATE_EVENT</code>,
+                    <code class="text-xs text-blue-700 dark:text-blue-300">CERTMATE_DRY_RUN</code>
+                    <span class="text-xs text-blue-700 dark:text-blue-300">(only set during Test runs)</span>
+                </div>
+
+                <!-- Blocked-patterns reference (issue #102) -->
+                <div class="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg text-sm">
+                    <p class="font-medium text-amber-800 dark:text-amber-200 mb-1"><i class="fas fa-exclamation-triangle mr-1"></i>Blocked Shell Patterns</p>
+                    <p class="text-xs text-amber-700 dark:text-amber-300">
+                        For safety, the command field rejects pipes, redirects, command substitution, and chained commands:
+                        <code class="text-xs">|</code>,
+                        <code class="text-xs">&amp;&amp;</code>,
+                        <code class="text-xs">||</code>,
+                        <code class="text-xs">;</code>,
+                        <code class="text-xs">$(...)</code>,
+                        <code class="text-xs">${...}</code>,
+                        <code class="text-xs">`...`</code>,
+                        <code class="text-xs">&gt;&nbsp;/</code>,
+                        <code class="text-xs">&lt;&lt;</code>,
+                        <code class="text-xs">eval</code>,
+                        <code class="text-xs">source</code>.
+                        References to sensitive files (<code class="text-xs">.pem</code>, <code class="text-xs">.env</code>, <code class="text-xs">settings.json</code>, private keys, vault tokens) are also blocked.
+                        If you need any of those, put the logic in a script file inside the container and call the script path directly (e.g. <code class="text-xs">/opt/scripts/deploy.sh</code>).
+                    </p>
                 </div>
 
                 <!-- Global Hooks -->

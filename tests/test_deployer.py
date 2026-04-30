@@ -217,7 +217,9 @@ class TestConfig:
             ],
             'domain_hooks': {},
         }
-        assert deploy_manager.save_config(config) is True
+        ok, err = deploy_manager.save_config(config)
+        assert ok is True
+        assert err is None
         settings_manager.save_settings.assert_called_once()
 
     def test_reject_empty_command(self, deploy_manager):
@@ -229,7 +231,9 @@ class TestConfig:
             ],
             'domain_hooks': {},
         }
-        assert deploy_manager.save_config(config) is False
+        ok, err = deploy_manager.save_config(config)
+        assert ok is False
+        assert err and 'Bad' in err
 
     def test_reject_missing_name(self, deploy_manager):
         config = {
@@ -240,7 +244,9 @@ class TestConfig:
             ],
             'domain_hooks': {},
         }
-        assert deploy_manager.save_config(config) is False
+        ok, err = deploy_manager.save_config(config)
+        assert ok is False
+        assert err and 'name' in err.lower()
 
     def test_timeout_clamped(self, deploy_manager, settings_manager):
         config = {
@@ -251,9 +257,47 @@ class TestConfig:
             ],
             'domain_hooks': {},
         }
-        assert deploy_manager.save_config(config) is True
+        ok, _ = deploy_manager.save_config(config)
+        assert ok is True
         saved = settings_manager.save_settings.call_args[0][0]
         assert saved['deploy_hooks']['global_hooks'][0]['timeout'] == 300
+
+    def test_unsafe_command_returns_specific_reason(self, deploy_manager):
+        """Issue #102: rejection error must name the offending hook AND
+        the specific reason (e.g. 'dangerous shell metacharacters'),
+        not a generic 'save failed'."""
+        config = {
+            'enabled': True,
+            'global_hooks': [
+                {'id': 'h1', 'name': 'Pipeline',
+                 'command': 'curl http://x | jq .',
+                 'enabled': True, 'timeout': 30, 'on_events': ['created']},
+            ],
+            'domain_hooks': {},
+        }
+        ok, err = deploy_manager.save_config(config)
+        assert ok is False
+        assert err is not None
+        assert "Pipeline" in err, "must name the offending hook"
+        assert "dangerous shell metacharacters" in err.lower() or "metacharacter" in err.lower()
+
+    def test_unsafe_command_in_domain_hook(self, deploy_manager):
+        config = {
+            'enabled': True,
+            'global_hooks': [],
+            'domain_hooks': {
+                'example.com': [
+                    {'id': 'd1', 'name': 'Chained',
+                     'command': 'echo a && echo b',
+                     'enabled': True, 'timeout': 30, 'on_events': ['renewed']},
+                ],
+            },
+        }
+        ok, err = deploy_manager.save_config(config)
+        assert ok is False
+        assert err is not None
+        assert "example.com" in err
+        assert "Chained" in err
 
 
 class TestHistory:
@@ -318,7 +362,11 @@ class TestTestHook:
 
     def test_not_found(self, deploy_manager):
         result = deploy_manager.test_hook('nonexistent')
-        assert 'not found' in result['error'].lower()
+        # Error message updated by issue #101 to name the two real causes
+        # (stale UI / save-time validator rejection).
+        assert result['hook_id'] == 'nonexistent'
+        assert result['reason'] == 'hook_missing_from_config'
+        assert 'nonexistent' in result['error']
 
 
 class TestEventListener:

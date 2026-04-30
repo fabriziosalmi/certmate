@@ -264,26 +264,34 @@ class DeployManager:
         })
 
     def save_config(self, config):
-        """Validate and save deploy_hooks config. Returns True on success."""
+        """Validate and save deploy_hooks config.
+
+        Returns (success: bool, error: str | None). The error message
+        identifies the offending hook + reason when validation fails so the
+        UI can show why a save was rejected (issue #102) instead of a
+        generic "save failed".
+        """
         if not isinstance(config, dict):
-            return False
+            return False, "Configuration must be an object"
         if not isinstance(config.get('enabled'), bool):
             config['enabled'] = False
 
         for hook in config.get('global_hooks', []):
-            if not self._validate_hook(hook):
-                return False
+            ok, err = self._validate_hook(hook)
+            if not ok:
+                return False, f"Global hook rejected: {err}"
         for domain, hooks in config.get('domain_hooks', {}).items():
             if not isinstance(hooks, list):
-                return False
+                return False, f"Hooks for domain '{domain}' must be a list"
             for hook in hooks:
-                if not self._validate_hook(hook):
-                    return False
+                ok, err = self._validate_hook(hook)
+                if not ok:
+                    return False, f"Hook for domain '{domain}' rejected: {err}"
 
         settings = self.settings_manager.load_settings()
         settings['deploy_hooks'] = config
         self.settings_manager.save_settings(settings)
-        return True
+        return True, None
 
     @staticmethod
     def _is_command_safe(command):
@@ -327,28 +335,35 @@ class DeployManager:
         return True, None
 
     def _validate_hook(self, hook):
-        """Validate a single hook dict. Returns True if valid."""
+        """Validate a single hook dict.
+
+        Returns (valid: bool, error: str | None). The error names the
+        offending hook (by name) and the specific reason so callers can
+        surface it to the user (issue #102: command field rejections used
+        to be a generic "save failed").
+        """
         if not isinstance(hook, dict):
-            return False
+            return False, "hook entry is not an object"
         if not hook.get('id'):
-            return False
+            return False, "hook is missing its id"
+        hook_label = hook.get('name', '').strip() or hook.get('id') or 'unnamed'
         if not hook.get('name', '').strip():
-            return False
+            return False, f"hook '{hook_label}' is missing a name"
         if not hook.get('command', '').strip():
-            return False
+            return False, f"hook '{hook_label}' is missing a command"
 
         command = hook['command'].strip()
         safe, reason = self._is_command_safe(command)
         if not safe:
-            logger.warning("Deploy hook command rejected: %s", reason)
-            return False
+            logger.warning("Deploy hook '%s' command rejected: %s", hook_label, reason)
+            return False, f"hook '{hook_label}' command {reason}"
 
         hook['timeout'] = min(max(int(hook.get('timeout', DEFAULT_TIMEOUT)), 1), MAX_TIMEOUT)
         if not isinstance(hook.get('on_events'), list):
             hook['on_events'] = ['created', 'renewed']
         if not isinstance(hook.get('enabled'), bool):
             hook['enabled'] = True
-        return True
+        return True, None
 
     # ------------------------------------------------------------------
     # Test hook
