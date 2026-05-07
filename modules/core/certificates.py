@@ -231,7 +231,7 @@ class CertificateManager:
             'dns_provider': dns_provider
         }
 
-    def create_certificate(self, domain, email, dns_provider=None, dns_config=None, account_id=None, staging=False, ca_provider=None, ca_account_id=None, domain_alias=None, san_domains=None, challenge_type=None, key_type=None, key_size=None, elliptic_curve=None):
+    def create_certificate(self, domain, email, dns_provider=None, dns_config=None, account_id=None, staging=False, ca_provider=None, ca_account_id=None, domain_alias=None, san_domains=None, challenge_type=None, key_type=None, key_size=None, elliptic_curve=None, force=False):
         """Create SSL certificate using configurable CA with DNS challenge
 
         Args:
@@ -252,6 +252,12 @@ class CertificateManager:
                 per-domain.
             key_size: RSA key size in bits (only valid with key_type='rsa').
             elliptic_curve: ECDSA curve (only valid with key_type='ecdsa').
+            force: When True, skip the "cert already exists" guard and pass
+                ``--force-renewal`` to certbot so the existing cert is
+                replaced. Used by ``renew_certificate`` when the renewal
+                conf is missing (typical Docker/K8s ephemeral-filesystem
+                case) and the cert needs to be regenerated from scratch
+                using the persisted metadata.
         """
         # Acquire per-domain lock to prevent concurrent create/renew operations
         domain_lock = self._get_domain_lock(domain)
@@ -268,12 +274,17 @@ class CertificateManager:
         ca_extra_env = {}
 
         try:
-            # Return conflict if cert already exists (use renew to refresh it)
+            # Return conflict if cert already exists (use renew to refresh it).
+            # ``force=True`` skips this guard so renew_certificate can rebuild a
+            # cert from scratch when the certbot renewal conf is missing.
             existing_cert = self.cert_dir / domain / 'cert.pem'
-            if existing_cert.exists():
+            if existing_cert.exists() and not force:
                 raise FileExistsError(f"Certificate for {domain} already exists. Use renew to refresh it.")
 
-            logger.info(f"Starting certificate creation for domain: {domain}")
+            if force:
+                logger.info(f"Force-renewing certificate for {domain} from persisted metadata")
+            else:
+                logger.info(f"Starting certificate creation for domain: {domain}")
             
             # ... (Validation and CA setup remains the same until DNS config)
             
@@ -399,6 +410,8 @@ class CertificateManager:
                         ca_account_config, staging, cert_dir, san_domains=san_list,
                         key_type=key_type, key_size=key_size, elliptic_curve=elliptic_curve,
                     )
+                    if force:
+                        certbot_cmd.append('--force-renewal')
                 except TypeError as e:
                     # Defensive fallback: older build_certbot_command without san_domains
                     logger.warning(f"build_certbot_command does not accept san_domains, adding manually: {e}")
@@ -420,6 +433,8 @@ class CertificateManager:
                         certbot_cmd.extend(['--key-type', 'rsa', '--rsa-key-size', str(key_size)])
                     elif key_type == 'ecdsa' and elliptic_curve:
                         certbot_cmd.extend(['--key-type', 'ecdsa', '--elliptic-curve', elliptic_curve])
+                    if force:
+                        certbot_cmd.append('--force-renewal')
             else:
                 certbot_cmd = [
                     'certbot', 'certonly',
@@ -438,6 +453,9 @@ class CertificateManager:
 
                 if staging:
                     certbot_cmd.append('--staging')
+
+                if force:
+                    certbot_cmd.append('--force-renewal')
 
                 # No-ca_manager path: still honour the resolved key shape so
                 # this branch produces the same cert as the main path.
