@@ -12,10 +12,11 @@ import shutil
 import threading
 from pathlib import Path
 from datetime import datetime, timedelta
+from typing import Dict
 from .shell import ShellExecutor
 from .dns_strategies import DNSStrategyFactory, HTTP01Strategy, check_certbot_plugin_installed
 from .constants import CERTIFICATE_FILES, get_domain_name
-from .utils import validate_domain, utc_now
+from .utils import validate_domain, utc_now, validate_key_options
 
 logger = logging.getLogger(__name__)
 
@@ -30,8 +31,13 @@ class CertificateManager:
         self.storage_manager = storage_manager
         self.ca_manager = ca_manager
         self.shell_executor = shell_executor or ShellExecutor()
-        # Per-domain locks to prevent concurrent create/renew on the same domain
-        self._domain_locks: dict[str, threading.Lock] = {}
+        # Per-domain reentrant locks so the renewal-rebuild path can call
+        # create_certificate from within renew_certificate on the same
+        # thread without deadlocking or having to release+reacquire (which
+        # would open a race window for a concurrent delete_certificate).
+        # Concurrency between threads/requests is still serialised — RLock
+        # is reentrant per-thread, not globally.
+        self._domain_locks: dict[str, threading.RLock] = {}
         self._domain_locks_mutex = threading.Lock()
 
     @staticmethod
@@ -57,12 +63,107 @@ class CertificateManager:
             tmp.unlink(missing_ok=True)
             raise
 
-    def _get_domain_lock(self, domain: str) -> threading.Lock:
-        """Return the per-domain lock, creating it on first use."""
+    def _get_domain_lock(self, domain: str) -> threading.RLock:
+        """Return the per-domain reentrant lock, creating it on first use."""
         with self._domain_locks_mutex:
             if domain not in self._domain_locks:
-                self._domain_locks[domain] = threading.Lock()
+                self._domain_locks[domain] = threading.RLock()
             return self._domain_locks[domain]
+
+    def hydrate_from_storage(self) -> Dict[str, str]:
+        """Restore PEMs and metadata from the storage backend to local disk.
+
+        Container restart story: in Docker without a PVC on
+        ``certificates/`` (or K8s pods on emptyDir), the cert files do not
+        survive across restarts even when the operator configured a remote
+        storage backend (Azure Key Vault, AWS, Vault, Infisical, …) as the
+        source of truth. Without rehydration, every cert lookup and every
+        renewal would fail until the next manual create.
+
+        This method walks ``settings.domains`` and, for any domain whose
+        ``cert.pem`` is missing locally but present in the storage backend,
+        restores cert.pem / chain.pem / fullchain.pem / privkey.pem and
+        metadata.json into ``cert_dir/<domain>/``. The certbot
+        ``renewal/<domain>.conf`` is *not* restored (the storage backend
+        only carries PEMs and metadata, not certbot internal state) — the
+        renewal path's metadata-driven rebuild then takes over for the
+        first renew after restart.
+
+        Returns a dict ``{domain: status}`` for observability/logging,
+        with status one of ``'restored'``, ``'present'``, ``'missing'``,
+        ``'error'``. Safe to call repeatedly; never raises.
+        """
+        results: Dict[str, str] = {}
+        if not self.storage_manager:
+            return results
+        try:
+            settings = self.settings_manager.load_settings()
+        except Exception as e:
+            logger.warning(f"hydrate_from_storage: could not load settings: {e}")
+            return results
+
+        for entry in settings.get('domains', []) or []:
+            if isinstance(entry, str):
+                domain = entry
+            elif isinstance(entry, dict):
+                domain = entry.get('domain')
+            else:
+                continue
+            if not domain:
+                continue
+
+            try:
+                _ = validate_domain(domain)
+            except Exception:
+                # ``validate_domain`` returns a tuple, not a raise — but
+                # belt-and-braces against future changes.
+                pass
+
+            local_cert = self.cert_dir / domain / 'cert.pem'
+            if local_cert.exists():
+                results[domain] = 'present'
+                continue
+
+            try:
+                retrieved = self.storage_manager.retrieve_certificate(domain)
+            except Exception as e:
+                logger.warning(f"hydrate_from_storage: retrieve failed for {domain}: {e}")
+                results[domain] = 'error'
+                continue
+
+            if not retrieved:
+                results[domain] = 'missing'
+                continue
+
+            cert_files, metadata = retrieved
+            domain_dir = self.cert_dir / domain
+            try:
+                domain_dir.mkdir(parents=True, exist_ok=True)
+                for filename, content in cert_files.items():
+                    if not isinstance(content, (bytes, bytearray)):
+                        continue
+                    target = domain_dir / filename
+                    target.write_bytes(content)
+                    # Lock down the private key so other users on the host
+                    # cannot read it after rehydration. The original create
+                    # path applies these perms via certbot itself.
+                    if filename == 'privkey.pem':
+                        try:
+                            target.chmod(0o600)
+                        except Exception:
+                            pass
+                if metadata:
+                    self._atomic_json_write(domain_dir / 'metadata.json', metadata)
+                results[domain] = 'restored'
+                logger.info(
+                    "hydrate_from_storage: restored %s from %s",
+                    domain, self.storage_manager.get_backend_name(),
+                )
+            except Exception as e:
+                logger.warning(f"hydrate_from_storage: write failed for {domain}: {e}")
+                results[domain] = 'error'
+
+        return results
 
 
 
@@ -231,9 +332,9 @@ class CertificateManager:
             'dns_provider': dns_provider
         }
 
-    def create_certificate(self, domain, email, dns_provider=None, dns_config=None, account_id=None, staging=False, ca_provider=None, ca_account_id=None, domain_alias=None, san_domains=None, challenge_type=None):
+    def create_certificate(self, domain, email, dns_provider=None, dns_config=None, account_id=None, staging=False, ca_provider=None, ca_account_id=None, domain_alias=None, san_domains=None, challenge_type=None, key_type=None, key_size=None, elliptic_curve=None, force=False):
         """Create SSL certificate using configurable CA with DNS challenge
-        
+
         Args:
             domain: Primary domain name for certificate
             email: Contact email for certificate authority
@@ -245,6 +346,19 @@ class CertificateManager:
             ca_account_id: Specific CA account ID to use
             domain_alias: Optional domain alias for DNS validation (e.g., '_acme-challenge.validation.example.org')
             san_domains: Optional list of additional domains for Subject Alternative Names (SAN)
+            key_type: Optional 'rsa' or 'ecdsa'. If all three key kwargs are
+                None the global ``default_key_*`` from settings are applied,
+                so callers (legacy web routes, scripts) get the configured
+                default for free. Pass an explicit value here to override
+                per-domain.
+            key_size: RSA key size in bits (only valid with key_type='rsa').
+            elliptic_curve: ECDSA curve (only valid with key_type='ecdsa').
+            force: When True, skip the "cert already exists" guard and pass
+                ``--force-renewal`` to certbot so the existing cert is
+                replaced. Used by ``renew_certificate`` when the renewal
+                conf is missing (typical Docker/K8s ephemeral-filesystem
+                case) and the cert needs to be regenerated from scratch
+                using the persisted metadata.
         """
         # Acquire per-domain lock to prevent concurrent create/renew operations
         domain_lock = self._get_domain_lock(domain)
@@ -261,12 +375,17 @@ class CertificateManager:
         ca_extra_env = {}
 
         try:
-            # Return conflict if cert already exists (use renew to refresh it)
+            # Return conflict if cert already exists (use renew to refresh it).
+            # ``force=True`` skips this guard so renew_certificate can rebuild a
+            # cert from scratch when the certbot renewal conf is missing.
             existing_cert = self.cert_dir / domain / 'cert.pem'
-            if existing_cert.exists():
+            if existing_cert.exists() and not force:
                 raise FileExistsError(f"Certificate for {domain} already exists. Use renew to refresh it.")
 
-            logger.info(f"Starting certificate creation for domain: {domain}")
+            if force:
+                logger.info(f"Force-renewing certificate for {domain} from persisted metadata")
+            else:
+                logger.info(f"Starting certificate creation for domain: {domain}")
             
             # ... (Validation and CA setup remains the same until DNS config)
             
@@ -362,6 +481,26 @@ class CertificateManager:
             cert_output_dir = cert_dir / domain
             cert_output_dir.mkdir(parents=True, exist_ok=True)
 
+            # Resolve key shape. If the caller did not pick anything we fall
+            # back to the global default from settings — this lets legacy
+            # callers (web routes, scripts, tests) get the configured
+            # default for free without having to fetch it themselves. If
+            # the caller did pick something, validate the triple here too
+            # so the cert is never built with an inconsistent shape (the
+            # API endpoint validates earlier, but renew_certificate also
+            # routes through this method and can pass values from disk).
+            if key_type is None and key_size is None and elliptic_curve is None:
+                settings = self.settings_manager.load_settings()
+                key_type = settings.get('default_key_type')
+                if key_type == 'rsa':
+                    key_size = settings.get('default_key_size')
+                elif key_type == 'ecdsa':
+                    elliptic_curve = settings.get('default_elliptic_curve')
+            if key_type is not None:
+                ok, err = validate_key_options(key_type, key_size, elliptic_curve)
+                if not ok:
+                    raise ValueError(f"Invalid key options for {domain}: {err}")
+
             # Build certbot command (ca_extra_env was hoisted above the try
             # so the finally block can clean up safely on early failure)
             san_list = all_domains[1:] if len(all_domains) > 1 else None
@@ -369,8 +508,11 @@ class CertificateManager:
                 try:
                     certbot_cmd, ca_extra_env = self.ca_manager.build_certbot_command(
                         domain, email, ca_provider, dns_provider, dns_config,
-                        ca_account_config, staging, cert_dir, san_domains=san_list
+                        ca_account_config, staging, cert_dir, san_domains=san_list,
+                        key_type=key_type, key_size=key_size, elliptic_curve=elliptic_curve,
                     )
+                    if force:
+                        certbot_cmd.append('--force-renewal')
                 except TypeError as e:
                     # Defensive fallback: older build_certbot_command without san_domains
                     logger.warning(f"build_certbot_command does not accept san_domains, adding manually: {e}")
@@ -386,6 +528,14 @@ class CertificateManager:
                     if san_list:
                         for san in san_list:
                             certbot_cmd.extend(['-d', san])
+                    # Fallback path also needs the key flags appended manually
+                    # so a stale ca_manager doesn't silently downgrade certs.
+                    if key_type == 'rsa' and key_size:
+                        certbot_cmd.extend(['--key-type', 'rsa', '--rsa-key-size', str(key_size)])
+                    elif key_type == 'ecdsa' and elliptic_curve:
+                        certbot_cmd.extend(['--key-type', 'ecdsa', '--elliptic-curve', elliptic_curve])
+                    if force:
+                        certbot_cmd.append('--force-renewal')
             else:
                 certbot_cmd = [
                     'certbot', 'certonly',
@@ -404,6 +554,16 @@ class CertificateManager:
 
                 if staging:
                     certbot_cmd.append('--staging')
+
+                if force:
+                    certbot_cmd.append('--force-renewal')
+
+                # No-ca_manager path: still honour the resolved key shape so
+                # this branch produces the same cert as the main path.
+                if key_type == 'rsa' and key_size:
+                    certbot_cmd.extend(['--key-type', 'rsa', '--rsa-key-size', str(key_size)])
+                elif key_type == 'ecdsa' and elliptic_curve:
+                    certbot_cmd.extend(['--key-type', 'ecdsa', '--elliptic-curve', elliptic_curve])
 
             # Build per-request environment (avoid race conditions with os.environ)
             process_env = os.environ.copy()
@@ -481,7 +641,14 @@ class CertificateManager:
                         with open(dst_file, 'rb') as f:
                             cert_files[cert_file] = f.read()
             
-            # Save metadata
+            # Save metadata. The key shape and DNS/CA selection are
+            # persisted here so a renewal that runs after the certbot
+            # renewal/<domain>.conf has been lost (Docker container without
+            # a PVC on certificates/, K8s pod restart with emptyDir, …) can
+            # reconstruct the original cert configuration. The metadata
+            # block is also synced to the storage backend via
+            # store_certificate below, so it survives even when the local
+            # filesystem itself is ephemeral.
             metadata = {
                 'domain': domain,
                 'san_domains': all_domains[1:] if len(all_domains) > 1 else [],
@@ -490,7 +657,12 @@ class CertificateManager:
                 'created_at': datetime.now().isoformat(),
                 'email': email,
                 'staging': staging,
-                'account_id': account_id
+                'account_id': account_id,
+                'ca_provider': ca_provider,
+                'domain_alias': domain_alias,
+                'key_type': key_type,
+                'key_size': key_size,
+                'elliptic_curve': elliptic_curve,
             }
             
             if self.storage_manager:
@@ -545,8 +717,110 @@ class CertificateManager:
                 except (FileNotFoundError, OSError):
                     pass
 
+    def _renew_from_metadata(self, domain, domain_dir):
+        """Rebuild a cert from scratch using persisted metadata.
+
+        Used when the certbot renewal conf is missing — the metadata is
+        the source of truth for the original cert configuration (key
+        shape, DNS plugin, CA, SAN list, …). The metadata is written to
+        ``metadata.json`` at create time and also synced to the storage
+        backend, so it survives ephemeral local filesystems.
+        """
+        import json
+
+        metadata_file = domain_dir / 'metadata.json'
+        metadata = {}
+        if metadata_file.exists():
+            try:
+                with open(metadata_file, 'r') as f:
+                    metadata = json.load(f)
+            except Exception as e:
+                logger.warning(f"Could not read {metadata_file}: {e}")
+
+        # Last-chance fallback: if even metadata.json is gone (truly fresh
+        # filesystem before any storage-backend rehydration completed), pull
+        # whatever can still be inferred from settings.
+        settings = self.settings_manager.load_settings()
+        domain_entries = [d for d in settings.get('domains', [])
+                          if isinstance(d, dict) and d.get('domain') == domain]
+        domain_entry = domain_entries[0] if domain_entries else {}
+        email = metadata.get('email') or settings.get('email')
+        if not email:
+            raise RuntimeError(
+                f"Cannot renew {domain}: renewal conf and metadata.json are both "
+                f"missing, and no email is configured in settings."
+            )
+
+        san_domains = metadata.get('san_domains') or []
+        dns_provider = (
+            metadata.get('dns_provider')
+            or domain_entry.get('dns_provider')
+            or settings.get('dns_provider')
+        )
+        account_id = metadata.get('account_id') or domain_entry.get('dns_account_id')
+        ca_provider = metadata.get('ca_provider') or settings.get('default_ca')
+        domain_alias = metadata.get('domain_alias')
+        challenge_type = metadata.get('challenge_type')
+        staging = bool(metadata.get('staging', False))
+
+        # Key shape resolution order: persisted metadata → per-domain
+        # override → caller passes None and create_certificate falls back to
+        # the global default. Anything else risks renewing with a different
+        # key shape than the original cert had.
+        key_type = metadata.get('key_type') or domain_entry.get('key_type')
+        key_size = metadata.get('key_size') or domain_entry.get('key_size')
+        elliptic_curve = metadata.get('elliptic_curve') or domain_entry.get('elliptic_curve')
+
+        # The per-domain lock is reentrant, so create_certificate can
+        # reacquire it on the same thread without deadlock — no manual
+        # release/reacquire needed here, which also closes the race
+        # window where a concurrent delete_certificate could slip in.
+
+        result = self.create_certificate(
+            domain=domain,
+            email=email,
+            dns_provider=dns_provider,
+            account_id=account_id,
+            staging=staging,
+            ca_provider=ca_provider,
+            domain_alias=domain_alias,
+            san_domains=san_domains,
+            challenge_type=challenge_type,
+            key_type=key_type,
+            key_size=key_size,
+            elliptic_curve=elliptic_curve,
+            force=True,
+        )
+        return {
+            'success': True,
+            'domain': domain,
+            'message': "Certificate renewed (rebuilt from metadata)",
+            'rebuilt_from_metadata': True,
+            'created_at': result.get('created_at'),
+        }
+
     def renew_certificate(self, domain):
-        """Renew a certificate"""
+        """Renew a certificate.
+
+        Two-tier strategy so renewals work in both PVC-backed and ephemeral
+        filesystem deployments:
+
+        1. **Fast path (renewal/<domain>.conf present)**: invoke
+           ``certbot renew --cert-name``. Certbot reads the conf and
+           reuses the original DNS plugin / CA / key shape. Same as
+           before this feature shipped — no behaviour change for setups
+           that keep ``certificates/`` on a persistent volume.
+
+        2. **Fallback path (renewal conf missing)**: kicks in after a
+           container restart on an ephemeral filesystem where the
+           startup hydration (``CertificateManager.hydrate_from_storage``)
+           restored the PEMs and ``metadata.json`` from the remote
+           storage backend but cannot restore the certbot renewal conf
+           (the backend only carries PEMs and metadata). The rebuild
+           reads ``metadata.json`` for the original key shape, DNS
+           plugin, CA, SAN list, alias and challenge type, and calls
+           ``create_certificate(force=True, ...)`` with those values.
+        """
         domain_lock = self._get_domain_lock(domain)
         if not domain_lock.acquire(blocking=False):
             raise RuntimeError(f"A certificate operation for {domain} is already in progress")
@@ -556,9 +830,25 @@ class CertificateManager:
             domain_dir = cert_dir / domain
             if not domain_dir.exists() or not (domain_dir / 'cert.pem').exists():
                 raise FileNotFoundError(f"No certificate found for domain: {domain}")
+
+            # If the renewal conf is gone (e.g. partial restore where the
+            # PEMs survived but the certbot renewal conf did not) ``certbot
+            # renew`` would either fail outright or silently regenerate with
+            # the wrong key shape. Take the metadata-driven rebuild path
+            # instead. The reentrant lock lets us call create_certificate
+            # from inside this method on the same thread without releasing,
+            # so a concurrent delete_certificate cannot slip in between.
+            renewal_conf = domain_dir / 'renewal' / f'{domain}.conf'
+            if not renewal_conf.exists():
+                logger.warning(
+                    "Renewal conf %s missing — rebuilding cert from metadata.json.",
+                    renewal_conf,
+                )
+                return self._renew_from_metadata(domain, domain_dir)
+
             work_dir = domain_dir / 'work'
             logs_dir = domain_dir / 'logs'
-            
+
             cmd = [
                 'certbot', 'renew',
                 '--cert-name', domain,

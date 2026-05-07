@@ -279,6 +279,18 @@ def create_api_resources(api, models, managers):
                     if not alias_valid:
                         return {'error': f'Invalid domain_alias: {alias_msg}'}, 400
 
+                # Optional per-cert key shape overrides. Validated up-front so
+                # the caller gets a clean 400 (with the field-specific reason)
+                # instead of a generic certbot stack trace later.
+                key_type = data.get('key_type')
+                key_size = data.get('key_size')
+                elliptic_curve = data.get('elliptic_curve')
+                if key_type is not None or key_size is not None or elliptic_curve is not None:
+                    from ..core.utils import validate_key_options
+                    ok, key_err = validate_key_options(key_type, key_size, elliptic_curve)
+                    if not ok:
+                        return {'error': key_err}, 400
+
                 # Validate domain
                 if not domain:
                     return {
@@ -354,7 +366,10 @@ def create_api_resources(api, models, managers):
                     ca_provider=ca_provider,
                     domain_alias=domain_alias,
                     san_domains=san_domains,
-                    challenge_type=challenge_type
+                    challenge_type=challenge_type,
+                    key_type=key_type,
+                    key_size=key_size,
+                    elliptic_curve=elliptic_curve,
                 )
 
                 # Append the new domain to settings under the manager's
@@ -370,11 +385,20 @@ def create_api_resources(api, models, managers):
                     )
                     if already_present:
                         return
-                    domains_list.append({
-                        'domain': domain,
-                        'dns_provider': _resolved_dns_provider,
-                        'dns_account_id': account_id,
-                    })
+                    # Only persist key overrides the operator picked
+                    # explicitly (build_domain_entry omits None values).
+                    # Inheriting certs leave the entry clean so later
+                    # changes to settings.default_key_* still apply,
+                    # while explicit overrides stay untouched.
+                    from ..core.utils import build_domain_entry
+                    domains_list.append(build_domain_entry(
+                        domain=domain,
+                        dns_provider=_resolved_dns_provider,
+                        dns_account_id=account_id,
+                        key_type=key_type,
+                        key_size=key_size,
+                        elliptic_curve=elliptic_curve,
+                    ))
                     s['domains'] = domains_list
 
                 settings_manager.update(_add_domain, "certificate_created")

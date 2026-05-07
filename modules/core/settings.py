@@ -10,7 +10,10 @@ from pathlib import Path
 
 from .constants import iter_cert_domain_dirs
 from .file_operations import FileOperations
-from .utils import generate_secure_token, validate_email, validate_api_token, validate_domain
+from .utils import (
+    generate_secure_token, validate_email, validate_api_token, validate_domain,
+    validate_key_options,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -135,6 +138,13 @@ class SettingsManager:
                 'setup_completed': False,  # Track if initial setup is done
                 'dns_provider': 'cloudflare',
                 'challenge_type': 'dns-01',  # 'dns-01' or 'http-01'
+                # Default certificate key shape applied to any cert that does
+                # not carry a per-domain override. 'rsa'/2048 mirrors the
+                # implicit certbot default that CertMate emitted before this
+                # setting existed, so upgraded installs see no change.
+                'default_key_type': 'rsa',
+                'default_key_size': 2048,
+                'default_elliptic_curve': 'secp256r1',
                 'dns_providers': {},  # Start with empty DNS providers - only add what's actually configured
                 'certificate_storage': {  # New storage backend configuration
                     'backend': 'local_filesystem',  # Default to local filesystem for backward compatibility
@@ -178,6 +188,9 @@ class SettingsManager:
                 'setup_completed': False,
                 'dns_provider': 'cloudflare',
                 'challenge_type': 'dns-01',
+                'default_key_type': 'rsa',
+                'default_key_size': 2048,
+                'default_elliptic_curve': 'secp256r1',
                 'dns_providers': {
                     'cloudflare': {'api_token': ''},
                     'route53': {'access_key_id': '', 'secret_access_key': '', 'region': 'us-east-1'},
@@ -219,8 +232,16 @@ class SettingsManager:
                 # Apply migrations for backward compatibility
                 settings, was_migrated = self._migrate_settings_format(settings)
 
-                # Only merge essential missing keys, NOT the full dns_providers template
-                essential_keys = ['cloudflare_token', 'domains', 'email', 'auto_renew', 'renewal_threshold_days', 'api_bearer_token', 'setup_completed', 'dns_provider', 'challenge_type']
+                # Only merge essential missing keys, NOT the full dns_providers template.
+                # ``default_key_*`` are listed here so an upgraded install picks up
+                # rsa/2048 (matching the implicit certbot default that CertMate
+                # used before the setting existed) without requiring manual edit.
+                essential_keys = [
+                    'cloudflare_token', 'domains', 'email', 'auto_renew',
+                    'renewal_threshold_days', 'api_bearer_token', 'setup_completed',
+                    'dns_provider', 'challenge_type',
+                    'default_key_type', 'default_key_size', 'default_elliptic_curve',
+                ]
                 for key in essential_keys:
                     if key not in settings:
                         # Don't regenerate api_bearer_token if its hash is already
@@ -388,6 +409,33 @@ class SettingsManager:
                 if 'dns_provider' in settings and settings['dns_provider'] not in supported_providers:
                     logger.error(f"Invalid dns_provider: {settings['dns_provider']}")
                     return False
+
+                # Validate the global certificate-key defaults if any of them
+                # are present. The shape is enforced as a triple so a payload
+                # that would silently disagree (e.g. key_type=rsa with an
+                # elliptic_curve set) is rejected before it can poison cert
+                # creation. The migration path above guarantees all three keys
+                # exist for upgraded installs, so the only callers that hit
+                # this branch with a partial set are POSTs from the UI/API.
+                key_type = settings.get('default_key_type')
+                key_size = settings.get('default_key_size')
+                elliptic_curve = settings.get('default_elliptic_curve')
+                if key_type is not None or key_size is not None or elliptic_curve is not None:
+                    # Save-time validation only checks the active branch
+                    # (RSA → key_size; ECDSA → elliptic_curve). The unused
+                    # field on the inactive branch is allowed to keep its
+                    # default value (so toggling RSA↔ECDSA via the UI does
+                    # not require both to be wiped on every switch).
+                    if key_type == 'rsa':
+                        check = validate_key_options(key_type, key_size, None)
+                    elif key_type == 'ecdsa':
+                        check = validate_key_options(key_type, None, elliptic_curve)
+                    else:
+                        check = validate_key_options(key_type, key_size, elliptic_curve)
+                    is_valid, err = check
+                    if not is_valid:
+                        logger.error(f"Invalid certificate key defaults: {err}")
+                        return False
 
                 # Validate domains
                 if 'domains' in settings:

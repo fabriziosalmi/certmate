@@ -195,8 +195,21 @@ class CAManager:
     def build_certbot_command(self, domain: str, email: str, ca_provider: str,
                             dns_provider: str, dns_config: Dict[str, Any],
                             account_config: Dict[str, Any], staging: bool = False,
-                            cert_dir: Path = None, san_domains: list = None) -> tuple:
+                            cert_dir: Path = None, san_domains: list = None,
+                            key_type: Optional[str] = None,
+                            key_size: Optional[int] = None,
+                            elliptic_curve: Optional[str] = None) -> tuple:
         """Build certbot command with CA-specific parameters.
+
+        Args:
+            key_type: Optional 'rsa' or 'ecdsa'. When omitted, no
+                ``--key-type`` flag is emitted and certbot picks its own
+                default (currently RSA-2048) — this preserves the
+                pre-feature behaviour for callers that don't opt in.
+            key_size: RSA key size in bits (2048/3072/4096). Required when
+                ``key_type='rsa'`` and ignored otherwise.
+            elliptic_curve: ECDSA curve name (secp256r1/secp384r1).
+                Required when ``key_type='ecdsa'`` and ignored otherwise.
 
         Returns:
             Tuple of (certbot_cmd list, extra_env dict) — extra_env contains
@@ -222,6 +235,13 @@ class CAManager:
         if san_domains:
             for san in san_domains:
                 certbot_cmd.extend(['-d', san])
+
+        # Key type / size flags. Only emitted when the caller explicitly
+        # picked one — leaving them off keeps the previous certbot default.
+        if key_type == 'rsa' and key_size:
+            certbot_cmd.extend(['--key-type', 'rsa', '--rsa-key-size', str(key_size)])
+        elif key_type == 'ecdsa' and elliptic_curve:
+            certbot_cmd.extend(['--key-type', 'ecdsa', '--elliptic-curve', elliptic_curve])
 
         # Add directory configuration if provided
         if cert_dir:

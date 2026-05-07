@@ -242,9 +242,32 @@ All settings are stored in `data/settings.json`:
   "certificate_storage": {
     "backend": "local_filesystem",
     "cert_dir": "certificates"
-  }
+  },
+  "default_key_type": "rsa",
+  "default_key_size": 2048,
+  "default_elliptic_curve": "secp256r1"
 }
 ```
+
+### Certificate key type/size
+
+Three top-level keys control the public-key shape of newly issued certificates:
+
+| Key | Values | Applies when |
+|---|---|---|
+| `default_key_type` | `rsa` (default) / `ecdsa` | always |
+| `default_key_size` | `2048` (default) / `3072` / `4096` | `default_key_type == "rsa"` |
+| `default_elliptic_curve` | `secp256r1` (default) / `secp384r1` | `default_key_type == "ecdsa"` |
+
+A per-certificate override is supported: each entry in `domains` may carry an optional `key_type` plus either `key_size` (RSA) or `elliptic_curve` (ECDSA). When the override is present it wins; otherwise the global default applies. The defaults `rsa`/`2048` mirror the implicit certbot default that CertMate emitted before this setting existed, so upgraded installs see no change unless the operator picks something else.
+
+Renewals preserve the original shape across both PVC-backed and ephemeral-filesystem deployments. Three layers cooperate:
+
+1. **PVC fast path**: certbot persists `--key-type`, `--rsa-key-size` and `--elliptic-curve` into its own `renewal/<domain>.conf` during the first issuance, and `certbot renew --cert-name <domain>` reuses those values automatically.
+2. **Startup rehydration** (`CertificateManager.hydrate_from_storage`): on app initialisation, every domain in `settings.domains` whose `cert.pem` is missing locally is restored from the configured remote storage backend (Azure Key Vault / AWS Secrets Manager / Vault / Infisical) — PEMs and `metadata.json`. The `renewal/<domain>.conf` is **not** restored because the backend never carried it.
+3. **Metadata-driven rebuild**: when `renew_certificate` runs and `renewal/<domain>.conf` is missing (typical of the first renew after a fresh-volume restart, since step 2 above intentionally does not restore it), the renewer reads `metadata.json` (key shape, CA, DNS plugin, account, SAN list, alias, challenge type) and rebuilds the cert via `certbot certonly --force-renewal` with all the original parameters. The historical shape is honoured.
+
+The metadata block stored at create time and synced to the storage backend includes `key_type`, `key_size`/`elliptic_curve`, `ca_provider`, `dns_provider`, `account_id`, `san_domains`, `domain_alias`, `challenge_type`. If `metadata.json` is also missing (truly fresh volume + storage backend with no record for that domain), the rebuild falls back to whatever per-domain overrides survive in `settings.domains` and ultimately to the *current* global default — that's the only path where the historical shape can be lost.
 
 ---
 
