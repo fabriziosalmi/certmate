@@ -285,6 +285,14 @@ Merges the ITJamie PR chain ([#128](https://github.com/fabriziosalmi/certmate/pu
 - 1 new test case in `test_download_file_param.py` (JSON 404 for missing domains)
 - All validated against live Cloudflare DNS-01 with random subdomain `pr133test-91e7c166.certmate.org`
 
+## Unreleased
+
+### Features
+- **Configurable certificate key type/size**: every cert was hardcoded to RSA-2048 because `CAManager.build_certbot_command` never passed `--key-type` or `--rsa-key-size` to certbot. Operators with compliance requirements (RSA-3072/4096) or modern stacks (ECDSA, smaller certs and faster handshakes) had to patch the code. The settings page now exposes a global default (`default_key_type` / `default_key_size` / `default_elliptic_curve`) and the certificate creation form has an optional per-cert override under "Advanced Options". Renewals automatically preserve the original shape of each cert because certbot persists the `--key-type`/`--rsa-key-size`/`--elliptic-curve` flags into its own `renewal/<domain>.conf` at create time. Default for upgraded installs stays at `rsa`/`2048` so behaviour does not change unless the operator opts in. RSA accepts 2048/3072/4096; ECDSA accepts `secp256r1` and `secp384r1`. Validation runs on every save and every cert creation so a contradictory shape (e.g. `key_type=rsa` with an `elliptic_curve` override) is rejected with a 400 instead of failing later inside certbot.
+
+---
+
+
 ## v2.4.7 (Patch — base image bump bookworm → trixie)
 
 Two-character `Dockerfile` change ([#127](https://github.com/fabriziosalmi/certmate/pull/127)): `python:3.12-slim` → `python:3.12-slim-trixie`. Expected to close ~11-13 of the 13 open Critical+High Trivy findings on the main branch image — all of them base-image OS CVEs (gnutls, libssh2, ncurses, systemd, libcap) fixed in trixie's package versions but not backported to bookworm.
