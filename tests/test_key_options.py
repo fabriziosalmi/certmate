@@ -197,7 +197,7 @@ class TestRenewalFallbackToMetadata:
         return mgr
 
     def test_missing_renewal_conf_triggers_metadata_rebuild(self, tmp_path):
-        from threading import Lock
+        from threading import RLock
         from modules.core.certificates import CertificateManager
 
         mgr = self._make_manager(tmp_path)
@@ -230,7 +230,7 @@ class TestRenewalFallbackToMetadata:
         }
         # Lock so renew_certificate enters the body and we can trace the
         # call to create_certificate without spawning real concurrency.
-        mgr._domain_locks[domain] = Lock()
+        mgr._domain_locks[domain] = RLock()
 
         # create_certificate is the delegation target; replace with a
         # spy so we can assert the args (in particular the key shape and
@@ -261,7 +261,7 @@ class TestRenewalFallbackToMetadata:
         global default key shape. This keeps renewals from hard-failing
         the very first time after a fresh deploy with empty volume.
         """
-        from threading import Lock
+        from threading import RLock
 
         mgr = self._make_manager(tmp_path)
         domain = 'orphan.example.com'
@@ -282,7 +282,7 @@ class TestRenewalFallbackToMetadata:
                 'key_size': 4096,
             }],
         }
-        mgr._domain_locks[domain] = Lock()
+        mgr._domain_locks[domain] = RLock()
         mgr.create_certificate = MagicMock(return_value={})
 
         mgr.renew_certificate(domain)
@@ -294,7 +294,7 @@ class TestRenewalFallbackToMetadata:
         assert kwargs['force'] is True
 
     def test_no_metadata_no_email_anywhere_raises(self, tmp_path):
-        from threading import Lock
+        from threading import RLock
 
         mgr = self._make_manager(tmp_path)
         domain = 'lost.example.com'
@@ -303,7 +303,7 @@ class TestRenewalFallbackToMetadata:
         (domain_dir / 'cert.pem').write_text('fake')
 
         mgr.settings_manager.load_settings.return_value = {'domains': []}
-        mgr._domain_locks[domain] = Lock()
+        mgr._domain_locks[domain] = RLock()
 
         with pytest.raises(RuntimeError, match='Cannot renew'):
             mgr.renew_certificate(domain)

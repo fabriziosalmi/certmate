@@ -30,8 +30,13 @@ class CertificateManager:
         self.storage_manager = storage_manager
         self.ca_manager = ca_manager
         self.shell_executor = shell_executor or ShellExecutor()
-        # Per-domain locks to prevent concurrent create/renew on the same domain
-        self._domain_locks: dict[str, threading.Lock] = {}
+        # Per-domain reentrant locks so the renewal-rebuild path can call
+        # create_certificate from within renew_certificate on the same
+        # thread without deadlocking or having to release+reacquire (which
+        # would open a race window for a concurrent delete_certificate).
+        # Concurrency between threads/requests is still serialised — RLock
+        # is reentrant per-thread, not globally.
+        self._domain_locks: dict[str, threading.RLock] = {}
         self._domain_locks_mutex = threading.Lock()
 
     @staticmethod
@@ -57,11 +62,11 @@ class CertificateManager:
             tmp.unlink(missing_ok=True)
             raise
 
-    def _get_domain_lock(self, domain: str) -> threading.Lock:
-        """Return the per-domain lock, creating it on first use."""
+    def _get_domain_lock(self, domain: str) -> threading.RLock:
+        """Return the per-domain reentrant lock, creating it on first use."""
         with self._domain_locks_mutex:
             if domain not in self._domain_locks:
-                self._domain_locks[domain] = threading.Lock()
+                self._domain_locks[domain] = threading.RLock()
             return self._domain_locks[domain]
 
 
@@ -670,9 +675,10 @@ class CertificateManager:
         key_size = metadata.get('key_size') or domain_entry.get('key_size')
         elliptic_curve = metadata.get('elliptic_curve') or domain_entry.get('elliptic_curve')
 
-        # The caller (renew_certificate) already released the per-domain
-        # lock before delegating here — create_certificate acquires it on
-        # its own and the lock is non-reentrant.
+        # The per-domain lock is reentrant, so create_certificate can
+        # reacquire it on the same thread without deadlock — no manual
+        # release/reacquire needed here, which also closes the race
+        # window where a concurrent delete_certificate could slip in.
 
         result = self.create_certificate(
             domain=domain,
@@ -721,10 +727,6 @@ class CertificateManager:
         domain_lock = self._get_domain_lock(domain)
         if not domain_lock.acquire(blocking=False):
             raise RuntimeError(f"A certificate operation for {domain} is already in progress")
-        # Tracks whether the finally block still owns the lock; the metadata
-        # rebuild path hands ownership over to create_certificate (which has
-        # its own per-domain locking), so the finally must not double-release.
-        lock_owned = True
         try:
             # Use the same config/work/log directories as during creation
             cert_dir = self.cert_dir
@@ -732,20 +734,19 @@ class CertificateManager:
             if not domain_dir.exists() or not (domain_dir / 'cert.pem').exists():
                 raise FileNotFoundError(f"No certificate found for domain: {domain}")
 
-            # If the renewal conf is gone (ephemeral filesystem, emptyDir,
-            # restored-from-backend-without-conf, …) ``certbot renew`` would
-            # either fail outright or silently regenerate with the wrong key
-            # shape. Take the metadata-driven rebuild path instead.
+            # If the renewal conf is gone (e.g. partial restore where the
+            # PEMs survived but the certbot renewal conf did not) ``certbot
+            # renew`` would either fail outright or silently regenerate with
+            # the wrong key shape. Take the metadata-driven rebuild path
+            # instead. The reentrant lock lets us call create_certificate
+            # from inside this method on the same thread without releasing,
+            # so a concurrent delete_certificate cannot slip in between.
             renewal_conf = domain_dir / 'renewal' / f'{domain}.conf'
             if not renewal_conf.exists():
                 logger.warning(
-                    "Renewal conf %s missing — rebuilding cert from metadata.json. "
-                    "This is expected on ephemeral filesystems (Docker without PVC, "
-                    "K8s emptyDir) when the storage backend is the source of truth.",
+                    "Renewal conf %s missing — rebuilding cert from metadata.json.",
                     renewal_conf,
                 )
-                domain_lock.release()
-                lock_owned = False
                 return self._renew_from_metadata(domain, domain_dir)
 
             work_dir = domain_dir / 'work'
@@ -800,8 +801,7 @@ class CertificateManager:
             logger.error(f"Exception during certificate renewal for {domain}: {error_msg}")
             raise RuntimeError(f"Exception: {error_msg}")
         finally:
-            if lock_owned:
-                domain_lock.release()
+            domain_lock.release()
 
     def check_renewals(self):
         """Check and renew certificates that are about to expire"""
