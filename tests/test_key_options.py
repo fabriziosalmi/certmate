@@ -171,6 +171,144 @@ class TestBuildCertbotCommandKeyFlags:
 # ---------------------------------------------------------------------------
 
 
+class TestRenewalFallbackToMetadata:
+    """Renewal path when the certbot renewal/<domain>.conf is missing.
+
+    The Docker/K8s ephemeral-filesystem case: the cert PEMs were
+    rehydrated from a remote storage backend on pod startup, but the
+    per-cert renewal conf certbot writes alongside them was not. Without
+    the fix, ``certbot renew --cert-name`` would fail outright (or worse,
+    silently regenerate with the wrong key shape). With the fix,
+    ``renew_certificate`` detects the missing conf and rebuilds the cert
+    from ``metadata.json`` (also synced to the storage backend), so the
+    original key_type / key_size / SAN list / DNS plugin are preserved.
+    """
+
+    def _make_manager(self, tmp_path):
+        from modules.core.certificates import CertificateManager
+        mgr = CertificateManager.__new__(CertificateManager)
+        mgr.cert_dir = tmp_path / 'certificates'
+        mgr.cert_dir.mkdir(parents=True)
+        mgr._domain_locks = {}
+        mgr._domain_locks_mutex = MagicMock()
+        mgr._domain_locks_mutex.__enter__ = lambda self_: None
+        mgr._domain_locks_mutex.__exit__ = lambda self_, *a: None
+        mgr.settings_manager = MagicMock()
+        return mgr
+
+    def test_missing_renewal_conf_triggers_metadata_rebuild(self, tmp_path):
+        from threading import Lock
+        from modules.core.certificates import CertificateManager
+
+        mgr = self._make_manager(tmp_path)
+        domain = 'example.com'
+        domain_dir = mgr.cert_dir / domain
+        domain_dir.mkdir()
+        # cert.pem exists, renewal/<domain>.conf does NOT — the exact
+        # state CertMate sees after restoring from a remote backend.
+        (domain_dir / 'cert.pem').write_text('fake')
+        (domain_dir / 'metadata.json').write_text(json.dumps({
+            'domain': domain,
+            'email': 'ops@example.com',
+            'san_domains': ['www.example.com'],
+            'dns_provider': 'cloudflare',
+            'account_id': 'production',
+            'ca_provider': 'letsencrypt',
+            'staging': False,
+            'key_type': 'ecdsa',
+            'elliptic_curve': 'secp384r1',
+            'key_size': None,
+            'challenge_type': 'dns-01',
+            'domain_alias': None,
+        }))
+
+        mgr.settings_manager.load_settings.return_value = {
+            'email': 'ops@example.com',
+            'dns_provider': 'cloudflare',
+            'default_ca': 'letsencrypt',
+            'domains': [{'domain': domain, 'dns_provider': 'cloudflare', 'dns_account_id': 'production'}],
+        }
+        # Lock so renew_certificate enters the body and we can trace the
+        # call to create_certificate without spawning real concurrency.
+        mgr._domain_locks[domain] = Lock()
+
+        # create_certificate is the delegation target; replace with a
+        # spy so we can assert the args (in particular the key shape and
+        # force=True) match the metadata.
+        mgr.create_certificate = MagicMock(return_value={'created_at': '2026-05-08T00:00:00'})
+
+        result = mgr.renew_certificate(domain)
+
+        mgr.create_certificate.assert_called_once()
+        kwargs = mgr.create_certificate.call_args.kwargs
+        assert kwargs['domain'] == domain
+        assert kwargs['email'] == 'ops@example.com'
+        assert kwargs['dns_provider'] == 'cloudflare'
+        assert kwargs['account_id'] == 'production'
+        assert kwargs['ca_provider'] == 'letsencrypt'
+        assert kwargs['key_type'] == 'ecdsa'
+        assert kwargs['elliptic_curve'] == 'secp384r1'
+        assert kwargs['san_domains'] == ['www.example.com']
+        assert kwargs['force'] is True
+
+        assert result['rebuilt_from_metadata'] is True
+
+    def test_missing_renewal_conf_with_no_metadata_uses_settings_fallback(self, tmp_path):
+        """Worst case: filesystem fully wiped, even metadata.json is gone.
+
+        Pull whatever still survives from settings (email, dns provider,
+        per-domain entry) and let create_certificate fall back to the
+        global default key shape. This keeps renewals from hard-failing
+        the very first time after a fresh deploy with empty volume.
+        """
+        from threading import Lock
+
+        mgr = self._make_manager(tmp_path)
+        domain = 'orphan.example.com'
+        domain_dir = mgr.cert_dir / domain
+        domain_dir.mkdir()
+        (domain_dir / 'cert.pem').write_text('fake')
+        # Intentionally no metadata.json.
+
+        mgr.settings_manager.load_settings.return_value = {
+            'email': 'ops@example.com',
+            'dns_provider': 'cloudflare',
+            'default_ca': 'letsencrypt',
+            'domains': [{
+                'domain': domain,
+                'dns_provider': 'route53',
+                'dns_account_id': 'prod',
+                'key_type': 'rsa',
+                'key_size': 4096,
+            }],
+        }
+        mgr._domain_locks[domain] = Lock()
+        mgr.create_certificate = MagicMock(return_value={})
+
+        mgr.renew_certificate(domain)
+        kwargs = mgr.create_certificate.call_args.kwargs
+        assert kwargs['dns_provider'] == 'route53'
+        assert kwargs['account_id'] == 'prod'
+        assert kwargs['key_type'] == 'rsa'
+        assert kwargs['key_size'] == 4096
+        assert kwargs['force'] is True
+
+    def test_no_metadata_no_email_anywhere_raises(self, tmp_path):
+        from threading import Lock
+
+        mgr = self._make_manager(tmp_path)
+        domain = 'lost.example.com'
+        domain_dir = mgr.cert_dir / domain
+        domain_dir.mkdir()
+        (domain_dir / 'cert.pem').write_text('fake')
+
+        mgr.settings_manager.load_settings.return_value = {'domains': []}
+        mgr._domain_locks[domain] = Lock()
+
+        with pytest.raises(RuntimeError, match='Cannot renew'):
+            mgr.renew_certificate(domain)
+
+
 class TestSettingsKeyDefaultsMigration:
     def test_legacy_settings_get_rsa_2048_defaults(self, tmp_path):
         from modules.core.file_operations import FileOperations
