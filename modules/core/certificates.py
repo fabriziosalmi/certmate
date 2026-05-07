@@ -15,7 +15,7 @@ from datetime import datetime, timedelta
 from .shell import ShellExecutor
 from .dns_strategies import DNSStrategyFactory, HTTP01Strategy, check_certbot_plugin_installed
 from .constants import CERTIFICATE_FILES, get_domain_name
-from .utils import validate_domain, utc_now
+from .utils import validate_domain, utc_now, validate_key_options
 
 logger = logging.getLogger(__name__)
 
@@ -231,9 +231,9 @@ class CertificateManager:
             'dns_provider': dns_provider
         }
 
-    def create_certificate(self, domain, email, dns_provider=None, dns_config=None, account_id=None, staging=False, ca_provider=None, ca_account_id=None, domain_alias=None, san_domains=None, challenge_type=None):
+    def create_certificate(self, domain, email, dns_provider=None, dns_config=None, account_id=None, staging=False, ca_provider=None, ca_account_id=None, domain_alias=None, san_domains=None, challenge_type=None, key_type=None, key_size=None, elliptic_curve=None):
         """Create SSL certificate using configurable CA with DNS challenge
-        
+
         Args:
             domain: Primary domain name for certificate
             email: Contact email for certificate authority
@@ -245,6 +245,13 @@ class CertificateManager:
             ca_account_id: Specific CA account ID to use
             domain_alias: Optional domain alias for DNS validation (e.g., '_acme-challenge.validation.example.org')
             san_domains: Optional list of additional domains for Subject Alternative Names (SAN)
+            key_type: Optional 'rsa' or 'ecdsa'. If all three key kwargs are
+                None the global ``default_key_*`` from settings are applied,
+                so callers (legacy web routes, scripts) get the configured
+                default for free. Pass an explicit value here to override
+                per-domain.
+            key_size: RSA key size in bits (only valid with key_type='rsa').
+            elliptic_curve: ECDSA curve (only valid with key_type='ecdsa').
         """
         # Acquire per-domain lock to prevent concurrent create/renew operations
         domain_lock = self._get_domain_lock(domain)
@@ -362,6 +369,26 @@ class CertificateManager:
             cert_output_dir = cert_dir / domain
             cert_output_dir.mkdir(parents=True, exist_ok=True)
 
+            # Resolve key shape. If the caller did not pick anything we fall
+            # back to the global default from settings — this lets legacy
+            # callers (web routes, scripts, tests) get the configured
+            # default for free without having to fetch it themselves. If
+            # the caller did pick something, validate the triple here too
+            # so the cert is never built with an inconsistent shape (the
+            # API endpoint validates earlier, but renew_certificate also
+            # routes through this method and can pass values from disk).
+            if key_type is None and key_size is None and elliptic_curve is None:
+                settings = self.settings_manager.load_settings()
+                key_type = settings.get('default_key_type')
+                if key_type == 'rsa':
+                    key_size = settings.get('default_key_size')
+                elif key_type == 'ecdsa':
+                    elliptic_curve = settings.get('default_elliptic_curve')
+            if key_type is not None:
+                ok, err = validate_key_options(key_type, key_size, elliptic_curve)
+                if not ok:
+                    raise ValueError(f"Invalid key options for {domain}: {err}")
+
             # Build certbot command (ca_extra_env was hoisted above the try
             # so the finally block can clean up safely on early failure)
             san_list = all_domains[1:] if len(all_domains) > 1 else None
@@ -369,7 +396,8 @@ class CertificateManager:
                 try:
                     certbot_cmd, ca_extra_env = self.ca_manager.build_certbot_command(
                         domain, email, ca_provider, dns_provider, dns_config,
-                        ca_account_config, staging, cert_dir, san_domains=san_list
+                        ca_account_config, staging, cert_dir, san_domains=san_list,
+                        key_type=key_type, key_size=key_size, elliptic_curve=elliptic_curve,
                     )
                 except TypeError as e:
                     # Defensive fallback: older build_certbot_command without san_domains
@@ -386,6 +414,12 @@ class CertificateManager:
                     if san_list:
                         for san in san_list:
                             certbot_cmd.extend(['-d', san])
+                    # Fallback path also needs the key flags appended manually
+                    # so a stale ca_manager doesn't silently downgrade certs.
+                    if key_type == 'rsa' and key_size:
+                        certbot_cmd.extend(['--key-type', 'rsa', '--rsa-key-size', str(key_size)])
+                    elif key_type == 'ecdsa' and elliptic_curve:
+                        certbot_cmd.extend(['--key-type', 'ecdsa', '--elliptic-curve', elliptic_curve])
             else:
                 certbot_cmd = [
                     'certbot', 'certonly',
@@ -404,6 +438,13 @@ class CertificateManager:
 
                 if staging:
                     certbot_cmd.append('--staging')
+
+                # No-ca_manager path: still honour the resolved key shape so
+                # this branch produces the same cert as the main path.
+                if key_type == 'rsa' and key_size:
+                    certbot_cmd.extend(['--key-type', 'rsa', '--rsa-key-size', str(key_size)])
+                elif key_type == 'ecdsa' and elliptic_curve:
+                    certbot_cmd.extend(['--key-type', 'ecdsa', '--elliptic-curve', elliptic_curve])
 
             # Build per-request environment (avoid race conditions with os.environ)
             process_env = os.environ.copy()
