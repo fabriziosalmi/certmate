@@ -227,6 +227,67 @@ def validate_api_token(token: str) -> Tuple[bool, str]:
 
 
 # =============================================
+# CERTIFICATE KEY OPTIONS
+# =============================================
+
+# RSA key sizes accepted by certbot's --rsa-key-size; matches LE/ZeroSSL
+# guidance and the upstream cryptography defaults. 1024 is excluded
+# (insecure) and 8192 is excluded (no real-world need, slow handshakes).
+KEY_TYPE_RSA = 'rsa'
+KEY_TYPE_ECDSA = 'ecdsa'
+VALID_KEY_TYPES = frozenset({KEY_TYPE_RSA, KEY_TYPE_ECDSA})
+VALID_RSA_KEY_SIZES = frozenset({2048, 3072, 4096})
+# secp521r1 is intentionally excluded: certbot accepts it but Let's Encrypt
+# rejects it as of 2026, and most consumers (browsers, load balancers) only
+# implement secp256r1/secp384r1.
+VALID_ELLIPTIC_CURVES = frozenset({'secp256r1', 'secp384r1'})
+
+
+def validate_key_options(
+    key_type: Optional[str],
+    key_size: Optional[int],
+    elliptic_curve: Optional[str],
+) -> Tuple[bool, str]:
+    """Validate the cert key-shape inputs that flow from API/UI to certbot.
+
+    Returns ``(True, '')`` on success and ``(False, message)`` on failure.
+
+    All three inputs may be ``None`` to mean "use the default" — this function
+    treats ``None`` for ``key_type`` as a request to skip validation entirely
+    so callers can hand it untouched API payloads. When ``key_type`` is set,
+    ``key_size`` and ``elliptic_curve`` are mutually exclusive (one applies to
+    RSA, the other to ECDSA).
+    """
+    if key_type is None:
+        # Caller hasn't picked a type; size/curve must also be absent or we
+        # have an inconsistent shape (e.g. {'key_size': 4096} with no type).
+        if key_size is not None or elliptic_curve is not None:
+            return False, "key_size/elliptic_curve require key_type to be set"
+        return True, ''
+
+    if key_type not in VALID_KEY_TYPES:
+        return False, f"key_type must be one of {sorted(VALID_KEY_TYPES)}, got {key_type!r}"
+
+    if key_type == KEY_TYPE_RSA:
+        if elliptic_curve is not None:
+            return False, "elliptic_curve is not valid for key_type='rsa'"
+        if key_size is None:
+            return False, "key_size is required when key_type='rsa'"
+        if key_size not in VALID_RSA_KEY_SIZES:
+            return False, f"key_size must be one of {sorted(VALID_RSA_KEY_SIZES)}, got {key_size!r}"
+        return True, ''
+
+    # key_type == 'ecdsa'
+    if key_size is not None:
+        return False, "key_size is not valid for key_type='ecdsa'"
+    if elliptic_curve is None:
+        return False, "elliptic_curve is required when key_type='ecdsa'"
+    if elliptic_curve not in VALID_ELLIPTIC_CURVES:
+        return False, f"elliptic_curve must be one of {sorted(VALID_ELLIPTIC_CURVES)}, got {elliptic_curve!r}"
+    return True, ''
+
+
+# =============================================
 # SECURITY & TOKEN FUNCTIONS
 # =============================================
 
