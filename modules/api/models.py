@@ -240,7 +240,17 @@ def create_api_models(api):
         'vault_url': fields.String(description='Azure Key Vault URL'),
         'client_id': fields.String(description='Azure Client ID'),
         'client_secret': fields.String(description='Azure Client Secret'),
-        'tenant_id': fields.String(description='Azure Tenant ID')
+        'tenant_id': fields.String(description='Azure Tenant ID'),
+        'storage_mode': fields.String(
+            description=(
+                "Whether to store certificates as Secrets, native Certificate "
+                "objects, or both. 'certificate'/'both' enables native consumption "
+                "from App Service, Application Gateway, Front Door, API Management "
+                "and AKS Ingress."
+            ),
+            enum=['secrets', 'certificate', 'both'],
+            default='secrets'
+        )
     })
 
     aws_secrets_manager_storage_model = api.model('AWSSecretsManagerStorage', {

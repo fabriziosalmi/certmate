@@ -1,3 +1,10 @@
+## Unreleased
+
+### Features
+- **Azure Key Vault Certificate-object support**: the Azure Key Vault storage backend can now persist certificates as native `Certificate` objects (PKCS12) in addition to — or instead of — the existing per-PEM Secrets layout. The mode is controlled by `certificate_storage.azure_keyvault.storage_mode` (`secrets` / `certificate` / `both`, default `secrets` for backwards compatibility). Certificates imported in `certificate` or `both` mode get `issuer_name="Unknown"` so Key Vault does not try to renew them — CertMate stays the source of truth — and carry domain/DNS-provider/email/etc. metadata as tags. Native Certificate objects unlock direct binding from App Service, Application Gateway, Front Door, API Management and AKS Ingress without exporting/importing PFX manually. A new admin-only endpoint `POST /api/storage/azure-keyvault/backfill-certificates` (and a "Backfill Certificate objects" button in Settings → Storage) imports Certificate objects for existing Secrets-only domains, skipping any already imported. The Service Principal needs Certificates `Get/List/Import/Delete` in addition to its previous Secrets permissions in `certificate`/`both` mode.
+
+---
+
 ## v2.4.7 (Patch — base image bump bookworm → trixie)
 
 Two-character `Dockerfile` change ([#127](https://github.com/fabriziosalmi/certmate/pull/127)): `python:3.12-slim` → `python:3.12-slim-trixie`. Expected to close ~11-13 of the 13 open Critical+High Trivy findings on the main branch image — all of them base-image OS CVEs (gnutls, libssh2, ncurses, systemd, libcap) fixed in trixie's package versions but not backported to bookworm.

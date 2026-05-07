@@ -164,7 +164,8 @@ class SettingsManager:
                         'vault_url': '',
                         'client_id': '',
                         'client_secret': '',
-                        'tenant_id': ''
+                        'tenant_id': '',
+                        'storage_mode': 'secrets'
                     },
                     'aws_secrets_manager': {
                         'region': 'us-east-1',
@@ -265,6 +266,20 @@ class SettingsManager:
                         if key not in settings['certificate_storage']:
                             settings['certificate_storage'][key] = value
                             was_migrated = True
+
+                    # Backfill nested defaults inside per-backend dicts (e.g.
+                    # azure_keyvault.storage_mode introduced after the initial
+                    # storage backend feature). Without this, instances upgraded
+                    # from older versions would keep the per-backend dict but
+                    # miss the new nested keys, and the backend would default
+                    # silently — making the new feature invisible from the UI.
+                    azure_kv_defaults = default_settings['certificate_storage'].get('azure_keyvault', {})
+                    azure_kv_settings = settings['certificate_storage'].get('azure_keyvault')
+                    if isinstance(azure_kv_settings, dict):
+                        for nested_key, nested_value in azure_kv_defaults.items():
+                            if nested_key not in azure_kv_settings:
+                                azure_kv_settings[nested_key] = nested_value
+                                was_migrated = True
 
                 # Validate critical settings — only regenerate if no hash is
                 # already stored (otherwise we've intentionally stripped the
