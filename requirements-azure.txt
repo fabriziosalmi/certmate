@@ -3,4 +3,7 @@
 
 azure-identity==1.17.1
 azure-mgmt-dns==8.1.0
-certbot-dns-azure==2.11.0
+# 2.6.1 is the latest published on PyPI as of 2026-05.
+# The previous pin (2.11.0) does not exist and broke `pip install`
+# (reported in issue #113).
+certbot-dns-azure==2.6.1
