@@ -522,7 +522,14 @@ class CertificateManager:
                         with open(dst_file, 'rb') as f:
                             cert_files[cert_file] = f.read()
             
-            # Save metadata
+            # Save metadata. The key shape and DNS/CA selection are
+            # persisted here so a renewal that runs after the certbot
+            # renewal/<domain>.conf has been lost (Docker container without
+            # a PVC on certificates/, K8s pod restart with emptyDir, …) can
+            # reconstruct the original cert configuration. The metadata
+            # block is also synced to the storage backend via
+            # store_certificate below, so it survives even when the local
+            # filesystem itself is ephemeral.
             metadata = {
                 'domain': domain,
                 'san_domains': all_domains[1:] if len(all_domains) > 1 else [],
@@ -531,7 +538,12 @@ class CertificateManager:
                 'created_at': datetime.now().isoformat(),
                 'email': email,
                 'staging': staging,
-                'account_id': account_id
+                'account_id': account_id,
+                'ca_provider': ca_provider,
+                'domain_alias': domain_alias,
+                'key_type': key_type,
+                'key_size': key_size,
+                'elliptic_curve': elliptic_curve,
             }
             
             if self.storage_manager:
