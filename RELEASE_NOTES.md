@@ -1,3 +1,10 @@
+## Unreleased
+
+### Features
+- **Configurable certificate key type/size**: every cert was hardcoded to RSA-2048 because `CAManager.build_certbot_command` never passed `--key-type` or `--rsa-key-size` to certbot. Operators with compliance requirements (RSA-3072/4096) or modern stacks (ECDSA, smaller certs and faster handshakes) had to patch the code. The settings page now exposes a global default (`default_key_type` / `default_key_size` / `default_elliptic_curve`) and the certificate creation form has an optional per-cert override under "Advanced Options". Renewals automatically preserve the original shape of each cert because certbot persists the `--key-type`/`--rsa-key-size`/`--elliptic-curve` flags into its own `renewal/<domain>.conf` at create time. Default for upgraded installs stays at `rsa`/`2048` so behaviour does not change unless the operator opts in. RSA accepts 2048/3072/4096; ECDSA accepts `secp256r1` and `secp384r1`. Validation runs on every save and every cert creation so a contradictory shape (e.g. `key_type=rsa` with an `elliptic_curve` override) is rejected with a 400 instead of failing later inside certbot.
+
+---
+
 ## v2.4.0 (Minor — issue triage + audit hardening)
 
 Closes seven open issues and adds one round of post-batch hardening driven by a 360° audit.
