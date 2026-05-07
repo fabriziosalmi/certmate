@@ -180,6 +180,14 @@
             var tokenRaw = formData.get('api_bearer_token');
             var tokenValue = tokenRaw ? tokenRaw.trim() : undefined;
 
+            // Default certificate-key shape selectors. RSA always carries
+            // a key_size, ECDSA always a curve — the inactive branch is
+            // omitted from the payload so save_settings doesn't trip the
+            // mutual-exclusion validator.
+            var defaultKeyType = formData.get('default_key_type') || 'rsa';
+            var defaultKeySize = parseInt(formData.get('default_key_size'), 10);
+            var defaultEllipticCurve = formData.get('default_elliptic_curve') || 'secp256r1';
+
             var settings = {
                 email: email.trim(),
                 domains: domainsValue,
@@ -192,7 +200,10 @@
                 storage_backend: formData.get('storage_backend'),
                 certificate_storage: collectStorageBackendSettings(),
                 default_ca: defaultCA,
-                ca_providers: caProviders
+                ca_providers: caProviders,
+                default_key_type: defaultKeyType,
+                default_key_size: defaultKeyType === 'rsa' ? (defaultKeySize || 2048) : 2048,
+                default_elliptic_curve: defaultEllipticCurve
             };
 
             // Validate required fields - email comes from the selected CA provider
@@ -605,6 +616,31 @@
                     thresholdField.value = data.renewal_threshold_days;
                     addDebugLog('Renewal threshold set to ' + data.renewal_threshold_days + ' days', 'info');
                 }
+            }
+
+            // Default certificate-key shape — populate selectors from the
+            // loaded settings so the form reflects the persisted defaults
+            // (and the operator can edit them without losing the others).
+            if (data.default_key_type) {
+                var keyTypeField = document.getElementById('default_key_type');
+                if (keyTypeField) {
+                    keyTypeField.value = data.default_key_type;
+                }
+            }
+            if (data.default_key_size) {
+                var keySizeField = document.getElementById('default_key_size');
+                if (keySizeField) {
+                    keySizeField.value = String(data.default_key_size);
+                }
+            }
+            if (data.default_elliptic_curve) {
+                var curveField = document.getElementById('default_elliptic_curve');
+                if (curveField) {
+                    curveField.value = data.default_elliptic_curve;
+                }
+            }
+            if (typeof toggleDefaultKeyOptions === 'function') {
+                toggleDefaultKeyOptions();
             }
 
             if (data.api_bearer_token) {
@@ -1840,6 +1876,19 @@
     // STORAGE BACKEND MANAGEMENT FUNCTIONS
     // =============================================
 
+    // Mirror the cert-form behaviour for Settings → Default Certificate Key:
+    // show the RSA key-size picker only when the operator picked RSA, the
+    // ECDSA curve picker only when they picked ECDSA. Keeping both visible
+    // would let the form post a contradictory pair (e.g. type=rsa with a
+    // curve set), which save_settings would reject.
+    function toggleDefaultKeyOptions() {
+        var keyType = (document.getElementById('default_key_type') || {}).value;
+        var sizeEl = document.getElementById('default_key_size_container');
+        var curveEl = document.getElementById('default_elliptic_curve_container');
+        if (sizeEl) sizeEl.style.display = (keyType === 'ecdsa') ? 'none' : '';
+        if (curveEl) curveEl.style.display = (keyType === 'ecdsa') ? '' : 'none';
+    }
+
     function toggleStorageBackendConfig() {
         var backend = document.getElementById('storage-backend').value;
         var configs = document.querySelectorAll('.storage-config');
@@ -2649,6 +2698,7 @@
     window.toggleTokenVisibility = toggleTokenVisibility;
     window.generateToken = generateToken;
     window.toggleStorageBackendConfig = toggleStorageBackendConfig;
+    window.toggleDefaultKeyOptions = toggleDefaultKeyOptions;
     window.testStorageBackend = testStorageBackend;
     window.showStorageMigrationModal = showStorageMigrationModal;
     window.closeStorageMigrationModal = closeStorageMigrationModal;
