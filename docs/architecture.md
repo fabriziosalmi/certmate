@@ -236,7 +236,10 @@ Three top-level keys control the public-key shape of newly issued certificates:
 
 A per-certificate override is supported: each entry in `domains` may carry an optional `key_type` plus either `key_size` (RSA) or `elliptic_curve` (ECDSA). When the override is present it wins; otherwise the global default applies. The defaults `rsa`/`2048` mirror the implicit certbot default that CertMate emitted before this setting existed, so upgraded installs see no change unless the operator picks something else.
 
-Renewals always preserve the shape that was in effect at creation time: certbot persists `--key-type`, `--rsa-key-size` and `--elliptic-curve` into its own `renewal/<domain>.conf` during the first issuance, and `certbot renew --cert-name <domain>` reuses those values automatically.
+Renewals always preserve the shape that was in effect at creation time. Two strategies cover both PVC-backed and ephemeral-filesystem deployments:
+
+1. **PVC fast path**: certbot persists `--key-type`, `--rsa-key-size` and `--elliptic-curve` into its own `renewal/<domain>.conf` during the first issuance, and `certbot renew --cert-name <domain>` reuses those values automatically.
+2. **Ephemeral fallback**: in Docker/K8s deployments where `certificates/` is on `emptyDir` (or any volume that does not survive container restarts), the renewal conf is gone after a restart even when the PEMs were rehydrated from a remote storage backend. CertMate persists the full cert configuration (`key_type`, `key_size`/`elliptic_curve`, `ca_provider`, `dns_provider`, `account_id`, `san_domains`, `domain_alias`, `challenge_type`) in `metadata.json` — which the storage backend keeps in sync with the PEMs — and `renew_certificate` detects the missing conf and rebuilds the cert from scratch using that metadata via `certbot certonly --force-renewal`. The original shape and DNS plugin are honoured.
 
 ---
 
