@@ -385,25 +385,20 @@ def create_api_resources(api, models, managers):
                     )
                     if already_present:
                         return
-                    entry = {
-                        'domain': domain,
-                        'dns_provider': _resolved_dns_provider,
-                        'dns_account_id': account_id,
-                    }
                     # Only persist key overrides the operator picked
-                    # explicitly. Inheriting from the global default keeps
-                    # the entry small and lets later changes to the global
-                    # apply to certs that never specified a per-cert shape.
-                    # Renewals still preserve the original shape because
-                    # certbot persists --key-type/--rsa-key-size/--elliptic-curve
-                    # in its own renewal/<domain>.conf at create time.
-                    if key_type is not None:
-                        entry['key_type'] = key_type
-                    if key_size is not None:
-                        entry['key_size'] = key_size
-                    if elliptic_curve is not None:
-                        entry['elliptic_curve'] = elliptic_curve
-                    domains_list.append(entry)
+                    # explicitly (build_domain_entry omits None values).
+                    # Inheriting certs leave the entry clean so later
+                    # changes to settings.default_key_* still apply,
+                    # while explicit overrides stay untouched.
+                    from ..core.utils import build_domain_entry
+                    domains_list.append(build_domain_entry(
+                        domain=domain,
+                        dns_provider=_resolved_dns_provider,
+                        dns_account_id=account_id,
+                        key_type=key_type,
+                        key_size=key_size,
+                        elliptic_curve=elliptic_curve,
+                    ))
                     s['domains'] = domains_list
 
                 settings_manager.update(_add_domain, "certificate_created")

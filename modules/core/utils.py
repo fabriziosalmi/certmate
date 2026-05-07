@@ -287,6 +287,37 @@ def validate_key_options(
     return True, ''
 
 
+def build_domain_entry(
+    domain: str,
+    dns_provider: Optional[str],
+    dns_account_id: Optional[str],
+    key_type: Optional[str] = None,
+    key_size: Optional[int] = None,
+    elliptic_curve: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Build the per-domain settings entry persisted under ``settings.domains``.
+
+    Only explicit per-cert overrides are stored; ``None`` values are
+    omitted so a cert that inherited the global default does not freeze
+    its shape into the entry. That way a later change to
+    ``default_key_type`` / ``default_key_size`` / ``default_elliptic_curve``
+    still applies to inheritor certs while explicit overrides stay
+    untouched.
+    """
+    entry: Dict[str, Any] = {
+        'domain': domain,
+        'dns_provider': dns_provider,
+        'dns_account_id': dns_account_id,
+    }
+    if key_type is not None:
+        entry['key_type'] = key_type
+    if key_size is not None:
+        entry['key_size'] = key_size
+    if elliptic_curve is not None:
+        entry['elliptic_curve'] = elliptic_curve
+    return entry
+
+
 # =============================================
 # SECURITY & TOKEN FUNCTIONS
 # =============================================

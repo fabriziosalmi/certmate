@@ -436,6 +436,141 @@ class TestRenewalFallbackToMetadata:
             mgr.renew_certificate(domain)
 
 
+class TestDomainEntryPersistence:
+    """``build_domain_entry`` is the helper the create-cert endpoint uses
+    to compose the per-domain settings entry. It exists as a separate
+    function so the "persist only explicit overrides" rule can be pinned
+    by tests without spinning up Flask.
+    """
+
+    def test_inheritor_entry_has_no_key_fields(self):
+        from modules.core.utils import build_domain_entry
+        entry = build_domain_entry(
+            domain='example.com',
+            dns_provider='cloudflare',
+            dns_account_id='production',
+        )
+        assert entry == {
+            'domain': 'example.com',
+            'dns_provider': 'cloudflare',
+            'dns_account_id': 'production',
+        }
+        for k in ('key_type', 'key_size', 'elliptic_curve'):
+            assert k not in entry
+
+    def test_rsa_override_persists_only_type_and_size(self):
+        from modules.core.utils import build_domain_entry
+        entry = build_domain_entry(
+            domain='example.com',
+            dns_provider='cloudflare',
+            dns_account_id='production',
+            key_type='rsa', key_size=4096, elliptic_curve=None,
+        )
+        assert entry['key_type'] == 'rsa'
+        assert entry['key_size'] == 4096
+        assert 'elliptic_curve' not in entry
+
+    def test_ecdsa_override_persists_only_type_and_curve(self):
+        from modules.core.utils import build_domain_entry
+        entry = build_domain_entry(
+            domain='example.com',
+            dns_provider='cloudflare',
+            dns_account_id='production',
+            key_type='ecdsa', key_size=None, elliptic_curve='secp384r1',
+        )
+        assert entry['key_type'] == 'ecdsa'
+        assert entry['elliptic_curve'] == 'secp384r1'
+        assert 'key_size' not in entry
+
+
+class TestEndpointPayloadValidation:
+    """The CreateCertificate endpoint runs ``validate_key_options`` on the
+    payload before invoking the certificate manager so the caller gets a
+    clean 400 (with the specific reason) instead of a 500 from certbot.
+    These tests pin the contract via the validator alone — the endpoint
+    is otherwise plumbing — but they document the matrix the API must
+    reject end-to-end.
+    """
+
+    @pytest.mark.parametrize("payload,reason_keyword", [
+        ({'key_type': 'rsa', 'key_size': 1024}, 'key_size'),
+        ({'key_type': 'rsa', 'key_size': 2048, 'elliptic_curve': 'secp256r1'}, 'elliptic_curve'),
+        ({'key_type': 'ecdsa', 'key_size': 4096}, 'key_size'),
+        ({'key_type': 'ecdsa', 'elliptic_curve': 'secp521r1'}, 'elliptic_curve'),
+        ({'key_type': 'dsa', 'key_size': 2048}, 'key_type'),
+        ({'key_size': 4096}, 'key_type'),  # size without type
+    ])
+    def test_invalid_payload_rejected_with_specific_reason(self, payload, reason_keyword):
+        from modules.core.utils import validate_key_options
+        ok, err = validate_key_options(
+            payload.get('key_type'),
+            payload.get('key_size'),
+            payload.get('elliptic_curve'),
+        )
+        assert not ok
+        assert reason_keyword in err
+
+    def test_payload_without_any_key_fields_passes(self):
+        """The endpoint only calls validate_key_options when at least one
+        of the three fields is present. A completely absent triple must
+        not be a 400; the cert gets the global default."""
+        from modules.core.utils import validate_key_options
+        ok, err = validate_key_options(None, None, None)
+        assert ok and err == ''
+
+
+class TestCorruptMetadataInRebuildPath:
+    """``_renew_from_metadata`` must keep working when ``metadata.json``
+    is unparseable — falls back to the per-domain settings entry rather
+    than letting a json.JSONDecodeError propagate to the caller.
+    """
+
+    def test_corrupt_metadata_falls_back_to_settings(self, tmp_path):
+        from threading import RLock
+        from modules.core.certificates import CertificateManager
+
+        mgr = CertificateManager.__new__(CertificateManager)
+        mgr.cert_dir = tmp_path / 'certificates'
+        mgr.cert_dir.mkdir(parents=True)
+        mgr._domain_locks = {}
+        mgr._domain_locks_mutex = MagicMock()
+        mgr._domain_locks_mutex.__enter__ = lambda self_: None
+        mgr._domain_locks_mutex.__exit__ = lambda self_, *a: None
+        mgr.settings_manager = MagicMock()
+
+        domain = 'example.com'
+        domain_dir = mgr.cert_dir / domain
+        domain_dir.mkdir()
+        (domain_dir / 'cert.pem').write_text('fake')
+        # Garbage that json.load will choke on.
+        (domain_dir / 'metadata.json').write_text('{this is not valid json...')
+
+        mgr.settings_manager.load_settings.return_value = {
+            'email': 'ops@example.com',
+            'dns_provider': 'cloudflare',
+            'default_ca': 'letsencrypt',
+            'domains': [{
+                'domain': domain,
+                'dns_provider': 'cloudflare',
+                'dns_account_id': 'production',
+                'key_type': 'rsa',
+                'key_size': 4096,
+            }],
+        }
+        mgr._domain_locks[domain] = RLock()
+        mgr.create_certificate = MagicMock(return_value={})
+
+        # Should not raise even though metadata.json is malformed.
+        mgr.renew_certificate(domain)
+
+        kwargs = mgr.create_certificate.call_args.kwargs
+        # Settings-fallback supplied the values that metadata couldn't.
+        assert kwargs['key_type'] == 'rsa'
+        assert kwargs['key_size'] == 4096
+        assert kwargs['dns_provider'] == 'cloudflare'
+        assert kwargs['account_id'] == 'production'
+
+
 class TestSettingsKeyDefaultsMigration:
     def test_legacy_settings_get_rsa_2048_defaults(self, tmp_path):
         from modules.core.file_operations import FileOperations
