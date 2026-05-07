@@ -808,17 +808,18 @@ class CertificateManager:
         1. **Fast path (renewal/<domain>.conf present)**: invoke
            ``certbot renew --cert-name``. Certbot reads the conf and
            reuses the original DNS plugin / CA / key shape. Same as
-           before this commit — no behaviour change for setups that
-           keep ``certificates/`` on a persistent volume.
+           before this feature shipped — no behaviour change for setups
+           that keep ``certificates/`` on a persistent volume.
 
-        2. **Fallback path (renewal conf missing)**: typical of Docker
-           containers without a PVC on ``certificates/`` or K8s pods on
-           emptyDir, where the PEMs are rehydrated from the remote
-           storage backend on startup but the renewal conf is not. We
-           rebuild the cert from scratch using the metadata we
-           persisted at create time (``metadata.json``, also synced to
-           the storage backend) so the original key shape, DNS plugin,
-           CA and SAN list are all honoured.
+        2. **Fallback path (renewal conf missing)**: kicks in after a
+           container restart on an ephemeral filesystem where the
+           startup hydration (``CertificateManager.hydrate_from_storage``)
+           restored the PEMs and ``metadata.json`` from the remote
+           storage backend but cannot restore the certbot renewal conf
+           (the backend only carries PEMs and metadata). The rebuild
+           reads ``metadata.json`` for the original key shape, DNS
+           plugin, CA, SAN list, alias and challenge type, and calls
+           ``create_certificate(force=True, ...)`` with those values.
         """
         domain_lock = self._get_domain_lock(domain)
         if not domain_lock.acquire(blocking=False):
