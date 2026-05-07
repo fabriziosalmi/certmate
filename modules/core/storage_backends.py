@@ -625,29 +625,44 @@ class AzureKeyVaultBackend(CertificateStorageBackend):
 
     @_with_retry()
     def store_certificate(self, domain: str, cert_files: Dict[str, bytes], metadata: Dict[str, Any]) -> bool:
-        """Store certificate files and metadata to Azure Key Vault."""
+        """Store certificate files and metadata to Azure Key Vault.
+
+        In ``both`` mode the two writes are independent: a failure on the
+        Secrets surface must not prevent the Certificate-object import (and
+        vice versa). The method returns True only when every active surface
+        succeeded; partial failures are logged per surface and the overall
+        result is False so the caller can surface the issue.
+        """
         try:
             _validate_storage_domain(domain)
-            ok_secrets = True
-            ok_certificate = True
-
-            if self.writes_secrets:
-                ok_secrets = self._store_as_secrets(domain, cert_files, metadata)
-            if self.writes_certificate:
-                try:
-                    ok_certificate = self._get_cert_importer().import_certificate(domain, cert_files, metadata)
-                except Exception as inner:
-                    logger.error("Certificate-object import failed for %s: %s", domain, inner)
-                    ok_certificate = False
-
-            if ok_secrets and ok_certificate:
-                logger.info("Certificate stored successfully in Azure Key Vault for %s (mode=%s)", domain, self.storage_mode)
-                return True
-            return False
-
         except Exception as e:
             logger.error(f"Failed to store certificate in Azure Key Vault for {domain}: {e}")
             return False
+
+        ok_secrets = True
+        ok_certificate = True
+
+        if self.writes_secrets:
+            try:
+                ok_secrets = self._store_as_secrets(domain, cert_files, metadata)
+            except Exception as inner:
+                logger.error("Secrets-surface write failed for %s: %s", domain, inner)
+                ok_secrets = False
+
+        if self.writes_certificate:
+            try:
+                ok_certificate = self._get_cert_importer().import_certificate(domain, cert_files, metadata)
+            except Exception as inner:
+                logger.error("Certificate-object import failed for %s: %s", domain, inner)
+                ok_certificate = False
+
+        if ok_secrets and ok_certificate:
+            logger.info(
+                "Certificate stored successfully in Azure Key Vault for %s (mode=%s)",
+                domain, self.storage_mode,
+            )
+            return True
+        return False
 
     def _retrieve_from_secrets(self, domain: str) -> Optional[Tuple[Dict[str, bytes], Dict[str, Any]]]:
         client = self._get_client()

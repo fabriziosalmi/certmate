@@ -210,6 +210,31 @@ class TestStoreCertificateRouting:
 
         assert backend.store_certificate("test.example.com", cert_files, metadata) is False
 
+    def test_both_mode_secrets_exception_does_not_skip_certificate_import(self, vault_config, cert_files, metadata):
+        """A Secrets-surface exception must not abort the Certificate import.
+
+        Each surface is independent: an outage on the Secrets API should
+        still let the Certificate import succeed (so downstream consumers
+        like App Gateway keep getting the new cert), and the caller is
+        signalled via the False return.
+        """
+        from modules.core.storage_backends import AzureKeyVaultBackend
+        backend = AzureKeyVaultBackend({**vault_config, "storage_mode": "both"})
+
+        secret_client = MagicMock()
+        secret_client.set_secret.side_effect = RuntimeError("Secrets API outage")
+        backend._client = secret_client
+
+        importer = MagicMock()
+        importer.import_certificate.return_value = True
+        backend._cert_importer = importer
+
+        result = backend.store_certificate("test.example.com", cert_files, metadata)
+        assert result is False  # overall fail because Secrets failed
+        importer.import_certificate.assert_called_once_with(
+            "test.example.com", cert_files, metadata,
+        )
+
 
 # ---------------------------------------------------------------------------
 # Importer: import_certificate constructs the right SDK call
