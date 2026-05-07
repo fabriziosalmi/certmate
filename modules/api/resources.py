@@ -1495,8 +1495,13 @@ def create_api_resources(api, models, managers):
                         else:
                             results[domain] = 'error: import returned false'
                     except Exception as per_domain:
+                        # Match the StorageBackendTest pattern: log the full
+                        # exception (with any tenant/request IDs from Azure)
+                        # but surface only the type name to the client. The
+                        # endpoint is admin-only, but consistent sanitisation
+                        # is cheaper than auditing every per-domain string.
                         logger.error(f"Backfill failed for {domain}: {per_domain}")
-                        results[domain] = f'error: {per_domain}'
+                        results[domain] = f'error: {type(per_domain).__name__}'
 
                 imported = sum(1 for v in results.values() if v == 'imported')
                 skipped = sum(1 for v in results.values() if v == 'skipped')
