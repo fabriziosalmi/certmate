@@ -235,6 +235,47 @@ class TestStoreCertificateRouting:
             "test.example.com", cert_files, metadata,
         )
 
+    def test_both_mode_certificate_exception_does_not_skip_secrets_write(self, vault_config, cert_files, metadata):
+        """Symmetric to the Secrets-fails-Cert-OK case: a Certificate-API
+        outage must not skip the Secrets writes. The Secrets surface keeps
+        being filled so its consumers (legacy tooling, dashboards) stay in
+        sync; the False return signals the partial failure to the caller.
+        """
+        from modules.core.storage_backends import AzureKeyVaultBackend
+        backend = AzureKeyVaultBackend({**vault_config, "storage_mode": "both"})
+
+        secret_client = MagicMock()
+        backend._client = secret_client
+
+        importer = MagicMock()
+        importer.import_certificate.side_effect = RuntimeError("Certificate API outage")
+        backend._cert_importer = importer
+
+        result = backend.store_certificate("test.example.com", cert_files, metadata)
+        assert result is False  # overall fail because Certificate failed
+        # 4 PEM files + 1 metadata secret were still written.
+        assert secret_client.set_secret.call_count == 5
+
+    def test_both_mode_double_store_failure_returns_false(self, vault_config, cert_files, metadata):
+        """Both surfaces failing → False, both surfaces still attempted."""
+        from modules.core.storage_backends import AzureKeyVaultBackend
+        backend = AzureKeyVaultBackend({**vault_config, "storage_mode": "both"})
+
+        secret_client = MagicMock()
+        secret_client.set_secret.side_effect = RuntimeError("Secrets outage")
+        backend._client = secret_client
+
+        importer = MagicMock()
+        importer.import_certificate.side_effect = RuntimeError("Certificate API outage")
+        backend._cert_importer = importer
+
+        assert backend.store_certificate("test.example.com", cert_files, metadata) is False
+        # Secrets path was attempted (it raised on the first set_secret).
+        assert secret_client.set_secret.called
+        importer.import_certificate.assert_called_once_with(
+            "test.example.com", cert_files, metadata,
+        )
+
 
 # ---------------------------------------------------------------------------
 # Importer: import_certificate constructs the right SDK call
