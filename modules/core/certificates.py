@@ -616,20 +616,141 @@ class CertificateManager:
                 except (FileNotFoundError, OSError):
                     pass
 
+    def _renew_from_metadata(self, domain, domain_dir):
+        """Rebuild a cert from scratch using persisted metadata.
+
+        Used when the certbot renewal conf is missing — the metadata is
+        the source of truth for the original cert configuration (key
+        shape, DNS plugin, CA, SAN list, …). The metadata is written to
+        ``metadata.json`` at create time and also synced to the storage
+        backend, so it survives ephemeral local filesystems.
+        """
+        import json
+
+        metadata_file = domain_dir / 'metadata.json'
+        metadata = {}
+        if metadata_file.exists():
+            try:
+                with open(metadata_file, 'r') as f:
+                    metadata = json.load(f)
+            except Exception as e:
+                logger.warning(f"Could not read {metadata_file}: {e}")
+
+        # Last-chance fallback: if even metadata.json is gone (truly fresh
+        # filesystem before any storage-backend rehydration completed), pull
+        # whatever can still be inferred from settings.
+        settings = self.settings_manager.load_settings()
+        domain_entries = [d for d in settings.get('domains', [])
+                          if isinstance(d, dict) and d.get('domain') == domain]
+        domain_entry = domain_entries[0] if domain_entries else {}
+        email = metadata.get('email') or settings.get('email')
+        if not email:
+            raise RuntimeError(
+                f"Cannot renew {domain}: renewal conf and metadata.json are both "
+                f"missing, and no email is configured in settings."
+            )
+
+        san_domains = metadata.get('san_domains') or []
+        dns_provider = (
+            metadata.get('dns_provider')
+            or domain_entry.get('dns_provider')
+            or settings.get('dns_provider')
+        )
+        account_id = metadata.get('account_id') or domain_entry.get('dns_account_id')
+        ca_provider = metadata.get('ca_provider') or settings.get('default_ca')
+        domain_alias = metadata.get('domain_alias')
+        challenge_type = metadata.get('challenge_type')
+        staging = bool(metadata.get('staging', False))
+
+        # Key shape resolution order: persisted metadata → per-domain
+        # override → caller passes None and create_certificate falls back to
+        # the global default. Anything else risks renewing with a different
+        # key shape than the original cert had.
+        key_type = metadata.get('key_type') or domain_entry.get('key_type')
+        key_size = metadata.get('key_size') or domain_entry.get('key_size')
+        elliptic_curve = metadata.get('elliptic_curve') or domain_entry.get('elliptic_curve')
+
+        # The caller (renew_certificate) already released the per-domain
+        # lock before delegating here — create_certificate acquires it on
+        # its own and the lock is non-reentrant.
+
+        result = self.create_certificate(
+            domain=domain,
+            email=email,
+            dns_provider=dns_provider,
+            account_id=account_id,
+            staging=staging,
+            ca_provider=ca_provider,
+            domain_alias=domain_alias,
+            san_domains=san_domains,
+            challenge_type=challenge_type,
+            key_type=key_type,
+            key_size=key_size,
+            elliptic_curve=elliptic_curve,
+            force=True,
+        )
+        return {
+            'success': True,
+            'domain': domain,
+            'message': "Certificate renewed (rebuilt from metadata)",
+            'rebuilt_from_metadata': True,
+            'created_at': result.get('created_at'),
+        }
+
     def renew_certificate(self, domain):
-        """Renew a certificate"""
+        """Renew a certificate.
+
+        Two-tier strategy so renewals work in both PVC-backed and ephemeral
+        filesystem deployments:
+
+        1. **Fast path (renewal/<domain>.conf present)**: invoke
+           ``certbot renew --cert-name``. Certbot reads the conf and
+           reuses the original DNS plugin / CA / key shape. Same as
+           before this commit — no behaviour change for setups that
+           keep ``certificates/`` on a persistent volume.
+
+        2. **Fallback path (renewal conf missing)**: typical of Docker
+           containers without a PVC on ``certificates/`` or K8s pods on
+           emptyDir, where the PEMs are rehydrated from the remote
+           storage backend on startup but the renewal conf is not. We
+           rebuild the cert from scratch using the metadata we
+           persisted at create time (``metadata.json``, also synced to
+           the storage backend) so the original key shape, DNS plugin,
+           CA and SAN list are all honoured.
+        """
         domain_lock = self._get_domain_lock(domain)
         if not domain_lock.acquire(blocking=False):
             raise RuntimeError(f"A certificate operation for {domain} is already in progress")
+        # Tracks whether the finally block still owns the lock; the metadata
+        # rebuild path hands ownership over to create_certificate (which has
+        # its own per-domain locking), so the finally must not double-release.
+        lock_owned = True
         try:
             # Use the same config/work/log directories as during creation
             cert_dir = self.cert_dir
             domain_dir = cert_dir / domain
             if not domain_dir.exists() or not (domain_dir / 'cert.pem').exists():
                 raise FileNotFoundError(f"No certificate found for domain: {domain}")
+
+            # If the renewal conf is gone (ephemeral filesystem, emptyDir,
+            # restored-from-backend-without-conf, …) ``certbot renew`` would
+            # either fail outright or silently regenerate with the wrong key
+            # shape. Take the metadata-driven rebuild path instead.
+            renewal_conf = domain_dir / 'renewal' / f'{domain}.conf'
+            if not renewal_conf.exists():
+                logger.warning(
+                    "Renewal conf %s missing — rebuilding cert from metadata.json. "
+                    "This is expected on ephemeral filesystems (Docker without PVC, "
+                    "K8s emptyDir) when the storage backend is the source of truth.",
+                    renewal_conf,
+                )
+                domain_lock.release()
+                lock_owned = False
+                return self._renew_from_metadata(domain, domain_dir)
+
             work_dir = domain_dir / 'work'
             logs_dir = domain_dir / 'logs'
-            
+
             cmd = [
                 'certbot', 'renew',
                 '--cert-name', domain,
@@ -679,7 +800,8 @@ class CertificateManager:
             logger.error(f"Exception during certificate renewal for {domain}: {error_msg}")
             raise RuntimeError(f"Exception: {error_msg}")
         finally:
-            domain_lock.release()
+            if lock_owned:
+                domain_lock.release()
 
     def check_renewals(self):
         """Check and renew certificates that are about to expire"""
