@@ -597,7 +597,8 @@ class AzureKeyVaultBackend(CertificateStorageBackend):
             )
         return self._cert_importer
 
-    def _sanitize_secret_name(self, name: str) -> str:
+    @staticmethod
+    def _sanitize_secret_name(name: str) -> str:
         """Sanitize name for Azure Key Vault secret naming requirements.
 
         Azure secret names support only alphanumerics and hyphens (max 127 chars).

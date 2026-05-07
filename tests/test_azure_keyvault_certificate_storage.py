@@ -351,8 +351,7 @@ def _real_metadata_secret_name(domain):
     not require sweeping rewrites.
     """
     from modules.core.storage_backends import AzureKeyVaultBackend
-    backend = AzureKeyVaultBackend.__new__(AzureKeyVaultBackend)
-    return AzureKeyVaultBackend._sanitize_secret_name(backend, f"cert-{domain}-metadata")
+    return AzureKeyVaultBackend._sanitize_secret_name(f"cert-{domain}-metadata")
 
 
 class TestListCertificatesRouting:
