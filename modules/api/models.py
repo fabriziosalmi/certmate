@@ -180,7 +180,19 @@ def create_api_models(api):
                 'acme-dns', 'duckdns', 'edgedns'
             ]
         ),
-        'dns_providers': fields.Nested(dns_providers_model, description='DNS provider configurations')
+        'dns_providers': fields.Nested(dns_providers_model, description='DNS provider configurations'),
+        'default_key_type': fields.String(
+            description='Global default key type for new certificates (per-domain overrides take precedence).',
+            enum=['rsa', 'ecdsa']
+        ),
+        'default_key_size': fields.Integer(
+            description="Global default RSA key size — applied when default_key_type='rsa'.",
+            enum=[2048, 3072, 4096]
+        ),
+        'default_elliptic_curve': fields.String(
+            description="Global default ECDSA curve — applied when default_key_type='ecdsa'.",
+            enum=['secp256r1', 'secp384r1']
+        )
     })
 
     create_cert_model = api.model('CreateCertificate', {
@@ -200,7 +212,22 @@ def create_api_models(api):
         'account_id': fields.String(description='DNS provider account ID'),
         'ca_provider': fields.String(description='CA provider (optional)',
                                      enum=['letsencrypt', 'digicert', 'private_ca']),
-        'domain_alias': fields.String(description='Optional domain alias for DNS validation')
+        'domain_alias': fields.String(description='Optional domain alias for DNS validation'),
+        'key_type': fields.String(
+            description=(
+                "Optional override of the global default key type. Omit to "
+                "inherit settings.default_key_type."
+            ),
+            enum=['rsa', 'ecdsa']
+        ),
+        'key_size': fields.Integer(
+            description="RSA key size in bits — required when key_type='rsa'.",
+            enum=[2048, 3072, 4096]
+        ),
+        'elliptic_curve': fields.String(
+            description="ECDSA curve — required when key_type='ecdsa'.",
+            enum=['secp256r1', 'secp384r1']
+        )
     })
 
     # Cache models
