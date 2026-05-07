@@ -3,6 +3,7 @@
 
 # Azure Key Vault
 azure-keyvault-secrets>=4.7.0
+azure-keyvault-certificates>=4.7.0
 azure-identity>=1.12.0
 
 # AWS Secrets Manager
