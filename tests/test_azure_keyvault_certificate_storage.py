@@ -461,6 +461,64 @@ class TestDeleteCertificateRouting:
         secret_client.begin_delete_secret.assert_not_called()
         importer.delete.assert_called_once_with("test.example.com")
 
+    def test_both_mode_certificate_exception_does_not_skip_secrets_delete(self, vault_config):
+        """A Certificate-API outage must not stop the Secrets cleanup.
+
+        Symmetric to the store_certificate contract: each surface is
+        independent. If Azure's Certificate API is failing, the legacy
+        Secrets should still be removed so the vault is not left with
+        stale per-PEM secrets. Overall result is False so the caller can
+        react to the partial failure.
+        """
+        from modules.core.storage_backends import AzureKeyVaultBackend
+        backend = AzureKeyVaultBackend({**vault_config, "storage_mode": "both"})
+
+        secret_client = MagicMock()
+        backend._client = secret_client
+
+        importer = MagicMock()
+        importer.delete.side_effect = RuntimeError("Certificate API outage")
+        backend._cert_importer = importer
+
+        result = backend.delete_certificate("test.example.com")
+        assert result is False  # overall fail because Certificate failed
+        # Secrets surface still walked: 4 PEMs + 1 metadata.
+        assert secret_client.begin_delete_secret.call_count == 5
+        importer.delete.assert_called_once_with("test.example.com")
+
+    def test_both_mode_double_failure_returns_false(self, vault_config):
+        """Both surfaces failing → False, both surfaces still attempted."""
+        from modules.core.storage_backends import AzureKeyVaultBackend
+        backend = AzureKeyVaultBackend({**vault_config, "storage_mode": "both"})
+
+        # Force the secrets path to raise before completing — patch the
+        # method directly so we don't have to defeat the per-file try/except
+        # inside _delete_secrets.
+        backend._delete_secrets = MagicMock(side_effect=RuntimeError("Secrets outage"))
+
+        importer = MagicMock()
+        importer.delete.side_effect = RuntimeError("Certificate API outage")
+        backend._cert_importer = importer
+
+        assert backend.delete_certificate("test.example.com") is False
+        backend._delete_secrets.assert_called_once_with("test.example.com")
+        importer.delete.assert_called_once_with("test.example.com")
+
+    def test_both_mode_partial_secret_failure_returns_false(self, vault_config):
+        """When _delete_secrets reports partial failure (returns False) the
+        overall result is False even if the Certificate API succeeded —
+        the caller needs to know a stale secret may have been left behind.
+        """
+        from modules.core.storage_backends import AzureKeyVaultBackend
+        backend = AzureKeyVaultBackend({**vault_config, "storage_mode": "both"})
+
+        backend._delete_secrets = MagicMock(return_value=False)
+        importer = MagicMock()
+        importer.delete.return_value = True
+        backend._cert_importer = importer
+
+        assert backend.delete_certificate("test.example.com") is False
+
 
 # ---------------------------------------------------------------------------
 # certificate_exists across modes

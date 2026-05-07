@@ -796,17 +796,38 @@ class AzureKeyVaultBackend(CertificateStorageBackend):
         return ok
 
     def delete_certificate(self, domain: str) -> bool:
-        """Delete certificate from Azure Key Vault across active modes."""
-        try:
-            if self.writes_secrets:
-                self._delete_secrets(domain)
-            if self.writes_certificate:
-                self._get_cert_importer().delete(domain)
-            logger.info(f"Certificate deleted from Azure Key Vault for {domain} (mode={self.storage_mode})")
+        """Delete certificate from Azure Key Vault across active modes.
+
+        Mirrors the surface-independence contract of :meth:`store_certificate`:
+        a failure on one surface must not skip the other. Returns True only
+        when every active surface deleted cleanly so callers can react to
+        partial failures (e.g. a Certificate object left orphaned in the
+        vault when the Secrets API was unreachable).
+        """
+        ok_secrets = True
+        ok_certificate = True
+
+        if self.writes_secrets:
+            try:
+                ok_secrets = self._delete_secrets(domain)
+            except Exception as inner:
+                logger.error("Secrets-surface delete failed for %s: %s", domain, inner)
+                ok_secrets = False
+
+        if self.writes_certificate:
+            try:
+                ok_certificate = self._get_cert_importer().delete(domain)
+            except Exception as inner:
+                logger.error("Certificate-object delete failed for %s: %s", domain, inner)
+                ok_certificate = False
+
+        if ok_secrets and ok_certificate:
+            logger.info(
+                "Certificate deleted from Azure Key Vault for %s (mode=%s)",
+                domain, self.storage_mode,
+            )
             return True
-        except Exception as e:
-            logger.error(f"Failed to delete certificate from Azure Key Vault for {domain}: {e}")
-            return False
+        return False
 
     def certificate_exists(self, domain: str) -> bool:
         """Check if certificate exists in Azure Key Vault (in any active mode)."""
