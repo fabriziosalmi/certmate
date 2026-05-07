@@ -158,6 +158,25 @@ def initialize_managers(container: AppContainer, app):
         shell_executor=shell_executor
     )
 
+    # Rehydrate cert PEMs from the configured remote storage backend so a
+    # restart on an ephemeral filesystem (Docker without a PVC, K8s pod on
+    # emptyDir, …) doesn't leave the dashboard, the cert API and the
+    # auto-renew loop staring at an empty certificates/ directory until
+    # someone manually creates the certs again. No-op when the backend is
+    # local_filesystem (the cert files already live on disk) or when the
+    # local copy is already present. Failures are logged but never raised
+    # — startup must not be blocked by a single unreachable cert.
+    try:
+        hydration_results = certificate_manager.hydrate_from_storage()
+        restored = sum(1 for v in hydration_results.values() if v == 'restored')
+        if restored:
+            logger.info(
+                "Rehydrated %d certificate(s) from %s on startup",
+                restored, storage_manager.get_backend_name() if storage_manager else 'storage backend',
+            )
+    except Exception as e:
+        logger.warning(f"Startup rehydration skipped due to error: {e}")
+
     audit_dir = container.logs_dir / "audit"
     audit_logger = AuditLogger(audit_dir)
 

@@ -171,6 +171,133 @@ class TestBuildCertbotCommandKeyFlags:
 # ---------------------------------------------------------------------------
 
 
+class TestHydrateFromStorage:
+    """Restore PEMs+metadata from the storage backend at startup.
+
+    This is the missing half of the Docker/K8s ephemeral-filesystem story:
+    when the container starts on a fresh volume, neither the PEMs nor the
+    certbot renewal conf are on disk. ``hydrate_from_storage`` puts the
+    PEMs and metadata.json back so the dashboard, the API and the
+    renew loop see a populated ``certificates/`` again — and the
+    metadata-driven rebuild path then handles the still-missing
+    renewal/<domain>.conf on the first renew after restart.
+    """
+
+    def _make_manager(self, tmp_path, storage_manager):
+        from modules.core.certificates import CertificateManager
+        mgr = CertificateManager.__new__(CertificateManager)
+        mgr.cert_dir = tmp_path / 'certificates'
+        mgr.cert_dir.mkdir(parents=True)
+        mgr.storage_manager = storage_manager
+        mgr.settings_manager = MagicMock()
+        return mgr
+
+    def test_restores_missing_cert_from_storage(self, tmp_path):
+        storage = MagicMock()
+        storage.get_backend_name.return_value = 'azure_keyvault'
+        storage.retrieve_certificate.return_value = (
+            {
+                'cert.pem': b'-----CERT-----',
+                'chain.pem': b'-----CHAIN-----',
+                'fullchain.pem': b'-----FULLCHAIN-----',
+                'privkey.pem': b'-----KEY-----',
+            },
+            {'domain': 'example.com', 'key_type': 'ecdsa', 'elliptic_curve': 'secp384r1'},
+        )
+        mgr = self._make_manager(tmp_path, storage)
+        mgr.settings_manager.load_settings.return_value = {
+            'domains': [{'domain': 'example.com', 'dns_provider': 'cloudflare'}],
+        }
+
+        results = mgr.hydrate_from_storage()
+        assert results == {'example.com': 'restored'}
+        domain_dir = mgr.cert_dir / 'example.com'
+        assert (domain_dir / 'cert.pem').read_bytes() == b'-----CERT-----'
+        assert (domain_dir / 'privkey.pem').read_bytes() == b'-----KEY-----'
+        assert (domain_dir / 'metadata.json').exists()
+        meta = json.loads((domain_dir / 'metadata.json').read_text())
+        assert meta['key_type'] == 'ecdsa'
+
+    def test_skips_domains_already_present_locally(self, tmp_path):
+        storage = MagicMock()
+        mgr = self._make_manager(tmp_path, storage)
+        domain_dir = mgr.cert_dir / 'example.com'
+        domain_dir.mkdir()
+        (domain_dir / 'cert.pem').write_text('already here')
+        mgr.settings_manager.load_settings.return_value = {
+            'domains': [{'domain': 'example.com'}],
+        }
+
+        results = mgr.hydrate_from_storage()
+        assert results == {'example.com': 'present'}
+        # Storage was never queried — local copy wins.
+        storage.retrieve_certificate.assert_not_called()
+        # Local file untouched.
+        assert (domain_dir / 'cert.pem').read_text() == 'already here'
+
+    def test_marks_missing_when_backend_has_no_record(self, tmp_path):
+        storage = MagicMock()
+        storage.retrieve_certificate.return_value = None
+        mgr = self._make_manager(tmp_path, storage)
+        mgr.settings_manager.load_settings.return_value = {
+            'domains': ['orphan.example.com'],  # legacy string form
+        }
+
+        results = mgr.hydrate_from_storage()
+        assert results == {'orphan.example.com': 'missing'}
+        # Did not write anything for an absent record.
+        assert not (mgr.cert_dir / 'orphan.example.com').exists()
+
+    def test_storage_error_does_not_block_other_domains(self, tmp_path):
+        storage = MagicMock()
+        storage.get_backend_name.return_value = 'azure_keyvault'
+
+        def fake_retrieve(domain):
+            if domain == 'broken.example.com':
+                raise RuntimeError("Azure unreachable")
+            return (
+                {'cert.pem': b'-----CERT-----', 'privkey.pem': b'-----KEY-----'},
+                {'domain': domain},
+            )
+
+        storage.retrieve_certificate.side_effect = fake_retrieve
+        mgr = self._make_manager(tmp_path, storage)
+        mgr.settings_manager.load_settings.return_value = {
+            'domains': [
+                {'domain': 'broken.example.com'},
+                {'domain': 'good.example.com'},
+            ],
+        }
+
+        results = mgr.hydrate_from_storage()
+        assert results['broken.example.com'] == 'error'
+        assert results['good.example.com'] == 'restored'
+        # The good cert was still written.
+        assert (mgr.cert_dir / 'good.example.com' / 'cert.pem').exists()
+
+    def test_no_storage_manager_returns_empty(self, tmp_path):
+        mgr = self._make_manager(tmp_path, storage_manager=None)
+        assert mgr.hydrate_from_storage() == {}
+
+    def test_privkey_chmod_0600(self, tmp_path):
+        import stat
+        storage = MagicMock()
+        storage.get_backend_name.return_value = 'azure_keyvault'
+        storage.retrieve_certificate.return_value = (
+            {'cert.pem': b'-----CERT-----', 'privkey.pem': b'-----KEY-----'},
+            {'domain': 'example.com'},
+        )
+        mgr = self._make_manager(tmp_path, storage)
+        mgr.settings_manager.load_settings.return_value = {
+            'domains': [{'domain': 'example.com'}],
+        }
+        mgr.hydrate_from_storage()
+        privkey = mgr.cert_dir / 'example.com' / 'privkey.pem'
+        # Owner-only read/write; nothing for group/other.
+        mode = privkey.stat().st_mode & 0o777
+        assert mode == 0o600
+
+
 class TestRenewalFallbackToMetadata:
     """Renewal path when the certbot renewal/<domain>.conf is missing.
 

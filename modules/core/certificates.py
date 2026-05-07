@@ -12,6 +12,7 @@ import shutil
 import threading
 from pathlib import Path
 from datetime import datetime, timedelta
+from typing import Dict
 from .shell import ShellExecutor
 from .dns_strategies import DNSStrategyFactory, HTTP01Strategy, check_certbot_plugin_installed
 from .constants import CERTIFICATE_FILES, get_domain_name
@@ -68,6 +69,101 @@ class CertificateManager:
             if domain not in self._domain_locks:
                 self._domain_locks[domain] = threading.RLock()
             return self._domain_locks[domain]
+
+    def hydrate_from_storage(self) -> Dict[str, str]:
+        """Restore PEMs and metadata from the storage backend to local disk.
+
+        Container restart story: in Docker without a PVC on
+        ``certificates/`` (or K8s pods on emptyDir), the cert files do not
+        survive across restarts even when the operator configured a remote
+        storage backend (Azure Key Vault, AWS, Vault, Infisical, …) as the
+        source of truth. Without rehydration, every cert lookup and every
+        renewal would fail until the next manual create.
+
+        This method walks ``settings.domains`` and, for any domain whose
+        ``cert.pem`` is missing locally but present in the storage backend,
+        restores cert.pem / chain.pem / fullchain.pem / privkey.pem and
+        metadata.json into ``cert_dir/<domain>/``. The certbot
+        ``renewal/<domain>.conf`` is *not* restored (the storage backend
+        only carries PEMs and metadata, not certbot internal state) — the
+        renewal path's metadata-driven rebuild then takes over for the
+        first renew after restart.
+
+        Returns a dict ``{domain: status}`` for observability/logging,
+        with status one of ``'restored'``, ``'present'``, ``'missing'``,
+        ``'error'``. Safe to call repeatedly; never raises.
+        """
+        results: Dict[str, str] = {}
+        if not self.storage_manager:
+            return results
+        try:
+            settings = self.settings_manager.load_settings()
+        except Exception as e:
+            logger.warning(f"hydrate_from_storage: could not load settings: {e}")
+            return results
+
+        for entry in settings.get('domains', []) or []:
+            if isinstance(entry, str):
+                domain = entry
+            elif isinstance(entry, dict):
+                domain = entry.get('domain')
+            else:
+                continue
+            if not domain:
+                continue
+
+            try:
+                _ = validate_domain(domain)
+            except Exception:
+                # ``validate_domain`` returns a tuple, not a raise — but
+                # belt-and-braces against future changes.
+                pass
+
+            local_cert = self.cert_dir / domain / 'cert.pem'
+            if local_cert.exists():
+                results[domain] = 'present'
+                continue
+
+            try:
+                retrieved = self.storage_manager.retrieve_certificate(domain)
+            except Exception as e:
+                logger.warning(f"hydrate_from_storage: retrieve failed for {domain}: {e}")
+                results[domain] = 'error'
+                continue
+
+            if not retrieved:
+                results[domain] = 'missing'
+                continue
+
+            cert_files, metadata = retrieved
+            domain_dir = self.cert_dir / domain
+            try:
+                domain_dir.mkdir(parents=True, exist_ok=True)
+                for filename, content in cert_files.items():
+                    if not isinstance(content, (bytes, bytearray)):
+                        continue
+                    target = domain_dir / filename
+                    target.write_bytes(content)
+                    # Lock down the private key so other users on the host
+                    # cannot read it after rehydration. The original create
+                    # path applies these perms via certbot itself.
+                    if filename == 'privkey.pem':
+                        try:
+                            target.chmod(0o600)
+                        except Exception:
+                            pass
+                if metadata:
+                    self._atomic_json_write(domain_dir / 'metadata.json', metadata)
+                results[domain] = 'restored'
+                logger.info(
+                    "hydrate_from_storage: restored %s from %s",
+                    domain, self.storage_manager.get_backend_name(),
+                )
+            except Exception as e:
+                logger.warning(f"hydrate_from_storage: write failed for {domain}: {e}")
+                results[domain] = 'error'
+
+        return results
 
 
 
