@@ -245,6 +245,47 @@
                                 </div>
                                 <div id="dns_alias_check_result" class="mt-2 hidden"></div>
                             </div>
+
+                            <!-- Certificate key shape -->
+                            <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label for="cert_key_type" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                        <i class="fas fa-key mr-1 text-purple-500"></i>
+                                        Key Type <span class="text-xs font-normal text-gray-500 dark:text-gray-400">(optional)</span>
+                                    </label>
+                                    <select id="cert_key_type"
+                                            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm"
+                                            onchange="toggleCertKeyOptions()">
+                                        <option value="">Use global default</option>
+                                        <option value="rsa">RSA</option>
+                                        <option value="ecdsa">ECDSA</option>
+                                    </select>
+                                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                        Override the default for this cert. Renewals keep this shape automatically.
+                                    </p>
+                                </div>
+                                <div id="cert_key_size_container" style="display: none;">
+                                    <label for="cert_key_size" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                        RSA Key Size
+                                    </label>
+                                    <select id="cert_key_size"
+                                            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm">
+                                        <option value="2048">2048 bits (default)</option>
+                                        <option value="3072">3072 bits</option>
+                                        <option value="4096">4096 bits</option>
+                                    </select>
+                                </div>
+                                <div id="cert_elliptic_curve_container" style="display: none;">
+                                    <label for="cert_elliptic_curve" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                        ECDSA Curve
+                                    </label>
+                                    <select id="cert_elliptic_curve"
+                                            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm">
+                                        <option value="secp256r1">secp256r1 / P-256 (default)</option>
+                                        <option value="secp384r1">secp384r1 / P-384</option>
+                                    </select>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     
