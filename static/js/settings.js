@@ -2230,8 +2230,12 @@
         if (!row || !modeSelect) {
             return;
         }
+        // Backend rejects backfill outside 'both' mode (in 'certificate'
+        // mode list_certificates() never sees the legacy Secrets and the
+        // walk would silently no-op). Hide the button rather than letting
+        // the user click into a 400.
         var visible = backendSelect && backendSelect.value === 'azure_keyvault'
-            && modeSelect.value !== 'secrets';
+            && modeSelect.value === 'both';
         row.style.display = visible ? '' : 'none';
     }
 
