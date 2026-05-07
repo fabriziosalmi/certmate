@@ -681,17 +681,21 @@ class AzureKeyVaultBackend(CertificateStorageBackend):
 
         * ``secrets``: read each PEM and the metadata-secret. Returns
           ``None`` if no PEM secret is found.
-        * ``certificate``: export the PFX from the Certificate object's
-          companion Secret and split it back into the four PEM files;
-          metadata is rehydrated from the Certificate object's tags.
+        * ``certificate``: export the PFX from the Certificate's companion
+          Secret (Azure mirrors the Certificate object's tags onto that
+          Secret, which is also the only surface that exposes the private
+          key) and split it back into the four PEM files; metadata is
+          rehydrated from those mirrored tags.
         * ``both``: prefer the Secrets path (cheaper, one round-trip per
           file, no PFX parse). When the PEMs are present but the
           metadata-secret is missing — manual deletion, legacy state from
           before metadata was stored, etc. — fall back to the Certificate
-          object's tags so callers don't lose ``dns_provider`` /
-          ``staging`` / ``san_domains``. If no Secret is found at all,
-          fall through to the Certificate-object export so a partial
-          Secrets state cannot mask an existing Certificate object.
+          object's tags (read directly from the Certificate API to avoid
+          relying on companion-Secret mirroring for this defensive path)
+          so callers don't lose ``dns_provider`` / ``staging`` /
+          ``san_domains``. If no Secret is found at all, fall through to
+          the Certificate-object export so a partial Secrets state cannot
+          mask an existing Certificate object.
         """
         try:
             # Prefer the secrets path whenever it is active — it is one
