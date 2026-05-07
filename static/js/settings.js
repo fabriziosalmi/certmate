@@ -2172,6 +2172,10 @@
                 selectedConfig.style.display = 'block';
             }
         }
+
+        if (typeof toggleAzureBackfillRow === 'function') {
+            toggleAzureBackfillRow();
+        }
     }
 
     function testStorageBackend() {
@@ -2219,6 +2223,77 @@
             });
     }
 
+    function toggleAzureBackfillRow() {
+        var modeSelect = document.getElementById('azure-storage-mode');
+        var row = document.getElementById('azure-backfill-row');
+        var backendSelect = document.getElementById('storage-backend');
+        if (!row || !modeSelect) {
+            return;
+        }
+        // Backend rejects backfill outside 'both' mode (in 'certificate'
+        // mode list_certificates() never sees the legacy Secrets and the
+        // walk would silently no-op). Hide the button rather than letting
+        // the user click into a 400.
+        var visible = backendSelect && backendSelect.value === 'azure_keyvault'
+            && modeSelect.value === 'both';
+        row.style.display = visible ? '' : 'none';
+    }
+
+    function backfillAzureCertificateObjects() {
+        var btn = document.getElementById('azure-backfill-btn');
+        var output = document.getElementById('azure-backfill-output');
+        if (btn) {
+            btn.disabled = true;
+        }
+        if (output) {
+            output.classList.remove('hidden');
+            output.textContent = 'Running backfill...';
+        }
+        showMessage('Backfilling Certificate objects...', 'info');
+
+        fetch('/api/storage/azure-keyvault/backfill-certificates', {
+            method: 'POST',
+            headers: API_HEADERS
+        })
+            .then(function (response) { return response.json().then(function (data) { return { ok: response.ok, data: data }; }); })
+            .then(function (payload) {
+                var data = payload.data || {};
+                if (output) {
+                    var lines = [];
+                    lines.push((data.message || (payload.ok ? 'Backfill finished' : 'Backfill failed')));
+                    if (data.results) {
+                        Object.keys(data.results).sort().forEach(function (domain) {
+                            lines.push(domain + ': ' + data.results[domain]);
+                        });
+                    } else if (data.error) {
+                        lines.push('Error: ' + data.error);
+                    }
+                    output.textContent = lines.join('\n');
+                }
+                if (data.success) {
+                    showMessage(data.message || 'Backfill complete', 'success');
+                } else if (data.message) {
+                    showMessage(data.message, payload.ok ? 'warning' : 'error');
+                } else if (data.error) {
+                    showMessage(data.error, 'error');
+                } else {
+                    showMessage('Backfill failed', 'error');
+                }
+            })
+            .catch(function (error) {
+                console.error('Azure Key Vault backfill error:', error);
+                if (output) {
+                    output.textContent = 'Backfill failed: ' + error.message;
+                }
+                showMessage('Backfill request failed: ' + error.message, 'error');
+            })
+            .finally(function () {
+                if (btn) {
+                    btn.disabled = false;
+                }
+            });
+    }
+
     function getStorageBackendConfig(backend) {
         var config = {};
 
@@ -2232,6 +2307,8 @@
                 config.tenant_id = document.getElementById('azure-tenant-id').value;
                 config.client_id = document.getElementById('azure-client-id').value;
                 config.client_secret = document.getElementById('azure-client-secret').value;
+                var storageModeEl = document.getElementById('azure-storage-mode');
+                config.storage_mode = (storageModeEl && storageModeEl.value) || 'secrets';
                 break;
 
             case 'aws_secrets_manager':
@@ -2388,6 +2465,13 @@
                 document.getElementById('azure-vault-url').value = azureConfig.vault_url || '';
                 document.getElementById('azure-tenant-id').value = azureConfig.tenant_id || '';
                 document.getElementById('azure-client-id').value = azureConfig.client_id || '';
+                var storageModeSelect = document.getElementById('azure-storage-mode');
+                if (storageModeSelect) {
+                    storageModeSelect.value = azureConfig.storage_mode || 'secrets';
+                }
+                if (typeof toggleAzureBackfillRow === 'function') {
+                    toggleAzureBackfillRow();
+                }
                 // Don't populate client_secret for security
                 break;
 
@@ -3025,6 +3109,8 @@
     window.generateToken = generateToken;
     window.toggleStorageBackendConfig = toggleStorageBackendConfig;
     window.testStorageBackend = testStorageBackend;
+    window.toggleAzureBackfillRow = toggleAzureBackfillRow;
+    window.backfillAzureCertificateObjects = backfillAzureCertificateObjects;
     window.showStorageMigrationModal = showStorageMigrationModal;
     window.closeStorageMigrationModal = closeStorageMigrationModal;
     window.performStorageMigration = performStorageMigration;

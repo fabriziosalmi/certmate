@@ -1014,6 +1014,14 @@ def create_api_resources(api, models, managers):
                     # Test by trying to list certificates (should not fail for auth issues)
                     domains = test_backend.list_certificates()
 
+                    # When the Azure Key Vault backend is configured to write
+                    # Certificate objects, the Service Principal also needs
+                    # access to the Certificate API. list_certificates above
+                    # already covers the secrets surface, so probe certificates
+                    # explicitly here to surface permission gaps before save.
+                    if backend_type == 'azure_keyvault' and getattr(test_backend, 'writes_certificate', False):
+                        test_backend.verify_certificate_api_access()
+
                     return {
                         'success': True,
                         'message': f'Successfully connected to {backend_type}',
@@ -1022,10 +1030,14 @@ def create_api_resources(api, models, managers):
                     }
 
                 except Exception as test_error:
+                    # Log the full exception for operator triage (includes any
+                    # tenant IDs, request IDs and SDK error codes) but only
+                    # return the exception type to the client to avoid leaking
+                    # those identifiers to anyone who can hit the test endpoint.
                     logger.error(f"Storage backend connection test failed: {test_error}")
                     return {
                         'success': False,
-                        'message': 'Connection test failed',
+                        'message': f'Connection test failed ({type(test_error).__name__}). See server logs for details.',
                         'backend': backend_type
                     }
 
@@ -1351,12 +1363,85 @@ def create_api_resources(api, models, managers):
                 logger.error(f"Error during storage migration: {e}")
                 return {'error': 'Failed to perform storage migration'}, 500
 
+    class StorageAzureKeyVaultBackfill(Resource):
+        @api.doc(security='Bearer')
+        @auth_manager.require_role('admin')
+        def post(self):
+            """Backfill native Certificate objects for domains already stored as Secrets.
+
+            Only valid when the active backend is azure_keyvault and its
+            ``storage_mode`` is ``both``. In ``both`` mode ``list_certificates``
+            walks the Secrets surface as well as the Certificate surface, so
+            legacy domains stored only as Secrets are visible to the loop and
+            get an imported Certificate object on first run. In ``certificate``
+            mode the Secrets surface is invisible and the walk would silently
+            no-op, so the operator must switch to ``both`` first.
+            """
+            try:
+                storage_manager = managers.get('storage')
+                if not storage_manager:
+                    return {'error': 'Storage manager not available'}, 500
+
+                backend = storage_manager.get_backend()
+                if backend.get_backend_name() != 'azure_keyvault':
+                    return {'error': 'Backfill is only available for the Azure Key Vault backend'}, 400
+                current_mode = getattr(backend, 'storage_mode', None)
+                if current_mode != 'both':
+                    return {
+                        'error': (
+                            "Backfill requires storage_mode='both' so the legacy Secrets are "
+                            "still listed. Active mode is '{}' — switch to 'both', run the "
+                            "backfill, and then optionally switch to 'certificate'."
+                        ).format(current_mode or 'unknown')
+                    }, 400
+
+                results = {}
+                for domain in backend.list_certificates():
+                    try:
+                        if backend.has_certificate_object(domain):
+                            results[domain] = 'skipped'
+                            continue
+                        retrieved = backend.retrieve_certificate(domain)
+                        if not retrieved:
+                            results[domain] = 'error: no certificate data found'
+                            continue
+                        cert_files, metadata = retrieved
+                        if backend.import_certificate_object(domain, cert_files, metadata):
+                            results[domain] = 'imported'
+                        else:
+                            results[domain] = 'error: import returned false'
+                    except Exception as per_domain:
+                        # Match the StorageBackendTest pattern: log the full
+                        # exception (with any tenant/request IDs from Azure)
+                        # but surface only the type name to the client. The
+                        # endpoint is admin-only, but consistent sanitisation
+                        # is cheaper than auditing every per-domain string.
+                        logger.error(f"Backfill failed for {domain}: {per_domain}")
+                        results[domain] = f'error: {type(per_domain).__name__}'
+
+                imported = sum(1 for v in results.values() if v == 'imported')
+                skipped = sum(1 for v in results.values() if v == 'skipped')
+                errors = sum(1 for v in results.values() if v.startswith('error'))
+                return {
+                    'success': errors == 0,
+                    'message': f'Backfill complete: {imported} imported, {skipped} skipped, {errors} errors',
+                    'imported': imported,
+                    'skipped': skipped,
+                    'errors': errors,
+                    'results': results,
+                }
+
+            except Exception as e:
+                logger.error(f"Error during Azure Key Vault Certificate backfill: {e}")
+                return {'error': 'Failed to backfill Certificate objects'}, 500
+
     # Register storage backend endpoints
     storage_ns = api.namespace('storage', description='Storage Backend Operations')
     storage_ns.add_resource(StorageBackendInfo, '/info')
     storage_ns.add_resource(StorageBackendConfig, '/config')
     storage_ns.add_resource(StorageBackendTest, '/test')
     storage_ns.add_resource(StorageBackendMigrate, '/migrate')
+    storage_ns.add_resource(StorageAzureKeyVaultBackfill, '/azure-keyvault/backfill-certificates')
 
     # Register DNS management endpoints
     dns_ns = api.namespace('dns', description='DNS Provider Account Management')
