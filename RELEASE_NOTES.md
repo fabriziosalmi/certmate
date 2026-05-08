@@ -1,3 +1,24 @@
+## v2.4.4 (Patch — wire up missing notification routes)
+
+Closes [#114](https://github.com/fabriziosalmi/certmate/issues/114).
+
+The frontend (`settings-notifications.js`, `base.html` SSE) had been calling four endpoints that were never registered server-side, so the browser saw 404 in the network tab and notification settings couldn't be saved from the UI. The backend logic (`Notifier`, `WeeklyDigest`) was already complete — this PR just surfaces it.
+
+### New routes (admin role required, registered in `modules/web/misc_routes.py`)
+
+| Method | Route | Backed by |
+|---|---|---|
+| GET / POST | `/api/notifications/config` | `Notifier._get_config()` / `SettingsManager.update()` writing the `notifications` block |
+| POST | `/api/notifications/test` | `Notifier.test_channel(channel_type, config)` |
+| POST | `/api/digest/send` | `WeeklyDigest.send()` |
+| GET | `/api/webhooks/deliveries?limit=N` | `Notifier.get_deliveries(limit)` (clamped to 1..500, default 50) |
+
+### Test coverage
+
+New `tests/test_notifications_routes.py` — 9 e2e tests covering: GET shape, POST round-trip persistence, body-shape validation, transport-failure normalization (`{success:false, error:...}` instead of 500 when SMTP host is unreachable), missing/unknown `channel_type`, digest result envelope (`success`/`skipped`/`error`), deliveries list shape + limit param.
+
+All 9 pass against the Docker test container (156s including image build). 143 unit tests still pass.
+
 ## v2.4.3 (Patch — issue triage)
 
 Closes four open issues, comments on five more.
