@@ -9,8 +9,10 @@ RUN apt-get update && \
     apt-get install -y -o Acquire::Retries=3 gcc && \
     rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first for better caching
-COPY requirements.txt requirements-minimal.txt ./
+# Copy every requirements*.txt so REQUIREMENTS_FILE and EXTRA_REQUIREMENTS
+# can point at any of the optional sets (storage backends, cloud DNS,
+# extended providers, …) without rebuilding the COPY layer for each one.
+COPY requirements*.txt ./
 
 # Create virtual environment and install dependencies
 RUN python -m venv /opt/venv
@@ -19,8 +21,17 @@ ENV PATH="/opt/venv/bin:$PATH"
 # Install minimal requirements by default (fastest build)
 # Override with --build-arg REQUIREMENTS_FILE=requirements.txt for full install
 ARG REQUIREMENTS_FILE=requirements.txt
+# Optional second pip install for storage backends or extra DNS plugins.
+# Examples:
+#   --build-arg EXTRA_REQUIREMENTS=requirements-storage-all.txt
+#   --build-arg EXTRA_REQUIREMENTS=requirements-azure-storage.txt
+# Empty by default → no second install, layer cached.
+ARG EXTRA_REQUIREMENTS=
 RUN pip install -U pip setuptools wheel && \
-    pip install --no-cache-dir -r ${REQUIREMENTS_FILE}
+    pip install --no-cache-dir -r ${REQUIREMENTS_FILE} && \
+    if [ -n "${EXTRA_REQUIREMENTS}" ]; then \
+        pip install --no-cache-dir -r ${EXTRA_REQUIREMENTS}; \
+    fi
 
 # Production stage
 FROM python:3.12-slim
