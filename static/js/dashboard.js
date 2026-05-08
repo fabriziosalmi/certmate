@@ -1156,22 +1156,69 @@
         return normalizeDnsName(value).replace(/^_acme-challenge\./i, '');
     }
 
+    function parseSanDomainsInput(value) {
+        return value
+            ? value.split(',').map(function (d) { return d.trim(); }).filter(function (d) { return d; })
+            : [];
+    }
+
+    function addUniqueDomain(domains, domain) {
+        if (domain && domains.indexOf(domain) === -1) {
+            domains.push(domain);
+        }
+    }
+
+    function buildRequestedDomains(primaryDomain, sanDomains, wildcardEnabled) {
+        var domains = [];
+        var primary = normalizeDnsName(primaryDomain);
+        addUniqueDomain(domains, primary);
+
+        if (wildcardEnabled && primary) {
+            addUniqueDomain(domains, '*.' + primary);
+        }
+
+        sanDomains.forEach(function (san) {
+            var normalizedSan = normalizeDnsName(san);
+            addUniqueDomain(domains, normalizedSan);
+        });
+
+        return domains;
+    }
+
+    function dnsChallengeName(domain) {
+        return '_acme-challenge.' + normalizeDnsName(domain);
+    }
+
     function updateDnsAliasHelp() {
         var domainField = document.getElementById('domain');
+        var sanField = document.getElementById('san_domains');
+        var wildcardField = document.getElementById('wildcard-cert');
         var aliasField = document.getElementById('dns_alias_domain');
         var help = document.getElementById('dns_alias_help');
         if (!domainField || !aliasField || !help) return;
 
-        var domain = normalizeDnsName(domainField.value);
         var aliasDomain = normalizeDnsAliasName(aliasField.value);
-        if (domain && aliasDomain) {
-            var source = '_acme-challenge.' + domain;
+        var requestedDomains = buildRequestedDomains(
+            domainField.value,
+            sanField ? parseSanDomainsInput(sanField.value) : [],
+            wildcardField ? wildcardField.checked : false
+        );
+
+        if (requestedDomains.length > 0 && aliasDomain) {
             var target = '_acme-challenge.' + aliasDomain;
-            help.innerHTML = 'Create this CNAME: <code class="font-mono bg-gray-100 dark:bg-gray-600 px-1 rounded">'
-                + escapeHtml(source)
-                + '</code> &rarr; <code class="font-mono bg-gray-100 dark:bg-gray-600 px-1 rounded">'
-                + escapeHtml(target)
-                + '</code>';
+            var challengeNames = [];
+            requestedDomains.forEach(function (requestedDomain) {
+                addUniqueDomain(challengeNames, dnsChallengeName(requestedDomain));
+            });
+
+            var rows = challengeNames.map(function (source) {
+                return '<div class="mt-1"><code class="font-mono bg-gray-100 dark:bg-gray-600 px-1 rounded">'
+                    + escapeHtml(source)
+                    + '</code> &rarr; <code class="font-mono bg-gray-100 dark:bg-gray-600 px-1 rounded">'
+                    + escapeHtml(target)
+                    + '</code></div>';
+            }).join('');
+            help.innerHTML = 'Create these CNAMEs:' + rows;
         } else {
             help.innerHTML = 'Use DNS-01 Alias Mode when <code class="font-mono bg-gray-100 dark:bg-gray-600 px-1 rounded">_acme-challenge.yourdomain.com</code> '
                 + 'is CNAMEd to a validation zone you control. Enter the target FQDN (without the <code class="font-mono bg-gray-100 dark:bg-gray-600 px-1 rounded">_acme-challenge.</code> prefix).';
@@ -1184,6 +1231,7 @@
 
         var domain = document.getElementById('domain').value.trim();
         var sanDomainsInput = document.getElementById('san_domains').value.trim();
+        var wildcardEnabled = document.getElementById('wildcard-cert').checked;
         var challengeType = document.getElementById('challenge_type_select').value;
         var dnsProvider = document.getElementById('dns_provider_select').value;
         var accountId = document.getElementById('account_select').value;
@@ -1192,9 +1240,10 @@
         dnsAliasDomain = dnsAliasDomain ? normalizeDnsAliasName(dnsAliasDomain) : '';
 
         // Parse SAN domains from comma-separated input
-        var sanDomains = sanDomainsInput
-            ? sanDomainsInput.split(',').map(function (d) { return d.trim(); }).filter(function (d) { return d; })
-            : [];
+        var sanDomains = parseSanDomainsInput(sanDomainsInput);
+        if (wildcardEnabled) {
+            addUniqueDomain(sanDomains, '*.' + normalizeDnsName(domain));
+        }
 
         if (!domain) {
             showMessage('Please enter a domain', 'error');
@@ -1252,6 +1301,7 @@
                     showMessage('Certificate created successfully for ' + domainsDisplay + '!');
                     document.getElementById('domain').value = '';
                     document.getElementById('san_domains').value = '';
+                    document.getElementById('wildcard-cert').checked = false;
                     document.getElementById('challenge_type_select').value = '';
                     document.getElementById('dns_provider_select').value = '';
                     document.getElementById('account_select').value = '';
@@ -1514,6 +1564,8 @@
         document.getElementById('certificateSearch').addEventListener('input', filterCertificates);
         document.getElementById('statusFilter').addEventListener('change', filterCertificates);
         document.getElementById('domain').addEventListener('input', updateDnsAliasHelp);
+        document.getElementById('san_domains').addEventListener('input', updateDnsAliasHelp);
+        document.getElementById('wildcard-cert').addEventListener('change', updateDnsAliasHelp);
         document.getElementById('dns_alias_domain').addEventListener('input', updateDnsAliasHelp);
         updateDnsAliasHelp();
 
