@@ -182,21 +182,11 @@ class AzureStrategy(DNSProviderStrategy):
     def default_propagation_seconds(self) -> int:
         return 180
 
-    def configure_certbot_arguments(self, cmd: list, credentials_file: Optional[Path], domain_alias: Optional[str] = None) -> None:
-        # certbot-dns-azure registers --dns-azure-credentials,
-        # --dns-azure-propagation-seconds, and --dns-azure-config — passing
-        # bare --dns-azure as the authenticator selector is ambiguous in
-        # argparse (#113). Use the explicit `--authenticator dns-azure` form,
-        # same pattern PowerDNSStrategy already uses for the same reason.
-        cmd.extend(['--authenticator', self.plugin_name])
-        if credentials_file:
-            cmd.extend([f'--{self.plugin_name}-credentials', str(credentials_file)])
-
-        if domain_alias:
-            logger.info(
-                f"DNS alias '{domain_alias}' requested for Azure DNS — ensure a CNAME "
-                f"from _acme-challenge.<domain> to _acme-challenge.{domain_alias} exists."
-            )
+    # The configure_certbot_arguments override that v2.4.3 added here for
+    # #113 was made redundant by 47aacfd, which generalised the
+    # --authenticator selector to the base DNSProviderStrategy. The base
+    # method now does the same thing for every plugin, so AzureStrategy
+    # can fall through to it unchanged.
 
 class GoogleStrategy(DNSProviderStrategy):
     def create_config_file(self, config_data: Dict[str, Any]) -> Optional[Path]:
