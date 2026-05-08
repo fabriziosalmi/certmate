@@ -21,16 +21,25 @@ ENV PATH="/opt/venv/bin:$PATH"
 # Install minimal requirements by default (fastest build)
 # Override with --build-arg REQUIREMENTS_FILE=requirements.txt for full install
 ARG REQUIREMENTS_FILE=requirements.txt
-# Optional second pip install for storage backends or extra DNS plugins.
-# Examples:
-#   --build-arg EXTRA_REQUIREMENTS=requirements-storage-all.txt
-#   --build-arg EXTRA_REQUIREMENTS=requirements-azure-storage.txt
+# Optional extra pip installs layered on top of the main requirements.
+# Accepts a SPACE-SEPARATED list so a single image can bundle e.g. the
+# Azure DNS plugin AND every remote storage backend at once. Quote the
+# value when invoking buildx so the shell preserves the spaces:
+#
+#   --build-arg EXTRA_REQUIREMENTS="requirements-azure.txt requirements-storage-all.txt"
+#   --build-arg EXTRA_REQUIREMENTS="requirements-aws.txt requirements-gcp.txt"
+#   --build-arg EXTRA_REQUIREMENTS=requirements-storage-all.txt   (single file)
+#
 # Empty by default → no second install, layer cached.
 ARG EXTRA_REQUIREMENTS=
+# shellcheck disable=SC2086 — intentional word-splitting to iterate the list.
 RUN pip install -U pip setuptools wheel && \
     pip install --no-cache-dir -r ${REQUIREMENTS_FILE} && \
     if [ -n "${EXTRA_REQUIREMENTS}" ]; then \
-        pip install --no-cache-dir -r ${EXTRA_REQUIREMENTS}; \
+        for req in ${EXTRA_REQUIREMENTS}; do \
+            echo "==> Installing extras from ${req}"; \
+            pip install --no-cache-dir -r "${req}"; \
+        done; \
     fi
 
 # Production stage
