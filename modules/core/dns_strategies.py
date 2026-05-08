@@ -81,7 +81,23 @@ class DNSProviderStrategy(ABC):
                 ``_acme-challenge.<alias-domain>`` in your DNS zone, and certbot
                 will follow the CNAME transparently.
         """
-        cmd.extend([f'--{self.plugin_name}'])
+        # Select the plugin via ``--authenticator <name>`` rather than the
+        # shorthand ``--<name>``. The shorthand only works when argparse can
+        # uniquely match its prefix; plugins that expose several
+        # ``--<name>-…`` options (Azure: -credentials, -config,
+        # -propagation-seconds; DuckDNS: -credentials, -token, -token-env,
+        # -propagation-seconds, -no-txt-restore; …) make the prefix
+        # ambiguous and certbot aborts with::
+        #
+        #   certbot: error: ambiguous option: --dns-azure could match
+        #   --dns-azure-propagation-seconds, --dns-azure-config,
+        #   --dns-azure-credentials
+        #
+        # ``--authenticator`` is the canonical, documented selector and is
+        # immune to that prefix collision, so it works for every plugin
+        # uniformly. See issue #113 (Azure) and the prior duckdns fix
+        # (commit 4ea7269) for the same class of bug.
+        cmd.extend(['--authenticator', self.plugin_name])
         if credentials_file:
             cmd.extend([f'--{self.plugin_name}-credentials', str(credentials_file)])
 
