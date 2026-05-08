@@ -1,3 +1,11 @@
+## v2.4.1 (Patch — client-cert UI fixes)
+
+Addresses [#123](https://github.com/fabriziosalmi/certmate/issues/123): the client-certificate dashboard was unusable from the GUI.
+
+### Bug fixes
+- **#123 405 Method Not Allowed creating a client certificate**: the create form posted to `/api/client-certs`, but that route is the list resource (GET only) — the create endpoint lives at `/api/client-certs/create`. Repointed the fetch to the documented Swagger path; `/create` is also the convention used elsewhere in the API (`/api/certificates/create`, `/api/backups/create`).
+- **Batch CSV upload was a dead button**: `#submitBatchBtn` was rendered after CSV preview but had no click handler — clicking it did nothing. Wired up a handler that POSTs `{headers, rows}` from the parsed CSV to `/api/client-certs/batch`, surfaces a `successful/total` toast (warning when any row failed), clears the preview, and reloads stats + list. CSRF is still covered by the existing Origin/Referer check, no token plumbing needed.
+
 ## v2.4.0 (Minor — issue triage + audit hardening)
 
 Closes seven open issues and adds one round of post-batch hardening driven by a 360° audit.
