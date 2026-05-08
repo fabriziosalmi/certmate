@@ -39,7 +39,7 @@ class TestAzureStrategyAvoidsAmbiguousFlag:
             'tenant_id': 'tenant',
             'client_id': 'client',
             'client_secret': 'shhh',
-        })
+        }, domain='example.com')
 
         cmd = []
         strategy.configure_certbot_arguments(cmd, creds)
@@ -56,6 +56,58 @@ class TestAzureStrategyAvoidsAmbiguousFlag:
         assert '--dns-azure-credentials' in cmd
         cred_idx = cmd.index('--dns-azure-credentials')
         assert cmd[cred_idx + 1] == str(creds)
+
+
+class TestAzureCredentialsFileFormat:
+    """The INI file produced by ``create_azure_config`` must match what
+    certbot-dns-azure 2.x actually parses (``dns_azure_sp_*`` keys plus a
+    ``dns_azure_zoneN`` mapping). Without the right keys the plugin
+    aborts with "No authentication methods have been configured"."""
+
+    def test_writes_sp_keys_and_zone_mapping(self, tmp_path, monkeypatch):
+        from modules.core.utils import create_azure_config
+        monkeypatch.chdir(tmp_path)
+        path = create_azure_config(
+            subscription_id='SUB',
+            resource_group='RG',
+            tenant_id='TEN',
+            client_id='CID',
+            client_secret='SECRET',
+            domain='example.com',
+        )
+        text = path.read_text()
+        assert 'dns_azure_sp_client_id = CID' in text
+        assert 'dns_azure_sp_client_secret = SECRET' in text
+        assert 'dns_azure_tenant_id = TEN' in text
+        assert 'dns_azure_zone1 = example.com:/subscriptions/SUB/resourceGroups/RG' in text
+        # Old (broken) keys must not be present — they were silently
+        # ignored by the plugin and produced "No authentication methods
+        # have been configured".
+        assert 'dns_azure_client_id =' not in text
+        assert 'dns_azure_client_secret =' not in text
+        assert 'dns_azure_subscription_id =' not in text
+        assert 'dns_azure_resource_group =' not in text
+
+    def test_wildcard_domain_strips_leading_asterisk_in_zone_mapping(self, tmp_path, monkeypatch):
+        """A wildcard cert (``*.example.com``) lives in the ``example.com``
+        DNS zone; the plugin matches FQDN suffix so we must drop the
+        leading ``*.`` before writing the zone mapping."""
+        from modules.core.utils import create_azure_config
+        monkeypatch.chdir(tmp_path)
+        path = create_azure_config('SUB', 'RG', 'TEN', 'CID', 'SECRET',
+                                    domain='*.example.com')
+        text = path.read_text()
+        assert 'dns_azure_zone1 = example.com:/subscriptions/SUB/resourceGroups/RG' in text
+        assert 'dns_azure_zone1 = *.example.com' not in text
+
+    def test_missing_domain_raises(self, tmp_path, monkeypatch):
+        """Defensive: a caller that forgets to propagate the domain gets a
+        clear ValueError up-front instead of an INI that certbot would
+        later reject with a vague error."""
+        from modules.core.utils import create_azure_config
+        monkeypatch.chdir(tmp_path)
+        with pytest.raises(ValueError, match='primary domain'):
+            create_azure_config('SUB', 'RG', 'TEN', 'CID', 'SECRET')
 
 
 class TestBaseStrategyAvoidsAmbiguousFlag:
@@ -94,7 +146,7 @@ class TestBaseStrategyAvoidsAmbiguousFlag:
             'tenant_id': 'tenant',
             'client_id': 'client',
             'client_secret': 'shhh',
-        })
+        }, domain='example.com')
 
         cmd = []
         with caplog.at_level('INFO'):

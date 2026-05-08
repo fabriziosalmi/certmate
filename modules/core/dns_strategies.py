@@ -43,8 +43,13 @@ class DNSProviderStrategy(ABC):
     """Abstract base class for DNS provider strategies"""
     
     @abstractmethod
-    def create_config_file(self, config_data: Dict[str, Any]) -> Optional[Path]:
-        """Create the configuration file for the provider"""
+    def create_config_file(self, config_data: Dict[str, Any], domain: Optional[str] = None) -> Optional[Path]:
+        """Create the configuration file for the provider.
+
+        ``domain`` is the cert's primary domain. Most plugins ignore it,
+        but a few (Azure, future zone-aware backends) need it to build
+        a per-cert zone mapping inside the credentials file.
+        """
         pass
     
     @property
@@ -117,7 +122,7 @@ class DNSProviderStrategy(ABC):
         pass
 
 class CloudflareStrategy(DNSProviderStrategy):
-    def create_config_file(self, config_data: Dict[str, Any]) -> Optional[Path]:
+    def create_config_file(self, config_data: Dict[str, Any], domain: Optional[str] = None) -> Optional[Path]:
         token = config_data.get('api_token') or config_data.get('token', '')
         return create_cloudflare_config(token)
     
@@ -130,7 +135,7 @@ class CloudflareStrategy(DNSProviderStrategy):
         return 60
 
 class Route53Strategy(DNSProviderStrategy):
-    def create_config_file(self, config_data: Dict[str, Any]) -> Optional[Path]:
+    def create_config_file(self, config_data: Dict[str, Any], domain: Optional[str] = None) -> Optional[Path]:
         # Route53 uses env vars, but we might create a file for Consistency or future use
         # For now, return None as the implementation in CertificateManager handles env vars specially
         # OR better: Refactor CertificateManager to ask the strategy to set up the environment!
@@ -165,13 +170,18 @@ class Route53Strategy(DNSProviderStrategy):
                 del env[key]
 
 class AzureStrategy(DNSProviderStrategy):
-    def create_config_file(self, config_data: Dict[str, Any]) -> Optional[Path]:
+    def create_config_file(self, config_data: Dict[str, Any], domain: Optional[str] = None) -> Optional[Path]:
+        # The credentials file embeds a ``dns_azure_zone1`` mapping
+        # built from the cert's primary domain, so we propagate it
+        # down here. create_azure_config raises ValueError if the
+        # domain is missing, surfacing the misuse early.
         return create_azure_config(
             config_data.get('subscription_id', ''),
             config_data.get('resource_group', ''),
             config_data.get('tenant_id', ''),
             config_data.get('client_id', ''),
             config_data.get('client_secret', ''),
+            domain=domain,
         )
         
     @property
@@ -183,7 +193,7 @@ class AzureStrategy(DNSProviderStrategy):
         return 180
 
 class GoogleStrategy(DNSProviderStrategy):
-    def create_config_file(self, config_data: Dict[str, Any]) -> Optional[Path]:
+    def create_config_file(self, config_data: Dict[str, Any], domain: Optional[str] = None) -> Optional[Path]:
         return create_google_config(
             config_data.get('project_id', ''),
             config_data.get('service_account_key', ''),
@@ -194,7 +204,7 @@ class GoogleStrategy(DNSProviderStrategy):
         return 'dns-google'
 
 class PowerDNSStrategy(DNSProviderStrategy):
-    def create_config_file(self, config_data: Dict[str, Any]) -> Optional[Path]:
+    def create_config_file(self, config_data: Dict[str, Any], domain: Optional[str] = None) -> Optional[Path]:
         return create_powerdns_config(
             config_data.get('api_url', ''),
             config_data.get('api_key', ''),
@@ -220,7 +230,7 @@ class PowerDNSStrategy(DNSProviderStrategy):
             )
 
 class DigitalOceanStrategy(DNSProviderStrategy):
-    def create_config_file(self, config_data: Dict[str, Any]) -> Optional[Path]:
+    def create_config_file(self, config_data: Dict[str, Any], domain: Optional[str] = None) -> Optional[Path]:
         return create_digitalocean_config(config_data.get('api_token', ''))
 
     @property
@@ -228,7 +238,7 @@ class DigitalOceanStrategy(DNSProviderStrategy):
         return 'dns-digitalocean'
 
 class LinodeStrategy(DNSProviderStrategy):
-    def create_config_file(self, config_data: Dict[str, Any]) -> Optional[Path]:
+    def create_config_file(self, config_data: Dict[str, Any], domain: Optional[str] = None) -> Optional[Path]:
         return create_linode_config(config_data.get('api_key', ''))
 
     @property
@@ -244,7 +254,7 @@ class EdgeDNSStrategy(DNSProviderStrategy):
     ``[default]`` section.
     """
 
-    def create_config_file(self, config_data: Dict[str, Any]) -> Optional[Path]:
+    def create_config_file(self, config_data: Dict[str, Any], domain: Optional[str] = None) -> Optional[Path]:
         return create_edgedns_config(
             config_data.get('client_token', ''),
             config_data.get('client_secret', ''),
@@ -272,7 +282,7 @@ class EdgeDNSStrategy(DNSProviderStrategy):
             )
 
 class GandiStrategy(DNSProviderStrategy):
-    def create_config_file(self, config_data: Dict[str, Any]) -> Optional[Path]:
+    def create_config_file(self, config_data: Dict[str, Any], domain: Optional[str] = None) -> Optional[Path]:
         return create_gandi_config(config_data.get('api_token', ''))
 
     @property
@@ -284,7 +294,7 @@ class GandiStrategy(DNSProviderStrategy):
         return 180
 
 class OVHStrategy(DNSProviderStrategy):
-    def create_config_file(self, config_data: Dict[str, Any]) -> Optional[Path]:
+    def create_config_file(self, config_data: Dict[str, Any], domain: Optional[str] = None) -> Optional[Path]:
         return create_ovh_config(
             config_data.get('endpoint', ''),
             config_data.get('application_key', ''),
@@ -308,7 +318,7 @@ class NamecheapStrategy(DNSProviderStrategy):
     Users should prefer acme-dns or manual DNS challenge for Namecheap domains.
     """
 
-    def create_config_file(self, config_data: Dict[str, Any]) -> Optional[Path]:
+    def create_config_file(self, config_data: Dict[str, Any], domain: Optional[str] = None) -> Optional[Path]:
         return create_namecheap_config(
             config_data.get('username', ''),
             config_data.get('api_key', ''),
@@ -334,7 +344,7 @@ class NamecheapStrategy(DNSProviderStrategy):
             )
 
 class ArvanCloudStrategy(DNSProviderStrategy):
-    def create_config_file(self, config_data: Dict[str, Any]) -> Optional[Path]:
+    def create_config_file(self, config_data: Dict[str, Any], domain: Optional[str] = None) -> Optional[Path]:
         return create_arvancloud_config(config_data.get('api_key', ''))
 
     @property
@@ -342,7 +352,7 @@ class ArvanCloudStrategy(DNSProviderStrategy):
         return 'dns-arvancloud'
 
 class InfomaniakStrategy(DNSProviderStrategy):
-    def create_config_file(self, config_data: Dict[str, Any]) -> Optional[Path]:
+    def create_config_file(self, config_data: Dict[str, Any], domain: Optional[str] = None) -> Optional[Path]:
         return create_infomaniak_config(config_data.get('api_token', ''))
 
     @property
@@ -365,7 +375,7 @@ class InfomaniakStrategy(DNSProviderStrategy):
             )
 
 class AcmeDNSStrategy(DNSProviderStrategy):
-    def create_config_file(self, config_data: Dict[str, Any]) -> Optional[Path]:
+    def create_config_file(self, config_data: Dict[str, Any], domain: Optional[str] = None) -> Optional[Path]:
         return create_acme_dns_config(
             config_data.get('api_url', ''),
             config_data.get('username', ''),
@@ -403,7 +413,7 @@ class DuckDNSStrategy(DNSProviderStrategy):
     certificates for any subdomain the account owns, including wildcards.
     """
 
-    def create_config_file(self, config_data: Dict[str, Any]) -> Optional[Path]:
+    def create_config_file(self, config_data: Dict[str, Any], domain: Optional[str] = None) -> Optional[Path]:
         return create_duckdns_config(config_data.get('api_token', ''))
 
     @property
@@ -436,7 +446,7 @@ class GenericMultiProviderStrategy(DNSProviderStrategy):
     def __init__(self, provider_name: str):
         self.provider_name = provider_name
         
-    def create_config_file(self, config_data: Dict[str, Any]) -> Optional[Path]:
+    def create_config_file(self, config_data: Dict[str, Any], domain: Optional[str] = None) -> Optional[Path]:
         return create_multi_provider_config(self.provider_name, config_data)
 
     @property
@@ -457,7 +467,7 @@ class HTTP01Strategy(DNSProviderStrategy):
     def plugin_name(self) -> str:
         return 'webroot'
 
-    def create_config_file(self, config_data: Dict[str, Any]) -> Optional[Path]:
+    def create_config_file(self, config_data: Dict[str, Any], domain: Optional[str] = None) -> Optional[Path]:
         return None  # No credentials needed
 
     def configure_certbot_arguments(self, cmd: list, credentials_file: Optional[Path], domain_alias: Optional[str] = None) -> None:

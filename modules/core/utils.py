@@ -391,14 +391,44 @@ def create_route53_config(access_key_id: str, secret_access_key: str) -> Path:
     content = f"dns_route53_access_key_id = {access_key_id}\ndns_route53_secret_access_key = {secret_access_key}\n"
     return _create_config_file("route53", content)
 
-def create_azure_config(subscription_id: str, resource_group: str, tenant_id: str, client_id: str, client_secret: str) -> Path:
-    """Create Azure DNS credentials file."""
+def create_azure_config(
+    subscription_id: str,
+    resource_group: str,
+    tenant_id: str,
+    client_id: str,
+    client_secret: str,
+    domain: Optional[str] = None,
+) -> Path:
+    """Create the credentials INI file consumed by certbot-dns-azure.
+
+    The plugin (certbot-dns-azure ≥ 2.x) requires its own naming for the
+    Service Principal keys — ``dns_azure_sp_client_id`` /
+    ``dns_azure_sp_client_secret`` — and at least one
+    ``dns_azure_zoneN = <DOMAIN>:<RESOURCE_ID>`` mapping that points the
+    plugin at the Azure DNS zone holding the records. Without the zone
+    mapping the plugin aborts with "At least one zone mapping needs to
+    be provided"; without the ``sp_`` prefix on the SP keys it aborts
+    with "No authentication methods have been configured".
+
+    The zone mapping uses the FQDN of the cert's primary domain (with
+    any leading ``*.`` stripped). Azure's plugin matches the longest
+    suffix at validation time, so a single mapping at ``example.com``
+    covers ``example.com``, ``*.example.com``, ``sub.example.com``,
+    etc. — i.e. every SAN that lives in the same Azure DNS zone.
+    """
+    if not domain:
+        # Defensive: callers should always pass the cert's primary
+        # domain. Fail loudly here rather than emitting an INI that
+        # would be silently rejected by certbot at validation time.
+        raise ValueError("create_azure_config requires the cert's primary domain to build the zone mapping")
+
+    zone_target = domain[2:] if domain.startswith('*.') else domain
+    resource_id = f"/subscriptions/{subscription_id}/resourceGroups/{resource_group}"
     content = (
-        f"dns_azure_subscription_id = {subscription_id}\n"
-        f"dns_azure_resource_group = {resource_group}\n"
         f"dns_azure_tenant_id = {tenant_id}\n"
-        f"dns_azure_client_id = {client_id}\n"
-        f"dns_azure_client_secret = {client_secret}\n"
+        f"dns_azure_sp_client_id = {client_id}\n"
+        f"dns_azure_sp_client_secret = {client_secret}\n"
+        f"dns_azure_zone1 = {zone_target}:{resource_id}\n"
     )
     return _create_config_file("azure", content)
 

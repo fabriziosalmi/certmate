@@ -570,8 +570,11 @@ class CertificateManager:
             process_env.update(ca_extra_env)
             strategy.prepare_environment(process_env, dns_config)
 
-            # Create Config File
-            credentials_file = strategy.create_config_file(dns_config)
+            # Create Config File. ``domain`` is propagated for plugins
+            # that build per-cert content into the credentials INI
+            # (Azure DNS uses it for ``dns_azure_zone1``); the rest of
+            # the strategies accept and ignore it.
+            credentials_file = strategy.create_config_file(dns_config, domain=domain)
 
             # Configure Args
             strategy.configure_certbot_arguments(certbot_cmd, credentials_file, domain_alias=domain_alias)
