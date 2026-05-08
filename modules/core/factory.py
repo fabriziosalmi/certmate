@@ -102,9 +102,9 @@ def _secret_key_from_env_or_generate(data_dir: Path) -> str:
             key = Path(explicit_key_file).read_text().strip()
             if key:
                 return key
-            logger.warning("SECRET_KEY_FILE (%s) is empty; generating a fresh secret key.", explicit_key_file)
+            logger.warning(f"SECRET_KEY_FILE ({explicit_key_file}) is empty; generating a fresh secret key.")
         except Exception as e:
-            logger.warning("Could not read SECRET_KEY_FILE (%s): %s; generating a fresh secret key.", explicit_key_file, e)
+            logger.warning(f"Could not read SECRET_KEY_FILE ({explicit_key_file}): {e}; generating a fresh secret key.")
         return secrets.token_hex(32)
 
     env_key = os.getenv('SECRET_KEY', '')
@@ -112,7 +112,7 @@ def _secret_key_from_env_or_generate(data_dir: Path) -> str:
         return env_key
 
     if env_key in insecure_defaults and env_key != '':
-        logger.warning("SECRET_KEY is set to an insecure default; ignoring it.")
+        logger.warning(f"SECRET_KEY is set to an insecure default; ignoring it.")
 
     implicit_key_file = data_dir / '.secret_key'
     if implicit_key_file.exists():
@@ -123,7 +123,7 @@ def _secret_key_from_env_or_generate(data_dir: Path) -> str:
         implicit_key_file.write_text(key)
         implicit_key_file.chmod(0o600)
     except OSError as e:
-        logger.warning("Could not persist SECRET_KEY to %s: %s. Sessions will not survive restarts.", implicit_key_file, e)
+        logger.warning(f"Could not persist SECRET_KEY to {implicit_key_file}: {e}. Sessions will not survive restarts.")
     return key
 
 def configure_app(container: AppContainer, app, test_config=None):
