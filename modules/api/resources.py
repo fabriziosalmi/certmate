@@ -8,8 +8,9 @@ import re
 import tempfile
 import zipfile
 import os
+import io
 from pathlib import Path
-from flask import send_file, after_this_request, current_app
+from flask import send_file, after_this_request, current_app, request
 from flask_restx import Resource, fields
 
 from ..core.metrics import get_metrics_summary, is_prometheus_available
@@ -480,13 +481,50 @@ def create_api_resources(api, models, managers):
         @api.doc(security='Bearer')
         @auth_manager.require_role('viewer')
         def get(self, domain):
-            """Download certificate files as ZIP"""
+            """Download certificate files as ZIP or individual file"""
             try:
                 cert_dir, err = _validate_domain_path(domain, file_ops.cert_dir)
                 if err:
                     return {'error': err}, 400
                 if not cert_dir.exists():
                     return {'error': f'Certificate not found for domain: {domain}'}, 404
+
+                # Check for the optional 'file' parameter
+                requested_file = request.args.get('file')
+
+                if requested_file:
+                    # Security check: only allow specific certificate files
+                    if requested_file not in ['fullchain.pem', 'privkey.pem', 'combined.pem']:
+                        return {'error': 'Invalid file requested.'}, 400
+
+                    if requested_file == 'combined.pem':
+                        try:
+                            # Read both files and join them
+                            fullchain = (cert_dir / 'fullchain.pem').read_text()
+                            privkey = (cert_dir / 'privkey.pem').read_text()
+                            combined_data = io.BytesIO(f"{fullchain}{privkey}".encode())
+
+                            return send_file(
+                                combined_data,
+                                as_attachment=True,
+                                download_name=f'{domain}_combined.pem',
+                                mimetype='application/x-pem-file'
+                            )
+                        except FileNotFoundError:
+                            return {'error': f'Required cert files not found for domain {domain}'}, 404
+
+                    file_path = cert_dir / requested_file
+                    if not file_path.exists():
+                        return {'error': f'File {requested_file} not found for domain {domain}'}, 404
+
+                    return send_file(
+                        file_path,
+                        as_attachment=True,
+                        download_name=f'{domain}_{requested_file}',
+                        mimetype='application/x-pem-file'
+                    )
+
+                # Fallback to original ZIP logic if no file parameter is provided
 
                 # Create temporary ZIP file
                 with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as tmp_file:
