@@ -5,6 +5,14 @@ services:
       context: .
       args:
         REQUIREMENTS_FILE: requirements.txt
+        # Optional extras layered on top of the main requirements.
+        # Defaults to empty (skipped). Set in .env to bake in storage
+        # backends or other optional deps at image build time:
+        #   EXTRA_REQUIREMENTS=requirements-storage-all.txt
+        # Other valid values: requirements-azure-storage.txt,
+        # requirements-aws-storage.txt, requirements-vault-storage.txt,
+        # requirements-infisical-storage.txt, requirements-extended.txt.
+        EXTRA_REQUIREMENTS: ${EXTRA_REQUIREMENTS:-}
     # Uncomment to use pre-built multi-platform image instead of building locally:
     # image: YOUR_DOCKERHUB_USERNAME/certmate:latest
     # platform: linux/amd64  # Optional: force specific platform (linux/amd64, linux/arm64)
