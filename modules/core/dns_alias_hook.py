@@ -55,9 +55,17 @@ def _json_request(method, url, headers, data=None):
         body = json.dumps(data).encode('utf-8')
         headers = {**headers, 'Content-Type': 'application/json'}
 
+    # Bandit B310: urllib.urlopen accepts file:// and custom schemes by
+    # default. Mitigated by validating the scheme before the call — `url`
+    # flows in from DNS-provider config assembled by the Lexicon adapters
+    # in this module, which only emit http(s) endpoints. Failing closed
+    # here keeps that contract explicit instead of relying on caller
+    # discipline alone.
+    if not url.startswith(('https://', 'http://')):
+        raise DNSAliasError(f'DNS provider API URL must use http or https: {url[:64]}')
     req = urllib.request.Request(url, data=body, headers=headers, method=method)
     try:
-        with urllib.request.urlopen(req, timeout=30) as response:
+        with urllib.request.urlopen(req, timeout=30) as response:  # nosec B310 - scheme validated above
             raw = response.read().decode('utf-8')
             return json.loads(raw) if raw else {}
     except urllib.error.HTTPError as exc:
@@ -79,7 +87,11 @@ def _record_name(alias_domain):
 
 def _public_ip():
     try:
-        with urllib.request.urlopen('https://api.ipify.org', timeout=10) as response:
+        # Hardcoded https URL (api.ipify.org) — Namecheap requires injecting
+        # the client's public IP into API calls. Bandit B310 flagged it on
+        # the assumption urllib could be tricked into file:// here, but the
+        # URL is a static literal.
+        with urllib.request.urlopen('https://api.ipify.org', timeout=10) as response:  # nosec B310 - hardcoded https literal
             return response.read().decode('utf-8').strip()
     except Exception as exc:
         raise DNSAliasError(
