@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -205,6 +206,78 @@ def test_domain_alias_hook_config_contains_provider_alias_and_is_cleaned_up(tmp_
     assert '"domain_alias": "jam--ie.bksslvalidation.ie"' in captured['content']
     assert expected_secret in captured['content']
     assert '"config":' in captured['content']
+    assert not captured['path'].exists()
+
+
+def test_domain_alias_metadata_is_saved_for_ui_and_renewal_audit(tmp_path):
+    mgr, _ = _manager(tmp_path, provider='cloudflare')
+
+    with patch('modules.core.certificates.check_certbot_plugin_installed', return_value=True):
+        result = mgr.create_certificate(
+            domain='jam.ie',
+            email='test@example.com',
+            dns_provider='cloudflare',
+            staging=True,
+            domain_alias='jam--ie.bksslvalidation.ie',
+        )
+
+    metadata = json.loads((tmp_path / 'jam.ie' / 'metadata.json').read_text())
+    assert result['success'] is True
+    assert metadata['domain_alias'] == 'jam--ie.bksslvalidation.ie'
+    assert metadata['alias_dns_provider'] == 'cloudflare'
+
+
+def test_certificate_info_includes_alias_metadata(tmp_path):
+    mgr, shell = _manager(tmp_path, provider='cloudflare')
+    shell.set_next_result(returncode=0, stdout='notAfter=Aug  6 00:00:00 2026 GMT\n')
+
+    info = mgr._parse_certificate_info(
+        'jam.ie',
+        b'fake certificate content',
+        {
+            'dns_provider': 'cloudflare',
+            'domain_alias': 'jam--ie.bksslvalidation.ie',
+            'alias_dns_provider': 'cloudflare',
+        },
+    )
+
+    assert info['exists'] is True
+    assert info['dns_provider'] == 'cloudflare'
+    assert info['domain_alias'] == 'jam--ie.bksslvalidation.ie'
+    assert info['alias_dns_provider'] == 'cloudflare'
+
+
+def test_domain_alias_renewal_rebuilds_manual_hook_from_metadata(tmp_path):
+    mgr, shell = _manager(tmp_path, provider='cloudflare')
+    domain_dir = tmp_path / 'jam.ie'
+    domain_dir.mkdir()
+    (domain_dir / 'cert.pem').write_text('fake certificate content')
+    (domain_dir / 'metadata.json').write_text(json.dumps({
+        'domain': 'jam.ie',
+        'dns_provider': 'cloudflare',
+        'domain_alias': 'jam--ie.bksslvalidation.ie',
+        'alias_dns_provider': 'cloudflare',
+        'account_id': 'production',
+    }))
+
+    captured = {}
+    original = CertificateManager._configure_dns_alias_arguments
+
+    def capture_config(cmd, hook_config):
+        captured['path'] = Path(hook_config)
+        captured['content'] = captured['path'].read_text()
+        original(cmd, hook_config)
+
+    with patch.object(CertificateManager, '_configure_dns_alias_arguments', side_effect=capture_config):
+        result = mgr.renew_certificate('jam.ie')
+
+    cmd = shell.commands_executed[0].split()
+    assert result['success'] is True
+    assert '--manual' in cmd
+    assert '--manual-auth-hook' in cmd
+    assert '"domain_alias": "jam--ie.bksslvalidation.ie"' in captured['content']
+    assert '"provider": "cloudflare"' in captured['content']
+    assert mgr.dns_manager.get_dns_provider_account_config.call_args.args[:2] == ('cloudflare', 'production')
     assert not captured['path'].exists()
 
 

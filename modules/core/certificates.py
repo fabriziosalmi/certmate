@@ -244,6 +244,8 @@ class CertificateManager:
             metadata = {}
 
         dns_provider = metadata.get('dns_provider')
+        domain_alias = metadata.get('domain_alias')
+        alias_dns_provider = metadata.get('alias_dns_provider')
         settings = self.settings_manager.load_settings()
         if not dns_provider:
             # Fall back to current settings
@@ -284,7 +286,9 @@ class CertificateManager:
                             'days_left': days_left,
                             'days_until_expiry': days_left,
                             'needs_renewal': days_left < renewal_threshold_days,
-                            'dns_provider': dns_provider
+                            'dns_provider': dns_provider,
+                            'domain_alias': domain_alias,
+                            'alias_dns_provider': alias_dns_provider
                         }
                     except ValueError as e:
                         logger.error(f"Error parsing certificate date for {domain}: {e}")
@@ -310,7 +314,9 @@ class CertificateManager:
             'days_left': None,
             'days_until_expiry': None,
             'needs_renewal': True,
-            'dns_provider': dns_provider
+            'dns_provider': dns_provider,
+            'domain_alias': domain_alias,
+            'alias_dns_provider': alias_dns_provider
         }
 
     def _create_empty_cert_info(self, domain):
@@ -677,6 +683,7 @@ class CertificateManager:
         domain_lock = self._get_domain_lock(domain)
         if not domain_lock.acquire(blocking=False):
             raise RuntimeError(f"A certificate operation for {domain} is already in progress")
+        alias_hook_config = None
         try:
             # Use the same config/work/log directories as during creation
             cert_dir = self.cert_dir
@@ -685,6 +692,15 @@ class CertificateManager:
                 raise FileNotFoundError(f"No certificate found for domain: {domain}")
             work_dir = domain_dir / 'work'
             logs_dir = domain_dir / 'logs'
+
+            metadata_file = domain_dir / 'metadata.json'
+            metadata = {}
+            if metadata_file.exists():
+                try:
+                    with open(metadata_file, 'r') as f:
+                        metadata = json.load(f)
+                except Exception as e:
+                    logger.warning(f"Failed to read metadata for renewal of {domain}: {e}")
             
             cmd = [
                 'certbot', 'renew',
@@ -694,6 +710,44 @@ class CertificateManager:
                 '--work-dir', str(work_dir),
                 '--logs-dir', str(logs_dir)
             ]
+
+            domain_alias = metadata.get('domain_alias')
+            if domain_alias:
+                alias_provider = metadata.get('alias_dns_provider') or metadata.get('dns_provider')
+                if not alias_provider:
+                    raise RuntimeError(f"Cannot renew {domain}: metadata is missing alias DNS provider")
+
+                settings = self.settings_manager.load_settings()
+                dns_config, _ = self.dns_manager.get_dns_provider_account_config(
+                    alias_provider,
+                    metadata.get('account_id'),
+                    settings,
+                )
+                if not dns_config:
+                    raise RuntimeError(
+                        f"Cannot renew {domain}: DNS alias provider account for {alias_provider} is not configured"
+                    )
+
+                strategy = DNSStrategyFactory.get_strategy(alias_provider)
+                propagation_map = settings.get('dns_propagation_seconds', {}) or {}
+                try:
+                    propagation_time = int(propagation_map.get(alias_provider, strategy.default_propagation_seconds))
+                except (ValueError, TypeError):
+                    propagation_time = strategy.default_propagation_seconds
+                propagation_time = max(1, min(3600, propagation_time))
+
+                alias_hook_config = self._create_dns_alias_hook_config(
+                    alias_provider,
+                    dns_config,
+                    domain_alias,
+                    propagation_time,
+                )
+                self._configure_dns_alias_arguments(cmd, alias_hook_config)
+                logger.info(
+                    f"Renewing {domain} with DNS alias '{domain_alias}' "
+                    f"using {alias_provider} manual hook."
+                )
+
             result = self.shell_executor.run(cmd, capture_output=True, text=True)
             
             if result.returncode == 0:
@@ -708,12 +762,8 @@ class CertificateManager:
                         self._atomic_binary_copy(src_file, dest_file)
                 
                 # Update metadata with renewal timestamp
-                metadata_file = dest_dir / 'metadata.json'
                 if metadata_file.exists():
                     try:
-                        import json
-                        with open(metadata_file, 'r') as f:
-                            metadata = json.load(f)
                         metadata['renewed_at'] = datetime.now().isoformat()
                         self._atomic_json_write(metadata_file, metadata)
                         logger.info(f"Updated renewal timestamp in metadata for {domain}")
@@ -735,6 +785,11 @@ class CertificateManager:
             logger.error(f"Exception during certificate renewal for {domain}: {error_msg}")
             raise RuntimeError(f"Exception: {error_msg}")
         finally:
+            if alias_hook_config:
+                try:
+                    os.unlink(alias_hook_config)
+                except (FileNotFoundError, OSError):
+                    pass
             domain_lock.release()
 
     def check_renewals(self):

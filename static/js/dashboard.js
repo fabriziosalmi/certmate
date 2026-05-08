@@ -331,6 +331,11 @@
         return '<span id="deployment-status-' + domainId + '" class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300"><i class="fas fa-spinner fa-spin mr-1"></i>Checking...</span>';
     }
 
+    function providerDisplayName(provider) {
+        var safeProvider = escapeHtml(provider || '');
+        return safeProvider ? safeProvider.charAt(0).toUpperCase() + safeProvider.slice(1) : '';
+    }
+
     function displayCertificates(certificates) {
         var container = document.getElementById('certificatesList');
         var thead = document.querySelector('#certificatesTable thead');
@@ -398,9 +403,12 @@
         }
 
         container.innerHTML = sorted.map(function (cert) {
-            var providerLabel = cert.dns_provider
-                ? cert.dns_provider.charAt(0).toUpperCase() + cert.dns_provider.slice(1)
-                : '';
+            // providerDisplayName(...) already calls escapeHtml internally —
+            // when interpolating into the rowHtml template we wrap it with
+            // rowRaw() to opt out of re-escaping. cert.domain and
+            // cert.domain_alias flow in unescaped; the helper escapes them.
+            var providerLabel = providerDisplayName(cert.dns_provider);
+            var domainAlias = cert.domain_alias || '';
 
             if (!cert.exists) {
                 return rowHtml`<tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer" onclick="openCertDetail('${cert.domain}')">
@@ -443,16 +451,23 @@
             //
             // deploymentBadgeHtml + autoRenewButtonHtml return pre-built HTML
             // strings whose inputs are already escaped, so we wrap with raw().
+            //
+            // Domain alias indicator (#122): when cert.domain_alias is set,
+            // render a small "Alias: …" hint under the domain name so users
+            // can spot rows that go through the CNAME-delegation flow.
             return rowHtml`<tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors duration-150 cursor-pointer" onclick="openCertDetail('${cert.domain}')">
                 <td class="px-6 py-4 whitespace-nowrap">
                     <div class="flex items-center">
                         <i class="fas fa-certificate text-gray-400 dark:text-gray-500 mr-2 text-sm" aria-hidden="true"></i>
-                        <div class="text-sm font-medium text-gray-900 dark:text-white">${cert.domain}</div>
+                        <div class="min-w-0">
+                            <div class="text-sm font-medium text-gray-900 dark:text-white">${cert.domain}</div>
+                            ${domainAlias ? rowHtml`<div class="mt-1 flex items-center text-xs text-blue-600 dark:text-blue-300 min-w-0"><i class="fas fa-link mr-1 text-blue-500" aria-hidden="true"></i><span class="truncate" title="${domainAlias}">Alias: ${domainAlias}</span></div>` : false}
+                        </div>
                     </div>
                 </td>
                 <td class="px-4 py-4 whitespace-nowrap"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${rowRaw(statusClass)}"><i class="fas ${rowRaw(statusIcon)} mr-1"></i>${statusText}</span></td>
                 <td class="px-4 py-4 whitespace-nowrap hidden md:table-cell"><div class="text-sm text-gray-900 dark:text-white">${expiryStr}</div><div class="text-xs ${rowRaw(daysClass)}">${cert.days_until_expiry} days</div></td>
-                <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-gray-500 dark:text-gray-400">${providerLabel || '—'}</td>
+                <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-gray-500 dark:text-gray-400">${rowRaw(providerLabel) || '—'}</td>
                 <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell">${rowRaw(deploymentBadgeHtml(cert))}</td>
                 <td class="px-4 py-4 whitespace-nowrap text-right">
                     <div class="flex items-center justify-end gap-1">
@@ -505,8 +520,9 @@
         document.getElementById('detailDomain').textContent = cert.domain;
 
         var safeDomain = escapeHtml(cert.domain);
-        var safeDnsProvider = escapeHtml(cert.dns_provider || '');
-        var providerLabel = safeDnsProvider ? safeDnsProvider.charAt(0).toUpperCase() + safeDnsProvider.slice(1) : '';
+        var providerLabel = providerDisplayName(cert.dns_provider);
+        var safeDomainAlias = escapeHtml(cert.domain_alias || '');
+        var aliasProviderLabel = providerDisplayName(cert.alias_dns_provider);
 
         if (!cert.exists) {
             content.innerHTML = '<div class="text-center py-8"><i class="fas fa-exclamation-triangle text-red-400 text-3xl mb-3"></i>' +
@@ -538,11 +554,13 @@
                 '<div class="space-y-3">' +
                 '<h4 class="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wider">Details</h4>' +
                 '<dl class="space-y-2">' +
-                '<div class="flex justify-between py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">Domain</dt><dd class="text-sm font-medium text-gray-900 dark:text-white">' + safeDomain + '</dd></div>' +
-                '<div class="flex justify-between py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">Expires</dt><dd class="text-sm font-medium text-gray-900 dark:text-white">' + expiryDate.toLocaleDateString(undefined, { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' }) + '</dd></div>' +
-                (providerLabel ? '<div class="flex justify-between py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">DNS Provider</dt><dd class="text-sm font-medium text-gray-900 dark:text-white">' + providerLabel + '</dd></div>' : '') +
-                '<div class="flex justify-between py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">Auto-Renew</dt><dd class="text-sm font-medium ' + (cert.auto_renew !== false ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400') + '">' + (cert.auto_renew !== false ? 'Enabled' : 'Disabled') + '</dd></div>' +
-                '<div class="flex justify-between py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">Deployment</dt><dd>' + deploymentBadgeHtml(cert) + '</dd></div>' +
+                '<div class="flex justify-between gap-4 py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">Domain</dt><dd class="text-sm font-medium text-right text-gray-900 dark:text-white">' + safeDomain + '</dd></div>' +
+                '<div class="flex justify-between gap-4 py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">Expires</dt><dd class="text-sm font-medium text-right text-gray-900 dark:text-white">' + expiryDate.toLocaleDateString(undefined, { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' }) + '</dd></div>' +
+                (providerLabel ? '<div class="flex justify-between gap-4 py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">DNS Provider</dt><dd class="text-sm font-medium text-right text-gray-900 dark:text-white">' + providerLabel + '</dd></div>' : '') +
+                (safeDomainAlias ? '<div class="flex justify-between gap-4 py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">DNS Alias</dt><dd class="text-sm font-medium text-right break-all text-blue-600 dark:text-blue-300">' + safeDomainAlias + '</dd></div>' : '') +
+                (safeDomainAlias && aliasProviderLabel ? '<div class="flex justify-between gap-4 py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">Alias Provider</dt><dd class="text-sm font-medium text-right text-gray-900 dark:text-white">' + aliasProviderLabel + '</dd></div>' : '') +
+                '<div class="flex justify-between gap-4 py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">Auto-Renew</dt><dd class="text-sm font-medium text-right ' + (cert.auto_renew !== false ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400') + '">' + (cert.auto_renew !== false ? 'Enabled' : 'Disabled') + '</dd></div>' +
+                '<div class="flex justify-between gap-4 py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">Deployment</dt><dd>' + deploymentBadgeHtml(cert) + '</dd></div>' +
                 '</dl>' +
                 '</div>' +
                 // Actions
