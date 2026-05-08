@@ -1,3 +1,18 @@
+## v2.4.2 (Patch — UI debt repayment)
+
+Frontend-only cleanup driven by a UI tech-debt audit. No behavior changes for end users; bundle shrinks and the theme toggle finally works correctly.
+
+### Refactor
+- **Removed unused `htmx.min.js`**: was loaded synchronously from `base.html` on every page but no template ever used `hx-*` attributes — 51 KB of vendor JS for zero benefit. The `<script>` tag and the file itself are gone.
+- **Split `settings.js` into per-component modules**: three self-contained Alpine components extracted to `settings-notifications.js`, `settings-deploy.js`, and `settings-apikeys.js`. `settings.js` is now 2651 lines (was 3048, −13%). Cross-module helpers (`addDebugLog`, `showMessage`) bridged via a small `window.CmSettings` surface.
+- **Added `CertMate.html` tagged-template helper**: each `${value}` interpolation is auto-escaped; `CertMate.raw()` opts out for pre-rendered fragments. Converts the two largest `innerHTML` sites in `dashboard.js` (stats cards + cert table row) — removes a class of XSS-by-omission risk where a future PR could forget to call `escapeHtml()` on a user-provided field.
+
+### Build hygiene
+- **Rebuilt `tailwind.min.css`**: the bundle was months stale and missing ~128 `dark:*` utilities. Most visible symptom: the theme toggle showed both moon and sun icons simultaneously because `dark:hidden` / `dark:inline` didn't exist in the bundle. Other silently-broken classes included `safe-area-bottom` and `pb-16`. Run `npm run css:build` after touching templates to keep this fresh.
+
+### Tests
+- Updated `test_static_csp` parametrization to match the new module layout (drop `htmx.min.js`, add `settings-*` bundles).
+
 ## v2.4.1 (Patch — client-cert UI fixes)
 
 Addresses [#123](https://github.com/fabriziosalmi/certmate/issues/123): the client-certificate dashboard was unusable from the GUI.
