@@ -67,7 +67,7 @@ def _provider_config(provider):
             'api_url': 'https://auth.acme-dns.io',
             'username': 'acme-user',
             'password': 'acme-password',
-            'subdomain': 'jam--ie.bksslvalidation.ie',
+            'subdomain': 'certmate-validation.example.net',
         }
     if provider == 'duckdns':
         return {'api_token': 'duck-token'}
@@ -119,16 +119,16 @@ def test_domain_alias_uses_manual_hook_not_provider_plugin(tmp_path, provider, p
 
     with patch('modules.core.certificates.check_certbot_plugin_installed', return_value=True):
         result = mgr.create_certificate(
-            domain='jam.ie',
+            domain='app.certmate.example',
             email='test@example.com',
             dns_provider=provider,
             staging=True,
-            domain_alias='jam--ie.bksslvalidation.ie',
+            domain_alias='certmate-validation.example.net',
         )
 
     assert result['success'] is True
     cmd = shell.commands_executed[0].split()
-    assert _d_flags(cmd) == ['jam.ie']
+    assert _d_flags(cmd) == ['app.certmate.example']
     assert '--manual' in cmd
     assert '--manual-auth-hook' in cmd
     assert '--manual-cleanup-hook' in cmd
@@ -143,18 +143,18 @@ def test_domain_alias_all_core_providers_use_manual_hook(tmp_path, provider):
 
     with patch('modules.core.certificates.check_certbot_plugin_installed', return_value=True):
         result = mgr.create_certificate(
-            domain='jam.ie',
+            domain='app.certmate.example',
             email='test@example.com',
             dns_provider=provider,
             staging=True,
-            domain_alias='jam--ie.bksslvalidation.ie',
+            domain_alias='certmate-validation.example.net',
         )
 
     assert result['success'] is True
     cmd = shell.commands_executed[0].split()
     assert '--manual' in cmd
     assert '--manual-auth-hook' in cmd
-    assert result['domain'] == 'jam.ie'
+    assert result['domain'] == 'app.certmate.example'
 
 
 def test_domain_alias_does_not_require_provider_certbot_plugin(tmp_path):
@@ -162,11 +162,11 @@ def test_domain_alias_does_not_require_provider_certbot_plugin(tmp_path):
 
     with patch('modules.core.certificates.check_certbot_plugin_installed') as plugin_check:
         result = mgr.create_certificate(
-            domain='jam.ie',
+            domain='app.certmate.example',
             email='test@example.com',
             dns_provider='powerdns',
             staging=True,
-            domain_alias='jam--ie.bksslvalidation.ie',
+            domain_alias='certmate-validation.example.net',
         )
 
     assert result['success'] is True
@@ -195,15 +195,15 @@ def test_domain_alias_hook_config_contains_provider_alias_and_is_cleaned_up(tmp_
     with patch('modules.core.certificates.check_certbot_plugin_installed', return_value=True), \
          patch.object(CertificateManager, '_configure_dns_alias_arguments', side_effect=capture_config):
         mgr.create_certificate(
-            domain='jam.ie',
+            domain='app.certmate.example',
             email='test@example.com',
             dns_provider=provider,
             staging=True,
-            domain_alias='jam--ie.bksslvalidation.ie',
+            domain_alias='certmate-validation.example.net',
         )
 
     assert f'"provider": "{provider}"' in captured['content']
-    assert '"domain_alias": "jam--ie.bksslvalidation.ie"' in captured['content']
+    assert '"domain_alias": "certmate-validation.example.net"' in captured['content']
     assert expected_secret in captured['content']
     assert '"config":' in captured['content']
     assert not captured['path'].exists()
@@ -214,16 +214,16 @@ def test_domain_alias_metadata_is_saved_for_ui_and_renewal_audit(tmp_path):
 
     with patch('modules.core.certificates.check_certbot_plugin_installed', return_value=True):
         result = mgr.create_certificate(
-            domain='jam.ie',
+            domain='app.certmate.example',
             email='test@example.com',
             dns_provider='cloudflare',
             staging=True,
-            domain_alias='jam--ie.bksslvalidation.ie',
+            domain_alias='certmate-validation.example.net',
         )
 
-    metadata = json.loads((tmp_path / 'jam.ie' / 'metadata.json').read_text())
+    metadata = json.loads((tmp_path / 'app.certmate.example' / 'metadata.json').read_text())
     assert result['success'] is True
-    assert metadata['domain_alias'] == 'jam--ie.bksslvalidation.ie'
+    assert metadata['domain_alias'] == 'certmate-validation.example.net'
     assert metadata['alias_dns_provider'] == 'cloudflare'
 
 
@@ -232,30 +232,30 @@ def test_certificate_info_includes_alias_metadata(tmp_path):
     shell.set_next_result(returncode=0, stdout='notAfter=Aug  6 00:00:00 2026 GMT\n')
 
     info = mgr._parse_certificate_info(
-        'jam.ie',
+        'app.certmate.example',
         b'fake certificate content',
         {
             'dns_provider': 'cloudflare',
-            'domain_alias': 'jam--ie.bksslvalidation.ie',
+            'domain_alias': 'certmate-validation.example.net',
             'alias_dns_provider': 'cloudflare',
         },
     )
 
     assert info['exists'] is True
     assert info['dns_provider'] == 'cloudflare'
-    assert info['domain_alias'] == 'jam--ie.bksslvalidation.ie'
+    assert info['domain_alias'] == 'certmate-validation.example.net'
     assert info['alias_dns_provider'] == 'cloudflare'
 
 
 def test_domain_alias_renewal_rebuilds_manual_hook_from_metadata(tmp_path):
     mgr, shell = _manager(tmp_path, provider='cloudflare')
-    domain_dir = tmp_path / 'jam.ie'
+    domain_dir = tmp_path / 'app.certmate.example'
     domain_dir.mkdir()
     (domain_dir / 'cert.pem').write_text('fake certificate content')
     (domain_dir / 'metadata.json').write_text(json.dumps({
-        'domain': 'jam.ie',
+        'domain': 'app.certmate.example',
         'dns_provider': 'cloudflare',
-        'domain_alias': 'jam--ie.bksslvalidation.ie',
+        'domain_alias': 'certmate-validation.example.net',
         'alias_dns_provider': 'cloudflare',
         'account_id': 'production',
     }))
@@ -269,16 +269,59 @@ def test_domain_alias_renewal_rebuilds_manual_hook_from_metadata(tmp_path):
         original(cmd, hook_config)
 
     with patch.object(CertificateManager, '_configure_dns_alias_arguments', side_effect=capture_config):
-        result = mgr.renew_certificate('jam.ie')
+        result = mgr.renew_certificate('app.certmate.example')
 
     cmd = shell.commands_executed[0].split()
     assert result['success'] is True
     assert '--manual' in cmd
     assert '--manual-auth-hook' in cmd
-    assert '"domain_alias": "jam--ie.bksslvalidation.ie"' in captured['content']
+    assert '"domain_alias": "certmate-validation.example.net"' in captured['content']
     assert '"provider": "cloudflare"' in captured['content']
     assert mgr.dns_manager.get_dns_provider_account_config.call_args.args[:2] == ('cloudflare', 'production')
     assert not captured['path'].exists()
+
+
+def test_dns_alias_expectations_include_sans_and_dedupe_wildcard():
+    expectations = CertificateManager.build_dns_alias_expectations(
+        'app.certmate.example',
+        'certmate-test-validation.example.net',
+        san_domains=['*.app.certmate.example', 'api.certmate.example'],
+    )
+
+    assert expectations == [
+        {
+            'source': '_acme-challenge.app.certmate.example',
+            'expected_target': '_acme-challenge.certmate-test-validation.example.net',
+        },
+        {
+            'source': '_acme-challenge.api.certmate.example',
+            'expected_target': '_acme-challenge.certmate-test-validation.example.net',
+        },
+    ]
+
+
+def test_dns_alias_check_reports_missing_and_ok_records(tmp_path):
+    mgr, shell = _manager(tmp_path, provider='cloudflare')
+    shell.response_queue = []
+    shell.add_response(
+        'dig +short CNAME _acme-challenge.app.certmate.example',
+        stdout='_acme-challenge.certmate-test-validation.example.net.\n',
+    )
+    shell.add_response(
+        'dig +short CNAME _acme-challenge.api.certmate.example',
+        stdout='',
+    )
+
+    result = mgr.check_dns_alias_records(
+        'app.certmate.example',
+        'certmate-test-validation.example.net',
+        san_domains=['api.certmate.example'],
+    )
+
+    assert result['ok'] is False
+    assert result['checks'][0]['ok'] is True
+    assert result['checks'][1]['status'] == 'missing'
+    assert result['checks'][1]['source'] == '_acme-challenge.api.certmate.example'
 
 
 def test_domain_alias_rejects_unsupported_provider(tmp_path):
@@ -353,19 +396,19 @@ def test_acme_dns_alias_mismatch_fails_before_certbot(tmp_path):
 def test_lexicon_alias_config_mapping(provider, expected_lexicon_provider, expected_key, expected_value):
     config = dns_alias_hook._lexicon_config(
         provider,
-        'jam--ie.bksslvalidation.ie',
+        'certmate-validation.example.net',
         _provider_config(provider),
     )
 
     assert config['provider_name'] == expected_lexicon_provider
-    assert config['domain'] == 'jam--ie.bksslvalidation.ie'
+    assert config['domain'] == 'certmate-validation.example.net'
     assert config[expected_key] == expected_value
 
 
 def test_google_alias_config_encodes_service_account():
     config = dns_alias_hook._lexicon_config(
         'google',
-        'jam--ie.bksslvalidation.ie',
+        'certmate-validation.example.net',
         _provider_config('google'),
     )
 
@@ -395,15 +438,15 @@ def test_lexicon_alias_create_and_delete_use_target_record(monkeypatch):
     monkeypatch.setitem(__import__('sys').modules, 'lexicon.client', MagicMock(Client=FakeClient))
     hook_config = {
         'provider': 'cloudflare',
-        'domain_alias': 'jam--ie.bksslvalidation.ie',
+        'domain_alias': 'certmate-validation.example.net',
         'config': _provider_config('cloudflare'),
     }
 
     dns_alias_hook._lexicon_change(hook_config, 'validation-token', 'create')
     dns_alias_hook._lexicon_change(hook_config, 'validation-token', 'delete')
 
-    assert ('create', 'TXT', '_acme-challenge.jam--ie.bksslvalidation.ie', 'validation-token') in calls
-    assert ('delete', 'TXT', '_acme-challenge.jam--ie.bksslvalidation.ie', 'validation-token') in calls
+    assert ('create', 'TXT', '_acme-challenge.certmate-validation.example.net', 'validation-token') in calls
+    assert ('delete', 'TXT', '_acme-challenge.certmate-validation.example.net', 'validation-token') in calls
 
 
 def test_acme_dns_alias_requires_matching_subdomain(monkeypatch):
@@ -413,7 +456,7 @@ def test_acme_dns_alias_requires_matching_subdomain(monkeypatch):
     dns_alias_hook._acme_dns_change(
         {
             'provider': 'acme-dns',
-            'domain_alias': 'jam--ie.bksslvalidation.ie',
+            'domain_alias': 'certmate-validation.example.net',
             'config': _provider_config('acme-dns'),
         },
         'validation-token',
