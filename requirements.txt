@@ -15,6 +15,10 @@ certbot-dns-cloudflare==2.10.0
 certbot-dns-route53==2.10.0
 certbot-dns-digitalocean==2.10.0
 certbot-dns-google==2.10.0
+# certbot-dns-azure has independent versioning. 2.5.0 is the latest in
+# the line that still declares certbot<3.0,>=2.0; 2.6.0+ jumps to
+# certbot 3.x and would conflict with our certbot==2.10.0 pin.
+certbot-dns-azure==2.5.0
 
 # DNS provider plugins - Additional providers
 # certbot-dns-powerdns pinned at 0.2.1 (latest) requires dns-lexicon<=3.5.6,
