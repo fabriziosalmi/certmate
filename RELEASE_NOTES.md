@@ -1,3 +1,22 @@
+## v2.4.3 (Patch — issue triage)
+
+Closes four open issues, comments on five more.
+
+### Bug fixes
+- **#125 Cross-origin deployment status checks blocked by CSP**: `connect-src` was `'self'`, so the dashboard's per-cert deployment check (which fetches the monitored domain to verify it serves the expected cert) was a no-op for any cert that didn't match the server URL. Relaxed to `'self' https: wss:` — narrower than the reporter's suggested `*` (still excludes `data:`/`blob:`/`file:`/`ftp:`) while unblocking the actual use case. Reported by @rob-infoglobe.
+- **#113 Azure DNS: `ambiguous option: --dns-azure`**: certbot-dns-azure registers `--dns-azure-credentials`, `--dns-azure-propagation-seconds`, and `--dns-azure-config` — passing the bare `--dns-azure` flag as the authenticator selector hits argparse's ambiguity check. `AzureStrategy` now overrides `configure_certbot_arguments` to use the explicit `--authenticator dns-azure` form, mirroring `PowerDNSStrategy`. Reported by @jensaops.
+- **#121 Docker compose silently fails when host dirs aren't writable**: `setup_directories` used to catch the `OSError`, fall back to creating tempdirs, and let the wizard half-succeed. It now probes each of `certificates/`, `data/`, `backups/`, `logs/` with a write+unlink test at boot and raises `RuntimeError` with a clear list of failed paths — including the hint that the container runs as UID/GID 1000:1000. Reported by @ITJamie.
+
+### Documentation
+- **#117 Deploy hooks docs**: new [`docs/deploy-hooks.md`](docs/deploy-hooks.md) covering hook schema, UI vs API config, the `CERTMATE_*` environment variables, manual triggering paths, the v2.4.0 security model (blocked patterns + sensitive-file denylist), common recipes, and the audit/history/debug paths.
+
+### Triaged (commented, not yet fixed)
+- **#114 Missing API routes (notifications/digest/webhooks)**: 4 of the 5 routes the frontend references (`/api/notifications/config`, `/api/notifications/test`, `/api/digest/send`, `/api/webhooks/deliveries`) are 404 — the backend logic exists but isn't surfaced. Audit posted on the issue, fix scoped for v2.4.4.
+- **#112 Route53 + credentials-file DNS providers fail at renewal**: `renew_certificate` skips both `prepare_environment` (env-var providers like Route53) and the credentials-file recreate path (Cloudflare, Hetzner, Linode, OVH, etc), so renewals always need ambient Docker env vars to work, and credentials-file providers fail outright on the second renewal. Diagnosed jointly by @jplandry908 and @jensaops; fix shape posted on the issue, scoped for v2.4.4.
+- **#115 Webhook command validator + GUI script editor request**: the bug part (curl POST blocked by `[\`$]` character class) was already fixed in v2.4.1 — verified the reporter's exact command runs through the current validator. The feature request (GUI script CRUD on the host) deferred — would substantially widen the threat model from "execute a vetted whitelist" to "write arbitrary code into the container", and the docs now explicitly cover the "wrap multi-step logic in a script you mount via Dockerfile/compose" pattern instead.
+- **#124 Domain alias mode**: tracked via PR #122 from the reporter (@ITJamie) — substantive 700-line fix with 479 lines of tests. Will review and aim to merge in v2.4.3 → v2.5.0 timeframe.
+- **#116 Akamai EdgeDNS missing**: closed as not-a-bug — already supported as the `edgedns` provider (UI label "Akamai Edge DNS"). Discoverability could improve.
+
 ## v2.4.2 (Patch — UI debt repayment)
 
 Frontend-only cleanup driven by a UI tech-debt audit. No behavior changes for end users; bundle shrinks and the theme toggle finally works correctly.
