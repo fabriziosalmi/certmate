@@ -202,12 +202,15 @@ class CertificateManager:
     @classmethod
     def _resolve_cname(cls, source):
         query = urllib.parse.urlencode({'name': source, 'type': 'CNAME'})
+        # Hardcoded https URL (Cloudflare's DNS-over-HTTPS endpoint). Bandit
+        # B310 fires defensively on urlopen, but the scheme + host are both
+        # compile-time literals here, only the query string is variable.
         request = urllib.request.Request(
             f'https://cloudflare-dns.com/dns-query?{query}',
             headers={'accept': 'application/dns-json'},
         )
         try:
-            with urllib.request.urlopen(request, timeout=10) as response:
+            with urllib.request.urlopen(request, timeout=10) as response:  # nosec B310 - hardcoded https literal
                 payload = json.loads(response.read().decode('utf-8'))
         except urllib.error.HTTPError as e:
             raise RuntimeError(f'DNS query failed with HTTP {e.code}') from e
