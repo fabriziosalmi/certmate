@@ -81,7 +81,23 @@ class DNSProviderStrategy(ABC):
                 ``_acme-challenge.<alias-domain>`` in your DNS zone, and certbot
                 will follow the CNAME transparently.
         """
-        cmd.extend([f'--{self.plugin_name}'])
+        # Select the plugin via ``--authenticator <name>`` rather than the
+        # shorthand ``--<name>``. The shorthand only works when argparse can
+        # uniquely match its prefix; plugins that expose several
+        # ``--<name>-…`` options (Azure: -credentials, -config,
+        # -propagation-seconds; DuckDNS: -credentials, -token, -token-env,
+        # -propagation-seconds, -no-txt-restore; …) make the prefix
+        # ambiguous and certbot aborts with::
+        #
+        #   certbot: error: ambiguous option: --dns-azure could match
+        #   --dns-azure-propagation-seconds, --dns-azure-config,
+        #   --dns-azure-credentials
+        #
+        # ``--authenticator`` is the canonical, documented selector and is
+        # immune to that prefix collision, so it works for every plugin
+        # uniformly. See issue #113 (Azure) and the prior duckdns fix
+        # (commit 4ea7269) for the same class of bug.
+        cmd.extend(['--authenticator', self.plugin_name])
         if credentials_file:
             cmd.extend([f'--{self.plugin_name}-credentials', str(credentials_file)])
 
@@ -157,14 +173,20 @@ class AzureStrategy(DNSProviderStrategy):
             config_data.get('client_id', ''),
             config_data.get('client_secret', ''),
         )
-        
+
     @property
     def plugin_name(self) -> str:
         return 'dns-azure'
-    
+
     @property
     def default_propagation_seconds(self) -> int:
         return 180
+
+    # The configure_certbot_arguments override that v2.4.3 added here for
+    # #113 was made redundant by 47aacfd, which generalised the
+    # --authenticator selector to the base DNSProviderStrategy. The base
+    # method now does the same thing for every plugin, so AzureStrategy
+    # can fall through to it unchanged.
 
 class GoogleStrategy(DNSProviderStrategy):
     def create_config_file(self, config_data: Dict[str, Any]) -> Optional[Path]:

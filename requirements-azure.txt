@@ -3,4 +3,9 @@
 
 azure-identity==1.17.1
 azure-mgmt-dns==8.1.0
-certbot-dns-azure==2.11.0
+# 2.5.0 is the latest certbot-dns-azure that still supports certbot 2.x
+# (the rest of CertMate is pinned to certbot==2.10.0 via requirements.txt).
+# 2.6.0 / 2.6.1 require certbot>=3.0,<4.0 and would break the install.
+# The previous pin (2.11.0) was a non-existent PyPI version that broke
+# `pip install -r requirements-azure.txt` outright (reported in issue #113).
+certbot-dns-azure==2.5.0

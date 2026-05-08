@@ -50,6 +50,9 @@
             if (e.target.files[0]) ccHandleCSVFile(e.target.files[0]);
         });
 
+        var submitBatchBtn = document.getElementById('submitBatchBtn');
+        if (submitBatchBtn) submitBatchBtn.addEventListener('click', ccHandleBatchSubmit);
+
         var search = document.getElementById('searchInput');
         var fUsage = document.getElementById('filterUsage');
         var fStatus = document.getElementById('filterStatus');
@@ -169,7 +172,7 @@
             notes: document.getElementById('notes').value
         };
 
-        fetch('/api/client-certs', {
+        fetch('/api/client-certs/create', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data)
@@ -184,6 +187,48 @@
             }
         }).catch(function() {
             CertMate.toast('Error creating certificate', 'error');
+        });
+    }
+
+    function ccHandleBatchSubmit() {
+        if (!window.csvData || !window.csvData.rows || window.csvData.rows.length === 0) {
+            CertMate.toast('No CSV data to upload', 'warning');
+            return;
+        }
+        var btn = document.getElementById('submitBatchBtn');
+        if (btn) btn.disabled = true;
+
+        fetch('/api/client-certs/batch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                headers: window.csvData.headers,
+                rows: window.csvData.rows
+            })
+        }).then(function(response) {
+            return response.json().then(function(body) {
+                return { ok: response.ok, body: body };
+            });
+        }).then(function(res) {
+            if (res.ok) {
+                var b = res.body || {};
+                var msg = (b.successful || 0) + '/' + (b.total || 0) + ' certificates created';
+                if (b.failed) msg += ' (' + b.failed + ' failed)';
+                CertMate.toast(msg, b.failed ? 'warning' : 'success');
+                document.getElementById('csvPreview').classList.add('hidden');
+                document.getElementById('submitBatchBtn').classList.add('hidden');
+                document.getElementById('csvFile').value = '';
+                window.csvData = null;
+                ccLoadCertificates();
+                ccLoadStatistics();
+            } else {
+                var err = (res.body && (res.body.message || res.body.error)) || 'Batch upload failed';
+                CertMate.toast(err, 'error');
+            }
+        }).catch(function() {
+            CertMate.toast('Batch upload failed', 'error');
+        }).finally(function() {
+            if (btn) btn.disabled = false;
         });
     }
 

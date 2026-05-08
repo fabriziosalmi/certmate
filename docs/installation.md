@@ -132,8 +132,17 @@ Quick setup for common providers:
 ## Environment Variables
 
 ```bash
-# API Authentication
+# API Authentication (auto-generated if neither is set)
+# Option A: inline value
 API_BEARER_TOKEN=your_secure_token_here
+# Option B: path to a file containing the token (takes precedence over API_BEARER_TOKEN)
+API_BEARER_TOKEN_FILE=/run/secrets/api_bearer_token
+
+# Flask session secret key (auto-generated if neither is set)
+# Option A: inline value
+SECRET_KEY=your_flask_secret_key
+# Option B: path to a file containing the key (takes precedence over SECRET_KEY)
+SECRET_KEY_FILE=/run/secrets/secret_key
 
 # DNS Providers (choose one or multiple)
 CLOUDFLARE_TOKEN=your_cloudflare_token
@@ -146,10 +155,20 @@ AZURE_CLIENT_SECRET=your_azure_secret
 GOOGLE_PROJECT_ID=your_gcp_project
 POWERDNS_API_URL=https://your-powerdns:8081
 POWERDNS_API_KEY=your_powerdns_key
-
-# Optional
-SECRET_KEY=your_flask_secret_key
 ```
+
+### Resolution Order
+
+| Variable | Precedence |
+|----------|------------|
+| `API_BEARER_TOKEN_FILE` | Highest — if set, `API_BEARER_TOKEN` is never read |
+| `API_BEARER_TOKEN` | Used only when `API_BEARER_TOKEN_FILE` is absent |
+| *(generated)* | Fallback when neither is set or the value fails validation |
+| `SECRET_KEY_FILE` | Highest — if set, `SECRET_KEY` is never read |
+| `SECRET_KEY` | Used only when `SECRET_KEY_FILE` is absent |
+| *(generated + persisted)* | Written to `data/.secret_key` so sessions survive restarts |
+
+> **Docker Secrets tip**: Use `API_BEARER_TOKEN_FILE=/run/secrets/api_bearer_token` and `SECRET_KEY_FILE=/run/secrets/secret_key` with Docker Swarm or Kubernetes secrets to avoid putting sensitive values in environment variables.
 
 ---
 

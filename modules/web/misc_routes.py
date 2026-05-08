@@ -116,6 +116,99 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
         return Response(stream_with_context(generate()),
                         mimetype='text/event-stream')
 
+    # ------------------------------------------------------------------ #
+    # Notifications + digest + webhook deliveries (#114)                  #
+    # ------------------------------------------------------------------ #
+    # The frontend (settings-notifications.js) was calling these but the
+    # routes weren't registered, so users always saw 404 in the network
+    # tab and notification settings couldn't be saved from the UI. The
+    # backend logic (Notifier, WeeklyDigest) was already complete — this
+    # just surfaces it.
+
+    @app.route('/api/notifications/config', methods=['GET', 'POST'])
+    @auth_manager.require_role('admin')
+    def api_notifications_config():
+        """Get or replace the notifications config block."""
+        notifier = managers.get('notifier')
+        settings_manager = managers.get('settings')
+        if notifier is None or settings_manager is None:
+            return jsonify({'error': 'Notifier not available'}), 503
+
+        if request.method == 'GET':
+            try:
+                return jsonify(notifier._get_config())
+            except Exception as e:
+                logger.error(f"Failed to read notifications config: {e}")
+                return jsonify({'error': 'Failed to read notifications config'}), 500
+
+        try:
+            data = request.json or {}
+            if not isinstance(data, dict):
+                return jsonify({'error': 'Body must be a JSON object'}), 400
+
+            def _mutator(s):
+                s['notifications'] = data
+                return s
+
+            settings_manager.update(_mutator)
+            return jsonify({'message': 'Notification settings saved'})
+        except Exception as e:
+            logger.error(f"Failed to save notifications config: {e}")
+            return jsonify({'error': 'Failed to save notifications config'}), 500
+
+    @app.route('/api/notifications/test', methods=['POST'])
+    @auth_manager.require_role('admin')
+    def api_notifications_test():
+        """Send a test message through one channel without persisting anything."""
+        notifier = managers.get('notifier')
+        if notifier is None:
+            return jsonify({'error': 'Notifier not available'}), 503
+        try:
+            data = request.json or {}
+            channel_type = data.get('channel_type')
+            config = data.get('config') or {}
+            if not channel_type:
+                return jsonify({'error': 'channel_type is required'}), 400
+            if not isinstance(config, dict):
+                return jsonify({'error': 'config must be a JSON object'}), 400
+
+            result = notifier.test_channel(channel_type, config)
+            # test_channel returns {error: ...} or {success: True, status: ...}
+            success = 'error' not in result
+            return jsonify({'success': success, **result})
+        except Exception as e:
+            logger.error(f"Notification test failed: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    @app.route('/api/digest/send', methods=['POST'])
+    @auth_manager.require_role('admin')
+    def api_digest_send():
+        """Manually trigger the weekly digest. Returns the WeeklyDigest.send() result."""
+        digest = managers.get('digest')
+        if digest is None:
+            return jsonify({'error': 'Digest not available'}), 503
+        try:
+            result = digest.send()
+            # send() returns either {success: True, ...} or {skipped: '...'} or {error: ...}
+            return jsonify(result)
+        except Exception as e:
+            logger.error(f"Digest send failed: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    @app.route('/api/webhooks/deliveries', methods=['GET'])
+    @auth_manager.require_role('admin')
+    def api_webhook_deliveries():
+        """Recent webhook delivery log entries, newest first."""
+        notifier = managers.get('notifier')
+        if notifier is None:
+            return jsonify({'error': 'Notifier not available'}), 503
+        try:
+            limit = min(max(request.args.get('limit', 50, type=int), 1), 500)
+            return jsonify(notifier.get_deliveries(limit=limit))
+        except Exception as e:
+            logger.error(f"Webhook deliveries fetch failed: {e}")
+            return jsonify({'error': 'Failed to read webhook deliveries'}), 500
+
     @app.route('/api/web/audit-logs', methods=['GET'])
     @auth_manager.require_role('admin')
     def get_audit_logs():

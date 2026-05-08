@@ -1,3 +1,90 @@
+## v2.4.5 (Patch — community PR roundup)
+
+Five merged community PRs + dependabot security bumps. No behavior change in CertMate's core flow; mostly bug fixes, Docker-secrets ergonomics, and new download flexibility.
+
+### From the community
+
+- **#119** [@rocogamer](https://github.com/rocogamer) — generalises the v2.4.3 #113 Azure ambiguous-flag fix to the base `DNSProviderStrategy.configure_certbot_arguments`. Every plugin now uses `--authenticator <name>` (immune to argparse prefix collisions) instead of the bare `--<name>` shorthand; more robust than the per-strategy override I shipped in v2.4.3 (also dropped here in favor of the base class fix). Repins `certbot-dns-azure==2.5.0` (was a phantom `2.11.0` not on PyPI; 2.6.0+ requires certbot>=3.0 which would break the certbot 2.10 pin). 4 new regression tests pin the contract on the base class.
+- **#120** [@langtutheky](https://github.com/langtutheky) — adds `SECRET_KEY_FILE` and `API_BEARER_TOKEN_FILE` resolution for Docker Swarm / Kubernetes secret-file mounts. Resolution order: `*_FILE` → env var → fallback. 15 unit tests cover the edge cases (empty file, read error, file precedence over env var, restart persistence, insecure default ignored). Replaces remaining `ADMIN_TOKEN` references with `API_BEARER_TOKEN` across docs and config files.
+- **#126** [@rob-infoglobe](https://github.com/rob-infoglobe) — adds `?file=` query param to `/api/certificates/<domain>/download` returning a single PEM (`fullchain.pem`, `privkey.pem`, or a server-side `fullchain || privkey` concatenation as `combined.pem`) for clients that can't unzip — lightweight scripts, embedded tools, simple webhook consumers. Tight whitelist on the filename; 400 on anything else, 404 on missing files. New `tests/test_download_file_param.py` (5 cases) pins the contract.
+
+### Security bumps
+
+- **#106** [@dependabot](https://github.com/apps/dependabot) — postcss 8.5.6 → 8.5.10. [XSS fix](https://github.com/postcss/postcss/releases/tag/8.5.10) for unescaped `</style>` in non-bundler cases. Dev-dep only, no runtime impact.
+- **#104** [@dependabot](https://github.com/apps/dependabot) — pip group: requests 2.32.5 → 2.33.0 ([CVE-2026-25645](https://github.com/psf/requests/releases/tag/v2.33.0) in `extract_zipped_paths`; doesn't affect default usage), python-dotenv, cryptography.
+
+### Tests
+
+- **209 unit tests pass** (was 143; +47 from #120's secret-key tests + #119's authenticator tests + the rest from the merged PRs).
+- 5 new e2e tests for #126.
+
+### Still pending
+
+- **#122** [@ITJamie](https://github.com/ITJamie) (DNS alias mode rewrite) — rebased on top of this release; the `dashboard.js` conflict from v2.4.2's CertMate.html refactor was reconciled. Awaiting the reporter's re-test before merge. Targeted for v2.4.6 / v2.5.0.
+
+## v2.4.4 (Patch — wire up missing notification routes)
+
+Closes [#114](https://github.com/fabriziosalmi/certmate/issues/114).
+
+The frontend (`settings-notifications.js`, `base.html` SSE) had been calling four endpoints that were never registered server-side, so the browser saw 404 in the network tab and notification settings couldn't be saved from the UI. The backend logic (`Notifier`, `WeeklyDigest`) was already complete — this PR just surfaces it.
+
+### New routes (admin role required, registered in `modules/web/misc_routes.py`)
+
+| Method | Route | Backed by |
+|---|---|---|
+| GET / POST | `/api/notifications/config` | `Notifier._get_config()` / `SettingsManager.update()` writing the `notifications` block |
+| POST | `/api/notifications/test` | `Notifier.test_channel(channel_type, config)` |
+| POST | `/api/digest/send` | `WeeklyDigest.send()` |
+| GET | `/api/webhooks/deliveries?limit=N` | `Notifier.get_deliveries(limit)` (clamped to 1..500, default 50) |
+
+### Test coverage
+
+New `tests/test_notifications_routes.py` — 9 e2e tests covering: GET shape, POST round-trip persistence, body-shape validation, transport-failure normalization (`{success:false, error:...}` instead of 500 when SMTP host is unreachable), missing/unknown `channel_type`, digest result envelope (`success`/`skipped`/`error`), deliveries list shape + limit param.
+
+All 9 pass against the Docker test container (156s including image build). 143 unit tests still pass.
+
+## v2.4.3 (Patch — issue triage)
+
+Closes four open issues, comments on five more.
+
+### Bug fixes
+- **#125 Cross-origin deployment status checks blocked by CSP**: `connect-src` was `'self'`, so the dashboard's per-cert deployment check (which fetches the monitored domain to verify it serves the expected cert) was a no-op for any cert that didn't match the server URL. Relaxed to `'self' https: wss:` — narrower than the reporter's suggested `*` (still excludes `data:`/`blob:`/`file:`/`ftp:`) while unblocking the actual use case. Reported by @rob-infoglobe.
+- **#113 Azure DNS: `ambiguous option: --dns-azure`**: certbot-dns-azure registers `--dns-azure-credentials`, `--dns-azure-propagation-seconds`, and `--dns-azure-config` — passing the bare `--dns-azure` flag as the authenticator selector hits argparse's ambiguity check. `AzureStrategy` now overrides `configure_certbot_arguments` to use the explicit `--authenticator dns-azure` form, mirroring `PowerDNSStrategy`. Reported by @jensaops.
+- **#121 Docker compose silently fails when host dirs aren't writable**: `setup_directories` used to catch the `OSError`, fall back to creating tempdirs, and let the wizard half-succeed. It now probes each of `certificates/`, `data/`, `backups/`, `logs/` with a write+unlink test at boot and raises `RuntimeError` with a clear list of failed paths — including the hint that the container runs as UID/GID 1000:1000. Reported by @ITJamie.
+
+### Documentation
+- **#117 Deploy hooks docs**: new [`docs/deploy-hooks.md`](docs/deploy-hooks.md) covering hook schema, UI vs API config, the `CERTMATE_*` environment variables, manual triggering paths, the v2.4.0 security model (blocked patterns + sensitive-file denylist), common recipes, and the audit/history/debug paths.
+
+### Triaged (commented, not yet fixed)
+- **#114 Missing API routes (notifications/digest/webhooks)**: 4 of the 5 routes the frontend references (`/api/notifications/config`, `/api/notifications/test`, `/api/digest/send`, `/api/webhooks/deliveries`) are 404 — the backend logic exists but isn't surfaced. Audit posted on the issue, fix scoped for v2.4.4.
+- **#112 Route53 + credentials-file DNS providers fail at renewal**: `renew_certificate` skips both `prepare_environment` (env-var providers like Route53) and the credentials-file recreate path (Cloudflare, Hetzner, Linode, OVH, etc), so renewals always need ambient Docker env vars to work, and credentials-file providers fail outright on the second renewal. Diagnosed jointly by @jplandry908 and @jensaops; fix shape posted on the issue, scoped for v2.4.4.
+- **#115 Webhook command validator + GUI script editor request**: the bug part (curl POST blocked by `[\`$]` character class) was already fixed in v2.4.1 — verified the reporter's exact command runs through the current validator. The feature request (GUI script CRUD on the host) deferred — would substantially widen the threat model from "execute a vetted whitelist" to "write arbitrary code into the container", and the docs now explicitly cover the "wrap multi-step logic in a script you mount via Dockerfile/compose" pattern instead.
+- **#124 Domain alias mode**: tracked via PR #122 from the reporter (@ITJamie) — substantive 700-line fix with 479 lines of tests. Will review and aim to merge in v2.4.3 → v2.5.0 timeframe.
+- **#116 Akamai EdgeDNS missing**: closed as not-a-bug — already supported as the `edgedns` provider (UI label "Akamai Edge DNS"). Discoverability could improve.
+
+## v2.4.2 (Patch — UI debt repayment)
+
+Frontend-only cleanup driven by a UI tech-debt audit. No behavior changes for end users; bundle shrinks and the theme toggle finally works correctly.
+
+### Refactor
+- **Removed unused `htmx.min.js`**: was loaded synchronously from `base.html` on every page but no template ever used `hx-*` attributes — 51 KB of vendor JS for zero benefit. The `<script>` tag and the file itself are gone.
+- **Split `settings.js` into per-component modules**: three self-contained Alpine components extracted to `settings-notifications.js`, `settings-deploy.js`, and `settings-apikeys.js`. `settings.js` is now 2651 lines (was 3048, −13%). Cross-module helpers (`addDebugLog`, `showMessage`) bridged via a small `window.CmSettings` surface.
+- **Added `CertMate.html` tagged-template helper**: each `${value}` interpolation is auto-escaped; `CertMate.raw()` opts out for pre-rendered fragments. Converts the two largest `innerHTML` sites in `dashboard.js` (stats cards + cert table row) — removes a class of XSS-by-omission risk where a future PR could forget to call `escapeHtml()` on a user-provided field.
+
+### Build hygiene
+- **Rebuilt `tailwind.min.css`**: the bundle was months stale and missing ~128 `dark:*` utilities. Most visible symptom: the theme toggle showed both moon and sun icons simultaneously because `dark:hidden` / `dark:inline` didn't exist in the bundle. Other silently-broken classes included `safe-area-bottom` and `pb-16`. Run `npm run css:build` after touching templates to keep this fresh.
+
+### Tests
+- Updated `test_static_csp` parametrization to match the new module layout (drop `htmx.min.js`, add `settings-*` bundles).
+
+## v2.4.1 (Patch — client-cert UI fixes)
+
+Addresses [#123](https://github.com/fabriziosalmi/certmate/issues/123): the client-certificate dashboard was unusable from the GUI.
+
+### Bug fixes
+- **#123 405 Method Not Allowed creating a client certificate**: the create form posted to `/api/client-certs`, but that route is the list resource (GET only) — the create endpoint lives at `/api/client-certs/create`. Repointed the fetch to the documented Swagger path; `/create` is also the convention used elsewhere in the API (`/api/certificates/create`, `/api/backups/create`).
+- **Batch CSV upload was a dead button**: `#submitBatchBtn` was rendered after CSV preview but had no click handler — clicking it did nothing. Wired up a handler that POSTs `{headers, rows}` from the parsed CSV to `/api/client-certs/batch`, surfaces a `successful/total` toast (warning when any row failed), clears the preview, and reloads stats + list. CSRF is still covered by the existing Origin/Referer check, no token plumbing needed.
+
 ## v2.4.0 (Minor — issue triage + audit hardening)
 
 Closes seven open issues and adds one round of post-batch hardening driven by a 360° audit.

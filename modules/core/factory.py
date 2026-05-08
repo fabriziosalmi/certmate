@@ -2,6 +2,7 @@ import os
 import tempfile
 import secrets
 from pathlib import Path
+from typing import Optional
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from flask import Flask, request
@@ -42,36 +43,89 @@ class AppContainer:
         self.logs_dir = None
 
 
-def setup_directories(container: AppContainer, test_config=None):
+def _verify_dir_writable(directory: Path) -> Optional[str]:
+    """Probe a directory for write access. Returns None on success, or a
+    short reason string on failure. Used at boot (#121) so a Docker setup
+    with non-writable host mounts fails fast with a clear message instead
+    of silently corrupting state later in the wizard.
+    """
     try:
-        _base = Path(__file__).resolve().parent.parent.parent
-        container.cert_dir = (_base / "certificates").resolve()
-        container.data_dir = (_base / "data").resolve()
-        container.backup_dir = (_base / "backups").resolve()
-        container.logs_dir = (_base / "logs").resolve()
-
-        for directory in [
-            container.cert_dir, container.data_dir,
-            container.backup_dir, container.logs_dir
-        ]:
-            directory.mkdir(exist_ok=True)
-
-        (container.backup_dir / "unified").mkdir(exist_ok=True)
-
-        # Clean up any orphan .tmp files left by a previous hard crash
-        for _search_dir in (container.cert_dir, container.data_dir):
+        if not directory.exists():
+            return f"does not exist (and could not be created)"
+        if not directory.is_dir():
+            return f"exists but is not a directory"
+        probe = directory / f".certmate_writeprobe_{os.getpid()}"
+        try:
+            probe.write_text('ok', encoding='utf-8')
+        finally:
             try:
-                if _search_dir.exists():
-                    for _tmp in _search_dir.rglob('*.tmp'):
-                        try:
-                            _tmp.unlink()
-                            logger.debug(f"Cleaned up orphan temp file: {_tmp}")
-                        except OSError:
-                            pass
-            except Exception:
+                probe.unlink()
+            except FileNotFoundError:
                 pass
-    except Exception as e:
-        logger.error(f"Failed to create dirs: {e}")
+    except PermissionError:
+        return "not writable by the container user (check host mount permissions)"
+    except OSError as e:
+        return f"OS error during write probe: {e}"
+    return None
+
+
+def setup_directories(container: AppContainer, test_config=None):
+    _base = Path(__file__).resolve().parent.parent.parent
+    container.cert_dir = (_base / "certificates").resolve()
+    container.data_dir = (_base / "data").resolve()
+    container.backup_dir = (_base / "backups").resolve()
+    container.logs_dir = (_base / "logs").resolve()
+
+    required = [
+        ('certificates', container.cert_dir),
+        ('data', container.data_dir),
+        ('backups', container.backup_dir),
+        ('logs', container.logs_dir),
+    ]
+
+    # Best-effort create. If the parent is read-only this raises;
+    # we'd rather hit the writable probe below for a single clean error.
+    for _, directory in required:
+        try:
+            directory.mkdir(exist_ok=True)
+        except OSError as e:
+            logger.error(f"Failed to create {directory}: {e}")
+
+    try:
+        (container.backup_dir / "unified").mkdir(exist_ok=True)
+    except OSError as e:
+        logger.error(f"Failed to create {container.backup_dir / 'unified'}: {e}")
+
+    # Boot-time writeability check (#121). Surface a clear error so the
+    # operator knows exactly which host mount is wrong instead of having
+    # the setup wizard half-succeed.
+    failures = []
+    for label, directory in required:
+        reason = _verify_dir_writable(directory)
+        if reason is not None:
+            failures.append(f"  - {label} ({directory}): {reason}")
+
+    if failures:
+        msg = (
+            "Required directories are not writable by the CertMate process. "
+            "Fix host-mount permissions (the container runs as UID/GID 1000:1000) "
+            "and restart:\n" + "\n".join(failures)
+        )
+        logger.error(msg)
+        raise RuntimeError(msg)
+
+    # Clean up any orphan .tmp files left by a previous hard crash
+    for _search_dir in (container.cert_dir, container.data_dir):
+        try:
+            if _search_dir.exists():
+                for _tmp in _search_dir.rglob('*.tmp'):
+                    try:
+                        _tmp.unlink()
+                        logger.debug(f"Cleaned up orphan temp file: {_tmp}")
+                    except OSError:
+                        pass
+        except Exception:
+            pass
         container.cert_dir = Path(tempfile.mkdtemp(prefix="certmate_certs_"))
         container.data_dir = Path(tempfile.mkdtemp(prefix="certmate_data_"))
         container.backup_dir = Path(tempfile.mkdtemp(
@@ -79,21 +133,55 @@ def setup_directories(container: AppContainer, test_config=None):
         container.logs_dir = Path(tempfile.mkdtemp(prefix="certmate_logs_"))
 
 
-def configure_app(container: AppContainer, app, test_config=None):
-    secret_key = os.getenv('SECRET_KEY', '')
+def _secret_key_from_env_or_generate(data_dir: Path) -> str:
+    """Return a Flask secret key.
+
+    Resolution order (mutually exclusive):
+    1. SECRET_KEY_FILE — if set, read the key from that file. Any read error
+       or empty result generates a fresh key immediately; SECRET_KEY is never
+       consulted (to avoid encouraging both vars).
+    2. SECRET_KEY — only checked when SECRET_KEY_FILE is absent. Insecure
+       defaults ('', 'your-secret-key-here', 'change-me', 'secret') are
+       treated as unset and fall through to step 3.
+    3. Persisted generated key — reads data_dir/.secret_key if it exists so
+       sessions survive restarts, otherwise generates secrets.token_hex(32)
+       and attempts to persist it. A persistence failure is logged but does
+       not block startup; sessions will not survive restarts in that case.
+    """
     insecure_defaults = {'', 'your-secret-key-here', 'change-me', 'secret'}
-    if secret_key in insecure_defaults:
-        key_file = container.data_dir / '.secret_key'
-        if key_file.exists():
-            secret_key = key_file.read_text().strip()
-        else:
-            secret_key = secrets.token_hex(32)
-            try:
-                key_file.write_text(secret_key)
-                key_file.chmod(0o600)
-            except OSError as e:
-                logger.warning(f"Could not persist SECRET_KEY to {key_file}: {e}. Sessions will not survive restarts.")
-    app.secret_key = secret_key
+
+    explicit_key_file = os.getenv('SECRET_KEY_FILE')
+    if explicit_key_file:
+        try:
+            key = Path(explicit_key_file).read_text().strip()
+            if key:
+                return key
+            logger.warning(f"SECRET_KEY_FILE ({explicit_key_file}) is empty; generating a fresh secret key.")
+        except Exception as e:
+            logger.warning(f"Could not read SECRET_KEY_FILE ({explicit_key_file}): {e}; generating a fresh secret key.")
+        return secrets.token_hex(32)
+
+    env_key = os.getenv('SECRET_KEY', '')
+    if env_key and env_key not in insecure_defaults:
+        return env_key
+
+    if env_key in insecure_defaults and env_key != '':
+        logger.warning(f"SECRET_KEY is set to an insecure default; ignoring it.")
+
+    implicit_key_file = data_dir / '.secret_key'
+    if implicit_key_file.exists():
+        return implicit_key_file.read_text().strip()
+
+    key = secrets.token_hex(32)
+    try:
+        implicit_key_file.write_text(key)
+        implicit_key_file.chmod(0o600)
+    except OSError as e:
+        logger.warning(f"Could not persist SECRET_KEY to {implicit_key_file}: {e}. Sessions will not survive restarts.")
+    return key
+
+def configure_app(container: AppContainer, app, test_config=None):
+    app.secret_key = _secret_key_from_env_or_generate(container.data_dir)
     app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
 
     if test_config:
@@ -435,7 +523,11 @@ def setup_security_headers(app):
                 "style-src 'self' 'unsafe-inline' cdn.redoc.ly fonts.googleapis.com; "
                 "font-src 'self' fonts.gstatic.com; "
                 "img-src 'self' data:; "
-                "connect-src 'self'; "
+                # Deployment-status checks (#125) cross-fetch every monitored
+                # domain to verify it's serving the expected cert — these are
+                # by definition NOT same-origin. Allow https: + a websocket
+                # scheme for any future real-time push. data: stays excluded.
+                "connect-src 'self' https: wss:; "
                 "frame-ancestors 'self'; "
                 "form-action 'self'; "
                 "base-uri 'self'; "

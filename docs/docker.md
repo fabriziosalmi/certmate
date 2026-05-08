@@ -60,7 +60,9 @@ Create a `.env` file on your host (not in the Docker image):
 
 ```bash
 SECRET_KEY=your-super-secret-key-here
-ADMIN_TOKEN=your-admin-token-here
+# SECRET_KEY_FILE=/run/secrets/secret_key  # Alternative: takes precedence over SECRET_KEY
+API_BEARER_TOKEN=your-api-bearer-token-here
+# API_BEARER_TOKEN_FILE=/run/secrets/api_bearer_token  # Alternative: takes precedence over API_BEARER_TOKEN
 CLOUDFLARE_API_TOKEN=your-cloudflare-api-token
 LOG_LEVEL=INFO
 ```
@@ -80,7 +82,9 @@ docker run -d --name certmate \
 ```bash
 docker run -d --name certmate \
   -e SECRET_KEY="your-secret-key" \
-  -e ADMIN_TOKEN="your-admin-token" \
+  # -e SECRET_KEY_FILE="/run/secrets/secret_key" \  # Alternative: takes precedence over SECRET_KEY
+  -e API_BEARER_TOKEN="your-api-bearer-token" \
+  # -e API_BEARER_TOKEN_FILE="/run/secrets/api_bearer_token" \  # Alternative: takes precedence over API_BEARER_TOKEN
   -e CLOUDFLARE_API_TOKEN="your-api-token" \
   -p 8000:8000 \
   -v certmate_certificates:/app/certificates \
@@ -92,8 +96,10 @@ docker run -d --name certmate \
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `SECRET_KEY` | Yes | Flask secret key for sessions |
-| `ADMIN_TOKEN` | Yes | Authentication token for admin access |
+| `SECRET_KEY` | No | Flask secret key for sessions (auto-generated if unset) |
+| `SECRET_KEY_FILE` | No | Path to a file containing the Flask secret key (takes precedence over `SECRET_KEY`) |
+| `API_BEARER_TOKEN` | No | Authentication token for API access (auto-generated if unset) |
+| `API_BEARER_TOKEN_FILE` | No | Path to a file containing the API bearer token (takes precedence over `API_BEARER_TOKEN`) |
 | `LOG_LEVEL` | No | `INFO` (default), `DEBUG`, `WARNING`, `ERROR` |
 | `CLOUDFLARE_API_TOKEN` | No | Cloudflare DNS provider token |
 | `AWS_ACCESS_KEY_ID` | No | AWS Route53 access key |
@@ -117,8 +123,10 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - SECRET_KEY=${SECRET_KEY}
-      - ADMIN_TOKEN=${ADMIN_TOKEN}
+      - SECRET_KEY=${SECRET_KEY:-}
+      # - SECRET_KEY_FILE=${SECRET_KEY_FILE:-}  # Alternative: path to a file containing the secret key
+      - API_BEARER_TOKEN=${API_BEARER_TOKEN:-}
+      # - API_BEARER_TOKEN_FILE=${API_BEARER_TOKEN_FILE:-}  # Alternative: path to a file containing the bearer token
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
     volumes:
       - certmate_certificates:/app/certificates
