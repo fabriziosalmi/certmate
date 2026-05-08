@@ -4,7 +4,10 @@ Handles certificate creation, renewal, and information retrieval
 """
 
 import os
+import json
+import shlex
 import subprocess
+import sys
 import tempfile
 import time
 import logging
@@ -18,6 +21,42 @@ from .constants import CERTIFICATE_FILES, get_domain_name
 from .utils import validate_domain, utc_now
 
 logger = logging.getLogger(__name__)
+
+DNS_ALIAS_SUPPORTED_PROVIDERS = {
+    'cloudflare',
+    'route53',
+    'azure',
+    'google',
+    'powerdns',
+    'digitalocean',
+    'linode',
+    'edgedns',
+    'gandi',
+    'ovh',
+    'namecheap',
+    'arvancloud',
+    'infomaniak',
+    'acme-dns',
+    'duckdns',
+}
+
+DNS_ALIAS_REQUIRED_FIELDS = {
+    'cloudflare': ('api_token',),
+    'route53': ('access_key_id', 'secret_access_key'),
+    'azure': ('subscription_id', 'resource_group', 'tenant_id', 'client_id', 'client_secret'),
+    'google': ('project_id', 'service_account_key'),
+    'powerdns': ('api_url', 'api_key'),
+    'digitalocean': ('api_token',),
+    'linode': ('api_key',),
+    'edgedns': ('client_token', 'client_secret', 'access_token', 'host'),
+    'gandi': ('api_token',),
+    'ovh': ('endpoint', 'application_key', 'application_secret', 'consumer_key'),
+    'namecheap': ('username', 'api_key'),
+    'arvancloud': ('api_key',),
+    'infomaniak': ('api_token',),
+    'acme-dns': ('api_url', 'username', 'password', 'subdomain'),
+    'duckdns': ('api_token',),
+}
 
 
 class CertificateManager:
@@ -63,6 +102,64 @@ class CertificateManager:
             if domain not in self._domain_locks:
                 self._domain_locks[domain] = threading.Lock()
             return self._domain_locks[domain]
+
+    @staticmethod
+    def _create_dns_alias_hook_config(dns_provider, dns_config, domain_alias, propagation_seconds):
+        """Write temporary config consumed by the DNS alias hook."""
+        if dns_provider not in DNS_ALIAS_SUPPORTED_PROVIDERS:
+            raise RuntimeError(f"DNS alias mode is not implemented for provider '{dns_provider}'")
+
+        missing_fields = [
+            field for field in DNS_ALIAS_REQUIRED_FIELDS[dns_provider]
+            if not str(dns_config.get(field) or '').strip()
+        ]
+        if missing_fields:
+            raise ValueError(
+                f"{dns_provider} DNS alias mode requires: {', '.join(missing_fields)}"
+            )
+
+        if dns_provider == 'acme-dns':
+            configured_alias = str(dns_config.get('subdomain') or '').strip().rstrip('.')
+            requested_alias = domain_alias.strip().rstrip('.')
+            if configured_alias != requested_alias:
+                raise ValueError(
+                    f"ACME-DNS domain_alias must match configured subdomain '{configured_alias}'"
+                )
+
+        fd, path = tempfile.mkstemp(prefix='certmate-dns-alias-', suffix='.json')
+        config_path = Path(path)
+        try:
+            with os.fdopen(fd, 'w') as f:
+                json.dump({
+                    'provider': dns_provider,
+                    'domain_alias': domain_alias.strip().rstrip('.'),
+                    'propagation_seconds': int(propagation_seconds),
+                    'config': dns_config,
+                }, f)
+            config_path.chmod(0o600)
+            return config_path
+        except Exception:
+            config_path.unlink(missing_ok=True)
+            raise
+
+    @staticmethod
+    def _configure_dns_alias_arguments(cmd, hook_config):
+        """Configure certbot manual DNS hooks for DNS alias validation."""
+        hook_script = Path(__file__).with_name('dns_alias_hook.py')
+        auth_hook = (
+            f"{shlex.quote(sys.executable)} {shlex.quote(str(hook_script))} "
+            f"--config {shlex.quote(str(hook_config))} --action auth"
+        )
+        cleanup_hook = (
+            f"{shlex.quote(sys.executable)} {shlex.quote(str(hook_script))} "
+            f"--config {shlex.quote(str(hook_config))} --action cleanup"
+        )
+        cmd.extend([
+            '--manual',
+            '--preferred-challenges', 'dns',
+            '--manual-auth-hook', auth_hook,
+            '--manual-cleanup-hook', cleanup_hook,
+        ])
 
 
 
@@ -328,15 +425,25 @@ class CertificateManager:
                 # Get Strategy
                 strategy = DNSStrategyFactory.get_strategy(dns_provider)
 
-                # Verify the certbot plugin is installed before proceeding
-                plugin = strategy.plugin_name
-                if not check_certbot_plugin_installed(plugin):
-                    pkg = f"certbot-{plugin}"
+                if domain_alias and dns_provider not in DNS_ALIAS_SUPPORTED_PROVIDERS:
                     raise RuntimeError(
-                        f"The certbot plugin '{plugin}' is not installed. "
-                        f"Install it with: pip install {pkg}  "
-                        f"(Docker users: rebuild with REQUIREMENTS_FILE=requirements.txt)"
+                        "DNS alias mode does not support this DNS provider yet. "
+                        "Use a supported account that controls the alias zone, "
+                        "or omit domain_alias for the provider's normal DNS-01 flow."
                     )
+
+                # Alias mode uses CertMate's manual DNS hook instead of the
+                # provider certbot authenticator, so the plugin is only needed
+                # for the normal non-alias DNS-01 flow.
+                if not domain_alias:
+                    plugin = strategy.plugin_name
+                    if not check_certbot_plugin_installed(plugin):
+                        pkg = f"certbot-{plugin}"
+                        raise RuntimeError(
+                            f"The certbot plugin '{plugin}' is not installed. "
+                            f"Install it with: pip install {pkg}  "
+                            f"(Docker users: rebuild with REQUIREMENTS_FILE=requirements.txt)"
+                        )
 
             # Build list of all domains (primary + SANs)
             all_domains = [domain]
@@ -410,13 +517,8 @@ class CertificateManager:
             process_env.update(ca_extra_env)
             strategy.prepare_environment(process_env, dns_config)
 
-            # Create Config File
-            credentials_file = strategy.create_config_file(dns_config)
-
-            # Configure Args
-            strategy.configure_certbot_arguments(certbot_cmd, credentials_file, domain_alias=domain_alias)
-
             # Set propagation time (DNS-01 only; HTTP-01 has no propagation)
+            propagation_time = None
             if challenge_type != 'http-01':
                 try:
                     settings = self.settings_manager.load_settings()
@@ -433,9 +535,31 @@ class CertificateManager:
                 # Ensure propagation time is within reasonable bounds (1 second to 1 hour)
                 propagation_time = max(1, min(3600, propagation_time))
 
-                # Some plugins (e.g. certbot-dns-route53 ≥ 1.22) do not accept a
+            use_dns_alias_hook = (
+                challenge_type != 'http-01'
+                and domain_alias
+                and dns_provider in DNS_ALIAS_SUPPORTED_PROVIDERS
+            )
+
+            if use_dns_alias_hook:
+                logger.info(
+                    f"DNS alias '{domain_alias}' requested for {domain}; "
+                    f"using {dns_provider} manual hook to create TXT records on the alias zone."
+                )
+                credentials_file = self._create_dns_alias_hook_config(
+                    dns_provider, dns_config, domain_alias, propagation_time or strategy.default_propagation_seconds
+                )
+                self._configure_dns_alias_arguments(certbot_cmd, credentials_file)
+            else:
+                # Create Config File
+                credentials_file = strategy.create_config_file(dns_config)
+
+                # Configure Args
+                strategy.configure_certbot_arguments(certbot_cmd, credentials_file, domain_alias=domain_alias)
+
+                # Some plugins (e.g. certbot-dns-route53 >= 1.22) do not accept a
                 # --{plugin}-propagation-seconds flag and handle propagation internally.
-                if strategy.supports_propagation_seconds_flag:
+                if challenge_type != 'http-01' and strategy.supports_propagation_seconds_flag:
                     certbot_cmd.extend([f'--{strategy.plugin_name}-propagation-seconds', str(propagation_time)])
 
             logger.info(f"Running certbot command for {domain} with {dns_provider}")
@@ -492,6 +616,9 @@ class CertificateManager:
                 'staging': staging,
                 'account_id': account_id
             }
+            if domain_alias:
+                metadata['domain_alias'] = domain_alias
+                metadata['alias_dns_provider'] = dns_provider
             
             if self.storage_manager:
                 try:

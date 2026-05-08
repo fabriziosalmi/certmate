@@ -530,14 +530,14 @@ With multi-master DNS (e.g., deSEC + gcore), you can only configure one DNS prov
 
 ### The Solution
 
-DNS alias validation works via CNAME delegation. Certbot follows CNAME chains automatically during the DNS-01 challenge -- no special flags are required.
+DNS alias validation works via CNAME delegation. Let's Encrypt follows CNAME chains during DNS-01 validation; CertMate writes the required TXT record on the delegated validation name.
 
-1. **Create a validation domain** on a CertMate-supported provider (e.g., `validation.example.org` on Cloudflare)
+1. **Create a validation domain** on a supported first-class provider (e.g., `validation.example.org` on Cloudflare, PowerDNS, Route53, or ACME-DNS)
 2. **Add CNAME records** in all your DNS providers pointing to the validation domain:
    ```dns
    _acme-challenge.example.com. 300 IN CNAME _acme-challenge.validation.example.org.
    ```
-3. **Request the certificate**, specifying the Cloudflare provider that manages the validation domain:
+3. **Request the certificate**, specifying the provider that manages the validation domain:
    ```bash
    curl -X POST http://localhost:8000/api/certificates/create \
      -H "Authorization: Bearer YOUR_TOKEN" \
@@ -549,7 +549,7 @@ DNS alias validation works via CNAME delegation. Certbot follows CNAME chains au
      }'
    ```
 
-   The `domain_alias` field is informational: it is logged by CertMate for auditing purposes. The actual delegation happens at the DNS level through the CNAME record created in step 2. Certbot writes the TXT record on the target zone (Cloudflare) and the CNAME ensures the ACME server finds it when querying `_acme-challenge.example.com`.
+   When `domain_alias` is set with a supported provider, CertMate uses a certbot manual DNS hook to create the TXT record at `_acme-challenge.validation.example.org`. The CNAME ensures Let's Encrypt finds that TXT value when querying `_acme-challenge.example.com`.
 
 ### Benefits
 
@@ -557,7 +557,21 @@ DNS alias validation works via CNAME delegation. Certbot follows CNAME chains au
 - No synchronization needed between providers
 - Works with providers not natively supported by CertMate (deSEC, gcore)
 - DNS API credentials are limited to the validation domain only
-- Compatible with all certbot DNS plugins -- no special certbot flags needed
+- Implemented for CertMate's first-class DNS providers; generic fallback providers are rejected until dedicated alias adapters exist
+
+### Provider Examples
+
+Cloudflare, PowerDNS, and Route53 all use the same request shape:
+
+```json
+{
+  "domain": "example.com",
+  "dns_provider": "route53",
+  "domain_alias": "validation.example.org"
+}
+```
+
+For ACME-DNS, `domain_alias` must exactly match the configured ACME-DNS `subdomain`/fulldomain. CertMate updates that ACME-DNS record directly and does not attempt cleanup because ACME-DNS stores the latest validation value.
 
 ### Wildcard Certificates with Domain Alias
 
