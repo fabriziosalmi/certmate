@@ -523,6 +523,10 @@
         var providerLabel = providerDisplayName(cert.dns_provider);
         var safeDomainAlias = escapeHtml(cert.domain_alias || '');
         var aliasProviderLabel = providerDisplayName(cert.alias_dns_provider);
+        var sanDomains = Array.isArray(cert.san_domains) ? cert.san_domains : [];
+        var sanDomainsHtml = sanDomains.map(function (san) {
+            return '<div class="break-all">' + escapeHtml(san) + '</div>';
+        }).join('');
 
         if (!cert.exists) {
             content.innerHTML = '<div class="text-center py-8"><i class="fas fa-exclamation-triangle text-red-400 text-3xl mb-3"></i>' +
@@ -555,6 +559,7 @@
                 '<h4 class="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wider">Details</h4>' +
                 '<dl class="space-y-2">' +
                 '<div class="flex justify-between gap-4 py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">Domain</dt><dd class="text-sm font-medium text-right text-gray-900 dark:text-white">' + safeDomain + '</dd></div>' +
+                (sanDomains.length ? '<div class="flex justify-between gap-4 py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">SANs</dt><dd class="text-sm font-medium text-right text-gray-900 dark:text-white">' + sanDomainsHtml + '</dd></div>' : '') +
                 '<div class="flex justify-between gap-4 py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">Expires</dt><dd class="text-sm font-medium text-right text-gray-900 dark:text-white">' + expiryDate.toLocaleDateString(undefined, { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' }) + '</dd></div>' +
                 (providerLabel ? '<div class="flex justify-between gap-4 py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">DNS Provider</dt><dd class="text-sm font-medium text-right text-gray-900 dark:text-white">' + providerLabel + '</dd></div>' : '') +
                 (safeDomainAlias ? '<div class="flex justify-between gap-4 py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">DNS-01 Alias</dt><dd class="text-sm font-medium text-right break-all text-blue-600 dark:text-blue-300">' + safeDomainAlias + '</dd></div>' : '') +
@@ -573,6 +578,8 @@
                 '<button type="button" onclick="downloadCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-download mr-2 text-blue-600"></i>Download Certificate</button>' +
                 '<button type="button" onclick="copyCurlCommand(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-blue-300 dark:border-blue-600 shadow-sm text-sm font-medium rounded-md text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50"><i class="fas fa-code mr-2"></i>Show API Command</button>' +
                 '<button type="button" onclick="checkDeploymentStatus(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-globe mr-2 text-indigo-600"></i>Check Deployment</button>' +
+                (safeDomainAlias ? '<button type="button" onclick="checkDnsAliasForCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-blue-300 dark:border-blue-600 shadow-sm text-sm font-medium rounded-md text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50"><i class="fas fa-search mr-2"></i>Check DNS-01 Alias</button>' : '') +
+                '<div id="cert_dns_alias_check_result" class="hidden"></div>' +
                 (roleAtLeast('admin')
                     ? '<button type="button" onclick="runDeployHooks(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-rocket mr-2 text-green-600"></i>Run Deploy Hooks Now</button>'
                     : '') +
@@ -1189,20 +1196,25 @@
         return '_acme-challenge.' + normalizeDnsName(domain);
     }
 
-    function updateDnsAliasHelp() {
+    function currentRequestedDomains() {
         var domainField = document.getElementById('domain');
         var sanField = document.getElementById('san_domains');
         var wildcardField = document.getElementById('wildcard-cert');
+        return buildRequestedDomains(
+            domainField ? domainField.value : '',
+            sanField ? parseSanDomainsInput(sanField.value) : [],
+            wildcardField ? wildcardField.checked : false
+        );
+    }
+
+    function updateDnsAliasHelp() {
+        var domainField = document.getElementById('domain');
         var aliasField = document.getElementById('dns_alias_domain');
         var help = document.getElementById('dns_alias_help');
         if (!domainField || !aliasField || !help) return;
 
         var aliasDomain = normalizeDnsAliasName(aliasField.value);
-        var requestedDomains = buildRequestedDomains(
-            domainField.value,
-            sanField ? parseSanDomainsInput(sanField.value) : [],
-            wildcardField ? wildcardField.checked : false
-        );
+        var requestedDomains = currentRequestedDomains();
 
         if (requestedDomains.length > 0 && aliasDomain) {
             var target = '_acme-challenge.' + aliasDomain;
@@ -1223,6 +1235,111 @@
             help.innerHTML = 'Use DNS-01 Alias Mode when <code class="font-mono bg-gray-100 dark:bg-gray-600 px-1 rounded">_acme-challenge.yourdomain.com</code> '
                 + 'is CNAMEd to a validation zone you control. Enter the target FQDN (without the <code class="font-mono bg-gray-100 dark:bg-gray-600 px-1 rounded">_acme-challenge.</code> prefix).';
         }
+    }
+
+    function renderDnsAliasCheckResult(result, targetId) {
+        var target = document.getElementById(targetId);
+        if (!target) return;
+
+        var checks = result && Array.isArray(result.checks) ? result.checks : [];
+        var ok = result && result.ok;
+        var headerClass = ok
+            ? 'text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+            : 'text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800';
+        var icon = ok ? 'fa-check-circle' : 'fa-times-circle';
+        var title = ok ? 'All DNS-01 alias CNAMEs are present' : 'DNS-01 alias CNAMEs need attention';
+
+        var rows = checks.map(function (check) {
+            var rowClass = check.ok ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300';
+            var found = check.found_targets && check.found_targets.length
+                ? check.found_targets.join(', ')
+                : 'No CNAME found';
+            if (check.error) {
+                found = check.error;
+            }
+            return '<div class="mt-2 text-xs ' + rowClass + '">' +
+                '<div><i class="fas ' + (check.ok ? 'fa-check' : 'fa-times') + ' mr-1"></i>' +
+                '<code class="font-mono bg-gray-100 dark:bg-gray-700 px-1 rounded">' + escapeHtml(check.source) + '</code></div>' +
+                '<div class="mt-1 ml-5">Expected: <code class="font-mono bg-gray-100 dark:bg-gray-700 px-1 rounded">' + escapeHtml(check.expected_target) + '</code></div>' +
+                '<div class="mt-1 ml-5">Found: <code class="font-mono bg-gray-100 dark:bg-gray-700 px-1 rounded">' + escapeHtml(found) + '</code></div>' +
+                '</div>';
+        }).join('');
+
+        if (!rows) {
+            rows = '<div class="mt-2 text-xs text-gray-600 dark:text-gray-300">No DNS-01 alias records to check.</div>';
+        }
+
+        target.className = 'mt-2 rounded-md border p-3 ' + headerClass;
+        target.innerHTML = '<div class="text-xs font-semibold"><i class="fas ' + icon + ' mr-1"></i>' + title + '</div>' + rows;
+        target.classList.remove('hidden');
+    }
+
+    function checkDnsAliasFromForm() {
+        var domain = normalizeDnsName(document.getElementById('domain').value);
+        var aliasDomain = normalizeDnsAliasName((document.getElementById('dns_alias_domain') || {}).value);
+        var requestedDomains = currentRequestedDomains();
+        var sanDomains = requestedDomains.slice(1);
+        var resultTarget = document.getElementById('dns_alias_check_result');
+
+        if (!domain || !aliasDomain) {
+            showMessage('Enter both primary domain and DNS-01 alias domain before checking.', 'error');
+            return;
+        }
+
+        if (resultTarget) {
+            resultTarget.className = 'mt-2 rounded-md border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-3 text-xs text-blue-700 dark:text-blue-300';
+            resultTarget.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Checking DNS-01 alias CNAMEs...';
+            resultTarget.classList.remove('hidden');
+        }
+
+        return fetch('/api/certificates/check-dns-alias', {
+            method: 'POST',
+            headers: API_HEADERS,
+            body: JSON.stringify({
+                domain: domain,
+                domain_alias: aliasDomain,
+                san_domains: sanDomains,
+            })
+        }).then(function (response) {
+            return response.json().then(function (result) {
+                if (!response.ok) {
+                    throw new Error(result.error || 'DNS-01 alias check failed');
+                }
+                renderDnsAliasCheckResult(result, 'dns_alias_check_result');
+            });
+        }).catch(function (error) {
+            showMessage(error.message || 'DNS-01 alias check failed', 'error');
+            if (resultTarget) {
+                resultTarget.classList.add('hidden');
+            }
+        });
+    }
+
+    function checkDnsAliasForCertificate(domain) {
+        var targetId = 'cert_dns_alias_check_result';
+        var resultTarget = document.getElementById(targetId);
+        if (resultTarget) {
+            resultTarget.className = 'mt-3 rounded-md border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-3 text-xs text-blue-700 dark:text-blue-300';
+            resultTarget.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Checking DNS-01 alias CNAMEs...';
+            resultTarget.classList.remove('hidden');
+        }
+
+        return fetch('/api/certificates/' + encodeURIComponent(domain) + '/dns-alias-check', {
+            method: 'GET',
+            headers: API_HEADERS
+        }).then(function (response) {
+            return response.json().then(function (result) {
+                if (!response.ok) {
+                    throw new Error(result.error || 'DNS-01 alias check failed');
+                }
+                renderDnsAliasCheckResult(result, targetId);
+            });
+        }).catch(function (error) {
+            showMessage(error.message || 'DNS-01 alias check failed', 'error');
+            if (resultTarget) {
+                resultTarget.classList.add('hidden');
+            }
+        });
     }
 
     // Create certificate
@@ -1567,6 +1684,7 @@
         document.getElementById('san_domains').addEventListener('input', updateDnsAliasHelp);
         document.getElementById('wildcard-cert').addEventListener('change', updateDnsAliasHelp);
         document.getElementById('dns_alias_domain').addEventListener('input', updateDnsAliasHelp);
+        document.getElementById('check_dns_alias_button').addEventListener('click', checkDnsAliasFromForm);
         updateDnsAliasHelp();
 
         // Close modal on outside click
@@ -1635,4 +1753,5 @@
     window.updateAccountSelection = updateAccountSelection;
     window.updateCAProviderInfo = updateCAProviderInfo;
     window.updateDnsAliasHelp = updateDnsAliasHelp;
+    window.checkDnsAliasForCertificate = checkDnsAliasForCertificate;
 })();

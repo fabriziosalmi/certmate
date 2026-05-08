@@ -155,6 +155,7 @@ def create_api_models(api):
         'dns_provider': fields.String(description='DNS provider used for the certificate'),
         'domain_alias': fields.String(description='DNS alias target used for DNS-01 validation'),
         'alias_dns_provider': fields.String(description='DNS provider used to manage the alias target'),
+        'san_domains': fields.List(fields.String, description='Subject Alternative Names included in the certificate'),
         'total_issued': fields.Integer(description='Total certificates issued'),
         'total_active': fields.Integer(description='Total active certificates'),
         'total_revoked': fields.Integer(description='Total revoked certificates'),

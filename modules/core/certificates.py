@@ -161,6 +161,91 @@ class CertificateManager:
             '--manual-cleanup-hook', cleanup_hook,
         ])
 
+    @staticmethod
+    def _normalize_dns_name(value):
+        return (value or '').strip().lower().removeprefix('*.').rstrip('.')
+
+    @classmethod
+    def _dns01_challenge_name(cls, domain):
+        normalized = cls._normalize_dns_name(domain)
+        return f"_acme-challenge.{normalized}" if normalized else ''
+
+    @classmethod
+    def build_dns_alias_expectations(cls, domain, domain_alias, san_domains=None):
+        """Build expected DNS-01 CNAME records for an alias-mode certificate."""
+        alias = cls._normalize_dns_name(domain_alias).removeprefix('_acme-challenge.')
+        if not domain or not alias:
+            return []
+
+        expected_target = f"_acme-challenge.{alias}"
+        challenge_names = []
+        for candidate in [domain] + list(san_domains or []):
+            challenge_name = cls._dns01_challenge_name(candidate)
+            if challenge_name and challenge_name not in challenge_names:
+                challenge_names.append(challenge_name)
+
+        return [
+            {
+                'source': challenge_name,
+                'expected_target': expected_target,
+            }
+            for challenge_name in challenge_names
+        ]
+
+    @staticmethod
+    def _normalize_cname_target(value):
+        return (value or '').strip().lower().rstrip('.')
+
+    def check_dns_alias_records(self, domain, domain_alias, san_domains=None):
+        """Check that DNS-01 alias CNAMEs exist for a requested certificate."""
+        checks = []
+        for expectation in self.build_dns_alias_expectations(domain, domain_alias, san_domains):
+            source = expectation['source']
+            expected_target = self._normalize_cname_target(expectation['expected_target'])
+            found_targets = []
+            error = None
+
+            try:
+                result = self.shell_executor.run(
+                    ['dig', '+short', 'CNAME', source],
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                )
+                if result.returncode != 0:
+                    error = (result.stderr or 'dig failed').strip()
+                else:
+                    found_targets = [
+                        line.strip()
+                        for line in (result.stdout or '').splitlines()
+                        if line.strip()
+                    ]
+            except Exception as e:
+                error = str(e)
+
+            normalized_found = [self._normalize_cname_target(target) for target in found_targets]
+            status = 'ok' if expected_target in normalized_found else 'missing'
+            if normalized_found and expected_target not in normalized_found:
+                status = 'mismatch'
+            if error:
+                status = 'error'
+
+            checks.append({
+                'source': source,
+                'expected_target': expectation['expected_target'],
+                'found_targets': found_targets,
+                'status': status,
+                'ok': status == 'ok',
+                'error': error,
+            })
+
+        return {
+            'domain': domain,
+            'domain_alias': domain_alias,
+            'checks': checks,
+            'ok': bool(checks) and all(check['ok'] for check in checks),
+        }
+
 
 
 
@@ -246,6 +331,7 @@ class CertificateManager:
         dns_provider = metadata.get('dns_provider')
         domain_alias = metadata.get('domain_alias')
         alias_dns_provider = metadata.get('alias_dns_provider')
+        san_domains = metadata.get('san_domains') or []
         settings = self.settings_manager.load_settings()
         if not dns_provider:
             # Fall back to current settings
@@ -288,7 +374,8 @@ class CertificateManager:
                             'needs_renewal': days_left < renewal_threshold_days,
                             'dns_provider': dns_provider,
                             'domain_alias': domain_alias,
-                            'alias_dns_provider': alias_dns_provider
+                            'alias_dns_provider': alias_dns_provider,
+                            'san_domains': san_domains
                         }
                     except ValueError as e:
                         logger.error(f"Error parsing certificate date for {domain}: {e}")
@@ -316,7 +403,8 @@ class CertificateManager:
             'needs_renewal': True,
             'dns_provider': dns_provider,
             'domain_alias': domain_alias,
-            'alias_dns_provider': alias_dns_provider
+            'alias_dns_provider': alias_dns_provider,
+            'san_domains': san_domains
         }
 
     def _create_empty_cert_info(self, domain):
