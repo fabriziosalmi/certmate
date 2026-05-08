@@ -133,21 +133,55 @@ def setup_directories(container: AppContainer, test_config=None):
         container.logs_dir = Path(tempfile.mkdtemp(prefix="certmate_logs_"))
 
 
-def configure_app(container: AppContainer, app, test_config=None):
-    secret_key = os.getenv('SECRET_KEY', '')
+def _secret_key_from_env_or_generate(data_dir: Path) -> str:
+    """Return a Flask secret key.
+
+    Resolution order (mutually exclusive):
+    1. SECRET_KEY_FILE — if set, read the key from that file. Any read error
+       or empty result generates a fresh key immediately; SECRET_KEY is never
+       consulted (to avoid encouraging both vars).
+    2. SECRET_KEY — only checked when SECRET_KEY_FILE is absent. Insecure
+       defaults ('', 'your-secret-key-here', 'change-me', 'secret') are
+       treated as unset and fall through to step 3.
+    3. Persisted generated key — reads data_dir/.secret_key if it exists so
+       sessions survive restarts, otherwise generates secrets.token_hex(32)
+       and attempts to persist it. A persistence failure is logged but does
+       not block startup; sessions will not survive restarts in that case.
+    """
     insecure_defaults = {'', 'your-secret-key-here', 'change-me', 'secret'}
-    if secret_key in insecure_defaults:
-        key_file = container.data_dir / '.secret_key'
-        if key_file.exists():
-            secret_key = key_file.read_text().strip()
-        else:
-            secret_key = secrets.token_hex(32)
-            try:
-                key_file.write_text(secret_key)
-                key_file.chmod(0o600)
-            except OSError as e:
-                logger.warning(f"Could not persist SECRET_KEY to {key_file}: {e}. Sessions will not survive restarts.")
-    app.secret_key = secret_key
+
+    explicit_key_file = os.getenv('SECRET_KEY_FILE')
+    if explicit_key_file:
+        try:
+            key = Path(explicit_key_file).read_text().strip()
+            if key:
+                return key
+            logger.warning(f"SECRET_KEY_FILE ({explicit_key_file}) is empty; generating a fresh secret key.")
+        except Exception as e:
+            logger.warning(f"Could not read SECRET_KEY_FILE ({explicit_key_file}): {e}; generating a fresh secret key.")
+        return secrets.token_hex(32)
+
+    env_key = os.getenv('SECRET_KEY', '')
+    if env_key and env_key not in insecure_defaults:
+        return env_key
+
+    if env_key in insecure_defaults and env_key != '':
+        logger.warning(f"SECRET_KEY is set to an insecure default; ignoring it.")
+
+    implicit_key_file = data_dir / '.secret_key'
+    if implicit_key_file.exists():
+        return implicit_key_file.read_text().strip()
+
+    key = secrets.token_hex(32)
+    try:
+        implicit_key_file.write_text(key)
+        implicit_key_file.chmod(0o600)
+    except OSError as e:
+        logger.warning(f"Could not persist SECRET_KEY to {implicit_key_file}: {e}. Sessions will not survive restarts.")
+    return key
+
+def configure_app(container: AppContainer, app, test_config=None):
+    app.secret_key = _secret_key_from_env_or_generate(container.data_dir)
     app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
 
     if test_config:
