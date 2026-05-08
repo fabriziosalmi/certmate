@@ -13,6 +13,9 @@ import time
 import logging
 import shutil
 import threading
+import urllib.error
+import urllib.parse
+import urllib.request
 from pathlib import Path
 from datetime import datetime, timedelta
 from .shell import ShellExecutor
@@ -196,6 +199,28 @@ class CertificateManager:
     def _normalize_cname_target(value):
         return (value or '').strip().lower().rstrip('.')
 
+    @classmethod
+    def _resolve_cname(cls, source):
+        query = urllib.parse.urlencode({'name': source, 'type': 'CNAME'})
+        request = urllib.request.Request(
+            f'https://cloudflare-dns.com/dns-query?{query}',
+            headers={'accept': 'application/dns-json'},
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=10) as response:
+                payload = json.loads(response.read().decode('utf-8'))
+        except urllib.error.HTTPError as e:
+            raise RuntimeError(f'DNS query failed with HTTP {e.code}') from e
+        except urllib.error.URLError as e:
+            raise RuntimeError(f'DNS query failed: {e.reason}') from e
+
+        answers = payload.get('Answer') or []
+        return [
+            answer.get('data', '').strip()
+            for answer in answers
+            if answer.get('type') == 5 and answer.get('data')
+        ]
+
     def check_dns_alias_records(self, domain, domain_alias, san_domains=None):
         """Check that DNS-01 alias CNAMEs exist for a requested certificate."""
         checks = []
@@ -206,20 +231,7 @@ class CertificateManager:
             error = None
 
             try:
-                result = self.shell_executor.run(
-                    ['dig', '+short', 'CNAME', source],
-                    capture_output=True,
-                    text=True,
-                    timeout=10,
-                )
-                if result.returncode != 0:
-                    error = (result.stderr or 'dig failed').strip()
-                else:
-                    found_targets = [
-                        line.strip()
-                        for line in (result.stdout or '').splitlines()
-                        if line.strip()
-                    ]
+                found_targets = self._resolve_cname(source)
             except Exception as e:
                 error = str(e)
 

@@ -301,22 +301,20 @@ def test_dns_alias_expectations_include_sans_and_dedupe_wildcard():
 
 
 def test_dns_alias_check_reports_missing_and_ok_records(tmp_path):
-    mgr, shell = _manager(tmp_path, provider='cloudflare')
-    shell.response_queue = []
-    shell.add_response(
-        'dig +short CNAME _acme-challenge.app.certmate.example',
-        stdout='_acme-challenge.certmate-test-validation.example.net.\n',
-    )
-    shell.add_response(
-        'dig +short CNAME _acme-challenge.api.certmate.example',
-        stdout='',
-    )
+    mgr, _ = _manager(tmp_path, provider='cloudflare')
+    answers = {
+        '_acme-challenge.app.certmate.example': [
+            '_acme-challenge.certmate-test-validation.example.net.'
+        ],
+        '_acme-challenge.api.certmate.example': [],
+    }
 
-    result = mgr.check_dns_alias_records(
-        'app.certmate.example',
-        'certmate-test-validation.example.net',
-        san_domains=['api.certmate.example'],
-    )
+    with patch.object(CertificateManager, '_resolve_cname', side_effect=lambda source: answers[source]):
+        result = mgr.check_dns_alias_records(
+            'app.certmate.example',
+            'certmate-test-validation.example.net',
+            san_domains=['api.certmate.example'],
+        )
 
     assert result['ok'] is False
     assert result['checks'][0]['ok'] is True
