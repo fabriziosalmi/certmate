@@ -1,3 +1,20 @@
+## v2.4.7 (Patch — base image bump bookworm → trixie)
+
+Two-character `Dockerfile` change ([#127](https://github.com/fabriziosalmi/certmate/pull/127)): `python:3.12-slim` → `python:3.12-slim-trixie`. Expected to close ~11-13 of the 13 open Critical+High Trivy findings on the main branch image — all of them base-image OS CVEs (gnutls, libssh2, ncurses, systemd, libcap) fixed in trixie's package versions but not backported to bookworm.
+
+| Component | bookworm (v2.4.6) | trixie (v2.4.7) |
+|---|---|---|
+| Debian | 12 | 13 |
+| glibc | 2.36 | 2.40 (forward-compat, no wheel rebuild needed) |
+| OpenSSL system | 3.0.x | 3.4.x (irrelevant — `cryptography` bundles its own) |
+| gnutls | 3.7.9 | 3.8.7 (closes alerts #253, #254, #255, #256, #257) |
+| ncurses | 6.4 | 6.5 (closes #182, #193, #200, #201) |
+| systemd | 252 | 256+ (closes #190, #194) |
+| libcap | 2.66 | 2.68+ (closes #178) |
+| libssh2 | 1.10.0 | 1.11.x (probably closes #274) |
+
+CI verified: multi-arch build (linux/amd64 + linux/arm64) green, full e2e test (3.12) suite green, full `requirements.txt` pip install (certbot 2.10 + 14 DNS plugins + cryptography + cloudflare + boto3 + azure-* + flask) succeeds on trixie. No application code touched, no behavior change. Trivy scan delta on main image will appear in the next nightly scan.
+
 ## v2.4.6 (Patch — domain alias mode + CI workflow fix)
 
 Closes [#124](https://github.com/fabriziosalmi/certmate/issues/124). Substantive contribution from [@ITJamie](https://github.com/ITJamie) ([#122](https://github.com/fabriziosalmi/certmate/pull/122)).
