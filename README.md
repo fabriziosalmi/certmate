@@ -1251,8 +1251,10 @@ main "$@"
 
 | Variable           | Required | Default        | Description                         |
 | ------------------ | -------- | -------------- | ----------------------------------- |
-| `API_BEARER_TOKEN` |          | -              | Bearer token for API authentication |
-| `SECRET_KEY`       |          | auto-generated | Flask secret key for sessions       |
+| `API_BEARER_TOKEN`      |          | auto-generated | Bearer token for API authentication |
+| `API_BEARER_TOKEN_FILE` |          | -              | Path to a file containing the API bearer token (takes precedence over `API_BEARER_TOKEN`) |
+| `SECRET_KEY`            |          | auto-generated | Flask secret key for sessions       |
+| `SECRET_KEY_FILE`       |          | -              | Path to a file containing the Flask secret key (takes precedence over `SECRET_KEY`) |
 | `HOST`             |          | `127.0.0.1`    | Server bind address                 |
 | `PORT`             |          | `8000`         | Server port                         |
 | `FLASK_ENV`        |          | `production`   | Flask environment                   |

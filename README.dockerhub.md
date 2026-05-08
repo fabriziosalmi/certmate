@@ -138,9 +138,6 @@ curl "http://localhost:8000/api/certificates" \
 
 ## Environment Variables
 
-### Required
-- `API_BEARER_TOKEN` - Secure API access token
-
 ### DNS Provider (choose one)
 - **Cloudflare**: `CLOUDFLARE_TOKEN`
 - **AWS Route53**: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_DEFAULT_REGION`
@@ -151,7 +148,10 @@ curl "http://localhost:8000/api/certificates" \
 - See [documentation](https://github.com/fabriziosalmi/certmate/blob/main/docs/dns-providers.md) for all providers
 
 ### Optional
+- `API_BEARER_TOKEN` - Bearer token for API authentication (auto-generated if unset)
+- `API_BEARER_TOKEN_FILE` - Path to a file containing the bearer token; takes precedence over `API_BEARER_TOKEN` when set
 - `SECRET_KEY` - Flask secret key (auto-generated if not set)
+- `SECRET_KEY_FILE` - Path to a file containing the Flask secret key (takes precedence over `SECRET_KEY`)
 - `FLASK_ENV` - Environment mode (default: production)
 - `HOST` - Bind address (default: 0.0.0.0)
 - `PORT` - Listen port (default: 8000)
@@ -266,5 +266,3 @@ MIT License - see [LICENSE](https://github.com/fabriziosalmi/certmate/blob/main/
 - **Discussions**: https://github.com/fabriziosalmi/certmate/discussions
 
 ---
-
-
