@@ -97,70 +97,48 @@
         var expired = certificates.filter(function (cert) { return cert.exists && cert.days_until_expiry !== null && cert.days_until_expiry !== undefined && cert.days_until_expiry <= 0; }).length;
 
         var statsContainer = document.getElementById('statsCards');
-        statsContainer.innerHTML =
-            '<div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow duration-200">' +
-            '<div class="p-6">' +
-            '<div class="flex items-center">' +
-            '<div class="flex-shrink-0">' +
-            '<div class="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">' +
-            '<i class="fas fa-certificate text-blue-600 dark:text-blue-400 text-xl"></i>' +
-            '</div>' +
-            '</div>' +
-            '<div class="ml-4 flex-1">' +
-            '<p class="text-sm font-medium text-gray-600 dark:text-gray-400">Total Certificates</p>' +
-            '<p class="text-2xl font-bold text-gray-900 dark:text-white">' + total + '</p>' +
-            '</div>' +
-            '</div>' +
-            '</div>' +
-            '</div>' +
+        var html = CertMate.html;
+        var raw = CertMate.raw;
 
-            '<div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow duration-200">' +
-            '<div class="p-6">' +
-            '<div class="flex items-center">' +
-            '<div class="flex-shrink-0">' +
-            '<div class="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">' +
-            '<i class="fas fa-check-circle text-green-600 dark:text-green-400 text-xl"></i>' +
-            '</div>' +
-            '</div>' +
-            '<div class="ml-4 flex-1">' +
-            '<p class="text-sm font-medium text-gray-600 dark:text-gray-400">Valid</p>' +
-            '<p class="text-2xl font-bold text-green-600 dark:text-green-400">' + valid + '</p>' +
-            '</div>' +
-            '</div>' +
-            '</div>' +
-            '</div>' +
+        function statCard(label, value, color, icon, valueId) {
+            return html`
+                <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow duration-200">
+                    <div class="p-6">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0">
+                                <div class="w-12 h-12 bg-${raw(color)}-100 dark:bg-${raw(color)}-900/30 rounded-lg flex items-center justify-center">
+                                    <i class="fas ${raw(icon)} text-${raw(color)}-600 dark:text-${raw(color)}-400 text-xl"></i>
+                                </div>
+                            </div>
+                            <div class="ml-4 flex-1">
+                                <p class="text-sm font-medium text-gray-600 dark:text-gray-400">${label}</p>
+                                <p class="text-2xl font-bold text-${raw(color)}-600 dark:text-${raw(color)}-400"${valueId ? raw(' id="' + valueId + '"') : ''}>${value}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+        }
 
-            '<div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow duration-200">' +
-            '<div class="p-6">' +
-            '<div class="flex items-center">' +
-            '<div class="flex-shrink-0">' +
-            '<div class="w-12 h-12 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg flex items-center justify-center">' +
-            '<i class="fas fa-exclamation-triangle text-yellow-600 dark:text-yellow-400 text-xl"></i>' +
-            '</div>' +
-            '</div>' +
-            '<div class="ml-4 flex-1">' +
-            '<p class="text-sm font-medium text-gray-600 dark:text-gray-400">Expiring Soon</p>' +
-            '<p class="text-2xl font-bold text-yellow-600 dark:text-yellow-400">' + expiring + '</p>' +
-            '</div>' +
-            '</div>' +
-            '</div>' +
-            '</div>' +
-
-            '<div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow duration-200">' +
-            '<div class="p-6">' +
-            '<div class="flex items-center">' +
-            '<div class="flex-shrink-0">' +
-            '<div class="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg flex items-center justify-center">' +
-            '<i class="fas fa-globe text-indigo-600 dark:text-indigo-400 text-xl"></i>' +
-            '</div>' +
-            '</div>' +
-            '<div class="ml-4 flex-1">' +
-            '<p class="text-sm font-medium text-gray-600 dark:text-gray-400">Deployment</p>' +
-            '<p class="text-2xl font-bold text-indigo-600 dark:text-indigo-400" id="deploymentCount">--</p>' +
-            '</div>' +
-            '</div>' +
-            '</div>' +
-            '</div>';
+        statsContainer.innerHTML = [
+            // The Total card uses the gray-on-white treatment from the original
+            // (text-gray-900 / text-white instead of color-tinted), so we render
+            // it with a hand-rolled value paragraph.
+            html`
+                <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow duration-200">
+                    <div class="p-6"><div class="flex items-center">
+                        <div class="flex-shrink-0"><div class="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                            <i class="fas fa-certificate text-blue-600 dark:text-blue-400 text-xl"></i>
+                        </div></div>
+                        <div class="ml-4 flex-1">
+                            <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Total Certificates</p>
+                            <p class="text-2xl font-bold text-gray-900 dark:text-white">${total}</p>
+                        </div>
+                    </div></div>
+                </div>`,
+            statCard('Valid', valid, 'green', 'fa-check-circle'),
+            statCard('Expiring Soon', expiring, 'yellow', 'fa-exclamation-triangle'),
+            statCard('Deployment', raw('--'), 'indigo', 'fa-globe', 'deploymentCount')
+        ].join('');
     }
 
     // Deployment Status Cache System
@@ -409,35 +387,41 @@
         thead.style.display = '';
         var sorted = applySorting(certificates);
 
+        var rowHtml = CertMate.html;
+        var rowRaw = CertMate.raw;
+
+        // Action button shorthand. cert.domain flows in raw \u2014 the helper
+        // escapes it for both the data-domain attribute and the onclick
+        // arg, so we no longer pre-compute a `safeDomain`.
+        function actionBtn(action, domain, hoverColor, title, icon) {
+            return rowHtml`<button type="button" data-action="${action}" data-domain="${domain}" onclick="event.stopPropagation()" class="p-1.5 text-gray-400 hover:text-${rowRaw(hoverColor)}-600 dark:hover:text-${rowRaw(hoverColor)}-400 rounded hover:bg-gray-100 dark:hover:bg-gray-700" title="${title}"><i class="fas ${rowRaw(icon)}"></i></button>`;
+        }
+
         container.innerHTML = sorted.map(function (cert) {
-            var safeDomain = escapeHtml(cert.domain);
-            var safeDnsProvider = escapeHtml(cert.dns_provider || '');
-            var providerLabel = safeDnsProvider ? safeDnsProvider.charAt(0).toUpperCase() + safeDnsProvider.slice(1) : '';
+            var providerLabel = cert.dns_provider
+                ? cert.dns_provider.charAt(0).toUpperCase() + cert.dns_provider.slice(1)
+                : '';
 
             if (!cert.exists) {
-                return '<tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer" onclick="openCertDetail(\'' + safeDomain + '\')">' +
-                    '<td class="px-6 py-4 whitespace-nowrap"><div class="text-sm font-medium text-gray-900 dark:text-white">' + safeDomain + '</div></td>' +
-                    '<td class="px-4 py-4 whitespace-nowrap"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400"><i class="fas fa-times-circle mr-1"></i>Not Found</span></td>' +
-                    '<td class="px-4 py-4 whitespace-nowrap hidden md:table-cell text-sm text-gray-500 dark:text-gray-400">\u2014</td>' +
-                    '<td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-gray-500 dark:text-gray-400">' + (providerLabel || '\u2014') + '</td>' +
-                    '<td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell">\u2014</td>' +
-                    '<td class="px-4 py-4 whitespace-nowrap text-right">' +
-                    '<div class="flex items-center justify-end gap-1">' +
-                    (roleAtLeast('admin')
-                        ? '<button type="button" data-action="delete" data-domain="' + safeDomain + '" onclick="event.stopPropagation()" class="p-1.5 text-gray-400 hover:text-red-600 dark:hover:text-red-400 rounded hover:bg-gray-100 dark:hover:bg-gray-700" title="Remove from list"><i class="fas fa-trash-alt"></i></button>'
-                        : '') +
-                    '</div>' +
-                    '</td>' +
-                    '</tr>';
+                return rowHtml`<tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer" onclick="openCertDetail('${cert.domain}')">
+                    <td class="px-6 py-4 whitespace-nowrap"><div class="text-sm font-medium text-gray-900 dark:text-white">${cert.domain}</div></td>
+                    <td class="px-4 py-4 whitespace-nowrap"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400"><i class="fas fa-times-circle mr-1"></i>Not Found</span></td>
+                    <td class="px-4 py-4 whitespace-nowrap hidden md:table-cell text-sm text-gray-500 dark:text-gray-400">\u2014</td>
+                    <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-gray-500 dark:text-gray-400">${providerLabel || '\u2014'}</td>
+                    <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell">\u2014</td>
+                    <td class="px-4 py-4 whitespace-nowrap text-right">
+                        <div class="flex items-center justify-end gap-1">
+                            ${roleAtLeast('admin') ? actionBtn('delete', cert.domain, 'red', 'Remove from list', 'fa-trash-alt') : false}
+                        </div>
+                    </td>
+                </tr>`;
             }
 
             var daysKnown = cert.days_until_expiry !== null && cert.days_until_expiry !== undefined;
-            var isExpired = cert.exists && daysKnown && cert.days_until_expiry <= 0;
-            var isExpiringSoon = cert.exists && daysKnown && cert.days_until_expiry > 0 && cert.days_until_expiry <= 30;
+            var isExpired = daysKnown && cert.days_until_expiry <= 0;
+            var isExpiringSoon = daysKnown && cert.days_until_expiry > 0 && cert.days_until_expiry <= 30;
             var statusClass, statusIcon, statusText;
-            if (!cert.exists) {
-                statusClass = 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'; statusIcon = 'fa-question-circle'; statusText = 'Unknown';
-            } else if (isExpired) {
+            if (isExpired) {
                 statusClass = 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400'; statusIcon = 'fa-times-circle'; statusText = 'Expired';
             } else if (isExpiringSoon) {
                 statusClass = 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400'; statusIcon = 'fa-exclamation-triangle'; statusText = 'Expiring';
@@ -449,40 +433,37 @@
             var expiryStr = expiryDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
             var daysClass = isExpired ? 'text-red-600 dark:text-red-400' : isExpiringSoon ? 'text-yellow-600 dark:text-yellow-400' : 'text-gray-500 dark:text-gray-400';
 
-            return '<tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors duration-150 cursor-pointer" onclick="openCertDetail(\'' + safeDomain + '\')">' +
-                '<td class="px-6 py-4 whitespace-nowrap">' +
-                '<div class="flex items-center">' +
-                // Inline subtle glyph instead of a rounded blue panel — the
-                // rounded panel read like an interactive control to users
-                // (issue #100) but it had no handler. The whole row is the
-                // affordance for opening the detail panel.
-                '<i class="fas fa-certificate text-gray-400 dark:text-gray-500 mr-2 text-sm" aria-hidden="true"></i>' +
-                '<div class="text-sm font-medium text-gray-900 dark:text-white">' + safeDomain + '</div>' +
-                '</div>' +
-                '</td>' +
-                '<td class="px-4 py-4 whitespace-nowrap"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ' + statusClass + '"><i class="fas ' + statusIcon + ' mr-1"></i>' + statusText + '</span></td>' +
-                '<td class="px-4 py-4 whitespace-nowrap hidden md:table-cell"><div class="text-sm text-gray-900 dark:text-white">' + expiryStr + '</div><div class="text-xs ' + daysClass + '">' + cert.days_until_expiry + ' days</div></td>' +
-                '<td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-gray-500 dark:text-gray-400">' + (providerLabel || '\u2014') + '</td>' +
-                '<td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell">' + deploymentBadgeHtml(cert) + '</td>' +
-                '<td class="px-4 py-4 whitespace-nowrap text-right">' +
-                '<div class="flex items-center justify-end gap-1">' +
-                // Role-aware: hide controls the user can't use to avoid
-                // showing buttons that would just 403. Server still
-                // enforces the role; this is UX only.
-                (roleAtLeast('operator')
-                    ? '<button type="button" data-action="renew" data-domain="' + safeDomain + '" onclick="event.stopPropagation()" class="p-1.5 text-gray-400 hover:text-green-600 dark:hover:text-green-400 rounded hover:bg-gray-100 dark:hover:bg-gray-700" title="Renew"><i class="fas fa-sync-alt"></i></button>'
-                    : '') +
-                '<button type="button" data-action="download" data-domain="' + safeDomain + '" onclick="event.stopPropagation()" class="p-1.5 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 rounded hover:bg-gray-100 dark:hover:bg-gray-700" title="Download"><i class="fas fa-download"></i></button>' +
-                '<button type="button" data-action="curl" data-domain="' + safeDomain + '" onclick="event.stopPropagation()" class="p-1.5 text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded hover:bg-gray-100 dark:hover:bg-gray-700" title="API"><i class="fas fa-code"></i></button>' +
-                (roleAtLeast('operator')
-                    ? autoRenewButtonHtml(safeDomain, cert.auto_renew !== false)
-                    : '') +
-                (roleAtLeast('admin')
-                    ? '<button type="button" data-action="delete" data-domain="' + safeDomain + '" onclick="event.stopPropagation()" class="p-1.5 text-gray-400 hover:text-red-600 dark:hover:text-red-400 rounded hover:bg-gray-100 dark:hover:bg-gray-700" title="Delete certificate"><i class="fas fa-trash-alt"></i></button>'
-                    : '') +
-                '</div>' +
-                '</td>' +
-                '</tr>';
+            // Inline subtle glyph instead of a rounded blue panel — the
+            // rounded panel read like an interactive control to users
+            // (issue #100) but it had no handler. The whole row is the
+            // affordance for opening the detail panel.
+            //
+            // Role-aware controls: hide buttons the user would just 403 on.
+            // Server still enforces; this is UX-only.
+            //
+            // deploymentBadgeHtml + autoRenewButtonHtml return pre-built HTML
+            // strings whose inputs are already escaped, so we wrap with raw().
+            return rowHtml`<tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors duration-150 cursor-pointer" onclick="openCertDetail('${cert.domain}')">
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="flex items-center">
+                        <i class="fas fa-certificate text-gray-400 dark:text-gray-500 mr-2 text-sm" aria-hidden="true"></i>
+                        <div class="text-sm font-medium text-gray-900 dark:text-white">${cert.domain}</div>
+                    </div>
+                </td>
+                <td class="px-4 py-4 whitespace-nowrap"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${rowRaw(statusClass)}"><i class="fas ${rowRaw(statusIcon)} mr-1"></i>${statusText}</span></td>
+                <td class="px-4 py-4 whitespace-nowrap hidden md:table-cell"><div class="text-sm text-gray-900 dark:text-white">${expiryStr}</div><div class="text-xs ${rowRaw(daysClass)}">${cert.days_until_expiry} days</div></td>
+                <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-gray-500 dark:text-gray-400">${providerLabel || '—'}</td>
+                <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell">${rowRaw(deploymentBadgeHtml(cert))}</td>
+                <td class="px-4 py-4 whitespace-nowrap text-right">
+                    <div class="flex items-center justify-end gap-1">
+                        ${roleAtLeast('operator') ? actionBtn('renew', cert.domain, 'green', 'Renew', 'fa-sync-alt') : false}
+                        ${actionBtn('download', cert.domain, 'blue', 'Download', 'fa-download')}
+                        ${actionBtn('curl', cert.domain, 'indigo', 'API', 'fa-code')}
+                        ${roleAtLeast('operator') ? rowRaw(autoRenewButtonHtml(escapeHtml(cert.domain), cert.auto_renew !== false)) : false}
+                        ${roleAtLeast('admin') ? actionBtn('delete', cert.domain, 'red', 'Delete certificate', 'fa-trash-alt') : false}
+                    </div>
+                </td>
+            </tr>`;
         }).join('');
 
         // Attach event listeners for cert action buttons
