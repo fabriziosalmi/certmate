@@ -475,6 +475,43 @@ curl http://localhost:5000/api/crl/download/info \
 
 ---
 
+#### 11. Download Domain Certificate Files
+
+**Endpoint**: `GET /certificates/<domain>/download`
+
+Download certificate files for a specific domain. By default, this endpoint returns a ZIP archive containing all certificate components. A specific file can be requested using the `file` query parameter.
+
+**Parameters**:
+- `domain` (Path) - The domain name associated with the certificate.
+- `file` (Query, Optional) - Specify a single file to download. 
+  - Supported values: `fullchain.pem`, `privkey.pem`, `combined.pem`
+
+**Response** (200 OK):
+- **Default**: `application/zip` (A ZIP file containing all PEM files)
+- **With `file` param**: `application/x-pem-file` (The raw content of the requested file)
+
+**Examples**:
+
+```bash
+# Download all files as a ZIP archive
+curl http://localhost:5000/api/certificates/example.com/download \
+ -H "Authorization: Bearer TOKEN" \
+ -o example_com_bundle.zip
+
+# Download only the fullchain.pem file
+curl "http://localhost:5000/api/certificates/example.com/download?file=fullchain.pem" \
+ -H "Authorization: Bearer TOKEN" \
+ -o fullchain.pem
+
+# Download only the private key
+curl "http://localhost:5000/api/certificates/example.com/download?file=privkey.pem" \
+ -H "Authorization: Bearer TOKEN" \
+ -o privkey.pem
+
+```
+
+---
+
 ## Error Handling
 
 ### Error Response Format
