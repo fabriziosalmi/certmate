@@ -435,7 +435,11 @@ def setup_security_headers(app):
                 "style-src 'self' 'unsafe-inline' cdn.redoc.ly fonts.googleapis.com; "
                 "font-src 'self' fonts.gstatic.com; "
                 "img-src 'self' data:; "
-                "connect-src 'self'; "
+                # Deployment-status checks (#125) cross-fetch every monitored
+                # domain to verify it's serving the expected cert — these are
+                # by definition NOT same-origin. Allow https: + a websocket
+                # scheme for any future real-time push. data: stays excluded.
+                "connect-src 'self' https: wss:; "
                 "frame-ancestors 'self'; "
                 "form-action 'self'; "
                 "base-uri 'self'; "
