@@ -1,3 +1,27 @@
+## v2.4.5 (Patch — community PR roundup)
+
+Five merged community PRs + dependabot security bumps. No behavior change in CertMate's core flow; mostly bug fixes, Docker-secrets ergonomics, and new download flexibility.
+
+### From the community
+
+- **#119** [@rocogamer](https://github.com/rocogamer) — generalises the v2.4.3 #113 Azure ambiguous-flag fix to the base `DNSProviderStrategy.configure_certbot_arguments`. Every plugin now uses `--authenticator <name>` (immune to argparse prefix collisions) instead of the bare `--<name>` shorthand; more robust than the per-strategy override I shipped in v2.4.3 (also dropped here in favor of the base class fix). Repins `certbot-dns-azure==2.5.0` (was a phantom `2.11.0` not on PyPI; 2.6.0+ requires certbot>=3.0 which would break the certbot 2.10 pin). 4 new regression tests pin the contract on the base class.
+- **#120** [@langtutheky](https://github.com/langtutheky) — adds `SECRET_KEY_FILE` and `API_BEARER_TOKEN_FILE` resolution for Docker Swarm / Kubernetes secret-file mounts. Resolution order: `*_FILE` → env var → fallback. 15 unit tests cover the edge cases (empty file, read error, file precedence over env var, restart persistence, insecure default ignored). Replaces remaining `ADMIN_TOKEN` references with `API_BEARER_TOKEN` across docs and config files.
+- **#126** [@rob-infoglobe](https://github.com/rob-infoglobe) — adds `?file=` query param to `/api/certificates/<domain>/download` returning a single PEM (`fullchain.pem`, `privkey.pem`, or a server-side `fullchain || privkey` concatenation as `combined.pem`) for clients that can't unzip — lightweight scripts, embedded tools, simple webhook consumers. Tight whitelist on the filename; 400 on anything else, 404 on missing files. New `tests/test_download_file_param.py` (5 cases) pins the contract.
+
+### Security bumps
+
+- **#106** [@dependabot](https://github.com/apps/dependabot) — postcss 8.5.6 → 8.5.10. [XSS fix](https://github.com/postcss/postcss/releases/tag/8.5.10) for unescaped `</style>` in non-bundler cases. Dev-dep only, no runtime impact.
+- **#104** [@dependabot](https://github.com/apps/dependabot) — pip group: requests 2.32.5 → 2.33.0 ([CVE-2026-25645](https://github.com/psf/requests/releases/tag/v2.33.0) in `extract_zipped_paths`; doesn't affect default usage), python-dotenv, cryptography.
+
+### Tests
+
+- **209 unit tests pass** (was 143; +47 from #120's secret-key tests + #119's authenticator tests + the rest from the merged PRs).
+- 5 new e2e tests for #126.
+
+### Still pending
+
+- **#122** [@ITJamie](https://github.com/ITJamie) (DNS alias mode rewrite) — rebased on top of this release; the `dashboard.js` conflict from v2.4.2's CertMate.html refactor was reconciled. Awaiting the reporter's re-test before merge. Targeted for v2.4.6 / v2.5.0.
+
 ## v2.4.4 (Patch — wire up missing notification routes)
 
 Closes [#114](https://github.com/fabriziosalmi/certmate/issues/114).
