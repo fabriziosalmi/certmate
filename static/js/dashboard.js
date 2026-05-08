@@ -461,7 +461,7 @@
                         <i class="fas fa-certificate text-gray-400 dark:text-gray-500 mr-2 text-sm" aria-hidden="true"></i>
                         <div class="min-w-0">
                             <div class="text-sm font-medium text-gray-900 dark:text-white">${cert.domain}</div>
-                            ${domainAlias ? rowHtml`<div class="mt-1 flex items-center text-xs text-blue-600 dark:text-blue-300 min-w-0"><i class="fas fa-link mr-1 text-blue-500" aria-hidden="true"></i><span class="truncate" title="${domainAlias}">Alias: ${domainAlias}</span></div>` : false}
+                            ${domainAlias ? rowHtml`<div class="mt-1 flex items-center text-xs text-blue-600 dark:text-blue-300 min-w-0"><i class="fas fa-link mr-1 text-blue-500" aria-hidden="true"></i><span class="truncate" title="${domainAlias}">DNS-01 Alias: ${domainAlias}</span></div>` : false}
                         </div>
                     </div>
                 </td>
@@ -557,7 +557,7 @@
                 '<div class="flex justify-between gap-4 py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">Domain</dt><dd class="text-sm font-medium text-right text-gray-900 dark:text-white">' + safeDomain + '</dd></div>' +
                 '<div class="flex justify-between gap-4 py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">Expires</dt><dd class="text-sm font-medium text-right text-gray-900 dark:text-white">' + expiryDate.toLocaleDateString(undefined, { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' }) + '</dd></div>' +
                 (providerLabel ? '<div class="flex justify-between gap-4 py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">DNS Provider</dt><dd class="text-sm font-medium text-right text-gray-900 dark:text-white">' + providerLabel + '</dd></div>' : '') +
-                (safeDomainAlias ? '<div class="flex justify-between gap-4 py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">DNS Alias</dt><dd class="text-sm font-medium text-right break-all text-blue-600 dark:text-blue-300">' + safeDomainAlias + '</dd></div>' : '') +
+                (safeDomainAlias ? '<div class="flex justify-between gap-4 py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">DNS-01 Alias</dt><dd class="text-sm font-medium text-right break-all text-blue-600 dark:text-blue-300">' + safeDomainAlias + '</dd></div>' : '') +
                 (safeDomainAlias && aliasProviderLabel ? '<div class="flex justify-between gap-4 py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">Alias Provider</dt><dd class="text-sm font-medium text-right text-gray-900 dark:text-white">' + aliasProviderLabel + '</dd></div>' : '') +
                 '<div class="flex justify-between gap-4 py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">Auto-Renew</dt><dd class="text-sm font-medium text-right ' + (cert.auto_renew !== false ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400') + '">' + (cert.auto_renew !== false ? 'Enabled' : 'Disabled') + '</dd></div>' +
                 '<div class="flex justify-between gap-4 py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">Deployment</dt><dd>' + deploymentBadgeHtml(cert) + '</dd></div>' +
@@ -1148,6 +1148,36 @@
         }
     }
 
+    function normalizeDnsName(value) {
+        return (value || '').trim().replace(/^\*\./, '').replace(/\.+$/, '');
+    }
+
+    function normalizeDnsAliasName(value) {
+        return normalizeDnsName(value).replace(/^_acme-challenge\./i, '');
+    }
+
+    function updateDnsAliasHelp() {
+        var domainField = document.getElementById('domain');
+        var aliasField = document.getElementById('dns_alias_domain');
+        var help = document.getElementById('dns_alias_help');
+        if (!domainField || !aliasField || !help) return;
+
+        var domain = normalizeDnsName(domainField.value);
+        var aliasDomain = normalizeDnsAliasName(aliasField.value);
+        if (domain && aliasDomain) {
+            var source = '_acme-challenge.' + domain;
+            var target = '_acme-challenge.' + aliasDomain;
+            help.innerHTML = 'Create this CNAME: <code class="font-mono bg-gray-100 dark:bg-gray-600 px-1 rounded">'
+                + escapeHtml(source)
+                + '</code> &rarr; <code class="font-mono bg-gray-100 dark:bg-gray-600 px-1 rounded">'
+                + escapeHtml(target)
+                + '</code>';
+        } else {
+            help.innerHTML = 'Use DNS-01 Alias Mode when <code class="font-mono bg-gray-100 dark:bg-gray-600 px-1 rounded">_acme-challenge.yourdomain.com</code> '
+                + 'is CNAMEd to a validation zone you control. Enter the target FQDN (without the <code class="font-mono bg-gray-100 dark:bg-gray-600 px-1 rounded">_acme-challenge.</code> prefix).';
+        }
+    }
+
     // Create certificate
     document.getElementById('createCertForm').addEventListener('submit', function (e) {
         e.preventDefault();
@@ -1159,7 +1189,7 @@
         var accountId = document.getElementById('account_select').value;
         var caProvider = document.getElementById('ca_provider_select').value;
         var dnsAliasDomain = (document.getElementById('dns_alias_domain') || {}).value;
-        dnsAliasDomain = dnsAliasDomain ? dnsAliasDomain.trim() : '';
+        dnsAliasDomain = dnsAliasDomain ? normalizeDnsAliasName(dnsAliasDomain) : '';
 
         // Parse SAN domains from comma-separated input
         var sanDomains = sanDomainsInput
@@ -1228,6 +1258,7 @@
                     document.getElementById('ca_provider_select').value = '';
                     var aliasField = document.getElementById('dns_alias_domain');
                     if (aliasField) { aliasField.value = ''; }
+                    updateDnsAliasHelp();
                     toggleDnsProviderVisibility();
                     updateAccountSelection();
                     loadCertificates();
@@ -1482,6 +1513,9 @@
         // Initialize search and filters
         document.getElementById('certificateSearch').addEventListener('input', filterCertificates);
         document.getElementById('statusFilter').addEventListener('change', filterCertificates);
+        document.getElementById('domain').addEventListener('input', updateDnsAliasHelp);
+        document.getElementById('dns_alias_domain').addEventListener('input', updateDnsAliasHelp);
+        updateDnsAliasHelp();
 
         // Close modal on outside click
         document.getElementById('curlModal').addEventListener('click', function (e) {
@@ -1548,4 +1582,5 @@
     window.toggleDnsProviderVisibility = toggleDnsProviderVisibility;
     window.updateAccountSelection = updateAccountSelection;
     window.updateCAProviderInfo = updateCAProviderInfo;
+    window.updateDnsAliasHelp = updateDnsAliasHelp;
 })();
