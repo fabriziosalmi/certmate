@@ -13,6 +13,7 @@ certbot-dns-cloudflare==2.10.0
 
 # Cloudflare API support
 cloudflare==2.19.4
+dns-lexicon==3.25.1
 
 # Core application dependencies
 urllib3>=2.6.0,!=2.2.0,<3      # CVE-2025-66418, CVE-2025-66471, CVE-2026-21441 (HIGH)

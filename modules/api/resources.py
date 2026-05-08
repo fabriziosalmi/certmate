@@ -431,6 +431,52 @@ def create_api_resources(api, models, managers):
                     'hint': 'Check application logs for detailed error information.'
                 }, 500
 
+    class CheckDNSAlias(Resource):
+        @api.doc(security='Bearer')
+        @auth_manager.require_role('viewer')
+        def post(self):
+            """Check DNS-01 alias CNAME records before creating a certificate."""
+            data = api.payload or {}
+            domain = (data.get('domain') or '').strip()
+            domain_alias = (data.get('domain_alias') or '').strip()
+            san_domains = data.get('san_domains') or []
+            if not isinstance(san_domains, list):
+                return {'error': 'san_domains must be an array'}, 400
+
+            wildcard = bool(data.get('wildcard'))
+            if wildcard and domain:
+                wildcard_domain = '*.' + domain.lstrip('*.')
+                if wildcard_domain not in san_domains:
+                    san_domains.append(wildcard_domain)
+
+            if not domain or not domain_alias:
+                return {'error': 'domain and domain_alias are required'}, 400
+
+            return certificate_manager.check_dns_alias_records(
+                domain,
+                domain_alias,
+                san_domains=san_domains,
+            ), 200
+
+    class CertificateDNSAliasCheck(Resource):
+        @api.doc(security='Bearer')
+        @auth_manager.require_role('viewer')
+        def get(self, domain):
+            """Check DNS-01 alias CNAME records for an existing certificate."""
+            cert_info = certificate_manager.get_certificate_info(domain)
+            if not cert_info or not cert_info.get('exists'):
+                return {'error': f'Certificate not found for domain: {domain}'}, 404
+
+            domain_alias = cert_info.get('domain_alias')
+            if not domain_alias:
+                return {'error': f'Certificate {domain} is not using DNS-01 alias mode'}, 400
+
+            return certificate_manager.check_dns_alias_records(
+                domain,
+                domain_alias,
+                san_domains=cert_info.get('san_domains') or [],
+            ), 200
+
     class CertificateDetail(Resource):
         @api.doc(security='Bearer')
         @auth_manager.require_role('admin')
@@ -1412,6 +1458,8 @@ def create_api_resources(api, models, managers):
         'CacheClear': CacheClear,
         'CertificateList': CertificateList,
         'CreateCertificate': CreateCertificate,
+        'CheckDNSAlias': CheckDNSAlias,
+        'CertificateDNSAliasCheck': CertificateDNSAliasCheck,
         'CertificateDetail': CertificateDetail,
         'DownloadCertificate': DownloadCertificate,
         'RenewCertificate': RenewCertificate,
