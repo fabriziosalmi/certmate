@@ -10,7 +10,7 @@ import zipfile
 import os
 import io
 from pathlib import Path
-from flask import send_file, after_this_request, current_app, request
+from flask import send_file, after_this_request, current_app, request, jsonify
 from flask_restx import Resource, fields
 
 from ..core.metrics import get_metrics_summary, is_prometheus_available
@@ -527,7 +527,7 @@ def create_api_resources(api, models, managers):
         @api.doc(security='Bearer')
         @auth_manager.require_role('viewer')
         def get(self, domain):
-            """Download certificate files as ZIP or individual file"""
+            """Download certificate files as ZIP, JSON, or individual file"""
             try:
                 cert_dir, err = _validate_domain_path(domain, file_ops.cert_dir)
                 if err:
@@ -535,8 +535,35 @@ def create_api_resources(api, models, managers):
                 if not cert_dir.exists():
                     return {'error': f'Certificate not found for domain: {domain}'}, 404
 
+                download_format = request.args.get('format')
                 # Check for the optional 'file' parameter
                 requested_file = request.args.get('file')
+
+                if download_format and download_format not in ['json']:
+                    return {'error': 'Invalid format requested.'}, 400
+
+                if download_format == 'json':
+                    if requested_file:
+                        return {'error': 'format=json cannot be combined with file.'}, 400
+
+                    required_files = {
+                        'cert_pem': 'cert.pem',
+                        'chain_pem': 'chain.pem',
+                        'fullchain_pem': 'fullchain.pem',
+                        'private_key_pem': 'privkey.pem',
+                    }
+
+                    try:
+                        payload = {'domain': domain}
+                        for response_key, filename in required_files.items():
+                            file_path = cert_dir / filename
+                            if not file_path.exists():
+                                return {'error': f'Required cert file not found for domain {domain}: {filename}'}, 404
+                            payload[response_key] = file_path.read_text(encoding='utf-8')
+
+                        return jsonify(payload)
+                    except FileNotFoundError:
+                        return {'error': f'Required cert file not found for domain {domain}'}, 404
 
                 if requested_file:
                     # Security check: only allow specific certificate files
@@ -546,8 +573,8 @@ def create_api_resources(api, models, managers):
                     if requested_file == 'combined.pem':
                         try:
                             # Read both files and join them
-                            fullchain = (cert_dir / 'fullchain.pem').read_text()
-                            privkey = (cert_dir / 'privkey.pem').read_text()
+                            fullchain = (cert_dir / 'fullchain.pem').read_text(encoding='utf-8')
+                            privkey = (cert_dir / 'privkey.pem').read_text(encoding='utf-8')
                             combined_data = io.BytesIO(f"{fullchain}{privkey}".encode())
 
                             return send_file(
