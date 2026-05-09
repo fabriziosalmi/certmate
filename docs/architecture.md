@@ -146,6 +146,7 @@ certificates/
     chain.pem         # Intermediate CA chain
     fullchain.pem     # cert + chain
     privkey.pem       # Private key (600 permissions)
+    combined.pem      # Fullchain + Private key (convenience bundle)
     metadata.json     # Certificate metadata
 ```
 
@@ -234,8 +235,16 @@ All settings are stored in `data/settings.json`:
 | POST | `/api/certificates` | Create new certificate |
 | GET | `/api/certificates/{domain}` | Get certificate info |
 | POST | `/api/certificates/{domain}/renew` | Renew certificate |
-| GET | `/api/certificates/{domain}/download` | Download as ZIP |
+| GET | `/api/certificates/{domain}/download` | Download as ZIP (default) or specific file via `?file=` (combined.pem, fullchain.pem, privkey.pem) |
 | GET | `/{domain}/tls` | Direct fullchain download |
+
+**Supported `?file=` values:**
+* `fullchain.pem`: The certificate and the intermediate chain.
+* `privkey.pem`: The private key.
+* `combined.pem`: The bundle containing the full chain and private key.
+
+**Note on Downloads:**
+By default, the `/download` endpoint returns a `.zip` archive containing all certificate components. If the `file` query parameter is provided (e.g., `?file=fullchain.pem`), the API returns only that specific file with the appropriate `text/plain` or `application/x-pem-file` Content-Type. Supported values: `combined.pem`, `fullchain.pem`, `privkey.pem`.
 
 ### Client Certificates
 
