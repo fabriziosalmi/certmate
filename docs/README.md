@@ -66,18 +66,19 @@ Welcome to the CertMate documentation. This folder contains comprehensive guides
 
 ## API Endpoints Quick Reference
 
-| Method | Endpoint                                 | Description           |
-| ------ | ---------------------------------------- | --------------------- |
-| POST   | `/api/client-certs/create`               | Create certificate    |
-| GET    | `/api/client-certs`                      | List certificates     |
-| GET    | `/api/client-certs/<id>`                 | Get metadata          |
-| GET    | `/api/client-certs/<id>/download/<type>` | Download cert/key/csr |
-| POST   | `/api/client-certs/<id>/revoke`          | Revoke certificate    |
-| POST   | `/api/client-certs/<id>/renew`           | Renew certificate     |
-| GET    | `/api/client-certs/stats`                | Get statistics        |
-| POST   | `/api/client-certs/batch`                | Batch CSV import      |
-| GET    | `/api/ocsp/status/<serial>`              | OCSP status           |
-| GET    | `/api/crl/download/<format>`             | Download CRL          |
+| Method | Endpoint                                 | Description                                |
+| ------ | ---------------------------------------- | ------------------------------------------ |
+| POST   | `/api/client-certs/create`               | Create certificate                         |
+| GET    | `/api/client-certs`                      | List certificates                          |
+| GET    | `/api/client-certs/<id>`                 | Get metadata                               |
+| GET    | `/api/client-certs/<id>/download/<type>` | Download cert/key/csr                      |
+| POST   | `/api/client-certs/<id>/revoke`          | Revoke certificate                         |
+| POST   | `/api/client-certs/<id>/renew`           | Renew certificate                          |
+| GET    | `/api/client-certs/stats`                | Get statistics                             |
+| POST   | `/api/client-certs/batch`                | Batch CSV import                           |
+| GET    | `/api/ocsp/status/<serial>`              | OCSP status                                |
+| GET    | `/api/crl/download/<format>`             | Download CRL                               |
+| GET    | `/api/certificates/<domain>/download`    | Download ZIP or specific file via `?file=` |
 
 See [API Reference](./api.md#endpoints) for full documentation.
 
@@ -198,6 +199,15 @@ curl -X POST http://localhost:8000/api/client-certs/create \
  "cert_usage": "api-mtls",
  "days_valid": 365
  }'
+```
+
+### Download Specific Server Certificate File
+
+```bash
+# Download only the fullchain.pem for example.com
+curl -H "Authorization: Bearer YOUR_TOKEN" \
+ "http://localhost:8000/api/certificates/example.com/download?file=fullchain.pem" \
+ -o fullchain.pem
 ```
 
 ### List Certificates
