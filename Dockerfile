@@ -1,5 +1,5 @@
 # Multi-stage build for optimized image size and faster builds
-FROM python:3.12-slim AS builder
+FROM python:3.12-slim-trixie AS builder
 
 # Set working directory for build stage
 WORKDIR /build
@@ -23,7 +23,7 @@ RUN pip install -U pip setuptools wheel && \
     pip install --no-cache-dir -r ${REQUIREMENTS_FILE}
 
 # Production stage
-FROM python:3.12-slim
+FROM python:3.12-slim-trixie
 
 # Set working directory
 WORKDIR /app

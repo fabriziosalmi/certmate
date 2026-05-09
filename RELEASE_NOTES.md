@@ -1,3 +1,44 @@
+## v2.4.7 (Patch — base image bump bookworm → trixie)
+
+Two-character `Dockerfile` change ([#127](https://github.com/fabriziosalmi/certmate/pull/127)): `python:3.12-slim` → `python:3.12-slim-trixie`. Expected to close ~11-13 of the 13 open Critical+High Trivy findings on the main branch image — all of them base-image OS CVEs (gnutls, libssh2, ncurses, systemd, libcap) fixed in trixie's package versions but not backported to bookworm.
+
+| Component | bookworm (v2.4.6) | trixie (v2.4.7) |
+|---|---|---|
+| Debian | 12 | 13 |
+| glibc | 2.36 | 2.40 (forward-compat, no wheel rebuild needed) |
+| OpenSSL system | 3.0.x | 3.4.x (irrelevant — `cryptography` bundles its own) |
+| gnutls | 3.7.9 | 3.8.7 (closes alerts #253, #254, #255, #256, #257) |
+| ncurses | 6.4 | 6.5 (closes #182, #193, #200, #201) |
+| systemd | 252 | 256+ (closes #190, #194) |
+| libcap | 2.66 | 2.68+ (closes #178) |
+| libssh2 | 1.10.0 | 1.11.x (probably closes #274) |
+
+CI verified: multi-arch build (linux/amd64 + linux/arm64) green, full e2e test (3.12) suite green, full `requirements.txt` pip install (certbot 2.10 + 14 DNS plugins + cryptography + cloudflare + boto3 + azure-* + flask) succeeds on trixie. No application code touched, no behavior change. Trivy scan delta on main image will appear in the next nightly scan.
+
+## v2.4.6 (Patch — domain alias mode + CI workflow fix)
+
+Closes [#124](https://github.com/fabriziosalmi/certmate/issues/124). Substantive contribution from [@ITJamie](https://github.com/ITJamie) ([#122](https://github.com/fabriziosalmi/certmate/pull/122)).
+
+### Domain alias mode that actually works
+
+The previous DNS-01 alias flow assumed the **primary** domain's DNS was manageable by your provider; CertMate would still try to write the `_acme-challenge` TXT record on the primary zone and fail with `Unable to determine zone_id for <primary>`. The whole point of alias mode is the case where it **isn't** — only the alias zone is. This release reworks the flow:
+
+- **`modules/core/dns_alias_hook.py`** — new Lexicon-backed manual DNS hook supporting cloudflare, route53, azure, google, powerdns, digitalocean, linode, gandi, ovh, namecheap, arvancloud, infomaniak, duckdns, acme-dns. Writes the TXT on the alias zone, lets the CNAME chain resolve. Unsupported providers are rejected up-front with a clear error instead of failing mid-certbot.
+- **`POST /api/certificates/<domain>/check-cnames`** — new endpoint to verify the `_acme-challenge` CNAME chain exists for a domain (and all its SANs) before issuing. Surfaces missing records up-front instead of after a 60s certbot retry.
+- **UI**: alias indicator pill on dashboard cert rows, alias display in cert detail panel, SAN list in the sidebar, hint help text in the create-cert form, "DNS-01 Alias" naming standardised.
+- **Renewal path**: rebuilds the manual hook from cert metadata so renewals don't fail when the temp credentials file is gone (the Cloudflare/Hetzner/Linode/etc renewal sibling of #112 — different code path, same shape of bug, fixed here for the alias case at least).
+- **Tests**: 47 cases in `tests/test_domain_alias.py` covering hook regeneration on renewal, SAN+wildcard expectations, CNAME existence reporter, unsupported-provider rejection, missing-credentials handling, ACME-DNS subdomain matching, lexicon adapter mapping for all 14 supported providers.
+
+### CI workflow fix (visible to every external contributor)
+
+`docker-multiplatform.yml` was constructing image tags like `docker.io//certmate:pr-NN` (note the double slash from an empty `secrets.DOCKERHUB_USER` on fork-originated PRs — GitHub Actions intentionally doesn't pass secrets to fork workflows). Every dependabot PR and every external contributor PR (#106, #104, #119, #122, …) had been red on the build job for that reason alone, hiding real signal. Added a one-line fallback: when `DOCKERHUB_USER` is empty, use `github.repository_owner` instead. Push to Docker Hub is still disabled for PRs (gated separately), so this only changes the tag, not what gets published.
+
+### Maintainer reconciliation during the rebase
+
+The PR was opened against `main` before the v2.4.x cleanup landed. To bring it on top of v2.4.5:
+- `dashboard.js` cert-row template reconciled with the v2.4.2 `CertMate.html` auto-escape helper (alias indicator now uses `${domainAlias}` interpolation; `providerLabel` goes through `rowRaw()`).
+- Bandit B310 hardening: scheme-validate the DNS-provider API URL in `_json_request`, `# nosec B310 - hardcoded https literal` on the two static URLs (api.ipify.org for Namecheap public-IP injection; cloudflare-dns.com for the new DoH lookup).
+
 ## v2.4.5 (Patch — community PR roundup)
 
 Five merged community PRs + dependabot security bumps. No behavior change in CertMate's core flow; mostly bug fixes, Docker-secrets ergonomics, and new download flexibility.

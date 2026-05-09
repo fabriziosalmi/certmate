@@ -668,7 +668,10 @@ Content-Type: application/json
 #
 #   _acme-challenge.example.com  CNAME  _acme-challenge.validation.example.org
 #
-# Certbot follows the CNAME chain automatically during the DNS-01 challenge.
+# CertMate creates the TXT record on the provider-managed alias name, and
+# Let's Encrypt follows the CNAME chain during the DNS-01 challenge.
+# Alias mode is supported for CertMate's first-class DNS providers; generic
+# fallback providers are rejected until a dedicated adapter exists.
 # This is useful when:
 # - The primary domain's DNS does not support an API
 # - You want to centralize ACME validations on a dedicated domain
