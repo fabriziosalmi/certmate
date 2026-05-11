@@ -273,6 +273,17 @@ def create_api_resources(api, models, managers):
                 account_id = data.get('account_id')
                 ca_provider = data.get('ca_provider')
                 challenge_type = data.get('challenge_type')  # Optional: 'dns-01' or 'http-01'
+
+                private_key_type = data.get('private_key_type')  # Optional, possible values: secp256r1 secp384r1 rsa4096 rsa3072 rsa2048
+
+                # Validate private key type
+                allowed_key_types = ['secp256r1', 'secp384r1', 'rsa4096', 'rsa3072', 'rsa2048']
+                if private_key_type and private_key_type not in allowed_key_types:
+                    return {
+                        'error': 'Invalid private_key_type',
+                        'hint': f'Allowed values: {", ".join(allowed_key_types)}'
+                    }, 400
+
                 domain_alias = data.get('domain_alias')  # Optional domain alias
                 if domain_alias:
                     from ..core.utils import validate_domain
@@ -355,7 +366,8 @@ def create_api_resources(api, models, managers):
                     ca_provider=ca_provider,
                     domain_alias=domain_alias,
                     san_domains=san_domains,
-                    challenge_type=challenge_type
+                    challenge_type=challenge_type,
+                    private_key_type=private_key_type
                 )
 
                 # Append the new domain to settings under the manager's

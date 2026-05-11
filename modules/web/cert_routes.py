@@ -39,6 +39,7 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
             ca_provider = data.get('ca_provider')
             challenge_type = data.get('challenge_type')
             domain_alias = data.get('domain_alias')
+            private_key_type = data.get('private_key_type')
 
             if not domain:
                 return jsonify({'error': 'Domain is required'}), 400
@@ -64,6 +65,7 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
                 account_id=account_id,
                 ca_provider=ca_provider,
                 domain_alias=domain_alias,
+                private_key_type=private_key_type,
                 san_domains=san_domains,
                 challenge_type=challenge_type,
             )

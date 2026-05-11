@@ -156,6 +156,7 @@ def create_api_models(api):
         'domain_alias': fields.String(description='DNS alias target used for DNS-01 validation'),
         'alias_dns_provider': fields.String(description='DNS provider used to manage the alias target'),
         'san_domains': fields.List(fields.String, description='Subject Alternative Names included in the certificate'),
+        'private_key_type': fields.String(description='Private key type sent to certbot during certificate generation'),
         'total_issued': fields.Integer(description='Total certificates issued'),
         'total_active': fields.Integer(description='Total active certificates'),
         'total_revoked': fields.Integer(description='Total revoked certificates'),
@@ -200,7 +201,8 @@ def create_api_models(api):
         'account_id': fields.String(description='DNS provider account ID'),
         'ca_provider': fields.String(description='CA provider (optional)',
                                      enum=['letsencrypt', 'digicert', 'private_ca']),
-        'domain_alias': fields.String(description='Optional domain alias for DNS validation')
+        'domain_alias': fields.String(description='Optional domain alias for DNS validation'),
+        'private_key_type': fields.String(description='Optional private key type passed to certbot for key generation')
     })
 
     # Cache models

@@ -195,7 +195,7 @@ class CAManager:
     def build_certbot_command(self, domain: str, email: str, ca_provider: str,
                             dns_provider: str, dns_config: Dict[str, Any],
                             account_config: Dict[str, Any], staging: bool = False,
-                            cert_dir: Path = None, san_domains: list = None) -> tuple:
+                            cert_dir: Path = None, san_domains: list = None, private_key_type = None) -> tuple:
         """Build certbot command with CA-specific parameters.
 
         Returns:

@@ -221,7 +221,7 @@ class SettingsManager:
 
             if not self.settings_file.exists():
                 # First time setup - create with full template for web UI
-                logger.info("Creating initial settings file with full provider template for first-time setup")
+                logger.info("Creating initial settings file with full provider template for first-time setup (%s)", self.settings_file)
                 self.save_settings(first_time_template)
                 return first_time_template
 

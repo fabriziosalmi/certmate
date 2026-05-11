@@ -437,7 +437,7 @@ class CertificateManager:
             'dns_provider': dns_provider
         }
 
-    def create_certificate(self, domain, email, dns_provider=None, dns_config=None, account_id=None, staging=False, ca_provider=None, ca_account_id=None, domain_alias=None, san_domains=None, challenge_type=None):
+    def create_certificate(self, domain, email, dns_provider=None, dns_config=None, account_id=None, staging=False, ca_provider=None, ca_account_id=None, domain_alias=None, san_domains=None, challenge_type=None, private_key_type=None):
         """Create SSL certificate using configurable CA with DNS challenge
         
         Args:
@@ -585,7 +585,8 @@ class CertificateManager:
                 try:
                     certbot_cmd, ca_extra_env = self.ca_manager.build_certbot_command(
                         domain, email, ca_provider, dns_provider, dns_config,
-                        ca_account_config, staging, cert_dir, san_domains=san_list
+                        ca_account_config, staging, cert_dir, san_domains=san_list,
+                        private_key_type=private_key_type
                     )
                 except TypeError as e:
                     # Defensive fallback: older build_certbot_command without san_domains
@@ -620,6 +621,19 @@ class CertificateManager:
 
                 if staging:
                     certbot_cmd.append('--staging')
+
+            # Replace the sample code block with this:
+            if private_key_type:
+                if private_key_type == 'rsa2048':
+                    certbot_cmd.extend(['--key-type', 'rsa', '--rsa-key-size', '2048'])
+                elif private_key_type == 'rsa3072':
+                    certbot_cmd.extend(['--key-type', 'rsa', '--rsa-key-size', '3072'])
+                elif private_key_type == 'rsa4096':
+                    certbot_cmd.extend(['--key-type', 'rsa', '--rsa-key-size', '4096'])
+                elif private_key_type == 'secp256r1':
+                    certbot_cmd.extend(['--key-type', 'ecdsa', '--elliptic-curve', 'secp256r1'])
+                elif private_key_type == 'secp384r1':
+                    certbot_cmd.extend(['--key-type', 'ecdsa', '--elliptic-curve', 'secp384r1'])
 
             # Build per-request environment (avoid race conditions with os.environ)
             process_env = os.environ.copy()
@@ -723,7 +737,8 @@ class CertificateManager:
                 'created_at': datetime.now().isoformat(),
                 'email': email,
                 'staging': staging,
-                'account_id': account_id
+                'account_id': account_id,
+                'private_key_type': private_key_type
             }
             if domain_alias:
                 metadata['domain_alias'] = domain_alias

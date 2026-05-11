@@ -1353,6 +1353,7 @@
         var dnsProvider = document.getElementById('dns_provider_select').value;
         var accountId = document.getElementById('account_select').value;
         var caProvider = document.getElementById('ca_provider_select').value;
+        var privateKeyType = document.getElementById('private_key_type_select').value;
         var dnsAliasDomain = (document.getElementById('dns_alias_domain') || {}).value;
         dnsAliasDomain = dnsAliasDomain ? normalizeDnsAliasName(dnsAliasDomain) : '';
 
@@ -1406,6 +1407,9 @@
         }
         if (dnsAliasDomain) {
             requestBody.domain_alias = dnsAliasDomain;
+        }
+        if (privateKeyType) {
+            requestBody.private_key_type = privateKeyType;
         }
 
         fetch('/api/certificates/create', {
