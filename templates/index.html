@@ -223,19 +223,27 @@
                                 </div>
                             </div>
 
-                            <!-- DNS Alias Mode -->
+                            <!-- DNS-01 Alias Mode -->
                             <div class="mt-4">
                                 <label for="dns_alias_domain" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                                     <i class="fas fa-random mr-1 text-blue-500"></i>
-                                    DNS Alias Domain <span class="text-xs font-normal text-gray-500 dark:text-gray-400">(optional)</span>
+                                    DNS-01 Alias Domain <span class="text-xs font-normal text-gray-500 dark:text-gray-400">(optional)</span>
                                 </label>
                                 <input type="text" id="dns_alias_domain" name="dns_alias_domain"
                                        class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm"
-                                       placeholder="e.g. _acme-challenge.validation.example.org">
-                                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                    Use DNS Alias Mode when <code class="font-mono bg-gray-100 dark:bg-gray-600 px-1 rounded">_acme-challenge.yourdomain.com</code>
+                                       placeholder="e.g. validation.example.org">
+                                <p id="dns_alias_help" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                    Use DNS-01 Alias Mode when <code class="font-mono bg-gray-100 dark:bg-gray-600 px-1 rounded">_acme-challenge.yourdomain.com</code>
                                     is CNAMEd to a validation zone you control. Enter the target FQDN (without the <code class="font-mono bg-gray-100 dark:bg-gray-600 px-1 rounded">_acme-challenge.</code> prefix).
                                 </p>
+                                <div class="mt-2 flex items-center gap-2">
+                                    <button type="button" id="check_dns_alias_button"
+                                            class="inline-flex items-center px-3 py-1.5 border border-blue-300 dark:border-blue-600 text-xs font-medium rounded-md text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50">
+                                        <i class="fas fa-search mr-1"></i>
+                                        Check DNS-01 Alias
+                                    </button>
+                                </div>
+                                <div id="dns_alias_check_result" class="mt-2 hidden"></div>
                             </div>
 
                             <!-- Certificate key shape -->

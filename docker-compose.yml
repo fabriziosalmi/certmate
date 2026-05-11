@@ -23,8 +23,10 @@ services:
     environment:
       - FLASK_ENV=production
       - SECRET_KEY=${SECRET_KEY:-}  # Auto-generated if empty; set a strong value for production
+      # - SECRET_KEY_FILE=${SECRET_KEY_FILE:-}  # Alternative: path to a file containing the secret key
       - CLOUDFLARE_TOKEN=${CLOUDFLARE_TOKEN}
-      - API_BEARER_TOKEN=${API_BEARER_TOKEN}
+      - API_BEARER_TOKEN=${API_BEARER_TOKEN:-}  # Auto-generated if empty; set a strong value for production
+      #- API_BEARER_TOKEN_FILE=${API_BEARER_TOKEN_FILE:-}  # Alternative: path to a file containing the bearer token
       - PORT=${PORT:-8000}                      # Internal listen port; also update ports: mapping if changed
       - GUNICORN_TIMEOUT=${GUNICORN_TIMEOUT:-300}  # Worker timeout; increase for slow DNS providers
       - LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL:-}    # Overrides the email set via the web UI when set

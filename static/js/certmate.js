@@ -18,6 +18,34 @@
             .replace(/'/g, '&#39;');
     };
 
+    // ── Tagged-template HTML builder ─────────────────────────────
+    // Usage:  el.innerHTML = CertMate.html`<div title="${userText}">...</div>`;
+    // Each ${value} is auto-escaped. Pre-rendered fragments must be wrapped
+    // with CertMate.raw(...) to opt out (e.g. nested templates, icon HTML).
+    // Arrays are joined; their elements are escaped or kept-raw the same way.
+    function HtmlSafe(s) { this.s = String(s); }
+    CM.raw = function(s) { return new HtmlSafe(s == null ? '' : s); };
+    CM.html = function(strings /*, ...values */) {
+        var out = strings[0];
+        for (var i = 1; i < arguments.length; i++) {
+            var v = arguments[i];
+            if (v instanceof HtmlSafe) {
+                out += v.s;
+            } else if (Array.isArray(v)) {
+                for (var j = 0; j < v.length; j++) {
+                    var x = v[j];
+                    out += (x instanceof HtmlSafe) ? x.s : CM.escapeHtml(x);
+                }
+            } else if (v == null || v === false) {
+                // null / undefined / false render as empty (handy for ?: branches)
+            } else {
+                out += CM.escapeHtml(v);
+            }
+            out += strings[i];
+        }
+        return out;
+    };
+
     // ── Toast Notifications ──────────────────────────────────────
     var toastContainer = null;
 

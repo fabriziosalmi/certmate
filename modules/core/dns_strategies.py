@@ -183,14 +183,20 @@ class AzureStrategy(DNSProviderStrategy):
             config_data.get('client_secret', ''),
             domain=domain,
         )
-        
+
     @property
     def plugin_name(self) -> str:
         return 'dns-azure'
-    
+
     @property
     def default_propagation_seconds(self) -> int:
         return 180
+
+    # The configure_certbot_arguments override that v2.4.3 added here for
+    # #113 was made redundant by 47aacfd, which generalised the
+    # --authenticator selector to the base DNSProviderStrategy. The base
+    # method now does the same thing for every plugin, so AzureStrategy
+    # can fall through to it unchanged.
 
 class GoogleStrategy(DNSProviderStrategy):
     def create_config_file(self, config_data: Dict[str, Any], domain: Optional[str] = None) -> Optional[Path]:

@@ -8,8 +8,9 @@ import re
 import tempfile
 import zipfile
 import os
+import io
 from pathlib import Path
-from flask import send_file, after_this_request, current_app
+from flask import send_file, after_this_request, current_app, request
 from flask_restx import Resource, fields
 
 from ..core.metrics import get_metrics_summary, is_prometheus_available
@@ -454,6 +455,52 @@ def create_api_resources(api, models, managers):
                     'hint': 'Check application logs for detailed error information.'
                 }, 500
 
+    class CheckDNSAlias(Resource):
+        @api.doc(security='Bearer')
+        @auth_manager.require_role('viewer')
+        def post(self):
+            """Check DNS-01 alias CNAME records before creating a certificate."""
+            data = api.payload or {}
+            domain = (data.get('domain') or '').strip()
+            domain_alias = (data.get('domain_alias') or '').strip()
+            san_domains = data.get('san_domains') or []
+            if not isinstance(san_domains, list):
+                return {'error': 'san_domains must be an array'}, 400
+
+            wildcard = bool(data.get('wildcard'))
+            if wildcard and domain:
+                wildcard_domain = '*.' + domain.lstrip('*.')
+                if wildcard_domain not in san_domains:
+                    san_domains.append(wildcard_domain)
+
+            if not domain or not domain_alias:
+                return {'error': 'domain and domain_alias are required'}, 400
+
+            return certificate_manager.check_dns_alias_records(
+                domain,
+                domain_alias,
+                san_domains=san_domains,
+            ), 200
+
+    class CertificateDNSAliasCheck(Resource):
+        @api.doc(security='Bearer')
+        @auth_manager.require_role('viewer')
+        def get(self, domain):
+            """Check DNS-01 alias CNAME records for an existing certificate."""
+            cert_info = certificate_manager.get_certificate_info(domain)
+            if not cert_info or not cert_info.get('exists'):
+                return {'error': f'Certificate not found for domain: {domain}'}, 404
+
+            domain_alias = cert_info.get('domain_alias')
+            if not domain_alias:
+                return {'error': f'Certificate {domain} is not using DNS-01 alias mode'}, 400
+
+            return certificate_manager.check_dns_alias_records(
+                domain,
+                domain_alias,
+                san_domains=cert_info.get('san_domains') or [],
+            ), 200
+
     class CertificateDetail(Resource):
         @api.doc(security='Bearer')
         @auth_manager.require_role('admin')
@@ -504,13 +551,50 @@ def create_api_resources(api, models, managers):
         @api.doc(security='Bearer')
         @auth_manager.require_role('viewer')
         def get(self, domain):
-            """Download certificate files as ZIP"""
+            """Download certificate files as ZIP or individual file"""
             try:
                 cert_dir, err = _validate_domain_path(domain, file_ops.cert_dir)
                 if err:
                     return {'error': err}, 400
                 if not cert_dir.exists():
                     return {'error': f'Certificate not found for domain: {domain}'}, 404
+
+                # Check for the optional 'file' parameter
+                requested_file = request.args.get('file')
+
+                if requested_file:
+                    # Security check: only allow specific certificate files
+                    if requested_file not in ['fullchain.pem', 'privkey.pem', 'combined.pem']:
+                        return {'error': 'Invalid file requested.'}, 400
+
+                    if requested_file == 'combined.pem':
+                        try:
+                            # Read both files and join them
+                            fullchain = (cert_dir / 'fullchain.pem').read_text()
+                            privkey = (cert_dir / 'privkey.pem').read_text()
+                            combined_data = io.BytesIO(f"{fullchain}{privkey}".encode())
+
+                            return send_file(
+                                combined_data,
+                                as_attachment=True,
+                                download_name=f'{domain}_combined.pem',
+                                mimetype='application/x-pem-file'
+                            )
+                        except FileNotFoundError:
+                            return {'error': f'Required cert files not found for domain {domain}'}, 404
+
+                    file_path = cert_dir / requested_file
+                    if not file_path.exists():
+                        return {'error': f'File {requested_file} not found for domain {domain}'}, 404
+
+                    return send_file(
+                        file_path,
+                        as_attachment=True,
+                        download_name=f'{domain}_{requested_file}',
+                        mimetype='application/x-pem-file'
+                    )
+
+                # Fallback to original ZIP logic if no file parameter is provided
 
                 # Create temporary ZIP file
                 with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as tmp_file:
@@ -1483,6 +1567,8 @@ def create_api_resources(api, models, managers):
         'CacheClear': CacheClear,
         'CertificateList': CertificateList,
         'CreateCertificate': CreateCertificate,
+        'CheckDNSAlias': CheckDNSAlias,
+        'CertificateDNSAliasCheck': CertificateDNSAliasCheck,
         'CertificateDetail': CertificateDetail,
         'DownloadCertificate': DownloadCertificate,
         'RenewCertificate': RenewCertificate,

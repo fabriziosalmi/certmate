@@ -43,12 +43,25 @@ jobs:
         registry: ${{ env.REGISTRY }}
         username: ${{ secrets.DOCKERHUB_USER }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
-        
+
+    - name: Compute image namespace
+      id: ns
+      # GitHub Actions doesn't pass secrets.* to workflows triggered by
+      # fork-originated PRs. With the previous template the build job was
+      # constructing a malformed tag like `docker.io//certmate:pr-122`
+      # (note the double slash) and exiting before any test-correctness
+      # signal could land. Fall back to the repo owner so the tag is
+      # always well-formed; push is still disabled for PRs separately.
+      run: |
+        OWNER="${{ secrets.DOCKERHUB_USER }}"
+        if [ -z "$OWNER" ]; then OWNER="${{ github.repository_owner }}"; fi
+        echo "namespace=$OWNER" >> "$GITHUB_OUTPUT"
+
     - name: Extract metadata
       id: meta
       uses: docker/metadata-action@v5
       with:
-        images: ${{ env.REGISTRY }}/${{ secrets.DOCKERHUB_USER }}/${{ env.IMAGE_NAME }}
+        images: ${{ env.REGISTRY }}/${{ steps.ns.outputs.namespace }}/${{ env.IMAGE_NAME }}
         tags: |
           type=ref,event=branch
           type=ref,event=pr

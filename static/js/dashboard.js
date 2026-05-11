@@ -97,70 +97,48 @@
         var expired = certificates.filter(function (cert) { return cert.exists && cert.days_until_expiry !== null && cert.days_until_expiry !== undefined && cert.days_until_expiry <= 0; }).length;
 
         var statsContainer = document.getElementById('statsCards');
-        statsContainer.innerHTML =
-            '<div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow duration-200">' +
-            '<div class="p-6">' +
-            '<div class="flex items-center">' +
-            '<div class="flex-shrink-0">' +
-            '<div class="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">' +
-            '<i class="fas fa-certificate text-blue-600 dark:text-blue-400 text-xl"></i>' +
-            '</div>' +
-            '</div>' +
-            '<div class="ml-4 flex-1">' +
-            '<p class="text-sm font-medium text-gray-600 dark:text-gray-400">Total Certificates</p>' +
-            '<p class="text-2xl font-bold text-gray-900 dark:text-white">' + total + '</p>' +
-            '</div>' +
-            '</div>' +
-            '</div>' +
-            '</div>' +
+        var html = CertMate.html;
+        var raw = CertMate.raw;
 
-            '<div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow duration-200">' +
-            '<div class="p-6">' +
-            '<div class="flex items-center">' +
-            '<div class="flex-shrink-0">' +
-            '<div class="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">' +
-            '<i class="fas fa-check-circle text-green-600 dark:text-green-400 text-xl"></i>' +
-            '</div>' +
-            '</div>' +
-            '<div class="ml-4 flex-1">' +
-            '<p class="text-sm font-medium text-gray-600 dark:text-gray-400">Valid</p>' +
-            '<p class="text-2xl font-bold text-green-600 dark:text-green-400">' + valid + '</p>' +
-            '</div>' +
-            '</div>' +
-            '</div>' +
-            '</div>' +
+        function statCard(label, value, color, icon, valueId) {
+            return html`
+                <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow duration-200">
+                    <div class="p-6">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0">
+                                <div class="w-12 h-12 bg-${raw(color)}-100 dark:bg-${raw(color)}-900/30 rounded-lg flex items-center justify-center">
+                                    <i class="fas ${raw(icon)} text-${raw(color)}-600 dark:text-${raw(color)}-400 text-xl"></i>
+                                </div>
+                            </div>
+                            <div class="ml-4 flex-1">
+                                <p class="text-sm font-medium text-gray-600 dark:text-gray-400">${label}</p>
+                                <p class="text-2xl font-bold text-${raw(color)}-600 dark:text-${raw(color)}-400"${valueId ? raw(' id="' + valueId + '"') : ''}>${value}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+        }
 
-            '<div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow duration-200">' +
-            '<div class="p-6">' +
-            '<div class="flex items-center">' +
-            '<div class="flex-shrink-0">' +
-            '<div class="w-12 h-12 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg flex items-center justify-center">' +
-            '<i class="fas fa-exclamation-triangle text-yellow-600 dark:text-yellow-400 text-xl"></i>' +
-            '</div>' +
-            '</div>' +
-            '<div class="ml-4 flex-1">' +
-            '<p class="text-sm font-medium text-gray-600 dark:text-gray-400">Expiring Soon</p>' +
-            '<p class="text-2xl font-bold text-yellow-600 dark:text-yellow-400">' + expiring + '</p>' +
-            '</div>' +
-            '</div>' +
-            '</div>' +
-            '</div>' +
-
-            '<div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow duration-200">' +
-            '<div class="p-6">' +
-            '<div class="flex items-center">' +
-            '<div class="flex-shrink-0">' +
-            '<div class="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg flex items-center justify-center">' +
-            '<i class="fas fa-globe text-indigo-600 dark:text-indigo-400 text-xl"></i>' +
-            '</div>' +
-            '</div>' +
-            '<div class="ml-4 flex-1">' +
-            '<p class="text-sm font-medium text-gray-600 dark:text-gray-400">Deployment</p>' +
-            '<p class="text-2xl font-bold text-indigo-600 dark:text-indigo-400" id="deploymentCount">--</p>' +
-            '</div>' +
-            '</div>' +
-            '</div>' +
-            '</div>';
+        statsContainer.innerHTML = [
+            // The Total card uses the gray-on-white treatment from the original
+            // (text-gray-900 / text-white instead of color-tinted), so we render
+            // it with a hand-rolled value paragraph.
+            html`
+                <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow duration-200">
+                    <div class="p-6"><div class="flex items-center">
+                        <div class="flex-shrink-0"><div class="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                            <i class="fas fa-certificate text-blue-600 dark:text-blue-400 text-xl"></i>
+                        </div></div>
+                        <div class="ml-4 flex-1">
+                            <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Total Certificates</p>
+                            <p class="text-2xl font-bold text-gray-900 dark:text-white">${total}</p>
+                        </div>
+                    </div></div>
+                </div>`,
+            statCard('Valid', valid, 'green', 'fa-check-circle'),
+            statCard('Expiring Soon', expiring, 'yellow', 'fa-exclamation-triangle'),
+            statCard('Deployment', raw('--'), 'indigo', 'fa-globe', 'deploymentCount')
+        ].join('');
     }
 
     // Deployment Status Cache System
@@ -353,6 +331,11 @@
         return '<span id="deployment-status-' + domainId + '" class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300"><i class="fas fa-spinner fa-spin mr-1"></i>Checking...</span>';
     }
 
+    function providerDisplayName(provider) {
+        var safeProvider = escapeHtml(provider || '');
+        return safeProvider ? safeProvider.charAt(0).toUpperCase() + safeProvider.slice(1) : '';
+    }
+
     function displayCertificates(certificates) {
         var container = document.getElementById('certificatesList');
         var thead = document.querySelector('#certificatesTable thead');
@@ -409,35 +392,44 @@
         thead.style.display = '';
         var sorted = applySorting(certificates);
 
+        var rowHtml = CertMate.html;
+        var rowRaw = CertMate.raw;
+
+        // Action button shorthand. cert.domain flows in raw \u2014 the helper
+        // escapes it for both the data-domain attribute and the onclick
+        // arg, so we no longer pre-compute a `safeDomain`.
+        function actionBtn(action, domain, hoverColor, title, icon) {
+            return rowHtml`<button type="button" data-action="${action}" data-domain="${domain}" onclick="event.stopPropagation()" class="p-1.5 text-gray-400 hover:text-${rowRaw(hoverColor)}-600 dark:hover:text-${rowRaw(hoverColor)}-400 rounded hover:bg-gray-100 dark:hover:bg-gray-700" title="${title}"><i class="fas ${rowRaw(icon)}"></i></button>`;
+        }
+
         container.innerHTML = sorted.map(function (cert) {
-            var safeDomain = escapeHtml(cert.domain);
-            var safeDnsProvider = escapeHtml(cert.dns_provider || '');
-            var providerLabel = safeDnsProvider ? safeDnsProvider.charAt(0).toUpperCase() + safeDnsProvider.slice(1) : '';
+            // providerDisplayName(...) already calls escapeHtml internally —
+            // when interpolating into the rowHtml template we wrap it with
+            // rowRaw() to opt out of re-escaping. cert.domain and
+            // cert.domain_alias flow in unescaped; the helper escapes them.
+            var providerLabel = providerDisplayName(cert.dns_provider);
+            var domainAlias = cert.domain_alias || '';
 
             if (!cert.exists) {
-                return '<tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer" onclick="openCertDetail(\'' + safeDomain + '\')">' +
-                    '<td class="px-6 py-4 whitespace-nowrap"><div class="text-sm font-medium text-gray-900 dark:text-white">' + safeDomain + '</div></td>' +
-                    '<td class="px-4 py-4 whitespace-nowrap"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400"><i class="fas fa-times-circle mr-1"></i>Not Found</span></td>' +
-                    '<td class="px-4 py-4 whitespace-nowrap hidden md:table-cell text-sm text-gray-500 dark:text-gray-400">\u2014</td>' +
-                    '<td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-gray-500 dark:text-gray-400">' + (providerLabel || '\u2014') + '</td>' +
-                    '<td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell">\u2014</td>' +
-                    '<td class="px-4 py-4 whitespace-nowrap text-right">' +
-                    '<div class="flex items-center justify-end gap-1">' +
-                    (roleAtLeast('admin')
-                        ? '<button type="button" data-action="delete" data-domain="' + safeDomain + '" onclick="event.stopPropagation()" class="p-1.5 text-gray-400 hover:text-red-600 dark:hover:text-red-400 rounded hover:bg-gray-100 dark:hover:bg-gray-700" title="Remove from list"><i class="fas fa-trash-alt"></i></button>'
-                        : '') +
-                    '</div>' +
-                    '</td>' +
-                    '</tr>';
+                return rowHtml`<tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer" onclick="openCertDetail('${cert.domain}')">
+                    <td class="px-6 py-4 whitespace-nowrap"><div class="text-sm font-medium text-gray-900 dark:text-white">${cert.domain}</div></td>
+                    <td class="px-4 py-4 whitespace-nowrap"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400"><i class="fas fa-times-circle mr-1"></i>Not Found</span></td>
+                    <td class="px-4 py-4 whitespace-nowrap hidden md:table-cell text-sm text-gray-500 dark:text-gray-400">\u2014</td>
+                    <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-gray-500 dark:text-gray-400">${providerLabel || '\u2014'}</td>
+                    <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell">\u2014</td>
+                    <td class="px-4 py-4 whitespace-nowrap text-right">
+                        <div class="flex items-center justify-end gap-1">
+                            ${roleAtLeast('admin') ? actionBtn('delete', cert.domain, 'red', 'Remove from list', 'fa-trash-alt') : false}
+                        </div>
+                    </td>
+                </tr>`;
             }
 
             var daysKnown = cert.days_until_expiry !== null && cert.days_until_expiry !== undefined;
-            var isExpired = cert.exists && daysKnown && cert.days_until_expiry <= 0;
-            var isExpiringSoon = cert.exists && daysKnown && cert.days_until_expiry > 0 && cert.days_until_expiry <= 30;
+            var isExpired = daysKnown && cert.days_until_expiry <= 0;
+            var isExpiringSoon = daysKnown && cert.days_until_expiry > 0 && cert.days_until_expiry <= 30;
             var statusClass, statusIcon, statusText;
-            if (!cert.exists) {
-                statusClass = 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'; statusIcon = 'fa-question-circle'; statusText = 'Unknown';
-            } else if (isExpired) {
+            if (isExpired) {
                 statusClass = 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400'; statusIcon = 'fa-times-circle'; statusText = 'Expired';
             } else if (isExpiringSoon) {
                 statusClass = 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400'; statusIcon = 'fa-exclamation-triangle'; statusText = 'Expiring';
@@ -449,40 +441,44 @@
             var expiryStr = expiryDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
             var daysClass = isExpired ? 'text-red-600 dark:text-red-400' : isExpiringSoon ? 'text-yellow-600 dark:text-yellow-400' : 'text-gray-500 dark:text-gray-400';
 
-            return '<tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors duration-150 cursor-pointer" onclick="openCertDetail(\'' + safeDomain + '\')">' +
-                '<td class="px-6 py-4 whitespace-nowrap">' +
-                '<div class="flex items-center">' +
-                // Inline subtle glyph instead of a rounded blue panel — the
-                // rounded panel read like an interactive control to users
-                // (issue #100) but it had no handler. The whole row is the
-                // affordance for opening the detail panel.
-                '<i class="fas fa-certificate text-gray-400 dark:text-gray-500 mr-2 text-sm" aria-hidden="true"></i>' +
-                '<div class="text-sm font-medium text-gray-900 dark:text-white">' + safeDomain + '</div>' +
-                '</div>' +
-                '</td>' +
-                '<td class="px-4 py-4 whitespace-nowrap"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ' + statusClass + '"><i class="fas ' + statusIcon + ' mr-1"></i>' + statusText + '</span></td>' +
-                '<td class="px-4 py-4 whitespace-nowrap hidden md:table-cell"><div class="text-sm text-gray-900 dark:text-white">' + expiryStr + '</div><div class="text-xs ' + daysClass + '">' + cert.days_until_expiry + ' days</div></td>' +
-                '<td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-gray-500 dark:text-gray-400">' + (providerLabel || '\u2014') + '</td>' +
-                '<td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell">' + deploymentBadgeHtml(cert) + '</td>' +
-                '<td class="px-4 py-4 whitespace-nowrap text-right">' +
-                '<div class="flex items-center justify-end gap-1">' +
-                // Role-aware: hide controls the user can't use to avoid
-                // showing buttons that would just 403. Server still
-                // enforces the role; this is UX only.
-                (roleAtLeast('operator')
-                    ? '<button type="button" data-action="renew" data-domain="' + safeDomain + '" onclick="event.stopPropagation()" class="p-1.5 text-gray-400 hover:text-green-600 dark:hover:text-green-400 rounded hover:bg-gray-100 dark:hover:bg-gray-700" title="Renew"><i class="fas fa-sync-alt"></i></button>'
-                    : '') +
-                '<button type="button" data-action="download" data-domain="' + safeDomain + '" onclick="event.stopPropagation()" class="p-1.5 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 rounded hover:bg-gray-100 dark:hover:bg-gray-700" title="Download"><i class="fas fa-download"></i></button>' +
-                '<button type="button" data-action="curl" data-domain="' + safeDomain + '" onclick="event.stopPropagation()" class="p-1.5 text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded hover:bg-gray-100 dark:hover:bg-gray-700" title="API"><i class="fas fa-code"></i></button>' +
-                (roleAtLeast('operator')
-                    ? autoRenewButtonHtml(safeDomain, cert.auto_renew !== false)
-                    : '') +
-                (roleAtLeast('admin')
-                    ? '<button type="button" data-action="delete" data-domain="' + safeDomain + '" onclick="event.stopPropagation()" class="p-1.5 text-gray-400 hover:text-red-600 dark:hover:text-red-400 rounded hover:bg-gray-100 dark:hover:bg-gray-700" title="Delete certificate"><i class="fas fa-trash-alt"></i></button>'
-                    : '') +
-                '</div>' +
-                '</td>' +
-                '</tr>';
+            // Inline subtle glyph instead of a rounded blue panel — the
+            // rounded panel read like an interactive control to users
+            // (issue #100) but it had no handler. The whole row is the
+            // affordance for opening the detail panel.
+            //
+            // Role-aware controls: hide buttons the user would just 403 on.
+            // Server still enforces; this is UX-only.
+            //
+            // deploymentBadgeHtml + autoRenewButtonHtml return pre-built HTML
+            // strings whose inputs are already escaped, so we wrap with raw().
+            //
+            // Domain alias indicator (#122): when cert.domain_alias is set,
+            // render a small "Alias: …" hint under the domain name so users
+            // can spot rows that go through the CNAME-delegation flow.
+            return rowHtml`<tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors duration-150 cursor-pointer" onclick="openCertDetail('${cert.domain}')">
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="flex items-center">
+                        <i class="fas fa-certificate text-gray-400 dark:text-gray-500 mr-2 text-sm" aria-hidden="true"></i>
+                        <div class="min-w-0">
+                            <div class="text-sm font-medium text-gray-900 dark:text-white">${cert.domain}</div>
+                            ${domainAlias ? rowHtml`<div class="mt-1 flex items-center text-xs text-blue-600 dark:text-blue-300 min-w-0"><i class="fas fa-link mr-1 text-blue-500" aria-hidden="true"></i><span class="truncate" title="${domainAlias}">DNS-01 Alias: ${domainAlias}</span></div>` : false}
+                        </div>
+                    </div>
+                </td>
+                <td class="px-4 py-4 whitespace-nowrap"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${rowRaw(statusClass)}"><i class="fas ${rowRaw(statusIcon)} mr-1"></i>${statusText}</span></td>
+                <td class="px-4 py-4 whitespace-nowrap hidden md:table-cell"><div class="text-sm text-gray-900 dark:text-white">${expiryStr}</div><div class="text-xs ${rowRaw(daysClass)}">${cert.days_until_expiry} days</div></td>
+                <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-gray-500 dark:text-gray-400">${rowRaw(providerLabel) || '—'}</td>
+                <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell">${rowRaw(deploymentBadgeHtml(cert))}</td>
+                <td class="px-4 py-4 whitespace-nowrap text-right">
+                    <div class="flex items-center justify-end gap-1">
+                        ${roleAtLeast('operator') ? actionBtn('renew', cert.domain, 'green', 'Renew', 'fa-sync-alt') : false}
+                        ${actionBtn('download', cert.domain, 'blue', 'Download', 'fa-download')}
+                        ${actionBtn('curl', cert.domain, 'indigo', 'API', 'fa-code')}
+                        ${roleAtLeast('operator') ? rowRaw(autoRenewButtonHtml(escapeHtml(cert.domain), cert.auto_renew !== false)) : false}
+                        ${roleAtLeast('admin') ? actionBtn('delete', cert.domain, 'red', 'Delete certificate', 'fa-trash-alt') : false}
+                    </div>
+                </td>
+            </tr>`;
         }).join('');
 
         // Attach event listeners for cert action buttons
@@ -524,8 +520,13 @@
         document.getElementById('detailDomain').textContent = cert.domain;
 
         var safeDomain = escapeHtml(cert.domain);
-        var safeDnsProvider = escapeHtml(cert.dns_provider || '');
-        var providerLabel = safeDnsProvider ? safeDnsProvider.charAt(0).toUpperCase() + safeDnsProvider.slice(1) : '';
+        var providerLabel = providerDisplayName(cert.dns_provider);
+        var safeDomainAlias = escapeHtml(cert.domain_alias || '');
+        var aliasProviderLabel = providerDisplayName(cert.alias_dns_provider);
+        var sanDomains = Array.isArray(cert.san_domains) ? cert.san_domains : [];
+        var sanDomainsHtml = sanDomains.map(function (san) {
+            return '<div class="break-all">' + escapeHtml(san) + '</div>';
+        }).join('');
 
         if (!cert.exists) {
             content.innerHTML = '<div class="text-center py-8"><i class="fas fa-exclamation-triangle text-red-400 text-3xl mb-3"></i>' +
@@ -557,11 +558,14 @@
                 '<div class="space-y-3">' +
                 '<h4 class="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wider">Details</h4>' +
                 '<dl class="space-y-2">' +
-                '<div class="flex justify-between py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">Domain</dt><dd class="text-sm font-medium text-gray-900 dark:text-white">' + safeDomain + '</dd></div>' +
-                '<div class="flex justify-between py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">Expires</dt><dd class="text-sm font-medium text-gray-900 dark:text-white">' + expiryDate.toLocaleDateString(undefined, { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' }) + '</dd></div>' +
-                (providerLabel ? '<div class="flex justify-between py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">DNS Provider</dt><dd class="text-sm font-medium text-gray-900 dark:text-white">' + providerLabel + '</dd></div>' : '') +
-                '<div class="flex justify-between py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">Auto-Renew</dt><dd class="text-sm font-medium ' + (cert.auto_renew !== false ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400') + '">' + (cert.auto_renew !== false ? 'Enabled' : 'Disabled') + '</dd></div>' +
-                '<div class="flex justify-between py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">Deployment</dt><dd>' + deploymentBadgeHtml(cert) + '</dd></div>' +
+                '<div class="flex justify-between gap-4 py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">Domain</dt><dd class="text-sm font-medium text-right text-gray-900 dark:text-white">' + safeDomain + '</dd></div>' +
+                (sanDomains.length ? '<div class="flex justify-between gap-4 py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">SANs</dt><dd class="text-sm font-medium text-right text-gray-900 dark:text-white">' + sanDomainsHtml + '</dd></div>' : '') +
+                '<div class="flex justify-between gap-4 py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">Expires</dt><dd class="text-sm font-medium text-right text-gray-900 dark:text-white">' + expiryDate.toLocaleDateString(undefined, { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' }) + '</dd></div>' +
+                (providerLabel ? '<div class="flex justify-between gap-4 py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">DNS Provider</dt><dd class="text-sm font-medium text-right text-gray-900 dark:text-white">' + providerLabel + '</dd></div>' : '') +
+                (safeDomainAlias ? '<div class="flex justify-between gap-4 py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">DNS-01 Alias</dt><dd class="text-sm font-medium text-right break-all text-blue-600 dark:text-blue-300">' + safeDomainAlias + '</dd></div>' : '') +
+                (safeDomainAlias && aliasProviderLabel ? '<div class="flex justify-between gap-4 py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">Alias Provider</dt><dd class="text-sm font-medium text-right text-gray-900 dark:text-white">' + aliasProviderLabel + '</dd></div>' : '') +
+                '<div class="flex justify-between gap-4 py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">Auto-Renew</dt><dd class="text-sm font-medium text-right ' + (cert.auto_renew !== false ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400') + '">' + (cert.auto_renew !== false ? 'Enabled' : 'Disabled') + '</dd></div>' +
+                '<div class="flex justify-between gap-4 py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">Deployment</dt><dd>' + deploymentBadgeHtml(cert) + '</dd></div>' +
                 '</dl>' +
                 '</div>' +
                 // Actions
@@ -574,6 +578,8 @@
                 '<button type="button" onclick="downloadCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-download mr-2 text-blue-600"></i>Download Certificate</button>' +
                 '<button type="button" onclick="copyCurlCommand(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-blue-300 dark:border-blue-600 shadow-sm text-sm font-medium rounded-md text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50"><i class="fas fa-code mr-2"></i>Show API Command</button>' +
                 '<button type="button" onclick="checkDeploymentStatus(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-globe mr-2 text-indigo-600"></i>Check Deployment</button>' +
+                (safeDomainAlias ? '<button type="button" onclick="checkDnsAliasForCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-blue-300 dark:border-blue-600 shadow-sm text-sm font-medium rounded-md text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50"><i class="fas fa-search mr-2"></i>Check DNS-01 Alias</button>' : '') +
+                '<div id="cert_dns_alias_check_result" class="hidden"></div>' +
                 (roleAtLeast('admin')
                     ? '<button type="button" onclick="runDeployHooks(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-rocket mr-2 text-green-600"></i>Run Deploy Hooks Now</button>'
                     : '') +
@@ -1161,23 +1167,212 @@
         if (curveEl) curveEl.style.display = (keyType === 'ecdsa') ? '' : 'none';
     }
 
+    function normalizeDnsName(value) {
+        return (value || '').trim().replace(/^\*\./, '').replace(/\.+$/, '');
+    }
+
+    function normalizeDnsAliasName(value) {
+        return normalizeDnsName(value).replace(/^_acme-challenge\./i, '');
+    }
+
+    function parseSanDomainsInput(value) {
+        return value
+            ? value.split(',').map(function (d) { return d.trim(); }).filter(function (d) { return d; })
+            : [];
+    }
+
+    function addUniqueDomain(domains, domain) {
+        if (domain && domains.indexOf(domain) === -1) {
+            domains.push(domain);
+        }
+    }
+
+    function buildRequestedDomains(primaryDomain, sanDomains, wildcardEnabled) {
+        var domains = [];
+        var primary = normalizeDnsName(primaryDomain);
+        addUniqueDomain(domains, primary);
+
+        if (wildcardEnabled && primary) {
+            addUniqueDomain(domains, '*.' + primary);
+        }
+
+        sanDomains.forEach(function (san) {
+            var normalizedSan = normalizeDnsName(san);
+            addUniqueDomain(domains, normalizedSan);
+        });
+
+        return domains;
+    }
+
+    function dnsChallengeName(domain) {
+        return '_acme-challenge.' + normalizeDnsName(domain);
+    }
+
+    function currentRequestedDomains() {
+        var domainField = document.getElementById('domain');
+        var sanField = document.getElementById('san_domains');
+        var wildcardField = document.getElementById('wildcard-cert');
+        return buildRequestedDomains(
+            domainField ? domainField.value : '',
+            sanField ? parseSanDomainsInput(sanField.value) : [],
+            wildcardField ? wildcardField.checked : false
+        );
+    }
+
+    function updateDnsAliasHelp() {
+        var domainField = document.getElementById('domain');
+        var aliasField = document.getElementById('dns_alias_domain');
+        var help = document.getElementById('dns_alias_help');
+        if (!domainField || !aliasField || !help) return;
+
+        var aliasDomain = normalizeDnsAliasName(aliasField.value);
+        var requestedDomains = currentRequestedDomains();
+
+        if (requestedDomains.length > 0 && aliasDomain) {
+            var target = '_acme-challenge.' + aliasDomain;
+            var challengeNames = [];
+            requestedDomains.forEach(function (requestedDomain) {
+                addUniqueDomain(challengeNames, dnsChallengeName(requestedDomain));
+            });
+
+            var rows = challengeNames.map(function (source) {
+                return '<div class="mt-1"><code class="font-mono bg-gray-100 dark:bg-gray-600 px-1 rounded">'
+                    + escapeHtml(source)
+                    + '</code> &rarr; <code class="font-mono bg-gray-100 dark:bg-gray-600 px-1 rounded">'
+                    + escapeHtml(target)
+                    + '</code></div>';
+            }).join('');
+            help.innerHTML = 'Create these CNAMEs:' + rows;
+        } else {
+            help.innerHTML = 'Use DNS-01 Alias Mode when <code class="font-mono bg-gray-100 dark:bg-gray-600 px-1 rounded">_acme-challenge.yourdomain.com</code> '
+                + 'is CNAMEd to a validation zone you control. Enter the target FQDN (without the <code class="font-mono bg-gray-100 dark:bg-gray-600 px-1 rounded">_acme-challenge.</code> prefix).';
+        }
+    }
+
+    function renderDnsAliasCheckResult(result, targetId) {
+        var target = document.getElementById(targetId);
+        if (!target) return;
+
+        var checks = result && Array.isArray(result.checks) ? result.checks : [];
+        var ok = result && result.ok;
+        var headerClass = ok
+            ? 'text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+            : 'text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800';
+        var icon = ok ? 'fa-check-circle' : 'fa-times-circle';
+        var title = ok ? 'All DNS-01 alias CNAMEs are present' : 'DNS-01 alias CNAMEs need attention';
+
+        var rows = checks.map(function (check) {
+            var rowClass = check.ok ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300';
+            var found = check.found_targets && check.found_targets.length
+                ? check.found_targets.join(', ')
+                : 'No CNAME found';
+            if (check.error) {
+                found = check.error;
+            }
+            return '<div class="mt-2 text-xs ' + rowClass + '">' +
+                '<div><i class="fas ' + (check.ok ? 'fa-check' : 'fa-times') + ' mr-1"></i>' +
+                '<code class="font-mono bg-gray-100 dark:bg-gray-700 px-1 rounded">' + escapeHtml(check.source) + '</code></div>' +
+                '<div class="mt-1 ml-5">Expected: <code class="font-mono bg-gray-100 dark:bg-gray-700 px-1 rounded">' + escapeHtml(check.expected_target) + '</code></div>' +
+                '<div class="mt-1 ml-5">Found: <code class="font-mono bg-gray-100 dark:bg-gray-700 px-1 rounded">' + escapeHtml(found) + '</code></div>' +
+                '</div>';
+        }).join('');
+
+        if (!rows) {
+            rows = '<div class="mt-2 text-xs text-gray-600 dark:text-gray-300">No DNS-01 alias records to check.</div>';
+        }
+
+        target.className = 'mt-2 rounded-md border p-3 ' + headerClass;
+        target.innerHTML = '<div class="text-xs font-semibold"><i class="fas ' + icon + ' mr-1"></i>' + title + '</div>' + rows;
+        target.classList.remove('hidden');
+    }
+
+    function checkDnsAliasFromForm() {
+        var domain = normalizeDnsName(document.getElementById('domain').value);
+        var aliasDomain = normalizeDnsAliasName((document.getElementById('dns_alias_domain') || {}).value);
+        var requestedDomains = currentRequestedDomains();
+        var sanDomains = requestedDomains.slice(1);
+        var resultTarget = document.getElementById('dns_alias_check_result');
+
+        if (!domain || !aliasDomain) {
+            showMessage('Enter both primary domain and DNS-01 alias domain before checking.', 'error');
+            return;
+        }
+
+        if (resultTarget) {
+            resultTarget.className = 'mt-2 rounded-md border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-3 text-xs text-blue-700 dark:text-blue-300';
+            resultTarget.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Checking DNS-01 alias CNAMEs...';
+            resultTarget.classList.remove('hidden');
+        }
+
+        return fetch('/api/certificates/check-dns-alias', {
+            method: 'POST',
+            headers: API_HEADERS,
+            body: JSON.stringify({
+                domain: domain,
+                domain_alias: aliasDomain,
+                san_domains: sanDomains,
+            })
+        }).then(function (response) {
+            return response.json().then(function (result) {
+                if (!response.ok) {
+                    throw new Error(result.error || 'DNS-01 alias check failed');
+                }
+                renderDnsAliasCheckResult(result, 'dns_alias_check_result');
+            });
+        }).catch(function (error) {
+            showMessage(error.message || 'DNS-01 alias check failed', 'error');
+            if (resultTarget) {
+                resultTarget.classList.add('hidden');
+            }
+        });
+    }
+
+    function checkDnsAliasForCertificate(domain) {
+        var targetId = 'cert_dns_alias_check_result';
+        var resultTarget = document.getElementById(targetId);
+        if (resultTarget) {
+            resultTarget.className = 'mt-3 rounded-md border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-3 text-xs text-blue-700 dark:text-blue-300';
+            resultTarget.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Checking DNS-01 alias CNAMEs...';
+            resultTarget.classList.remove('hidden');
+        }
+
+        return fetch('/api/certificates/' + encodeURIComponent(domain) + '/dns-alias-check', {
+            method: 'GET',
+            headers: API_HEADERS
+        }).then(function (response) {
+            return response.json().then(function (result) {
+                if (!response.ok) {
+                    throw new Error(result.error || 'DNS-01 alias check failed');
+                }
+                renderDnsAliasCheckResult(result, targetId);
+            });
+        }).catch(function (error) {
+            showMessage(error.message || 'DNS-01 alias check failed', 'error');
+            if (resultTarget) {
+                resultTarget.classList.add('hidden');
+            }
+        });
+    }
+
     // Create certificate
     document.getElementById('createCertForm').addEventListener('submit', function (e) {
         e.preventDefault();
 
         var domain = document.getElementById('domain').value.trim();
         var sanDomainsInput = document.getElementById('san_domains').value.trim();
+        var wildcardEnabled = document.getElementById('wildcard-cert').checked;
         var challengeType = document.getElementById('challenge_type_select').value;
         var dnsProvider = document.getElementById('dns_provider_select').value;
         var accountId = document.getElementById('account_select').value;
         var caProvider = document.getElementById('ca_provider_select').value;
         var dnsAliasDomain = (document.getElementById('dns_alias_domain') || {}).value;
-        dnsAliasDomain = dnsAliasDomain ? dnsAliasDomain.trim() : '';
+        dnsAliasDomain = dnsAliasDomain ? normalizeDnsAliasName(dnsAliasDomain) : '';
 
         // Parse SAN domains from comma-separated input
-        var sanDomains = sanDomainsInput
-            ? sanDomainsInput.split(',').map(function (d) { return d.trim(); }).filter(function (d) { return d; })
-            : [];
+        var sanDomains = parseSanDomainsInput(sanDomainsInput);
+        if (wildcardEnabled) {
+            addUniqueDomain(sanDomains, '*.' + normalizeDnsName(domain));
+        }
 
         if (!domain) {
             showMessage('Please enter a domain', 'error');
@@ -1247,12 +1442,14 @@
                     showMessage('Certificate created successfully for ' + domainsDisplay + '!');
                     document.getElementById('domain').value = '';
                     document.getElementById('san_domains').value = '';
+                    document.getElementById('wildcard-cert').checked = false;
                     document.getElementById('challenge_type_select').value = '';
                     document.getElementById('dns_provider_select').value = '';
                     document.getElementById('account_select').value = '';
                     document.getElementById('ca_provider_select').value = '';
                     var aliasField = document.getElementById('dns_alias_domain');
                     if (aliasField) { aliasField.value = ''; }
+                    updateDnsAliasHelp();
                     toggleDnsProviderVisibility();
                     updateAccountSelection();
                     loadCertificates();
@@ -1507,6 +1704,12 @@
         // Initialize search and filters
         document.getElementById('certificateSearch').addEventListener('input', filterCertificates);
         document.getElementById('statusFilter').addEventListener('change', filterCertificates);
+        document.getElementById('domain').addEventListener('input', updateDnsAliasHelp);
+        document.getElementById('san_domains').addEventListener('input', updateDnsAliasHelp);
+        document.getElementById('wildcard-cert').addEventListener('change', updateDnsAliasHelp);
+        document.getElementById('dns_alias_domain').addEventListener('input', updateDnsAliasHelp);
+        document.getElementById('check_dns_alias_button').addEventListener('click', checkDnsAliasFromForm);
+        updateDnsAliasHelp();
 
         // Close modal on outside click
         document.getElementById('curlModal').addEventListener('click', function (e) {
@@ -1574,4 +1777,6 @@
     window.toggleDnsProviderVisibility = toggleDnsProviderVisibility;
     window.updateAccountSelection = updateAccountSelection;
     window.updateCAProviderInfo = updateCAProviderInfo;
+    window.updateDnsAliasHelp = updateDnsAliasHelp;
+    window.checkDnsAliasForCertificate = checkDnsAliasForCertificate;
 })();

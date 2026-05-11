@@ -21,14 +21,35 @@ logger = logging.getLogger(__name__)
 def _bearer_token_from_env_or_generate():
     """Return a valid api_bearer_token for the default settings template.
 
-    Reads API_BEARER_TOKEN from the environment. If it is missing OR fails
-    validate_api_token (too short, weak pattern, insufficient entropy) we
-    fall back to a freshly generated secure token. This prevents a
-    misconfigured env var (issue #108: docker-compose passing an empty or
-    weak ${API_BEARER_TOKEN}) from poisoning every subsequent save_settings
-    call with a misleading "API token length must be between 32 and 512
-    characters" rejection.
+    Resolution order (mutually exclusive):
+    1. API_BEARER_TOKEN_FILE — if set, read the token from that file. Any
+       read error or validation failure generates a fresh token immediately;
+       API_BEARER_TOKEN is never consulted (to avoid encouraging both vars).
+    2. API_BEARER_TOKEN — only checked when API_BEARER_TOKEN_FILE is absent.
+       An invalid value (too short, weak pattern, insufficient entropy) is
+       logged and a fresh token is generated instead. This prevents a
+       misconfigured env var (issue #108: docker-compose passing an empty or
+       weak ${API_BEARER_TOKEN}) from poisoning save_settings with a
+       misleading "API token length must be between 32 and 512 characters"
+       rejection.
+    3. generate_secure_token() — fallback when neither variable is set or
+       both fail validation.
     """
+    token_file = os.getenv('API_BEARER_TOKEN_FILE')
+    if token_file:
+        try:
+            file_token = Path(token_file).read_text().strip()
+            is_valid, reason = validate_api_token(file_token)
+            if is_valid:
+                return file_token
+            logger.warning(
+                "API_BEARER_TOKEN_FILE token is invalid (%s); "
+                "falling back to API_BEARER_TOKEN or a generated token.",
+                reason)
+        except Exception as e:
+            logger.warning("Could not read API_BEARER_TOKEN_FILE (%s): %s", token_file, e)
+            return generate_secure_token()
+
     env_token = os.getenv('API_BEARER_TOKEN')
     if env_token:
         is_valid, reason = validate_api_token(env_token)

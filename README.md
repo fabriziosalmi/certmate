@@ -668,7 +668,10 @@ Content-Type: application/json
 #
 #   _acme-challenge.example.com  CNAME  _acme-challenge.validation.example.org
 #
-# Certbot follows the CNAME chain automatically during the DNS-01 challenge.
+# CertMate creates the TXT record on the provider-managed alias name, and
+# Let's Encrypt follows the CNAME chain during the DNS-01 challenge.
+# Alias mode is supported for CertMate's first-class DNS providers; generic
+# fallback providers are rejected until a dedicated adapter exists.
 # This is useful when:
 # - The primary domain's DNS does not support an API
 # - You want to centralize ACME validations on a dedicated domain
@@ -1251,8 +1254,10 @@ main "$@"
 
 | Variable           | Required | Default        | Description                         |
 | ------------------ | -------- | -------------- | ----------------------------------- |
-| `API_BEARER_TOKEN` |          | -              | Bearer token for API authentication |
-| `SECRET_KEY`       |          | auto-generated | Flask secret key for sessions       |
+| `API_BEARER_TOKEN`      |          | auto-generated | Bearer token for API authentication |
+| `API_BEARER_TOKEN_FILE` |          | -              | Path to a file containing the API bearer token (takes precedence over `API_BEARER_TOKEN`) |
+| `SECRET_KEY`            |          | auto-generated | Flask secret key for sessions       |
+| `SECRET_KEY_FILE`       |          | -              | Path to a file containing the Flask secret key (takes precedence over `SECRET_KEY`) |
 | `HOST`             |          | `127.0.0.1`    | Server bind address                 |
 | `PORT`             |          | `8000`         | Server port                         |
 | `FLASK_ENV`        |          | `production`   | Flask environment                   |
