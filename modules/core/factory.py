@@ -33,6 +33,11 @@ from modules.web import register_web_routes
 logger = get_certmate_logger('factory')
 request_logger = get_certmate_logger('request-watchdog')
 
+# APScheduler jobs run in background threads where Flask's thread-local
+# current_app proxy is unbound.  We keep a module-level reference so we
+# can explicitly push an app context inside those jobs.
+_flask_app = None
+
 
 class AppContainer:
     """DI Container holding all managers and application state"""
@@ -458,28 +463,53 @@ def initialize_managers(container: AppContainer, app):
     }
 
 
+def _run_manager_job(manager_key: str, method_name: str):
+    """Execute a manager method inside a Flask app context.
+
+    APScheduler jobs run in background threads where the thread-local
+    `current_app` proxy is unbound.  We keep a module-level reference to
+    the app instance so we can push an explicit app context before
+    touching any Flask-bound code.
+    """
+    if _flask_app is None:
+        logger.warning(
+            "Background job skipped: Flask app not yet initialised "
+            "(manager_key=%s, method=%s)",
+            manager_key,
+            method_name,
+        )
+        return
+    with _flask_app.app_context():
+        managers = _flask_app.config.get('MANAGERS')
+        manager = managers.get(manager_key) if managers else None
+        if manager is None:
+            logger.warning(
+                "Background job skipped: manager '%s' not found", manager_key
+            )
+            return
+        try:
+            getattr(manager, method_name)()
+        except Exception:
+            logger.exception(
+                "Background job failed: manager_key=%s, method=%s",
+                manager_key,
+                method_name,
+            )
+
+
 def _certificate_renewal_job():
     """Picklable wrapper for certificate renewal check"""
-    from flask import current_app
-    managers = current_app.config.get('MANAGERS')
-    if managers and 'certificates' in managers:
-        managers['certificates'].check_renewals()
+    _run_manager_job('certificates', 'check_renewals')
 
 
 def _client_certificate_renewal_job():
     """Picklable wrapper for client certificate renewal check"""
-    from flask import current_app
-    managers = current_app.config.get('MANAGERS')
-    if managers and 'client_certificates' in managers:
-        managers['client_certificates'].check_renewals()
+    _run_manager_job('client_certificates', 'check_renewals')
 
 
 def _weekly_digest_job():
     """Picklable wrapper for weekly digest"""
-    from flask import current_app
-    managers = current_app.config.get('MANAGERS')
-    if managers and 'digest' in managers:
-        managers['digest'].send()
+    _run_manager_job('digest', 'send')
 
 
 def setup_scheduler(container: AppContainer):
@@ -768,12 +798,17 @@ def create_app(test_config=None):
 
     configure_app(container, app, test_config)
     initialize_managers(container, app)
+    app.config['MANAGERS'] = container.managers
     setup_api(container, app)
     register_web_routes(app, container.managers)
     setup_csrf_protection(app)
     setup_security_headers(app)
     setup_rate_limiting(app, container)
     setup_slow_request_logging(app, container)
+
+    # Make the app instance available to background APScheduler jobs before
+    # starting the scheduler so recovered misfired jobs can push an app context.
+    _flask_app = app
     setup_scheduler(container)
 
     return app, container
