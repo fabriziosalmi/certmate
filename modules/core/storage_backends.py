@@ -414,6 +414,15 @@ class _AzureKeyVaultCertificateImporter:
         logger.info("Certificate object imported into Azure Key Vault for %s as %s", domain, cert_name)
         return True
 
+    def get_certificate_update_time(self, domain: str) -> Optional['datetime']:
+        """Return the ``updated_on`` timestamp of a Certificate object, or None."""
+        cert_name = self._certificate_name(domain)
+        try:
+            cert = self._get_cert_client().get_certificate(cert_name)
+            return getattr(cert.properties, 'updated_on', None)
+        except Exception:
+            return None
+
     def export_certificate(self, domain: str) -> Optional[Tuple[Dict[str, bytes], Dict[str, Any]]]:
         """Reconstruct the four PEM files (and metadata from tags) from a Certificate object.
 
@@ -664,14 +673,18 @@ class AzureKeyVaultBackend(CertificateStorageBackend):
             return True
         return False
 
-    def _retrieve_from_secrets(self, domain: str) -> Optional[Tuple[Dict[str, bytes], Dict[str, Any]]]:
+    def _retrieve_from_secrets(self, domain: str) -> Optional[Tuple[Dict[str, bytes], Dict[str, Any], 'Optional[datetime]']]:
         client = self._get_client()
         cert_files: Dict[str, bytes] = {}
+        latest_update: Optional['datetime'] = None
         for filename in CERTIFICATE_FILES:
             secret_name = self._sanitize_secret_name(f"cert-{domain}-{filename.replace('.', '-')}")
             try:
                 secret = client.get_secret(secret_name)
                 cert_files[filename] = secret.value.encode('utf-8')
+                updated = getattr(secret.properties, 'updated_on', None)
+                if updated and (latest_update is None or updated > latest_update):
+                    latest_update = updated
             except Exception as e:
                 logger.debug(f"Secret {secret_name} not found for {domain}: {e}")
                 continue
@@ -687,7 +700,7 @@ class AzureKeyVaultBackend(CertificateStorageBackend):
         except Exception as e:
             logger.debug(f"Metadata not found in Azure Key Vault for {domain}: {e}")
 
-        return cert_files, metadata
+        return cert_files, metadata, latest_update
 
     @_with_retry()
     def retrieve_certificate(self, domain: str) -> Optional[Tuple[Dict[str, bytes], Dict[str, Any]]]:
@@ -702,41 +715,45 @@ class AzureKeyVaultBackend(CertificateStorageBackend):
           Secret, which is also the only surface that exposes the private
           key) and split it back into the four PEM files; metadata is
           rehydrated from those mirrored tags.
-        * ``both``: prefer the Secrets path (cheaper, one round-trip per
-          file, no PFX parse). When the PEMs are present but the
-          metadata-secret is missing — manual deletion, legacy state from
-          before metadata was stored, etc. — fall back to the Certificate
-          object's tags (read directly from the Certificate API to avoid
-          relying on companion-Secret mirroring for this defensive path)
-          so callers don't lose ``dns_provider`` / ``staging`` /
-          ``san_domains``. If no Secret is found at all, fall through to
-          the Certificate-object export so a partial Secrets state cannot
-          mask an existing Certificate object.
+        * ``both``: the two surfaces may diverge when a renewal's
+          Certificate-object import succeeds but the Secrets write fails
+          (or vice versa). To avoid returning stale data we compare the
+          ``updated_on`` timestamps of both surfaces and return the
+          freshest one. When Secrets carry no metadata (manual deletion,
+          legacy state) we fall back to the Certificate object's tags.
         """
         try:
-            # Prefer the secrets path whenever it is active — it is one
-            # round-trip per file with no PFX parsing.
-            if self.writes_secrets:
+            if self.storage_mode == AZURE_KV_MODE_SECRETS:
                 result = self._retrieve_from_secrets(domain)
                 if result is not None:
-                    cert_files, metadata = result
-                    # The metadata-secret can be missing (manual deletion,
-                    # never-stored legacy state, …) even when the PEM secrets
-                    # are intact. In 'both' mode we can recover the semantic
-                    # metadata (dns_provider, staging, san_domains, …) from
-                    # the Certificate object's tags rather than returning an
-                    # empty dict to the caller.
-                    if not metadata and self.writes_certificate:
-                        metadata = self._get_cert_importer().get_metadata_tags(domain)
+                    cert_files, metadata, _ = result
                     return cert_files, metadata
-                if self.storage_mode == AZURE_KV_MODE_SECRETS:
-                    return None
-                # In 'both' mode fall through to certificate-object retrieval
-                # so that a partial Secrets state does not mask an existing
-                # Certificate object.
+                return None
 
-            if self.writes_certificate:
+            if self.storage_mode == AZURE_KV_MODE_CERTIFICATE:
                 return self._get_cert_importer().export_certificate(domain)
+
+            # storage_mode == 'both' — compare timestamps to avoid stale reads
+            secrets_result = self._retrieve_from_secrets(domain)
+            cert_update = self._get_cert_importer().get_certificate_update_time(domain)
+
+            if secrets_result is not None and cert_update is None:
+                cert_files, metadata, secrets_update = secrets_result
+                if not metadata:
+                    metadata = self._get_cert_importer().get_metadata_tags(domain)
+                return cert_files, metadata
+
+            if secrets_result is None and cert_update is not None:
+                return self._get_cert_importer().export_certificate(domain)
+
+            if secrets_result is not None and cert_update is not None:
+                cert_files, metadata, secrets_update = secrets_result
+                if secrets_update is not None and cert_update > secrets_update:
+                    return self._get_cert_importer().export_certificate(domain)
+                if not metadata:
+                    metadata = self._get_cert_importer().get_metadata_tags(domain)
+                return cert_files, metadata
+
             return None
         except Exception as e:
             logger.error(f"Failed to retrieve certificate from Azure Key Vault for {domain}: {e}")

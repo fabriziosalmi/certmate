@@ -659,25 +659,21 @@ class TestTagsMetadataRoundTrip:
 
 class TestRetrieveBothMode:
     def test_secrets_present_certificate_api_not_touched(self, vault_config, cert_files):
-        """When Secrets path returns a populated bundle, the Certificate API
-        should not be queried — that's the cheaper round-trip the design
-        promises. The importer mock is exposed via ``backend._cert_importer``
-        so any incidental call would fail the test."""
+        """When Secrets path returns a populated bundle and no Certificate
+        object exists yet, the backend returns the Secrets data without
+        touching export_certificate or get_metadata_tags."""
         from modules.core.storage_backends import AzureKeyVaultBackend
         backend = AzureKeyVaultBackend({**vault_config, "storage_mode": "both"})
 
-        # _retrieve_from_secrets uses _get_client; populate _client to bypass SDK import.
         secret_client = MagicMock()
+        _now = datetime.datetime(2026, 5, 1, 12, 0, 0)
 
         def fake_get_secret(secret_name):
             secret = MagicMock()
-            # The metadata secret is the only one whose sanitised name still
-            # contains the substring 'metadata' regardless of CRC suffix —
-            # match on substring so the test stays valid if naming evolves.
+            secret.properties.updated_on = _now
             if "metadata" in secret_name:
                 secret.value = json.dumps({"domain": "test.example.com", "dns_provider": "cloudflare"})
             else:
-                # Return PEM bytes regardless of which file was requested.
                 secret.value = "PEM-CONTENT"
             return secret
 
@@ -685,12 +681,13 @@ class TestRetrieveBothMode:
         backend._client = secret_client
 
         importer = MagicMock()
+        importer.get_certificate_update_time.return_value = None
         backend._cert_importer = importer
 
         result = backend.retrieve_certificate("test.example.com")
         assert result is not None
         cert_files_returned, metadata = result
-        assert cert_files_returned  # non-empty
+        assert cert_files_returned
         assert metadata["domain"] == "test.example.com"
         importer.export_certificate.assert_not_called()
         importer.get_metadata_tags.assert_not_called()
@@ -703,12 +700,13 @@ class TestRetrieveBothMode:
         backend = AzureKeyVaultBackend({**vault_config, "storage_mode": "both"})
 
         secret_client = MagicMock()
+        _now = datetime.datetime(2026, 5, 1, 12, 0, 0)
 
         def get_secret(secret_name):
             if "metadata" in secret_name:
-                # Simulate manual deletion of the metadata secret.
                 raise RuntimeError("not found")
             secret = MagicMock()
+            secret.properties.updated_on = _now
             secret.value = "PEM-CONTENT"
             return secret
 
@@ -716,6 +714,7 @@ class TestRetrieveBothMode:
         backend._client = secret_client
 
         importer = MagicMock()
+        importer.get_certificate_update_time.return_value = None
         importer.get_metadata_tags.return_value = {
             "domain": "test.example.com",
             "dns_provider": "cloudflare",
@@ -748,6 +747,75 @@ class TestRetrieveBothMode:
         result = backend.retrieve_certificate("test.example.com")
         assert result is not None
         importer.export_certificate.assert_called_once_with("test.example.com")
+
+    def test_both_mode_certificate_newer_than_secrets_returns_cert(self, vault_config, cert_files):
+        """When Certificate object is newer than Secrets, return the fresher
+        Certificate-surface data — avoids stale reads from surface skew."""
+        from modules.core.storage_backends import AzureKeyVaultBackend
+        backend = AzureKeyVaultBackend({**vault_config, "storage_mode": "both"})
+
+        secret_client = MagicMock()
+        secrets_ts = datetime.datetime(2026, 1, 1, 0, 0, 0)
+
+        def get_secret(name):
+            secret = MagicMock()
+            secret.properties.updated_on = secrets_ts
+            if "metadata" in name:
+                secret.value = json.dumps({"domain": "skew.example.com", "version": "old"})
+            else:
+                secret.value = "OLD-PEM"
+            return secret
+
+        secret_client.get_secret.side_effect = get_secret
+        backend._client = secret_client
+
+        cert_ts = datetime.datetime(2026, 6, 1, 0, 0, 0)
+        importer = MagicMock()
+        importer.get_certificate_update_time.return_value = cert_ts
+        importer.export_certificate.return_value = (
+            cert_files,
+            {"domain": "skew.example.com", "version": "new"},
+        )
+        backend._cert_importer = importer
+
+        result = backend.retrieve_certificate("skew.example.com")
+        assert result is not None
+        _, metadata = result
+        assert metadata["version"] == "new"
+        importer.export_certificate.assert_called_once_with("skew.example.com")
+
+    def test_both_mode_secrets_newer_than_certificate_returns_secrets(self, vault_config, cert_files):
+        """When Secrets are newer than the Certificate object, return Secrets
+        data — keeps the cheaper path when it is fresher."""
+        from modules.core.storage_backends import AzureKeyVaultBackend
+        backend = AzureKeyVaultBackend({**vault_config, "storage_mode": "both"})
+
+        secret_client = MagicMock()
+        secrets_ts = datetime.datetime(2026, 6, 1, 0, 0, 0)
+
+        def get_secret(name):
+            secret = MagicMock()
+            secret.properties.updated_on = secrets_ts
+            if "metadata" in name:
+                secret.value = json.dumps({"domain": "skew.example.com", "version": "new"})
+            else:
+                secret.value = "NEW-PEM"
+            return secret
+
+        secret_client.get_secret.side_effect = get_secret
+        backend._client = secret_client
+
+        cert_ts = datetime.datetime(2026, 1, 1, 0, 0, 0)
+        importer = MagicMock()
+        importer.get_certificate_update_time.return_value = cert_ts
+        importer.get_metadata_tags.return_value = {}
+        backend._cert_importer = importer
+
+        result = backend.retrieve_certificate("skew.example.com")
+        assert result is not None
+        _, metadata = result
+        assert metadata["version"] == "new"
+        importer.export_certificate.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -785,11 +853,12 @@ class TestBackfillFlow:
         from modules.core.storage_backends import AzureKeyVaultBackend
         backend = AzureKeyVaultBackend({**vault_config, "storage_mode": "both"})
 
-        # Fake the secrets path so retrieve_certificate succeeds.
         secret_client = MagicMock()
+        _now = datetime.datetime(2026, 5, 1, 12, 0, 0)
 
         def get_secret(name):
             secret = MagicMock()
+            secret.properties.updated_on = _now
             if "metadata" in name:
                 secret.value = json.dumps({"domain": "fresh.example.com"})
             else:
@@ -800,11 +869,11 @@ class TestBackfillFlow:
         backend._client = secret_client
 
         importer = MagicMock()
-        importer.exists.return_value = False  # no Certificate object yet
+        importer.exists.return_value = False
+        importer.get_certificate_update_time.return_value = None
         importer.import_certificate.return_value = True
         backend._cert_importer = importer
 
-        # Simulate the endpoint's per-domain logic.
         if not backend.has_certificate_object("fresh.example.com"):
             retrieved = backend.retrieve_certificate("fresh.example.com")
             assert retrieved is not None
