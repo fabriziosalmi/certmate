@@ -983,12 +983,7 @@ class CertificateManager:
         domain_entries = [d for d in settings.get('domains', [])
                           if isinstance(d, dict) and d.get('domain') == domain]
         domain_entry = domain_entries[0] if domain_entries else {}
-        email = metadata.get('email') or settings.get('email')
-        if not email:
-            raise RuntimeError(
-                f"Cannot renew {domain}: renewal conf and metadata.json are both "
-                f"missing, and no email is configured in settings."
-            )
+        email = metadata.get('email') or settings.get('email') or 'certmate@localhost'
 
         san_domains = metadata.get('san_domains') or []
         dns_provider = (

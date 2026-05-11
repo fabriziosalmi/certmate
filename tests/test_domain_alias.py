@@ -80,6 +80,7 @@ def _manager(tmp_path, provider='cloudflare'):
         'default_ca': 'letsencrypt',
         'challenge_type': 'dns-01',
         'dns_propagation_seconds': {provider: 1},
+        'email': 'test@example.com',
     }
     settings_mgr.get_domain_dns_provider.return_value = provider
 
