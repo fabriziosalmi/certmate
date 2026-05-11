@@ -1,5 +1,4 @@
 import os
-import tempfile
 import secrets
 from pathlib import Path
 from typing import Optional
@@ -126,11 +125,6 @@ def setup_directories(container: AppContainer, test_config=None):
                         pass
         except Exception:
             pass
-        container.cert_dir = Path(tempfile.mkdtemp(prefix="certmate_certs_"))
-        container.data_dir = Path(tempfile.mkdtemp(prefix="certmate_data_"))
-        container.backup_dir = Path(tempfile.mkdtemp(
-            prefix="certmate_backups_"))
-        container.logs_dir = Path(tempfile.mkdtemp(prefix="certmate_logs_"))
 
 
 def _secret_key_from_env_or_generate(data_dir: Path) -> str:
