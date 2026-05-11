@@ -231,11 +231,11 @@
                                 </label>
                                 <select id="private_key_type_select" name="private_key_type_select"
                                         class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text->
-                                    <option value="secp256r1" selected>secp256r1 (Default)</option>
-                                    <option value="secp384r1">secp384r1</option>
-                                    <option value="rsa4096">rsa4096</option>
-                                    <option value="rsa3072">rsa3072</option>
-                                    <option value="rsa2048">rsa2048</option>
+                                    <option value="secp256r1" selected>ECDSA P-256 (Modern, Recommended)</option>
+                                    <option value="secp384r1">ECDSA P-384 (High Security)</option>
+                                    <option value="rsa4096">RSA 4096-bit (Maximum Compatibility)</option>
+                                    <option value="rsa3072">RSA 3072-bit</option>
+                                    <option value="rsa2048">RSA 2048-bit (Legacy Compatible)</option>
                                 </select>
                                 <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
                                     ECC keys (secp) are faster and smaller, while RSA offers broader legacy compatibility.
