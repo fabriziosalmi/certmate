@@ -412,7 +412,7 @@
 
             if (!cert.exists) {
                 return rowHtml`<tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer" onclick="openCertDetail('${cert.domain}')">
-                    <td class="px-6 py-4 whitespace-nowrap"><div class="text-sm font-medium text-gray-900 dark:text-white">${cert.domain}</div></td>
+                    <td class="px-6 py-4 max-w-0"><div class="text-sm font-medium text-gray-900 dark:text-white truncate">${cert.domain}</div></td>
                     <td class="px-4 py-4 whitespace-nowrap"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400"><i class="fas fa-times-circle mr-1"></i>Not Found</span></td>
                     <td class="px-4 py-4 whitespace-nowrap hidden md:table-cell text-sm text-gray-500 dark:text-gray-400">\u2014</td>
                     <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-gray-500 dark:text-gray-400">${providerLabel || '\u2014'}</td>
@@ -455,13 +455,16 @@
             // Domain alias indicator (#122): when cert.domain_alias is set,
             // render a small "Alias: …" hint under the domain name so users
             // can spot rows that go through the CNAME-delegation flow.
+            var aliasHint = domainAlias
+                ? rowRaw(rowHtml`<div class="mt-1 flex items-center text-xs text-blue-600 dark:text-blue-300 min-w-0"><i class="fas fa-link mr-1 text-blue-500 shrink-0" aria-hidden="true"></i><span class="truncate" title="${domainAlias}">DNS-01 Alias: ${domainAlias}</span></div>`)
+                : false;
             return rowHtml`<tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors duration-150 cursor-pointer" onclick="openCertDetail('${cert.domain}')">
-                <td class="px-6 py-4 whitespace-nowrap">
-                    <div class="flex items-center">
-                        <i class="fas fa-certificate text-gray-400 dark:text-gray-500 mr-2 text-sm" aria-hidden="true"></i>
+                <td class="px-6 py-4 max-w-0">
+                    <div class="flex items-center min-w-0">
+                        <i class="fas fa-certificate text-gray-400 dark:text-gray-500 mr-2 text-sm shrink-0" aria-hidden="true"></i>
                         <div class="min-w-0">
-                            <div class="text-sm font-medium text-gray-900 dark:text-white">${cert.domain}</div>
-                            ${domainAlias ? rowHtml`<div class="mt-1 flex items-center text-xs text-blue-600 dark:text-blue-300 min-w-0"><i class="fas fa-link mr-1 text-blue-500" aria-hidden="true"></i><span class="truncate" title="${domainAlias}">DNS-01 Alias: ${domainAlias}</span></div>` : false}
+                            <div class="text-sm font-medium text-gray-900 dark:text-white truncate">${cert.domain}</div>
+                            ${aliasHint}
                         </div>
                     </div>
                 </td>
