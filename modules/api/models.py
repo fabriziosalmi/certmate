@@ -223,6 +223,16 @@ def create_api_models(api):
         'cleared_entries': fields.Integer(description='Number of entries that were cleared')
     })
 
+    deployment_status_model = api.model('DeploymentStatus', {
+        'domain': fields.String(description='Domain name'),
+        'deployed': fields.Boolean(description='Whether the domain is serving a certificate'),
+        'reachable': fields.Boolean(description='Whether the domain responds over HTTPS'),
+        'certificate_match': fields.Raw(description='Whether the served certificate matches the local certificate'),
+        'method': fields.String(description='Check method'),
+        'timestamp': fields.String(description='Check timestamp'),
+        'error': fields.String(description='Optional error message')
+    })
+
     # Backup models
     backup_metadata_model = api.model('BackupMetadata', {
         'filename': fields.String(description='Backup filename'),
@@ -338,6 +348,7 @@ def create_api_models(api):
         'dns_providers_model': dns_providers_model,
         'cache_stats_model': cache_stats_model,
         'cache_clear_response_model': cache_clear_response_model,
+        'deployment_status_model': deployment_status_model,
         'certificate_model': certificate_model,
         'create_cert_model': create_cert_model,
         'cache_entry_model': cache_entry_model,

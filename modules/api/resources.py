@@ -4,7 +4,10 @@ Defines Flask-RESTX Resource classes for REST API endpoints
 """
 
 import logging
+import hashlib
 import re
+import socket
+import ssl
 import tempfile
 import zipfile
 import os
@@ -16,6 +19,7 @@ from flask_restx import Resource, fields
 from ..core.metrics import get_metrics_summary, is_prometheus_available
 from ..core.constants import CERTIFICATE_FILES, iter_cert_domain_dirs
 from ..core.auth import ROLE_HIERARCHY
+from ..core.utils import utc_now_iso
 
 _DOMAIN_RE = re.compile(r'^(\*\.)?([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$')
 
@@ -46,6 +50,38 @@ def _validate_domain_path(domain, cert_base_dir):
     except (OSError, ValueError):
         return None, 'Invalid domain path'
     return cert_dir, None
+
+
+def _certificate_fingerprint(cert_bytes):
+    """Return a stable SHA-256 fingerprint for a PEM or DER certificate."""
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes
+
+    cert_bytes = cert_bytes or b''
+    if not cert_bytes:
+        return None
+
+    try:
+        cert = x509.load_pem_x509_certificate(cert_bytes)
+    except ValueError:
+        cert = x509.load_der_x509_certificate(cert_bytes)
+    return cert.fingerprint(hashes.SHA256()).hex()
+
+
+def _probe_https_certificate(domain, timeout=5):
+    """Return the live TLS certificate for a domain, if reachable."""
+    host = domain[2:] if domain.startswith('*.') else domain
+    context = ssl.create_default_context()
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_NONE
+
+    with socket.create_connection((host, 443), timeout=timeout) as raw_sock:
+        with context.wrap_socket(raw_sock, server_hostname=host) as tls_sock:
+            cert_bytes = tls_sock.getpeercert(binary_form=True)
+            return {
+                'reachable': True,
+                'certificate_bytes': cert_bytes,
+            }
 
 
 logger = logging.getLogger(__name__)
@@ -879,6 +915,69 @@ def create_api_resources(api, models, managers):
     def _user_has_role(user, min_role):
         level = ROLE_HIERARCHY.get((user or {}).get('role'), -1)
         return level >= ROLE_HIERARCHY.get(min_role, 999)
+
+    class CertificateDeploymentStatus(Resource):
+        @api.doc(security='Bearer')
+        @auth_manager.require_role('viewer')
+        @api.marshal_with(models['deployment_status_model'])
+        def get(self, domain):
+            """Check whether the domain is serving the expected certificate."""
+            _, err = _validate_domain_path(domain, file_ops.cert_dir)
+            if err:
+                return {'error': err}, 400
+
+            cert_info = certificate_manager.get_certificate_info(domain)
+            if not cert_info or not cert_info.get('exists'):
+                return {'error': f'Certificate not found for domain: {domain}'}, 404
+
+            cached_result = cache_manager.get_deployment_status(domain)
+            if isinstance(cached_result, dict) and cached_result.get('domain') == domain:
+                return cached_result, 200
+
+            expected_bytes = None
+            storage_manager = getattr(certificate_manager, 'storage_manager', None)
+            if storage_manager is not None:
+                try:
+                    storage_result = storage_manager.retrieve_certificate(domain)
+                    if storage_result:
+                        cert_files, _metadata = storage_result
+                        expected_bytes = cert_files.get('cert.pem')
+                except Exception as e:
+                    logger.warning(f"Could not read stored certificate for {domain}: {e}")
+
+            if expected_bytes is None:
+                cert_path = Path(file_ops.cert_dir) / domain / 'cert.pem'
+                if cert_path.exists():
+                    expected_bytes = cert_path.read_bytes()
+
+            if not expected_bytes:
+                return {'error': f'Certificate file not found for domain: {domain}'}, 404
+
+            expected_fingerprint = _certificate_fingerprint(expected_bytes)
+            if not expected_fingerprint:
+                return {'error': f'Could not parse certificate for domain: {domain}'}, 500
+
+            result = {
+                'domain': domain,
+                'deployed': False,
+                'reachable': False,
+                'certificate_match': False,
+                'method': 'https-tls',
+                'timestamp': utc_now_iso(),
+            }
+
+            try:
+                probe = _probe_https_certificate(domain)
+                result['reachable'] = True
+                result['deployed'] = True
+                result['certificate_match'] = (
+                    _certificate_fingerprint(probe.get('certificate_bytes')) == expected_fingerprint
+                )
+            except Exception as e:
+                result['error'] = str(e)
+
+            cache_manager.set_deployment_status(domain, result)
+            return result, 200
 
     class DownloadCertificate(Resource):
         @api.doc(security='Bearer')
@@ -1946,6 +2045,7 @@ def create_api_resources(api, models, managers):
         'CheckDNSAlias': CheckDNSAlias,
         'CertificateDNSAliasCheck': CertificateDNSAliasCheck,
         'CertificateDetail': CertificateDetail,
+        'CertificateDeploymentStatus': CertificateDeploymentStatus,
         'DownloadCertificate': DownloadCertificate,
         'RenewCertificate': RenewCertificate,
         'CertificateAutoRenew': CertificateAutoRenew,

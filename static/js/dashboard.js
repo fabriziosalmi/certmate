@@ -289,9 +289,10 @@
     }
 
     // Build deployment status badge HTML
-    function deploymentBadgeHtml(cert) {
+    function deploymentBadgeHtml(cert, context) {
         var safeDomain = escapeHtml(cert.domain);
         var domainId = safeDomain.replace(/\./g, '-');
+        var badgeId = context === 'detail' ? '' : ' id="deployment-status-' + domainId + '"';
         var cachedStatus = deploymentCache.get(cert.domain);
         if (cachedStatus) {
             var sc, si, st;
@@ -304,9 +305,9 @@
             } else {
                 sc = 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'; si = 'fa-question-circle'; st = 'Unknown';
             }
-            return '<span id="deployment-status-' + domainId + '" class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ' + sc + '"><i class="fas ' + si + ' mr-1"></i>' + st + '</span>';
+            return '<span data-deployment-domain="' + safeDomain + '"' + badgeId + ' class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ' + sc + '"><i class="fas ' + si + ' mr-1"></i>' + st + '</span>';
         }
-        return '<span id="deployment-status-' + domainId + '" class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300"><i class="fas fa-spinner fa-spin mr-1"></i>Checking...</span>';
+        return '<span data-deployment-domain="' + safeDomain + '"' + badgeId + ' class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300"><i class="fas fa-spinner fa-spin mr-1"></i>Checking...</span>';
     }
 
     function providerDisplayName(provider) {
@@ -450,7 +451,7 @@
                 <td class="px-4 py-4 whitespace-nowrap"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${rowRaw(statusClass)}"><i class="fas ${rowRaw(statusIcon)} mr-1"></i>${statusText}</span></td>
                 <td class="px-4 py-4 whitespace-nowrap hidden md:table-cell"><div class="text-sm text-gray-900 dark:text-white">${expiryStr}</div><div class="text-xs ${rowRaw(daysClass)}">${cert.days_until_expiry} days</div></td>
                 <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-gray-500 dark:text-gray-400">${rowRaw(providerLabel) || '—'}</td>
-                <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell">${rowRaw(deploymentBadgeHtml(cert))}</td>
+                <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell">${rowRaw(deploymentBadgeHtml(cert, 'row'))}</td>
                 <td class="px-4 py-4 whitespace-nowrap text-right">
                     <div class="flex items-center justify-end gap-1">
                         ${roleAtLeast('operator') ? actionBtn('renew', cert.domain, 'green', 'Renew', 'fa-sync-alt') : false}
@@ -547,7 +548,7 @@
                 (safeDomainAlias ? '<div class="flex justify-between gap-4 py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">DNS-01 Alias</dt><dd class="text-sm font-medium text-right break-all text-blue-600 dark:text-blue-300">' + safeDomainAlias + '</dd></div>' : '') +
                 (safeDomainAlias && aliasProviderLabel ? '<div class="flex justify-between gap-4 py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">Alias Provider</dt><dd class="text-sm font-medium text-right text-gray-900 dark:text-white">' + aliasProviderLabel + '</dd></div>' : '') +
                 '<div class="flex justify-between gap-4 py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">Auto-Renew</dt><dd class="text-sm font-medium text-right ' + (cert.auto_renew !== false ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400') + '">' + (cert.auto_renew !== false ? 'Enabled' : 'Disabled') + '</dd></div>' +
-                '<div class="flex justify-between gap-4 py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">Deployment</dt><dd>' + deploymentBadgeHtml(cert) + '</dd></div>' +
+                '<div class="flex justify-between gap-4 py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">Deployment</dt><dd>' + deploymentBadgeHtml(cert, 'detail') + '</dd></div>' +
                 '</dl>' +
                 '</div>' +
                 // Actions
@@ -793,27 +794,29 @@
 
     // Check deployment status for a specific domain
     function checkDeploymentStatus(domain) {
-        var statusElement = document.getElementById('deployment-status-' + domain.replace(/\./g, '-'));
-        var textElement = document.getElementById('deployment-text-' + domain.replace(/\./g, '-'));
+        var statusElements = Array.prototype.filter.call(
+            document.querySelectorAll('[data-deployment-domain]'),
+            function (el) {
+                return el.getAttribute('data-deployment-domain') === domain;
+            }
+        );
 
-        if (!statusElement) {
+        if (!statusElements.length) {
             return Promise.resolve();
         }
 
         // Check cache first
         var cachedResult = deploymentCache.get(domain);
         if (cachedResult) {
-            updateDeploymentUI(domain, cachedResult, statusElement);
+            updateDeploymentUI(domain, cachedResult);
             return Promise.resolve();
         }
 
         // Update UI to show checking state
-        statusElement.className = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-600';
-        statusElement.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Checking...';
-        if (textElement) {
-            textElement.textContent = 'Checking...';
-            textElement.className = 'text-sm font-medium text-blue-600';
-        }
+        statusElements.forEach(function (statusElement) {
+            statusElement.className = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-600';
+            statusElement.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Checking...';
+        });
 
         return fetch('/api/certificates/' + encodeURIComponent(domain) + '/deployment-status', {
             method: 'GET',
@@ -822,7 +825,7 @@
             if (response.ok) {
                 return response.json().then(function (result) {
                     deploymentCache.set(domain, result);
-                    updateDeploymentUI(domain, result, statusElement);
+                    updateDeploymentUI(domain, result);
                 });
             }
             throw new Error('API failed');
@@ -840,11 +843,13 @@
                     };
                 }
                 deploymentCache.set(domain, result);
-                updateDeploymentUI(domain, result, statusElement);
+                updateDeploymentUI(domain, result);
             });
         }).catch(function () {
-            statusElement.className = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300';
-            statusElement.innerHTML = '<i class="fas fa-question-circle mr-1"></i>Error';
+            statusElements.forEach(function (statusElement) {
+                statusElement.className = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300';
+                statusElement.innerHTML = '<i class="fas fa-question-circle mr-1"></i>Error';
+            });
         });
     }
 
@@ -883,49 +888,42 @@
     }
 
     // Update deployment UI based on check result
-    function updateDeploymentUI(domain, result, statusElement) {
-        var textElement = document.getElementById('deployment-text-' + domain.replace(/\./g, '-'));
+    function updateDeploymentUI(domain, result) {
+        var statusElements = Array.prototype.filter.call(
+            document.querySelectorAll('[data-deployment-domain]'),
+            function (el) {
+                return el.getAttribute('data-deployment-domain') === domain;
+            }
+        );
 
+        var statusText;
+        var statusClass;
+        var statusIcon;
         if (result.deployed && result.certificate_match !== false) {
-            statusElement.className = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400';
-            statusElement.innerHTML = '<i class="fas fa-check-circle mr-1"></i>Deployed';
-            if (textElement) {
-                textElement.textContent = 'Active';
-                textElement.className = 'text-sm font-medium text-green-600 dark:text-green-400';
-            }
-
+            statusClass = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400';
+            statusIcon = 'fa-check-circle';
+            statusText = 'Deployed';
         } else if (result.reachable && result.certificate_match === false) {
-            statusElement.className = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400';
-            statusElement.innerHTML = '<i class="fas fa-exclamation-triangle mr-1"></i>Mismatch';
-            if (textElement) {
-                textElement.textContent = 'Mismatch';
-                textElement.className = 'text-sm font-medium text-yellow-600 dark:text-yellow-400';
-            }
-
+            statusClass = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400';
+            statusIcon = 'fa-exclamation-triangle';
+            statusText = 'Wrong Cert';
         } else if (result.reachable) {
-            statusElement.className = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400';
-            statusElement.innerHTML = '<i class="fas fa-info-circle mr-1"></i>Unknown';
-            if (textElement) {
-                textElement.textContent = 'Unknown';
-                textElement.className = 'text-sm font-medium text-blue-600 dark:text-blue-400';
-            }
-
+            statusClass = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400';
+            statusIcon = 'fa-info-circle';
+            statusText = 'Unknown';
         } else {
-            statusElement.className = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400';
-            statusElement.innerHTML = '<i class="fas fa-times-circle mr-1"></i>Unreachable';
-            if (textElement) {
-                textElement.textContent = 'Unreachable';
-                textElement.className = 'text-sm font-medium text-red-600 dark:text-red-400';
-            }
+            statusClass = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400';
+            statusIcon = 'fa-times-circle';
+            statusText = 'Not Deployed';
         }
 
-        // Add method info to title for debugging
-        if (result.method) {
-            statusElement.title = 'Checked via: ' + result.method + ' at ' + result.timestamp;
-            if (textElement) {
-                textElement.title = statusElement.title;
+        statusElements.forEach(function (statusElement) {
+            statusElement.className = statusClass;
+            statusElement.innerHTML = '<i class="fas ' + statusIcon + ' mr-1"></i>' + statusText;
+            if (result.method) {
+                statusElement.title = 'Checked via: ' + result.method + ' at ' + result.timestamp;
             }
-        }
+        });
     }
 
     // Load certificates with deployment status
