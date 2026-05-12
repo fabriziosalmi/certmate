@@ -1,5 +1,9 @@
 import os
 import secrets
+import sys
+import threading
+import time
+import traceback
 from pathlib import Path
 from typing import Optional
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -27,6 +31,7 @@ from modules.api.client_certificates import create_client_certificate_resources
 from modules.web import register_web_routes
 
 logger = get_certmate_logger('factory')
+request_logger = get_certmate_logger('request-watchdog')
 
 
 class AppContainer:
@@ -40,6 +45,129 @@ class AppContainer:
         self.data_dir = None
         self.backup_dir = None
         self.logs_dir = None
+        self.request_watchdog = None
+
+
+def _env_float(name: str, default: float, min_value: float = 0.0) -> float:
+    raw = os.getenv(name, '').strip()
+    if not raw:
+        return default
+    try:
+        value = float(raw)
+    except ValueError:
+        logger.warning(f"Invalid {name} value '{raw}'; using default {default}")
+        return default
+    return max(value, min_value)
+
+
+def _format_thread_stack(thread_id: int) -> str:
+    frame = sys._current_frames().get(thread_id)
+    if frame is None:
+        return ''
+    return ''.join(traceback.format_stack(frame))
+
+
+def setup_slow_request_logging(app: Flask, container: AppContainer):
+    """Track long-running requests and log thread stacks when they linger."""
+    enabled = os.getenv('CERTMATE_SLOW_REQUEST_LOGGING', 'true').lower() in ('1', 'true', 'yes', 'on')
+    if not enabled:
+        return
+
+    slow_after = _env_float('CERTMATE_SLOW_REQUEST_THRESHOLD_SECONDS', 30.0, 0.1)
+    scan_every = _env_float('CERTMATE_SLOW_REQUEST_SCAN_SECONDS', 10.0, 1.0)
+    repeat_every = _env_float('CERTMATE_SLOW_REQUEST_REPEAT_SECONDS', slow_after, 0.1)
+
+    active_requests: dict[int, dict[str, object]] = {}
+    lock = threading.Lock()
+    stop_event = threading.Event()
+
+    @app.before_request
+    def _track_request_start():
+        thread = threading.current_thread()
+        with lock:
+            active_requests[thread.ident or 0] = {
+                'started_at': time.perf_counter(),
+                'method': getattr(request, 'method', None),
+                'path': getattr(request, 'path', None),
+                'remote_addr': getattr(request, 'remote_addr', None),
+                'request_id': request.headers.get('X-Request-Id'),
+                'thread_name': thread.name,
+                'last_reported_at': None,
+            }
+
+    @app.after_request
+    def _log_slow_request(response):
+        thread = threading.current_thread()
+        started = None
+        meta = None
+        with lock:
+            meta = active_requests.pop(thread.ident or 0, None)
+        if meta:
+            started = meta.get('started_at')
+        if started is not None:
+            duration_ms = (time.perf_counter() - float(started)) * 1000
+            if duration_ms >= slow_after * 1000:
+                request_logger.warning(
+                    "Slow request completed",
+                    method=meta.get('method'),
+                    path=meta.get('path'),
+                    remote_addr=meta.get('remote_addr'),
+                    request_id=meta.get('request_id'),
+                    thread_name=meta.get('thread_name'),
+                    thread_id=thread.ident,
+                    status_code=getattr(response, 'status_code', None),
+                    duration_ms=round(duration_ms, 2),
+                    threshold_seconds=slow_after,
+                )
+        return response
+
+    @app.teardown_request
+    def _clear_active_request(_exc):
+        thread = threading.current_thread()
+        with lock:
+            active_requests.pop(thread.ident or 0, None)
+
+    def _watchdog():
+        while not stop_event.wait(scan_every):
+            now = time.perf_counter()
+            snapshots = []
+            with lock:
+                for thread_id, meta in active_requests.items():
+                    started_at = float(meta.get('started_at', now))
+                    age = now - started_at
+                    last_reported = meta.get('last_reported_at')
+                    if age < slow_after:
+                        continue
+                    if last_reported is not None and (now - float(last_reported)) < repeat_every:
+                        continue
+                    meta['last_reported_at'] = now
+                    snapshots.append((thread_id, dict(meta), age))
+
+            for thread_id, meta, age in snapshots:
+                stack = _format_thread_stack(thread_id)
+                request_logger.warning(
+                    "Request still running",
+                    method=meta.get('method'),
+                    path=meta.get('path'),
+                    remote_addr=meta.get('remote_addr'),
+                    request_id=meta.get('request_id'),
+                    thread_name=meta.get('thread_name'),
+                    thread_id=thread_id,
+                    duration_ms=round(age * 1000, 2),
+                    threshold_seconds=slow_after,
+                    stack=stack or None,
+                )
+
+    watcher = threading.Thread(
+        target=_watchdog,
+        name='certmate-request-watchdog',
+        daemon=True,
+    )
+    watcher.start()
+    container.request_watchdog = {
+        'thread': watcher,
+        'stop_event': stop_event,
+    }
 
 
 def _verify_dir_writable(directory: Path) -> Optional[str]:
@@ -635,6 +763,7 @@ def create_app(test_config=None):
     setup_csrf_protection(app)
     setup_security_headers(app)
     setup_rate_limiting(app, container)
+    setup_slow_request_logging(app, container)
     setup_scheduler(container)
 
     return app, container
