@@ -80,8 +80,8 @@
                     </div>
                     <!-- Dark mode toggle -->
                     <button id="themeToggle" onclick="toggleTheme()" class="px-2 py-2 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700" title="Toggle theme">
-                        <i class="fas fa-moon block dark:hidden"></i>
-                        <i class="fas fa-sun hidden dark:block"></i>
+                        <i class="fas fa-moon" id="theme-icon-moon"></i>
+                        <i class="fas fa-sun" id="theme-icon-sun" style="display:none"></i>
                     </button>
                     <!-- Logout -->
                     <button id="logoutBtn" onclick="doLogout()" style="display:none" class="px-3 py-2 rounded-md text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 border border-red-200 dark:border-red-700" title="Logout">
@@ -124,6 +124,13 @@
             .catch(function(){window.location.href='/login'});
     }
     // Theme toggle
+    function _syncThemeIcons() {
+        var isDark = document.documentElement.classList.contains('dark');
+        var moon = document.getElementById('theme-icon-moon');
+        var sun = document.getElementById('theme-icon-sun');
+        if (moon) moon.style.display = isDark ? 'none' : '';
+        if (sun) sun.style.display = isDark ? '' : 'none';
+    }
     function toggleTheme(){
         var html = document.documentElement;
         if (html.classList.contains('dark')) {
@@ -133,7 +140,10 @@
             html.classList.add('dark');
             localStorage.setItem('theme', 'dark');
         }
+        _syncThemeIcons();
     }
+    // Sync icons once DOM is ready (handles dark-mode-on-load case)
+    document.addEventListener('DOMContentLoaded', _syncThemeIcons);
     // Notifications
     var _notifOpen = false;
     function toggleNotifications() {
