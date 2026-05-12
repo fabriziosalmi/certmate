@@ -285,7 +285,15 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
     @app.route('/api/deploy/history', methods=['GET'])
     @auth_manager_ref.require_role('admin')
     def api_deploy_history():
-        """Get deploy hook execution history"""
+        """Get deploy hook execution history.
+
+        Returns the history list directly (newest first), matching the
+        sibling ``/api/webhooks/deliveries`` endpoint. The Settings →
+        Deploy "Recent Executions" panel in ``static/js/settings-deploy.js``
+        does ``Array.isArray(res.body)`` on the response — wrapping the
+        list in ``{"history": [...]}`` made the panel render the
+        "unexpected response" error reported in issue #137.
+        """
         if not deploy_manager:
             return jsonify({'error': 'Deploy manager not available'}), 503
 
@@ -293,7 +301,7 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
             limit = min(int(request.args.get('limit', 50)), 200)
             domain = request.args.get('domain')
             history = deploy_manager.get_history(limit=limit, domain=domain)
-            return jsonify({'history': history})
+            return jsonify(history)
         except Exception as e:
             logger.error(f"Failed to get deploy history: {e}")
             return jsonify({'error': 'Failed to get deploy history'}), 500
