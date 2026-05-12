@@ -479,6 +479,102 @@ def create_api_resources(api, models, managers):
 
     class CertificateDetail(Resource):
         @api.doc(security='Bearer')
+        @auth_manager.require_role('operator')
+        def patch(self, domain):
+            """Update DNS provider for an existing certificate (issue #129).
+
+            Allows changing the DNS provider (and optionally the alias DNS
+            provider) used for future renewals of this certificate without
+            deleting and re-creating it. Updates both the on-disk
+            metadata.json and the domain entry in settings.
+
+            Body: {"dns_provider": "route53", "account_id": "default",
+                   "alias_dns_provider": "cloudflare"}
+            """
+            cert_dir, err = _validate_domain_path(domain, file_ops.cert_dir)
+            if err:
+                return {'error': err}, 400
+            if not cert_dir or not cert_dir.exists():
+                return {'error': f'Certificate not found for domain: {domain}'}, 404
+
+            data = api.payload or {}
+            new_dns_provider = data.get('dns_provider')
+            new_account_id = data.get('account_id')
+            new_alias_dns_provider = data.get('alias_dns_provider')
+
+            if not new_dns_provider and not new_alias_dns_provider:
+                return {
+                    'error': 'At least one of dns_provider or alias_dns_provider is required',
+                    'hint': 'Provide the new DNS provider name to use for future renewals.'
+                }, 400
+
+            # Validate the new provider has credentials configured
+            if new_dns_provider:
+                settings = settings_manager.load_settings()
+                dns_config, _ = dns_manager.get_dns_provider_account_config(
+                    new_dns_provider,
+                    new_account_id,
+                    settings,
+                )
+                if not dns_config:
+                    return {
+                        'error': f"DNS provider '{new_dns_provider}' account "
+                                 f"'{new_account_id or 'default'}' is not configured",
+                        'hint': 'Configure the DNS provider credentials in Settings first.'
+                    }, 400
+
+            try:
+                import json as _json
+
+                # 1. Update on-disk metadata.json
+                metadata_file = cert_dir / 'metadata.json'
+                metadata = {}
+                if metadata_file.exists():
+                    try:
+                        with open(metadata_file, 'r') as f:
+                            metadata = _json.load(f)
+                    except Exception:
+                        pass
+
+                old_provider = metadata.get('dns_provider')
+                if new_dns_provider:
+                    metadata['dns_provider'] = new_dns_provider
+                if new_account_id:
+                    metadata['account_id'] = new_account_id
+                if new_alias_dns_provider:
+                    metadata['alias_dns_provider'] = new_alias_dns_provider
+
+                certificate_manager._atomic_json_write(metadata_file, metadata)
+                logger.info(
+                    f"Updated DNS provider for {domain}: "
+                    f"{old_provider} → {new_dns_provider or old_provider}"
+                )
+
+                # 2. Update domain entry in settings
+                def _update_domain_provider(s):
+                    for entry in s.get('domains', []):
+                        if isinstance(entry, dict) and entry.get('domain') == domain:
+                            if new_dns_provider:
+                                entry['dns_provider'] = new_dns_provider
+                            if new_account_id:
+                                entry['dns_account_id'] = new_account_id
+                            break
+
+                settings_manager.update(_update_domain_provider, "dns_provider_change")
+
+                return {
+                    'message': f'DNS provider updated for {domain}',
+                    'domain': domain,
+                    'dns_provider': metadata.get('dns_provider'),
+                    'alias_dns_provider': metadata.get('alias_dns_provider'),
+                    'account_id': metadata.get('account_id'),
+                }, 200
+
+            except Exception as e:
+                logger.error(f"Failed to update DNS provider for {domain}: {e}")
+                return {'error': 'Failed to update DNS provider'}, 500
+
+        @api.doc(security='Bearer')
         @auth_manager.require_role('admin')
         def delete(self, domain):
             """Delete a certificate's files from disk.
