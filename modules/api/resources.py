@@ -1460,6 +1460,12 @@ def create_api_resources(api, models, managers):
             get an imported Certificate object on first run. In ``certificate``
             mode the Secrets surface is invisible and the walk would silently
             no-op, so the operator must switch to ``both`` first.
+
+            Accepts an optional ``?limit=N`` query parameter that caps how
+            many domains are processed in a single call. Large vaults can
+            paginate by calling repeatedly until ``remaining`` is ``0`` —
+            each call is independent because already-imported domains are
+            reported as ``skipped`` on subsequent runs.
             """
             try:
                 storage_manager = managers.get('storage')
@@ -1479,8 +1485,23 @@ def create_api_resources(api, models, managers):
                         ).format(current_mode or 'unknown')
                     }, 400
 
+                limit_raw = request.args.get('limit')
+                limit = None
+                if limit_raw is not None:
+                    try:
+                        limit = int(limit_raw)
+                    except (TypeError, ValueError):
+                        return {'error': "Query parameter 'limit' must be a positive integer"}, 400
+                    if limit < 1:
+                        return {'error': "Query parameter 'limit' must be a positive integer"}, 400
+
                 results = {}
-                for domain in backend.list_certificates():
+                all_domains = list(backend.list_certificates())
+                processed = 0
+                for domain in all_domains:
+                    if limit is not None and processed >= limit:
+                        break
+                    processed += 1
                     try:
                         if backend.has_certificate_object(domain):
                             results[domain] = 'skipped'
@@ -1495,23 +1516,20 @@ def create_api_resources(api, models, managers):
                         else:
                             results[domain] = 'error: import returned false'
                     except Exception as per_domain:
-                        # Match the StorageBackendTest pattern: log the full
-                        # exception (with any tenant/request IDs from Azure)
-                        # but surface only the type name to the client. The
-                        # endpoint is admin-only, but consistent sanitisation
-                        # is cheaper than auditing every per-domain string.
                         logger.error(f"Backfill failed for {domain}: {per_domain}")
                         results[domain] = f'error: {type(per_domain).__name__}'
 
                 imported = sum(1 for v in results.values() if v == 'imported')
                 skipped = sum(1 for v in results.values() if v == 'skipped')
                 errors = sum(1 for v in results.values() if v.startswith('error'))
+                remaining = max(0, len(all_domains) - processed)
                 return {
                     'success': errors == 0,
                     'message': f'Backfill complete: {imported} imported, {skipped} skipped, {errors} errors',
                     'imported': imported,
                     'skipped': skipped,
                     'errors': errors,
+                    'remaining': remaining,
                     'results': results,
                 }
 
