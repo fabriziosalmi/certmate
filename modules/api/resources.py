@@ -980,8 +980,63 @@ def create_api_resources(api, models, managers):
             except Exception as e:
                 result['error'] = str(e)
 
+            persisted_status = certificate_manager.get_deployment_status_record(domain)
+            if isinstance(persisted_status, dict) and persisted_status.get('browser'):
+                result['browser'] = persisted_status.get('browser')
+
+            certificate_manager.record_backend_deployment_status(domain, result)
             cache_manager.set_deployment_status(domain, result)
             return result, 200
+
+    class CertificateDeploymentBrowserReports(Resource):
+        @api.doc(security='Bearer')
+        @auth_manager.require_role('viewer')
+        @api.expect(models['browser_deployment_reports_model'])
+        def post(self):
+            """Persist browser-reported reachability for one or more domains."""
+            payload = request.get_json(silent=True) or {}
+            reports = payload.get('reports')
+            if not isinstance(reports, list) or not reports:
+                return {'error': 'reports must be a non-empty array'}, 400
+
+            updated = []
+            skipped = []
+            for report in reports:
+                if not isinstance(report, dict):
+                    skipped.append({'error': 'invalid report payload'})
+                    continue
+
+                domain = (report.get('domain') or '').strip()
+                if not domain:
+                    skipped.append({'error': 'missing domain'})
+                    continue
+
+                _, err = _validate_domain_path(domain, file_ops.cert_dir)
+                if err:
+                    skipped.append({'domain': domain, 'error': err})
+                    continue
+
+                browser_status = certificate_manager.record_browser_deployment_status(domain, report)
+                persisted = certificate_manager.get_deployment_status_record(domain)
+                backend = persisted.get('backend') if isinstance(persisted, dict) else None
+                merged = {
+                    'domain': domain,
+                    'deployed': bool(backend.get('deployed')) if isinstance(backend, dict) else False,
+                    'reachable': bool(backend.get('reachable')) if isinstance(backend, dict) else False,
+                    'certificate_match': backend.get('certificate_match') if isinstance(backend, dict) else False,
+                    'method': backend.get('method') if isinstance(backend, dict) else 'browser-report',
+                    'timestamp': backend.get('timestamp') if isinstance(backend, dict) else None,
+                    'error': backend.get('error') if isinstance(backend, dict) else None,
+                    'browser': browser_status.get('browser') if isinstance(browser_status, dict) else None,
+                }
+                cache_manager.set_deployment_status(domain, merged)
+                updated.append(domain)
+
+            return {
+                'updated': updated,
+                'skipped': skipped,
+                'count': len(updated),
+            }, 200
 
     class DownloadCertificate(Resource):
         @api.doc(security='Bearer')
@@ -2050,6 +2105,7 @@ def create_api_resources(api, models, managers):
         'CertificateDNSAliasCheck': CertificateDNSAliasCheck,
         'CertificateDetail': CertificateDetail,
         'CertificateDeploymentStatus': CertificateDeploymentStatus,
+        'CertificateDeploymentBrowserReports': CertificateDeploymentBrowserReports,
         'DownloadCertificate': DownloadCertificate,
         'RenewCertificate': RenewCertificate,
         'CertificateAutoRenew': CertificateAutoRenew,

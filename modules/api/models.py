@@ -223,6 +223,13 @@ def create_api_models(api):
         'cleared_entries': fields.Integer(description='Number of entries that were cleared')
     })
 
+    browser_deployment_model = api.model('BrowserDeploymentStatus', {
+        'reachable': fields.Boolean(description='Whether the browser could reach the domain'),
+        'checked_at': fields.String(description='When the browser check happened'),
+        'method': fields.String(description='How the browser check was performed'),
+        'source': fields.String(description='Source of the browser report')
+    })
+
     deployment_status_model = api.model('DeploymentStatus', {
         'domain': fields.String(description='Domain name'),
         'deployed': fields.Boolean(description='Whether the domain is serving a certificate'),
@@ -230,7 +237,20 @@ def create_api_models(api):
         'certificate_match': fields.Raw(description='Whether the served certificate matches the local certificate'),
         'method': fields.String(description='Check method'),
         'timestamp': fields.String(description='Check timestamp'),
-        'error': fields.String(description='Optional error message')
+        'error': fields.String(description='Optional error message'),
+        'browser': fields.Nested(browser_deployment_model, description='Browser-reported reachability')
+    })
+
+    browser_deployment_report_model = api.model('BrowserDeploymentReport', {
+        'domain': fields.String(required=True, description='Domain name'),
+        'reachable': fields.Boolean(required=True, description='Whether the browser could reach the domain'),
+        'checked_at': fields.String(description='When the browser check happened'),
+        'method': fields.String(description='How the browser check was performed'),
+        'source': fields.String(description='Source of the browser report')
+    })
+
+    browser_deployment_reports_model = api.model('BrowserDeploymentReports', {
+        'reports': fields.List(fields.Nested(browser_deployment_report_model), required=True, description='Batch of browser deployment reports')
     })
 
     # Backup models
@@ -348,6 +368,9 @@ def create_api_models(api):
         'dns_providers_model': dns_providers_model,
         'cache_stats_model': cache_stats_model,
         'cache_clear_response_model': cache_clear_response_model,
+        'browser_deployment_model': browser_deployment_model,
+        'browser_deployment_report_model': browser_deployment_report_model,
+        'browser_deployment_reports_model': browser_deployment_reports_model,
         'deployment_status_model': deployment_status_model,
         'certificate_model': certificate_model,
         'create_cert_model': create_cert_model,

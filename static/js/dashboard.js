@@ -14,6 +14,8 @@
     };
 
     var escapeHtml = CertMate.escapeHtml;
+    var browserDeploymentReportQueue = {};
+    var browserDeploymentReportTimer = null;
 
     // --- Role-aware UI gating (audit punch-list M2) -----------------------
     // Default to viewer until /api/auth/me responds. The server is the
@@ -84,6 +86,45 @@
         document.getElementById('certificateSearch').value = '';
         document.getElementById('statusFilter').value = 'all';
         filterCertificates();
+    }
+
+    function queueBrowserDeploymentReport(domain, result) {
+        if (!domain || !result || !result.reachable) {
+            return;
+        }
+
+        browserDeploymentReportQueue[domain] = {
+            domain: domain,
+            reachable: true,
+            checked_at: result.timestamp || new Date().toISOString(),
+            method: result.method || 'browser-fallback',
+            source: 'browser'
+        };
+
+        if (!browserDeploymentReportTimer) {
+            browserDeploymentReportTimer = setTimeout(flushBrowserDeploymentReports, 250);
+        }
+    }
+
+    function flushBrowserDeploymentReports() {
+        browserDeploymentReportTimer = null;
+        var reports = Object.keys(browserDeploymentReportQueue).map(function (domain) {
+            return browserDeploymentReportQueue[domain];
+        });
+        browserDeploymentReportQueue = {};
+
+        if (!reports.length) {
+            return Promise.resolve();
+        }
+
+        return fetch('/api/certificates/deployment-status/browser', {
+            method: 'POST',
+            headers: API_HEADERS,
+            credentials: 'same-origin',
+            body: JSON.stringify({ reports: reports })
+        }).catch(function (error) {
+            console.warn('Failed to send browser deployment reports:', error);
+        });
     }
 
     // Update statistics cards with deployment info
@@ -851,6 +892,7 @@
                     if (result && result.reachable === false) {
                         return checkDeploymentViaBrowser(domain).then(function (browserResult) {
                             if (browserResult) {
+                                queueBrowserDeploymentReport(domain, browserResult);
                                 deploymentCache.set(domain, browserResult);
                                 updateDeploymentUI(domain, browserResult);
                                 return;
@@ -877,6 +919,9 @@
                         error: 'all_methods_failed',
                         timestamp: new Date().toISOString()
                     };
+                }
+                if (result.reachable) {
+                    queueBrowserDeploymentReport(domain, result);
                 }
                 deploymentCache.set(domain, result);
                 updateDeploymentUI(domain, result);

@@ -576,6 +576,7 @@ def setup_api(container: AppContainer, app):
     ns_certificates.add_resource(api_resources['CheckDNSAlias'], '/check-dns-alias')
     ns_certificates.add_resource(api_resources['CertificateDetail'], '/<string:domain>')
     ns_certificates.add_resource(api_resources['CertificateDeploymentStatus'], '/<string:domain>/deployment-status')
+    ns_certificates.add_resource(api_resources['CertificateDeploymentBrowserReports'], '/deployment-status/browser')
     ns_certificates.add_resource(api_resources['CertificateDNSAliasCheck'], '/<string:domain>/dns-alias-check')
     ns_certificates.add_resource(api_resources['DownloadCertificate'], '/<string:domain>/download')
     ns_certificates.add_resource(api_resources['RenewCertificate'], '/<string:domain>/renew')
