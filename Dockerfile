@@ -76,5 +76,6 @@ ENTRYPOINT ["tini", "--"]
 # Run the application
 # Single worker + threads: avoids duplicate APScheduler jobs and session
 # sharing issues. CertMate is I/O-bound, not CPU-bound.
+# 8 threads: SSE holds 1 thread per browser tab; 4 was too few.
 # $PORT defaults to 8000 and can be overridden via environment variable.
-CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${PORT} --workers 1 --threads 4 --timeout ${GUNICORN_TIMEOUT} --access-logfile - --error-logfile - --log-level info app:app"]
+CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${PORT} --workers 1 --threads 8 --timeout ${GUNICORN_TIMEOUT} --access-logfile - --error-logfile - --log-level info app:app"]

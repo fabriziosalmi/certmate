@@ -115,13 +115,13 @@
         </div>
     </nav>
     <script>
-    // Auth check
-    (function(){
+    // Auth check -- delayed to avoid competing with page-critical resources
+    setTimeout(function(){
         fetch('/api/auth/me',{credentials:'same-origin'})
             .then(function(r){return r.json()})
             .then(function(d){if(d&&d.user&&d.user.username)document.getElementById('logoutBtn').style.display='inline-block';})
             .catch(function(){});
-    })();
+    }, 500);
     function doLogout(){
         fetch('/api/auth/logout',{method:'POST',credentials:'same-origin'})
             .then(function(){window.location.href='/login'})
@@ -224,8 +224,8 @@
             .then(function(certs) { renderNotifications(certs); })
             .catch(function() {});
     }
-    // Check on load (with cache) and refresh every 5 minutes
-    setTimeout(checkNotifications, 2000);
+    // Check on load (with cache, staggered after auth) and refresh every 5 min
+    setTimeout(checkNotifications, 4000);
     setInterval(function() { checkNotifications(true); }, 300000);
 
     // SSE real-time updates
@@ -270,15 +270,18 @@
             };
         }
 
-        // Delay SSE connection to avoid race with auth
-        setTimeout(connectSSE, 3000);
+        // Delay SSE to avoid thread starvation (1 worker + 4 threads)
+        // SSE holds a thread permanently; connect after page is interactive
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(connectSSE, 5000);
+        });
     })();
     </script>
     <script defer src="/static/js/alpine.min.js"></script>
     <script src="/static/js/certmate.js"></script>
-    <script src="/static/js/cmd-palette.js"></script>
-    <script src="/static/js/shortcuts.js"></script>
-    <script src="/static/js/setup-wizard.js"></script>
+    <script defer src="/static/js/cmd-palette.js"></script>
+    <script defer src="/static/js/shortcuts.js"></script>
+    <script defer src="/static/js/setup-wizard.js"></script>
 
     <main class="page-enter">
     {% block content %}{% endblock %}

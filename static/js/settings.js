@@ -2595,14 +2595,14 @@
             });
         });
 
-        // Load settings on page load
+        // Load settings on page load (critical, runs first)
         loadSettings();
 
         // Initialize CA provider configuration visibility
         toggleCAProviderConfig();
 
-        // Refresh cache stats on load
-        refreshCacheStats();
+        // Refresh cache stats (delayed to avoid thread starvation)
+        setTimeout(function () { refreshCacheStats(); }, 1500);
 
         // Form submit handler
         if (form) {
@@ -2613,14 +2613,14 @@
             });
         }
 
-        // Backup list (delayed)
-        setTimeout(function () { refreshBackupList(); }, 1000);
+        // Backup list (delayed further)
+        setTimeout(function () { refreshBackupList(); }, 3000);
 
-        // User management (delayed)
+        // User management (delayed further still)
         setTimeout(function () {
             loadAuthConfig();
             refreshUserList();
-        }, 500);
+        }, 4000);
     });
 
     // =============================================
