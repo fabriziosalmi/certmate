@@ -301,7 +301,7 @@
             } else if (cachedStatus.reachable && !cachedStatus.certificate_match) {
                 sc = 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400'; si = 'fa-exclamation-triangle'; st = 'Wrong Cert';
             } else if (!cachedStatus.reachable) {
-                sc = 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400'; si = 'fa-times-circle'; st = 'Not Deployed';
+                sc = 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400'; si = 'fa-times-circle'; st = 'Unreachable';
             } else {
                 sc = 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'; si = 'fa-question-circle'; st = 'Unknown';
             }
@@ -560,7 +560,7 @@
                     : '') +
                 '<button type="button" onclick="downloadCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-download mr-2 text-blue-600"></i>Download Certificate</button>' +
                 '<button type="button" onclick="copyCurlCommand(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-blue-300 dark:border-blue-600 shadow-sm text-sm font-medium rounded-md text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50"><i class="fas fa-code mr-2"></i>Show API Command</button>' +
-                '<button type="button" onclick="checkDeploymentStatus(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-globe mr-2 text-indigo-600"></i>Check Deployment</button>' +
+                '<button type="button" onclick="checkDeploymentStatus(\'' + safeDomain + '\', this)" class="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-globe mr-2 text-indigo-600"></i>Check Deployment</button>' +
                 (safeDomainAlias ? '<button type="button" onclick="checkDnsAliasForCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-blue-300 dark:border-blue-600 shadow-sm text-sm font-medium rounded-md text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50"><i class="fas fa-search mr-2"></i>Check DNS-01 Alias</button>' : '') +
                 '<div id="cert_dns_alias_check_result" class="hidden"></div>' +
                 (roleAtLeast('admin')
@@ -793,7 +793,24 @@
     }
 
     // Check deployment status for a specific domain
-    function checkDeploymentStatus(domain) {
+    function checkDeploymentStatus(domain, triggerButton) {
+        var restoreButton = function () {
+            if (!triggerButton) {
+                return;
+            }
+            triggerButton.disabled = false;
+            if (triggerButton.dataset.originalHtml) {
+                triggerButton.innerHTML = triggerButton.dataset.originalHtml;
+                delete triggerButton.dataset.originalHtml;
+            }
+        };
+
+        if (triggerButton) {
+            triggerButton.dataset.originalHtml = triggerButton.innerHTML;
+            triggerButton.disabled = true;
+            triggerButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Checking...';
+        }
+
         var statusElements = Array.prototype.filter.call(
             document.querySelectorAll('[data-deployment-domain]'),
             function (el) {
@@ -802,6 +819,7 @@
         );
 
         if (!statusElements.length) {
+            restoreButton();
             return Promise.resolve();
         }
 
@@ -809,6 +827,7 @@
         var cachedResult = deploymentCache.get(domain);
         if (cachedResult) {
             updateDeploymentUI(domain, cachedResult);
+            restoreButton();
             return Promise.resolve();
         }
 
@@ -850,6 +869,8 @@
                 statusElement.className = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300';
                 statusElement.innerHTML = '<i class="fas fa-question-circle mr-1"></i>Error';
             });
+        }).finally(function () {
+            restoreButton();
         });
     }
 
@@ -914,7 +935,7 @@
         } else {
             statusClass = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400';
             statusIcon = 'fa-times-circle';
-            statusText = 'Not Deployed';
+            statusText = 'Unreachable';
         }
 
         statusElements.forEach(function (statusElement) {
