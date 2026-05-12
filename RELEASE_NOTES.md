@@ -1,3 +1,28 @@
+## v2.4.8 (Patch — community PR merge + JSON download + lint fixes)
+
+Merges the ITJamie PR chain ([#128](https://github.com/fabriziosalmi/certmate/pull/128), [#132](https://github.com/fabriziosalmi/certmate/pull/132), [#133](https://github.com/fabriziosalmi/certmate/pull/133)) and resolves three markdown lint findings. All changes validated end-to-end on a live Docker instance with real Cloudflare DNS-01 certificate creation.
+
+### From the community
+
+- **#133** [@ITJamie](https://github.com/ITJamie) (superset of #128 and #132) — three fixes in one:
+  - **JSON certificate download** (`?format=json`): new query parameter on `GET /api/certificates/<domain>/download` returns a JSON object with `cert_pem`, `chain_pem`, `fullchain_pem`, `private_key_pem` as PEM strings. Mutually exclusive with the existing `?file=` parameter (returns 400 on conflict). Invalid format values return 400. Documented in `docs/api.md` and `README.md`.
+  - **Tempdir data-loss fix**: `setup_directories()` in `factory.py` no longer calls `tempfile.mkdtemp()` — certificates, data, backups, and logs directories now always resolve to the project paths (`/app/certificates`, `/app/data`, etc.), surviving container restarts.
+  - **Settings migration**: `SettingsManager.load_settings()` now migrates legacy single-account DNS provider config (`dns_providers.cloudflare.api_token`) to the multi-account structure (`dns_providers.cloudflare.accounts.default.api_token`), and correctly applies `CLOUDFLARE_TOKEN` env var override without resetting `setup_completed` (fixes setup wizard loop, issue #130).
+  - **Dashboard table fix**: certificate rows in `dashboard.js` now use `rowRaw(rowHtml\`...\`)` for action buttons, fixing escaped HTML tags rendering as visible text.
+
+### Lint fixes
+
+- `README.md`: fixed docker-compose YAML code block indentation (duplicate `cpus`/`memory` keys at wrong nesting level)
+- `README.md`: normalized `Backup & Recovery` headings to `Backup and Recovery` (resolves broken `#backup--recovery` anchor)
+- `docs/guide.md`: fixed broken link `./CHANGELOG.md` → `../RELEASE_NOTES.md`
+
+### Tests
+
+- 2 new test files: `test_factory_directories.py` (tempdir fix) + `test_issue130_setup_wizard_loop.py` (migration + env override)
+- 2 new test cases in `test_cert_lifecycle.py` (JSON download success + invalid format)
+- 1 new test case in `test_download_file_param.py` (JSON 404 for missing domains)
+- All validated against live Cloudflare DNS-01 with random subdomain `pr133test-91e7c166.certmate.org`
+
 ## v2.4.7 (Patch — base image bump bookworm → trixie)
 
 Two-character `Dockerfile` change ([#127](https://github.com/fabriziosalmi/certmate/pull/127)): `python:3.12-slim` → `python:3.12-slim-trixie`. Expected to close ~11-13 of the 13 open Critical+High Trivy findings on the main branch image — all of them base-image OS CVEs (gnutls, libssh2, ncurses, systemd, libcap) fixed in trixie's package versions but not backported to bookworm.
