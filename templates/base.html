@@ -41,17 +41,17 @@
                 <div class="flex items-center space-x-1 sm:space-x-4">
                     <!-- Desktop nav links (hidden on mobile — bottom tab bar used instead) -->
                     <a href="/" class="hidden md:inline-flex items-center px-3 py-2 text-sm {% if request.path == '/' %}nav-active{% else %}nav-inactive{% endif %}">
-                        <i class="fas fa-certificate mr-1.5"></i> Certificates
+                        <i class="fas fa-certificate mr-1.5 text-[0.85em] leading-none"></i> Certificates
                     </a>
 
                     <a href="/settings" class="hidden md:inline-flex items-center px-3 py-2 text-sm {% if request.path == '/settings' %}nav-active{% else %}nav-inactive{% endif %}">
-                        <i class="fas fa-cog mr-1.5"></i> Settings
+                        <i class="fas fa-cog mr-1.5 text-[0.85em] leading-none"></i> Settings
                     </a>
                     <a href="/help" class="hidden md:inline-flex items-center px-3 py-2 text-sm {% if request.path == '/help' %}nav-active{% else %}nav-inactive{% endif %}">
-                        <i class="fas fa-question-circle mr-1.5"></i> Help
+                        <i class="fas fa-question-circle mr-1.5 text-[0.85em] leading-none"></i> Help
                     </a>
                     <a href="/activity" class="hidden md:inline-flex items-center px-3 py-2 text-sm {% if request.path == '/activity' %}nav-active{% else %}nav-inactive{% endif %}">
-                        <i class="fas fa-history mr-1.5"></i> Activity
+                        <i class="fas fa-history mr-1.5 text-[0.85em] leading-none"></i> Activity
                     </a>
                     <!-- Search (Cmd+K) -->
                     <button type="button" onclick="document.dispatchEvent(new KeyboardEvent('keydown',{key:'k',metaKey:true}))" class="hidden sm:inline-flex items-center px-2.5 py-1.5 text-sm text-gray-400 bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition" title="Search (Cmd+K)">
@@ -80,8 +80,8 @@
                     </div>
                     <!-- Dark mode toggle -->
                     <button id="themeToggle" onclick="toggleTheme()" class="px-2 py-2 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700" title="Toggle theme">
-                        <i class="fas fa-moon dark:hidden"></i>
-                        <i class="fas fa-sun hidden dark:inline"></i>
+                        <i class="fas fa-moon block dark:hidden"></i>
+                        <i class="fas fa-sun hidden dark:block"></i>
                     </button>
                     <!-- Logout -->
                     <button id="logoutBtn" onclick="doLogout()" style="display:none" class="px-3 py-2 rounded-md text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 border border-red-200 dark:border-red-700" title="Logout">
