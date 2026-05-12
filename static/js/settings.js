@@ -2358,9 +2358,9 @@
             showMessage('Password must be at least 12 characters and include a digit and a symbol', 'error');
             var pwField = document.getElementById('newUserPassword');
             if (pwField) {
-                pwField.classList.add('border-red-500');
+                pwField.classList.add('border-red-500', 'input-shake');
                 pwField.focus();
-                setTimeout(function() { pwField.classList.remove('border-red-500'); }, 3000);
+                setTimeout(function() { pwField.classList.remove('border-red-500', 'input-shake'); }, 3000);
             }
             return;
         }

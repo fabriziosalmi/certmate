@@ -327,7 +327,11 @@
 
         <!-- Statistics Cards -->
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6" id="statsCards">
-            <!-- Stats will be populated here -->
+            <!-- Skeleton placeholders (replaced by JS on load) -->
+            <div class="bg-white dark:bg-surface-card rounded-xl p-4"><div class="skeleton h-4 w-16 mb-2"></div><div class="skeleton h-7 w-10"></div></div>
+            <div class="bg-white dark:bg-surface-card rounded-xl p-4"><div class="skeleton h-4 w-16 mb-2"></div><div class="skeleton h-7 w-10"></div></div>
+            <div class="bg-white dark:bg-surface-card rounded-xl p-4"><div class="skeleton h-4 w-16 mb-2"></div><div class="skeleton h-7 w-10"></div></div>
+            <div class="bg-white dark:bg-surface-card rounded-xl p-4"><div class="skeleton h-4 w-16 mb-2"></div><div class="skeleton h-7 w-10"></div></div>
         </div>
 
         <!-- Certificates List -->
@@ -392,7 +396,10 @@
                         </tr>
                     </thead>
                     <tbody id="certificatesList" class="divide-y divide-gray-200 dark:divide-gray-700">
-                        <!-- Certificates will be loaded here -->
+                        <!-- Skeleton rows (replaced by JS on load) -->
+                        <tr><td class="px-6 py-4" colspan="7"><div class="flex items-center space-x-4"><div class="skeleton h-4 w-40"></div><div class="skeleton h-4 w-20"></div><div class="skeleton h-4 w-24 hidden md:block"></div></div></td></tr>
+                        <tr><td class="px-6 py-4" colspan="7"><div class="flex items-center space-x-4"><div class="skeleton h-4 w-32"></div><div class="skeleton h-4 w-16"></div><div class="skeleton h-4 w-28 hidden md:block"></div></div></td></tr>
+                        <tr><td class="px-6 py-4" colspan="7"><div class="flex items-center space-x-4"><div class="skeleton h-4 w-36"></div><div class="skeleton h-4 w-20"></div><div class="skeleton h-4 w-20 hidden md:block"></div></div></td></tr>
                     </tbody>
                 </table>
             </div>

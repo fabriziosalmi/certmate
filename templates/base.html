@@ -9,6 +9,7 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png">
     <meta name="theme-color" content="#3b82f6" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0b1120" media="(prefers-color-scheme: dark)">
+    <link rel="manifest" href="/static/manifest.json">
     <link href="/static/css/tailwind.min.css" rel="stylesheet">
     <link href="/static/css/fontawesome.min.css" rel="stylesheet">
     {% block head %}{% endblock %}
@@ -93,20 +94,23 @@
     </nav>
 
     <!-- Bottom Tab Bar (mobile only) -->
-    <nav class="fixed bottom-0 left-0 right-0 md:hidden bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 shadow-[0_-2px_10px_rgba(0,0,0,0.1)] z-40 safe-area-bottom" id="bottomTabBar">
+    <nav class="fixed bottom-0 left-0 right-0 md:hidden bg-white dark:bg-surface-card border-t border-gray-200 dark:border-white/5 shadow-[0_-2px_10px_rgba(0,0,0,0.1)] z-40 safe-area-bottom" id="bottomTabBar">
         <div class="flex justify-around h-14">
-            <a href="/" class="flex flex-col items-center justify-center flex-1 py-1 {% if request.path == '/' %}text-primary{% else %}text-gray-500 dark:text-gray-400{% endif %}">
+            <a href="/" class="flex flex-col items-center justify-center flex-1 py-1 transition-colors duration-150 {% if request.path == '/' %}text-primary{% else %}text-gray-500 dark:text-gray-400{% endif %}">
                 <i class="fas fa-certificate text-lg"></i>
-                <span class="text-[10px] mt-0.5 font-medium">Certs</span>
+                <span class="text-xs mt-0.5 font-medium">Certs</span>
             </a>
-
-            <a href="/settings" class="flex flex-col items-center justify-center flex-1 py-1 {% if request.path == '/settings' %}text-primary{% else %}text-gray-500 dark:text-gray-400{% endif %}">
+            <a href="/settings" class="flex flex-col items-center justify-center flex-1 py-1 transition-colors duration-150 {% if request.path == '/settings' %}text-primary{% else %}text-gray-500 dark:text-gray-400{% endif %}">
                 <i class="fas fa-cog text-lg"></i>
-                <span class="text-[10px] mt-0.5 font-medium">Settings</span>
+                <span class="text-xs mt-0.5 font-medium">Settings</span>
             </a>
-            <a href="/activity" class="flex flex-col items-center justify-center flex-1 py-1 {% if request.path == '/activity' %}text-primary{% else %}text-gray-500 dark:text-gray-400{% endif %}">
+            <a href="/help" class="flex flex-col items-center justify-center flex-1 py-1 transition-colors duration-150 {% if request.path == '/help' %}text-primary{% else %}text-gray-500 dark:text-gray-400{% endif %}">
+                <i class="fas fa-question-circle text-lg"></i>
+                <span class="text-xs mt-0.5 font-medium">Help</span>
+            </a>
+            <a href="/activity" class="flex flex-col items-center justify-center flex-1 py-1 transition-colors duration-150 {% if request.path == '/activity' %}text-primary{% else %}text-gray-500 dark:text-gray-400{% endif %}">
                 <i class="fas fa-history text-lg"></i>
-                <span class="text-[10px] mt-0.5 font-medium">Activity</span>
+                <span class="text-xs mt-0.5 font-medium">Activity</span>
             </a>
         </div>
     </nav>

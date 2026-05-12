@@ -58,6 +58,14 @@ html.dark {
     filter: brightness(0.92);
   }
 }
+/* Global press feedback for all primary-colored buttons */
+button[class*="bg-primary"]:active,
+button[class*="bg-green-6"]:active,
+button[class*="bg-blue-6"]:active,
+button[class*="bg-red-6"]:active {
+  transform: scale(0.97);
+  filter: brightness(0.92);
+}
 
 /* ── Table row health strip ──────────────────────────────────── */
 .health-valid   { border-left: 3px solid #22c55e; }
