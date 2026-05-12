@@ -94,3 +94,5 @@ github_response.md
 PLAN.md
 scratch/
 test_settings.py
+# Internal audit docs (not for distribution)
+UI_AUDIT.md

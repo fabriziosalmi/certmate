@@ -10,7 +10,7 @@
     <link href="/static/css/tailwind.min.css" rel="stylesheet">
     <link href="/static/css/fontawesome.min.css" rel="stylesheet">
 </head>
-<body class="bg-gray-50 dark:bg-gray-900 min-h-screen flex items-center justify-center transition-colors duration-200">
+<body class="login-ambient min-h-screen flex items-center justify-center transition-colors duration-200 font-sans">
     <div class="max-w-md w-full mx-4">
         <!-- Logo and Title -->
         <div class="text-center mb-8">
@@ -20,7 +20,7 @@
         </div>
 
         <!-- Login Form -->
-        <div class="bg-white dark:bg-gray-800 shadow-lg rounded-lg p-8">
+        <div class="glass-card shadow-elevated rounded-2xl p-8 border border-gray-200/50 dark:border-white/5">
             <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-6 text-center">Sign In</h2>
             
             <!-- Error Message -->
@@ -65,7 +65,7 @@
 
                 <!-- Submit Button -->
                 <button type="submit" id="loginBtn"
-                        class="w-full py-3 px-4 bg-primary text-white font-semibold rounded-md hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition-colors">
+                        class="w-full py-3 px-4 bg-primary text-white font-semibold rounded-lg hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 dark:focus:ring-offset-gray-800 btn-press transition-all duration-150">
                     <i class="fas fa-sign-in-alt mr-2"></i> Sign In
                 </button>
             </form>

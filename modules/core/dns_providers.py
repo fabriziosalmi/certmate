@@ -14,6 +14,35 @@ class DNSManager:
     def __init__(self, settings_manager):
         self.settings_manager = settings_manager
 
+    # Canonical list of supported DNS providers
+    SUPPORTED_PROVIDERS = [
+        'cloudflare', 'route53', 'azure', 'google', 'digitalocean',
+        'namecheap', 'godaddy', 'linode', 'ovh', 'hetzner',
+        'rfc2136', 'powerdns', 'desec',
+    ]
+
+    def get_available_providers(self):
+        """List available DNS providers and their configuration status.
+
+        Returns a list of dicts with provider name, label, and whether
+        at least one account with credentials is configured.
+        """
+        settings = self.settings_manager.load_settings()
+        settings = self.settings_manager.migrate_dns_providers_to_multi_account(settings)
+        dns_providers = settings.get('dns_providers', {})
+
+        result = []
+        for provider in self.SUPPORTED_PROVIDERS:
+            accounts = self.list_dns_provider_accounts(provider, settings=settings)
+            configured = any(a.get('configured') for a in accounts)
+            result.append({
+                'name': provider,
+                'label': provider.replace('_', ' ').title(),
+                'configured': configured,
+                'accounts': len(accounts),
+            })
+        return result
+
     def get_dns_provider_account_config(self, provider, account_id=None, settings=None):
         """Get DNS provider account configuration
         

@@ -326,13 +326,17 @@
         </script>
 
         <!-- Statistics Cards -->
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6" id="statsCards">
-            <!-- Stats will be populated here -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6" id="statsCards">
+            <!-- Skeleton placeholders (replaced by JS on load) -->
+            <div class="bg-white dark:bg-surface-card rounded-xl p-4"><div class="skeleton h-4 w-16 mb-2"></div><div class="skeleton h-7 w-10"></div></div>
+            <div class="bg-white dark:bg-surface-card rounded-xl p-4"><div class="skeleton h-4 w-16 mb-2"></div><div class="skeleton h-7 w-10"></div></div>
+            <div class="bg-white dark:bg-surface-card rounded-xl p-4"><div class="skeleton h-4 w-16 mb-2"></div><div class="skeleton h-7 w-10"></div></div>
+            <div class="bg-white dark:bg-surface-card rounded-xl p-4"><div class="skeleton h-4 w-16 mb-2"></div><div class="skeleton h-7 w-10"></div></div>
         </div>
 
         <!-- Certificates List -->
-        <div class="bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700">
-            <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50 rounded-t-lg">
+        <div class="bg-white dark:bg-surface-card shadow-card rounded-xl overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-100 dark:border-white/5">
                 <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-3 lg:space-y-0">
                     <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Your Certificates</h3>
                     <div class="flex flex-col sm:flex-row items-stretch sm:items-center space-y-2 sm:space-y-0 sm:space-x-2 lg:space-x-3">
@@ -369,7 +373,7 @@
             </div>
             <div class="overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700" id="certificatesTable">
-                    <thead class="bg-gray-50 dark:bg-gray-700/50">
+                    <thead class="bg-gray-50/80 dark:bg-gray-700/60 backdrop-blur-md sticky top-0 z-10">
                         <tr>
                             <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer select-none hover:text-gray-700 dark:hover:text-gray-200" onclick="sortCertificates('domain')">
                                 Domain <i class="fas fa-sort ml-1 text-gray-400" id="sort-icon-domain"></i>
@@ -392,7 +396,10 @@
                         </tr>
                     </thead>
                     <tbody id="certificatesList" class="divide-y divide-gray-200 dark:divide-gray-700">
-                        <!-- Certificates will be loaded here -->
+                        <!-- Skeleton rows (replaced by JS on load) -->
+                        <tr><td class="px-6 py-4" colspan="7"><div class="flex items-center space-x-4"><div class="skeleton h-4 w-40"></div><div class="skeleton h-4 w-20"></div><div class="skeleton h-4 w-24 hidden md:block"></div></div></td></tr>
+                        <tr><td class="px-6 py-4" colspan="7"><div class="flex items-center space-x-4"><div class="skeleton h-4 w-32"></div><div class="skeleton h-4 w-16"></div><div class="skeleton h-4 w-28 hidden md:block"></div></div></td></tr>
+                        <tr><td class="px-6 py-4" colspan="7"><div class="flex items-center space-x-4"><div class="skeleton h-4 w-36"></div><div class="skeleton h-4 w-20"></div><div class="skeleton h-4 w-20 hidden md:block"></div></div></td></tr>
                     </tbody>
                 </table>
             </div>
@@ -408,10 +415,10 @@
 
     <!-- Certificate Detail Slide-out Panel -->
     <div id="certDetailOverlay" class="fixed inset-0 bg-gray-900/50 backdrop-blur-sm z-40 hidden" onclick="closeCertDetail()"></div>
-    <div id="certDetailPanel" class="fixed top-0 right-0 h-full w-full sm:w-96 lg:w-[480px] bg-white dark:bg-gray-800 shadow-2xl z-50 transform translate-x-full transition-transform duration-300 ease-in-out overflow-y-auto">
-        <div class="sticky top-0 bg-white dark:bg-gray-800 border-b dark:border-gray-700 px-6 py-4 flex items-center justify-between z-10">
+    <div id="certDetailPanel" class="fixed top-0 right-0 h-full w-full sm:w-96 lg:w-[480px] bg-white dark:bg-surface-card shadow-elevated z-50 transform translate-x-full panel-slide overflow-y-auto">
+        <div class="sticky top-0 bg-white dark:bg-surface-card border-b border-gray-100 dark:border-white/5 px-6 py-4 flex items-center justify-between z-10">
             <h3 class="text-lg font-semibold text-gray-900 dark:text-white truncate" id="detailDomain">Certificate Details</h3>
-            <button type="button" onclick="closeCertDetail()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1" title="Close panel">
+            <button type="button" onclick="closeCertDetail()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 transition-colors" title="Close panel">
                 <i class="fas fa-times text-lg"></i>
             </button>
         </div>
