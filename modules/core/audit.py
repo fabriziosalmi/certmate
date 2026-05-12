@@ -7,6 +7,7 @@ import logging
 import json
 from pathlib import Path
 from datetime import datetime
+from collections import deque
 from .utils import utc_now
 from typing import Optional, Dict, Any
 
@@ -467,30 +468,44 @@ class AuditLogger:
             List of audit entries (parsed JSON), newest first
         """
         try:
-            entries = []
             if not self.audit_log_file.exists():
-                return entries
+                return []
+
+            if limit <= 0:
+                return []
 
             file_size = self.audit_log_file.stat().st_size
             if file_size == 0:
-                return entries
+                return []
 
-            # Read only the tail of the file (8KB per expected entry is generous)
-            read_size = min(file_size, limit * 512)
+            # Read only the tail of the file so large audit logs do not block
+            # the activity page or other callers that only need recent entries.
+            block_size = 8192
+            blocks = []
+            remaining = file_size
 
-            with open(self.audit_log_file, 'r') as f:
-                if file_size > read_size:
-                    f.seek(file_size - read_size)
-                    f.readline()  # discard partial first line
-                lines = f.readlines()
+            with open(self.audit_log_file, 'rb') as f:
+                while remaining > 0 and len(blocks) <= limit:
+                    read_size = min(block_size, remaining)
+                    remaining -= read_size
+                    f.seek(remaining)
+                    blocks.append(f.read(read_size))
 
-            # Parse the last 'limit' lines
-            for line in lines[-limit:]:
+            raw_lines = b''.join(reversed(blocks)).splitlines()
+
+            # If we did not read from the start of the file, the first line can be partial.
+            if remaining > 0 and raw_lines:
+                raw_lines = raw_lines[1:]
+
+            entries = []
+            for line in raw_lines[-limit:]:
                 try:
-                    if ' - INFO - ' in line:
-                        json_str = line.split(' - INFO - ', 1)[1].strip()
-                        entries.append(json.loads(json_str))
-                except (json.JSONDecodeError, IndexError):
+                    raw = line.decode('utf-8', errors='replace')
+                    if ' - INFO - ' not in raw:
+                        continue
+                    json_str = raw.split(' - INFO - ', 1)[1].strip()
+                    entries.append(json.loads(json_str))
+                except (UnicodeDecodeError, json.JSONDecodeError, IndexError):
                     continue
 
             return entries
