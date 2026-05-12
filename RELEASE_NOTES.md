@@ -1,3 +1,84 @@
+## v2.4.15 (Patch — Sprint 1.6 audit polish)
+
+Audit polish sprint: the four zero/low-risk items from the [2026-05-12 API auth audit](https://github.com/fabriziosalmi/certmate/releases/tag/v2.4.12) that didn't need structural design, shipped together because each is small, additive, and shares no code paths. Four atomic commits, 13 new unit tests on top of v2.4.14's 112 (125 total, 0.87s runtime, no Docker). PR [#151](https://github.com/fabriziosalmi/certmate/pull/151).
+
+### F-4 — Confirm dialog when creating an API key with no domain scope
+
+The Allowed Domains field on the API Keys settings tab has always defaulted to "empty = unrestricted" — sensible for backward compatibility, easy to trip over: an admin who hits Create with the field blank just minted a key with role-scoped access to every certificate on the install.
+
+`createKey` in `static/js/settings-apikeys.js` now gates on a confirm dialog when `parseAllowedDomains(...)` returns undefined:
+
+> "This key will have no domain restrictions and will be authorized to operate on every certificate on this CertMate instance, scoped only by the role you selected. To restrict the key to specific domains, cancel and fill in the Allowed Domains field (comma-separated, supports wildcards like *.example.com). Create this unrestricted key?"
+
+On cancel, focus jumps back to the Allowed Domains input so recovery is one keystroke. When the field has at least one pattern (including a single wildcard) the dialog is skipped — the admin already declared intent. Zero backend change.
+
+### F-6 — Self-host ReDoc bundle + drop external CDN from CSP
+
+`/redoc/` previously loaded the ReDoc bundle from `cdn.redoc.ly` and Montserrat / Roboto from `fonts.googleapis.com` + `fonts.gstatic.com`, breaking the project's air-gapped-ready promise and forcing three external origins into the global CSP.
+
+Three changes:
+
+1. `static/js/redoc.standalone.js` checked in as a vendored asset (918 KB; pulled from `cdn.redoc.ly/redoc/latest/bundles/` at the time of the commit; carries its own MIT license header).
+2. `templates/redoc.html` switched from `<redoc spec-url=>` + CDN `<script>` to `Redoc.init()` against the locally-hosted bundle. ReDoc's `theme.typography.fontFamily` is pinned to the system-font stack so no Google Fonts request fires.
+3. `modules/core/factory.py` CSP — dropped `cdn.redoc.ly`, `fonts.googleapis.com`, `fonts.gstatic.com`. `/redoc/` now satisfies the same `self`-only CSP as every other page on the install.
+
+`tests/test_static_csp.py` — `test_redoc_csp_allows_external` rewritten to `test_redoc_csp_self_only` (asserts the three CDN origins are absent and `self` is present); new `test_redoc_html_self_hosts_bundle` confirms the rendered page references `/static/js/redoc.standalone.js`.
+
+### GET role normalisation — `/api/web/settings` GET is now `viewer`
+
+The Flask-RESTX surface at `/api/settings` GET already required only `viewer`; the web blueprint at the same path (plus its `/api/web/settings` alias) was `admin` for both GET and POST. Two endpoints, same data, different roles — confusing for integrators and inconsistent with the masking guarantee already in place on the web blueprint side.
+
+The blueprint splits into two view functions: GET is `viewer`, POST stays `admin`. Why this is safe to open: `api_settings_get` already masks every key matching `/(token|secret|password|key|credential)/i` to `'********'` via the `_mask_dict` regex walker. The RESTX `Settings.get` resource achieves the same via `MaskedString` field types. Both endpoints have been masking on the read path since well before this change; the only thing that shifts is which roles can hit them.
+
+### F-7 — Per-username login rate limit on top of per-IP
+
+`/api/auth/login` had a single per-IP bucket (5 attempts / 60s). It fails open to a distributed brute-force where an attacker spreads attempts across N source IPs — N × 5 attempts/minute against a single account before any rate limit fires. The 12-character password policy mitigates the threat; SOC2 / ISO27001 audits still expect a per-account lockout for due diligence.
+
+New per-username bucket on top:
+
+| Bucket | Limit | Window |
+|---|---|---|
+| per-IP | 5 attempts | 60 s |
+| per-username (new) | 10 attempts | 300 s |
+
+Wider window for the username bucket because the threat model is slower than a per-IP burst and legitimate users mistyping a password from different devices should still recover quickly.
+
+Defensive details:
+- Username is lower-cased + trimmed before bucketing so an attacker cannot side-step the cap by varying case (`ADMIN` vs `admin`) or padding whitespace.
+- Empty / whitespace-only usernames skip the per-user bucket — recording them would let an attacker pre-fill a wildcard slot to starve legitimate users.
+- Attempts older than their respective window are pruned lazily on every check; in-memory dicts don't grow unbounded.
+- When both buckets trip, `retry_after` is the **longer** of the two outstanding windows so the client backs off enough to clear both.
+- `_check_login_rate_limit` and `_record_login_attempt` grew an optional `username` parameter; existing callers without a username keep working.
+
+`auth_routes.py` POST `/api/auth/login` now reads the username from the request body **before** the rate-limit check but credential validation still happens after — so a hammered username cannot be probed for existence by comparing error codes; both rate-limit and bad-credentials paths return the same generic error envelope.
+
+### Tests
+
+`tests/test_sprint1_6_audit_polish.py` — 13 new tests, 0.07s runtime:
+
+- `TestPerIpBucket` (3) — original behaviour preserved + backward-compatible no-username signature
+- `TestPerUsernameBucket` (5) — distributed-attack blocked, per-user isolation, case/whitespace normalisation, empty username does not poison the bucket
+- `TestRetryAfterIsWorstCase` (2) — `retry_after` picks the binding window
+- `TestBucketWindowExpiry` (2) — stale entries pruned on next check
+- `TestSettingsGetRoleNormalization` (1) — module exposes the split GET handler with viewer role
+
+Total unit-test surface after this release: 125 passes (112 pre-existing + 13 new) in 0.87s without Docker. CI also runs the Docker-fixture integration suite and the updated `tests/test_static_csp.py` assertions for the ReDoc self-host.
+
+### Backward compatibility
+
+- Every existing API call continues to work for admin callers. The only observable changes for non-admin callers:
+  - Viewers can now read `/api/web/settings` GET (where they previously got 403). The response is masked; no secret value is exposed.
+  - The viewer cannot trip the per-username login bucket without doing 10 failed POSTs against the same username in 5 minutes.
+- `parseAllowedDomains` is unchanged; the F-4 confirm only fires when the field is empty, so admins who routinely scope their keys see no new dialog.
+- The `_check_login_rate_limit(ip)` signature is preserved (username defaults to None); legacy callers don't need to change.
+- ReDoc renders identically — only the asset source changes.
+
+### Non-goals (deferred to Sprint 2, with reason)
+
+- **F-3** (legacy bearer deprecation flag + dedicated rotation endpoint + UI migration warning). Structural feature, needs UX design for the migration path. Deferred to a dedicated PR.
+- **#138** (help.html rewrite). Pure UI but a large rewrite that deserves its own design + sprint.
+- **#150** (diagnostic snapshot + one-click bug report from error toasts). New feature opened during this sprint after the audit walk-through; in the backlog now, separate PR.
+
 ## v2.4.14 (Patch — Sprint 1.5 API auth audit follow-up)
 
 Direct follow-up to the [2026-05-12 draconian API auth audit](https://github.com/fabriziosalmi/certmate/releases/tag/v2.4.12) and the coverage matrix it produced. Four atomic commits, 23 new unit tests on top of v2.4.13's 89 (112 unit-test surface, 0.83s runtime, no Docker). PR [#148](https://github.com/fabriziosalmi/certmate/pull/148).
