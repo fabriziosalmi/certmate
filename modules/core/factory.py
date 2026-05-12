@@ -479,8 +479,9 @@ def _run_manager_job(manager_key: str, method_name: str):
             method_name,
         )
         return
+    from flask import current_app
     with _flask_app.app_context():
-        managers = _flask_app.config.get('MANAGERS')
+        managers = current_app.config.get('MANAGERS')
         manager = managers.get(manager_key) if managers else None
         if manager is None:
             logger.warning(
@@ -514,6 +515,7 @@ def _weekly_digest_job():
 
 def setup_scheduler(container: AppContainer):
     """Set up APScheduler for background tasks with persistent store."""
+    assert _flask_app is not None, "setup_scheduler called before _flask_app was set"
     try:
         from sqlalchemy import create_engine, event as _sa_event
         _db_path = container.data_dir / 'scheduler_jobs.sqlite'
@@ -774,6 +776,7 @@ def setup_rate_limiting(app, container: AppContainer):
 
 def create_app(test_config=None):
     """Application Factory for CertMate"""
+    global _flask_app
     container = AppContainer()
     setup_directories(container, test_config)
 
