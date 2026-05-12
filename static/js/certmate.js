@@ -72,22 +72,73 @@
         info: 'bg-blue-50 dark:bg-blue-900/40 border-blue-300 dark:border-blue-700 text-blue-800 dark:text-blue-200'
     };
 
-    CM.toast = function(message, type, duration) {
+    CM.toast = function(message, type, duration, options) {
         type = type || 'info';
-        duration = duration || 5000;
+        // When an errorContext is supplied, give the user time to find
+        // the Report button before the toast auto-dismisses. 10s vs the
+        // 5s default — still goes away on its own so a chatty page
+        // doesn't grow a pile of toasts.
+        if (duration === undefined || duration === null) {
+            duration = (options && options.errorContext) ? 10000 : 5000;
+        }
         var container = ensureToastContainer();
+        var opts = options || {};
+
+        // Render the "Report this issue" button when (a) the caller
+        // supplied an errorContext (so there's something to report),
+        // (b) the type is error (we don't want to clutter success
+        // toasts with a bug report affordance), and (c) the current
+        // user role is admin — the diagnostics snapshot endpoint
+        // is admin-only and a viewer click would just 403.
+        var canReport = (
+            type === 'error' &&
+            opts.errorContext &&
+            CM.role === 'admin' &&
+            typeof CM.reportIssue === 'function'
+        );
 
         var toast = document.createElement('div');
-        toast.className = 'pointer-events-auto relative border rounded-lg shadow-lg p-4 flex items-start gap-3 transform translate-x-full opacity-0 transition-all duration-300 overflow-hidden ' + (TOAST_COLORS[type] || TOAST_COLORS.info);
+        toast.className = 'pointer-events-auto relative border rounded-lg shadow-lg p-4 flex flex-col gap-2 transform translate-x-full opacity-0 transition-all duration-300 overflow-hidden ' + (TOAST_COLORS[type] || TOAST_COLORS.info);
 
-        toast.innerHTML =
-            '<i class="fas ' + (TOAST_ICONS[type] || TOAST_ICONS.info) + ' text-lg mt-0.5 flex-shrink-0"></i>' +
-            '<div class="flex-1 text-sm font-medium">' + CM.escapeHtml(message) + '</div>' +
-            '<button class="flex-shrink-0 text-current opacity-50 hover:opacity-100" onclick="this.parentElement.remove()">' +
-            '<i class="fas fa-times"></i></button>' +
-            (duration > 0 ? '<div class="toast-progress" style="--toast-duration:' + duration + 'ms"></div>' : '');
+        var headerHtml =
+            '<div class="flex items-start gap-3">' +
+                '<i class="fas ' + (TOAST_ICONS[type] || TOAST_ICONS.info) + ' text-lg mt-0.5 flex-shrink-0"></i>' +
+                '<div class="flex-1 text-sm font-medium">' + CM.escapeHtml(message) + '</div>' +
+                '<button class="flex-shrink-0 text-current opacity-50 hover:opacity-100" data-action="dismiss">' +
+                '<i class="fas fa-times"></i></button>' +
+            '</div>';
+
+        var reportRowHtml = canReport
+            ? '<div class="pl-7 flex justify-start">' +
+                  '<button data-action="report" class="text-xs font-medium underline opacity-80 hover:opacity-100 disabled:opacity-40 disabled:no-underline disabled:cursor-wait">' +
+                      '<i class="fas fa-bug mr-1"></i>Report this issue' +
+                  '</button>' +
+              '</div>'
+            : '';
+
+        var progressHtml = duration > 0
+            ? '<div class="toast-progress" style="--toast-duration:' + duration + 'ms"></div>'
+            : '';
+
+        toast.innerHTML = headerHtml + reportRowHtml + progressHtml;
 
         container.appendChild(toast);
+
+        toast.querySelector('[data-action="dismiss"]').addEventListener('click', function () {
+            toast.remove();
+        });
+
+        if (canReport) {
+            var reportBtn = toast.querySelector('[data-action="report"]');
+            reportBtn.addEventListener('click', function () {
+                reportBtn.disabled = true;
+                reportBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Preparing…';
+                CM.reportIssue(opts.errorContext)['finally'](function () {
+                    reportBtn.disabled = false;
+                    reportBtn.innerHTML = '<i class="fas fa-bug mr-1"></i>Report this issue';
+                });
+            });
+        }
 
         // Animate in
         requestAnimationFrame(function() {
@@ -105,6 +156,34 @@
 
         return toast;
     };
+
+    // ── Current-user role (cross-page) ───────────────────────────
+    // dashboard.js has had its own currentRole for a while; we mirror it
+    // here on CM.role so report-issue.js (and any future cross-page
+    // helper) can gate UI without depending on dashboard.js being
+    // loaded — e.g. /settings doesn't load it. The two stores converge:
+    // refreshRole() is idempotent and dashboard.js's loadCertificates
+    // continues to drive its own local copy.
+    CM.role = 'viewer';
+    CM.ROLE_LEVELS = { viewer: 0, operator: 1, admin: 2 };
+    CM.roleAtLeast = function (name) {
+        return (CM.ROLE_LEVELS[CM.role] || 0) >= (CM.ROLE_LEVELS[name] || 0);
+    };
+    CM.refreshRole = function () {
+        return fetch('/api/auth/me', { credentials: 'same-origin' })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (data) {
+                if (data && data.user && data.user.role) {
+                    CM.role = data.user.role;
+                }
+            })
+            .catch(function () { /* keep last-known role */ });
+    };
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', CM.refreshRole);
+    } else {
+        CM.refreshRole();
+    }
 
     // ── Styled Confirm Dialog ────────────────────────────────────
     function createOverlay() {
