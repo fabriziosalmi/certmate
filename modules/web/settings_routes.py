@@ -99,18 +99,24 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
                 return jsonify({
                     'error': 'Cannot delete your own account; ask another admin'
                 }), 400
-            if auth_manager.delete_user(username):
-                return jsonify({'message': 'User deleted'})
-            return jsonify({'error': 'Deletion failed'}), 500
+            success, msg = auth_manager.delete_user(username)
+            if success:
+                return jsonify({'message': msg})
+            if 'not found' in msg.lower():
+                return jsonify({'error': msg}), 404
+            return jsonify({'error': msg}), 400
 
         data = request.json
         role = data.get('role')
         if not role:
             return jsonify({'error': 'Role required'}), 400
 
-        if auth_manager.update_user(username, role=role):
-            return jsonify({'message': 'User updated'})
-        return jsonify({'error': 'Update failed'}), 500
+        success, msg = auth_manager.update_user(username, role=role)
+        if success:
+            return jsonify({'message': msg})
+        if 'not found' in msg.lower():
+            return jsonify({'error': msg}), 404
+        return jsonify({'error': msg}), 400
 
     @app.route('/api/dns/<string:provider>/accounts', methods=['GET', 'POST'])
     @app.route('/api/dns-providers/accounts', methods=['GET', 'POST'])

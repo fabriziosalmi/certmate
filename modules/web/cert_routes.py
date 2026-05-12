@@ -95,7 +95,7 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
             return jsonify({'error': str(e)}), 400
         except RuntimeError as e:
             logger.error(f"Certificate creation failed: {e}")
-            return jsonify({'error': str(e)}), 500
+            return jsonify({'error': str(e)}), 422
         except Exception as e:
             logger.error(f"Failed to create certificate: {e}")
             return jsonify({'error': 'Failed to create certificate'}), 500
