@@ -9,8 +9,10 @@ RUN apt-get update && \
     apt-get install -y -o Acquire::Retries=3 gcc && \
     rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first for better caching
-COPY requirements.txt requirements-minimal.txt ./
+# Copy every requirements*.txt so REQUIREMENTS_FILE and EXTRA_REQUIREMENTS
+# can point at any of the optional sets (storage backends, cloud DNS,
+# extended providers, …) without rebuilding the COPY layer for each one.
+COPY requirements*.txt ./
 
 # Create virtual environment and install dependencies
 RUN python -m venv /opt/venv
@@ -19,8 +21,26 @@ ENV PATH="/opt/venv/bin:$PATH"
 # Install minimal requirements by default (fastest build)
 # Override with --build-arg REQUIREMENTS_FILE=requirements.txt for full install
 ARG REQUIREMENTS_FILE=requirements.txt
+# Optional extra pip installs layered on top of the main requirements.
+# Accepts a SPACE-SEPARATED list so a single image can bundle e.g. the
+# Azure DNS plugin AND every remote storage backend at once. Quote the
+# value when invoking buildx so the shell preserves the spaces:
+#
+#   --build-arg EXTRA_REQUIREMENTS="requirements-azure.txt requirements-storage-all.txt"
+#   --build-arg EXTRA_REQUIREMENTS="requirements-aws.txt requirements-gcp.txt"
+#   --build-arg EXTRA_REQUIREMENTS=requirements-storage-all.txt   (single file)
+#
+# Empty by default → no second install, layer cached.
+ARG EXTRA_REQUIREMENTS=
+# shellcheck disable=SC2086 — intentional word-splitting to iterate the list.
 RUN pip install -U pip setuptools wheel && \
-    pip install --no-cache-dir -r ${REQUIREMENTS_FILE}
+    pip install --no-cache-dir -r ${REQUIREMENTS_FILE} && \
+    if [ -n "${EXTRA_REQUIREMENTS}" ]; then \
+        for req in ${EXTRA_REQUIREMENTS}; do \
+            echo "==> Installing extras from ${req}"; \
+            pip install --no-cache-dir -r "${req}"; \
+        done; \
+    fi
 
 # Production stage
 FROM python:3.12-slim-trixie
