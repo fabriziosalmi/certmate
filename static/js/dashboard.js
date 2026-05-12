@@ -837,7 +837,12 @@
             statusElement.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Checking...';
         });
 
-        return fetch('/api/certificates/' + encodeURIComponent(domain) + '/deployment-status', {
+        var deploymentUrl = '/api/certificates/' + encodeURIComponent(domain) + '/deployment-status';
+        if (forceRefresh) {
+            deploymentUrl += '?refresh=1';
+        }
+
+        return fetch(deploymentUrl, {
             method: 'GET',
             headers: API_HEADERS
         }).then(function (response) {

@@ -922,6 +922,7 @@ def create_api_resources(api, models, managers):
         @api.marshal_with(models['deployment_status_model'])
         def get(self, domain):
             """Check whether the domain is serving the expected certificate."""
+            refresh_requested = str(request.args.get('refresh', '')).lower() in {'1', 'true', 'yes', 'on'}
             _, err = _validate_domain_path(domain, file_ops.cert_dir)
             if err:
                 return {'error': err}, 400
@@ -930,9 +931,12 @@ def create_api_resources(api, models, managers):
             if not cert_info or not cert_info.get('exists'):
                 return {'error': f'Certificate not found for domain: {domain}'}, 404
 
-            cached_result = cache_manager.get_deployment_status(domain)
-            if isinstance(cached_result, dict) and cached_result.get('domain') == domain:
-                return cached_result, 200
+            if refresh_requested:
+                cache_manager.remove_from_cache(domain)
+            else:
+                cached_result = cache_manager.get_deployment_status(domain)
+                if isinstance(cached_result, dict) and cached_result.get('domain') == domain:
+                    return cached_result, 200
 
             expected_bytes = None
             storage_manager = getattr(certificate_manager, 'storage_manager', None)
