@@ -15,6 +15,7 @@ from flask_restx import Resource, fields
 
 from ..core.metrics import get_metrics_summary, is_prometheus_available
 from ..core.constants import CERTIFICATE_FILES, iter_cert_domain_dirs
+from ..core.auth import ROLE_HIERARCHY
 
 _DOMAIN_RE = re.compile(r'^(\*\.)?([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$')
 
@@ -742,6 +743,17 @@ def create_api_resources(api, models, managers):
                 event_bus = current_app.config.get('EVENT_BUS')
                 if event_bus:
                     event_bus.publish('certificate_deleted', {'domain': domain})
+
+                if audit_logger:
+                    user = getattr(request, 'current_user', None) or {}
+                    audit_logger.log_operation(
+                        operation='delete',
+                        resource_type='certificate',
+                        resource_id=domain,
+                        status='success',
+                        user=user.get('username'),
+                        ip_address=request.remote_addr,
+                    )
                 return {'message': f'Certificate deleted for {domain}', 'domain': domain}, 200
             except RuntimeError as e:
                 return {'error': str(e)}, 409
@@ -749,11 +761,32 @@ def create_api_resources(api, models, managers):
                 logger.error(f"Certificate deletion failed for {domain}: {e}")
                 return {'error': 'Certificate deletion failed'}, 500
 
+    # Files containing private-key material. A viewer-role caller is
+    # permitted to download public certificate material (cert, chain,
+    # fullchain) but anything that exposes the private key requires
+    # operator role. The default ZIP includes privkey.pem and is
+    # therefore also operator-gated. (2026-05-12 API auth audit
+    # follow-up: viewer-can-pull-privkey was an information-disclosure
+    # surface that the original endpoint exposed.)
+    _PRIVATE_KEY_FILES = frozenset({'privkey.pem', 'combined.pem'})
+    _PUBLIC_DOWNLOAD_FILES = frozenset({'cert.pem', 'chain.pem', 'fullchain.pem'})
+
+    def _user_has_role(user, min_role):
+        level = ROLE_HIERARCHY.get((user or {}).get('role'), -1)
+        return level >= ROLE_HIERARCHY.get(min_role, 999)
+
     class DownloadCertificate(Resource):
         @api.doc(security='Bearer')
         @auth_manager.require_role('viewer')
         def get(self, domain):
-            """Download certificate files as ZIP, JSON, or individual file"""
+            """Download certificate files as ZIP, JSON, or individual file.
+
+            Role gating is per-file: viewers can pull public material
+            (cert.pem, chain.pem, fullchain.pem) and the public-only ZIP
+            (?include_private=0); anything that exposes the private key
+            (privkey.pem, combined.pem, format=json, default ZIP)
+            requires operator role.
+            """
             try:
                 scope_err = _check_domain_scope(domain, 'download')
                 if scope_err:
@@ -764,14 +797,38 @@ def create_api_resources(api, models, managers):
                 if not cert_dir.exists():
                     return {'error': f'Certificate not found for domain: {domain}'}, 404
 
+                user = getattr(request, 'current_user', None) or {}
                 download_format = request.args.get('format')
                 # Check for the optional 'file' parameter
                 requested_file = request.args.get('file')
+                include_private = str(request.args.get('include_private', '1')).lower() not in ('0', 'false', 'no', 'off')
 
                 if download_format and download_format not in ['json']:
                     return {'error': 'Invalid format requested.'}, 400
 
+                def _privkey_denied(file_label):
+                    """Emit audit + return 403 for viewer trying to pull privkey."""
+                    if audit_logger:
+                        audit_logger.log_authz_denied(
+                            operation='download',
+                            resource_type='certificate',
+                            resource_id=domain,
+                            reason=f'viewer cannot download private-key material ({file_label})',
+                            user=user.get('username'),
+                            ip_address=request.remote_addr,
+                        )
+                    return {
+                        'error': 'operator role required to download private key material',
+                        'code': 'PRIVKEY_REQUIRES_OPERATOR',
+                        'hint': f'Use ?file=fullchain.pem or ?include_private=0 to download public material as a viewer.',
+                    }, 403
+
                 if download_format == 'json':
+                    # format=json always returns private_key_pem inline.
+                    # Restrict to operator+; viewer must use ?file=... for
+                    # the specific public-material file they need.
+                    if not _user_has_role(user, 'operator'):
+                        return _privkey_denied('format=json')
                     if requested_file:
                         return {'error': 'format=json cannot be combined with file.'}, 400
 
@@ -796,8 +853,14 @@ def create_api_resources(api, models, managers):
 
                 if requested_file:
                     # Security check: only allow specific certificate files
-                    if requested_file not in ['fullchain.pem', 'privkey.pem', 'combined.pem']:
+                    allowed_files = _PUBLIC_DOWNLOAD_FILES | _PRIVATE_KEY_FILES
+                    if requested_file not in allowed_files:
                         return {'error': 'Invalid file requested.'}, 400
+
+                    # Private-key files require operator+; public files
+                    # remain viewer-accessible.
+                    if requested_file in _PRIVATE_KEY_FILES and not _user_has_role(user, 'operator'):
+                        return _privkey_denied(requested_file)
 
                     if requested_file == 'combined.pem':
                         try:
@@ -826,13 +889,24 @@ def create_api_resources(api, models, managers):
                         mimetype='application/x-pem-file'
                     )
 
-                # Fallback to original ZIP logic if no file parameter is provided
+                # Fallback ZIP. Two flavors:
+                #   include_private=1 (default)  -> all 4 PEMs, operator+
+                #   include_private=0            -> public material only,
+                #                                   safe for viewer
+                if include_private and not _user_has_role(user, 'operator'):
+                    return _privkey_denied('default ZIP')
+
+                files_to_zip = (
+                    CERTIFICATE_FILES if include_private
+                    else tuple(f for f in CERTIFICATE_FILES if f not in _PRIVATE_KEY_FILES)
+                )
+                zip_suffix = 'certificates' if include_private else 'certificates_public'
 
                 # Create temporary ZIP file
                 with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as tmp_file:
                     tmp_path = tmp_file.name
                     with zipfile.ZipFile(tmp_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-                        for cert_file in CERTIFICATE_FILES:
+                        for cert_file in files_to_zip:
                             file_path = cert_dir / cert_file
                             if file_path.exists():
                                 zipf.write(file_path, cert_file)
@@ -848,7 +922,7 @@ def create_api_resources(api, models, managers):
                     return send_file(
                         tmp_path,
                         as_attachment=True,
-                        download_name=f'{domain}_certificates.zip',
+                        download_name=f'{domain}_{zip_suffix}.zip',
                         mimetype='application/zip'
                     )
 
@@ -1010,6 +1084,17 @@ def create_api_resources(api, models, managers):
                     logger.info(f"Created unified backup: {filename}")
 
                 if created_backups:
+                    if audit_logger:
+                        user = getattr(request, 'current_user', None) or {}
+                        audit_logger.log_operation(
+                            operation='create',
+                            resource_type='backup',
+                            resource_id=created_backups[0].get('filename', 'unknown'),
+                            status='success',
+                            details={'type': 'unified', 'reason': reason},
+                            user=user.get('username'),
+                            ip_address=request.remote_addr,
+                        )
                     return {
                         'message': 'Backup created successfully',
                         'backups': created_backups,
@@ -1178,6 +1263,24 @@ def create_api_resources(api, models, managers):
                 restore_msg = "Settings and certificates restored atomically"
 
                 if success:
+                    if audit_logger:
+                        user = getattr(request, 'current_user', None) or {}
+                        # Restore wholesale-replaces settings + certificates;
+                        # the audit entry must surface both source filename
+                        # and the pre-restore backup (if one was created) so
+                        # an admin can roll back via the audit trail alone.
+                        audit_logger.log_operation(
+                            operation='restore',
+                            resource_type='backup',
+                            resource_id=filename,
+                            status='success',
+                            details={
+                                'backup_type': 'unified',
+                                'pre_restore_backup': pre_restore_backup,
+                            },
+                            user=user.get('username'),
+                            ip_address=request.remote_addr,
+                        )
                     response = {
                         'message': f'{restore_msg} successfully from {filename}',
                         'restored_from': filename,
@@ -1231,6 +1334,17 @@ def create_api_resources(api, models, managers):
                 backup_path.unlink()
 
                 logger.info(f"Backup deleted: {backup_type}/{filename}")
+                if audit_logger:
+                    user = getattr(request, 'current_user', None) or {}
+                    audit_logger.log_operation(
+                        operation='delete',
+                        resource_type='backup',
+                        resource_id=filename,
+                        status='success',
+                        details={'backup_type': backup_type},
+                        user=user.get('username'),
+                        ip_address=request.remote_addr,
+                    )
                 return {
                     'message': f'Backup {filename} deleted successfully',
                     'deleted_file': filename,
