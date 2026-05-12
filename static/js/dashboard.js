@@ -452,6 +452,7 @@
                 <td class="px-4 py-4 whitespace-nowrap text-right">
                     <div class="flex items-center justify-end gap-1">
                         ${roleAtLeast('operator') ? actionBtn('renew', cert.domain, 'green', 'Renew', 'fa-sync-alt') : false}
+                        ${roleAtLeast('operator') ? actionBtn('force-renew', cert.domain, 'amber', 'Force renew', 'fa-bolt') : false}
                         ${actionBtn('download', cert.domain, 'blue', 'Download', 'fa-download')}
                         ${actionBtn('curl', cert.domain, 'indigo', 'API', 'fa-code')}
                         ${roleAtLeast('operator') ? rowRaw(autoRenewButtonHtml(escapeHtml(cert.domain), cert.auto_renew !== false)) : false}
@@ -467,6 +468,7 @@
                 var domain = btn.dataset.domain;
                 switch (btn.dataset.action) {
                     case 'renew': renewCertificate(domain); break;
+                    case 'force-renew': renewCertificate(domain, true); break;
                     case 'download': downloadCertificate(domain); break;
                     case 'curl': copyCurlCommand(domain); break;
                     case 'toggle-auto-renew':
@@ -553,7 +555,8 @@
                 '<h4 class="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wider">Actions</h4>' +
                 '<div class="grid grid-cols-1 gap-2">' +
                 (roleAtLeast('operator')
-                    ? '<button type="button" onclick="renewCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-sync-alt mr-2 text-green-600"></i>Renew Certificate</button>'
+                    ? '<button type="button" onclick="renewCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-sync-alt mr-2 text-green-600"></i>Renew Certificate</button>' +
+                    '<button type="button" onclick="renewCertificate(\'' + safeDomain + '\', true)" class="w-full inline-flex items-center justify-center px-4 py-2 border border-amber-300 dark:border-amber-700 shadow-sm text-sm font-medium rounded-md text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/40"><i class="fas fa-bolt mr-2"></i>Force Renew Certificate</button>'
                     : '') +
                 '<button type="button" onclick="downloadCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-download mr-2 text-blue-600"></i>Download Certificate</button>' +
                 '<button type="button" onclick="copyCurlCommand(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-blue-300 dark:border-blue-600 shadow-sm text-sm font-medium rounded-md text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50"><i class="fas fa-code mr-2"></i>Show API Command</button>' +
@@ -1568,22 +1571,24 @@
         });
     }
 
-    function renewCertificate(domain) {
+    function renewCertificate(domain, force) {
+        force = force === true;
         var progressInterval = showLoadingModal(
-            'Renewing Certificate for ' + domain,
-            'This may take a few minutes...'
+            (force ? 'Force Renewing Certificate for ' : 'Renewing Certificate for ') + domain,
+            force ? 'This bypasses the normal due check and may count against CA rate limits...' : 'This may take a few minutes...'
         );
 
         fetch('/api/certificates/' + encodeURIComponent(domain) + '/renew', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ force: force })
         }).then(function (response) {
             return response.json().then(function (result) {
                 return { ok: response.ok, result: result };
             });
         }).then(function (data) {
             if (data.ok) {
-                showMessage('Certificate renewed successfully for ' + domain + '!', 'success');
+                showMessage((force ? 'Forced renewal completed for ' : 'Certificate renewal completed for ') + domain + '!', 'success');
                 setTimeout(function () { loadCertificates(); }, 2000);
             } else {
                 showMessage(data.result.error || data.result.message || 'Failed to renew certificate', 'error');

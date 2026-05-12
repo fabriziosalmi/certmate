@@ -781,7 +781,7 @@ class CertificateManager:
                 except (FileNotFoundError, OSError):
                     pass
 
-    def renew_certificate(self, domain):
+    def renew_certificate(self, domain, force=False):
         """Renew a certificate"""
         domain_lock = self._get_domain_lock(domain)
         if not domain_lock.acquire(blocking=False):
@@ -814,6 +814,8 @@ class CertificateManager:
                 '--work-dir', str(work_dir),
                 '--logs-dir', str(logs_dir)
             ]
+            if force:
+                cmd.append('--force-renewal')
 
             # Build per-request environment with DNS provider credentials
             # (fix #112: env vars like AWS_ACCESS_KEY_ID were missing during
