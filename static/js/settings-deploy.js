@@ -182,9 +182,19 @@
                         });
                     })
                     .then(function (res) {
-                        if (res.ok && Array.isArray(res.body)) {
-                            self.history = res.body;
-                            addDebugLog('Loaded deploy history: ' + res.body.length + ' entries', 'info');
+                        // Backend returns {history: [...]} — keep accepting a
+                        // raw array too for forward/backward compatibility.
+                        var entries = null;
+                        if (res.ok && res.body) {
+                            if (Array.isArray(res.body)) {
+                                entries = res.body;
+                            } else if (Array.isArray(res.body.history)) {
+                                entries = res.body.history;
+                            }
+                        }
+                        if (entries) {
+                            self.history = entries;
+                            addDebugLog('Loaded deploy history: ' + entries.length + ' entries', 'info');
                         } else {
                             addDebugLog('Failed to load deploy history: '
                                 + ((res.body && res.body.error) || 'unexpected response'),

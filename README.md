@@ -1701,6 +1701,7 @@ certmate/
 #### Authentication & Authorization
 - **Role-Based Access Control**: Assign viewer, operator, or admin roles to each user
 - **Scoped API Keys**: Create API keys with specific role permissions and optional expiration
+- **Per-Domain Scoping (`allowed_domains`)**: Restrict a scoped API key to a list of domain patterns. Supports exact (`example.com`) and wildcard (`*.example.com`) forms; the wildcard matches subdomains only, not the apex. Out-of-scope requests return `403 DOMAIN_OUT_OF_SCOPE` and are recorded in the audit log. Leave the field empty for unrestricted access (legacy behavior).
 - **HMAC-SHA256 Token Hashing**: API tokens are hashed with a server-side HMAC secret, preventing offline brute-force even if the settings file is leaked (backward compatible with pre-2.2.6 SHA-256 hashes)
 - **Strong Bearer Tokens**: Use cryptographically secure tokens (32+ characters)
 - **Token Rotation**: Regularly rotate API tokens and revoke unused keys
@@ -1708,11 +1709,31 @@ certmate/
 - **HTTPS Only**: Always use HTTPS in production environments
 - **IP Restrictions**: Implement firewall rules to restrict access
 
+#### Settings API Hardening
+- **Strict Field Whitelist on `POST /api/settings`**: only documented configuration keys are accepted. Sensitive fields (`api_bearer_token`, `deploy_hooks`, `users`, `api_keys`, `local_auth_enabled`) **cannot** be written through the generic settings endpoint — each has its own dedicated endpoint with its own audit:
+  - Users → `POST /api/users`
+  - API keys → `POST /api/keys`
+  - Deploy hooks → `POST /api/deploy/config`
+  - Local auth toggle → `POST /api/auth/config` (admin-only)
+  Unknown or rejected keys are returned in a `400` response with a `hint` field pointing at the correct endpoint.
+- **Audit Trail for Configuration Changes**: every mutation to settings, the auth-config toggle, users, scoped API keys, and deploy hooks is recorded with operator identity and source IP. Authorization denials (out-of-scope domain access, blocked field writes) are recorded too. Logs are written to `data/audit/certificate_audit.log` as one JSON object per line — pipeable into your SIEM of choice.
+
 #### Certificate Security
 - **File Permissions**: Private keys stored with `600` permissions
 - **Directory Permissions**: Certificate directories with `700` permissions
 - **Backup Encryption**: Encrypt certificate backups
 - **Access Logging**: Monitor certificate access patterns
+
+#### Secret Storage Hardening
+CertMate stores DNS provider credentials, ACME account keys, and (legacy) bearer tokens inside `data/settings.json`. The bearer token itself is migrated to an HMAC-SHA256 hash on first save, but **DNS provider credentials remain in the file in their original form** so they can be passed to certbot plugins. The file is created with `0600` permissions, which is the first line of defense. Recommended hardening, in order of effort:
+
+1. **Use an external secret backend** (already supported): point `certificate_storage.backend` at HashiCorp Vault, Infisical, AWS Secrets Manager, or Azure Key Vault. Issued certificates are stored there transparently, keeping the bearer token + DNS credentials in `settings.json` as the only on-disk secret surface.
+2. **Encrypt the underlying volume**: run CertMate's `data/` directory on a LUKS-encrypted partition (Linux), an encrypted APFS volume (macOS), or a Kubernetes `Secret` mounted in a `tmpfs`. This protects credentials at rest even if the host disk is removed or imaged.
+3. **Run as a dedicated non-root user** with `data/` owned by that user and `0700` mode. Verify with `ls -la data/` — only the CertMate process user should be able to read the file.
+4. **Avoid bind-mounting `data/` from untrusted sources** in Docker. Use a named volume managed by Docker, or a CSI-provisioned volume in Kubernetes, rather than a bind from a multi-tenant host.
+5. **Rotate credentials regularly**: DNS provider credentials can be rotated independently of CertMate — issue a new token in the provider console, update Settings, then revoke the old token. CertMate will pick up the new credentials on the next renewal.
+
+> CertMate does **not** currently encrypt secrets at the application layer. If your threat model requires that the same operator who can read `settings.json` should still not be able to read DNS credentials, use option (1) above and configure the per-provider credentials in the external secret backend rather than in CertMate's settings.
 
 #### Network Security
 ```bash

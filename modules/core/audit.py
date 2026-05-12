@@ -226,6 +226,234 @@ class AuditLogger:
             error=error_message
         )
 
+    # ---- Configuration & access-control mutations ----
+    # These methods cover the audit gap identified in Sprint 1: any operation
+    # that mutates settings, auth config, API keys, users, deploy hooks, or
+    # CA providers MUST log a non-repudiable record. Values that may contain
+    # secrets are NEVER serialized — we record the set of keys changed and
+    # any non-sensitive metadata.
+
+    # Top-level settings keys whose VALUE we treat as secret. Diffs over these
+    # keys still log the key name and a flag that the value changed, but
+    # never the plaintext value.
+    _SENSITIVE_SETTINGS_KEYS = frozenset({
+        'api_bearer_token', 'api_bearer_token_hash',
+        'cloudflare_token', 'dns_providers',
+        'certificate_storage',  # contains vault tokens, AWS keys, etc.
+        'users', 'api_keys',
+    })
+
+    def log_settings_changed(
+        self,
+        changed_keys: list,
+        sensitive_changed: list,
+        user: Optional[str] = None,
+        ip_address: Optional[str] = None,
+    ) -> None:
+        """Log a mutation to top-level settings.
+
+        Args:
+            changed_keys: keys whose value changed (non-sensitive values may
+                be diffed by callers if useful — we only record the names here)
+            sensitive_changed: subset of changed_keys whose values are secret
+                and therefore never serialized
+        """
+        self.log_operation(
+            operation='update',
+            resource_type='settings',
+            resource_id='settings',
+            status='success',
+            details={
+                'changed_keys': sorted(changed_keys),
+                'sensitive_changed': sorted(sensitive_changed),
+            },
+            user=user,
+            ip_address=ip_address,
+        )
+
+    def log_auth_config_changed(
+        self,
+        local_auth_enabled_before: bool,
+        local_auth_enabled_after: bool,
+        user: Optional[str] = None,
+        ip_address: Optional[str] = None,
+    ) -> None:
+        """Log a change to the local-auth toggle."""
+        self.log_operation(
+            operation='update',
+            resource_type='auth_config',
+            resource_id='local_auth_enabled',
+            status='success',
+            details={
+                'before': bool(local_auth_enabled_before),
+                'after': bool(local_auth_enabled_after),
+            },
+            user=user,
+            ip_address=ip_address,
+        )
+
+    def log_api_key_created(
+        self,
+        key_id: str,
+        name: str,
+        role: str,
+        allowed_domains: Optional[list] = None,
+        expires_at: Optional[str] = None,
+        user: Optional[str] = None,
+        ip_address: Optional[str] = None,
+    ) -> None:
+        """Log scoped API key creation. Token plaintext is NEVER logged."""
+        self.log_operation(
+            operation='create',
+            resource_type='api_key',
+            resource_id=key_id,
+            status='success',
+            details={
+                'name': name,
+                'role': role,
+                'allowed_domains': allowed_domains,
+                'expires_at': expires_at,
+            },
+            user=user,
+            ip_address=ip_address,
+        )
+
+    def log_api_key_revoked(
+        self,
+        key_id: str,
+        name: str,
+        user: Optional[str] = None,
+        ip_address: Optional[str] = None,
+    ) -> None:
+        """Log scoped API key revocation."""
+        self.log_operation(
+            operation='revoke',
+            resource_type='api_key',
+            resource_id=key_id,
+            status='success',
+            details={'name': name},
+            user=user,
+            ip_address=ip_address,
+        )
+
+    def log_user_created(
+        self,
+        username: str,
+        role: str,
+        user: Optional[str] = None,
+        ip_address: Optional[str] = None,
+    ) -> None:
+        """Log local-auth user creation."""
+        self.log_operation(
+            operation='create',
+            resource_type='user',
+            resource_id=username,
+            status='success',
+            details={'role': role},
+            user=user,
+            ip_address=ip_address,
+        )
+
+    def log_user_deleted(
+        self,
+        username: str,
+        user: Optional[str] = None,
+        ip_address: Optional[str] = None,
+    ) -> None:
+        """Log local-auth user deletion."""
+        self.log_operation(
+            operation='delete',
+            resource_type='user',
+            resource_id=username,
+            status='success',
+            user=user,
+            ip_address=ip_address,
+        )
+
+    def log_user_role_changed(
+        self,
+        username: str,
+        old_role: str,
+        new_role: str,
+        user: Optional[str] = None,
+        ip_address: Optional[str] = None,
+    ) -> None:
+        """Log a role change on a local-auth user."""
+        self.log_operation(
+            operation='update',
+            resource_type='user',
+            resource_id=username,
+            status='success',
+            details={'old_role': old_role, 'new_role': new_role},
+            user=user,
+            ip_address=ip_address,
+        )
+
+    def log_deploy_hook_changed(
+        self,
+        scope: str,
+        hook_id: str,
+        operation: str,
+        user: Optional[str] = None,
+        ip_address: Optional[str] = None,
+    ) -> None:
+        """Log a deploy hook mutation. Hook commands themselves are NOT logged
+        (they can contain secrets and risk creating an injection log line).
+
+        Args:
+            scope: 'global' or a domain name
+            hook_id: hook identifier
+            operation: 'create' | 'update' | 'delete' | 'enable' | 'disable'
+        """
+        self.log_operation(
+            operation=operation,
+            resource_type='deploy_hook',
+            resource_id=f"{scope}:{hook_id}",
+            status='success',
+            details={'scope': scope},
+            user=user,
+            ip_address=ip_address,
+        )
+
+    def log_ca_provider_changed(
+        self,
+        old: Optional[str],
+        new: Optional[str],
+        user: Optional[str] = None,
+        ip_address: Optional[str] = None,
+    ) -> None:
+        """Log a change to the active CA provider."""
+        self.log_operation(
+            operation='update',
+            resource_type='ca_provider',
+            resource_id='active',
+            status='success',
+            details={'before': old, 'after': new},
+            user=user,
+            ip_address=ip_address,
+        )
+
+    def log_authz_denied(
+        self,
+        operation: str,
+        resource_type: str,
+        resource_id: str,
+        reason: str,
+        user: Optional[str] = None,
+        ip_address: Optional[str] = None,
+    ) -> None:
+        """Log an authorization denial (e.g. scoped key tried to access
+        a domain outside its allowed_domains)."""
+        self.log_operation(
+            operation=operation,
+            resource_type=resource_type,
+            resource_id=resource_id,
+            status='denied',
+            details={'reason': reason},
+            user=user,
+            ip_address=ip_address,
+        )
+
     def get_recent_entries(self, limit: int = 100) -> list:
         """
         Get recent audit log entries.

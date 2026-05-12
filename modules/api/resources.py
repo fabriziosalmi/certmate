@@ -66,6 +66,39 @@ def create_api_resources(api, models, managers):
     cache_manager = managers['cache']
     dns_manager = managers['dns']
     deploy_manager = managers.get('deployer')
+    audit_logger = managers.get('audit')
+
+    def _check_domain_scope(domain, operation):
+        """Reject the request if the caller's API-key allowed_domains does
+        not cover *domain*. Returns (response_body, http_status) on denial,
+        or None when access is permitted.
+
+        Sessions and legacy bearer tokens have no allowed_domains set on
+        request.current_user → unrestricted (existing behavior preserved).
+        Only scoped API keys, which now carry an allowed_domains list,
+        will hit a 403.
+        """
+        user = getattr(request, 'current_user', None) or {}
+        if auth_manager.user_can_access_domain(user, domain):
+            return None
+        logger.warning(
+            "Scope denial: user=%s op=%s domain=%s scope=%s",
+            user.get('username'), operation, domain,
+            user.get('allowed_domains'),
+        )
+        if audit_logger:
+            audit_logger.log_authz_denied(
+                operation=operation,
+                resource_type='certificate',
+                resource_id=domain,
+                reason='domain outside scoped key allowed_domains',
+                user=user.get('username'),
+                ip_address=request.remote_addr,
+            )
+        return {
+            'error': f'API key not authorized for domain {domain}',
+            'code': 'DOMAIN_OUT_OF_SCOPE',
+        }, 403
 
     # Health check endpoint
     class HealthCheck(Resource):
@@ -134,27 +167,89 @@ def create_api_resources(api, models, managers):
         @api.expect(models['settings_model'])
         @auth_manager.require_role('admin')
         def post(self):
-            """Update settings"""
+            """Update settings.
+
+            Accepts only fields in PUBLIC_SETTINGS_WRITABLE_KEYS. Sensitive
+            fields (api_bearer_token, deploy_hooks, users, api_keys,
+            local_auth_enabled) have dedicated endpoints and are rejected
+            here even from admin callers — defense-in-depth against
+            payload-style privilege escalation or RCE injection.
+            """
+            from ..core.settings import (
+                validate_settings_post,
+                diff_settings_keys,
+                SETTINGS_REJECT_KEYS,
+            )
             try:
                 new_settings = api.payload
-                if not isinstance(new_settings, dict):
-                    return {'error': 'Invalid settings format'}, 400
+                # Load *before* validating: validate_settings_post uses the
+                # current state to drop no-op echoes (a GET-then-POST-back
+                # round-trip would otherwise hit the reject list for fields
+                # like users/api_keys/api_bearer_token_hash that the UI did
+                # not intend to mutate).
+                before = settings_manager.load_settings() or {}
+                try:
+                    filtered, rejected, unknown = validate_settings_post(
+                        new_settings, current=before)
+                except ValueError as e:
+                    return {'error': str(e)}, 400
 
-                # Validate required fields
-                required_fields = ['email', 'dns_provider']
-                for field in required_fields:
-                    if field not in new_settings:
-                        return {'error': f'Missing required field: {field}'}, 400
+                if rejected:
+                    user = getattr(request, 'current_user', {}) or {}
+                    logger.warning(
+                        "Rejected POST /api/settings: caller tried to write "
+                        "blocked fields %s (user=%s)",
+                        rejected, user.get('username'),
+                    )
+                    if audit_logger:
+                        for field in rejected:
+                            audit_logger.log_authz_denied(
+                                operation='update',
+                                resource_type='settings',
+                                resource_id=field,
+                                reason=f'field {field} requires a dedicated endpoint',
+                                user=user.get('username'),
+                                ip_address=request.remote_addr,
+                            )
+                    return {
+                        'error': 'Forbidden fields in payload',
+                        'rejected': sorted(rejected),
+                        'hint': 'Use the dedicated endpoint for these fields '
+                                '(e.g. /api/deploy/config, /api/users, '
+                                '/api/keys, /api/auth/config).',
+                    }, 400
 
-                # Use atomic_update so concurrent writes from the web UI cannot
-                # race, and so users/api_keys are preserved (the API payload
-                # rarely contains them).
-                success = settings_manager.atomic_update(new_settings)
+                if unknown:
+                    return {
+                        'error': 'Unknown fields in payload',
+                        'unknown': sorted(unknown),
+                        'hint': 'Only documented settings keys are accepted.',
+                    }, 400
 
-                if success:
-                    return {'message': 'Settings updated successfully'}, 200
-                else:
+                # Required fields are checked at load_settings + save_settings
+                # layers (validate_email, validate_api_token, supported_providers).
+                # Enforcing them per POST was incompatible with no-op round-trip
+                # echoes — a UI updating cache_ttl shouldn't be required to
+                # resend email + dns_provider that didn't change. The defaults
+                # in load_settings still seed both fields on first run.
+                success = settings_manager.atomic_update(filtered)
+                if not success:
                     return {'error': 'Failed to save settings'}, 500
+
+                after = settings_manager.load_settings() or {}
+                changed = diff_settings_keys(before, after)
+                if audit_logger and changed:
+                    user = getattr(request, 'current_user', {}) or {}
+                    sensitive_changed = [
+                        k for k in changed if k in audit_logger._SENSITIVE_SETTINGS_KEYS
+                    ]
+                    audit_logger.log_settings_changed(
+                        changed_keys=changed,
+                        sensitive_changed=sensitive_changed,
+                        user=user.get('username'),
+                        ip_address=request.remote_addr,
+                    )
+                return {'message': 'Settings updated successfully'}, 200
 
             except Exception as e:
                 logger.error(f"Error updating settings: {e}")
@@ -215,8 +310,15 @@ def create_api_resources(api, models, managers):
         @api.marshal_list_with(models['certificate_model'])
         @auth_manager.require_role('viewer')
         def get(self):
-            """List all certificates"""
+            """List all certificates.
+
+            Scoped API keys with allowed_domains only see certificates
+            within their scope. Unrestricted callers (legacy keys, local
+            users) see every certificate.
+            """
             try:
+                user = getattr(request, 'current_user', None) or {}
+                scope = user.get('allowed_domains')
                 settings = settings_manager.load_settings()
                 certificates = []
 
@@ -246,13 +348,18 @@ def create_api_resources(api, models, managers):
                 for cert_dir_path in iter_cert_domain_dirs(certificate_manager.cert_dir):
                     all_domains.add(cert_dir_path.name)
 
-                # Get certificate info for all domains
+                # Get certificate info for all domains, filtered by the
+                # caller's API-key scope. domain_matches_scope(d, None) is
+                # always True so unrestricted callers see everything.
                 for domain in all_domains:
-                    if domain:
-                        cert_info = certificate_manager.get_certificate_info(domain)
-                        if cert_info:
-                            cert_info['auto_renew'] = auto_renew_by_domain.get(domain, True)
-                            certificates.append(cert_info)
+                    if not domain:
+                        continue
+                    if not auth_manager.domain_matches_scope(domain, scope):
+                        continue
+                    cert_info = certificate_manager.get_certificate_info(domain)
+                    if cert_info:
+                        cert_info['auto_renew'] = auto_renew_by_domain.get(domain, True)
+                        certificates.append(cert_info)
 
                 return certificates
             except Exception as e:
@@ -317,6 +424,20 @@ def create_api_resources(api, models, managers):
                                 'error': f'Invalid SAN domain format: {san}',
                                 'hint': 'SAN domains should be domain names only, not URLs.'
                             }, 400
+
+                # Scope check: the requested domain AND every SAN must be
+                # within the API key's allowed_domains. Reject the entire
+                # creation if any one is out of scope — partial creates
+                # would leak data across tenants.
+                scope_err = _check_domain_scope(domain, 'create')
+                if scope_err:
+                    return scope_err
+                for san in (san_domains or []):
+                    san_clean = san.strip() if isinstance(san, str) else ''
+                    if san_clean:
+                        scope_err = _check_domain_scope(san_clean, 'create_san')
+                        if scope_err:
+                            return scope_err
 
                 settings = settings_manager.load_settings()
                 email = settings.get('email')
@@ -463,6 +584,9 @@ def create_api_resources(api, models, managers):
         @auth_manager.require_role('viewer')
         def get(self, domain):
             """Check DNS-01 alias CNAME records for an existing certificate."""
+            scope_err = _check_domain_scope(domain, 'dns_alias_check')
+            if scope_err:
+                return scope_err
             cert_info = certificate_manager.get_certificate_info(domain)
             if not cert_info or not cert_info.get('exists'):
                 return {'error': f'Certificate not found for domain: {domain}'}, 404
@@ -491,6 +615,9 @@ def create_api_resources(api, models, managers):
             Body: {"dns_provider": "route53", "account_id": "default",
                    "alias_dns_provider": "cloudflare"}
             """
+            scope_err = _check_domain_scope(domain, 'update_dns_provider')
+            if scope_err:
+                return scope_err
             cert_dir, err = _validate_domain_path(domain, file_ops.cert_dir)
             if err:
                 return {'error': err}, 400
@@ -583,6 +710,9 @@ def create_api_resources(api, models, managers):
             Does NOT revoke the certificate at the CA — call the CA's revoke
             endpoint separately if revocation is required.
             """
+            scope_err = _check_domain_scope(domain, 'delete')
+            if scope_err:
+                return scope_err
             # Path is only validated for the side-effect of rejecting
             # traversal attempts; the actual delete is keyed on the domain
             # name and handled by certificate_manager.
@@ -625,6 +755,9 @@ def create_api_resources(api, models, managers):
         def get(self, domain):
             """Download certificate files as ZIP, JSON, or individual file"""
             try:
+                scope_err = _check_domain_scope(domain, 'download')
+                if scope_err:
+                    return scope_err
                 cert_dir, err = _validate_domain_path(domain, file_ops.cert_dir)
                 if err:
                     return {'error': err}, 400
@@ -729,6 +862,9 @@ def create_api_resources(api, models, managers):
         def post(self, domain):
             """Renew an existing certificate"""
             try:
+                scope_err = _check_domain_scope(domain, 'renew')
+                if scope_err:
+                    return scope_err
                 result = certificate_manager.renew_certificate(domain)
 
                 event_bus = current_app.config.get('EVENT_BUS')
@@ -757,6 +893,9 @@ def create_api_resources(api, models, managers):
 
             Body: {"enabled": true|false}
             """
+            scope_err = _check_domain_scope(domain, 'set_auto_renew')
+            if scope_err:
+                return scope_err
             _, err = _validate_domain_path(domain, file_ops.cert_dir)
             if err:
                 return {'error': err}, 400
@@ -799,6 +938,9 @@ def create_api_resources(api, models, managers):
             with CERTMATE_EVENT=manual; the on_events filter is ignored
             since the user explicitly requested execution.
             """
+            scope_err = _check_domain_scope(domain, 'run_deploy')
+            if scope_err:
+                return scope_err
             if deploy_manager is None:
                 return {'error': 'Deploy manager not available'}, 503
 
