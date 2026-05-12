@@ -4,7 +4,6 @@ Defines Flask-RESTX Resource classes for REST API endpoints
 """
 
 import logging
-import hashlib
 import re
 import socket
 import ssl
@@ -72,6 +71,9 @@ def _probe_https_certificate(domain, timeout=5):
     """Return the live TLS certificate for a domain, if reachable."""
     host = domain[2:] if domain.startswith('*.') else domain
     context = ssl.create_default_context()
+    # We intentionally disable PKI validation here. The goal is to compare the
+    # served certificate fingerprint against the stored certificate, even when
+    # the live cert is invalid or otherwise not trusted.
     context.check_hostname = False
     context.verify_mode = ssl.CERT_NONE
 
@@ -926,6 +928,9 @@ def create_api_resources(api, models, managers):
             _, err = _validate_domain_path(domain, file_ops.cert_dir)
             if err:
                 return {'error': err}, 400
+            scope_err = _check_domain_scope(domain, 'deployment_status')
+            if scope_err:
+                return scope_err
 
             cert_info = certificate_manager.get_certificate_info(domain)
             if not cert_info or not cert_info.get('exists'):
@@ -1014,6 +1019,10 @@ def create_api_resources(api, models, managers):
                 _, err = _validate_domain_path(domain, file_ops.cert_dir)
                 if err:
                     skipped.append({'domain': domain, 'error': err})
+                    continue
+                scope_err = _check_domain_scope(domain, 'browser_report')
+                if scope_err:
+                    skipped.append({'domain': domain, 'error': 'out of scope'})
                     continue
 
                 browser_status = certificate_manager.record_browser_deployment_status(domain, report)

@@ -140,6 +140,45 @@ def test_deployment_status_refresh_bypasses_cache(tmp_path, monkeypatch):
     cache_manager.get_deployment_status.assert_not_called()
 
 
+def test_deployment_status_denies_out_of_scope_domain(tmp_path, monkeypatch):
+    domain = 'example.com'
+    cert_dir = tmp_path / domain
+    cert_dir.mkdir(parents=True)
+    (cert_dir / 'cert.pem').write_bytes(b'expected-cert-bytes')
+
+    auth_manager = MagicMock()
+    auth_manager.require_role = MagicMock(side_effect=_passthrough_decorator)
+    auth_manager.user_can_access_domain = MagicMock(return_value=False)
+
+    certificate_manager = MagicMock(
+        cert_dir=Path(tmp_path),
+        storage_manager=None,
+        get_certificate_info=MagicMock(return_value={'exists': True}),
+    )
+
+    managers = {
+        'auth': auth_manager,
+        'settings': MagicMock(),
+        'certificates': certificate_manager,
+        'file_ops': MagicMock(cert_dir=Path(tmp_path)),
+        'cache': MagicMock(
+            get_deployment_status=MagicMock(return_value=None),
+            set_deployment_status=MagicMock(),
+            remove_from_cache=MagicMock(),
+        ),
+        'dns': MagicMock(),
+    }
+
+    app = _build_app(managers)
+    client = app.test_client()
+
+    response = client.get(f'/api/certificates/{domain}/deployment-status')
+
+    assert response.status_code == 403
+    assert response.get_json()['code'] == 'DOMAIN_OUT_OF_SCOPE'
+    certificate_manager.get_certificate_info.assert_not_called()
+
+
 def test_browser_report_is_persisted_separately(tmp_path, monkeypatch):
     domain = 'example.com'
     cert_dir = tmp_path / domain
@@ -248,3 +287,53 @@ def test_browser_report_is_persisted_separately(tmp_path, monkeypatch):
     assert body['reachable'] is False
     assert body['browser']['reachable'] is True
     assert body['browser']['checked_at'] == '2026-05-12T09:45:31.540941'
+
+
+def test_browser_report_skips_out_of_scope_domains(tmp_path):
+    domain = 'example.com'
+    cert_dir = tmp_path / domain
+    cert_dir.mkdir(parents=True)
+    (cert_dir / 'cert.pem').write_bytes(b'expected-cert-bytes')
+
+    auth_manager = MagicMock()
+    auth_manager.require_role = MagicMock(side_effect=_passthrough_decorator)
+    auth_manager.user_can_access_domain = MagicMock(return_value=False)
+
+    certificate_manager = MagicMock()
+    certificate_manager.cert_dir = Path(tmp_path)
+    certificate_manager.storage_manager = None
+    certificate_manager.get_certificate_info.return_value = {'exists': True}
+
+    managers = {
+        'auth': auth_manager,
+        'settings': MagicMock(),
+        'certificates': certificate_manager,
+        'file_ops': MagicMock(cert_dir=Path(tmp_path)),
+        'cache': MagicMock(
+            get_deployment_status=MagicMock(return_value=None),
+            set_deployment_status=MagicMock(),
+            remove_from_cache=MagicMock(),
+        ),
+        'dns': MagicMock(),
+    }
+
+    app = _build_app(managers)
+    client = app.test_client()
+
+    response = client.post('/api/certificates/deployment-status/browser', json={
+        'reports': [{
+            'domain': domain,
+            'reachable': True,
+            'checked_at': '2026-05-12T09:45:31.540941',
+            'method': 'browser-fallback',
+            'source': 'browser',
+        }]
+    })
+
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body['updated'] == []
+    assert body['count'] == 0
+    assert body['skipped'][0]['domain'] == domain
+    assert body['skipped'][0]['error'] == 'out of scope'
+    certificate_manager.record_browser_deployment_status.assert_not_called()
