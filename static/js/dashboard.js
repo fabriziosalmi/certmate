@@ -1031,7 +1031,7 @@
         var providers = ['cloudflare', 'route53', 'digitalocean', 'azure', 'google', 'powerdns', 'rfc2136'];
 
         providers.forEach(function (provider) {
-            fetch('/api/settings/dns-providers/' + provider + '/accounts', {
+            fetch('/api/dns/' + provider + '/accounts', {
                 headers: API_HEADERS
             }).then(function (response) {
                 if (response.ok) {
