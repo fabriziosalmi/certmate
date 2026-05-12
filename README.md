@@ -20,7 +20,7 @@
  
 ![screenshot1](screenshot_1.png)
 
-[Quick Start](#quick-start-with-docker) • [Documentation](#documentation) • [Installation](#installation-methods) • [DNS Providers](#supported-dns-providers) • [CA Providers](docs/ca-providers.md) • [Storage Backends](#certificate-storage-configuration) • [Backup & Recovery](#backup--recovery) • [API Reference](#api-usage)
+[Quick Start](#quick-start-with-docker) • [Documentation](#documentation) • [Installation](#installation-methods) • [DNS Providers](#supported-dns-providers) • [CA Providers](docs/ca-providers.md) • [Storage Backends](#certificate-storage-configuration) • [Backup and Recovery](#backup-and-recovery) • [API Reference](#api-usage)
 
 </div>
 
@@ -73,7 +73,7 @@ CertMate solves the complexity of SSL certificate management in modern distribut
 - **Kubernetes Compatible** - Deploy in any Kubernetes cluster
 - **Monitoring Integration** - Health checks, Prometheus metrics, and structured JSON logging
 
-### **Backup & Recovery**
+### **Backup and Recovery**
 - **Unified Backups** - Atomic snapshots of both settings and certificates ensuring data consistency
 - **Automatic Backups** - Settings and certificates backed up automatically on changes
 - **Manual Backup Creation** - On-demand backup creation via web UI or API
@@ -1730,27 +1730,27 @@ iptables -A INPUT -p tcp --dport 8000 -j DROP
 # docker-compose.prod.yml
 version: '3.8'
 services:
- certmate:
- image: certmate:latest
- deploy:
- replicas: 2
- resources:
- limits:
- cpus: '1.0'
- memory: 512M
- reservations:
- cpus: '0.5'
- memory: 256M
- environment:
- - FLASK_ENV=production
- - GUNICORN_WORKERS=4
- - GUNICORN_THREADS=2
- healthcheck:
- test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
- interval: 30s
- timeout: 10s
- retries: 3
- start_period: 60s
+  certmate:
+    image: certmate:latest
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    environment:
+      - FLASK_ENV=production
+      - GUNICORN_WORKERS=4
+      - GUNICORN_THREADS=2
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 ```
 
 #### Load Balancing with Nginx
@@ -1781,7 +1781,7 @@ server {
 }
 ```
 
-### Backup & Recovery
+### Backup and Recovery
 
 CertMate provides comprehensive backup and recovery capabilities built directly into the application, ensuring your certificates and configuration data are always protected.
 
