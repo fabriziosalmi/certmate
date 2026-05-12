@@ -329,6 +329,40 @@
             'title="' + title + '"><i class="fas ' + icon + '"></i></button>';
     }
 
+    function deploymentStatusDisplay(result) {
+        var statusClass;
+        var statusIcon;
+        var statusText;
+
+        if (result && result.deployed && result.certificate_match === true) {
+            statusClass = 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400';
+            statusIcon = 'fa-check-circle';
+            statusText = 'Deployed';
+        } else if (result && result.reachable && result.certificate_match === false) {
+            statusClass = 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400';
+            statusIcon = 'fa-exclamation-triangle';
+            statusText = 'Wrong Cert';
+        } else if (result && result.reachable && result.certificate_match === null) {
+            statusClass = 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400';
+            statusIcon = 'fa-info-circle';
+            statusText = 'Reachable';
+        } else if (result && !result.reachable) {
+            statusClass = 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400';
+            statusIcon = 'fa-times-circle';
+            statusText = 'Unreachable';
+        } else {
+            statusClass = 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300';
+            statusIcon = 'fa-question-circle';
+            statusText = 'Unknown';
+        }
+
+        return {
+            className: 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ' + statusClass,
+            icon: statusIcon,
+            text: statusText
+        };
+    }
+
     // Build deployment status badge HTML
     function deploymentBadgeHtml(cert, context) {
         var safeDomain = escapeHtml(cert.domain);
@@ -336,17 +370,8 @@
         var badgeId = context === 'detail' ? '' : ' id="deployment-status-' + domainId + '"';
         var cachedStatus = deploymentCache.get(cert.domain);
         if (cachedStatus) {
-            var sc, si, st;
-            if (cachedStatus.deployed && cachedStatus.certificate_match) {
-                sc = 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400'; si = 'fa-check-circle'; st = 'Deployed';
-            } else if (cachedStatus.reachable && !cachedStatus.certificate_match) {
-                sc = 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400'; si = 'fa-exclamation-triangle'; st = 'Wrong Cert';
-            } else if (!cachedStatus.reachable) {
-                sc = 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400'; si = 'fa-times-circle'; st = 'Unreachable';
-            } else {
-                sc = 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'; si = 'fa-question-circle'; st = 'Unknown';
-            }
-            return '<span data-deployment-domain="' + safeDomain + '"' + badgeId + ' class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ' + sc + '"><i class="fas ' + si + ' mr-1"></i>' + st + '</span>';
+            var display = deploymentStatusDisplay(cachedStatus);
+            return '<span data-deployment-domain="' + safeDomain + '"' + badgeId + ' class="' + display.className + '"><i class="fas ' + display.icon + ' mr-1"></i>' + display.text + '</span>';
         }
         return '<span data-deployment-domain="' + safeDomain + '"' + badgeId + ' class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300"><i class="fas fa-spinner fa-spin mr-1"></i>Checking...</span>';
     }
@@ -979,30 +1004,11 @@
             }
         );
 
-        var statusText;
-        var statusClass;
-        var statusIcon;
-        if (result.deployed && result.certificate_match !== false) {
-            statusClass = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400';
-            statusIcon = 'fa-check-circle';
-            statusText = 'Deployed';
-        } else if (result.reachable && result.certificate_match === false) {
-            statusClass = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400';
-            statusIcon = 'fa-exclamation-triangle';
-            statusText = 'Wrong Cert';
-        } else if (result.reachable) {
-            statusClass = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400';
-            statusIcon = 'fa-info-circle';
-            statusText = 'Unknown';
-        } else {
-            statusClass = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400';
-            statusIcon = 'fa-times-circle';
-            statusText = 'Unreachable';
-        }
+        var display = deploymentStatusDisplay(result);
 
         statusElements.forEach(function (statusElement) {
-            statusElement.className = statusClass;
-            statusElement.innerHTML = '<i class="fas ' + statusIcon + ' mr-1"></i>' + statusText;
+            statusElement.className = display.className;
+            statusElement.innerHTML = '<i class="fas ' + display.icon + ' mr-1"></i>' + display.text;
             if (result.method) {
                 statusElement.title = 'Checked via: ' + result.method + ' at ' + result.timestamp;
             }
