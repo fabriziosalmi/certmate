@@ -1,3 +1,63 @@
+## v2.4.17 (Patch — two community fixes from @rocogamer)
+
+Bundle of two small, surgical community PRs from [@rocogamer](https://github.com/rocogamer) that came out of the maintainer-feedback loop earlier this session. Both are mergeable as-is and ship together because each is too small for a release of its own.
+
+### `fix(api): bare-list /api/deploy/history` (closes [#152](https://github.com/fabriziosalmi/certmate/issues/152), PR [#153](https://github.com/fabriziosalmi/certmate/pull/153))
+
+One functional line of diff in `modules/web/settings_routes.py`:
+
+```diff
+-            return jsonify({'history': history})
++            return jsonify(history)
+```
+
+Closes the convention point left as a follow-up after [#142](https://github.com/fabriziosalmi/certmate/pull/142). `GET /api/deploy/history` previously wrapped its result in `{"history": [...]}` while the sibling event-log endpoint `GET /api/webhooks/deliveries` already returned a bare list, and the frontend (`settings-deploy.js`, `settings-notifications.js`) was originally written to the bare-list convention. v2.4.12 had landed a dual-shape frontend handler so the panel would keep working while a backend flip was pending; this PR completes that flip and removes the asymmetry.
+
+The success contract is now a bare list. The error path keeps the `{"error": "..."}` envelope so the frontend's catch branch can still surface a real reason instead of a generic literal.
+
+`tests/test_issue152_deploy_history.py` — 4 new contract tests pinning the post-#152 shape: populated success returns a list in order; empty history returns `[]` (the historically most-visible symptom of the wrap was the empty case); `?limit=N` (capped at 200) and `?domain=...` are still threaded through to `DeployManager.get_history` verbatim; the 503 error path keeps its envelope. All four pass locally in 0.08 s.
+
+The v2.4.12 dual-shape frontend handler stays in place as a forward-compatibility shim; rolling back to v2.4.16 / v2.4.15 won't break the UI, the bare-list path was always accepted.
+
+### `build: EXTRA_REQUIREMENTS build-arg + certbot-dns-azure baked in` (PR [#155](https://github.com/fabriziosalmi/certmate/pull/155))
+
+Two build-level improvements:
+
+**`EXTRA_REQUIREMENTS` Dockerfile build-arg** — accepts a space-separated list of `requirements-*.txt` paths and runs `pip install -r <file>` for each after the main install. Defaults to empty (existing builds unchanged). Wired through `docker-compose.yml` as `EXTRA_REQUIREMENTS: ${EXTRA_REQUIREMENTS:-}` so a single env var in `.env` bakes optional storage / DNS plugins into the image at build time:
+
+```bash
+# Azure DNS + Azure Key Vault in one image
+docker build \
+  --build-arg EXTRA_REQUIREMENTS="requirements-azure-storage.txt" \
+  -t certmate:azure .
+
+# Every remote storage backend
+docker build \
+  --build-arg EXTRA_REQUIREMENTS=requirements-storage-all.txt \
+  -t certmate:full .
+```
+
+The Dockerfile `COPY requirements.txt requirements-minimal.txt ./` was widened to `COPY requirements*.txt ./` so all optional sets are available to the layered install without rebuilding the COPY layer per combination. The intentional word-splitting carries an explicit `# shellcheck disable=SC2086` so a future maintainer doesn't quote it and break the loop.
+
+**`certbot-dns-azure==2.5.0` baked into the main `requirements.txt`** — Azure is one of the four major DNS providers exposed in the UI dropdown, but until now selecting it on a default image produced a "plugin not installed" error. The pin is to 2.5.0 specifically: it's the last version in the `certbot<3.0,>=2.0` line; 2.6.0+ jumped to certbot 3.x and would conflict with the repo-wide `certbot==2.10.0`. The same constraint already lived as a comment in `requirements-azure.txt`; this commit promotes it to the main set.
+
+**Image size note**: the bake-in adds `azure-identity`, `azure-mgmt-dns`, `msrest`, `msal` and their transitive dependencies — about 30–50 MB of image. The trade-off is consistent with the existing four bundled DNS plugins (cloudflare, route53, digitalocean, google), and the build-arg is the escape hatch for anyone who wants a slimmer image: ship without Azure, then layer it back in via `EXTRA_REQUIREMENTS=requirements-azure.txt` on demand.
+
+### Tests
+
+`tests/test_issue152_deploy_history.py` — 4 new contract tests (above). Full unit-test surface: 140 passes (136 pre-existing + 4 new) in ~1.0 s without Docker.
+
+### Backward compatibility
+
+- Both PRs are additive at the API / build level.
+- The v2.4.12 dual-shape frontend handler keeps the deploy history panel working on rollback to older backends.
+- Existing `docker build` invocations without `EXTRA_REQUIREMENTS` produce the same image (plus the `certbot-dns-azure` baked-in package, which on a default build is the only behavioural delta).
+- No existing API call shape changes other than `GET /api/deploy/history` going from envelope to bare list — which the frontend already tolerates and which the documented contract test pins.
+
+### Acknowledgement
+
+Both PRs come out of a tight feedback loop earlier in the session: PR #141 was originally a three-feature monolith, asked to split, and rocogamer turned around four atomic PRs (#153, #154, #155, #156) plus a follow-up issue (#152) within the same day. v2.4.17 ships the two of those that were ready to merge without further changes; #154 (APScheduler `app_context` fix) needs a one-line `global` declaration and a regression test before it can land safely; #156 (configurable certificate key type/size + ECDSA) deserves its own dedicated review window.
+
 ## v2.4.16 (Patch — Sprint 1.7: in-app diagnostic snapshot + one-click bug report)
 
 Implements [#150](https://github.com/fabriziosalmi/certmate/issues/150) end-to-end. When an action fails and you're signed in as admin, the error toast now surfaces a **Report this issue** button. One click → fetch `/api/diagnostics/snapshot` → merge with browser context → format Markdown → clipboard + open GitHub with the bug template pre-filled. You paste, review what you're sending, submit. No telemetry, no automatic upload, no new external dependency. PR [#157](https://github.com/fabriziosalmi/certmate/pull/157). Four atomic commits, 11 new unit tests on top of v2.4.15's 125 (136 total, 1.14 s runtime, no Docker).
