@@ -560,7 +560,7 @@
                     : '') +
                 '<button type="button" onclick="downloadCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-download mr-2 text-blue-600"></i>Download Certificate</button>' +
                 '<button type="button" onclick="copyCurlCommand(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-blue-300 dark:border-blue-600 shadow-sm text-sm font-medium rounded-md text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50"><i class="fas fa-code mr-2"></i>Show API Command</button>' +
-                '<button type="button" onclick="checkDeploymentStatus(\'' + safeDomain + '\', this)" class="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-globe mr-2 text-indigo-600"></i>Check Deployment</button>' +
+                '<button type="button" onclick="checkDeploymentStatus(\'' + safeDomain + '\', this, true)" class="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-globe mr-2 text-indigo-600"></i>Check Deployment</button>' +
                 (safeDomainAlias ? '<button type="button" onclick="checkDnsAliasForCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-blue-300 dark:border-blue-600 shadow-sm text-sm font-medium rounded-md text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50"><i class="fas fa-search mr-2"></i>Check DNS-01 Alias</button>' : '') +
                 '<div id="cert_dns_alias_check_result" class="hidden"></div>' +
                 (roleAtLeast('admin')
@@ -793,7 +793,7 @@
     }
 
     // Check deployment status for a specific domain
-    function checkDeploymentStatus(domain, triggerButton) {
+    function checkDeploymentStatus(domain, triggerButton, forceRefresh) {
         var restoreButton = function () {
             if (!triggerButton) {
                 return;
@@ -824,7 +824,7 @@
         }
 
         // Check cache first
-        var cachedResult = deploymentCache.get(domain);
+        var cachedResult = forceRefresh ? null : deploymentCache.get(domain);
         if (cachedResult) {
             updateDeploymentUI(domain, cachedResult);
             restoreButton();
