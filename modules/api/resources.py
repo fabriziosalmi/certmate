@@ -10,7 +10,7 @@ import zipfile
 import os
 import io
 from pathlib import Path
-from flask import send_file, after_this_request, current_app, request
+from flask import send_file, after_this_request, current_app, request, jsonify
 from flask_restx import Resource, fields
 
 from ..core.metrics import get_metrics_summary, is_prometheus_available
@@ -508,6 +508,102 @@ def create_api_resources(api, models, managers):
 
     class CertificateDetail(Resource):
         @api.doc(security='Bearer')
+        @auth_manager.require_role('operator')
+        def patch(self, domain):
+            """Update DNS provider for an existing certificate (issue #129).
+
+            Allows changing the DNS provider (and optionally the alias DNS
+            provider) used for future renewals of this certificate without
+            deleting and re-creating it. Updates both the on-disk
+            metadata.json and the domain entry in settings.
+
+            Body: {"dns_provider": "route53", "account_id": "default",
+                   "alias_dns_provider": "cloudflare"}
+            """
+            cert_dir, err = _validate_domain_path(domain, file_ops.cert_dir)
+            if err:
+                return {'error': err}, 400
+            if not cert_dir or not cert_dir.exists():
+                return {'error': f'Certificate not found for domain: {domain}'}, 404
+
+            data = api.payload or {}
+            new_dns_provider = data.get('dns_provider')
+            new_account_id = data.get('account_id')
+            new_alias_dns_provider = data.get('alias_dns_provider')
+
+            if not new_dns_provider and not new_alias_dns_provider:
+                return {
+                    'error': 'At least one of dns_provider or alias_dns_provider is required',
+                    'hint': 'Provide the new DNS provider name to use for future renewals.'
+                }, 400
+
+            # Validate the new provider has credentials configured
+            if new_dns_provider:
+                settings = settings_manager.load_settings()
+                dns_config, _ = dns_manager.get_dns_provider_account_config(
+                    new_dns_provider,
+                    new_account_id,
+                    settings,
+                )
+                if not dns_config:
+                    return {
+                        'error': f"DNS provider '{new_dns_provider}' account "
+                                 f"'{new_account_id or 'default'}' is not configured",
+                        'hint': 'Configure the DNS provider credentials in Settings first.'
+                    }, 400
+
+            try:
+                import json as _json
+
+                # 1. Update on-disk metadata.json
+                metadata_file = cert_dir / 'metadata.json'
+                metadata = {}
+                if metadata_file.exists():
+                    try:
+                        with open(metadata_file, 'r') as f:
+                            metadata = _json.load(f)
+                    except Exception:
+                        pass
+
+                old_provider = metadata.get('dns_provider')
+                if new_dns_provider:
+                    metadata['dns_provider'] = new_dns_provider
+                if new_account_id:
+                    metadata['account_id'] = new_account_id
+                if new_alias_dns_provider:
+                    metadata['alias_dns_provider'] = new_alias_dns_provider
+
+                certificate_manager._atomic_json_write(metadata_file, metadata)
+                logger.info(
+                    f"Updated DNS provider for {domain}: "
+                    f"{old_provider} → {new_dns_provider or old_provider}"
+                )
+
+                # 2. Update domain entry in settings
+                def _update_domain_provider(s):
+                    for entry in s.get('domains', []):
+                        if isinstance(entry, dict) and entry.get('domain') == domain:
+                            if new_dns_provider:
+                                entry['dns_provider'] = new_dns_provider
+                            if new_account_id:
+                                entry['dns_account_id'] = new_account_id
+                            break
+
+                settings_manager.update(_update_domain_provider, "dns_provider_change")
+
+                return {
+                    'message': f'DNS provider updated for {domain}',
+                    'domain': domain,
+                    'dns_provider': metadata.get('dns_provider'),
+                    'alias_dns_provider': metadata.get('alias_dns_provider'),
+                    'account_id': metadata.get('account_id'),
+                }, 200
+
+            except Exception as e:
+                logger.error(f"Failed to update DNS provider for {domain}: {e}")
+                return {'error': 'Failed to update DNS provider'}, 500
+
+        @api.doc(security='Bearer')
         @auth_manager.require_role('admin')
         def delete(self, domain):
             """Delete a certificate's files from disk.
@@ -556,7 +652,7 @@ def create_api_resources(api, models, managers):
         @api.doc(security='Bearer')
         @auth_manager.require_role('viewer')
         def get(self, domain):
-            """Download certificate files as ZIP or individual file"""
+            """Download certificate files as ZIP, JSON, or individual file"""
             try:
                 cert_dir, err = _validate_domain_path(domain, file_ops.cert_dir)
                 if err:
@@ -564,8 +660,35 @@ def create_api_resources(api, models, managers):
                 if not cert_dir.exists():
                     return {'error': f'Certificate not found for domain: {domain}'}, 404
 
+                download_format = request.args.get('format')
                 # Check for the optional 'file' parameter
                 requested_file = request.args.get('file')
+
+                if download_format and download_format not in ['json']:
+                    return {'error': 'Invalid format requested.'}, 400
+
+                if download_format == 'json':
+                    if requested_file:
+                        return {'error': 'format=json cannot be combined with file.'}, 400
+
+                    required_files = {
+                        'cert_pem': 'cert.pem',
+                        'chain_pem': 'chain.pem',
+                        'fullchain_pem': 'fullchain.pem',
+                        'private_key_pem': 'privkey.pem',
+                    }
+
+                    try:
+                        payload = {'domain': domain}
+                        for response_key, filename in required_files.items():
+                            file_path = cert_dir / filename
+                            if not file_path.exists():
+                                return {'error': f'Required cert file not found for domain {domain}: {filename}'}, 404
+                            payload[response_key] = file_path.read_text(encoding='utf-8')
+
+                        return jsonify(payload)
+                    except FileNotFoundError:
+                        return {'error': f'Required cert file not found for domain {domain}'}, 404
 
                 if requested_file:
                     # Security check: only allow specific certificate files
@@ -575,8 +698,8 @@ def create_api_resources(api, models, managers):
                     if requested_file == 'combined.pem':
                         try:
                             # Read both files and join them
-                            fullchain = (cert_dir / 'fullchain.pem').read_text()
-                            privkey = (cert_dir / 'privkey.pem').read_text()
+                            fullchain = (cert_dir / 'fullchain.pem').read_text(encoding='utf-8')
+                            privkey = (cert_dir / 'privkey.pem').read_text(encoding='utf-8')
                             combined_data = io.BytesIO(f"{fullchain}{privkey}".encode())
 
                             return send_file(

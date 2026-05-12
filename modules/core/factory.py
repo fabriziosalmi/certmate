@@ -1,5 +1,4 @@
 import os
-import tempfile
 import secrets
 from pathlib import Path
 from typing import Optional
@@ -131,11 +130,31 @@ def setup_directories(container: AppContainer, test_config=None):
                         pass
         except Exception:
             pass
-        container.cert_dir = Path(tempfile.mkdtemp(prefix="certmate_certs_"))
-        container.data_dir = Path(tempfile.mkdtemp(prefix="certmate_data_"))
-        container.backup_dir = Path(tempfile.mkdtemp(
-            prefix="certmate_backups_"))
-        container.logs_dir = Path(tempfile.mkdtemp(prefix="certmate_logs_"))
+
+    # Docker volume persistence check (#130). Warn loudly if /app/data
+    # appears to be ephemeral container storage rather than a persistent
+    # volume. This catches the most common deployment mistake: forgetting
+    # to mount ./data:/app/data in docker-compose.yml.
+    _in_docker = Path('/.dockerenv').exists() or os.getenv('container') is not None
+    if _in_docker:
+        sentinel = container.data_dir / '.certmate_persistent'
+        if sentinel.exists():
+            logger.info("Persistent volume verified — data directory survives container restarts")
+        else:
+            # First boot on this volume: create sentinel. If the sentinel
+            # doesn't survive the next restart, the volume wasn't mounted.
+            try:
+                sentinel.write_text('1')
+            except OSError:
+                pass
+            logger.warning(
+                "PERSISTENCE CHECK: This appears to be the first boot on this data directory. "
+                "If you see this message on every restart, your /app/data volume is NOT "
+                "persistent and ALL configuration (admin account, settings, certificates) "
+                "will be LOST on container recreation. Mount a persistent volume: "
+                "-v ./data:/app/data:rw (Docker) or a PVC (Kubernetes). "
+                "Required volumes: /app/data, /app/certificates, /app/logs, /app/backups"
+            )
 
 
 def _secret_key_from_env_or_generate(data_dir: Path) -> str:

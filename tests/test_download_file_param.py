@@ -25,6 +25,11 @@ class TestDownloadFileParamMissingDomain:
         r = api.get(f"/api/certificates/{NONEXISTENT_DOMAIN}/download")
         assert r.status_code == 404
 
+    def test_json_format_still_returns_404_for_missing_domain(self, api):
+        """The JSON mode must not change the missing-domain response."""
+        r = api.get(f"/api/certificates/{NONEXISTENT_DOMAIN}/download?format=json")
+        assert r.status_code == 404
+
     @pytest.mark.parametrize("filename", [
         "fullchain.pem",
         "privkey.pem",

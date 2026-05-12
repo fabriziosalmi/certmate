@@ -97,7 +97,30 @@ class TestCertificateDownload:
         assert any("cert" in n.lower() or "fullchain" in n.lower() for n in names), \
             f"No cert file in ZIP: {names}"
 
-    def test_05_download_tls_components(self, api):
+    def test_05_download_json_bundle(self, api):
+        r = api.get(f"/api/certificates/{TEST_DOMAIN}/download?format=json")
+        assert r.status_code == 200
+        assert r.headers["Content-Type"].startswith("application/json")
+
+        payload = r.json()
+        assert payload["domain"] == TEST_DOMAIN
+        assert set(payload.keys()) >= {
+            "domain",
+            "cert_pem",
+            "chain_pem",
+            "fullchain_pem",
+            "private_key_pem",
+        }
+        assert "-----BEGIN CERTIFICATE-----" in payload["cert_pem"]
+        assert "-----BEGIN CERTIFICATE-----" in payload["chain_pem"]
+        assert "-----BEGIN CERTIFICATE-----" in payload["fullchain_pem"]
+        assert "-----BEGIN" in payload["private_key_pem"]
+
+    def test_06_invalid_format_returns_400(self, api):
+        r = api.get(f"/api/certificates/{TEST_DOMAIN}/download?format=tar")
+        assert r.status_code == 400
+
+    def test_07_download_tls_components(self, api):
         """Download individual TLS components."""
         for component in ("cert", "key", "chain", "fullchain"):
             r = api.get(f"/{TEST_DOMAIN}/tls/{component}")
@@ -108,7 +131,7 @@ class TestCertificateDownload:
 class TestCertificateRenewal:
     """Renew the certificate."""
 
-    def test_06_renew_certificate(self, api):
+    def test_08_renew_certificate(self, api):
         r = api.post_json(f"/api/certificates/{TEST_DOMAIN}/renew", {})
         # Renewal may succeed or say "not due for renewal" — both are OK
         assert r.status_code in (200, 400), f"Renew failed: {r.status_code} {r.text[:200]}"

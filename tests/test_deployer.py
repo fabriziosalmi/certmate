@@ -274,12 +274,14 @@ class TestConfig:
     def test_unsafe_command_returns_specific_reason(self, deploy_manager):
         """Issue #102: rejection error must name the offending hook AND
         the specific reason (e.g. 'dangerous shell metacharacters'),
-        not a generic 'save failed'."""
+        not a generic 'save failed'.
+        Note: pipes are now intentionally allowed (issue #115), so we
+        test with && chaining which is still blocked."""
         config = {
             'enabled': True,
             'global_hooks': [
                 {'id': 'h1', 'name': 'Pipeline',
-                 'command': 'curl http://x | jq .',
+                 'command': 'curl http://x && rm -rf /',
                  'enabled': True, 'timeout': 30, 'on_events': ['created']},
             ],
             'domain_hooks': {},

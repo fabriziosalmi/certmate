@@ -276,6 +276,14 @@ class SettingsManager:
                     settings['dns_providers'] = {}
                     was_migrated = True
 
+                dns_providers_before = {
+                    provider: dict(config) if isinstance(config, dict) else config
+                    for provider, config in settings.get('dns_providers', {}).items()
+                }
+                settings = self.migrate_dns_providers_to_multi_account(settings)
+                if settings.get('dns_providers', {}) != dns_providers_before:
+                    was_migrated = True
+
                 # Ensure certificate_storage exists with default configuration
                 if 'certificate_storage' not in settings:
                     settings['certificate_storage'] = default_settings['certificate_storage']
@@ -328,9 +336,20 @@ class SettingsManager:
                     settings['email'] = letsencrypt_email
 
                 if os.getenv('CLOUDFLARE_TOKEN'):
-                    if 'cloudflare' not in settings['dns_providers']:
-                        settings['dns_providers']['cloudflare'] = {'accounts': {'default': {}}}
-                    settings['dns_providers']['cloudflare']['accounts']['default']['api_token'] = os.getenv('CLOUDFLARE_TOKEN')
+                    dns_providers = settings.setdefault('dns_providers', {})
+                    cloudflare_config = dns_providers.get('cloudflare')
+                    if not isinstance(cloudflare_config, dict):
+                        cloudflare_config = {}
+                        dns_providers['cloudflare'] = cloudflare_config
+                    accounts = cloudflare_config.get('accounts')
+                    if not isinstance(accounts, dict):
+                        accounts = {}
+                        cloudflare_config['accounts'] = accounts
+                    default_account = accounts.get('default')
+                    if not isinstance(default_account, dict):
+                        default_account = {}
+                        accounts['default'] = default_account
+                    default_account['api_token'] = os.getenv('CLOUDFLARE_TOKEN')
 
                 return settings
 
