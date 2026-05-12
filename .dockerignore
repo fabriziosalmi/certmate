@@ -3,6 +3,13 @@
 .env.*
 *.env
 
+# Virtual environments — NEVER copy into Docker context
+.venv/
+venv/
+venv*/
+env/
+
+
 # Exclude development files
 .git
 .gitignore
