@@ -410,6 +410,19 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
             data = request.json or {}
             domain = data.get('domain', 'test.example.com')
             result = deploy_manager.test_hook(hook_id, domain=domain)
+            if audit_logger:
+                actor = getattr(request, 'current_user', {}) or {}
+                # We audit the *attempt* (success or failure of the dry-run)
+                # because the test path executes the hook command end-to-end
+                # against a test domain — admins need a trail of who poked
+                # what, even on a successful no-op test.
+                audit_logger.log_deploy_hook_changed(
+                    scope=domain,
+                    hook_id=hook_id,
+                    operation='test',
+                    user=actor.get('username'),
+                    ip_address=request.remote_addr,
+                )
             if 'error' in result:
                 return jsonify(result), 404
             return jsonify(result)

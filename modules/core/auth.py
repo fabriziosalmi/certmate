@@ -35,11 +35,19 @@ class AuthManager:
         self._sessions = {}  # In-memory session store: {session_id: {user, expires, created}}
         self._session_lock = threading.Lock()  # Thread-safe session access
         self._hmac_key = None  # Set by set_hmac_key() after app init
+        self._audit_logger = None  # Set by set_audit_logger() after AuditLogger constructed
         import os
         _timeout_hours = int(os.getenv('SESSION_TIMEOUT_HOURS', '8'))
         self._session_timeout = max(1, _timeout_hours) * 60 * 60
         if not BCRYPT_AVAILABLE:
             logger.warning("bcrypt not available, falling back to SHA-256 (less secure)")
+
+    def set_audit_logger(self, audit_logger):
+        """Inject the AuditLogger so authorization denials emit a real audit
+        entry instead of a stderr-only warning. Optional — when unset, the
+        decorator falls back to logger.warning so role/scope denials are at
+        least surfaced in the application log."""
+        self._audit_logger = audit_logger
 
     def set_hmac_key(self, key):
         """Set the server-side secret used for HMAC-based API token hashing.
@@ -601,53 +609,81 @@ class AuthManager:
         """Check if any users exist"""
         return len(self._get_users()) > 0
     
+    def _authenticate_request(self):
+        """Resolve the caller's identity for the current Flask request.
+
+        Single source of truth for authentication. Both ``require_auth`` and
+        ``require_role`` delegate here instead of chaining decorators or
+        relying on cross-decorator side effects on ``request.current_user``
+        (the previous implementation called ``self.require_auth(lambda:
+        None)()`` to populate the request, then read the side-effect — an
+        architecture flagged as fragile by the 2026-05-12 API auth audit
+        finding F-1).
+
+        Returns:
+            (user_dict, None)            on success
+            (None, (error_dict, status)) on failure
+
+        Side effects: none. The caller is responsible for assigning
+        ``request.current_user`` once it knows the request is allowed to
+        proceed. That keeps the side effect localized to the decorator that
+        owns it, instead of leaking across two helpers.
+        """
+        try:
+            # Allow unauthenticated access during initial setup
+            # (matches require_web_auth: bypass if auth disabled OR no users)
+            if not self.is_local_auth_enabled() or not self.has_any_users():
+                return {'username': 'setup_user', 'role': 'admin'}, None
+
+            # Check for session-based auth first (for web UI)
+            session_id = request.cookies.get('certmate_session')
+            if session_id:
+                user_info = self.validate_session(session_id)
+                if user_info:
+                    return user_info, None
+
+            # Fall back to bearer token auth (for API)
+            auth_header = request.headers.get('Authorization')
+            if not auth_header:
+                return None, ({'error': 'Authorization header required',
+                               'code': 'AUTH_HEADER_MISSING'}, 401)
+
+            try:
+                scheme, token = auth_header.split(' ', 1)
+                if scheme.lower() != 'bearer':
+                    return None, ({'error': 'Invalid authorization scheme. Use Bearer token',
+                                   'code': 'INVALID_AUTH_SCHEME'}, 401)
+                if not token.strip():
+                    return None, ({'error': 'Invalid authorization header format. Use: Bearer <token>',
+                                   'code': 'INVALID_AUTH_FORMAT'}, 401)
+            except ValueError:
+                return None, ({'error': 'Invalid authorization header format. Use: Bearer <token>',
+                               'code': 'INVALID_AUTH_FORMAT'}, 401)
+
+            # Authenticate against legacy token and scoped API keys
+            user_info = self.authenticate_api_token(token)
+            if not user_info:
+                logger.warning(f"Invalid API token attempt from {request.remote_addr}")
+                return None, ({'error': 'Invalid or expired token',
+                               'code': 'INVALID_TOKEN'}, 401)
+
+            return user_info, None
+        except Exception as e:
+            logger.error(f"Authentication error: {e}")
+            return None, ({'error': 'Authentication failed',
+                           'code': 'AUTH_ERROR'}, 401)
+
     def require_auth(self, f):
-        """Enhanced decorator to require authentication (API token or session)"""
+        """Decorator: require authentication (API token or session)."""
         @wraps(f)
         def decorated_function(*args, **kwargs):
-            try:
-                # Allow unauthenticated access during initial setup
-                # (matches require_web_auth: bypass if auth disabled OR no users)
-                if not self.is_local_auth_enabled() or not self.has_any_users():
-                    request.current_user = {'username': 'setup_user', 'role': 'admin'}
-                    return f(*args, **kwargs)
-
-                # Check for session-based auth first (for web UI)
-                session_id = request.cookies.get('certmate_session')
-                if session_id:
-                    user_info = self.validate_session(session_id)
-                    if user_info:
-                        request.current_user = user_info
-                        return f(*args, **kwargs)
-                
-                # Fall back to bearer token auth (for API)
-                auth_header = request.headers.get('Authorization')
-                if not auth_header:
-                    return {'error': 'Authorization header required', 'code': 'AUTH_HEADER_MISSING'}, 401
-                
-                try:
-                    scheme, token = auth_header.split(' ', 1)
-                    if scheme.lower() != 'bearer':
-                        return {'error': 'Invalid authorization scheme. Use Bearer token', 'code': 'INVALID_AUTH_SCHEME'}, 401
-                    if not token.strip():
-                        return {'error': 'Invalid authorization header format. Use: Bearer <token>', 'code': 'INVALID_AUTH_FORMAT'}, 401
-                except ValueError:
-                    return {'error': 'Invalid authorization header format. Use: Bearer <token>', 'code': 'INVALID_AUTH_FORMAT'}, 401
-                
-                # Authenticate against legacy token and scoped API keys
-                user_info = self.authenticate_api_token(token)
-                if not user_info:
-                    logger.warning(f"Invalid API token attempt from {request.remote_addr}")
-                    return {'error': 'Invalid or expired token', 'code': 'INVALID_TOKEN'}, 401
-
-                request.current_user = user_info
-                return f(*args, **kwargs)
-            except Exception as e:
-                logger.error(f"Authentication error: {e}")
-                return {'error': 'Authentication failed', 'code': 'AUTH_ERROR'}, 401
-        
+            user, err = self._authenticate_request()
+            if err is not None:
+                return err
+            request.current_user = user
+            return f(*args, **kwargs)
         return decorated_function
-    
+
     def require_role(self, min_role):
         """Decorator factory requiring a minimum role level.
 
@@ -659,24 +695,67 @@ class AuthManager:
         def decorator(f):
             @wraps(f)
             def decorated_function(*args, **kwargs):
-                # Authenticate first (sets request.current_user)
-                auth_result = self.require_auth(lambda: None)()
-                if isinstance(auth_result, tuple) and len(auth_result) == 2:
-                    return auth_result  # Return auth error
+                user, err = self._authenticate_request()
+                if err is not None:
+                    return err
 
-                # Check role level
-                user = getattr(request, 'current_user', None)
-                if not user:
-                    return {'error': 'Authentication required', 'code': 'AUTH_REQUIRED'}, 401
+                # current_user is set here only after auth is known to
+                # have succeeded; downstream code that reads it can trust
+                # the value is fresh from this request, not a leftover.
+                request.current_user = user
 
                 user_level = ROLE_HIERARCHY.get(user.get('role'), -1)
                 required_level = ROLE_HIERARCHY.get(min_role, 999)
                 if user_level < required_level:
-                    return {'error': f'{min_role} privileges required', 'code': 'INSUFFICIENT_ROLE'}, 403
+                    # Audit + log every role denial so privilege-enumeration
+                    # attempts surface in the audit trail instead of vanishing
+                    # behind a silent 403 (2026-05-12 API auth audit, F-2).
+                    self._log_rbac_denial(
+                        user=user,
+                        required_role=min_role,
+                        endpoint=request.path,
+                    )
+                    return {'error': f'{min_role} privileges required',
+                            'code': 'INSUFFICIENT_ROLE'}, 403
 
                 return f(*args, **kwargs)
             return decorated_function
         return decorator
+
+    def _log_rbac_denial(self, user, required_role, endpoint):
+        """Record an RBAC role-level denial.
+
+        Always emits a structured warning on the application logger so the
+        signal is present even when no AuditLogger is wired. When one IS
+        wired (the production path), also writes a tamper-evident audit
+        entry via log_authz_denied so the denial sits in the same log
+        admins already scan.
+        """
+        username = (user or {}).get('username')
+        actual_role = (user or {}).get('role')
+        try:
+            from flask import request as _request
+            ip = _request.remote_addr
+        except Exception:
+            ip = None
+
+        logger.warning(
+            "RBAC denial: user=%s role=%s required=%s endpoint=%s ip=%s",
+            username, actual_role, required_role, endpoint, ip,
+        )
+
+        if self._audit_logger is not None:
+            try:
+                self._audit_logger.log_authz_denied(
+                    operation='access',
+                    resource_type='endpoint',
+                    resource_id=endpoint,
+                    reason=f'role={actual_role} below required {required_role}',
+                    user=username,
+                    ip_address=ip,
+                )
+            except Exception as e:
+                logger.debug(f"Failed to write RBAC denial audit entry: {e}")
 
     def require_admin(self, f):
         """Decorator to require admin role (backward compat wrapper)."""
