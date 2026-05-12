@@ -2,17 +2,213 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Prevent flash of white background in dark mode */
+/* ================================================================
+   CertMate Design System — UI v2
+   Self-hosted fonts, premium transitions, scrollbar polish
+   ================================================================ */
+
+/* ── Typography: Inter Variable (UI) + JetBrains Mono (code) ──── */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/static/webfonts/InterVariable.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/static/webfonts/JetBrainsMono-Regular.woff2') format('woff2');
+}
+
+/* ── Dark mode flash prevention ──────────────────────────────── */
 html.dark {
-    background-color: #111827 !important;
+  background-color: #0b1120 !important;
 }
 
-/* Alpine.js: hide elements until Alpine initializes */
+/* ── Alpine.js cloak ─────────────────────────────────────────── */
 [x-cloak] {
-    display: none !important;
+  display: none !important;
 }
 
-/* iOS safe area for bottom tab bar */
+/* ── iOS safe area ───────────────────────────────────────────── */
 .safe-area-bottom {
-    padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* ── Page entry animation ────────────────────────────────────── */
+@keyframes pageEnter {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.page-enter {
+  animation: pageEnter 250ms ease-out;
+}
+
+/* ── Button press feedback ───────────────────────────────────── */
+@layer components {
+  .btn-press {
+    @apply transition-all duration-150;
+  }
+  .btn-press:active {
+    transform: scale(0.97);
+    filter: brightness(0.92);
+  }
+}
+
+/* ── Table row health strip ──────────────────────────────────── */
+.health-valid   { border-left: 3px solid #22c55e; }
+.health-warning { border-left: 3px solid #f59e0b; }
+.health-expired { border-left: 3px solid #ef4444; }
+.health-unknown { border-left: 3px solid #6b7280; }
+
+/* ── Row stagger entrance ────────────────────────────────────── */
+@keyframes rowSlideIn {
+  from { opacity: 0; transform: translateX(-6px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.row-enter {
+  animation: rowSlideIn 180ms ease-out backwards;
+}
+
+/* ── Skeleton shimmer ────────────────────────────────────────── */
+@keyframes shimmer {
+  to { background-position: -200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg,
+    hsl(220, 15%, 93%) 25%,
+    hsl(220, 15%, 88%) 50%,
+    hsl(220, 15%, 93%) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: 4px;
+}
+.dark .skeleton {
+  background: linear-gradient(90deg,
+    hsl(222, 20%, 18%) 25%,
+    hsl(222, 20%, 22%) 50%,
+    hsl(222, 20%, 18%) 75%
+  );
+  background-size: 200% 100%;
+}
+
+/* ── Toast progress bar ──────────────────────────────────────── */
+.toast-progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: currentColor;
+  opacity: 0.25;
+  border-radius: 0 0 0 8px;
+  animation: toastShrink var(--toast-duration, 5000ms) linear forwards;
+}
+@keyframes toastShrink {
+  from { width: 100%; }
+  to   { width: 0; }
+}
+
+/* ── Notification badge pulse ────────────────────────────────── */
+@keyframes badgePulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.15); }
+}
+.badge-pulse {
+  animation: badgePulse 2s ease-in-out infinite;
+}
+
+/* ── Login page ambient background ───────────────────────────── */
+.login-ambient {
+  background:
+    radial-gradient(ellipse at 20% 50%, hsla(214, 100%, 60%, 0.07) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 20%, hsla(260, 80%, 55%, 0.05) 0%, transparent 50%),
+    hsl(220, 20%, 97%);
+}
+.dark .login-ambient {
+  background:
+    radial-gradient(ellipse at 20% 50%, hsla(214, 100%, 45%, 0.08) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 20%, hsla(260, 80%, 40%, 0.05) 0%, transparent 50%),
+    hsl(222, 32%, 8%);
+}
+
+/* ── Glassmorphism card ──────────────────────────────────────── */
+.glass-card {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+}
+.dark .glass-card {
+  background: rgba(17, 24, 39, 0.75);
+  backdrop-filter: blur(20px) saturate(1.2);
+  -webkit-backdrop-filter: blur(20px) saturate(1.2);
+}
+
+/* ── Premium shadow tokens ───────────────────────────────────── */
+.shadow-card {
+  box-shadow:
+    0 1px 3px rgba(0,0,0,0.05),
+    0 1px 2px rgba(0,0,0,0.03);
+}
+.dark .shadow-card {
+  box-shadow:
+    0 1px 3px rgba(0,0,0,0.35),
+    0 0 0 1px rgba(255,255,255,0.04);
+}
+.shadow-elevated {
+  box-shadow:
+    0 10px 40px rgba(0,0,0,0.1),
+    0 2px 10px rgba(0,0,0,0.05);
+}
+.dark .shadow-elevated {
+  box-shadow:
+    0 10px 40px rgba(0,0,0,0.5),
+    0 0 0 1px rgba(255,255,255,0.05);
+}
+
+/* ── Detail panel entrance ───────────────────────────────────── */
+.panel-slide {
+  transition: transform 300ms cubic-bezier(0.16, 1, 0.3, 1),
+              opacity 200ms ease;
+}
+
+/* ── Form validation shake ───────────────────────────────────── */
+@keyframes inputShake {
+  10%, 90% { transform: translateX(-1px); }
+  20%, 80% { transform: translateX(2px); }
+  30%, 50%, 70% { transform: translateX(-3px); }
+  40%, 60% { transform: translateX(3px); }
+}
+.input-shake {
+  animation: inputShake 400ms ease-in-out;
+}
+
+/* ── Scrollbar ───────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: hsl(220, 10%, 72%);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover { background: hsl(220, 10%, 55%); }
+
+.dark ::-webkit-scrollbar-thumb { background: hsl(220, 10%, 28%); }
+.dark ::-webkit-scrollbar-thumb:hover { background: hsl(220, 10%, 40%); }
+
+/* Firefox */
+* { scrollbar-width: thin; scrollbar-color: hsl(220, 10%, 72%) transparent; }
+.dark * { scrollbar-color: hsl(220, 10%, 28%) transparent; }
+
+/* ── Nav active indicator ────────────────────────────────────── */
+.nav-active {
+  @apply text-blue-600 dark:text-blue-400 font-semibold border-b-2 border-blue-500 dark:border-blue-400;
+}
+.nav-inactive {
+  @apply text-gray-500 dark:text-gray-400 font-medium border-b-2 border-transparent
+         hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600
+         transition-colors duration-150;
 }

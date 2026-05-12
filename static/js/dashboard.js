@@ -97,47 +97,23 @@
         var expired = certificates.filter(function (cert) { return cert.exists && cert.days_until_expiry !== null && cert.days_until_expiry !== undefined && cert.days_until_expiry <= 0; }).length;
 
         var statsContainer = document.getElementById('statsCards');
-        var html = CertMate.html;
-        var raw = CertMate.raw;
 
-        function statCard(label, value, color, icon, valueId) {
-            return html`
-                <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow duration-200">
-                    <div class="p-6">
-                        <div class="flex items-center">
-                            <div class="flex-shrink-0">
-                                <div class="w-12 h-12 bg-${raw(color)}-100 dark:bg-${raw(color)}-900/30 rounded-lg flex items-center justify-center">
-                                    <i class="fas ${raw(icon)} text-${raw(color)}-600 dark:text-${raw(color)}-400 text-xl"></i>
-                                </div>
-                            </div>
-                            <div class="ml-4 flex-1">
-                                <p class="text-sm font-medium text-gray-600 dark:text-gray-400">${label}</p>
-                                <p class="text-2xl font-bold text-${raw(color)}-600 dark:text-${raw(color)}-400"${valueId ? raw(' id="' + valueId + '"') : ''}>${value}</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>`;
+        function statCard(label, value, colorClass, iconClass, valueId, subtitle) {
+            return '<div class="bg-white dark:bg-surface-card overflow-hidden shadow-card rounded-xl hover:shadow-elevated transition-shadow duration-200">' +
+                '<div class="p-4"><div class="flex items-center">' +
+                '<i class="fas ' + iconClass + ' ' + colorClass + ' text-lg mr-3 flex-shrink-0"></i>' +
+                '<div class="flex-1 min-w-0">' +
+                '<p class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">' + CertMate.escapeHtml(label) + '</p>' +
+                '<p class="text-xl font-bold ' + colorClass + ' tabular-nums"' + (valueId ? ' id="' + valueId + '"' : '') + '>' + value + '</p>' +
+                (subtitle ? '<p class="text-xs text-gray-400 dark:text-gray-500">' + subtitle + '</p>' : '') +
+                '</div></div></div></div>';
         }
 
         statsContainer.innerHTML = [
-            // The Total card uses the gray-on-white treatment from the original
-            // (text-gray-900 / text-white instead of color-tinted), so we render
-            // it with a hand-rolled value paragraph.
-            html`
-                <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow duration-200">
-                    <div class="p-6"><div class="flex items-center">
-                        <div class="flex-shrink-0"><div class="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
-                            <i class="fas fa-certificate text-blue-600 dark:text-blue-400 text-xl"></i>
-                        </div></div>
-                        <div class="ml-4 flex-1">
-                            <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Total Certificates</p>
-                            <p class="text-2xl font-bold text-gray-900 dark:text-white">${total}</p>
-                        </div>
-                    </div></div>
-                </div>`,
-            statCard('Valid', valid, 'green', 'fa-check-circle'),
-            statCard('Expiring Soon', expiring, 'yellow', 'fa-exclamation-triangle'),
-            statCard('Deployment', raw('--'), 'indigo', 'fa-globe', 'deploymentCount')
+            statCard('Total', total, 'text-gray-900 dark:text-white', 'fa-certificate text-blue-500 dark:text-blue-400'),
+            statCard('Valid', valid, 'text-green-600 dark:text-green-400', 'fa-check-circle text-green-500 dark:text-green-400', null, valid + ' of ' + total),
+            statCard('Expiring', expiring, 'text-yellow-600 dark:text-yellow-400', 'fa-exclamation-triangle text-yellow-500 dark:text-yellow-400'),
+            statCard('Deployed', '<span class="text-gray-300 dark:text-gray-600 animate-pulse">...</span>', 'text-indigo-600 dark:text-indigo-400', 'fa-globe text-indigo-500 dark:text-indigo-400', 'deploymentCount')
         ].join('');
     }
 
@@ -428,13 +404,13 @@
             var daysKnown = cert.days_until_expiry !== null && cert.days_until_expiry !== undefined;
             var isExpired = daysKnown && cert.days_until_expiry <= 0;
             var isExpiringSoon = daysKnown && cert.days_until_expiry > 0 && cert.days_until_expiry <= 30;
-            var statusClass, statusIcon, statusText;
+            var statusClass, statusIcon, statusText, healthClass;
             if (isExpired) {
-                statusClass = 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400'; statusIcon = 'fa-times-circle'; statusText = 'Expired';
+                statusClass = 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400'; statusIcon = 'fa-times-circle'; statusText = 'Expired'; healthClass = 'health-expired';
             } else if (isExpiringSoon) {
-                statusClass = 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400'; statusIcon = 'fa-exclamation-triangle'; statusText = 'Expiring';
+                statusClass = 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400'; statusIcon = 'fa-exclamation-triangle'; statusText = 'Expiring'; healthClass = 'health-warning';
             } else {
-                statusClass = 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400'; statusIcon = 'fa-check-circle'; statusText = 'Valid';
+                statusClass = 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400'; statusIcon = 'fa-check-circle'; statusText = 'Valid'; healthClass = 'health-valid';
             }
 
             var expiryDate = new Date(cert.expiry_date);
@@ -458,10 +434,11 @@
             var aliasHint = domainAlias
                 ? rowRaw(rowHtml`<div class="mt-1 flex items-center text-xs text-blue-600 dark:text-blue-300 min-w-0"><i class="fas fa-link mr-1 text-blue-500 shrink-0" aria-hidden="true"></i><span class="truncate" title="${domainAlias}">DNS-01 Alias: ${domainAlias}</span></div>`)
                 : false;
-            return rowHtml`<tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors duration-150 cursor-pointer" onclick="openCertDetail('${cert.domain}')">
+            var lockColor = isExpired ? 'text-red-400' : isExpiringSoon ? 'text-yellow-400' : 'text-green-500';
+            return rowHtml`<tr class="${rowRaw(healthClass)} row-enter hover:bg-blue-50/40 dark:hover:bg-blue-900/10 transition-colors duration-150 cursor-pointer" style="animation-delay:${rowRaw(String(sorted.indexOf(cert) * 30))}ms" onclick="openCertDetail('${cert.domain}')">
                 <td class="px-6 py-4 max-w-0">
                     <div class="flex items-center min-w-0">
-                        <i class="fas fa-certificate text-gray-400 dark:text-gray-500 mr-2 text-sm shrink-0" aria-hidden="true"></i>
+                        <i class="fas fa-lock ${rowRaw(lockColor)} mr-2 text-sm shrink-0" aria-hidden="true"></i>
                         <div class="min-w-0">
                             <div class="text-sm font-medium text-gray-900 dark:text-white truncate">${cert.domain}</div>
                             ${aliasHint}
