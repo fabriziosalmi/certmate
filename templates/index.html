@@ -415,10 +415,10 @@
 
     <!-- Certificate Detail Slide-out Panel -->
     <div id="certDetailOverlay" class="fixed inset-0 bg-gray-900/50 backdrop-blur-sm z-40 hidden" onclick="closeCertDetail()"></div>
-    <div id="certDetailPanel" class="fixed top-0 right-0 h-full w-full sm:w-96 lg:w-[480px] bg-white dark:bg-gray-800 shadow-2xl z-50 transform translate-x-full transition-transform duration-300 ease-in-out overflow-y-auto">
-        <div class="sticky top-0 bg-white dark:bg-gray-800 border-b dark:border-gray-700 px-6 py-4 flex items-center justify-between z-10">
+    <div id="certDetailPanel" class="fixed top-0 right-0 h-full w-full sm:w-96 lg:w-[480px] bg-white dark:bg-surface-card shadow-elevated z-50 transform translate-x-full panel-slide overflow-y-auto">
+        <div class="sticky top-0 bg-white dark:bg-surface-card border-b border-gray-100 dark:border-white/5 px-6 py-4 flex items-center justify-between z-10">
             <h3 class="text-lg font-semibold text-gray-900 dark:text-white truncate" id="detailDomain">Certificate Details</h3>
-            <button type="button" onclick="closeCertDetail()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1" title="Close panel">
+            <button type="button" onclick="closeCertDetail()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 transition-colors" title="Close panel">
                 <i class="fas fa-times text-lg"></i>
             </button>
         </div>
