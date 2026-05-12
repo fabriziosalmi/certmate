@@ -1,3 +1,41 @@
+## v2.4.13 (Patch — audit log performance + slow-request watchdog)
+
+Single community PR from [@ITJamie](https://github.com/ITJamie) ([#146](https://github.com/fabriziosalmi/certmate/pull/146)). Two changes, both diagnostic-grade; neither alters application behavior for the happy path.
+
+### Audit log read performance
+
+`AuditLogger.get_recent_entries` previously read `min(file_size, limit * 512)` bytes from the end of `certificate_audit.log` and parsed the tail as ASCII. The 512-bytes-per-entry budget was already tight before v2.4.12 and became a real problem with the new audit methods that v2.4.12 added: `log_settings_changed` with several `changed_keys` lands at ~600 bytes per entry, and `log_api_key_created` with an `allowed_domains` list goes further. Result: the Activity page sometimes hung, and the tail it did return silently dropped recent entries.
+
+The replacement walks backwards from EOF in 8 KB blocks, stops when the accumulated block count exceeds the caller's `limit`, and decodes UTF-8 with `errors='replace'` so a single malformed byte does not lose an otherwise valid record. Effective budget is now ~8 KB per expected entry — comfortable for everything the audit logger currently emits. Test (`tests/test_audit.py`) writes 2000 entries and asks for the last 3 to exercise both the multi-block walk and the trimming.
+
+### Slow-request watchdog
+
+New optional instrumentation registered by `setup_slow_request_logging(app, container)` in `modules/core/factory.py`. Tracks every in-flight Flask request by thread ID under a lock; on `after_request`, logs a `Slow request completed` event when duration crosses a configurable threshold; in parallel, a daemon watchdog thread periodically scans for requests still running past the threshold and emits a `Request still running` event including the captured thread stack so the operator can see where it is stuck.
+
+Three env knobs (all optional, all default to sensible production values):
+
+| Variable | Default | Effect |
+|---|---|---|
+| `CERTMATE_SLOW_REQUEST_LOGGING` | `true` | Master switch. Set to `false`/`0`/`no`/`off` to disable. |
+| `CERTMATE_SLOW_REQUEST_THRESHOLD_SECONDS` | `30.0` | Request duration above which we start logging. |
+| `CERTMATE_SLOW_REQUEST_SCAN_SECONDS` | `10.0` | How often the watchdog scans for in-flight slow requests. |
+| `CERTMATE_SLOW_REQUEST_REPEAT_SECONDS` | matches threshold | Minimum gap between repeated "still running" logs for the same request. |
+
+Output goes to a dedicated `request-watchdog` logger so it doesn't pollute the main log stream. The watchdog thread is a daemon, dies with the process, and its `stop_event` is stored on the app container for future shutdown plumbing.
+
+### Tests
+
+- `tests/test_audit.py::test_get_recent_entries_uses_tail_and_preserves_order` — 2000 entries, asks for last 3, verifies order.
+- `tests/test_factory_logging.py::test_env_float_falls_back_on_invalid_value` — bad env value gracefully falls back to default.
+- `tests/test_factory_logging.py::test_format_thread_stack_returns_current_thread_stack` — sanity check on the helper.
+
+The watchdog thread itself is not tested end-to-end (would require timing-coupled Flask integration plumbing), but the helpers it depends on are covered and the rest is standard Flask `before/after_request` glue.
+
+### Notes
+
+- No application behavior change. The watchdog only logs; it does not abort, cancel, or modify requests in any way.
+- Compatible with v2.4.12: the new audit-log read path is downstream of v2.4.12's audit writes; the line format is unchanged.
+
 ## v2.4.12 (Patch — Sprint 1 security hardening + two open bug fixes + repo hygiene)
 
 Closes the first batch of an internal security audit on the v2.4.x API surface, plus two open community bug reports filed the same day against the dashboard and the deploy menu, plus a small repo-hygiene pass. Eleven atomic commits, 1427 insertions and 9135 deletions on `main` (the deletion total is dominated by seven tracked-by-mistake dev artifacts — `.coverage`, `coverage.xml`, `test_results.json`, `debug_*.py`, a stale Playwright screenshot — being untracked, not by application code being removed). 55 new unit tests in `tests/test_sprint1_security.py`; 86 unit tests pass in total. PR [#147](https://github.com/fabriziosalmi/certmate/pull/147).
