@@ -110,10 +110,12 @@
     // Message display function
     // =============================================
 
-    function showMessage(message, type) {
+    function showMessage(message, type, options) {
         type = type || 'info';
         addDebugLog(message, type);
-        CertMate.toast(message, type);
+        // options.errorContext (when supplied) triggers the "Report this
+        // issue" button in the resulting toast — see report-issue.js.
+        CertMate.toast(message, type, undefined, options);
     }
 
     // =============================================
@@ -267,7 +269,15 @@
                 .then(function (response) {
                     if (!response.ok) {
                         return response.text().then(function (errorData) {
-                            throw new Error('HTTP ' + response.status + ': ' + errorData);
+                            // Parse JSON body when possible so the bug-report
+                            // errorContext can carry the `code`/`hint` the
+                            // backend returned.
+                            var parsed = null;
+                            try { parsed = errorData ? JSON.parse(errorData) : null; } catch (e) { /* not JSON */ }
+                            var err = new Error('HTTP ' + response.status + ': ' + (parsed && parsed.error ? parsed.error : errorData));
+                            err.responseStatus = response.status;
+                            err.responseBody = parsed;
+                            throw err;
                         });
                     }
                     return response.json();
@@ -281,7 +291,15 @@
                 })
                 .catch(function (error) {
                     addDebugLog('Error saving settings: ' + error.message, 'error');
-                    showMessage('Error saving settings: ' + error.message, 'error');
+                    showMessage('Error saving settings: ' + error.message, 'error', {
+                        errorContext: {
+                            endpoint: 'POST /api/web/settings',
+                            status: error.responseStatus || 0,
+                            code: error.responseBody && error.responseBody.code,
+                            message: (error.responseBody && error.responseBody.error) || error.message,
+                            hint: error.responseBody && error.responseBody.hint
+                        }
+                    });
                 })
                 .then(function () {
                     // finally block equivalent
@@ -1320,7 +1338,12 @@
             .then(function (response) {
                 if (!response.ok) {
                     return response.text().then(function (errorData) {
-                        throw new Error('HTTP ' + response.status + ': ' + errorData);
+                        var parsed = null;
+                        try { parsed = errorData ? JSON.parse(errorData) : null; } catch (e) { /* not JSON */ }
+                        var err = new Error('HTTP ' + response.status + ': ' + (parsed && parsed.error ? parsed.error : errorData));
+                        err.responseStatus = response.status;
+                        err.responseBody = parsed;
+                        throw err;
                     });
                 }
                 return response.json();
@@ -1338,12 +1361,22 @@
                     // Refresh backup list
                     return refreshBackupList();
                 } else {
-                    throw new Error(result.error || 'Failed to create backup');
+                    var err = new Error(result.error || 'Failed to create backup');
+                    err.responseBody = result;
+                    throw err;
                 }
             })
             .catch(function (error) {
                 addDebugLog('Error creating backup: ' + error.message, 'error');
-                showMessage('Error creating backup: ' + error.message, 'error');
+                showMessage('Error creating backup: ' + error.message, 'error', {
+                    errorContext: {
+                        endpoint: 'POST /api/backups/create',
+                        status: error.responseStatus || 0,
+                        code: error.responseBody && error.responseBody.code,
+                        message: (error.responseBody && error.responseBody.error) || error.message,
+                        hint: error.responseBody && error.responseBody.hint
+                    }
+                });
             })
             .then(function () {
                 // finally block equivalent - restore button state
@@ -1551,7 +1584,12 @@
                 .then(function (response) {
                     if (!response.ok) {
                         return response.text().then(function (errorData) {
-                            throw new Error('HTTP ' + response.status + ': ' + errorData);
+                            var parsed = null;
+                            try { parsed = errorData ? JSON.parse(errorData) : null; } catch (e) { /* not JSON */ }
+                            var err = new Error('HTTP ' + response.status + ': ' + (parsed && parsed.error ? parsed.error : errorData));
+                            err.responseStatus = response.status;
+                            err.responseBody = parsed;
+                            throw err;
                         });
                     }
                     return response.json();
@@ -1590,7 +1628,15 @@
         })
             .catch(function (error) {
                 addDebugLog('Error during backup restore: ' + error.message, 'error');
-                showMessage('Error restoring backup: ' + error.message, 'error');
+                showMessage('Error restoring backup: ' + error.message, 'error', {
+                    errorContext: {
+                        endpoint: 'POST /api/backups/restore/unified',
+                        status: error.responseStatus || 0,
+                        code: error.responseBody && error.responseBody.code,
+                        message: (error.responseBody && error.responseBody.error) || error.message,
+                        hint: error.responseBody && error.responseBody.hint
+                    }
+                });
             });
     }
 
