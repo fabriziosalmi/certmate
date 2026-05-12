@@ -7,13 +7,26 @@
         if (ns && typeof ns.showMessage === 'function') ns.showMessage(message, type);
     }
 
+    // Parse the comma-separated allowed_domains input into:
+    //   - undefined  → unrestricted (omit the field from the payload)
+    //   - []         → locked-out key (empty list)
+    //   - [d1, d2…]  → scoped list
+    function parseAllowedDomains(raw) {
+        if (typeof raw !== 'string') return undefined;
+        var trimmed = raw.trim();
+        if (trimmed === '') return undefined;
+        return trimmed.split(',')
+            .map(function (s) { return s.trim().toLowerCase(); })
+            .filter(function (s) { return s.length > 0; });
+    }
+
     // Alpine.js component: API key CRUD.
     function apiKeyManager() {
         return {
             keys: {},
             loading: true,
             createdToken: '',
-            newKey: { name: '', role: 'viewer', expires_at: '' },
+            newKey: { name: '', role: 'viewer', expires_at: '', allowed_domains: '' },
 
             loadKeys: function () {
                 var self = this;
@@ -45,6 +58,10 @@
                 if (self.newKey.expires_at) {
                     payload.expires_at = new Date(self.newKey.expires_at).toISOString();
                 }
+                var domains = parseAllowedDomains(self.newKey.allowed_domains);
+                if (domains !== undefined) {
+                    payload.allowed_domains = domains;
+                }
                 fetch('/api/keys', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -55,7 +72,7 @@
                         return r.json().then(function (data) {
                             if (r.ok) {
                                 self.createdToken = data.token;
-                                self.newKey = { name: '', role: 'viewer', expires_at: '' };
+                                self.newKey = { name: '', role: 'viewer', expires_at: '', allowed_domains: '' };
                                 self.loadKeys();
                                 showMessage('API key "' + data.name + '" created', 'success');
                             } else {
