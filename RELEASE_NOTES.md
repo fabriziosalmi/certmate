@@ -1,3 +1,90 @@
+## v2.4.16 (Patch — Sprint 1.7: in-app diagnostic snapshot + one-click bug report)
+
+Implements [#150](https://github.com/fabriziosalmi/certmate/issues/150) end-to-end. When an action fails and you're signed in as admin, the error toast now surfaces a **Report this issue** button. One click → fetch `/api/diagnostics/snapshot` → merge with browser context → format Markdown → clipboard + open GitHub with the bug template pre-filled. You paste, review what you're sending, submit. No telemetry, no automatic upload, no new external dependency. PR [#157](https://github.com/fabriziosalmi/certmate/pull/157). Four atomic commits, 11 new unit tests on top of v2.4.15's 125 (136 total, 1.14 s runtime, no Docker).
+
+### Backend — `GET /api/diagnostics/snapshot`
+
+New admin-only resource under a new `/api/diagnostics/` namespace. Returns an **allowlist** (not a serialiser): every field is added by name in the handler, so a future contributor adding a field has to explicitly choose to expose it.
+
+| Field | Source | Notes |
+|---|---|---|
+| `certmate_version`, `python_version`, `os_platform`, `container` | `modules.__version__`, `sys.version`, `platform.platform()`, `/.dockerenv` | public |
+| `scheduler_running` | `container.scheduler.running` | bool |
+| `certificate_count` | `len(certificate_manager.list_certificates())` | int |
+| `dns_provider`, `default_ca`, `challenge_type`, `storage_backend` | settings scalar reads — provider/CA names, never credentials | low |
+| `disk_free_bytes`, `disk_total_bytes` | `shutil.disk_usage(app.config['DATA_DIR'])` | low |
+| `recent_audit` | last 5 entries from `audit_logger.get_recent_entries(5)`, sanitised | mid |
+| `errors` | only present on partial failure | low |
+
+Sanitisation of the audit tail is performed inline in the handler. Each entry is reduced to exactly `{timestamp, operation, resource_type, status}` — `resource_id` (often a domain), `user`, `ip_address`, `details` (full operation payload), and `error` are dropped. A future audit field has to be opted-in explicitly.
+
+Partial-failure tolerance: if certificate enumeration / settings read / `shutil.disk_usage` / audit read raises, that single field becomes `null` and the response carries an `errors: {field: reason}` map alongside the working data — never 500s the whole call.
+
+### Frontend — `static/js/report-issue.js`
+
+`CM.reportIssue(errorContext)` is the public entry point:
+
+1. Fetches `/api/diagnostics/snapshot`.
+2. Merges with browser context (`userAgent`, page, viewport, the error envelope).
+3. Formats a structured Markdown body via the pure `buildMarkdown()` (exposed on `CM.reportIssueInternals` for future test harnesses).
+4. Copies to clipboard via `navigator.clipboard.writeText`.
+5. Opens `github.com/fabriziosalmi/certmate/issues/new?template=bug_report.md&title=[Bug] <status> <code> on <method> <endpoint>` (title encodes the most useful triage facts; truncated at 200 chars).
+
+Defensive plumbing: idempotent (in-flight Promise guards double-clicks), three fallback paths (clipboard reject → modal with editable textarea + clickable GitHub link; popup blocker → same modal; snapshot fetch fail → ship a client-only report tagged "Server snapshot was unavailable"). The user is never stranded.
+
+### Frontend — `CM.toast` extension + role export
+
+- `CM.toast(message, type, duration, options)` gains an optional 4th argument. When `options.errorContext` is supplied and `type === 'error'` and `CM.role === 'admin'`, the toast renders a **Report this issue** button below the message and extends auto-dismiss to 10 s so the user has time to find it. Every existing call works unchanged.
+- `CM.role`, `CM.roleAtLeast`, `CM.refreshRole` exposed on `window.CertMate`. `dashboard.js` already tracked the role for its own UI gating; we mirror it on `CM` so cross-page helpers don't have to depend on `dashboard.js` being loaded (`/settings` doesn't load it). Auto-refresh on `DOMContentLoaded`.
+
+### Wire-up — 8 high-impact error sites
+
+| Action | File | Endpoint |
+|---|---|---|
+| Cert create (server error + network) | `dashboard.js` | `POST /api/certificates/create` |
+| Cert renew | `dashboard.js` | `POST /api/certificates/<d>/renew` |
+| Cert delete | `dashboard.js` | `DELETE /api/certificates/<d>` |
+| Run deploy hooks | `dashboard.js` | `POST /api/certificates/<d>/deploy` |
+| Settings save | `settings.js` | `POST /api/web/settings` |
+| API key create | `settings-apikeys.js` | `POST /api/keys` |
+| Backup create | `settings.js` | `POST /api/backups/create` |
+| Backup restore | `settings.js` | `POST /api/backups/restore/unified` |
+
+Each `errorContext` carries `{endpoint, status, code?, message?, hint?}`. `status: 0, code: 'NETWORK_ERROR'` is the convention for `.catch` branches that never got an HTTP response. The remaining ~80 error toasts in the codebase continue to work as before — they just don't surface the button. The pattern is documented inline so contributors extending coverage know what to pass.
+
+Plumbing changes alongside the wires:
+- `showMessage(msg, type)` in `dashboard.js` / `settings.js` / `settings-apikeys.js` grew an optional 3rd `options` parameter forwarded to `CertMate.toast`.
+- Cert delete / renew handlers propagate `response.status` through their `.then()` wrap.
+- Settings save / backup create / restore catch paths now parse the JSON response body when available and attach it as `error.responseBody` + `error.responseStatus`, so the toast can forward structured fields (`code`, `hint`).
+
+### Tests
+
+`tests/test_diagnostics_snapshot.py` — 11 new tests, 0.47 s runtime:
+
+- **`TestSnapshotShape`** (3) — all 13 documented fields present; cert count reflects the manager; settings scalars round-trip.
+- **`TestSnapshotSanitization`** (4) — response carries **none** of 8 forbidden values planted in the settings + audit fixtures (bearer token, hash, cloudflare_token, audit `details` leak, audit `resource_id`, audit `user`, audit `ip_address`, `password_hash` literal). Audit entries are stripped to exactly the four allowed keys. Audit list capped at 5. Full-settings keys (users, api_keys, dns_providers, deploy_hooks, …) never appear at the top level. The flatten-and-search assertion catches any future leak path that adds one of those tokens anywhere in the response.
+- **`TestSnapshotPartialFailure`** (4) — certificate enumeration, audit log read, and `shutil.disk_usage` each individually injected with failure; the corresponding field becomes `null`, the `errors` map carries a documented reason, and the other fields still populate. Missing audit logger → empty list, no crash.
+
+Total unit-test surface after this release: 136 passes (125 pre-existing + 11 new) in ~1.14 s without Docker.
+
+### Documentation
+
+README gains a **Reporting Bugs** subsection that explains the in-app flow and what's in the snapshot. The existing **Support Checklist** below it is preserved as the manual fallback for users hitting a bug before they can reach the UI; the `cat settings.json` curl example was replaced with a curl against `/api/diagnostics/snapshot` so a user copy-pasting the help guide doesn't leak credentials into a public issue.
+
+### Backward compatibility
+
+- No existing API shape changes; the new endpoint is purely additive.
+- Every existing `CM.toast(msg, type, duration)` and `showMessage(msg, type)` callsite continues to work — the `options` arg is optional everywhere.
+- No new external dependency, no new build step, no new CSP origin required (the GitHub URL is `_blank window.open`, not a same-origin fetch).
+- The remaining ~80 error toasts not wired in this PR simply don't surface the button; their user experience is unchanged.
+
+### Non-goals (explicit)
+
+- No telemetry. No automatic upload. No phone-home. The flow is fully manual end-to-end — the user paste-reviews-submits.
+- No Sentry / Bugsnag integration.
+- No screenshot capture (the strict CSP blocks `html2canvas`; structured fields are more useful anyway).
+- No coverage of all ~90 error sites — many are client-side validation errors with no server status / endpoint to report. The pattern is documented inline; future PRs (community or maintainer) can extend coverage where it adds value.
+
 ## v2.4.15 (Patch — Sprint 1.6 audit polish)
 
 Audit polish sprint: the four zero/low-risk items from the [2026-05-12 API auth audit](https://github.com/fabriziosalmi/certmate/releases/tag/v2.4.12) that didn't need structural design, shipped together because each is small, additive, and shares no code paths. Four atomic commits, 13 new unit tests on top of v2.4.14's 112 (125 total, 0.87s runtime, no Docker). PR [#151](https://github.com/fabriziosalmi/certmate/pull/151).
