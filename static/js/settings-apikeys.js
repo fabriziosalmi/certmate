@@ -2,9 +2,9 @@
     'use strict';
 
     // Local proxy to core's showMessage (toast + debug log).
-    function showMessage(message, type) {
+    function showMessage(message, type, options) {
         var ns = window.CmSettings;
-        if (ns && typeof ns.showMessage === 'function') ns.showMessage(message, type);
+        if (ns && typeof ns.showMessage === 'function') ns.showMessage(message, type, options);
     }
 
     // Parse the comma-separated allowed_domains input into:
@@ -117,11 +117,28 @@
                                 self.loadKeys();
                                 showMessage('API key "' + data.name + '" created', 'success');
                             } else {
-                                showMessage(data.error || 'Failed to create API key', 'error');
+                                showMessage(data.error || 'Failed to create API key', 'error', {
+                                    errorContext: {
+                                        endpoint: 'POST /api/keys',
+                                        status: r.status,
+                                        code: data.code,
+                                        message: data.error,
+                                        hint: data.hint
+                                    }
+                                });
                             }
                         });
                     })
-                    .catch(function () { showMessage('Failed to create API key', 'error'); });
+                    .catch(function () {
+                        showMessage('Failed to create API key', 'error', {
+                            errorContext: {
+                                endpoint: 'POST /api/keys',
+                                status: 0,
+                                code: 'NETWORK_ERROR',
+                                message: 'network error or unparseable response'
+                            }
+                        });
+                    });
             },
 
             revokeKey: function (keyId, keyName) {
