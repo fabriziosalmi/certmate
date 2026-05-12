@@ -1,3 +1,75 @@
+## v2.4.14 (Patch — Sprint 1.5 API auth audit follow-up)
+
+Direct follow-up to the [2026-05-12 draconian API auth audit](https://github.com/fabriziosalmi/certmate/releases/tag/v2.4.12) and the coverage matrix it produced. Four atomic commits, 23 new unit tests on top of v2.4.13's 89 (112 unit-test surface, 0.83s runtime, no Docker). PR [#148](https://github.com/fabriziosalmi/certmate/pull/148).
+
+Picks up everything from the audit that was actionable in one sprint without re-opening structural design questions. The four deferred items (F-3 / F-4 / F-6 / F-7) are explicitly out of scope and reasoned below.
+
+### Authentication architecture (F-1)
+
+`AuthManager.require_role` previously called `self.require_auth(lambda: None)()` and then read `request.current_user` back as a side effect of the lambda's invocation. The chain worked, but it leaned on a cross-decorator side effect with no compile- or runtime-checkable guarantee — any middleware clearing `request.current_user` between the lambda call and the role-check line would silently downgrade authentication to None. Not exploitable today; fragile as a foundation.
+
+New `AuthManager._authenticate_request()` is the single source of truth. Evaluates bypass mode -> session cookie -> bearer token in order and returns `(user, None)` on success or `(None, (error_dict, status))` on failure, **without touching `request.current_user`**. Both `require_auth` and `require_role` are now thin wrappers that call it, assign `request.current_user` exactly when they know the request is allowed to proceed, and dispatch. The decorator API surface is unchanged.
+
+### Authorization audit trail (F-2)
+
+Domain-scope denials have audited via `log_authz_denied` since v2.4.12; role-level denials returned `403 INSUFFICIENT_ROLE` silently, leaving privilege-enumeration attempts off the audit trail. `AuthManager` gains `set_audit_logger(audit_logger)` (wired in `factory.py` right after both objects are constructed) and `_log_rbac_denial(user, required_role, endpoint)`. The helper always emits a structured `logger.warning` so the signal is present even without an audit logger; when one is wired (the production path), it also writes `log_authz_denied` with `operation='access'`, `resource_type='endpoint'`, `resource_id=request.path`, `reason='role=X below required Y'`.
+
+### Certificate download — private-key role split
+
+Escalation of a finding the audit rated INFO/⚠️ in its coverage matrix. `DownloadCertificate.get` required only `viewer` and returned private-key material via four code paths: `?format=json`, `?file=privkey.pem`, `?file=combined.pem`, default ZIP. A scoped viewer key could therefore pull the private key for every certificate in its scope — information disclosure inconsistent with the read-only-monitoring intent of the role.
+
+The decorator stays `viewer` so the authn check still fires, and the handler now gates per file:
+
+| Path | Allowed roles |
+|---|---|
+| `?file=cert.pem`, `?file=chain.pem`, `?file=fullchain.pem` | viewer, operator, admin |
+| `?include_private=0` (public-only ZIP, new) | viewer, operator, admin |
+| `?file=privkey.pem`, `?file=combined.pem`, `?format=json`, default ZIP / `?include_private=1` | operator, admin |
+
+Denied calls return `403 PRIVKEY_REQUIRES_OPERATOR` with a `hint` pointing at the viewer-safe variants, and write `audit_logger.log_authz_denied` so the attempt is visible. The public-only ZIP carries the suffix `_certificates_public.zip` so an attached file is unambiguous at a glance. `cert.pem` and `chain.pem` are newly legal `?file=` values — they were never reachable as single files before (the original whitelist only included `fullchain.pem` on the public side).
+
+### Audit-log coverage matrix gaps
+
+Six mutating endpoints landed in v2.4.12 without audit wiring; the audit's coverage matrix flagged them. Each now emits an audit entry on success:
+
+| Endpoint | Audit method | Notes |
+|---|---|---|
+| `DELETE /api/certificates/<d>` | `log_operation(operation='delete', resource_type='certificate')` | |
+| `POST /api/backups/create` | `log_operation(operation='create', resource_type='backup', details={type,reason})` | |
+| `POST /api/backups/restore/<...>` | `log_operation(operation='restore', resource_type='backup', details={backup_type, pre_restore_backup})` | Heaviest of the four; wholesale-replaces settings + certificates. The audit entry surfaces both source filename and the pre-restore backup so an admin can roll back via the audit trail alone. |
+| `DELETE /api/backups/delete/<...>` | `log_operation(operation='delete', resource_type='backup')` | |
+| `POST /api/deploy/test/<id>` | `log_deploy_hook_changed(operation='test', scope=<domain>, hook_id=<id>)` | The dry-run executes the hook end-to-end against a test domain; the command itself is never logged (log-injection + secret-leak risk, consistent with the existing `log_deploy_hook_changed` semantics). |
+| `POST /api/notifications/config` | `log_operation(operation='update', resource_type='notifications_config', details={channels_present})` | Channel config carries credentials inline (Slack/Discord webhook URLs, SMTP passwords); `details` records only the sorted list of channel keys present, never their secrets. |
+
+### Tests
+
+`tests/test_sprint1_5_audit_followup.py` — 23 new tests, 0.35s runtime:
+
+- `TestAuthenticateRequestBypassMode` (2) — bypass mode returns setup_user without touching `request.current_user` (the F-1 invariant — the helper has no side effects)
+- `TestAuthenticateRequestBearerToken` (5) — missing header / wrong scheme / invalid token / legacy token / scoped key allowed_domains propagation
+- `TestRequireRoleDelegation` (3) — both decorators set `current_user` only on success, 403 INSUFFICIENT_ROLE for under-roled callers
+- `TestRbacDenialAudit` (2) — `log_authz_denied` emitted with the right fields when an AuditLogger is wired; no crash when not wired (fallback warning path)
+- `TestDownloadRoleSplit` (11) — full matrix of viewer-allowed and viewer-denied download paths plus operator-allowed counterparts; each viewer denial verified to emit `log_authz_denied`
+
+Total unit-test surface after this release: 112 passes (89 pre-existing + 23 new) in ~0.83s without Docker. CI also runs the Docker-fixture integration suite (`test_auth.py`, `test_settings.py`, `test_cert_lifecycle.py`, ...) and passes.
+
+### Backward compatibility
+
+- The download endpoint still accepts every previous URL; only viewers see new 403s on the four private-key paths. The new `?include_private=0` parameter and `cert.pem` / `chain.pem` single-file paths are additive.
+- The `_authenticate_request` refactor is internal to AuthManager; the decorator API surface (`@auth_manager.require_auth`, `@auth_manager.require_role`) is unchanged.
+- `set_audit_logger` is optional — when unset, role denials still surface in `logger.warning`. No regression for tests or minimal setups.
+- No changes to scoped API key creation, the `allowed_domains` matcher, or the settings whitelist.
+
+### Non-goals (deferred to Sprint 2)
+
+Listed so they don't get assumed:
+
+- **F-3** (legacy bearer token deprecation flag + UI warning + dedicated rotation endpoint). Structural feature; needs UX design for the migration path.
+- **F-4** (UI warning when `allowed_domains` left empty on key creation). UX nudge.
+- **F-5** (in-memory session store lost on restart). Audit explicitly called this an accepted trade-off; not a fix target.
+- **F-6** (self-host the ReDoc bundle to remove `cdn.redoc.ly` from CSP). INFO; air-gapped polish.
+- **F-7** (per-username login rate limit on top of the existing per-IP limit). INFO; mitigated today by the 12-character password policy + per-IP limit.
+
 ## v2.4.13 (Patch — audit log performance + slow-request watchdog)
 
 Single community PR from [@ITJamie](https://github.com/ITJamie) ([#146](https://github.com/fabriziosalmi/certmate/pull/146)). Two changes, both diagnostic-grade; neither alters application behavior for the happy path.
