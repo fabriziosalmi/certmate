@@ -329,51 +329,75 @@
             'title="' + title + '"><i class="fas ' + icon + '"></i></button>';
     }
 
-    function deploymentStatusDisplay(result) {
+    function deploymentStatusDisplay(role, result) {
+        var isBrowser = role === 'browser';
+        var roleLabel = isBrowser ? 'Browser' : 'Backend';
+        var roleIcon = isBrowser ? 'fa-globe' : 'fa-server';
         var statusClass;
-        var statusIcon;
+        var statusIcon = roleIcon;
         var statusText;
 
-        if (result && result.deployed && result.certificate_match === true) {
-            statusClass = 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400';
-            statusIcon = 'fa-check-circle';
-            statusText = 'Deployed';
-        } else if (result && result.reachable && result.certificate_match === false) {
-            statusClass = 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400';
-            statusIcon = 'fa-exclamation-triangle';
-            statusText = 'Wrong Cert';
-        } else if (result && result.reachable && result.certificate_match === null) {
-            statusClass = 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400';
-            statusIcon = 'fa-info-circle';
-            statusText = 'Reachable';
-        } else if (result && !result.reachable) {
-            statusClass = 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400';
-            statusIcon = 'fa-times-circle';
-            statusText = 'Unreachable';
+        if (isBrowser) {
+            if (result && result.reachable) {
+                statusClass = 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400';
+                statusText = 'Reachable';
+            } else if (result && result.reachable === false) {
+                statusClass = 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400';
+                statusText = 'Unreachable';
+            } else {
+                statusClass = 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300';
+                statusText = 'Not Checked';
+            }
         } else {
-            statusClass = 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300';
-            statusIcon = 'fa-question-circle';
-            statusText = 'Unknown';
+            if (result && result.error === 'backend-unavailable') {
+                statusClass = 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300';
+                statusIcon = 'fa-exclamation-circle';
+                statusText = 'Unavailable';
+            } else if (result && result.deployed && result.certificate_match === true) {
+                statusClass = 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400';
+                statusText = 'Deployed';
+            } else if (result && result.reachable && result.certificate_match === false) {
+                statusClass = 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400';
+                statusText = 'Wrong Cert';
+            } else if (result && result.reachable === false) {
+                statusClass = 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400';
+                statusText = 'Unreachable';
+            } else {
+                statusClass = 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300';
+                statusText = 'Unknown';
+            }
         }
 
         return {
             className: 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ' + statusClass,
             icon: statusIcon,
-            text: statusText
+            text: roleLabel + ': ' + statusText
         };
     }
 
-    // Build deployment status badge HTML
-    function deploymentBadgeHtml(cert, context) {
+    function deploymentBadgeHtml(role, result, safeDomain, domainId) {
+        var badgeId = 'deployment-status-' + domainId + '-' + role;
+        var display = deploymentStatusDisplay(role, result);
+        var title = display.text;
+        if (result && result.method) {
+            title += ' via ' + result.method;
+        }
+        if (result && result.timestamp) {
+            title += ' at ' + result.timestamp;
+        }
+        return '<span data-deployment-domain="' + safeDomain + '" data-deployment-role="' + role + '" id="' + badgeId + '" title="' + escapeHtml(title) + '" class="' + display.className + '"><i class="fas ' + display.icon + ' mr-1"></i>' + display.text + '</span>';
+    }
+
+    // Build deployment status badges HTML
+    function deploymentBadgesHtml(cert) {
         var safeDomain = escapeHtml(cert.domain);
         var domainId = safeDomain.replace(/\./g, '-');
-        var badgeId = context === 'detail' ? '' : ' id="deployment-status-' + domainId + '"';
-        var cachedStatus = deploymentCache.get(cert.domain);
-        if (cachedStatus) {
-            var display = deploymentStatusDisplay(cachedStatus);
-            return '<span data-deployment-domain="' + safeDomain + '"' + badgeId + ' class="' + display.className + '"><i class="fas ' + display.icon + ' mr-1"></i>' + display.text + '</span>';
-        }
-        return '<span data-deployment-domain="' + safeDomain + '"' + badgeId + ' class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300"><i class="fas fa-spinner fa-spin mr-1"></i>Checking...</span>';
+        var cachedStatus = deploymentCache.get(cert.domain) || {};
+        var browserStatus = cachedStatus.browser || null;
+        return '<div class="flex flex-wrap items-center gap-2">' +
+            deploymentBadgeHtml('backend', cachedStatus, safeDomain, domainId) +
+            deploymentBadgeHtml('browser', browserStatus, safeDomain, domainId) +
+            '</div>';
     }
 
     function providerDisplayName(provider) {
@@ -517,7 +541,7 @@
                 <td class="px-4 py-4 whitespace-nowrap"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${rowRaw(statusClass)}"><i class="fas ${rowRaw(statusIcon)} mr-1"></i>${statusText}</span></td>
                 <td class="px-4 py-4 whitespace-nowrap hidden md:table-cell"><div class="text-sm text-gray-900 dark:text-white">${expiryStr}</div><div class="text-xs ${rowRaw(daysClass)}">${cert.days_until_expiry} days</div></td>
                 <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-gray-500 dark:text-gray-400">${rowRaw(providerLabel) || '—'}</td>
-                <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell">${rowRaw(deploymentBadgeHtml(cert, 'row'))}</td>
+                <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell">${rowRaw(deploymentBadgesHtml(cert))}</td>
                 <td class="px-4 py-4 whitespace-nowrap text-right">
                     <div class="flex items-center justify-end gap-1">
                         ${roleAtLeast('operator') ? actionBtn('renew', cert.domain, 'green', 'Renew', 'fa-sync-alt') : false}
@@ -614,7 +638,7 @@
                 (safeDomainAlias ? '<div class="flex justify-between gap-4 py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">DNS-01 Alias</dt><dd class="text-sm font-medium text-right break-all text-blue-600 dark:text-blue-300">' + safeDomainAlias + '</dd></div>' : '') +
                 (safeDomainAlias && aliasProviderLabel ? '<div class="flex justify-between gap-4 py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">Alias Provider</dt><dd class="text-sm font-medium text-right text-gray-900 dark:text-white">' + aliasProviderLabel + '</dd></div>' : '') +
                 '<div class="flex justify-between gap-4 py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">Auto-Renew</dt><dd class="text-sm font-medium text-right ' + (cert.auto_renew !== false ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400') + '">' + (cert.auto_renew !== false ? 'Enabled' : 'Disabled') + '</dd></div>' +
-                '<div class="flex justify-between gap-4 py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">Deployment</dt><dd>' + deploymentBadgeHtml(cert, 'detail') + '</dd></div>' +
+                '<div class="flex justify-between gap-4 py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">Deployment</dt><dd>' + deploymentBadgesHtml(cert) + '</dd></div>' +
                 '</dl>' +
                 '</div>' +
                 // Actions
@@ -1006,21 +1030,30 @@
 
     // Update deployment UI based on check result
     function updateDeploymentUI(domain, result) {
-        var statusElements = Array.prototype.filter.call(
-            document.querySelectorAll('[data-deployment-domain]'),
-            function (el) {
-                return el.getAttribute('data-deployment-domain') === domain;
-            }
-        );
+        var backendResult = result || null;
+        var browserResult = result && result.browser ? result.browser : null;
 
-        var display = deploymentStatusDisplay(result);
-
-        statusElements.forEach(function (statusElement) {
-            statusElement.className = display.className;
-            statusElement.innerHTML = '<i class="fas ' + display.icon + ' mr-1"></i>' + display.text;
-            if (result.method) {
-                statusElement.title = 'Checked via: ' + result.method + ' at ' + result.timestamp;
-            }
+        ['backend', 'browser'].forEach(function (role) {
+            var roleResult = role === 'browser' ? browserResult : backendResult;
+            var display = deploymentStatusDisplay(role, roleResult);
+            Array.prototype.filter.call(
+                document.querySelectorAll('[data-deployment-domain][data-deployment-role="' + role + '"]'),
+                function (el) {
+                    return el.getAttribute('data-deployment-domain') === domain;
+                }
+            ).forEach(function (statusElement) {
+                statusElement.className = display.className;
+                statusElement.innerHTML = '<i class="fas ' + display.icon + ' mr-1"></i>' + display.text;
+                if (roleResult && roleResult.method) {
+                    var title = display.text + ' via ' + roleResult.method;
+                    if (roleResult.timestamp) {
+                        title += ' at ' + roleResult.timestamp;
+                    }
+                    statusElement.title = title;
+                } else {
+                    statusElement.removeAttribute('title');
+                }
+            });
         });
     }
 
