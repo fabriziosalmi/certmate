@@ -473,10 +473,9 @@ def _run_manager_job(manager_key: str, method_name: str):
     """
     if _flask_app is None:
         logger.warning(
-            "Background job skipped: Flask app not yet initialised "
-            "(manager_key=%s, method=%s)",
-            manager_key,
-            method_name,
+            "Background job skipped: Flask app not yet initialised",
+            manager_key=manager_key,
+            method_name=method_name,
         )
         return
     from flask import current_app
@@ -485,16 +484,17 @@ def _run_manager_job(manager_key: str, method_name: str):
         manager = managers.get(manager_key) if managers else None
         if manager is None:
             logger.warning(
-                "Background job skipped: manager '%s' not found", manager_key
+                "Background job skipped: manager not found",
+                manager_key=manager_key,
             )
             return
         try:
             getattr(manager, method_name)()
         except Exception:
             logger.exception(
-                "Background job failed: manager_key=%s, method=%s",
-                manager_key,
-                method_name,
+                "Background job failed",
+                manager_key=manager_key,
+                method_name=method_name,
             )
 
 
