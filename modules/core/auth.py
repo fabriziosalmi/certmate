@@ -119,6 +119,89 @@ class AuthManager:
 
     # --- Scoped API Key management ---
 
+    # Domain pattern used by allowed_domains validation. Mirrors the existing
+    # _DOMAIN_RE in modules/api/resources.py but also accepts the bare
+    # wildcard form "*.example.com" (no leading label before the asterisk).
+    _ALLOWED_DOMAIN_RE = __import__('re').compile(
+        r'^(\*\.)?([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$'
+    )
+
+    @classmethod
+    def _normalize_allowed_domains(cls, allowed_domains):
+        """Normalize / validate an allowed_domains value before storage.
+
+        Returns (normalized_list_or_None, error_or_None).
+
+        - None / missing  → returns (None, None)  (unrestricted; back-compat)
+        - empty list      → returns ([], None)    (locked-out key — valid use)
+        - list of strings → each entry validated against _ALLOWED_DOMAIN_RE;
+                            stripped + lowercased; duplicates collapsed.
+        - any other type  → error
+        """
+        if allowed_domains is None:
+            return None, None
+        if not isinstance(allowed_domains, list):
+            return None, "allowed_domains must be a list of domain patterns or null"
+        normalized = []
+        seen = set()
+        for entry in allowed_domains:
+            if not isinstance(entry, str):
+                return None, "allowed_domains entries must be strings"
+            cleaned = entry.strip().lower()
+            if not cleaned:
+                continue
+            if not cls._ALLOWED_DOMAIN_RE.match(cleaned):
+                return None, f"Invalid domain pattern: {entry!r}"
+            if cleaned not in seen:
+                seen.add(cleaned)
+                normalized.append(cleaned)
+        return normalized, None
+
+    @staticmethod
+    def domain_matches_scope(domain, allowed_domains):
+        """Return True if *domain* is reachable by a caller scoped to
+        *allowed_domains*.
+
+        - allowed_domains is None → unrestricted (every domain matches).
+        - allowed_domains is []   → locked out (no domain matches).
+        - allowed_domains is a list of patterns where each pattern is either
+          an exact domain ("example.com") matched case-insensitively, or a
+          wildcard "*.example.com" that matches any single-level subdomain
+          ("foo.example.com" ✓, "a.b.example.com" ✓, "example.com" ✗).
+        """
+        if allowed_domains is None:
+            return True
+        if not allowed_domains:
+            return False
+        if not isinstance(domain, str) or not domain:
+            return False
+        d = domain.strip().lower().lstrip('*.')
+        for pattern in allowed_domains:
+            p = pattern.strip().lower()
+            if p.startswith('*.'):
+                suffix = p[1:]  # ".example.com"
+                # Wildcard must match a strict subdomain — "example.com" by
+                # itself does NOT match "*.example.com".
+                if d.endswith(suffix) and len(d) > len(suffix):
+                    return True
+            else:
+                if d == p:
+                    return True
+        return False
+
+    def user_can_access_domain(self, user, domain):
+        """Return True if the request's current_user is allowed to operate on
+        *domain* according to its scoped key's allowed_domains.
+
+        Users without allowed_domains (legacy keys, session-authenticated
+        local users, the legacy bearer token) keep full access (the audit's
+        "no multi-tenancy by design" baseline).
+        """
+        if not user:
+            return False
+        scope = user.get('allowed_domains')
+        return self.domain_matches_scope(domain, scope)
+
     def _get_api_keys(self):
         """Get all API keys from settings."""
         settings = self.settings_manager.load_settings()
@@ -160,8 +243,20 @@ class AuthManager:
             return secrets.compare_digest(actual, expected)
         return False
 
-    def create_api_key(self, name, role='viewer', expires_at=None, created_by=None):
+    def create_api_key(self, name, role='viewer', expires_at=None, created_by=None,
+                       allowed_domains=None):
         """Create a new scoped API key.
+
+        Args:
+            name: human-readable label, 1-64 chars, unique among active keys
+            role: viewer | operator | admin
+            expires_at: optional ISO-8601 expiry
+            created_by: username of the admin creating the key
+            allowed_domains: optional list of domain patterns scoping the
+                key to specific certificates. None = unrestricted (legacy
+                behavior). Empty list = locked-out key (creatable for
+                staging). See AuthManager.domain_matches_scope() for the
+                matching semantics.
 
         Returns:
             tuple: (success, result_dict_or_error_string)
@@ -173,6 +268,10 @@ class AuthManager:
             if role not in ROLE_HIERARCHY:
                 return False, f"Invalid role: {role}. Must be viewer, operator, or admin"
             normalized_role = self._normalize_role(role)
+
+            scoped_domains, scope_err = self._normalize_allowed_domains(allowed_domains)
+            if scope_err:
+                return False, scope_err
 
             api_keys = self._get_api_keys()
 
@@ -194,10 +293,14 @@ class AuthManager:
                 'expires_at': expires_at,
                 'last_used_at': None,
                 'revoked': False,
+                'allowed_domains': scoped_domains,
             }
 
             if self._save_api_keys(api_keys):
-                logger.info(f"API key '{name}' (role={normalized_role}) created by {created_by}")
+                logger.info(
+                    f"API key '{name}' (role={normalized_role}, "
+                    f"allowed_domains={scoped_domains}) created by {created_by}"
+                )
                 return True, {
                     'id': key_id,
                     'name': name,
@@ -206,6 +309,7 @@ class AuthManager:
                     'token_prefix': plaintext[:7],
                     'created_at': api_keys[key_id]['created_at'],
                     'expires_at': expires_at,
+                    'allowed_domains': scoped_domains,
                 }
             return False, "Failed to save API key"
         except (OSError, ValueError, KeyError) as e:
@@ -230,6 +334,7 @@ class AuthManager:
                 'last_used_at': data.get('last_used_at'),
                 'revoked': data.get('revoked', False),
                 'is_expired': is_expired,
+                'allowed_domains': data.get('allowed_domains'),
             }
         return result
 
@@ -300,6 +405,8 @@ class AuthManager:
                     return {
                         'username': 'api_key:' + key_data.get('name', key_id),
                         'role': self._normalize_role(key_data.get('role', 'viewer')),
+                        'allowed_domains': key_data.get('allowed_domains'),
+                        'api_key_id': key_id,
                     }
 
             return None
