@@ -24,10 +24,24 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
                     r'(token|secret|password|key|credential)',
                     re.IGNORECASE
                 )
+                # The 'key' fragment in the regex matches any field name
+                # containing "key" — including the cryptographic-shape
+                # defaults, whose values ('rsa', '2048', 'secp256r1', …)
+                # are not secrets. Masking them breaks the settings UI:
+                # the populated <select> ends up with no matching <option>
+                # and renders empty, and a save-without-edit then trips
+                # the validate_key_options check.
+                _NON_SECRET_KEYS = {
+                    'default_key_type',
+                    'default_key_size',
+                    'default_elliptic_curve',
+                }
                 def _mask_dict(d):
                     if not isinstance(d, dict):
                         return
                     for k in list(d.keys()):
+                        if k in _NON_SECRET_KEYS:
+                            continue
                         if _SECRET_KEYS.search(k) and isinstance(d[k], str) and d[k]:
                             d[k] = '********'
                         elif isinstance(d[k], dict):
