@@ -24,9 +24,40 @@
   src: url('/static/webfonts/JetBrainsMono-Regular.woff2') format('woff2');
 }
 
+/* ── Typography polish ───────────────────────────────────────── */
+/* #1+#2: Fixed-width numbers + slashed zero for data alignment */
+/* #16: Anti-aliased rendering for crisp text on dark surfaces  */
+@layer base {
+  body {
+    font-variant-numeric: tabular-nums slashed-zero;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
 /* ── Dark mode flash prevention ──────────────────────────────── */
+/* #24: Native dark scheme for scrollbars, selects, checkboxes  */
 html.dark {
   background-color: #0b1120 !important;
+  color-scheme: dark;
+}
+
+/* ── Text selection ──────────────────────────────────────────── */
+/* #12: Branded selection color for data copy/paste UX          */
+::selection { background: hsla(214, 80%, 52%, 0.3); }
+.dark ::selection { background: hsla(214, 80%, 52%, 0.35); }
+
+/* ── Table readability ───────────────────────────────────────── */
+/* #8:  Impercettible zebra striping for horizontal eye-tracking */
+/* #22: Focus-within highlight for keyboard navigation          */
+#certificatesTable tbody tr:nth-child(even) {
+  background: rgba(0, 0, 0, 0.015);
+}
+.dark #certificatesTable tbody tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.02);
+}
+#certificatesTable tbody tr:focus-within {
+  background: rgba(59, 130, 246, 0.06);
 }
 
 /* ── Alpine.js cloak ─────────────────────────────────────────── */

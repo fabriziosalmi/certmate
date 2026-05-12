@@ -328,7 +328,7 @@
             if (isFiltered) {
                 container.innerHTML = '<tr><td colspan="6">' +
                     '<div class="px-6 py-12 text-center">' +
-                    '<div class="mx-auto max-w-sm">' +
+                    '<div class="mx-auto max-w-sm border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl p-8">' +
                     '<div class="mx-auto h-16 w-16 flex items-center justify-center bg-gray-100 dark:bg-gray-700 rounded-full mb-4">' +
                     '<i class="fas fa-search text-gray-400 text-2xl"></i>' +
                     '</div>' +
@@ -389,7 +389,7 @@
             if (!cert.exists) {
                 return rowHtml`<tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer" onclick="openCertDetail('${cert.domain}')">
                     <td class="px-6 py-4 max-w-0"><div class="text-sm font-medium text-gray-900 dark:text-white truncate">${cert.domain}</div></td>
-                    <td class="px-4 py-4 whitespace-nowrap"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400"><i class="fas fa-times-circle mr-1"></i>Not Found</span></td>
+                    <td class="px-4 py-4 whitespace-nowrap"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-500/10 text-red-700 dark:text-red-400 ring-1 ring-inset ring-red-500/20"><i class="fas fa-times-circle mr-1"></i>Not Found</span></td>
                     <td class="px-4 py-4 whitespace-nowrap hidden md:table-cell text-sm text-gray-500 dark:text-gray-400">\u2014</td>
                     <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-gray-500 dark:text-gray-400">${providerLabel || '\u2014'}</td>
                     <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell">\u2014</td>
@@ -406,11 +406,11 @@
             var isExpiringSoon = daysKnown && cert.days_until_expiry > 0 && cert.days_until_expiry <= 30;
             var statusClass, statusIcon, statusText, healthClass;
             if (isExpired) {
-                statusClass = 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400'; statusIcon = 'fa-times-circle'; statusText = 'Expired'; healthClass = 'health-expired';
+                statusClass = 'bg-red-500/10 text-red-700 dark:text-red-400 ring-1 ring-inset ring-red-500/20'; statusIcon = 'fa-times-circle'; statusText = 'Expired'; healthClass = 'health-expired';
             } else if (isExpiringSoon) {
-                statusClass = 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400'; statusIcon = 'fa-exclamation-triangle'; statusText = 'Expiring'; healthClass = 'health-warning';
+                statusClass = 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 ring-1 ring-inset ring-yellow-500/20'; statusIcon = 'fa-exclamation-triangle'; statusText = 'Expiring'; healthClass = 'health-warning';
             } else {
-                statusClass = 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400'; statusIcon = 'fa-check-circle'; statusText = 'Valid'; healthClass = 'health-valid';
+                statusClass = 'bg-green-500/10 text-green-700 dark:text-green-400 ring-1 ring-inset ring-green-500/20'; statusIcon = 'fa-check-circle'; statusText = 'Valid'; healthClass = 'health-valid';
             }
 
             var expiryDate = new Date(cert.expiry_date);
