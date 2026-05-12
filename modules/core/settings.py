@@ -63,25 +63,85 @@ SETTINGS_REJECT_KEYS = frozenset({
 })
 
 
-def validate_settings_post(payload):
+SECRET_MASK_SENTINEL = '********'
+
+
+def _strip_masked_values(payload):
+    """Recursively strip keys whose value equals the masking sentinel.
+
+    GET /api/web/settings masks secret-named fields with '********' so the
+    UI can render the form without leaking the real values. A round-trip
+    POST that echoes the GET response back (which is what the web UI and
+    integration tests do) would otherwise overwrite the real on-disk
+    secret with the literal string '********'. Stripping these placeholders
+    pre-validation makes the round-trip a no-op for the masked fields
+    while leaving every other key untouched.
+
+    Operates on dicts of arbitrary depth. Lists and non-dict values are
+    returned unchanged. A key whose value is a dict that was originally
+    non-empty but became empty after stripping is dropped from the result
+    — its content was entirely masked, so the only safe interpretation is
+    "preserve existing on-disk value". An originally-empty dict ({}) is
+    kept as {}: it carries the caller's actual intent (e.g. clear
+    users/api_keys, which the reject list will then catch).
+    """
+    if not isinstance(payload, dict):
+        return payload
+    out = {}
+    for key, value in payload.items():
+        if value == SECRET_MASK_SENTINEL:
+            continue
+        if isinstance(value, dict):
+            original_size = len(value)
+            cleaned = _strip_masked_values(value)
+            if not cleaned and original_size > 0:
+                # Every nested entry was masked — drop the outer key so
+                # the on-disk value is preserved by the merge layer.
+                continue
+            out[key] = cleaned
+        else:
+            out[key] = value
+    return out
+
+
+def validate_settings_post(payload, current=None):
     """Filter a POST /api/settings payload against the writable whitelist.
+
+    Args:
+        payload: dict received from the client.
+        current: optional dict of the on-disk settings *before* this POST.
+            When provided, any incoming top-level field whose value already
+            equals the current value is silently dropped as a no-op
+            round-trip echo. This is what makes the GET-then-POST-back
+            pattern (used by the web UI and integration test fixtures)
+            interoperate with the strict whitelist without false positives.
 
     Returns:
         tuple (filtered, rejected, unknown):
-          filtered: dict of payload restricted to PUBLIC_SETTINGS_WRITABLE_KEYS
-          rejected: list of keys in SETTINGS_REJECT_KEYS that the caller tried
-                    to write (each is a security event — log & audit)
-          unknown:  list of keys neither allowed nor explicitly blocked
-                    (treat as 400; likely a typo or future field that needs
-                    to be added to the whitelist intentionally)
+          filtered: payload restricted to PUBLIC_SETTINGS_WRITABLE_KEYS,
+                    with masked sentinels stripped and no-op echoes removed
+          rejected: keys in SETTINGS_REJECT_KEYS that the caller tried to
+                    mutate with a value different from current (each one is
+                    a security event — log & audit)
+          unknown:  keys neither allowed nor explicitly blocked (treat as
+                    400; likely a typo or a field that needs to be added
+                    to the whitelist intentionally)
     """
     if not isinstance(payload, dict):
         raise ValueError("Settings payload must be an object")
 
+    cleaned_payload = _strip_masked_values(payload)
+
     filtered = {}
     rejected = []
     unknown = []
-    for key, value in payload.items():
+    for key, value in cleaned_payload.items():
+        # No-op echo: incoming value matches the on-disk value. Silently
+        # drop — applies uniformly to writable, reject-listed, and
+        # unknown keys so the same payload that came out of GET goes
+        # straight back in without surfacing spurious 400s.
+        if current is not None and key in current and value == current.get(key):
+            continue
         if key in SETTINGS_REJECT_KEYS:
             rejected.append(key)
         elif key in PUBLIC_SETTINGS_WRITABLE_KEYS:

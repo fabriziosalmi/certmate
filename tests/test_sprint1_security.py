@@ -18,8 +18,10 @@ from unittest.mock import MagicMock
 from modules.core.settings import (
     PUBLIC_SETTINGS_WRITABLE_KEYS,
     SETTINGS_REJECT_KEYS,
+    SECRET_MASK_SENTINEL,
     validate_settings_post,
     diff_settings_keys,
+    _strip_masked_values,
 )
 from modules.core.auth import AuthManager
 
@@ -83,6 +85,124 @@ class TestValidateSettingsPost:
             'auto_renew', 'setup_completed',
         }
         assert wizard_payload_keys.issubset(PUBLIC_SETTINGS_WRITABLE_KEYS)
+
+
+class TestMaskedSentinelStripping:
+    """The GET endpoint masks secret-named fields with '********'. A
+    round-trip POST must NOT overwrite the real on-disk value with the
+    placeholder. These tests pin the contract.
+    """
+
+    def test_top_level_mask_stripped(self):
+        filtered, rejected, unknown = validate_settings_post({
+            'email': 'a@b.c',
+            'dns_provider': 'cloudflare',
+            'api_bearer_token': SECRET_MASK_SENTINEL,
+        })
+        assert 'api_bearer_token' not in filtered
+        assert 'api_bearer_token' not in rejected  # NOT a rejection — it's a no-op
+
+    def test_nested_mask_collapses_empty_dict(self):
+        # When every nested field is masked, the outer key disappears so
+        # atomic_update isn't asked to write {}.
+        cleaned = _strip_masked_values({
+            'dns_providers': {
+                'cloudflare': {'api_token': SECRET_MASK_SENTINEL},
+            }
+        })
+        assert cleaned == {}
+
+    def test_nested_mask_preserves_real_values(self):
+        cleaned = _strip_masked_values({
+            'dns_providers': {
+                'cloudflare': {
+                    'api_token': SECRET_MASK_SENTINEL,
+                    'email': 'admin@example.com',
+                }
+            }
+        })
+        assert cleaned == {
+            'dns_providers': {'cloudflare': {'email': 'admin@example.com'}}
+        }
+
+    def test_non_dict_input_returned_unchanged(self):
+        assert _strip_masked_values('foo') == 'foo'
+        assert _strip_masked_values(None) is None
+        assert _strip_masked_values([1, 2]) == [1, 2]
+
+    def test_real_token_value_still_rejected(self):
+        # Defense: the strip is for masks only. A real token value still
+        # has to go through the dedicated rotation flow.
+        filtered, rejected, _ = validate_settings_post({
+            'email': 'a@b.c',
+            'dns_provider': 'cf',
+            'api_bearer_token': 'cm_evil_real_token_value',
+        })
+        assert 'api_bearer_token' in rejected
+        assert 'api_bearer_token' not in filtered
+
+
+class TestNoOpEchoSilentDrop:
+    """When `current` is supplied, fields whose incoming value matches the
+    on-disk value are silently dropped — regardless of which list they
+    fall under. This is what makes GET-then-POST-back behave like 'save
+    only what changed'.
+    """
+
+    def test_unchanged_writable_field_dropped(self):
+        current = {'email': 'a@b.c', 'dns_provider': 'cloudflare'}
+        filtered, _, _ = validate_settings_post(
+            {'email': 'a@b.c', 'dns_provider': 'cloudflare'},
+            current=current,
+        )
+        assert filtered == {}
+
+    def test_changed_writable_field_kept(self):
+        current = {'email': 'old@b.c', 'dns_provider': 'cloudflare'}
+        filtered, _, _ = validate_settings_post(
+            {'email': 'new@b.c', 'dns_provider': 'cloudflare'},
+            current=current,
+        )
+        assert filtered == {'email': 'new@b.c'}
+
+    def test_unchanged_reject_field_not_rejected(self):
+        # If a round-trip echoes 'deploy_hooks' unchanged, that's not a
+        # mutation attempt — silently drop it instead of 400ing.
+        current = {'deploy_hooks': {'global_hooks': []}, 'email': 'a@b.c'}
+        filtered, rejected, _ = validate_settings_post(
+            {'deploy_hooks': {'global_hooks': []}, 'email': 'a@b.c'},
+            current=current,
+        )
+        assert rejected == []
+        assert filtered == {}
+
+    def test_changed_reject_field_still_rejected(self):
+        current = {'deploy_hooks': {'global_hooks': []}}
+        filtered, rejected, _ = validate_settings_post(
+            {'deploy_hooks': {'global_hooks': [{'command': 'rm -rf /'}]}},
+            current=current,
+        )
+        assert 'deploy_hooks' in rejected
+        assert filtered == {}
+
+    def test_unchanged_users_dict_silently_dropped(self):
+        # The web UI doesn't send 'users' but the integration test fixture
+        # round-trips the full GET response. The reject list must not 400
+        # on this case (atomic_update would protect them anyway).
+        current = {'users': {}, 'email': 'a@b.c'}
+        filtered, rejected, _ = validate_settings_post(
+            {'users': {}, 'email': 'a@b.c'},
+            current=current,
+        )
+        assert rejected == []
+
+    def test_without_current_old_strict_behavior(self):
+        # Backward-compat: when callers don't supply `current`, no-op
+        # detection is disabled. Reject-list fields still 400 immediately.
+        filtered, rejected, _ = validate_settings_post(
+            {'email': 'a@b.c', 'deploy_hooks': {}}
+        )
+        assert 'deploy_hooks' in rejected
 
 
 class TestDiffSettingsKeys:

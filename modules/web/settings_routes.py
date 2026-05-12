@@ -49,8 +49,13 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
                 diff_settings_keys,
             )
             data = request.json
+            # Load *before* validating: validate_settings_post uses the
+            # current state to drop no-op echoes from a GET-then-POST-back
+            # round-trip (the dominant pattern from the web UI).
+            before = settings_manager.load_settings() or {}
             try:
-                filtered, rejected, unknown = validate_settings_post(data)
+                filtered, rejected, unknown = validate_settings_post(
+                    data, current=before)
             except ValueError as e:
                 return jsonify({'error': str(e)}), 400
 
@@ -87,7 +92,6 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
                     'hint': 'Only documented settings keys are accepted.',
                 }), 400
 
-            before = settings_manager.load_settings() or {}
             if not settings_manager.atomic_update(filtered):
                 return jsonify({'error': 'Update failed'}), 500
 

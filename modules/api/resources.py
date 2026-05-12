@@ -182,8 +182,15 @@ def create_api_resources(api, models, managers):
             )
             try:
                 new_settings = api.payload
+                # Load *before* validating: validate_settings_post uses the
+                # current state to drop no-op echoes (a GET-then-POST-back
+                # round-trip would otherwise hit the reject list for fields
+                # like users/api_keys/api_bearer_token_hash that the UI did
+                # not intend to mutate).
+                before = settings_manager.load_settings() or {}
                 try:
-                    filtered, rejected, unknown = validate_settings_post(new_settings)
+                    filtered, rejected, unknown = validate_settings_post(
+                        new_settings, current=before)
                 except ValueError as e:
                     return {'error': str(e)}, 400
 
@@ -219,12 +226,12 @@ def create_api_resources(api, models, managers):
                         'hint': 'Only documented settings keys are accepted.',
                     }, 400
 
-                # Required fields (preserved from previous behavior).
-                for field in ('email', 'dns_provider'):
-                    if field not in filtered:
-                        return {'error': f'Missing required field: {field}'}, 400
-
-                before = settings_manager.load_settings() or {}
+                # Required fields are checked at load_settings + save_settings
+                # layers (validate_email, validate_api_token, supported_providers).
+                # Enforcing them per POST was incompatible with no-op round-trip
+                # echoes — a UI updating cache_ttl shouldn't be required to
+                # resend email + dns_provider that didn't change. The defaults
+                # in load_settings still seed both fields on first run.
                 success = settings_manager.atomic_update(filtered)
                 if not success:
                     return {'error': 'Failed to save settings'}, 500
