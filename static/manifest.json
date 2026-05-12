@@ -1,0 +1,21 @@
+{
+  "name": "CertMate",
+  "short_name": "CertMate",
+  "description": "SSL Certificate Management Platform",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f7fa",
+  "theme_color": "#3b82f6",
+  "icons": [
+    {
+      "src": "/static/img/certmate_logo_256.png",
+      "sizes": "256x256",
+      "type": "image/png"
+    },
+    {
+      "src": "/static/img/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ]
+}

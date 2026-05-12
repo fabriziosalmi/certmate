@@ -231,11 +231,13 @@ class AuditLogger:
         """
         Get recent audit log entries.
 
+        Uses a tail-seek approach to avoid reading the entire file.
+
         Args:
             limit: Maximum number of entries to return
 
         Returns:
-            List of audit entries (parsed JSON)
+            List of audit entries (parsed JSON), newest first
         """
         try:
             if not self.audit_log_file.exists():
@@ -244,24 +246,31 @@ class AuditLogger:
             if limit <= 0:
                 return []
 
+            file_size = self.audit_log_file.stat().st_size
+            if file_size == 0:
+                return []
+
             # Read only the tail of the file so large audit logs do not block
             # the activity page or other callers that only need recent entries.
-            tail_lines = deque(maxlen=limit)
-            with open(self.audit_log_file, 'rb') as f:
-                f.seek(0, 2)
-                remaining = f.tell()
-                buffer = b''
-                block_size = 8192
+            block_size = 8192
+            blocks = []
+            remaining = file_size
 
-                while remaining > 0 and len(tail_lines) < limit:
+            with open(self.audit_log_file, 'rb') as f:
+                while remaining > 0 and len(blocks) <= limit:
                     read_size = min(block_size, remaining)
                     remaining -= read_size
                     f.seek(remaining)
-                    buffer = f.read(read_size) + buffer
-                    tail_lines = deque(buffer.splitlines(), maxlen=limit)
+                    blocks.append(f.read(read_size))
+
+            raw_lines = b''.join(reversed(blocks)).splitlines()
+
+            # If we did not read from the start of the file, the first line can be partial.
+            if remaining > 0 and raw_lines:
+                raw_lines = raw_lines[1:]
 
             entries = []
-            for line in tail_lines:
+            for line in raw_lines[-limit:]:
                 try:
                     raw = line.decode('utf-8', errors='replace')
                     if ' - INFO - ' not in raw:
