@@ -423,7 +423,7 @@ def create_api_resources(api, models, managers):
                 return {
                     'error': f'Certificate creation failed: {error_msg}',
                     'hint': hint
-                }, 500
+                }, 422
             except Exception as e:
                 logger.error(f"Certificate creation failed: {str(e)}")
                 return {

@@ -223,6 +223,11 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
             if success:
                 return jsonify({'message': message})
             return jsonify({'error': message}), 400
+        except FileNotFoundError as e:
+            return jsonify({'error': str(e)}), 404
+        except RuntimeError as e:
+            logger.error(f"Certificate renewal failed: {e}")
+            return jsonify({'error': str(e)}), 422
         except Exception as e:
             logger.error(f"Certificate renewal failed via web: {str(e)}")
             return jsonify({'error': 'Certificate renewal failed'}), 500
