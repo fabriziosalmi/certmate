@@ -51,6 +51,48 @@
                     showMessage('Key name is required', 'error');
                     return;
                 }
+
+                var domains = parseAllowedDomains(self.newKey.allowed_domains);
+
+                // F-4 (2026-05-12 API auth audit follow-up): make the
+                // "unrestricted scope" default explicit. An admin who
+                // submits the form with the allowed_domains field empty
+                // is creating a key with access to every certificate on
+                // the install — surface that intent with a confirm
+                // dialog so it doesn't happen by accident. When the
+                // field has at least one pattern (even a wildcard like
+                // *.example.com), the dialog is skipped.
+                var proceed;
+                if (domains === undefined) {
+                    proceed = CertMate.confirm(
+                        'This key will have no domain restrictions and will be ' +
+                        'authorized to operate on every certificate on this CertMate ' +
+                        'instance, scoped only by the role you selected. ' +
+                        'To restrict the key to specific domains, cancel and fill in ' +
+                        'the Allowed Domains field (comma-separated, supports wildcards ' +
+                        'like *.example.com). Create this unrestricted key?',
+                        'Create Unrestricted API Key'
+                    );
+                } else {
+                    proceed = Promise.resolve(true);
+                }
+
+                proceed.then(function (ok) {
+                    if (!ok) {
+                        // Bring the user back to the input they likely
+                        // intended to fill so the recovery is one click.
+                        var field = document.querySelector(
+                            "[x-data*='apiKeyManager'] input[x-model='newKey.allowed_domains']"
+                        );
+                        if (field) field.focus();
+                        return;
+                    }
+                    self._postCreate(domains);
+                });
+            },
+
+            _postCreate: function (domains) {
+                var self = this;
                 var payload = {
                     name: self.newKey.name.trim(),
                     role: self.newKey.role
@@ -58,7 +100,6 @@
                 if (self.newKey.expires_at) {
                     payload.expires_at = new Date(self.newKey.expires_at).toISOString();
                 }
-                var domains = parseAllowedDomains(self.newKey.allowed_domains);
                 if (domains !== undefined) {
                     payload.allowed_domains = domains;
                 }

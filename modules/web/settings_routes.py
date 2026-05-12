@@ -11,38 +11,53 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
     deploy_manager = managers.get('deployer')
     audit_logger = managers.get('audit')
 
-    @app.route('/api/settings', methods=['GET', 'POST'])
-    @app.route('/api/web/settings', methods=['GET', 'POST'])
+    @app.route('/api/settings', methods=['GET'])
+    @app.route('/api/web/settings', methods=['GET'])
+    @auth_manager.require_role('viewer')
+    def api_settings_get():
+        """Read settings (viewer-accessible).
+
+        Aligns the web blueprint with the Flask-RESTX surface, which
+        already allowed viewer-role reads. Secret values are masked
+        with '********' regardless of caller role, so a viewer never
+        sees real bearer tokens, DNS provider credentials, or
+        storage-backend credentials. The Sprint 1.6 audit follow-up
+        flagged the previous admin-only GET as inconsistent with
+        RESTX and unnecessarily restrictive (a UI-rendering viewer
+        already needs the masked structure to show form fields).
+        """
+        try:
+            settings = settings_manager.load_settings()
+            import copy, re
+            masked = copy.deepcopy(settings)
+            _SECRET_KEYS = re.compile(
+                r'(token|secret|password|key|credential)',
+                re.IGNORECASE
+            )
+            def _mask_dict(d):
+                if not isinstance(d, dict):
+                    return
+                for k in list(d.keys()):
+                    if _SECRET_KEYS.search(k) and isinstance(d[k], str) and d[k]:
+                        d[k] = '********'
+                    elif isinstance(d[k], dict):
+                        _mask_dict(d[k])
+            _mask_dict(masked)
+            response = jsonify(masked)
+            response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, post-check=0, pre-check=0, max-age=0'
+            response.headers['Pragma'] = 'no-cache'
+            response.headers['Expires'] = '-1'
+            return response
+        except Exception as e:
+            logger.error(f"Failed to load settings: {e}")
+            return jsonify({'error': 'Failed to load settings'}), 500
+
+    @app.route('/api/settings', methods=['POST'])
+    @app.route('/api/web/settings', methods=['POST'])
     @auth_manager.require_role('admin')
     def api_settings():
-        """Get or update settings"""
-        if request.method == 'GET':
-            try:
-                settings = settings_manager.load_settings()
-                import copy, re
-                masked = copy.deepcopy(settings)
-                _SECRET_KEYS = re.compile(
-                    r'(token|secret|password|key|credential)',
-                    re.IGNORECASE
-                )
-                def _mask_dict(d):
-                    if not isinstance(d, dict):
-                        return
-                    for k in list(d.keys()):
-                        if _SECRET_KEYS.search(k) and isinstance(d[k], str) and d[k]:
-                            d[k] = '********'
-                        elif isinstance(d[k], dict):
-                            _mask_dict(d[k])
-                _mask_dict(masked)
-                response = jsonify(masked)
-                response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, post-check=0, pre-check=0, max-age=0'
-                response.headers['Pragma'] = 'no-cache'
-                response.headers['Expires'] = '-1'
-                return response
-            except Exception as e:
-                logger.error(f"Failed to load settings: {e}")
-                return jsonify({'error': 'Failed to load settings'}), 500
-
+        """Update settings (admin-only). Same whitelist + audit as the
+        Flask-RESTX Settings.post resource."""
         try:
             from modules.core.settings import (
                 validate_settings_post,

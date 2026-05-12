@@ -5,11 +5,45 @@
     <!-- needed for adaptive design -->
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link href="https://fonts.googleapis.com/css?family=Montserrat:300,400,700|Roboto:300,400,700" rel="stylesheet">
-    <style>body { margin: 0; padding: 0; }</style>
+    <style>
+      /*
+        Self-hosted styling — no external Google Fonts request. The
+        system font stack matches what every major OS already ships
+        and keeps /redoc/ air-gapped friendly. ReDoc's typography
+        configuration below mirrors these families so the rendered
+        spec matches the surrounding chrome.
+      */
+      body {
+        margin: 0;
+        padding: 0;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+                     Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif;
+      }
+      code, pre {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+                     'Liberation Mono', 'Courier New', monospace;
+      }
+    </style>
   </head>
   <body>
-    <redoc spec-url='/static/swagger.json'></redoc>
-    <script src="https://cdn.redoc.ly/redoc/latest/bundles/redoc.standalone.js"> </script>
+    <div id="redoc-container"></div>
+    <script src="/static/js/redoc.standalone.js"></script>
+    <script>
+      // Pin ReDoc's typography to the system-font stack so the
+      // bundle doesn't try to fetch Montserrat/Roboto from Google.
+      Redoc.init('/static/swagger.json', {
+        theme: {
+          typography: {
+            fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif",
+            headings: {
+              fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif"
+            },
+            code: {
+              fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace"
+            }
+          }
+        }
+      }, document.getElementById('redoc-container'));
+    </script>
   </body>
 </html>

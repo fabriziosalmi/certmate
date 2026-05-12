@@ -59,12 +59,29 @@ class TestCSPHeaders:
         assert "font-src 'self'" in csp
         assert "script-src 'self'" in csp
 
-    def test_redoc_csp_allows_external(self, api):
+    def test_redoc_csp_self_only(self, api):
+        """Since v2.4.15 ReDoc is self-hosted under static/js/ and the
+        page no longer fetches Montserrat/Roboto from Google Fonts; the
+        CSP must therefore NOT whitelist any external origin for the
+        /redoc page (air-gapped clean)."""
         r = api.get("/redoc")
         assert r.status_code == 200
         csp = r.headers.get("Content-Security-Policy", "")
-        assert "cdn.redoc.ly" in csp
-        assert "fonts.googleapis.com" in csp
+        assert "cdn.redoc.ly" not in csp
+        assert "fonts.googleapis.com" not in csp
+        assert "fonts.gstatic.com" not in csp
+        assert "script-src 'self'" in csp
+        assert "font-src 'self'" in csp
+
+    def test_redoc_html_self_hosts_bundle(self, api):
+        """The /redoc page must reference the locally-hosted bundle and
+        carry no external CDN references."""
+        r = api.get("/redoc")
+        assert r.status_code == 200
+        body = r.text
+        assert "/static/js/redoc.standalone.js" in body
+        assert "cdn.redoc.ly" not in body
+        assert "fonts.googleapis.com" not in body
 
 
 class TestNoCDNReferences:

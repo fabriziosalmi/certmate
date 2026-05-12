@@ -671,9 +671,16 @@ def setup_security_headers(app):
                 # evaluation). Removing it breaks the UI. The risk is mitigated by
                 # 'unsafe-inline' already being required for inline <script> blocks.
                 # To eliminate unsafe-eval, migrate to the @alpinejs/csp build.
-                "script-src 'self' 'unsafe-inline' 'unsafe-eval' cdn.redoc.ly; "
-                "style-src 'self' 'unsafe-inline' cdn.redoc.ly fonts.googleapis.com; "
-                "font-src 'self' fonts.gstatic.com; "
+                #
+                # ReDoc and its Montserrat/Roboto fonts used to require a CDN
+                # script-src/style-src/font-src whitelist. v2.4.15 self-hosts the
+                # redoc.standalone.js bundle under static/js/ and pins ReDoc's
+                # typography to the system-font stack, removing the need for
+                # cdn.redoc.ly, fonts.googleapis.com, fonts.gstatic.com — the
+                # /redoc/ page is now air-gapped clean.
+                "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+                "style-src 'self' 'unsafe-inline'; "
+                "font-src 'self'; "
                 "img-src 'self' data:; "
                 # Deployment-status checks (#125) cross-fetch every monitored
                 # domain to verify it's serving the expected cert — these are

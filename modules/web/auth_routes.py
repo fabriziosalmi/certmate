@@ -22,7 +22,16 @@ def register_auth_routes(app, managers, require_web_auth, auth_manager,
         """Login endpoint"""
         try:
             client_ip = request.remote_addr or 'unknown'
-            allowed, retry_after = _check_login_rate_limit(client_ip)
+
+            data = request.json or {}
+            username = (data.get('username') or '').strip()
+            password = data.get('password', '')
+
+            # Rate-limit check happens after we've extracted the username
+            # so the per-username bucket can throttle a target under a
+            # distributed (multi-IP) brute-force attack — the per-IP
+            # bucket alone fails open in that scenario (F-7 follow-up).
+            allowed, retry_after = _check_login_rate_limit(client_ip, username)
             if not allowed:
                 response = jsonify({
                     'error': 'Too many attempts. Please try again later.',
@@ -31,17 +40,13 @@ def register_auth_routes(app, managers, require_web_auth, auth_manager,
                 response.headers['Retry-After'] = str(retry_after)
                 return response, 429
 
-            data = request.json
-            username = data.get('username', '').strip()
-            password = data.get('password', '')
-
             if not username or not password:
                 return jsonify({'error': 'Credentials required'}), 400
 
             if not auth_manager.is_local_auth_enabled():
                 return jsonify({'error': 'Local auth disabled'}), 403
 
-            _record_login_attempt(client_ip)
+            _record_login_attempt(client_ip, username)
             user_info = auth_manager.authenticate_user(username, password)
 
             if not user_info:
