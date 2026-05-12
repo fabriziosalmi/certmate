@@ -787,6 +787,7 @@ class CertificateManager:
         if not domain_lock.acquire(blocking=False):
             raise RuntimeError(f"A certificate operation for {domain} is already in progress")
         alias_hook_config = None
+        credentials_file = None
         try:
             # Use the same config/work/log directories as during creation
             cert_dir = self.cert_dir
@@ -814,9 +815,18 @@ class CertificateManager:
                 '--logs-dir', str(logs_dir)
             ]
 
+            # Build per-request environment with DNS provider credentials
+            # (fix #112: env vars like AWS_ACCESS_KEY_ID were missing during
+            # renewal, causing Route53 and other env-var-based providers to
+            # fail with "Unable to locate credentials").
+            process_env = os.environ.copy()
+
+            dns_provider = metadata.get('dns_provider')
+            challenge_type = metadata.get('challenge_type', 'dns-01')
+
             domain_alias = metadata.get('domain_alias')
             if domain_alias:
-                alias_provider = metadata.get('alias_dns_provider') or metadata.get('dns_provider')
+                alias_provider = metadata.get('alias_dns_provider') or dns_provider
                 if not alias_provider:
                     raise RuntimeError(f"Cannot renew {domain}: metadata is missing alias DNS provider")
 
@@ -832,6 +842,9 @@ class CertificateManager:
                     )
 
                 strategy = DNSStrategyFactory.get_strategy(alias_provider)
+                # Inject provider env vars (e.g. AWS credentials) for alias renewals too
+                strategy.prepare_environment(process_env, dns_config)
+
                 propagation_map = settings.get('dns_propagation_seconds', {}) or {}
                 try:
                     propagation_time = int(propagation_map.get(alias_provider, strategy.default_propagation_seconds))
@@ -850,8 +863,27 @@ class CertificateManager:
                     f"Renewing {domain} with DNS alias '{domain_alias}' "
                     f"using {alias_provider} manual hook."
                 )
+            elif dns_provider and challenge_type != 'http-01':
+                # Standard DNS-01 renewal: load DNS config and prepare env vars
+                settings = self.settings_manager.load_settings()
+                dns_config, _ = self.dns_manager.get_dns_provider_account_config(
+                    dns_provider,
+                    metadata.get('account_id'),
+                    settings,
+                )
+                if dns_config:
+                    strategy = DNSStrategyFactory.get_strategy(dns_provider)
+                    strategy.prepare_environment(process_env, dns_config)
+                    # Create credentials file for providers that need one
+                    credentials_file = strategy.create_config_file(dns_config)
+                    logger.info(f"Prepared DNS environment for renewal of {domain} with {dns_provider}")
+                else:
+                    logger.warning(
+                        f"DNS config for provider '{dns_provider}' not found during "
+                        f"renewal of {domain}; certbot may fail if credentials are required"
+                    )
 
-            result = self.shell_executor.run(cmd, capture_output=True, text=True)
+            result = self.shell_executor.run(cmd, capture_output=True, text=True, env=process_env)
             
             if result.returncode == 0:
                 # Copy renewed certificates from the correct live directory
@@ -891,6 +923,11 @@ class CertificateManager:
             if alias_hook_config:
                 try:
                     os.unlink(alias_hook_config)
+                except (FileNotFoundError, OSError):
+                    pass
+            if credentials_file:
+                try:
+                    os.unlink(credentials_file)
                 except (FileNotFoundError, OSError):
                     pass
             domain_lock.release()

@@ -20,7 +20,7 @@
  
 ![screenshot1](screenshot_1.png)
 
-[Quick Start](#quick-start-with-docker) • [Documentation](#documentation) • [Installation](#installation-methods) • [DNS Providers](#supported-dns-providers) • [CA Providers](docs/ca-providers.md) • [Storage Backends](#certificate-storage-configuration) • [Backup & Recovery](#backup--recovery) • [API Reference](#api-usage)
+[Quick Start](#quick-start-with-docker) • [Documentation](#documentation) • [Installation](#installation-methods) • [DNS Providers](#supported-dns-providers) • [CA Providers](docs/ca-providers.md) • [Storage Backends](#certificate-storage-configuration) • [Backup and Recovery](#backup-and-recovery) • [API Reference](#api-usage)
 
 </div>
 
@@ -73,7 +73,7 @@ CertMate solves the complexity of SSL certificate management in modern distribut
 - **Kubernetes Compatible** - Deploy in any Kubernetes cluster
 - **Monitoring Integration** - Health checks, Prometheus metrics, and structured JSON logging
 
-### **Backup & Recovery**
+### **Backup and Recovery**
 - **Unified Backups** - Atomic snapshots of both settings and certificates ensuring data consistency
 - **Automatic Backups** - Settings and certificates backed up automatically on changes
 - **Manual Backup Creation** - On-demand backup creation via web UI or API
@@ -681,8 +681,8 @@ Content-Type: application/json
 POST /api/certificates/example.com/renew
 Authorization: Bearer your_token_here
 
-# Download certificate (ZIP format)
-GET /api/certificates/example.com/download
+# Download certificate bundle as JSON
+GET /api/certificates/example.com/download?format=json
 Authorization: Bearer your_token_here
 
 # Check certificate deployment status
@@ -842,14 +842,13 @@ This endpoint returns a ZIP file containing all certificate files:
 #### cURL Download
 ```bash
 curl -H "Authorization: Bearer your_token_here" \
- -o example.com-tls.zip \
- https://your-certmate-server.com/example.com/tls
+ -o example.com-tls.json \
+ https://your-certmate-server.com/api/certificates/example.com/download?format=json
 ```
 
 #### Python SDK Example
 ```python
 import requests
-import zipfile
 from pathlib import Path
 
 class CertMateClient:
@@ -857,23 +856,13 @@ class CertMateClient:
  self.base_url = base_url.rstrip('/')
  self.headers = {"Authorization": f"Bearer {token}"}
  
- def download_certificate(self, domain, extract_to=None):
- """Download and optionally extract certificate for domain"""
- url = f"{self.base_url}/{domain}/tls"
+ def download_certificate(self, domain):
+ """Download certificate bundle as JSON for domain"""
+ url = f"{self.base_url}/api/certificates/{domain}/download?format=json"
  
  response = requests.get(url, headers=self.headers)
  response.raise_for_status()
- 
- zip_path = f"{domain}-tls.zip"
- with open(zip_path, 'wb') as f:
- f.write(response.content)
- 
- if extract_to:
- Path(extract_to).mkdir(parents=True, exist_ok=True)
- with zipfile.ZipFile(zip_path, 'r') as zip_ref:
- zip_ref.extractall(extract_to)
- 
- return zip_path
+ return response.json()
  
  def list_certificates(self):
  """List all managed certificates"""
@@ -905,8 +894,18 @@ client = CertMateClient("https://certmate.company.com", "your_token_here")
 
 # List and download certificates
 certs = client.list_certificates()
-client.download_certificate("api.company.com", extract_to="/etc/ssl/certs/api/")
+bundle = client.download_certificate("api.company.com")
+Path("/etc/ssl/certs/api").mkdir(parents=True, exist_ok=True)
+for name, key in {
+    "cert.pem": "cert_pem",
+    "chain.pem": "chain_pem",
+    "fullchain.pem": "fullchain_pem",
+    "privkey.pem": "private_key_pem",
+}.items():
+    Path("/etc/ssl/certs/api", name).write_text(bundle[key])
 ```
+
+The same JSON response shape can be consumed directly by Ansible's `uri` module or Salt's HTTP helpers without unpacking an archive.
 
 #### Infrastructure as Code Examples
 
@@ -997,8 +996,8 @@ download_certificate() {
  # Download with retry logic
  for i in {1..3}; do
  if curl -f -H "Authorization: Bearer $API_TOKEN" \
- -o "${DOMAIN}-tls.zip" \
- "$CERTMATE_URL/$DOMAIN/tls"; then
+ -o "${DOMAIN}-tls.json" \
+ "$CERTMATE_URL/api/certificates/$DOMAIN/download?format=json"; then
  log "Certificate downloaded successfully"
  return 0
  else
@@ -1014,7 +1013,10 @@ download_certificate() {
 extract_certificate() {
  log "Extracting certificate to ${CERT_DIR}"
  mkdir -p "$CERT_DIR"
- unzip -o "${DOMAIN}-tls.zip" -d "$CERT_DIR"
+ jq -r '.cert_pem' "${DOMAIN}-tls.json" > "$CERT_DIR/cert.pem"
+ jq -r '.chain_pem' "${DOMAIN}-tls.json" > "$CERT_DIR/chain.pem"
+ jq -r '.fullchain_pem' "${DOMAIN}-tls.json" > "$CERT_DIR/fullchain.pem"
+ jq -r '.private_key_pem' "${DOMAIN}-tls.json" > "$CERT_DIR/privkey.pem"
  
  # Set proper permissions
  chmod 600 "$CERT_DIR"/*.pem
@@ -1029,7 +1031,7 @@ reload_services() {
 }
 
 cleanup() {
- rm -f "${DOMAIN}-tls.zip"
+ rm -f "${DOMAIN}-tls.json"
 }
 
 # Main execution
@@ -1111,21 +1113,28 @@ main "$@"
  
  - name: Download and deploy certificates
  block:
- - name: Download certificate
+ - name: Download certificate bundle as JSON
  uri:
- url: "{{ certmate_url }}/{{ item }}/tls"
+ url: "{{ certmate_url }}/api/certificates/{{ item }}/download?format=json"
  headers:
  Authorization: "Bearer {{ certmate_token }}"
- dest: "/tmp/{{ item }}-tls.zip"
+ return_content: yes
+ register: cert_bundle
  
- - name: Extract certificate
- unarchive:
- src: "/tmp/{{ item }}-tls.zip"
- dest: "/etc/ssl/certs/{{ item }}/"
- remote_src: yes
+ - name: Write certificate files
+ copy:
+ dest: "/etc/ssl/certs/{{ item.0.item }}/{{ item.1.name }}"
+ content: "{{ item.0.json[item.1.key] }}"
  owner: root
  group: ssl-cert
- mode: '0640'
+ mode: "{{ item.1.mode }}"
+ loop: "{{ cert_bundle.results | product(cert_files) | list }}"
+ vars:
+ cert_files:
+ - { name: "cert.pem", key: "cert_pem", mode: "0644" }
+ - { name: "chain.pem", key: "chain_pem", mode: "0644" }
+ - { name: "fullchain.pem", key: "fullchain_pem", mode: "0644" }
+ - { name: "privkey.pem", key: "private_key_pem", mode: "0600" }
  loop:
  - "api.company.com"
  - "staging.company.com"
@@ -1186,23 +1195,28 @@ main "$@"
  
  - name: Download certificates
  uri:
- url: "{{ certmate_url }}/{{ item.name }}/tls"
+ url: "{{ certmate_url }}/api/certificates/{{ item.name }}/download?format=json"
  method: GET
  headers:
  Authorization: "Bearer {{ api_token }}"
- dest: "/tmp/{{ item.name }}-tls.zip"
- creates: "/tmp/{{ item.name }}-tls.zip"
+ return_content: yes
+ register: cert_bundle
  loop: "{{ certificate_domains }}"
  
- - name: Extract certificates
- unarchive:
- src: "/tmp/{{ item.name }}-tls.zip"
- dest: "/etc/ssl/certs/{{ item.name }}/"
+ - name: Write certificates
+ copy:
+ dest: "/etc/ssl/certs/{{ item.0.item.name }}/{{ item.1.name }}"
+ content: "{{ item.0.json[item.1.key] }}"
  owner: root
  group: ssl-cert
- mode: '0640'
- remote_src: yes
- loop: "{{ certificate_domains }}"
+ mode: "{{ item.1.mode }}"
+ loop: "{{ cert_bundle.results | product(cert_files) | list }}"
+ vars:
+ cert_files:
+ - { name: "cert.pem", key: "cert_pem", mode: "0644" }
+ - { name: "chain.pem", key: "chain_pem", mode: "0644" }
+ - { name: "fullchain.pem", key: "fullchain_pem", mode: "0644" }
+ - { name: "privkey.pem", key: "private_key_pem", mode: "0600" }
  notify: 
  - reload nginx
  - reload haproxy
@@ -1226,7 +1240,7 @@ main "$@"
  
  - name: Cleanup temporary files
  file:
- path: "/tmp/{{ item.name }}-tls.zip"
+ path: "/tmp/{{ item.name }}-tls.json"
  state: absent
  loop: "{{ certificate_domains }}"
  
@@ -1687,6 +1701,7 @@ certmate/
 #### Authentication & Authorization
 - **Role-Based Access Control**: Assign viewer, operator, or admin roles to each user
 - **Scoped API Keys**: Create API keys with specific role permissions and optional expiration
+- **Per-Domain Scoping (`allowed_domains`)**: Restrict a scoped API key to a list of domain patterns. Supports exact (`example.com`) and wildcard (`*.example.com`) forms; the wildcard matches subdomains only, not the apex. Out-of-scope requests return `403 DOMAIN_OUT_OF_SCOPE` and are recorded in the audit log. Leave the field empty for unrestricted access (legacy behavior).
 - **HMAC-SHA256 Token Hashing**: API tokens are hashed with a server-side HMAC secret, preventing offline brute-force even if the settings file is leaked (backward compatible with pre-2.2.6 SHA-256 hashes)
 - **Strong Bearer Tokens**: Use cryptographically secure tokens (32+ characters)
 - **Token Rotation**: Regularly rotate API tokens and revoke unused keys
@@ -1694,11 +1709,31 @@ certmate/
 - **HTTPS Only**: Always use HTTPS in production environments
 - **IP Restrictions**: Implement firewall rules to restrict access
 
+#### Settings API Hardening
+- **Strict Field Whitelist on `POST /api/settings`**: only documented configuration keys are accepted. Sensitive fields (`api_bearer_token`, `deploy_hooks`, `users`, `api_keys`, `local_auth_enabled`) **cannot** be written through the generic settings endpoint — each has its own dedicated endpoint with its own audit:
+  - Users → `POST /api/users`
+  - API keys → `POST /api/keys`
+  - Deploy hooks → `POST /api/deploy/config`
+  - Local auth toggle → `POST /api/auth/config` (admin-only)
+  Unknown or rejected keys are returned in a `400` response with a `hint` field pointing at the correct endpoint.
+- **Audit Trail for Configuration Changes**: every mutation to settings, the auth-config toggle, users, scoped API keys, and deploy hooks is recorded with operator identity and source IP. Authorization denials (out-of-scope domain access, blocked field writes) are recorded too. Logs are written to `data/audit/certificate_audit.log` as one JSON object per line — pipeable into your SIEM of choice.
+
 #### Certificate Security
 - **File Permissions**: Private keys stored with `600` permissions
 - **Directory Permissions**: Certificate directories with `700` permissions
 - **Backup Encryption**: Encrypt certificate backups
 - **Access Logging**: Monitor certificate access patterns
+
+#### Secret Storage Hardening
+CertMate stores DNS provider credentials, ACME account keys, and (legacy) bearer tokens inside `data/settings.json`. The bearer token itself is migrated to an HMAC-SHA256 hash on first save, but **DNS provider credentials remain in the file in their original form** so they can be passed to certbot plugins. The file is created with `0600` permissions, which is the first line of defense. Recommended hardening, in order of effort:
+
+1. **Use an external secret backend** (already supported): point `certificate_storage.backend` at HashiCorp Vault, Infisical, AWS Secrets Manager, or Azure Key Vault. Issued certificates are stored there transparently, keeping the bearer token + DNS credentials in `settings.json` as the only on-disk secret surface.
+2. **Encrypt the underlying volume**: run CertMate's `data/` directory on a LUKS-encrypted partition (Linux), an encrypted APFS volume (macOS), or a Kubernetes `Secret` mounted in a `tmpfs`. This protects credentials at rest even if the host disk is removed or imaged.
+3. **Run as a dedicated non-root user** with `data/` owned by that user and `0700` mode. Verify with `ls -la data/` — only the CertMate process user should be able to read the file.
+4. **Avoid bind-mounting `data/` from untrusted sources** in Docker. Use a named volume managed by Docker, or a CSI-provisioned volume in Kubernetes, rather than a bind from a multi-tenant host.
+5. **Rotate credentials regularly**: DNS provider credentials can be rotated independently of CertMate — issue a new token in the provider console, update Settings, then revoke the old token. CertMate will pick up the new credentials on the next renewal.
+
+> CertMate does **not** currently encrypt secrets at the application layer. If your threat model requires that the same operator who can read `settings.json` should still not be able to read DNS credentials, use option (1) above and configure the per-provider credentials in the external secret backend rather than in CertMate's settings.
 
 #### Network Security
 ```bash
@@ -1716,27 +1751,27 @@ iptables -A INPUT -p tcp --dport 8000 -j DROP
 # docker-compose.prod.yml
 version: '3.8'
 services:
- certmate:
- image: certmate:latest
- deploy:
- replicas: 2
- resources:
- limits:
- cpus: '1.0'
- memory: 512M
- reservations:
- cpus: '0.5'
- memory: 256M
- environment:
- - FLASK_ENV=production
- - GUNICORN_WORKERS=4
- - GUNICORN_THREADS=2
- healthcheck:
- test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
- interval: 30s
- timeout: 10s
- retries: 3
- start_period: 60s
+  certmate:
+    image: certmate:latest
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    environment:
+      - FLASK_ENV=production
+      - GUNICORN_WORKERS=4
+      - GUNICORN_THREADS=2
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 ```
 
 #### Load Balancing with Nginx
@@ -1767,7 +1802,7 @@ server {
 }
 ```
 
-### Backup & Recovery
+### Backup and Recovery
 
 CertMate provides comprehensive backup and recovery capabilities built directly into the application, ensuring your certificates and configuration data are always protected.
 

@@ -353,36 +353,54 @@ class DeployManager:
         """Check a deploy hook command for dangerous patterns.
 
         Returns (safe: bool, reason: str | None).
+
+        The sanitizer intentionally allows:
+        - $CERTMATE_* / ${CERTMATE_*} env vars (injected by CertMate itself)
+        - Simple pipes (|) for common post-processing (e.g. curl | jq)
+        - Simple output redirection (> file) to non-absolute paths
+
+        It blocks:
+        - Backtick sub-shells, $() sub-shells
+        - Arbitrary ${...} parameter expansion (except CERTMATE_*)
+        - Command chaining (&&, ||, ;)
+        - eval / source builtins
+        - Redirect to absolute paths (> /etc/... could overwrite system files)
+        - References to CertMate-internal sensitive files
         """
         import re
 
         if len(command) > 1024:
             return False, "command exceeds 1024 character limit"
 
-        # Block shell metacharacters that enable chaining, sub-shells, or
-        # redirection to absolute paths (which could overwrite system files).
+        # Strip out whitelisted env var references before applying the
+        # dangerous-pattern check. CertMate injects these into the hook
+        # environment (see _run_hook), so they're safe to reference.
+        # Both $CERTMATE_FOO and ${CERTMATE_FOO} forms are allowed.
+        _safe_vars = re.compile(r'\$\{?CERTMATE_[A-Z_]+\}?')
+        sanitized = _safe_vars.sub('__SAFE__', command)
+
+        # Block shell metacharacters that enable code injection.
         _DANGEROUS_SHELL = re.compile(
             r'[`]'              # backtick sub-shell
             r'|\$\('            # $() sub-shell
-            r'|\$\{'            # ${} parameter expansion
+            r'|\$\{'            # ${} parameter expansion (after safe vars removed)
             r'|&&'              # logical AND chaining
             r'|\|\|'            # logical OR chaining
             r'|[;]'             # statement separator
             r'|[\r\n]'          # newline / CR — sh -c treats them as `;`
-            r'|\|'              # pipe
             r'|>\s*/'           # redirect to absolute path
             r'|<<'              # here-doc
             r'|\beval\b'        # eval built-in
             r'|\bsource\b'     # source built-in
             r'|\b\.\s+/'       # ". /path" (source shorthand)
         )
-        if _DANGEROUS_SHELL.search(command):
+        if _DANGEROUS_SHELL.search(sanitized):
             return False, "contains dangerous shell metacharacters"
 
         # Block access to CertMate's own sensitive files.
         _BLOCKED_FILES = re.compile(
             r'(settings\.json|api_bearer_token|client_secret'
-            r'|vault_token|\.env\b|private.*key|\.pem\b)',
+            r'|vault_token|\.env\b)',
             re.IGNORECASE,
         )
         if _BLOCKED_FILES.search(command):

@@ -591,11 +591,11 @@
                 }
             }
 
-            if (data.auto_renew !== undefined) {
+            {
                 var autoRenewField = document.getElementById('auto_renew');
                 if (autoRenewField) {
-                    autoRenewField.checked = data.auto_renew;
-                    addDebugLog('Auto-renewal set to ' + data.auto_renew, 'info');
+                    autoRenewField.checked = data.auto_renew !== false;
+                    addDebugLog('Auto-renewal set to ' + autoRenewField.checked, 'info');
                 }
             }
 
@@ -2437,6 +2437,18 @@
             return;
         }
 
+        // Client-side password policy check (mirrors backend)
+        if (password.length < 12 || !/\d/.test(password) || !/[^A-Za-z0-9]/.test(password)) {
+            showMessage('Password must be at least 12 characters and include a digit and a symbol', 'error');
+            var pwField = document.getElementById('newUserPassword');
+            if (pwField) {
+                pwField.classList.add('border-red-500', 'input-shake');
+                pwField.focus();
+                setTimeout(function() { pwField.classList.remove('border-red-500', 'input-shake'); }, 3000);
+            }
+            return;
+        }
+
         fetch('/api/users', {
             method: 'POST',
             headers: {
@@ -2462,7 +2474,7 @@
             })
             .catch(function (error) {
                 console.error('Error creating user:', error);
-                showMessage('Failed to create user', 'error');
+                showMessage('Failed to create user: ' + error.message, 'error');
             });
     }
 
@@ -2470,8 +2482,13 @@
         var userListDiv = document.getElementById('userList');
         userListDiv.innerHTML = '<div class="text-center py-4 text-gray-500 dark:text-gray-400 text-sm"><i class="fas fa-spinner fa-spin mr-2"></i> Loading users...</div>';
 
+        // Timeout after 15 seconds to prevent infinite loading
+        var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        var timeoutId = controller ? setTimeout(function() { controller.abort(); }, 15000) : null;
+
         fetch('/api/users', {
-            headers: {}
+            headers: {},
+            signal: controller ? controller.signal : undefined
         })
             .then(function (response) {
                 if (!response.ok) {
@@ -2480,6 +2497,7 @@
                 return response.json();
             })
             .then(function (data) {
+                if (timeoutId) clearTimeout(timeoutId);
                 var users = data.users || {};
 
                 if (Object.keys(users).length === 0) {
@@ -2547,8 +2565,12 @@
                 });
             })
             .catch(function (error) {
+                if (timeoutId) clearTimeout(timeoutId);
                 console.error('Error loading users:', error);
-                userListDiv.innerHTML = '<div class="text-center py-4 text-red-500 text-sm"><i class="fas fa-exclamation-triangle mr-2"></i> Failed to load users</div>';
+                var msg = error.name === 'AbortError'
+                    ? 'User list request timed out. Click Refresh to retry.'
+                    : 'Failed to load users. Click Refresh to retry.';
+                userListDiv.innerHTML = '<div class="text-center py-4 text-red-500 text-sm"><i class="fas fa-exclamation-triangle mr-2"></i> ' + msg + '</div>';
             });
     }
 
@@ -2657,14 +2679,14 @@
             });
         });
 
-        // Load settings on page load
+        // Load settings on page load (critical, runs first)
         loadSettings();
 
         // Initialize CA provider configuration visibility
         toggleCAProviderConfig();
 
-        // Refresh cache stats on load
-        refreshCacheStats();
+        // Refresh cache stats (delayed to avoid thread starvation)
+        setTimeout(function () { refreshCacheStats(); }, 1500);
 
         // Form submit handler
         if (form) {
@@ -2675,14 +2697,14 @@
             });
         }
 
-        // Backup list (delayed)
-        setTimeout(function () { refreshBackupList(); }, 1000);
+        // Backup list (delayed further)
+        setTimeout(function () { refreshBackupList(); }, 3000);
 
-        // User management (delayed)
+        // User management (delayed further still)
         setTimeout(function () {
             loadAuthConfig();
             refreshUserList();
-        }, 500);
+        }, 4000);
     });
 
     // =============================================

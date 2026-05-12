@@ -10,8 +10,8 @@
     // DNS provider definitions with required fields
     var PROVIDERS = {
         cloudflare:    { label: 'Cloudflare', icon: 'fa-cloud', fields: [{ key: 'api_token', label: 'API Token', type: 'password' }] },
-        route53:       { label: 'AWS Route 53', icon: 'fa-aws', fields: [{ key: 'access_key_id', label: 'Access Key ID', type: 'text' }, { key: 'secret_access_key', label: 'Secret Access Key', type: 'password' }, { key: 'region', label: 'Region', type: 'text', placeholder: 'us-east-1' }] },
-        digitalocean:  { label: 'DigitalOcean', icon: 'fa-digital-ocean', fields: [{ key: 'api_token', label: 'API Token', type: 'password' }] },
+        route53:       { label: 'AWS Route 53', icon: 'fa-cloud-upload-alt', fields: [{ key: 'access_key_id', label: 'Access Key ID', type: 'text' }, { key: 'secret_access_key', label: 'Secret Access Key', type: 'password' }, { key: 'region', label: 'Region', type: 'text', placeholder: 'us-east-1' }] },
+        digitalocean:  { label: 'DigitalOcean', icon: 'fa-water', fields: [{ key: 'api_token', label: 'API Token', type: 'password' }] },
         hetzner:       { label: 'Hetzner', icon: 'fa-server', fields: [{ key: 'api_token', label: 'API Token', type: 'password' }] },
         gandi:         { label: 'Gandi', icon: 'fa-globe', fields: [{ key: 'api_token', label: 'API Token', type: 'password' }] },
         linode:        { label: 'Akamai Connected Cloud (Linode)', icon: 'fa-cloud', fields: [{ key: 'api_key', label: 'API Key', type: 'password' }] },
@@ -21,8 +21,8 @@
         namecheap:     { label: 'Namecheap', icon: 'fa-globe', fields: [{ key: 'username', label: 'Username', type: 'text' }, { key: 'api_key', label: 'API Key', type: 'password' }] },
         vultr:         { label: 'Vultr', icon: 'fa-cloud', fields: [{ key: 'api_key', label: 'API Key', type: 'password' }] },
         ovh:           { label: 'OVH', icon: 'fa-globe', fields: [{ key: 'endpoint', label: 'Endpoint', type: 'text', placeholder: 'ovh-eu' }, { key: 'application_key', label: 'Application Key', type: 'text' }, { key: 'application_secret', label: 'Application Secret', type: 'password' }, { key: 'consumer_key', label: 'Consumer Key', type: 'password' }] },
-        azure:         { label: 'Azure DNS', icon: 'fa-microsoft', fields: [{ key: 'subscription_id', label: 'Subscription ID', type: 'text' }, { key: 'resource_group', label: 'Resource Group', type: 'text' }, { key: 'tenant_id', label: 'Tenant ID', type: 'text' }, { key: 'client_id', label: 'Client ID', type: 'text' }, { key: 'client_secret', label: 'Client Secret', type: 'password' }] },
-        google:        { label: 'Google Cloud DNS', icon: 'fa-google', fields: [{ key: 'project_id', label: 'Project ID', type: 'text' }, { key: 'service_account_key', label: 'Service Account Key (JSON)', type: 'textarea' }] }
+        azure:         { label: 'Azure DNS', icon: 'fa-cube', fields: [{ key: 'subscription_id', label: 'Subscription ID', type: 'text' }, { key: 'resource_group', label: 'Resource Group', type: 'text' }, { key: 'tenant_id', label: 'Tenant ID', type: 'text' }, { key: 'client_id', label: 'Client ID', type: 'text' }, { key: 'client_secret', label: 'Client Secret', type: 'password' }] },
+        google:        { label: 'Google Cloud DNS', icon: 'fa-cloud-meatball', fields: [{ key: 'project_id', label: 'Project ID', type: 'text' }, { key: 'service_account_key', label: 'Service Account Key (JSON)', type: 'textarea' }] }
     };
 
     var state = { step: 1, email: '', provider: '', credentials: {} };

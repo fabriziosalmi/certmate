@@ -7,6 +7,9 @@
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico">
     <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <meta name="theme-color" content="#3b82f6" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#0b1120" media="(prefers-color-scheme: dark)">
+    <link rel="manifest" href="/static/manifest.json">
     <link href="/static/css/tailwind.min.css" rel="stylesheet">
     <link href="/static/css/fontawesome.min.css" rel="stylesheet">
     {% block head %}{% endblock %}
@@ -20,9 +23,9 @@
     })();
     </script>
 </head>
-<body class="bg-gray-50 dark:bg-gray-900 min-h-screen pb-16 md:pb-0 transition-colors duration-200">
+<body class="bg-surface-light dark:bg-surface-dark min-h-screen pb-16 md:pb-0 transition-colors duration-200 font-sans">
     <!-- Top Navigation -->
-    <nav class="bg-white dark:bg-gray-800 shadow-sm border-b dark:border-gray-700">
+    <nav class="bg-white dark:bg-surface-card shadow-card border-b border-gray-200/60 dark:border-white/5">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between h-14 md:h-16">
                 <div class="flex items-center">
@@ -38,20 +41,18 @@
                 </div>
                 <div class="flex items-center space-x-1 sm:space-x-4">
                     <!-- Desktop nav links (hidden on mobile — bottom tab bar used instead) -->
-                    <a href="/" class="hidden md:inline-flex px-3 py-2 rounded-md text-sm font-medium {% if request.path == '/' %}text-primary bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700{% else %}text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700{% endif %}">
-                        <i class="fas fa-certificate mr-1"></i> Certificates
+                    <a href="/" class="hidden md:inline-flex items-center px-3 py-2 text-sm {% if request.path == '/' %}nav-active{% else %}nav-inactive{% endif %}">
+                        <i class="fas fa-certificate mr-1.5 text-[0.85em] leading-none -translate-y-px"></i> Certificates
                     </a>
-                    <a href="/#client" class="hidden md:inline-flex px-3 py-2 rounded-md text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700">
-                        <i class="fas fa-id-card mr-1"></i> Client Certs
+
+                    <a href="/settings" class="hidden md:inline-flex items-center px-3 py-2 text-sm {% if request.path == '/settings' %}nav-active{% else %}nav-inactive{% endif %}">
+                        <i class="fas fa-cog mr-1.5 text-[0.85em] leading-none -translate-y-px"></i> Settings
                     </a>
-                    <a href="/settings" class="hidden md:inline-flex px-3 py-2 rounded-md text-sm font-medium {% if request.path == '/settings' %}text-primary bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700{% else %}text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700{% endif %}">
-                        <i class="fas fa-cog mr-1"></i> Settings
+                    <a href="/help" class="hidden md:inline-flex items-center px-3 py-2 text-sm {% if request.path == '/help' %}nav-active{% else %}nav-inactive{% endif %}">
+                        <i class="fas fa-question-circle mr-1.5 text-[0.85em] leading-none -translate-y-px"></i> Help
                     </a>
-                    <a href="/help" class="hidden md:inline-flex px-3 py-2 rounded-md text-sm font-medium {% if request.path == '/help' %}text-primary bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700{% else %}text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700{% endif %}">
-                        <i class="fas fa-question-circle mr-1"></i> Help
-                    </a>
-                    <a href="/activity" class="hidden md:inline-flex px-3 py-2 rounded-md text-sm font-medium {% if request.path == '/activity' %}text-primary bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700{% else %}text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700{% endif %}">
-                        <i class="fas fa-history mr-1"></i> Activity
+                    <a href="/activity" class="hidden md:inline-flex items-center px-3 py-2 text-sm {% if request.path == '/activity' %}nav-active{% else %}nav-inactive{% endif %}">
+                        <i class="fas fa-history mr-1.5 text-[0.85em] leading-none -translate-y-px"></i> Activity
                     </a>
                     <!-- Search (Cmd+K) -->
                     <button type="button" onclick="document.dispatchEvent(new KeyboardEvent('keydown',{key:'k',metaKey:true}))" class="hidden sm:inline-flex items-center px-2.5 py-1.5 text-sm text-gray-400 bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition" title="Search (Cmd+K)">
@@ -67,7 +68,7 @@
                     <div class="relative">
                         <button type="button" id="notifBtn" onclick="toggleNotifications()" class="px-2 py-2 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 relative" title="Notifications">
                             <i class="fas fa-bell"></i>
-                            <span id="notifBadge" class="hidden absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">0</span>
+                            <span id="notifBadge" class="hidden absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold badge-pulse">0</span>
                         </button>
                         <div id="notifPanel" class="hidden absolute right-0 mt-2 w-[calc(100vw-2rem)] max-w-sm md:w-80 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 z-50 max-h-96 overflow-y-auto">
                             <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
@@ -80,8 +81,8 @@
                     </div>
                     <!-- Dark mode toggle -->
                     <button id="themeToggle" onclick="toggleTheme()" class="px-2 py-2 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700" title="Toggle theme">
-                        <i class="fas fa-moon dark:hidden"></i>
-                        <i class="fas fa-sun hidden dark:inline"></i>
+                        <i class="fas fa-moon" id="theme-icon-moon"></i>
+                        <i class="fas fa-sun" id="theme-icon-sun" style="display:none"></i>
                     </button>
                     <!-- Logout -->
                     <button id="logoutBtn" onclick="doLogout()" style="display:none" class="px-3 py-2 rounded-md text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 border border-red-200 dark:border-red-700" title="Logout">
@@ -93,40 +94,47 @@
     </nav>
 
     <!-- Bottom Tab Bar (mobile only) -->
-    <nav class="fixed bottom-0 left-0 right-0 md:hidden bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 shadow-[0_-2px_10px_rgba(0,0,0,0.1)] z-40 safe-area-bottom" id="bottomTabBar">
+    <nav class="fixed bottom-0 left-0 right-0 md:hidden bg-white dark:bg-surface-card border-t border-gray-200 dark:border-white/5 shadow-[0_-2px_10px_rgba(0,0,0,0.1)] z-40 safe-area-bottom" id="bottomTabBar">
         <div class="flex justify-around h-14">
-            <a href="/" class="flex flex-col items-center justify-center flex-1 py-1 {% if request.path == '/' %}text-primary{% else %}text-gray-500 dark:text-gray-400{% endif %}">
+            <a href="/" class="flex flex-col items-center justify-center flex-1 py-1 transition-colors duration-150 {% if request.path == '/' %}text-primary{% else %}text-gray-500 dark:text-gray-400{% endif %}">
                 <i class="fas fa-certificate text-lg"></i>
-                <span class="text-[10px] mt-0.5 font-medium">Certs</span>
+                <span class="text-xs mt-0.5 font-medium">Certs</span>
             </a>
-            <a href="/#client" class="flex flex-col items-center justify-center flex-1 py-1 text-gray-500 dark:text-gray-400">
-                <i class="fas fa-id-card text-lg"></i>
-                <span class="text-[10px] mt-0.5 font-medium">Client</span>
-            </a>
-            <a href="/settings" class="flex flex-col items-center justify-center flex-1 py-1 {% if request.path == '/settings' %}text-primary{% else %}text-gray-500 dark:text-gray-400{% endif %}">
+            <a href="/settings" class="flex flex-col items-center justify-center flex-1 py-1 transition-colors duration-150 {% if request.path == '/settings' %}text-primary{% else %}text-gray-500 dark:text-gray-400{% endif %}">
                 <i class="fas fa-cog text-lg"></i>
-                <span class="text-[10px] mt-0.5 font-medium">Settings</span>
+                <span class="text-xs mt-0.5 font-medium">Settings</span>
             </a>
-            <a href="/activity" class="flex flex-col items-center justify-center flex-1 py-1 {% if request.path == '/activity' %}text-primary{% else %}text-gray-500 dark:text-gray-400{% endif %}">
+            <a href="/help" class="flex flex-col items-center justify-center flex-1 py-1 transition-colors duration-150 {% if request.path == '/help' %}text-primary{% else %}text-gray-500 dark:text-gray-400{% endif %}">
+                <i class="fas fa-question-circle text-lg"></i>
+                <span class="text-xs mt-0.5 font-medium">Help</span>
+            </a>
+            <a href="/activity" class="flex flex-col items-center justify-center flex-1 py-1 transition-colors duration-150 {% if request.path == '/activity' %}text-primary{% else %}text-gray-500 dark:text-gray-400{% endif %}">
                 <i class="fas fa-history text-lg"></i>
-                <span class="text-[10px] mt-0.5 font-medium">Activity</span>
+                <span class="text-xs mt-0.5 font-medium">Activity</span>
             </a>
         </div>
     </nav>
     <script>
-    // Auth check
-    (function(){
+    // Auth check -- delayed to avoid competing with page-critical resources
+    setTimeout(function(){
         fetch('/api/auth/me',{credentials:'same-origin'})
             .then(function(r){return r.json()})
             .then(function(d){if(d&&d.user&&d.user.username)document.getElementById('logoutBtn').style.display='inline-block';})
             .catch(function(){});
-    })();
+    }, 500);
     function doLogout(){
         fetch('/api/auth/logout',{method:'POST',credentials:'same-origin'})
             .then(function(){window.location.href='/login'})
             .catch(function(){window.location.href='/login'});
     }
     // Theme toggle
+    function _syncThemeIcons() {
+        var isDark = document.documentElement.classList.contains('dark');
+        var moon = document.getElementById('theme-icon-moon');
+        var sun = document.getElementById('theme-icon-sun');
+        if (moon) moon.style.display = isDark ? 'none' : '';
+        if (sun) sun.style.display = isDark ? '' : 'none';
+    }
     function toggleTheme(){
         var html = document.documentElement;
         if (html.classList.contains('dark')) {
@@ -136,7 +144,10 @@
             html.classList.add('dark');
             localStorage.setItem('theme', 'dark');
         }
+        _syncThemeIcons();
     }
+    // Sync icons once DOM is ready (handles dark-mode-on-load case)
+    document.addEventListener('DOMContentLoaded', _syncThemeIcons);
     // Notifications
     var _notifOpen = false;
     function toggleNotifications() {
@@ -213,8 +224,8 @@
             .then(function(certs) { renderNotifications(certs); })
             .catch(function() {});
     }
-    // Check on load (with cache) and refresh every 5 minutes
-    setTimeout(checkNotifications, 2000);
+    // Check on load (with cache, staggered after auth) and refresh every 5 min
+    setTimeout(checkNotifications, 4000);
     setInterval(function() { checkNotifications(true); }, 300000);
 
     // SSE real-time updates
@@ -259,17 +270,22 @@
             };
         }
 
-        // Delay SSE connection to avoid race with auth
-        setTimeout(connectSSE, 3000);
+        // Delay SSE to avoid thread starvation (1 worker + 4 threads)
+        // SSE holds a thread permanently; connect after page is interactive
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(connectSSE, 5000);
+        });
     })();
     </script>
     <script defer src="/static/js/alpine.min.js"></script>
     <script src="/static/js/certmate.js"></script>
-    <script src="/static/js/cmd-palette.js"></script>
-    <script src="/static/js/shortcuts.js"></script>
-    <script src="/static/js/setup-wizard.js"></script>
+    <script defer src="/static/js/cmd-palette.js"></script>
+    <script defer src="/static/js/shortcuts.js"></script>
+    <script defer src="/static/js/setup-wizard.js"></script>
 
+    <main class="page-enter">
     {% block content %}{% endblock %}
+    </main>
 
     {% block scripts %}{% endblock %}
 </body>

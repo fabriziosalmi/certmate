@@ -75,6 +75,12 @@ PLAN_*.docx
 
 htmlcov/
 .pytest_cache/
+.coverage
+coverage.xml
+test_results.json
+
+# Local dev / debug scripts (kept on developer machines only)
+debug_*.py
 
 backups/
 app.py.backup
@@ -94,3 +100,5 @@ github_response.md
 PLAN.md
 scratch/
 test_settings.py
+# Internal audit docs (not for distribution)
+UI_AUDIT.md

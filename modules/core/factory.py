@@ -1,6 +1,9 @@
 import os
-import tempfile
 import secrets
+import sys
+import threading
+import time
+import traceback
 from pathlib import Path
 from typing import Optional
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -28,6 +31,7 @@ from modules.api.client_certificates import create_client_certificate_resources
 from modules.web import register_web_routes
 
 logger = get_certmate_logger('factory')
+request_logger = get_certmate_logger('request-watchdog')
 
 
 class AppContainer:
@@ -41,6 +45,129 @@ class AppContainer:
         self.data_dir = None
         self.backup_dir = None
         self.logs_dir = None
+        self.request_watchdog = None
+
+
+def _env_float(name: str, default: float, min_value: float = 0.0) -> float:
+    raw = os.getenv(name, '').strip()
+    if not raw:
+        return default
+    try:
+        value = float(raw)
+    except ValueError:
+        logger.warning(f"Invalid {name} value '{raw}'; using default {default}")
+        return default
+    return max(value, min_value)
+
+
+def _format_thread_stack(thread_id: int) -> str:
+    frame = sys._current_frames().get(thread_id)
+    if frame is None:
+        return ''
+    return ''.join(traceback.format_stack(frame))
+
+
+def setup_slow_request_logging(app: Flask, container: AppContainer):
+    """Track long-running requests and log thread stacks when they linger."""
+    enabled = os.getenv('CERTMATE_SLOW_REQUEST_LOGGING', 'true').lower() in ('1', 'true', 'yes', 'on')
+    if not enabled:
+        return
+
+    slow_after = _env_float('CERTMATE_SLOW_REQUEST_THRESHOLD_SECONDS', 30.0, 0.1)
+    scan_every = _env_float('CERTMATE_SLOW_REQUEST_SCAN_SECONDS', 10.0, 1.0)
+    repeat_every = _env_float('CERTMATE_SLOW_REQUEST_REPEAT_SECONDS', slow_after, 0.1)
+
+    active_requests: dict[int, dict[str, object]] = {}
+    lock = threading.Lock()
+    stop_event = threading.Event()
+
+    @app.before_request
+    def _track_request_start():
+        thread = threading.current_thread()
+        with lock:
+            active_requests[thread.ident or 0] = {
+                'started_at': time.perf_counter(),
+                'method': getattr(request, 'method', None),
+                'path': getattr(request, 'path', None),
+                'remote_addr': getattr(request, 'remote_addr', None),
+                'request_id': request.headers.get('X-Request-Id'),
+                'thread_name': thread.name,
+                'last_reported_at': None,
+            }
+
+    @app.after_request
+    def _log_slow_request(response):
+        thread = threading.current_thread()
+        started = None
+        meta = None
+        with lock:
+            meta = active_requests.pop(thread.ident or 0, None)
+        if meta:
+            started = meta.get('started_at')
+        if started is not None:
+            duration_ms = (time.perf_counter() - float(started)) * 1000
+            if duration_ms >= slow_after * 1000:
+                request_logger.warning(
+                    "Slow request completed",
+                    method=meta.get('method'),
+                    path=meta.get('path'),
+                    remote_addr=meta.get('remote_addr'),
+                    request_id=meta.get('request_id'),
+                    thread_name=meta.get('thread_name'),
+                    thread_id=thread.ident,
+                    status_code=getattr(response, 'status_code', None),
+                    duration_ms=round(duration_ms, 2),
+                    threshold_seconds=slow_after,
+                )
+        return response
+
+    @app.teardown_request
+    def _clear_active_request(_exc):
+        thread = threading.current_thread()
+        with lock:
+            active_requests.pop(thread.ident or 0, None)
+
+    def _watchdog():
+        while not stop_event.wait(scan_every):
+            now = time.perf_counter()
+            snapshots = []
+            with lock:
+                for thread_id, meta in active_requests.items():
+                    started_at = float(meta.get('started_at', now))
+                    age = now - started_at
+                    last_reported = meta.get('last_reported_at')
+                    if age < slow_after:
+                        continue
+                    if last_reported is not None and (now - float(last_reported)) < repeat_every:
+                        continue
+                    meta['last_reported_at'] = now
+                    snapshots.append((thread_id, dict(meta), age))
+
+            for thread_id, meta, age in snapshots:
+                stack = _format_thread_stack(thread_id)
+                request_logger.warning(
+                    "Request still running",
+                    method=meta.get('method'),
+                    path=meta.get('path'),
+                    remote_addr=meta.get('remote_addr'),
+                    request_id=meta.get('request_id'),
+                    thread_name=meta.get('thread_name'),
+                    thread_id=thread_id,
+                    duration_ms=round(age * 1000, 2),
+                    threshold_seconds=slow_after,
+                    stack=stack or None,
+                )
+
+    watcher = threading.Thread(
+        target=_watchdog,
+        name='certmate-request-watchdog',
+        daemon=True,
+    )
+    watcher.start()
+    container.request_watchdog = {
+        'thread': watcher,
+        'stop_event': stop_event,
+    }
 
 
 def _verify_dir_writable(directory: Path) -> Optional[str]:
@@ -126,11 +253,31 @@ def setup_directories(container: AppContainer, test_config=None):
                         pass
         except Exception:
             pass
-        container.cert_dir = Path(tempfile.mkdtemp(prefix="certmate_certs_"))
-        container.data_dir = Path(tempfile.mkdtemp(prefix="certmate_data_"))
-        container.backup_dir = Path(tempfile.mkdtemp(
-            prefix="certmate_backups_"))
-        container.logs_dir = Path(tempfile.mkdtemp(prefix="certmate_logs_"))
+
+    # Docker volume persistence check (#130). Warn loudly if /app/data
+    # appears to be ephemeral container storage rather than a persistent
+    # volume. This catches the most common deployment mistake: forgetting
+    # to mount ./data:/app/data in docker-compose.yml.
+    _in_docker = Path('/.dockerenv').exists() or os.getenv('container') is not None
+    if _in_docker:
+        sentinel = container.data_dir / '.certmate_persistent'
+        if sentinel.exists():
+            logger.info("Persistent volume verified — data directory survives container restarts")
+        else:
+            # First boot on this volume: create sentinel. If the sentinel
+            # doesn't survive the next restart, the volume wasn't mounted.
+            try:
+                sentinel.write_text('1')
+            except OSError:
+                pass
+            logger.warning(
+                "PERSISTENCE CHECK: This appears to be the first boot on this data directory. "
+                "If you see this message on every restart, your /app/data volume is NOT "
+                "persistent and ALL configuration (admin account, settings, certificates) "
+                "will be LOST on container recreation. Mount a persistent volume: "
+                "-v ./data:/app/data:rw (Docker) or a PVC (Kubernetes). "
+                "Required volumes: /app/data, /app/certificates, /app/logs, /app/backups"
+            )
 
 
 def _secret_key_from_env_or_generate(data_dir: Path) -> str:
@@ -248,6 +395,9 @@ def initialize_managers(container: AppContainer, app):
 
     audit_dir = container.logs_dir / "audit"
     audit_logger = AuditLogger(audit_dir)
+    # Let AuthManager emit RBAC + scope denials through the same audit
+    # surface the rest of the app uses (2026-05-12 API auth audit, F-2).
+    auth_manager.set_audit_logger(audit_logger)
 
     rate_limit_config = RateLimitConfig()
     rate_limiter = SimpleRateLimiter(rate_limit_config)
@@ -521,9 +671,16 @@ def setup_security_headers(app):
                 # evaluation). Removing it breaks the UI. The risk is mitigated by
                 # 'unsafe-inline' already being required for inline <script> blocks.
                 # To eliminate unsafe-eval, migrate to the @alpinejs/csp build.
-                "script-src 'self' 'unsafe-inline' 'unsafe-eval' cdn.redoc.ly; "
-                "style-src 'self' 'unsafe-inline' cdn.redoc.ly fonts.googleapis.com; "
-                "font-src 'self' fonts.gstatic.com; "
+                #
+                # ReDoc and its Montserrat/Roboto fonts used to require a CDN
+                # script-src/style-src/font-src whitelist. v2.4.15 self-hosts the
+                # redoc.standalone.js bundle under static/js/ and pins ReDoc's
+                # typography to the system-font stack, removing the need for
+                # cdn.redoc.ly, fonts.googleapis.com, fonts.gstatic.com — the
+                # /redoc/ page is now air-gapped clean.
+                "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+                "style-src 'self' 'unsafe-inline'; "
+                "font-src 'self'; "
                 "img-src 'self' data:; "
                 # Deployment-status checks (#125) cross-fetch every monitored
                 # domain to verify it's serving the expected cert — these are
@@ -616,6 +773,7 @@ def create_app(test_config=None):
     setup_csrf_protection(app)
     setup_security_headers(app)
     setup_rate_limiting(app, container)
+    setup_slow_request_logging(app, container)
     setup_scheduler(container)
 
     return app, container

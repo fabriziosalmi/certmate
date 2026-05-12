@@ -479,16 +479,20 @@ curl http://localhost:5000/api/crl/download/info \
 
 **Endpoint**: `GET /certificates/<domain>/download`
 
-Download certificate files for a specific domain. By default, this endpoint returns a ZIP archive containing all certificate components. A specific file can be requested using the `file` query parameter.
+Download certificate files for a specific domain. By default, this endpoint returns a ZIP archive containing all certificate components. A specific file can be requested using the `file` query parameter. JSON mode is also available for automation that wants all PEMs in one response.
 
 **Parameters**:
 - `domain` (Path) - The domain name associated with the certificate.
 - `file` (Query, Optional) - Specify a single file to download. 
   - Supported values: `fullchain.pem`, `privkey.pem`, `combined.pem`
+- `format` (Query, Optional) - Set to `json` to return all certificate files in a JSON object.
 
 **Response** (200 OK):
 - **Default**: `application/zip` (A ZIP file containing all PEM files)
 - **With `file` param**: `application/x-pem-file` (The raw content of the requested file)
+- **With `format=json`**: `application/json` with `domain`, `cert_pem`, `chain_pem`, `fullchain_pem`, and `private_key_pem`
+
+The JSON form is the preferred automation shape for Ansible, Salt, or any other client that wants to write PEM files directly.
 
 **Examples**:
 
@@ -507,6 +511,11 @@ curl "http://localhost:5000/api/certificates/example.com/download?file=fullchain
 curl "http://localhost:5000/api/certificates/example.com/download?file=privkey.pem" \
  -H "Authorization: Bearer TOKEN" \
  -o privkey.pem
+
+# Download the full certificate bundle as JSON
+curl "http://localhost:5000/api/certificates/example.com/download?format=json" \
+ -H "Authorization: Bearer TOKEN" \
+ -o example_com_bundle.json
 
 ```
 

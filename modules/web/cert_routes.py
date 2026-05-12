@@ -12,14 +12,50 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
                          certificate_manager, _sanitize_domain, file_ops,
                          settings_manager, dns_manager, CERTIFICATE_FILES):
     """Register certificate-related routes"""
+    audit_logger = managers.get('audit')
+
+    def _scope_denied(domain, operation):
+        """Emit audit + return Flask JSON 403 if the current user's API key
+        is not scoped to *domain*. Returns None when access is granted.
+        """
+        user = getattr(request, 'current_user', None) or {}
+        if auth_manager.user_can_access_domain(user, domain):
+            return None
+        logger.warning(
+            "Scope denial (web): user=%s op=%s domain=%s scope=%s",
+            user.get('username'), operation, domain,
+            user.get('allowed_domains'),
+        )
+        if audit_logger:
+            audit_logger.log_authz_denied(
+                operation=operation,
+                resource_type='certificate',
+                resource_id=domain,
+                reason='domain outside scoped key allowed_domains',
+                user=user.get('username'),
+                ip_address=request.remote_addr,
+            )
+        return jsonify({
+            'error': f'API key not authorized for domain {domain}',
+            'code': 'DOMAIN_OUT_OF_SCOPE',
+        }), 403
 
     @app.route('/api/certificates', methods=['GET'])
     @app.route('/api/web/certificates', methods=['GET'])
     @auth_manager.require_role('viewer')
     def list_certificates_web():
-        """List all certificates via web"""
+        """List all certificates via web — filtered by API-key scope."""
         try:
+            user = getattr(request, 'current_user', None) or {}
+            scope = user.get('allowed_domains')
             certs = certificate_manager.list_certificates()
+            if scope is not None and isinstance(certs, list):
+                certs = [
+                    c for c in certs
+                    if isinstance(c, dict) and auth_manager.domain_matches_scope(
+                        c.get('domain', ''), scope
+                    )
+                ]
             return jsonify(certs)
         except Exception as e:
             logger.error(f"Failed to list certificates: {e}")
@@ -42,6 +78,17 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
 
             if not domain:
                 return jsonify({'error': 'Domain is required'}), 400
+
+            # Scope check: primary domain + every SAN must be in scope.
+            denial = _scope_denied(domain, 'create')
+            if denial:
+                return denial
+            for san in (san_domains or []):
+                san_clean = san.strip() if isinstance(san, str) else ''
+                if san_clean:
+                    denial = _scope_denied(san_clean, 'create_san')
+                    if denial:
+                        return denial
 
             settings = settings_manager.load_settings()
             email = settings.get('email')
@@ -95,7 +142,7 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
             return jsonify({'error': str(e)}), 400
         except RuntimeError as e:
             logger.error(f"Certificate creation failed: {e}")
-            return jsonify({'error': str(e)}), 500
+            return jsonify({'error': str(e)}), 422
         except Exception as e:
             logger.error(f"Failed to create certificate: {e}")
             return jsonify({'error': 'Failed to create certificate'}), 500
@@ -121,10 +168,28 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
             ca_provider = data.get('ca_provider') or settings.get('default_ca', 'letsencrypt')
             challenge_type = data.get('challenge_type') or settings.get('challenge_type', 'dns-01')
 
+            user = getattr(request, 'current_user', None) or {}
+            scope = user.get('allowed_domains')
+
             results = []
             for domain in domains:
                 domain = (domain if isinstance(domain, str) else '').strip()
                 if not domain:
+                    continue
+                if not auth_manager.domain_matches_scope(domain, scope):
+                    if audit_logger:
+                        audit_logger.log_authz_denied(
+                            operation='batch_create',
+                            resource_type='certificate',
+                            resource_id=domain,
+                            reason='domain outside scoped key allowed_domains',
+                            user=user.get('username'),
+                            ip_address=request.remote_addr,
+                        )
+                    results.append({
+                        'domain': domain, 'success': False,
+                        'message': 'API key not authorized for this domain',
+                    })
                     continue
                 try:
                     result = certificate_manager.create_certificate(
@@ -153,10 +218,24 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
             temp_zip = tempfile.NamedTemporaryFile(suffix='.zip', delete=False)
             temp_zip.close()
 
+            user = getattr(request, 'current_user', None) or {}
+            scope = user.get('allowed_domains')
+
             with zipfile.ZipFile(temp_zip.name, 'w') as zf:
                 for domain in domains:
                     cert_dir, error = _sanitize_domain(domain, file_ops.cert_dir)
                     if error:
+                        continue
+                    if not auth_manager.domain_matches_scope(cert_dir.name, scope):
+                        if audit_logger:
+                            audit_logger.log_authz_denied(
+                                operation='batch_download',
+                                resource_type='certificate',
+                                resource_id=cert_dir.name,
+                                reason='domain outside scoped key allowed_domains',
+                                user=user.get('username'),
+                                ip_address=request.remote_addr,
+                            )
                         continue
                     cert_path = certificate_manager.get_certificate_path(
                         cert_dir.name)
@@ -213,6 +292,9 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
     def renew_certificate_web(domain):
         """Renew certificate via web"""
         try:
+            denial = _scope_denied(domain, 'renew')
+            if denial:
+                return denial
             cert_dir, error = _sanitize_domain(domain, file_ops.cert_dir)
             if error:
                 return jsonify({'error': error}), 400
@@ -223,6 +305,11 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
             if success:
                 return jsonify({'message': message})
             return jsonify({'error': message}), 400
+        except FileNotFoundError as e:
+            return jsonify({'error': str(e)}), 404
+        except RuntimeError as e:
+            logger.error(f"Certificate renewal failed: {e}")
+            return jsonify({'error': str(e)}), 422
         except Exception as e:
             logger.error(f"Certificate renewal failed via web: {str(e)}")
             return jsonify({'error': 'Certificate renewal failed'}), 500

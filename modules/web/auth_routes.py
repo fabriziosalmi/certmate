@@ -1,5 +1,4 @@
 import logging
-from modules.core.auth import ROLE_HIERARCHY
 from flask import render_template, request, jsonify, redirect, url_for
 
 
@@ -9,6 +8,7 @@ logger = logging.getLogger(__name__)
 def register_auth_routes(app, managers, require_web_auth, auth_manager,
                          _check_login_rate_limit, _record_login_attempt):
     """Register authentication routes"""
+    audit_logger = managers.get('audit')
 
     @app.route('/login', methods=['GET'])
     def login_page():
@@ -22,7 +22,16 @@ def register_auth_routes(app, managers, require_web_auth, auth_manager,
         """Login endpoint"""
         try:
             client_ip = request.remote_addr or 'unknown'
-            allowed, retry_after = _check_login_rate_limit(client_ip)
+
+            data = request.json or {}
+            username = (data.get('username') or '').strip()
+            password = data.get('password', '')
+
+            # Rate-limit check happens after we've extracted the username
+            # so the per-username bucket can throttle a target under a
+            # distributed (multi-IP) brute-force attack — the per-IP
+            # bucket alone fails open in that scenario (F-7 follow-up).
+            allowed, retry_after = _check_login_rate_limit(client_ip, username)
             if not allowed:
                 response = jsonify({
                     'error': 'Too many attempts. Please try again later.',
@@ -31,17 +40,13 @@ def register_auth_routes(app, managers, require_web_auth, auth_manager,
                 response.headers['Retry-After'] = str(retry_after)
                 return response, 429
 
-            data = request.json
-            username = data.get('username', '').strip()
-            password = data.get('password', '')
-
             if not username or not password:
                 return jsonify({'error': 'Credentials required'}), 400
 
             if not auth_manager.is_local_auth_enabled():
                 return jsonify({'error': 'Local auth disabled'}), 403
 
-            _record_login_attempt(client_ip)
+            _record_login_attempt(client_ip, username)
             user_info = auth_manager.authenticate_user(username, password)
 
             if not user_info:
@@ -97,26 +102,37 @@ def register_auth_routes(app, managers, require_web_auth, auth_manager,
                 return jsonify({'user': user_info, 'auth_mode': 'session'})
         return jsonify({'user': None}), 401
 
-    @app.route('/api/auth/config', methods=['GET', 'POST'])
+    @app.route('/api/auth/config', methods=['GET'])
     @auth_manager.require_role('viewer')
-    def api_auth_config():
-        """Auth configuration"""
-        if request.method == 'POST':
-            user = getattr(request, 'current_user', {})
-            if ROLE_HIERARCHY.get(user.get('role'), -1) < ROLE_HIERARCHY['admin']:
-                return jsonify({'error': 'Admin required'}), 403
+    def api_auth_config_get():
+        """Read auth configuration. Viewers may read so the UI can render
+        the correct affordances."""
+        return jsonify({
+            'local_auth_enabled': auth_manager.is_local_auth_enabled(),
+            'has_users': auth_manager.has_any_users()
+        })
 
-        if request.method == 'GET':
-            return jsonify({
-                'local_auth_enabled': auth_manager.is_local_auth_enabled(),
-                'has_users': auth_manager.has_any_users()
-            })
-
-        data = request.json
-        enable = data.get('local_auth_enabled', False)
+    @app.route('/api/auth/config', methods=['POST'])
+    @auth_manager.require_role('admin')
+    def api_auth_config_post():
+        """Mutate auth configuration. Admin-only — defense-in-depth at the
+        decorator level so the role check fires before any handler logic
+        runs.
+        """
+        data = request.json or {}
+        enable = bool(data.get('local_auth_enabled', False))
         if enable and not auth_manager.has_any_users():
             return jsonify({'error': 'Create admin first'}), 400
 
+        before = auth_manager.is_local_auth_enabled()
         if auth_manager.enable_local_auth(enable):
+            if audit_logger and before != enable:
+                user = getattr(request, 'current_user', {}) or {}
+                audit_logger.log_auth_config_changed(
+                    local_auth_enabled_before=before,
+                    local_auth_enabled_after=enable,
+                    user=user.get('username'),
+                    ip_address=request.remote_addr,
+                )
             return jsonify({'message': 'Auth config updated'})
         return jsonify({'error': 'Update failed'}), 500

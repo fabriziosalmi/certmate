@@ -10,11 +10,12 @@ import zipfile
 import os
 import io
 from pathlib import Path
-from flask import send_file, after_this_request, current_app, request
+from flask import send_file, after_this_request, current_app, request, jsonify
 from flask_restx import Resource, fields
 
 from ..core.metrics import get_metrics_summary, is_prometheus_available
 from ..core.constants import CERTIFICATE_FILES, iter_cert_domain_dirs
+from ..core.auth import ROLE_HIERARCHY
 
 _DOMAIN_RE = re.compile(r'^(\*\.)?([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$')
 
@@ -66,6 +67,39 @@ def create_api_resources(api, models, managers):
     cache_manager = managers['cache']
     dns_manager = managers['dns']
     deploy_manager = managers.get('deployer')
+    audit_logger = managers.get('audit')
+
+    def _check_domain_scope(domain, operation):
+        """Reject the request if the caller's API-key allowed_domains does
+        not cover *domain*. Returns (response_body, http_status) on denial,
+        or None when access is permitted.
+
+        Sessions and legacy bearer tokens have no allowed_domains set on
+        request.current_user → unrestricted (existing behavior preserved).
+        Only scoped API keys, which now carry an allowed_domains list,
+        will hit a 403.
+        """
+        user = getattr(request, 'current_user', None) or {}
+        if auth_manager.user_can_access_domain(user, domain):
+            return None
+        logger.warning(
+            "Scope denial: user=%s op=%s domain=%s scope=%s",
+            user.get('username'), operation, domain,
+            user.get('allowed_domains'),
+        )
+        if audit_logger:
+            audit_logger.log_authz_denied(
+                operation=operation,
+                resource_type='certificate',
+                resource_id=domain,
+                reason='domain outside scoped key allowed_domains',
+                user=user.get('username'),
+                ip_address=request.remote_addr,
+            )
+        return {
+            'error': f'API key not authorized for domain {domain}',
+            'code': 'DOMAIN_OUT_OF_SCOPE',
+        }, 403
 
     # Health check endpoint
     class HealthCheck(Resource):
@@ -134,27 +168,89 @@ def create_api_resources(api, models, managers):
         @api.expect(models['settings_model'])
         @auth_manager.require_role('admin')
         def post(self):
-            """Update settings"""
+            """Update settings.
+
+            Accepts only fields in PUBLIC_SETTINGS_WRITABLE_KEYS. Sensitive
+            fields (api_bearer_token, deploy_hooks, users, api_keys,
+            local_auth_enabled) have dedicated endpoints and are rejected
+            here even from admin callers — defense-in-depth against
+            payload-style privilege escalation or RCE injection.
+            """
+            from ..core.settings import (
+                validate_settings_post,
+                diff_settings_keys,
+                SETTINGS_REJECT_KEYS,
+            )
             try:
                 new_settings = api.payload
-                if not isinstance(new_settings, dict):
-                    return {'error': 'Invalid settings format'}, 400
+                # Load *before* validating: validate_settings_post uses the
+                # current state to drop no-op echoes (a GET-then-POST-back
+                # round-trip would otherwise hit the reject list for fields
+                # like users/api_keys/api_bearer_token_hash that the UI did
+                # not intend to mutate).
+                before = settings_manager.load_settings() or {}
+                try:
+                    filtered, rejected, unknown = validate_settings_post(
+                        new_settings, current=before)
+                except ValueError as e:
+                    return {'error': str(e)}, 400
 
-                # Validate required fields
-                required_fields = ['email', 'dns_provider']
-                for field in required_fields:
-                    if field not in new_settings:
-                        return {'error': f'Missing required field: {field}'}, 400
+                if rejected:
+                    user = getattr(request, 'current_user', {}) or {}
+                    logger.warning(
+                        "Rejected POST /api/settings: caller tried to write "
+                        "blocked fields %s (user=%s)",
+                        rejected, user.get('username'),
+                    )
+                    if audit_logger:
+                        for field in rejected:
+                            audit_logger.log_authz_denied(
+                                operation='update',
+                                resource_type='settings',
+                                resource_id=field,
+                                reason=f'field {field} requires a dedicated endpoint',
+                                user=user.get('username'),
+                                ip_address=request.remote_addr,
+                            )
+                    return {
+                        'error': 'Forbidden fields in payload',
+                        'rejected': sorted(rejected),
+                        'hint': 'Use the dedicated endpoint for these fields '
+                                '(e.g. /api/deploy/config, /api/users, '
+                                '/api/keys, /api/auth/config).',
+                    }, 400
 
-                # Use atomic_update so concurrent writes from the web UI cannot
-                # race, and so users/api_keys are preserved (the API payload
-                # rarely contains them).
-                success = settings_manager.atomic_update(new_settings)
+                if unknown:
+                    return {
+                        'error': 'Unknown fields in payload',
+                        'unknown': sorted(unknown),
+                        'hint': 'Only documented settings keys are accepted.',
+                    }, 400
 
-                if success:
-                    return {'message': 'Settings updated successfully'}, 200
-                else:
+                # Required fields are checked at load_settings + save_settings
+                # layers (validate_email, validate_api_token, supported_providers).
+                # Enforcing them per POST was incompatible with no-op round-trip
+                # echoes — a UI updating cache_ttl shouldn't be required to
+                # resend email + dns_provider that didn't change. The defaults
+                # in load_settings still seed both fields on first run.
+                success = settings_manager.atomic_update(filtered)
+                if not success:
                     return {'error': 'Failed to save settings'}, 500
+
+                after = settings_manager.load_settings() or {}
+                changed = diff_settings_keys(before, after)
+                if audit_logger and changed:
+                    user = getattr(request, 'current_user', {}) or {}
+                    sensitive_changed = [
+                        k for k in changed if k in audit_logger._SENSITIVE_SETTINGS_KEYS
+                    ]
+                    audit_logger.log_settings_changed(
+                        changed_keys=changed,
+                        sensitive_changed=sensitive_changed,
+                        user=user.get('username'),
+                        ip_address=request.remote_addr,
+                    )
+                return {'message': 'Settings updated successfully'}, 200
 
             except Exception as e:
                 logger.error(f"Error updating settings: {e}")
@@ -215,8 +311,15 @@ def create_api_resources(api, models, managers):
         @api.marshal_list_with(models['certificate_model'])
         @auth_manager.require_role('viewer')
         def get(self):
-            """List all certificates"""
+            """List all certificates.
+
+            Scoped API keys with allowed_domains only see certificates
+            within their scope. Unrestricted callers (legacy keys, local
+            users) see every certificate.
+            """
             try:
+                user = getattr(request, 'current_user', None) or {}
+                scope = user.get('allowed_domains')
                 settings = settings_manager.load_settings()
                 certificates = []
 
@@ -246,13 +349,18 @@ def create_api_resources(api, models, managers):
                 for cert_dir_path in iter_cert_domain_dirs(certificate_manager.cert_dir):
                     all_domains.add(cert_dir_path.name)
 
-                # Get certificate info for all domains
+                # Get certificate info for all domains, filtered by the
+                # caller's API-key scope. domain_matches_scope(d, None) is
+                # always True so unrestricted callers see everything.
                 for domain in all_domains:
-                    if domain:
-                        cert_info = certificate_manager.get_certificate_info(domain)
-                        if cert_info:
-                            cert_info['auto_renew'] = auto_renew_by_domain.get(domain, True)
-                            certificates.append(cert_info)
+                    if not domain:
+                        continue
+                    if not auth_manager.domain_matches_scope(domain, scope):
+                        continue
+                    cert_info = certificate_manager.get_certificate_info(domain)
+                    if cert_info:
+                        cert_info['auto_renew'] = auto_renew_by_domain.get(domain, True)
+                        certificates.append(cert_info)
 
                 return certificates
             except Exception as e:
@@ -317,6 +425,20 @@ def create_api_resources(api, models, managers):
                                 'error': f'Invalid SAN domain format: {san}',
                                 'hint': 'SAN domains should be domain names only, not URLs.'
                             }, 400
+
+                # Scope check: the requested domain AND every SAN must be
+                # within the API key's allowed_domains. Reject the entire
+                # creation if any one is out of scope — partial creates
+                # would leak data across tenants.
+                scope_err = _check_domain_scope(domain, 'create')
+                if scope_err:
+                    return scope_err
+                for san in (san_domains or []):
+                    san_clean = san.strip() if isinstance(san, str) else ''
+                    if san_clean:
+                        scope_err = _check_domain_scope(san_clean, 'create_san')
+                        if scope_err:
+                            return scope_err
 
                 settings = settings_manager.load_settings()
                 email = settings.get('email')
@@ -423,7 +545,7 @@ def create_api_resources(api, models, managers):
                 return {
                     'error': f'Certificate creation failed: {error_msg}',
                     'hint': hint
-                }, 500
+                }, 422
             except Exception as e:
                 logger.error(f"Certificate creation failed: {str(e)}")
                 return {
@@ -463,6 +585,9 @@ def create_api_resources(api, models, managers):
         @auth_manager.require_role('viewer')
         def get(self, domain):
             """Check DNS-01 alias CNAME records for an existing certificate."""
+            scope_err = _check_domain_scope(domain, 'dns_alias_check')
+            if scope_err:
+                return scope_err
             cert_info = certificate_manager.get_certificate_info(domain)
             if not cert_info or not cert_info.get('exists'):
                 return {'error': f'Certificate not found for domain: {domain}'}, 404
@@ -479,6 +604,105 @@ def create_api_resources(api, models, managers):
 
     class CertificateDetail(Resource):
         @api.doc(security='Bearer')
+        @auth_manager.require_role('operator')
+        def patch(self, domain):
+            """Update DNS provider for an existing certificate (issue #129).
+
+            Allows changing the DNS provider (and optionally the alias DNS
+            provider) used for future renewals of this certificate without
+            deleting and re-creating it. Updates both the on-disk
+            metadata.json and the domain entry in settings.
+
+            Body: {"dns_provider": "route53", "account_id": "default",
+                   "alias_dns_provider": "cloudflare"}
+            """
+            scope_err = _check_domain_scope(domain, 'update_dns_provider')
+            if scope_err:
+                return scope_err
+            cert_dir, err = _validate_domain_path(domain, file_ops.cert_dir)
+            if err:
+                return {'error': err}, 400
+            if not cert_dir or not cert_dir.exists():
+                return {'error': f'Certificate not found for domain: {domain}'}, 404
+
+            data = api.payload or {}
+            new_dns_provider = data.get('dns_provider')
+            new_account_id = data.get('account_id')
+            new_alias_dns_provider = data.get('alias_dns_provider')
+
+            if not new_dns_provider and not new_alias_dns_provider:
+                return {
+                    'error': 'At least one of dns_provider or alias_dns_provider is required',
+                    'hint': 'Provide the new DNS provider name to use for future renewals.'
+                }, 400
+
+            # Validate the new provider has credentials configured
+            if new_dns_provider:
+                settings = settings_manager.load_settings()
+                dns_config, _ = dns_manager.get_dns_provider_account_config(
+                    new_dns_provider,
+                    new_account_id,
+                    settings,
+                )
+                if not dns_config:
+                    return {
+                        'error': f"DNS provider '{new_dns_provider}' account "
+                                 f"'{new_account_id or 'default'}' is not configured",
+                        'hint': 'Configure the DNS provider credentials in Settings first.'
+                    }, 400
+
+            try:
+                import json as _json
+
+                # 1. Update on-disk metadata.json
+                metadata_file = cert_dir / 'metadata.json'
+                metadata = {}
+                if metadata_file.exists():
+                    try:
+                        with open(metadata_file, 'r') as f:
+                            metadata = _json.load(f)
+                    except Exception:
+                        pass
+
+                old_provider = metadata.get('dns_provider')
+                if new_dns_provider:
+                    metadata['dns_provider'] = new_dns_provider
+                if new_account_id:
+                    metadata['account_id'] = new_account_id
+                if new_alias_dns_provider:
+                    metadata['alias_dns_provider'] = new_alias_dns_provider
+
+                certificate_manager._atomic_json_write(metadata_file, metadata)
+                logger.info(
+                    f"Updated DNS provider for {domain}: "
+                    f"{old_provider} → {new_dns_provider or old_provider}"
+                )
+
+                # 2. Update domain entry in settings
+                def _update_domain_provider(s):
+                    for entry in s.get('domains', []):
+                        if isinstance(entry, dict) and entry.get('domain') == domain:
+                            if new_dns_provider:
+                                entry['dns_provider'] = new_dns_provider
+                            if new_account_id:
+                                entry['dns_account_id'] = new_account_id
+                            break
+
+                settings_manager.update(_update_domain_provider, "dns_provider_change")
+
+                return {
+                    'message': f'DNS provider updated for {domain}',
+                    'domain': domain,
+                    'dns_provider': metadata.get('dns_provider'),
+                    'alias_dns_provider': metadata.get('alias_dns_provider'),
+                    'account_id': metadata.get('account_id'),
+                }, 200
+
+            except Exception as e:
+                logger.error(f"Failed to update DNS provider for {domain}: {e}")
+                return {'error': 'Failed to update DNS provider'}, 500
+
+        @api.doc(security='Bearer')
         @auth_manager.require_role('admin')
         def delete(self, domain):
             """Delete a certificate's files from disk.
@@ -487,6 +711,9 @@ def create_api_resources(api, models, managers):
             Does NOT revoke the certificate at the CA — call the CA's revoke
             endpoint separately if revocation is required.
             """
+            scope_err = _check_domain_scope(domain, 'delete')
+            if scope_err:
+                return scope_err
             # Path is only validated for the side-effect of rejecting
             # traversal attempts; the actual delete is keyed on the domain
             # name and handled by certificate_manager.
@@ -516,6 +743,17 @@ def create_api_resources(api, models, managers):
                 event_bus = current_app.config.get('EVENT_BUS')
                 if event_bus:
                     event_bus.publish('certificate_deleted', {'domain': domain})
+
+                if audit_logger:
+                    user = getattr(request, 'current_user', None) or {}
+                    audit_logger.log_operation(
+                        operation='delete',
+                        resource_type='certificate',
+                        resource_id=domain,
+                        status='success',
+                        user=user.get('username'),
+                        ip_address=request.remote_addr,
+                    )
                 return {'message': f'Certificate deleted for {domain}', 'domain': domain}, 200
             except RuntimeError as e:
                 return {'error': str(e)}, 409
@@ -523,31 +761,112 @@ def create_api_resources(api, models, managers):
                 logger.error(f"Certificate deletion failed for {domain}: {e}")
                 return {'error': 'Certificate deletion failed'}, 500
 
+    # Files containing private-key material. A viewer-role caller is
+    # permitted to download public certificate material (cert, chain,
+    # fullchain) but anything that exposes the private key requires
+    # operator role. The default ZIP includes privkey.pem and is
+    # therefore also operator-gated. (2026-05-12 API auth audit
+    # follow-up: viewer-can-pull-privkey was an information-disclosure
+    # surface that the original endpoint exposed.)
+    _PRIVATE_KEY_FILES = frozenset({'privkey.pem', 'combined.pem'})
+    _PUBLIC_DOWNLOAD_FILES = frozenset({'cert.pem', 'chain.pem', 'fullchain.pem'})
+
+    def _user_has_role(user, min_role):
+        level = ROLE_HIERARCHY.get((user or {}).get('role'), -1)
+        return level >= ROLE_HIERARCHY.get(min_role, 999)
+
     class DownloadCertificate(Resource):
         @api.doc(security='Bearer')
         @auth_manager.require_role('viewer')
         def get(self, domain):
-            """Download certificate files as ZIP or individual file"""
+            """Download certificate files as ZIP, JSON, or individual file.
+
+            Role gating is per-file: viewers can pull public material
+            (cert.pem, chain.pem, fullchain.pem) and the public-only ZIP
+            (?include_private=0); anything that exposes the private key
+            (privkey.pem, combined.pem, format=json, default ZIP)
+            requires operator role.
+            """
             try:
+                scope_err = _check_domain_scope(domain, 'download')
+                if scope_err:
+                    return scope_err
                 cert_dir, err = _validate_domain_path(domain, file_ops.cert_dir)
                 if err:
                     return {'error': err}, 400
                 if not cert_dir.exists():
                     return {'error': f'Certificate not found for domain: {domain}'}, 404
 
+                user = getattr(request, 'current_user', None) or {}
+                download_format = request.args.get('format')
                 # Check for the optional 'file' parameter
                 requested_file = request.args.get('file')
+                include_private = str(request.args.get('include_private', '1')).lower() not in ('0', 'false', 'no', 'off')
+
+                if download_format and download_format not in ['json']:
+                    return {'error': 'Invalid format requested.'}, 400
+
+                def _privkey_denied(file_label):
+                    """Emit audit + return 403 for viewer trying to pull privkey."""
+                    if audit_logger:
+                        audit_logger.log_authz_denied(
+                            operation='download',
+                            resource_type='certificate',
+                            resource_id=domain,
+                            reason=f'viewer cannot download private-key material ({file_label})',
+                            user=user.get('username'),
+                            ip_address=request.remote_addr,
+                        )
+                    return {
+                        'error': 'operator role required to download private key material',
+                        'code': 'PRIVKEY_REQUIRES_OPERATOR',
+                        'hint': f'Use ?file=fullchain.pem or ?include_private=0 to download public material as a viewer.',
+                    }, 403
+
+                if download_format == 'json':
+                    # format=json always returns private_key_pem inline.
+                    # Restrict to operator+; viewer must use ?file=... for
+                    # the specific public-material file they need.
+                    if not _user_has_role(user, 'operator'):
+                        return _privkey_denied('format=json')
+                    if requested_file:
+                        return {'error': 'format=json cannot be combined with file.'}, 400
+
+                    required_files = {
+                        'cert_pem': 'cert.pem',
+                        'chain_pem': 'chain.pem',
+                        'fullchain_pem': 'fullchain.pem',
+                        'private_key_pem': 'privkey.pem',
+                    }
+
+                    try:
+                        payload = {'domain': domain}
+                        for response_key, filename in required_files.items():
+                            file_path = cert_dir / filename
+                            if not file_path.exists():
+                                return {'error': f'Required cert file not found for domain {domain}: {filename}'}, 404
+                            payload[response_key] = file_path.read_text(encoding='utf-8')
+
+                        return jsonify(payload)
+                    except FileNotFoundError:
+                        return {'error': f'Required cert file not found for domain {domain}'}, 404
 
                 if requested_file:
                     # Security check: only allow specific certificate files
-                    if requested_file not in ['fullchain.pem', 'privkey.pem', 'combined.pem']:
+                    allowed_files = _PUBLIC_DOWNLOAD_FILES | _PRIVATE_KEY_FILES
+                    if requested_file not in allowed_files:
                         return {'error': 'Invalid file requested.'}, 400
+
+                    # Private-key files require operator+; public files
+                    # remain viewer-accessible.
+                    if requested_file in _PRIVATE_KEY_FILES and not _user_has_role(user, 'operator'):
+                        return _privkey_denied(requested_file)
 
                     if requested_file == 'combined.pem':
                         try:
                             # Read both files and join them
-                            fullchain = (cert_dir / 'fullchain.pem').read_text()
-                            privkey = (cert_dir / 'privkey.pem').read_text()
+                            fullchain = (cert_dir / 'fullchain.pem').read_text(encoding='utf-8')
+                            privkey = (cert_dir / 'privkey.pem').read_text(encoding='utf-8')
                             combined_data = io.BytesIO(f"{fullchain}{privkey}".encode())
 
                             return send_file(
@@ -570,13 +889,24 @@ def create_api_resources(api, models, managers):
                         mimetype='application/x-pem-file'
                     )
 
-                # Fallback to original ZIP logic if no file parameter is provided
+                # Fallback ZIP. Two flavors:
+                #   include_private=1 (default)  -> all 4 PEMs, operator+
+                #   include_private=0            -> public material only,
+                #                                   safe for viewer
+                if include_private and not _user_has_role(user, 'operator'):
+                    return _privkey_denied('default ZIP')
+
+                files_to_zip = (
+                    CERTIFICATE_FILES if include_private
+                    else tuple(f for f in CERTIFICATE_FILES if f not in _PRIVATE_KEY_FILES)
+                )
+                zip_suffix = 'certificates' if include_private else 'certificates_public'
 
                 # Create temporary ZIP file
                 with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as tmp_file:
                     tmp_path = tmp_file.name
                     with zipfile.ZipFile(tmp_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-                        for cert_file in CERTIFICATE_FILES:
+                        for cert_file in files_to_zip:
                             file_path = cert_dir / cert_file
                             if file_path.exists():
                                 zipf.write(file_path, cert_file)
@@ -592,7 +922,7 @@ def create_api_resources(api, models, managers):
                     return send_file(
                         tmp_path,
                         as_attachment=True,
-                        download_name=f'{domain}_certificates.zip',
+                        download_name=f'{domain}_{zip_suffix}.zip',
                         mimetype='application/zip'
                     )
 
@@ -606,6 +936,9 @@ def create_api_resources(api, models, managers):
         def post(self, domain):
             """Renew an existing certificate"""
             try:
+                scope_err = _check_domain_scope(domain, 'renew')
+                if scope_err:
+                    return scope_err
                 result = certificate_manager.renew_certificate(domain)
 
                 event_bus = current_app.config.get('EVENT_BUS')
@@ -634,6 +967,9 @@ def create_api_resources(api, models, managers):
 
             Body: {"enabled": true|false}
             """
+            scope_err = _check_domain_scope(domain, 'set_auto_renew')
+            if scope_err:
+                return scope_err
             _, err = _validate_domain_path(domain, file_ops.cert_dir)
             if err:
                 return {'error': err}, 400
@@ -676,6 +1012,9 @@ def create_api_resources(api, models, managers):
             with CERTMATE_EVENT=manual; the on_events filter is ignored
             since the user explicitly requested execution.
             """
+            scope_err = _check_domain_scope(domain, 'run_deploy')
+            if scope_err:
+                return scope_err
             if deploy_manager is None:
                 return {'error': 'Deploy manager not available'}, 503
 
@@ -745,6 +1084,17 @@ def create_api_resources(api, models, managers):
                     logger.info(f"Created unified backup: {filename}")
 
                 if created_backups:
+                    if audit_logger:
+                        user = getattr(request, 'current_user', None) or {}
+                        audit_logger.log_operation(
+                            operation='create',
+                            resource_type='backup',
+                            resource_id=created_backups[0].get('filename', 'unknown'),
+                            status='success',
+                            details={'type': 'unified', 'reason': reason},
+                            user=user.get('username'),
+                            ip_address=request.remote_addr,
+                        )
                     return {
                         'message': 'Backup created successfully',
                         'backups': created_backups,
@@ -913,6 +1263,24 @@ def create_api_resources(api, models, managers):
                 restore_msg = "Settings and certificates restored atomically"
 
                 if success:
+                    if audit_logger:
+                        user = getattr(request, 'current_user', None) or {}
+                        # Restore wholesale-replaces settings + certificates;
+                        # the audit entry must surface both source filename
+                        # and the pre-restore backup (if one was created) so
+                        # an admin can roll back via the audit trail alone.
+                        audit_logger.log_operation(
+                            operation='restore',
+                            resource_type='backup',
+                            resource_id=filename,
+                            status='success',
+                            details={
+                                'backup_type': 'unified',
+                                'pre_restore_backup': pre_restore_backup,
+                            },
+                            user=user.get('username'),
+                            ip_address=request.remote_addr,
+                        )
                     response = {
                         'message': f'{restore_msg} successfully from {filename}',
                         'restored_from': filename,
@@ -966,6 +1334,17 @@ def create_api_resources(api, models, managers):
                 backup_path.unlink()
 
                 logger.info(f"Backup deleted: {backup_type}/{filename}")
+                if audit_logger:
+                    user = getattr(request, 'current_user', None) or {}
+                    audit_logger.log_operation(
+                        operation='delete',
+                        resource_type='backup',
+                        resource_id=filename,
+                        status='success',
+                        details={'backup_type': backup_type},
+                        user=user.get('username'),
+                        ip_address=request.remote_addr,
+                    )
                 return {
                     'message': f'Backup {filename} deleted successfully',
                     'deleted_file': filename,

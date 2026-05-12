@@ -21,9 +21,10 @@ def register_backup_cache_routes(app, managers, require_web_auth,
     def create_backup_web():
         """Create a new backup"""
         try:
-            data = request.json
-            backup_type = data.get('type', 'full')
-            filename = file_ops.create_backup(backup_type)
+            data = request.json or {}
+            backup_reason = data.get('reason', 'manual')
+            settings_data = settings_manager.load_settings()
+            filename = file_ops.create_unified_backup(settings_data, backup_reason)
             return jsonify({'message': 'Backup created', 'filename': filename})
         except Exception as e:
             return jsonify({'error': 'Backup creation failed'}), 500

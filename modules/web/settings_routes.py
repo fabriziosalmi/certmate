@@ -9,44 +9,121 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
     """Register settings-related routes"""
     auth_manager_ref = auth_manager
     deploy_manager = managers.get('deployer')
+    audit_logger = managers.get('audit')
 
-    @app.route('/api/settings', methods=['GET', 'POST'])
-    @app.route('/api/web/settings', methods=['GET', 'POST'])
+    @app.route('/api/settings', methods=['GET'])
+    @app.route('/api/web/settings', methods=['GET'])
+    @auth_manager.require_role('viewer')
+    def api_settings_get():
+        """Read settings (viewer-accessible).
+
+        Aligns the web blueprint with the Flask-RESTX surface, which
+        already allowed viewer-role reads. Secret values are masked
+        with '********' regardless of caller role, so a viewer never
+        sees real bearer tokens, DNS provider credentials, or
+        storage-backend credentials. The Sprint 1.6 audit follow-up
+        flagged the previous admin-only GET as inconsistent with
+        RESTX and unnecessarily restrictive (a UI-rendering viewer
+        already needs the masked structure to show form fields).
+        """
+        try:
+            settings = settings_manager.load_settings()
+            import copy, re
+            masked = copy.deepcopy(settings)
+            _SECRET_KEYS = re.compile(
+                r'(token|secret|password|key|credential)',
+                re.IGNORECASE
+            )
+            def _mask_dict(d):
+                if not isinstance(d, dict):
+                    return
+                for k in list(d.keys()):
+                    if _SECRET_KEYS.search(k) and isinstance(d[k], str) and d[k]:
+                        d[k] = '********'
+                    elif isinstance(d[k], dict):
+                        _mask_dict(d[k])
+            _mask_dict(masked)
+            response = jsonify(masked)
+            response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, post-check=0, pre-check=0, max-age=0'
+            response.headers['Pragma'] = 'no-cache'
+            response.headers['Expires'] = '-1'
+            return response
+        except Exception as e:
+            logger.error(f"Failed to load settings: {e}")
+            return jsonify({'error': 'Failed to load settings'}), 500
+
+    @app.route('/api/settings', methods=['POST'])
+    @app.route('/api/web/settings', methods=['POST'])
     @auth_manager.require_role('admin')
     def api_settings():
-        """Get or update settings"""
-        if request.method == 'GET':
-            try:
-                settings = settings_manager.load_settings()
-                import copy, re
-                masked = copy.deepcopy(settings)
-                _SECRET_KEYS = re.compile(
-                    r'(token|secret|password|key|credential)',
-                    re.IGNORECASE
-                )
-                def _mask_dict(d):
-                    if not isinstance(d, dict):
-                        return
-                    for k in list(d.keys()):
-                        if _SECRET_KEYS.search(k) and isinstance(d[k], str) and d[k]:
-                            d[k] = '********'
-                        elif isinstance(d[k], dict):
-                            _mask_dict(d[k])
-                _mask_dict(masked)
-                response = jsonify(masked)
-                response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, post-check=0, pre-check=0, max-age=0'
-                response.headers['Pragma'] = 'no-cache'
-                response.headers['Expires'] = '-1'
-                return response
-            except Exception as e:
-                logger.error(f"Failed to load settings: {e}")
-                return jsonify({'error': 'Failed to load settings'}), 500
-
+        """Update settings (admin-only). Same whitelist + audit as the
+        Flask-RESTX Settings.post resource."""
         try:
+            from modules.core.settings import (
+                validate_settings_post,
+                diff_settings_keys,
+            )
             data = request.json
-            if settings_manager.atomic_update(data):
-                return jsonify({'message': 'Settings updated'})
-            return jsonify({'error': 'Update failed'}), 500
+            # Load *before* validating: validate_settings_post uses the
+            # current state to drop no-op echoes from a GET-then-POST-back
+            # round-trip (the dominant pattern from the web UI).
+            before = settings_manager.load_settings() or {}
+            try:
+                filtered, rejected, unknown = validate_settings_post(
+                    data, current=before)
+            except ValueError as e:
+                return jsonify({'error': str(e)}), 400
+
+            current = getattr(request, 'current_user', {}) or {}
+
+            if rejected:
+                logger.warning(
+                    "Rejected POST /api/web/settings: caller tried to write "
+                    "blocked fields %s (user=%s)",
+                    rejected, current.get('username'),
+                )
+                if audit_logger:
+                    for field in rejected:
+                        audit_logger.log_authz_denied(
+                            operation='update',
+                            resource_type='settings',
+                            resource_id=field,
+                            reason=f'field {field} requires a dedicated endpoint',
+                            user=current.get('username'),
+                            ip_address=request.remote_addr,
+                        )
+                return jsonify({
+                    'error': 'Forbidden fields in payload',
+                    'rejected': sorted(rejected),
+                    'hint': 'Use the dedicated endpoint for these fields '
+                            '(e.g. /api/deploy/config, /api/users, '
+                            '/api/keys, /api/auth/config).',
+                }), 400
+
+            if unknown:
+                return jsonify({
+                    'error': 'Unknown fields in payload',
+                    'unknown': sorted(unknown),
+                    'hint': 'Only documented settings keys are accepted.',
+                }), 400
+
+            if not settings_manager.atomic_update(filtered):
+                return jsonify({'error': 'Update failed'}), 500
+
+            after = settings_manager.load_settings() or {}
+            changed = diff_settings_keys(before, after)
+            if audit_logger and changed:
+                sensitive_changed = [
+                    k for k in changed
+                    if k in audit_logger._SENSITIVE_SETTINGS_KEYS
+                ]
+                audit_logger.log_settings_changed(
+                    changed_keys=changed,
+                    sensitive_changed=sensitive_changed,
+                    user=current.get('username'),
+                    ip_address=request.remote_addr,
+                )
+            return jsonify({'message': 'Settings updated'})
         except Exception as e:
             logger.error(f"Failed to update settings: {e}")
             return jsonify({'error': 'Failed to update settings'}), 500
@@ -82,6 +159,14 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
 
         success, msg = auth_manager.create_user(username, password, role)
         if success:
+            if audit_logger:
+                actor = getattr(request, 'current_user', {}) or {}
+                audit_logger.log_user_created(
+                    username=username,
+                    role=role,
+                    user=actor.get('username'),
+                    ip_address=request.remote_addr,
+                )
             return jsonify({'message': 'User created'}), 201
         if 'already exists' in msg.lower():
             return jsonify({'error': msg}), 409
@@ -99,18 +184,43 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
                 return jsonify({
                     'error': 'Cannot delete your own account; ask another admin'
                 }), 400
-            if auth_manager.delete_user(username):
-                return jsonify({'message': 'User deleted'})
-            return jsonify({'error': 'Deletion failed'}), 500
+            success, msg = auth_manager.delete_user(username)
+            if success:
+                if audit_logger:
+                    audit_logger.log_user_deleted(
+                        username=username,
+                        user=current.get('username'),
+                        ip_address=request.remote_addr,
+                    )
+                return jsonify({'message': msg})
+            if 'not found' in msg.lower():
+                return jsonify({'error': msg}), 404
+            return jsonify({'error': msg}), 400
 
         data = request.json
         role = data.get('role')
         if not role:
             return jsonify({'error': 'Role required'}), 400
 
-        if auth_manager.update_user(username, role=role):
-            return jsonify({'message': 'User updated'})
-        return jsonify({'error': 'Update failed'}), 500
+        # Capture the previous role so the audit entry records the transition.
+        old_users = auth_manager.list_users() or {}
+        old_role = (old_users.get(username) or {}).get('role')
+
+        success, msg = auth_manager.update_user(username, role=role)
+        if success:
+            if audit_logger and old_role != role:
+                actor = getattr(request, 'current_user', {}) or {}
+                audit_logger.log_user_role_changed(
+                    username=username,
+                    old_role=old_role,
+                    new_role=role,
+                    user=actor.get('username'),
+                    ip_address=request.remote_addr,
+                )
+            return jsonify({'message': msg})
+        if 'not found' in msg.lower():
+            return jsonify({'error': msg}), 404
+        return jsonify({'error': msg}), 400
 
     @app.route('/api/dns/<string:provider>/accounts', methods=['GET', 'POST'])
     @app.route('/api/dns-providers/accounts', methods=['GET', 'POST'])
@@ -202,18 +312,30 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
             name = data.get('name', '').strip()
             role = data.get('role', 'viewer')
             expires_at = data.get('expires_at')
+            allowed_domains = data.get('allowed_domains')
 
             if not name:
                 return jsonify({'error': 'Key name is required'}), 400
             if len(name) > 64:
                 return jsonify({'error': 'Key name must be ≤ 64 characters'}), 400
 
-            user = getattr(request, 'current_user', {})
+            user = getattr(request, 'current_user', {}) or {}
             success, result_data = auth_manager_ref.create_api_key(
                 name, role=role, expires_at=expires_at,
-                created_by=user.get('username')
+                created_by=user.get('username'),
+                allowed_domains=allowed_domains,
             )
             if success:
+                if audit_logger:
+                    audit_logger.log_api_key_created(
+                        key_id=result_data.get('id'),
+                        name=result_data.get('name'),
+                        role=result_data.get('role'),
+                        allowed_domains=result_data.get('allowed_domains'),
+                        expires_at=result_data.get('expires_at'),
+                        user=user.get('username'),
+                        ip_address=request.remote_addr,
+                    )
                 return jsonify(result_data), 201
             return jsonify({'error': result_data}), 400
         except Exception as e:
@@ -225,9 +347,25 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
     def api_key_detail(key_id):
         """Revoke an API key"""
         try:
-            if auth_manager_ref.revoke_api_key(key_id):
-                return jsonify({'message': 'API key revoked'})
-            return jsonify({'error': 'Key not found or already revoked'}), 404
+            # Capture name before revocation for the audit record.
+            existing = auth_manager_ref.list_api_keys().get(key_id) or {}
+            key_name = existing.get('name')
+
+            ok, msg = auth_manager_ref.revoke_api_key(key_id)
+            if not ok:
+                # Distinguish "not found" so the UI can show 404 vs 400.
+                status = 404 if 'not found' in (msg or '').lower() else 400
+                return jsonify({'error': msg or 'Failed to revoke'}), status
+
+            if audit_logger:
+                user = getattr(request, 'current_user', {}) or {}
+                audit_logger.log_api_key_revoked(
+                    key_id=key_id,
+                    name=key_name,
+                    user=user.get('username'),
+                    ip_address=request.remote_addr,
+                )
+            return jsonify({'message': msg or 'API key revoked'})
         except Exception as e:
             logger.error(f"Failed to revoke API key {key_id}: {e}")
             return jsonify({'error': 'Failed to revoke API key'}), 500
@@ -254,6 +392,18 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
             data = request.json
             ok, err = deploy_manager.save_config(data)
             if ok:
+                if audit_logger:
+                    actor = getattr(request, 'current_user', {}) or {}
+                    # Hook commands themselves are NEVER logged (would leak
+                    # secrets + risk log-injection). We record that the
+                    # configuration was touched, by whom, from where.
+                    audit_logger.log_deploy_hook_changed(
+                        scope='global',
+                        hook_id='config',
+                        operation='update',
+                        user=actor.get('username'),
+                        ip_address=request.remote_addr,
+                    )
                 return jsonify({'message': 'Deploy configuration saved'})
             # Surface the specific reason (issue #102) so users see *why*
             # a hook was rejected rather than a generic save failure.
@@ -275,6 +425,19 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
             data = request.json or {}
             domain = data.get('domain', 'test.example.com')
             result = deploy_manager.test_hook(hook_id, domain=domain)
+            if audit_logger:
+                actor = getattr(request, 'current_user', {}) or {}
+                # We audit the *attempt* (success or failure of the dry-run)
+                # because the test path executes the hook command end-to-end
+                # against a test domain — admins need a trail of who poked
+                # what, even on a successful no-op test.
+                audit_logger.log_deploy_hook_changed(
+                    scope=domain,
+                    hook_id=hook_id,
+                    operation='test',
+                    user=actor.get('username'),
+                    ip_address=request.remote_addr,
+                )
             if 'error' in result:
                 return jsonify(result), 404
             return jsonify(result)

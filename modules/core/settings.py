@@ -15,6 +15,159 @@ from .utils import generate_secure_token, validate_email, validate_api_token, va
 logger = logging.getLogger(__name__)
 
 
+# --- POST /api/settings input validation -----------------------------------
+# Strict whitelist enforced by validate_settings_post() below. Two callsites
+# share this: the Flask-RESTX Settings resource (external API) and the web
+# blueprint's api_settings handler (UI). Both go through the same gate so
+# the rules can't drift.
+#
+# Adding a key here authorizes a generic admin POST to mutate it. For
+# anything with side-effects (shell exec, auth/token rotation, RBAC), prefer
+# a dedicated endpoint and keep the key in SETTINGS_REJECT_KEYS.
+
+PUBLIC_SETTINGS_WRITABLE_KEYS = frozenset({
+    'email',
+    'dns_provider',
+    'dns_providers',
+    'domains',
+    'auto_renew',
+    'renewal_threshold_days',
+    'challenge_type',
+    'certificate_storage',
+    'notifications',
+    'setup_completed',
+    'cloudflare_token',         # legacy single-provider token
+    'ca_providers',             # CA provider configuration
+    'default_ca',               # selected CA provider
+    'default_ca_accounts',      # per-CA default accounts
+    'default_accounts',         # per-DNS-provider default accounts
+    'dns_propagation_seconds',
+    'cache_ttl',
+})
+
+# Keys whose mutation via the bulk settings endpoint would create a privilege
+# escalation, RCE injection, or token-rotation risk. Each has (or should have)
+# a dedicated endpoint with its own auth and audit:
+#   - api_bearer_token / _hash : future /api/auth/bearer/rotate
+#   - deploy_hooks             : /api/deploy/config
+#   - users                    : /api/users
+#   - api_keys                 : /api/keys
+#   - local_auth_enabled       : /api/auth/config
+SETTINGS_REJECT_KEYS = frozenset({
+    'api_bearer_token',
+    'api_bearer_token_hash',
+    'deploy_hooks',
+    'users',
+    'api_keys',
+    'local_auth_enabled',
+})
+
+
+SECRET_MASK_SENTINEL = '********'
+
+
+def _strip_masked_values(payload):
+    """Recursively strip keys whose value equals the masking sentinel.
+
+    GET /api/web/settings masks secret-named fields with '********' so the
+    UI can render the form without leaking the real values. A round-trip
+    POST that echoes the GET response back (which is what the web UI and
+    integration tests do) would otherwise overwrite the real on-disk
+    secret with the literal string '********'. Stripping these placeholders
+    pre-validation makes the round-trip a no-op for the masked fields
+    while leaving every other key untouched.
+
+    Operates on dicts of arbitrary depth. Lists and non-dict values are
+    returned unchanged. A key whose value is a dict that was originally
+    non-empty but became empty after stripping is dropped from the result
+    — its content was entirely masked, so the only safe interpretation is
+    "preserve existing on-disk value". An originally-empty dict ({}) is
+    kept as {}: it carries the caller's actual intent (e.g. clear
+    users/api_keys, which the reject list will then catch).
+    """
+    if not isinstance(payload, dict):
+        return payload
+    out = {}
+    for key, value in payload.items():
+        if value == SECRET_MASK_SENTINEL:
+            continue
+        if isinstance(value, dict):
+            original_size = len(value)
+            cleaned = _strip_masked_values(value)
+            if not cleaned and original_size > 0:
+                # Every nested entry was masked — drop the outer key so
+                # the on-disk value is preserved by the merge layer.
+                continue
+            out[key] = cleaned
+        else:
+            out[key] = value
+    return out
+
+
+def validate_settings_post(payload, current=None):
+    """Filter a POST /api/settings payload against the writable whitelist.
+
+    Args:
+        payload: dict received from the client.
+        current: optional dict of the on-disk settings *before* this POST.
+            When provided, any incoming top-level field whose value already
+            equals the current value is silently dropped as a no-op
+            round-trip echo. This is what makes the GET-then-POST-back
+            pattern (used by the web UI and integration test fixtures)
+            interoperate with the strict whitelist without false positives.
+
+    Returns:
+        tuple (filtered, rejected, unknown):
+          filtered: payload restricted to PUBLIC_SETTINGS_WRITABLE_KEYS,
+                    with masked sentinels stripped and no-op echoes removed
+          rejected: keys in SETTINGS_REJECT_KEYS that the caller tried to
+                    mutate with a value different from current (each one is
+                    a security event — log & audit)
+          unknown:  keys neither allowed nor explicitly blocked (treat as
+                    400; likely a typo or a field that needs to be added
+                    to the whitelist intentionally)
+    """
+    if not isinstance(payload, dict):
+        raise ValueError("Settings payload must be an object")
+
+    cleaned_payload = _strip_masked_values(payload)
+
+    filtered = {}
+    rejected = []
+    unknown = []
+    for key, value in cleaned_payload.items():
+        # No-op echo: incoming value matches the on-disk value. Silently
+        # drop — applies uniformly to writable, reject-listed, and
+        # unknown keys so the same payload that came out of GET goes
+        # straight back in without surfacing spurious 400s.
+        if current is not None and key in current and value == current.get(key):
+            continue
+        if key in SETTINGS_REJECT_KEYS:
+            rejected.append(key)
+        elif key in PUBLIC_SETTINGS_WRITABLE_KEYS:
+            filtered[key] = value
+        else:
+            unknown.append(key)
+    return filtered, rejected, unknown
+
+
+def diff_settings_keys(before, after):
+    """Compute the set of top-level keys whose value differs between two
+    settings dicts. Used by audit logging to record what changed without
+    serializing secret values.
+
+    Returns:
+        list of changed top-level key names (sorted)
+    """
+    if not isinstance(before, dict) or not isinstance(after, dict):
+        return []
+    changed = set()
+    for key in set(before.keys()) | set(after.keys()):
+        if before.get(key) != after.get(key):
+            changed.add(key)
+    return sorted(changed)
+
+
 def _bearer_token_from_env_or_generate():
     """Return a valid api_bearer_token for the default settings template.
 
@@ -256,6 +409,14 @@ class SettingsManager:
                     settings['dns_providers'] = {}
                     was_migrated = True
 
+                dns_providers_before = {
+                    provider: dict(config) if isinstance(config, dict) else config
+                    for provider, config in settings.get('dns_providers', {}).items()
+                }
+                settings = self.migrate_dns_providers_to_multi_account(settings)
+                if settings.get('dns_providers', {}) != dns_providers_before:
+                    was_migrated = True
+
                 # Ensure certificate_storage exists with default configuration
                 if 'certificate_storage' not in settings:
                     settings['certificate_storage'] = default_settings['certificate_storage']
@@ -322,9 +483,20 @@ class SettingsManager:
                     settings['email'] = letsencrypt_email
 
                 if os.getenv('CLOUDFLARE_TOKEN'):
-                    if 'cloudflare' not in settings['dns_providers']:
-                        settings['dns_providers']['cloudflare'] = {'accounts': {'default': {}}}
-                    settings['dns_providers']['cloudflare']['accounts']['default']['api_token'] = os.getenv('CLOUDFLARE_TOKEN')
+                    dns_providers = settings.setdefault('dns_providers', {})
+                    cloudflare_config = dns_providers.get('cloudflare')
+                    if not isinstance(cloudflare_config, dict):
+                        cloudflare_config = {}
+                        dns_providers['cloudflare'] = cloudflare_config
+                    accounts = cloudflare_config.get('accounts')
+                    if not isinstance(accounts, dict):
+                        accounts = {}
+                        cloudflare_config['accounts'] = accounts
+                    default_account = accounts.get('default')
+                    if not isinstance(default_account, dict):
+                        default_account = {}
+                        accounts['default'] = default_account
+                    default_account['api_token'] = os.getenv('CLOUDFLARE_TOKEN')
 
                 return settings
 

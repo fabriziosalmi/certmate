@@ -9,6 +9,293 @@
 
 ---
 
+## v2.4.15 (Patch — Sprint 1.6 audit polish)
+
+Audit polish sprint: the four zero/low-risk items from the [2026-05-12 API auth audit](https://github.com/fabriziosalmi/certmate/releases/tag/v2.4.12) that didn't need structural design, shipped together because each is small, additive, and shares no code paths. Four atomic commits, 13 new unit tests on top of v2.4.14's 112 (125 total, 0.87s runtime, no Docker). PR [#151](https://github.com/fabriziosalmi/certmate/pull/151).
+
+### F-4 — Confirm dialog when creating an API key with no domain scope
+
+The Allowed Domains field on the API Keys settings tab has always defaulted to "empty = unrestricted" — sensible for backward compatibility, easy to trip over: an admin who hits Create with the field blank just minted a key with role-scoped access to every certificate on the install.
+
+`createKey` in `static/js/settings-apikeys.js` now gates on a confirm dialog when `parseAllowedDomains(...)` returns undefined:
+
+> "This key will have no domain restrictions and will be authorized to operate on every certificate on this CertMate instance, scoped only by the role you selected. To restrict the key to specific domains, cancel and fill in the Allowed Domains field (comma-separated, supports wildcards like *.example.com). Create this unrestricted key?"
+
+On cancel, focus jumps back to the Allowed Domains input so recovery is one keystroke. When the field has at least one pattern (including a single wildcard) the dialog is skipped — the admin already declared intent. Zero backend change.
+
+### F-6 — Self-host ReDoc bundle + drop external CDN from CSP
+
+`/redoc/` previously loaded the ReDoc bundle from `cdn.redoc.ly` and Montserrat / Roboto from `fonts.googleapis.com` + `fonts.gstatic.com`, breaking the project's air-gapped-ready promise and forcing three external origins into the global CSP.
+
+Three changes:
+
+1. `static/js/redoc.standalone.js` checked in as a vendored asset (918 KB; pulled from `cdn.redoc.ly/redoc/latest/bundles/` at the time of the commit; carries its own MIT license header).
+2. `templates/redoc.html` switched from `<redoc spec-url=>` + CDN `<script>` to `Redoc.init()` against the locally-hosted bundle. ReDoc's `theme.typography.fontFamily` is pinned to the system-font stack so no Google Fonts request fires.
+3. `modules/core/factory.py` CSP — dropped `cdn.redoc.ly`, `fonts.googleapis.com`, `fonts.gstatic.com`. `/redoc/` now satisfies the same `self`-only CSP as every other page on the install.
+
+`tests/test_static_csp.py` — `test_redoc_csp_allows_external` rewritten to `test_redoc_csp_self_only` (asserts the three CDN origins are absent and `self` is present); new `test_redoc_html_self_hosts_bundle` confirms the rendered page references `/static/js/redoc.standalone.js`.
+
+### GET role normalisation — `/api/web/settings` GET is now `viewer`
+
+The Flask-RESTX surface at `/api/settings` GET already required only `viewer`; the web blueprint at the same path (plus its `/api/web/settings` alias) was `admin` for both GET and POST. Two endpoints, same data, different roles — confusing for integrators and inconsistent with the masking guarantee already in place on the web blueprint side.
+
+The blueprint splits into two view functions: GET is `viewer`, POST stays `admin`. Why this is safe to open: `api_settings_get` already masks every key matching `/(token|secret|password|key|credential)/i` to `'********'` via the `_mask_dict` regex walker. The RESTX `Settings.get` resource achieves the same via `MaskedString` field types. Both endpoints have been masking on the read path since well before this change; the only thing that shifts is which roles can hit them.
+
+### F-7 — Per-username login rate limit on top of per-IP
+
+`/api/auth/login` had a single per-IP bucket (5 attempts / 60s). It fails open to a distributed brute-force where an attacker spreads attempts across N source IPs — N × 5 attempts/minute against a single account before any rate limit fires. The 12-character password policy mitigates the threat; SOC2 / ISO27001 audits still expect a per-account lockout for due diligence.
+
+New per-username bucket on top:
+
+| Bucket | Limit | Window |
+|---|---|---|
+| per-IP | 5 attempts | 60 s |
+| per-username (new) | 10 attempts | 300 s |
+
+Wider window for the username bucket because the threat model is slower than a per-IP burst and legitimate users mistyping a password from different devices should still recover quickly.
+
+Defensive details:
+- Username is lower-cased + trimmed before bucketing so an attacker cannot side-step the cap by varying case (`ADMIN` vs `admin`) or padding whitespace.
+- Empty / whitespace-only usernames skip the per-user bucket — recording them would let an attacker pre-fill a wildcard slot to starve legitimate users.
+- Attempts older than their respective window are pruned lazily on every check; in-memory dicts don't grow unbounded.
+- When both buckets trip, `retry_after` is the **longer** of the two outstanding windows so the client backs off enough to clear both.
+- `_check_login_rate_limit` and `_record_login_attempt` grew an optional `username` parameter; existing callers without a username keep working.
+
+`auth_routes.py` POST `/api/auth/login` now reads the username from the request body **before** the rate-limit check but credential validation still happens after — so a hammered username cannot be probed for existence by comparing error codes; both rate-limit and bad-credentials paths return the same generic error envelope.
+
+### Tests
+
+`tests/test_sprint1_6_audit_polish.py` — 13 new tests, 0.07s runtime:
+
+- `TestPerIpBucket` (3) — original behaviour preserved + backward-compatible no-username signature
+- `TestPerUsernameBucket` (5) — distributed-attack blocked, per-user isolation, case/whitespace normalisation, empty username does not poison the bucket
+- `TestRetryAfterIsWorstCase` (2) — `retry_after` picks the binding window
+- `TestBucketWindowExpiry` (2) — stale entries pruned on next check
+- `TestSettingsGetRoleNormalization` (1) — module exposes the split GET handler with viewer role
+
+Total unit-test surface after this release: 125 passes (112 pre-existing + 13 new) in 0.87s without Docker. CI also runs the Docker-fixture integration suite and the updated `tests/test_static_csp.py` assertions for the ReDoc self-host.
+
+### Backward compatibility
+
+- Every existing API call continues to work for admin callers. The only observable changes for non-admin callers:
+  - Viewers can now read `/api/web/settings` GET (where they previously got 403). The response is masked; no secret value is exposed.
+  - The viewer cannot trip the per-username login bucket without doing 10 failed POSTs against the same username in 5 minutes.
+- `parseAllowedDomains` is unchanged; the F-4 confirm only fires when the field is empty, so admins who routinely scope their keys see no new dialog.
+- The `_check_login_rate_limit(ip)` signature is preserved (username defaults to None); legacy callers don't need to change.
+- ReDoc renders identically — only the asset source changes.
+
+### Non-goals (deferred to Sprint 2, with reason)
+
+- **F-3** (legacy bearer deprecation flag + dedicated rotation endpoint + UI migration warning). Structural feature, needs UX design for the migration path. Deferred to a dedicated PR.
+- **#138** (help.html rewrite). Pure UI but a large rewrite that deserves its own design + sprint.
+- **#150** (diagnostic snapshot + one-click bug report from error toasts). New feature opened during this sprint after the audit walk-through; in the backlog now, separate PR.
+
+## v2.4.14 (Patch — Sprint 1.5 API auth audit follow-up)
+
+Direct follow-up to the [2026-05-12 draconian API auth audit](https://github.com/fabriziosalmi/certmate/releases/tag/v2.4.12) and the coverage matrix it produced. Four atomic commits, 23 new unit tests on top of v2.4.13's 89 (112 unit-test surface, 0.83s runtime, no Docker). PR [#148](https://github.com/fabriziosalmi/certmate/pull/148).
+
+Picks up everything from the audit that was actionable in one sprint without re-opening structural design questions. The four deferred items (F-3 / F-4 / F-6 / F-7) are explicitly out of scope and reasoned below.
+
+### Authentication architecture (F-1)
+
+`AuthManager.require_role` previously called `self.require_auth(lambda: None)()` and then read `request.current_user` back as a side effect of the lambda's invocation. The chain worked, but it leaned on a cross-decorator side effect with no compile- or runtime-checkable guarantee — any middleware clearing `request.current_user` between the lambda call and the role-check line would silently downgrade authentication to None. Not exploitable today; fragile as a foundation.
+
+New `AuthManager._authenticate_request()` is the single source of truth. Evaluates bypass mode -> session cookie -> bearer token in order and returns `(user, None)` on success or `(None, (error_dict, status))` on failure, **without touching `request.current_user`**. Both `require_auth` and `require_role` are now thin wrappers that call it, assign `request.current_user` exactly when they know the request is allowed to proceed, and dispatch. The decorator API surface is unchanged.
+
+### Authorization audit trail (F-2)
+
+Domain-scope denials have audited via `log_authz_denied` since v2.4.12; role-level denials returned `403 INSUFFICIENT_ROLE` silently, leaving privilege-enumeration attempts off the audit trail. `AuthManager` gains `set_audit_logger(audit_logger)` (wired in `factory.py` right after both objects are constructed) and `_log_rbac_denial(user, required_role, endpoint)`. The helper always emits a structured `logger.warning` so the signal is present even without an audit logger; when one is wired (the production path), it also writes `log_authz_denied` with `operation='access'`, `resource_type='endpoint'`, `resource_id=request.path`, `reason='role=X below required Y'`.
+
+### Certificate download — private-key role split
+
+Escalation of a finding the audit rated INFO/⚠️ in its coverage matrix. `DownloadCertificate.get` required only `viewer` and returned private-key material via four code paths: `?format=json`, `?file=privkey.pem`, `?file=combined.pem`, default ZIP. A scoped viewer key could therefore pull the private key for every certificate in its scope — information disclosure inconsistent with the read-only-monitoring intent of the role.
+
+The decorator stays `viewer` so the authn check still fires, and the handler now gates per file:
+
+| Path | Allowed roles |
+|---|---|---|
+| `?file=cert.pem`, `?file=chain.pem`, `?file=fullchain.pem` | viewer, operator, admin |
+| `?include_private=0` (public-only ZIP, new) | viewer, operator, admin |
+| `?file=privkey.pem`, `?file=combined.pem`, `?format=json`, default ZIP / `?include_private=1` | operator, admin |
+
+Denied calls return `403 PRIVKEY_REQUIRES_OPERATOR` with a `hint` pointing at the viewer-safe variants, and write `audit_logger.log_authz_denied` so the attempt is visible. The public-only ZIP carries the suffix `_certificates_public.zip` so an attached file is unambiguous at a glance. `cert.pem` and `chain.pem` are newly legal `?file=` values — they were never reachable as single files before (the original whitelist only included `fullchain.pem` on the public side).
+
+### Audit-log coverage matrix gaps
+
+Six mutating endpoints landed in v2.4.12 without audit wiring; the audit's coverage matrix flagged them. Each now emits an audit entry on success:
+
+| Endpoint | Audit method | Notes |
+|---|---|---|
+| `DELETE /api/certificates/<d>` | `log_operation(operation='delete', resource_type='certificate')` | |
+| `POST /api/backups/create` | `log_operation(operation='create', resource_type='backup', details={type,reason})` | |
+| `POST /api/backups/restore/<...>` | `log_operation(operation='restore', resource_type='backup', details={backup_type, pre_restore_backup})` | Heaviest of the four; wholesale-replaces settings + certificates. The audit entry surfaces both source filename and the pre-restore backup so an admin can roll back via the audit trail alone. |
+| `DELETE /api/backups/delete/<...>` | `log_operation(operation='delete', resource_type='backup')` | |
+| `POST /api/deploy/test/<id>` | `log_deploy_hook_changed(operation='test', scope=<domain>, hook_id=<id>)` | The dry-run executes the hook end-to-end against a test domain; the command itself is never logged (log-injection + secret-leak risk, consistent with the existing `log_deploy_hook_changed` semantics). |
+| `POST /api/notifications/config` | `log_operation(operation='update', resource_type='notifications_config', details={channels_present})` | Channel config carries credentials inline (Slack/Discord webhook URLs, SMTP passwords); `details` records only the sorted list of channel keys present, never their secrets. |
+
+### Tests
+
+`tests/test_sprint1_5_audit_followup.py` — 23 new tests, 0.35s runtime:
+
+- `TestAuthenticateRequestBypassMode` (2) — bypass mode returns setup_user without touching `request.current_user` (the F-1 invariant — the helper has no side effects)
+- `TestAuthenticateRequestBearerToken` (5) — missing header / wrong scheme / invalid token / legacy token / scoped key allowed_domains propagation
+- `TestRequireRoleDelegation` (3) — both decorators set `current_user` only on success, 403 INSUFFICIENT_ROLE for under-roled callers
+- `TestRbacDenialAudit` (2) — `log_authz_denied` emitted with the right fields when an AuditLogger is wired; no crash when not wired (fallback warning path)
+- `TestDownloadRoleSplit` (11) — full matrix of viewer-allowed and viewer-denied download paths plus operator-allowed counterparts; each viewer denial verified to emit `log_authz_denied`
+
+Total unit-test surface after this release: 112 passes (89 pre-existing + 23 new) in ~0.83s without Docker. CI also runs the Docker-fixture integration suite (`test_auth.py`, `test_settings.py`, `test_cert_lifecycle.py`, ...) and passes.
+
+### Backward compatibility
+
+- The download endpoint still accepts every previous URL; only viewers see new 403s on the four private-key paths. The new `?include_private=0` parameter and `cert.pem` / `chain.pem` single-file paths are additive.
+- The `_authenticate_request` refactor is internal to AuthManager; the decorator API surface (`@auth_manager.require_auth`, `@auth_manager.require_role`) is unchanged.
+- `set_audit_logger` is optional — when unset, role denials still surface in `logger.warning`. No regression for tests or minimal setups.
+- No changes to scoped API key creation, the `allowed_domains` matcher, or the settings whitelist.
+
+### Non-goals (deferred to Sprint 2)
+
+Listed so they don't get assumed:
+
+- **F-3** (legacy bearer token deprecation flag + UI warning + dedicated rotation endpoint). Structural feature; needs UX design for the migration path.
+- **F-4** (UI warning when `allowed_domains` left empty on key creation). UX nudge.
+- **F-5** (in-memory session store lost on restart). Audit explicitly called this an accepted trade-off; not a fix target.
+- **F-6** (self-host the ReDoc bundle to remove `cdn.redoc.ly` from CSP). INFO; air-gapped polish.
+- **F-7** (per-username login rate limit on top of the existing per-IP limit). INFO; mitigated today by the 12-character password policy + per-IP limit.
+
+## v2.4.13 (Patch — audit log performance + slow-request watchdog)
+
+Single community PR from [@ITJamie](https://github.com/ITJamie) ([#146](https://github.com/fabriziosalmi/certmate/pull/146)). Two changes, both diagnostic-grade; neither alters application behavior for the happy path.
+
+### Audit log read performance
+
+`AuditLogger.get_recent_entries` previously read `min(file_size, limit * 512)` bytes from the end of `certificate_audit.log` and parsed the tail as ASCII. The 512-bytes-per-entry budget was already tight before v2.4.12 and became a real problem with the new audit methods that v2.4.12 added: `log_settings_changed` with several `changed_keys` lands at ~600 bytes per entry, and `log_api_key_created` with an `allowed_domains` list goes further. Result: the Activity page sometimes hung, and the tail it did return silently dropped recent entries.
+
+The replacement walks backwards from EOF in 8 KB blocks, stops when the accumulated block count exceeds the caller's `limit`, and decodes UTF-8 with `errors='replace'` so a single malformed byte does not lose an otherwise valid record. Effective budget is now ~8 KB per expected entry — comfortable for everything the audit logger currently emits. Test (`tests/test_audit.py`) writes 2000 entries and asks for the last 3 to exercise both the multi-block walk and the trimming.
+
+### Slow-request watchdog
+
+New optional instrumentation registered by `setup_slow_request_logging(app, container)` in `modules/core/factory.py`. Tracks every in-flight Flask request by thread ID under a lock; on `after_request`, logs a `Slow request completed` event when duration crosses a configurable threshold; in parallel, a daemon watchdog thread periodically scans for requests still running past the threshold and emits a `Request still running` event including the captured thread stack so the operator can see where it is stuck.
+
+Three env knobs (all optional, all default to sensible production values):
+
+| Variable | Default | Effect |
+|---|---|---|
+| `CERTMATE_SLOW_REQUEST_LOGGING` | `true` | Master switch. Set to `false`/`0`/`no`/`off` to disable. |
+| `CERTMATE_SLOW_REQUEST_THRESHOLD_SECONDS` | `30.0` | Request duration above which we start logging. |
+| `CERTMATE_SLOW_REQUEST_SCAN_SECONDS` | `10.0` | How often the watchdog scans for in-flight slow requests. |
+| `CERTMATE_SLOW_REQUEST_REPEAT_SECONDS` | matches threshold | Minimum gap between repeated "still running" logs for the same request. |
+
+Output goes to a dedicated `request-watchdog` logger so it doesn't pollute the main log stream. The watchdog thread is a daemon, dies with the process, and its `stop_event` is stored on the app container for future shutdown plumbing.
+
+### Tests
+
+- `tests/test_audit.py::test_get_recent_entries_uses_tail_and_preserves_order` — 2000 entries, asks for last 3, verifies order.
+- `tests/test_factory_logging.py::test_env_float_falls_back_on_invalid_value` — bad env value gracefully falls back to default.
+- `tests/test_factory_logging.py::test_format_thread_stack_returns_current_thread_stack` — sanity check on the helper.
+
+The watchdog thread itself is not tested end-to-end (would require timing-coupled Flask integration plumbing), but the helpers it depends on are covered and the rest is standard Flask `before/after_request` glue.
+
+### Notes
+
+- No application behavior change. The watchdog only logs; it does not abort, cancel, or modify requests in any way.
+- Compatible with v2.4.12: the new audit-log read path is downstream of v2.4.12's audit writes; the line format is unchanged.
+
+## v2.4.12 (Patch — Sprint 1 security hardening + two open bug fixes + repo hygiene)
+
+Closes the first batch of an internal security audit on the v2.4.x API surface, plus two open community bug reports filed the same day against the dashboard and the deploy menu, plus a small repo-hygiene pass. Eleven atomic commits, 1427 insertions and 9135 deletions on `main` (the deletion total is dominated by seven tracked-by-mistake dev artifacts — `.coverage`, `coverage.xml`, `test_results.json`, `debug_*.py`, a stale Playwright screenshot — being untracked, not by application code being removed). 55 new unit tests in `tests/test_sprint1_security.py`; 86 unit tests pass in total. PR [#147](https://github.com/fabriziosalmi/certmate/pull/147).
+
+### Authorization
+
+- **Strict field whitelist on `POST /api/settings`** (both the Flask-RESTX surface at `/api/settings` and the web blueprint at `/api/web/settings`). The endpoint previously accepted any payload field and let `atomic_update` merge it on top of the on-disk settings. `atomic_update` already preserved `users`, `api_keys`, and `local_auth_enabled`, but did **not** protect `api_bearer_token` (token-rotation hijack via an admin-credentialed client) or `deploy_hooks` (shell-exec injection via the deploy hook command field). Each rejected field is now a `400` with a `hint` pointing at the dedicated endpoint (`/api/users`, `/api/keys`, `/api/auth/config`, `/api/deploy/config`). Unknown fields are also rejected to surface typos instead of silently dropping them. Masked-secret echoes (`'********'` placeholder values returned by the masked GET) are stripped recursively before validation so a UI round-trip POST does not falsely 400; the unmasked GET-then-POST-back round-trip is now a clean no-op.
+
+- **`/api/auth/config` split into two routes.** The previous implementation registered a single `GET|POST` view with `require_role('viewer')` and an inline admin check inside the handler — defense-in-depth fail. Now `GET` is `viewer`, `POST` is `admin`, both enforced at the decorator level. POST also audit-logs the `local_auth_enabled` transition.
+
+- **Scoped API keys with `allowed_domains`.** Optional per-key list of domain patterns; supports exact (`example.com`) and wildcard (`*.example.com`) forms. The wildcard matches subdomains at any depth but not the apex, matching Let's Encrypt's SAN semantics. `None` (or omitted on existing keys) preserves the legacy unrestricted behavior. `[]` is a deliberate locked-out state for staging keys. Enforced on every per-domain endpoint (RESTX + web blueprint): `GET /certificates` (filters the result set), `POST /certificates(/create)` (checks primary + every SAN), `PATCH /certificates/{d}`, `DELETE /certificates/{d}`, `GET /certificates/{d}/download`, `GET /certificates/{d}/dns-alias-check`, `POST /certificates/{d}/renew`, `PUT /certificates/{d}/auto-renew`, `POST /certificates/{d}/deploy`, plus batch create and batch download. Denials return `403 DOMAIN_OUT_OF_SCOPE` and are recorded in the audit log.
+
+### Audit trail
+
+Nine new `AuditLogger` methods cover settings mutations, auth-config toggle, user CRUD, scoped key CRUD, deploy hook changes, CA provider changes, and authorization denials. Wired into seven mutating endpoints. Sensitive values are never serialized — only key names, IDs, and operational metadata. Deploy hook commands themselves are explicitly not logged (log-injection + secret-leak risk).
+
+### Bug fixes
+
+- **[#144](https://github.com/fabriziosalmi/certmate/issues/144) (community, [@ITJamie](https://github.com/ITJamie))** — Dashboard 404s on DNS provider accounts. `dashboard.js` was calling `/api/settings/dns-providers/<p>/accounts`, which is not a registered route. Seven providers, seven 404s on every dashboard load. Corrected to `/api/dns/<p>/accounts`.
+
+- **[#137](https://github.com/fabriziosalmi/certmate/issues/137) (community, [@SpeeDFireCZE](https://github.com/SpeeDFireCZE))** — *Recent Executions* in the Deploy menu showed *unexpected response*. The backend returns `{history: [...]}` but the Alpine.js handler branched only on `Array.isArray(res.body)`, so the wrapped object was discarded and the fallback fired. Handler now accepts both shapes, forward-compatible with any future raw-array return.
+
+- **Drive-by**: `DELETE /api/keys/<id>` was treating `revoke_api_key`'s `(ok, msg)` tuple as truthy, so failed revocations always returned *API key revoked*. Now distinguishes 404 (not found) from 400 (other failure) and surfaces the underlying message.
+
+### UI
+
+- New *Allowed Domains* input on the API Keys settings tab. Comma-separated, inline help, defaults to empty (= unrestricted, preserves the existing zero-click workflow for admins who don't need scoping).
+- New scope badge on the existing-keys list. Shows `N domain(s)` or `locked`, with the full pattern set in the title attribute and as a secondary line in monospace.
+
+### Documentation
+
+README gains two new subsections under *Security & Best Practices*:
+
+- **Settings API Hardening** documents the strict whitelist on `POST /api/settings`, the per-field rejection behavior, and the new audit-log surface.
+- **Secret Storage Hardening** documents the on-disk situation (DNS provider credentials remain in `data/settings.json` in their original form; the bearer token is HMAC-SHA256 hashed) and the five recommended hardening steps in order of effort (external secret backend > volume encryption > non-root user > avoid bind mounts > credential rotation). Explicit callout that the application does not encrypt secrets at the application layer — defers to an external secret backend or volume encryption.
+
+### Repo hygiene
+
+- **Seven tracked dev artifacts untracked** (`.coverage`, `coverage.xml`, `test_results.json`, `debug_response.py`, `debug_storage_simple.py`, `debug_storage_test.py`, and one stale Playwright failure screenshot under `test_screenshots/`). All were left over from local debugging sessions; none are referenced by the test suite, the CI workflow, or the application. `.gitignore` extended with the corresponding patterns so they do not drift back in.
+
+- **Missing issue templates shipped**. `feature_request.md` and `.github/ISSUE_TEMPLATE/config.yml` existed locally but had never been committed, so the GitHub issue picker at `/issues/new/choose` only offered Bug Report and the `?template=feature_request.md` link in the README silently 404'd back to the blank-issue redirect. Both files are now committed; the `config.yml` keeps blank issues disabled and routes contributors at Discussions.
+
+- **GitHub Wiki populated** (off-PR, same day). Eleven pages reflowed from the existing `docs/` tree, navigable left sidebar (`_Sidebar`), per-page footer (`_Footer`), and a project-wide `Home` landing page. Inter-page links rewritten to wiki page references; source-file links rewritten to absolute repo URLs so they resolve from the wiki. Closes [#140](https://github.com/fabriziosalmi/certmate/issues/140).
+
+### Backward compatibility
+
+- API keys without `allowed_domains` (existing rows in `settings.json`) keep full access.
+- Session-authenticated local users and the legacy `api_bearer_token` keep full access.
+- The setup wizard payload (`email`, `dns_provider`, `dns_providers`, `auto_renew`, `setup_completed`) is covered by the whitelist; a regression test guards this.
+- The masked-secret round-trip pattern used by the web UI (GET → populateForm → POST same payload back) is preserved: masked values are stripped pre-validation and unchanged top-level fields are silently dropped as no-op echoes.
+- `atomic_update`'s pre-existing `protected_keys` is unchanged — the whitelist is an additional gate at the HTTP layer, not a replacement.
+
+### Breaking changes (security)
+
+The whitelist on `POST /api/settings` rejects payloads that include `api_bearer_token`, `api_bearer_token_hash`, `deploy_hooks`, `users`, `api_keys`, or `local_auth_enabled` *with a value different from the current on-disk value*, returning `400` and a `hint` field pointing at the correct dedicated endpoint. No-op round-trip echoes of the same fields are silently dropped and do not break existing callers. Any integration that was *intentionally* mutating one of these fields through the generic settings endpoint will need to switch to the dedicated endpoint. The CertMate web UI already uses the dedicated endpoints for these fields and is unaffected.
+
+### Non-goals (explicit)
+
+Items deliberately out of scope for this sprint, listed so they do not get assumed:
+
+- No secrets-at-rest encryption. DNS provider credentials remain in `data/settings.json` in their original form. The README now documents this explicitly and points at the existing external-storage backends (Vault, Infisical, AWS Secrets Manager, Azure Key Vault) as the recommended fix.
+- No HMAC chain or tamper-evidence on the audit log itself.
+- No dedicated API surface for rotating the legacy bearer token; rotation still requires editing `settings.json` or `.env`.
+- No changes to the renewal path, OCSP/CRL, storage backends, or DNS provider plugins.
+
+### Tests
+
+- `tests/test_sprint1_security.py` — 55 new tests across seven classes covering whitelist accept/reject/unknown, settings-diff, masked-sentinel stripping (top-level and nested-collapse), no-op echo silent-drop semantics, scope matcher (exact, wildcard, apex non-match, locked, unrestricted), `_normalize_allowed_domains` validation, key creation with scope, and authentication propagating scope onto `current_user`.
+- `tests/test_apikeys.py` + `tests/test_settings_atomic_update.py` — 31 pre-existing tests, no regressions.
+- Total unit-test surface: 86 passes locally in 0.6s without Docker; the Docker-fixture integration suite (`test_auth.py::TestSetupModeBypass::test_web_settings_post_works`, etc.) runs in CI and passes.
+
+## v2.4.8 (Patch — community PR merge + JSON download + lint fixes)
+
+Merges the ITJamie PR chain ([#128](https://github.com/fabriziosalmi/certmate/pull/128), [#132](https://github.com/fabriziosalmi/certmate/pull/132), [#133](https://github.com/fabriziosalmi/certmate/pull/133)) and resolves three markdown lint findings. All changes validated end-to-end on a live Docker instance with real Cloudflare DNS-01 certificate creation.
+
+### From the community
+
+- **#133** [@ITJamie](https://github.com/ITJamie) (superset of #128 and #132) — three fixes in one:
+  - **JSON certificate download** (`?format=json`): new query parameter on `GET /api/certificates/<domain>/download` returns a JSON object with `cert_pem`, `chain_pem`, `fullchain_pem`, `private_key_pem` as PEM strings. Mutually exclusive with the existing `?file=` parameter (returns 400 on conflict). Invalid format values return 400. Documented in `docs/api.md` and `README.md`.
+  - **Tempdir data-loss fix**: `setup_directories()` in `factory.py` no longer calls `tempfile.mkdtemp()` — certificates, data, backups, and logs directories now always resolve to the project paths (`/app/certificates`, `/app/data`, etc.), surviving container restarts.
+  - **Settings migration**: `SettingsManager.load_settings()` now migrates legacy single-account DNS provider config (`dns_providers.cloudflare.api_token`) to the multi-account structure (`dns_providers.cloudflare.accounts.default.api_token`), and correctly applies `CLOUDFLARE_TOKEN` env var override without resetting `setup_completed` (fixes setup wizard loop, issue #130).
+  - **Dashboard table fix**: certificate rows in `dashboard.js` now use `rowRaw(rowHtml\`...\`)` for action buttons, fixing escaped HTML tags rendering as visible text.
+
+### Lint fixes
+
+- `README.md`: fixed docker-compose YAML code block indentation (duplicate `cpus`/`memory` keys at wrong nesting level)
+- `README.md`: normalized `Backup & Recovery` headings to `Backup and Recovery` (resolves broken `#backup--recovery` anchor)
+- `docs/guide.md`: fixed broken link `./CHANGELOG.md` → `../RELEASE_NOTES.md`
+
+### Tests
+
+- 2 new test files: `test_factory_directories.py` (tempdir fix) + `test_issue130_setup_wizard_loop.py` (migration + env override)
+- 2 new test cases in `test_cert_lifecycle.py` (JSON download success + invalid format)
+- 1 new test case in `test_download_file_param.py` (JSON 404 for missing domains)
+- All validated against live Cloudflare DNS-01 with random subdomain `pr133test-91e7c166.certmate.org`
+
 ## v2.4.7 (Patch — base image bump bookworm → trixie)
 
 Two-character `Dockerfile` change ([#127](https://github.com/fabriziosalmi/certmate/pull/127)): `python:3.12-slim` → `python:3.12-slim-trixie`. Expected to close ~11-13 of the 13 open Critical+High Trivy findings on the main branch image — all of them base-image OS CVEs (gnutls, libssh2, ncurses, systemd, libcap) fixed in trixie's package versions but not backported to bookworm.

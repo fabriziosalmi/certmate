@@ -78,13 +78,14 @@
         var container = ensureToastContainer();
 
         var toast = document.createElement('div');
-        toast.className = 'pointer-events-auto border rounded-lg shadow-lg p-4 flex items-start gap-3 transform translate-x-full opacity-0 transition-all duration-300 ' + (TOAST_COLORS[type] || TOAST_COLORS.info);
+        toast.className = 'pointer-events-auto relative border rounded-lg shadow-lg p-4 flex items-start gap-3 transform translate-x-full opacity-0 transition-all duration-300 overflow-hidden ' + (TOAST_COLORS[type] || TOAST_COLORS.info);
 
         toast.innerHTML =
             '<i class="fas ' + (TOAST_ICONS[type] || TOAST_ICONS.info) + ' text-lg mt-0.5 flex-shrink-0"></i>' +
             '<div class="flex-1 text-sm font-medium">' + CM.escapeHtml(message) + '</div>' +
             '<button class="flex-shrink-0 text-current opacity-50 hover:opacity-100" onclick="this.parentElement.remove()">' +
-            '<i class="fas fa-times"></i></button>';
+            '<i class="fas fa-times"></i></button>' +
+            (duration > 0 ? '<div class="toast-progress" style="--toast-duration:' + duration + 'ms"></div>' : '');
 
         container.appendChild(toast);
 

@@ -151,6 +151,22 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
                 return s
 
             settings_manager.update(_mutator)
+            audit_logger = managers.get('audit')
+            if audit_logger:
+                actor = getattr(request, 'current_user', {}) or {}
+                # Channel credentials (Slack/Discord webhook URLs, SMTP
+                # passwords) ride inside `data`; record only the set of
+                # configured channels, not their secrets.
+                channels = sorted(k for k in data.keys() if isinstance(data.get(k), dict))
+                audit_logger.log_operation(
+                    operation='update',
+                    resource_type='notifications_config',
+                    resource_id='notifications',
+                    status='success',
+                    details={'channels_present': channels},
+                    user=actor.get('username'),
+                    ip_address=request.remote_addr,
+                )
             return jsonify({'message': 'Notification settings saved'})
         except Exception as e:
             logger.error(f"Failed to save notifications config: {e}")

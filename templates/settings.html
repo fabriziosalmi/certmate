@@ -5,38 +5,34 @@
     <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8"
          x-data="{ tab: (location.hash.slice(1) || 'dns') }"
          x-init="$watch('tab', t => history.replaceState(null, '', '#' + t))"
-        <!-- Header -->
-        <div class="bg-white dark:bg-gray-800 shadow rounded-lg mb-6">
-            <div class="px-6 py-4">
-                <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Settings</h2>
-                <p class="text-gray-600 dark:text-gray-300 mt-1">Configure your DNS provider credentials and preferences</p>
-                <div class="mt-3 flex items-center text-sm">
-                    <div class="flex items-center text-green-600 dark:text-green-400" id="connectionStatus" style="display: none;">
-                        <i class="fas fa-check-circle mr-1"></i>
-                        <span>Connected and configured</span>
-                    </div>
-                    <div class="flex items-center text-yellow-600 dark:text-yellow-400" id="partialStatus" style="display: none;">
-                        <i class="fas fa-exclamation-triangle mr-1"></i>
-                        <span>Partially configured</span>
-                    </div>
-                    <div class="flex items-center text-red-600 dark:text-red-400" id="disconnectedStatus" style="display: none;">
-                        <i class="fas fa-times-circle mr-1"></i>
-                        <span>Not configured</span>
+         <!-- Settings Tabs (Alpine.js) -->
+        <div class="bg-white dark:bg-surface-card shadow-card rounded-xl">
+            <div class="px-6 py-3 border-b border-gray-100 dark:border-white/5 overflow-x-auto">
+                <div class="flex items-center justify-between mb-2">
+                    <nav class="flex items-center text-sm" aria-label="Breadcrumb">
+                        <a href="/" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"><i class="fas fa-home"></i></a>
+                        <i class="fas fa-chevron-right text-[10px] text-gray-300 dark:text-gray-600 mx-2"></i>
+                        <span class="text-gray-700 dark:text-gray-200 font-medium">Settings</span>
+                    </nav>
+                    <div class="flex items-center text-xs gap-3">
+                        <div class="flex items-center text-green-600 dark:text-green-400" id="connectionStatus" style="display: none;">
+                            <i class="fas fa-check-circle mr-1"></i><span>Connected</span>
+                        </div>
+                        <div class="flex items-center text-yellow-600 dark:text-yellow-400" id="partialStatus" style="display: none;">
+                            <i class="fas fa-exclamation-triangle mr-1"></i><span>Partial</span>
+                        </div>
+                        <div class="flex items-center text-red-600 dark:text-red-400" id="disconnectedStatus" style="display: none;">
+                            <i class="fas fa-times-circle mr-1"></i><span>Not configured</span>
+                        </div>
                     </div>
                 </div>
-            </div>
-        </div>
-
-        <!-- Settings Tabs (Alpine.js) -->
-        <div class="bg-white dark:bg-gray-800 shadow rounded-lg">
-            <div class="px-6 py-3 border-b dark:border-gray-700 overflow-x-auto">
                 <nav class="flex space-x-1 min-w-max" role="tablist">
-                    <template x-for="t in [{id:'dns',icon:'fa-server',label:'DNS'},{id:'ca',icon:'fa-shield-alt',label:'CA'},{id:'general',icon:'fa-cogs',label:'General'},{id:'storage',icon:'fa-database',label:'Storage'},{id:'notifications',icon:'fa-bell',label:'Notifications'},{id:'deploy',icon:'fa-rocket',label:'Deploy'},{id:'users',icon:'fa-users',label:'Users'},{id:'apikeys',icon:'fa-key',label:'API Keys'},{id:'backup',icon:'fa-archive',label:'Backup'}]">
-                        <button type="button" @click="tab = t.id" role="tab"
+                    <template x-for="t in [{id:'dns',icon:'fa-server',label:'DNS',abbr:'DNS'},{id:'ca',icon:'fa-shield-alt',label:'CA',abbr:'CA'},{id:'general',icon:'fa-cogs',label:'General',abbr:'Gen'},{id:'storage',icon:'fa-database',label:'Storage',abbr:'Sto'},{id:'notifications',icon:'fa-bell',label:'Notifications',abbr:'Notif'},{id:'deploy',icon:'fa-rocket',label:'Deploy',abbr:'Dep'},{id:'users',icon:'fa-users',label:'Users',abbr:'Usr'},{id:'apikeys',icon:'fa-key',label:'API Keys',abbr:'Keys'},{id:'backup',icon:'fa-archive',label:'Backup',abbr:'Bkp'}]">
+                        <button type="button" @click="tab = t.id" role="tab" :title="t.label"
                                 :class="tab === t.id
                                     ? 'px-4 py-2 text-sm font-medium rounded-md text-primary bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700'
                                     : 'px-4 py-2 text-sm font-medium rounded-md text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700'">
-                            <i class="fas" :class="t.icon" class="mr-1"></i><span class="hidden sm:inline" x-text="' ' + t.label"></span>
+                            <i class="fas" :class="t.icon" class="mr-1"></i><span class="hidden sm:inline" x-text="' ' + t.label"></span><span class="sm:hidden" x-text="' ' + t.abbr"></span>
                         </button>
                     </template>
                 </nav>
@@ -57,7 +53,7 @@
                     {% include 'partials/settings_users.html' %}
                     {% include 'partials/settings_apikeys.html' %}
                     <!-- TAB: Backup & Restore Section -->
-        <div x-show="tab === 'backup'" x-cloak class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 mt-6">
+        <div x-show="tab === 'backup'" x-cloak class="bg-white dark:bg-surface-card rounded-xl shadow-card p-6 mt-6">
             <div class="flex items-center justify-between mb-4">
                 <h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
                     <i class="fas fa-database mr-2 text-blue-500"></i>

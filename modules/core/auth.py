@@ -35,11 +35,19 @@ class AuthManager:
         self._sessions = {}  # In-memory session store: {session_id: {user, expires, created}}
         self._session_lock = threading.Lock()  # Thread-safe session access
         self._hmac_key = None  # Set by set_hmac_key() after app init
+        self._audit_logger = None  # Set by set_audit_logger() after AuditLogger constructed
         import os
         _timeout_hours = int(os.getenv('SESSION_TIMEOUT_HOURS', '8'))
         self._session_timeout = max(1, _timeout_hours) * 60 * 60
         if not BCRYPT_AVAILABLE:
             logger.warning("bcrypt not available, falling back to SHA-256 (less secure)")
+
+    def set_audit_logger(self, audit_logger):
+        """Inject the AuditLogger so authorization denials emit a real audit
+        entry instead of a stderr-only warning. Optional — when unset, the
+        decorator falls back to logger.warning so role/scope denials are at
+        least surfaced in the application log."""
+        self._audit_logger = audit_logger
 
     def set_hmac_key(self, key):
         """Set the server-side secret used for HMAC-based API token hashing.
@@ -119,6 +127,89 @@ class AuthManager:
 
     # --- Scoped API Key management ---
 
+    # Domain pattern used by allowed_domains validation. Mirrors the existing
+    # _DOMAIN_RE in modules/api/resources.py but also accepts the bare
+    # wildcard form "*.example.com" (no leading label before the asterisk).
+    _ALLOWED_DOMAIN_RE = __import__('re').compile(
+        r'^(\*\.)?([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$'
+    )
+
+    @classmethod
+    def _normalize_allowed_domains(cls, allowed_domains):
+        """Normalize / validate an allowed_domains value before storage.
+
+        Returns (normalized_list_or_None, error_or_None).
+
+        - None / missing  → returns (None, None)  (unrestricted; back-compat)
+        - empty list      → returns ([], None)    (locked-out key — valid use)
+        - list of strings → each entry validated against _ALLOWED_DOMAIN_RE;
+                            stripped + lowercased; duplicates collapsed.
+        - any other type  → error
+        """
+        if allowed_domains is None:
+            return None, None
+        if not isinstance(allowed_domains, list):
+            return None, "allowed_domains must be a list of domain patterns or null"
+        normalized = []
+        seen = set()
+        for entry in allowed_domains:
+            if not isinstance(entry, str):
+                return None, "allowed_domains entries must be strings"
+            cleaned = entry.strip().lower()
+            if not cleaned:
+                continue
+            if not cls._ALLOWED_DOMAIN_RE.match(cleaned):
+                return None, f"Invalid domain pattern: {entry!r}"
+            if cleaned not in seen:
+                seen.add(cleaned)
+                normalized.append(cleaned)
+        return normalized, None
+
+    @staticmethod
+    def domain_matches_scope(domain, allowed_domains):
+        """Return True if *domain* is reachable by a caller scoped to
+        *allowed_domains*.
+
+        - allowed_domains is None → unrestricted (every domain matches).
+        - allowed_domains is []   → locked out (no domain matches).
+        - allowed_domains is a list of patterns where each pattern is either
+          an exact domain ("example.com") matched case-insensitively, or a
+          wildcard "*.example.com" that matches any single-level subdomain
+          ("foo.example.com" ✓, "a.b.example.com" ✓, "example.com" ✗).
+        """
+        if allowed_domains is None:
+            return True
+        if not allowed_domains:
+            return False
+        if not isinstance(domain, str) or not domain:
+            return False
+        d = domain.strip().lower().lstrip('*.')
+        for pattern in allowed_domains:
+            p = pattern.strip().lower()
+            if p.startswith('*.'):
+                suffix = p[1:]  # ".example.com"
+                # Wildcard must match a strict subdomain — "example.com" by
+                # itself does NOT match "*.example.com".
+                if d.endswith(suffix) and len(d) > len(suffix):
+                    return True
+            else:
+                if d == p:
+                    return True
+        return False
+
+    def user_can_access_domain(self, user, domain):
+        """Return True if the request's current_user is allowed to operate on
+        *domain* according to its scoped key's allowed_domains.
+
+        Users without allowed_domains (legacy keys, session-authenticated
+        local users, the legacy bearer token) keep full access (the audit's
+        "no multi-tenancy by design" baseline).
+        """
+        if not user:
+            return False
+        scope = user.get('allowed_domains')
+        return self.domain_matches_scope(domain, scope)
+
     def _get_api_keys(self):
         """Get all API keys from settings."""
         settings = self.settings_manager.load_settings()
@@ -160,8 +251,20 @@ class AuthManager:
             return secrets.compare_digest(actual, expected)
         return False
 
-    def create_api_key(self, name, role='viewer', expires_at=None, created_by=None):
+    def create_api_key(self, name, role='viewer', expires_at=None, created_by=None,
+                       allowed_domains=None):
         """Create a new scoped API key.
+
+        Args:
+            name: human-readable label, 1-64 chars, unique among active keys
+            role: viewer | operator | admin
+            expires_at: optional ISO-8601 expiry
+            created_by: username of the admin creating the key
+            allowed_domains: optional list of domain patterns scoping the
+                key to specific certificates. None = unrestricted (legacy
+                behavior). Empty list = locked-out key (creatable for
+                staging). See AuthManager.domain_matches_scope() for the
+                matching semantics.
 
         Returns:
             tuple: (success, result_dict_or_error_string)
@@ -173,6 +276,10 @@ class AuthManager:
             if role not in ROLE_HIERARCHY:
                 return False, f"Invalid role: {role}. Must be viewer, operator, or admin"
             normalized_role = self._normalize_role(role)
+
+            scoped_domains, scope_err = self._normalize_allowed_domains(allowed_domains)
+            if scope_err:
+                return False, scope_err
 
             api_keys = self._get_api_keys()
 
@@ -194,10 +301,14 @@ class AuthManager:
                 'expires_at': expires_at,
                 'last_used_at': None,
                 'revoked': False,
+                'allowed_domains': scoped_domains,
             }
 
             if self._save_api_keys(api_keys):
-                logger.info(f"API key '{name}' (role={normalized_role}) created by {created_by}")
+                logger.info(
+                    f"API key '{name}' (role={normalized_role}, "
+                    f"allowed_domains={scoped_domains}) created by {created_by}"
+                )
                 return True, {
                     'id': key_id,
                     'name': name,
@@ -206,6 +317,7 @@ class AuthManager:
                     'token_prefix': plaintext[:7],
                     'created_at': api_keys[key_id]['created_at'],
                     'expires_at': expires_at,
+                    'allowed_domains': scoped_domains,
                 }
             return False, "Failed to save API key"
         except (OSError, ValueError, KeyError) as e:
@@ -230,6 +342,7 @@ class AuthManager:
                 'last_used_at': data.get('last_used_at'),
                 'revoked': data.get('revoked', False),
                 'is_expired': is_expired,
+                'allowed_domains': data.get('allowed_domains'),
             }
         return result
 
@@ -300,6 +413,8 @@ class AuthManager:
                     return {
                         'username': 'api_key:' + key_data.get('name', key_id),
                         'role': self._normalize_role(key_data.get('role', 'viewer')),
+                        'allowed_domains': key_data.get('allowed_domains'),
+                        'api_key_id': key_id,
                     }
 
             return None
@@ -494,53 +609,81 @@ class AuthManager:
         """Check if any users exist"""
         return len(self._get_users()) > 0
     
+    def _authenticate_request(self):
+        """Resolve the caller's identity for the current Flask request.
+
+        Single source of truth for authentication. Both ``require_auth`` and
+        ``require_role`` delegate here instead of chaining decorators or
+        relying on cross-decorator side effects on ``request.current_user``
+        (the previous implementation called ``self.require_auth(lambda:
+        None)()`` to populate the request, then read the side-effect — an
+        architecture flagged as fragile by the 2026-05-12 API auth audit
+        finding F-1).
+
+        Returns:
+            (user_dict, None)            on success
+            (None, (error_dict, status)) on failure
+
+        Side effects: none. The caller is responsible for assigning
+        ``request.current_user`` once it knows the request is allowed to
+        proceed. That keeps the side effect localized to the decorator that
+        owns it, instead of leaking across two helpers.
+        """
+        try:
+            # Allow unauthenticated access during initial setup
+            # (matches require_web_auth: bypass if auth disabled OR no users)
+            if not self.is_local_auth_enabled() or not self.has_any_users():
+                return {'username': 'setup_user', 'role': 'admin'}, None
+
+            # Check for session-based auth first (for web UI)
+            session_id = request.cookies.get('certmate_session')
+            if session_id:
+                user_info = self.validate_session(session_id)
+                if user_info:
+                    return user_info, None
+
+            # Fall back to bearer token auth (for API)
+            auth_header = request.headers.get('Authorization')
+            if not auth_header:
+                return None, ({'error': 'Authorization header required',
+                               'code': 'AUTH_HEADER_MISSING'}, 401)
+
+            try:
+                scheme, token = auth_header.split(' ', 1)
+                if scheme.lower() != 'bearer':
+                    return None, ({'error': 'Invalid authorization scheme. Use Bearer token',
+                                   'code': 'INVALID_AUTH_SCHEME'}, 401)
+                if not token.strip():
+                    return None, ({'error': 'Invalid authorization header format. Use: Bearer <token>',
+                                   'code': 'INVALID_AUTH_FORMAT'}, 401)
+            except ValueError:
+                return None, ({'error': 'Invalid authorization header format. Use: Bearer <token>',
+                               'code': 'INVALID_AUTH_FORMAT'}, 401)
+
+            # Authenticate against legacy token and scoped API keys
+            user_info = self.authenticate_api_token(token)
+            if not user_info:
+                logger.warning(f"Invalid API token attempt from {request.remote_addr}")
+                return None, ({'error': 'Invalid or expired token',
+                               'code': 'INVALID_TOKEN'}, 401)
+
+            return user_info, None
+        except Exception as e:
+            logger.error(f"Authentication error: {e}")
+            return None, ({'error': 'Authentication failed',
+                           'code': 'AUTH_ERROR'}, 401)
+
     def require_auth(self, f):
-        """Enhanced decorator to require authentication (API token or session)"""
+        """Decorator: require authentication (API token or session)."""
         @wraps(f)
         def decorated_function(*args, **kwargs):
-            try:
-                # Allow unauthenticated access during initial setup
-                # (matches require_web_auth: bypass if auth disabled OR no users)
-                if not self.is_local_auth_enabled() or not self.has_any_users():
-                    request.current_user = {'username': 'setup_user', 'role': 'admin'}
-                    return f(*args, **kwargs)
-
-                # Check for session-based auth first (for web UI)
-                session_id = request.cookies.get('certmate_session')
-                if session_id:
-                    user_info = self.validate_session(session_id)
-                    if user_info:
-                        request.current_user = user_info
-                        return f(*args, **kwargs)
-                
-                # Fall back to bearer token auth (for API)
-                auth_header = request.headers.get('Authorization')
-                if not auth_header:
-                    return {'error': 'Authorization header required', 'code': 'AUTH_HEADER_MISSING'}, 401
-                
-                try:
-                    scheme, token = auth_header.split(' ', 1)
-                    if scheme.lower() != 'bearer':
-                        return {'error': 'Invalid authorization scheme. Use Bearer token', 'code': 'INVALID_AUTH_SCHEME'}, 401
-                    if not token.strip():
-                        return {'error': 'Invalid authorization header format. Use: Bearer <token>', 'code': 'INVALID_AUTH_FORMAT'}, 401
-                except ValueError:
-                    return {'error': 'Invalid authorization header format. Use: Bearer <token>', 'code': 'INVALID_AUTH_FORMAT'}, 401
-                
-                # Authenticate against legacy token and scoped API keys
-                user_info = self.authenticate_api_token(token)
-                if not user_info:
-                    logger.warning(f"Invalid API token attempt from {request.remote_addr}")
-                    return {'error': 'Invalid or expired token', 'code': 'INVALID_TOKEN'}, 401
-
-                request.current_user = user_info
-                return f(*args, **kwargs)
-            except Exception as e:
-                logger.error(f"Authentication error: {e}")
-                return {'error': 'Authentication failed', 'code': 'AUTH_ERROR'}, 401
-        
+            user, err = self._authenticate_request()
+            if err is not None:
+                return err
+            request.current_user = user
+            return f(*args, **kwargs)
         return decorated_function
-    
+
     def require_role(self, min_role):
         """Decorator factory requiring a minimum role level.
 
@@ -552,24 +695,67 @@ class AuthManager:
         def decorator(f):
             @wraps(f)
             def decorated_function(*args, **kwargs):
-                # Authenticate first (sets request.current_user)
-                auth_result = self.require_auth(lambda: None)()
-                if isinstance(auth_result, tuple) and len(auth_result) == 2:
-                    return auth_result  # Return auth error
+                user, err = self._authenticate_request()
+                if err is not None:
+                    return err
 
-                # Check role level
-                user = getattr(request, 'current_user', None)
-                if not user:
-                    return {'error': 'Authentication required', 'code': 'AUTH_REQUIRED'}, 401
+                # current_user is set here only after auth is known to
+                # have succeeded; downstream code that reads it can trust
+                # the value is fresh from this request, not a leftover.
+                request.current_user = user
 
                 user_level = ROLE_HIERARCHY.get(user.get('role'), -1)
                 required_level = ROLE_HIERARCHY.get(min_role, 999)
                 if user_level < required_level:
-                    return {'error': f'{min_role} privileges required', 'code': 'INSUFFICIENT_ROLE'}, 403
+                    # Audit + log every role denial so privilege-enumeration
+                    # attempts surface in the audit trail instead of vanishing
+                    # behind a silent 403 (2026-05-12 API auth audit, F-2).
+                    self._log_rbac_denial(
+                        user=user,
+                        required_role=min_role,
+                        endpoint=request.path,
+                    )
+                    return {'error': f'{min_role} privileges required',
+                            'code': 'INSUFFICIENT_ROLE'}, 403
 
                 return f(*args, **kwargs)
             return decorated_function
         return decorator
+
+    def _log_rbac_denial(self, user, required_role, endpoint):
+        """Record an RBAC role-level denial.
+
+        Always emits a structured warning on the application logger so the
+        signal is present even when no AuditLogger is wired. When one IS
+        wired (the production path), also writes a tamper-evident audit
+        entry via log_authz_denied so the denial sits in the same log
+        admins already scan.
+        """
+        username = (user or {}).get('username')
+        actual_role = (user or {}).get('role')
+        try:
+            from flask import request as _request
+            ip = _request.remote_addr
+        except Exception:
+            ip = None
+
+        logger.warning(
+            "RBAC denial: user=%s role=%s required=%s endpoint=%s ip=%s",
+            username, actual_role, required_role, endpoint, ip,
+        )
+
+        if self._audit_logger is not None:
+            try:
+                self._audit_logger.log_authz_denied(
+                    operation='access',
+                    resource_type='endpoint',
+                    resource_id=endpoint,
+                    reason=f'role={actual_role} below required {required_role}',
+                    user=username,
+                    ip_address=ip,
+                )
+            except Exception as e:
+                logger.debug(f"Failed to write RBAC denial audit entry: {e}")
 
     def require_admin(self, f):
         """Decorator to require admin role (backward compat wrapper)."""
