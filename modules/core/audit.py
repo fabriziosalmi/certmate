@@ -7,6 +7,7 @@ import logging
 import json
 from pathlib import Path
 from datetime import datetime
+from collections import deque
 from .utils import utc_now
 from typing import Optional, Dict, Any
 
@@ -237,21 +238,38 @@ class AuditLogger:
             List of audit entries (parsed JSON)
         """
         try:
-            entries = []
             if not self.audit_log_file.exists():
-                return entries
+                return []
 
-            with open(self.audit_log_file, 'r') as f:
-                lines = f.readlines()
-                # Get last 'limit' lines
-                for line in lines[-limit:]:
-                    try:
-                        # Extract JSON from log line (format: timestamp - logger - level - {json})
-                        if ' - INFO - ' in line:
-                            json_str = line.split(' - INFO - ', 1)[1].strip()
-                            entries.append(json.loads(json_str))
-                    except (json.JSONDecodeError, IndexError):
+            if limit <= 0:
+                return []
+
+            # Read only the tail of the file so large audit logs do not block
+            # the activity page or other callers that only need recent entries.
+            tail_lines = deque(maxlen=limit)
+            with open(self.audit_log_file, 'rb') as f:
+                f.seek(0, 2)
+                remaining = f.tell()
+                buffer = b''
+                block_size = 8192
+
+                while remaining > 0 and len(tail_lines) < limit:
+                    read_size = min(block_size, remaining)
+                    remaining -= read_size
+                    f.seek(remaining)
+                    buffer = f.read(read_size) + buffer
+                    tail_lines = deque(buffer.splitlines(), maxlen=limit)
+
+            entries = []
+            for line in tail_lines:
+                try:
+                    raw = line.decode('utf-8', errors='replace')
+                    if ' - INFO - ' not in raw:
                         continue
+                    json_str = raw.split(' - INFO - ', 1)[1].strip()
+                    entries.append(json.loads(json_str))
+                except (UnicodeDecodeError, json.JSONDecodeError, IndexError):
+                    continue
 
             return entries
 
