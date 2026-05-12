@@ -230,28 +230,40 @@ class AuditLogger:
         """
         Get recent audit log entries.
 
+        Uses a tail-seek approach to avoid reading the entire file.
+
         Args:
             limit: Maximum number of entries to return
 
         Returns:
-            List of audit entries (parsed JSON)
+            List of audit entries (parsed JSON), newest first
         """
         try:
             entries = []
             if not self.audit_log_file.exists():
                 return entries
 
+            file_size = self.audit_log_file.stat().st_size
+            if file_size == 0:
+                return entries
+
+            # Read only the tail of the file (8KB per expected entry is generous)
+            read_size = min(file_size, limit * 512)
+
             with open(self.audit_log_file, 'r') as f:
+                if file_size > read_size:
+                    f.seek(file_size - read_size)
+                    f.readline()  # discard partial first line
                 lines = f.readlines()
-                # Get last 'limit' lines
-                for line in lines[-limit:]:
-                    try:
-                        # Extract JSON from log line (format: timestamp - logger - level - {json})
-                        if ' - INFO - ' in line:
-                            json_str = line.split(' - INFO - ', 1)[1].strip()
-                            entries.append(json.loads(json_str))
-                    except (json.JSONDecodeError, IndexError):
-                        continue
+
+            # Parse the last 'limit' lines
+            for line in lines[-limit:]:
+                try:
+                    if ' - INFO - ' in line:
+                        json_str = line.split(' - INFO - ', 1)[1].strip()
+                        entries.append(json.loads(json_str))
+                except (json.JSONDecodeError, IndexError):
+                    continue
 
             return entries
 

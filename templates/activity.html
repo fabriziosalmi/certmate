@@ -2,27 +2,29 @@
 {% block title %}CertMate - Activity{% endblock %}
 {% block content %}
     <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-3">
-            <div>
-                <h2 class="text-xl font-semibold text-gray-900 dark:text-white"><i class="fas fa-history mr-2 text-primary"></i>Activity Log</h2>
-                <p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Recent certificate operations and system events</p>
+        <div class="bg-white dark:bg-surface-card shadow-card rounded-xl overflow-hidden">
+            <div class="px-6 py-3 border-b border-gray-100 dark:border-white/5">
+                <div class="flex items-center justify-between">
+                    <nav class="flex items-center text-sm" aria-label="Breadcrumb">
+                        <a href="/" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"><i class="fas fa-home"></i></a>
+                        <i class="fas fa-chevron-right text-[10px] text-gray-300 dark:text-gray-600 mx-2"></i>
+                        <span class="text-gray-700 dark:text-gray-200 font-medium">Activity</span>
+                    </nav>
+                    <div class="flex items-center gap-2">
+                        <select id="filterOp" class="px-3 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary">
+                            <option value="">All Operations</option>
+                            <option value="create">Created</option>
+                            <option value="renew">Renewed</option>
+                            <option value="revoke">Revoked</option>
+                            <option value="download">Downloaded</option>
+                            <option value="api_request">API Request</option>
+                        </select>
+                        <button type="button" onclick="loadActivity()" class="px-2.5 py-1.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition" title="Refresh">
+                            <i class="fas fa-sync"></i>
+                        </button>
+                    </div>
+                </div>
             </div>
-            <div class="flex items-center gap-2">
-                <select id="filterOp" class="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary">
-                    <option value="">All Operations</option>
-                    <option value="create">Created</option>
-                    <option value="renew">Renewed</option>
-                    <option value="revoke">Revoked</option>
-                    <option value="download">Downloaded</option>
-                    <option value="api_request">API Request</option>
-                </select>
-                <button type="button" onclick="loadActivity()" class="px-3 py-2 text-sm bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition" title="Refresh">
-                    <i class="fas fa-sync"></i>
-                </button>
-            </div>
-        </div>
-
-        <div class="bg-white dark:bg-gray-800 shadow-sm rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
             <div id="activityList" class="divide-y divide-gray-100 dark:divide-gray-700/50">
                 <div class="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
                     <i class="fas fa-spinner fa-spin mr-2"></i>Loading activity...

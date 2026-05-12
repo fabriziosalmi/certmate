@@ -95,7 +95,7 @@ class TestNavigation:
         browser_page.goto(BASE_URL)
         browser_page.click('a[href="/settings"]')
         browser_page.wait_for_url("**/settings")
-        expect(browser_page.locator("h2").first).to_contain_text("Settings")
+        expect(browser_page.locator("nav[aria-label='Breadcrumb']")).to_contain_text("Settings")
 
     def test_help_navigation(self, browser_page):
         browser_page.goto(BASE_URL)

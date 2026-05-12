@@ -2479,7 +2479,6 @@
                         }
                     });
                 });
-                })
             })
             .catch(function (error) {
                 if (timeoutId) clearTimeout(timeoutId);
