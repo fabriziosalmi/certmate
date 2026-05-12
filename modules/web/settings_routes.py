@@ -448,7 +448,15 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
     @app.route('/api/deploy/history', methods=['GET'])
     @auth_manager_ref.require_role('admin')
     def api_deploy_history():
-        """Get deploy hook execution history"""
+        """Get deploy hook execution history.
+
+        Returns a bare list ``[...]`` — matches the sibling event-log
+        endpoint ``/api/webhooks/deliveries`` (modules/web/misc_routes.py)
+        and the convention the UI (``static/js/settings-deploy.js``,
+        ``static/js/settings-notifications.js``) was originally written
+        against. The error path keeps the ``{"error": ...}`` envelope so
+        the frontend's catch branch can surface a real reason.
+        """
         if not deploy_manager:
             return jsonify({'error': 'Deploy manager not available'}), 503
 
@@ -456,7 +464,7 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
             limit = min(int(request.args.get('limit', 50)), 200)
             domain = request.args.get('domain')
             history = deploy_manager.get_history(limit=limit, domain=domain)
-            return jsonify({'history': history})
+            return jsonify(history)
         except Exception as e:
             logger.error(f"Failed to get deploy history: {e}")
             return jsonify({'error': 'Failed to get deploy history'}), 500

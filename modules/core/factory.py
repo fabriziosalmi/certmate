@@ -430,6 +430,11 @@ def initialize_managers(container: AppContainer, app):
     )
     event_bus.add_listener(deploy_manager.on_certificate_event)
     app.config['EVENT_BUS'] = event_bus
+    # DATA_DIR is the partition the DiagnosticsSnapshot endpoint queries
+    # for disk_free / disk_total. Stored on the Flask app config so the
+    # RESTX resource can resolve it via current_app without holding a
+    # reference to the container.
+    app.config['DATA_DIR'] = str(container.data_dir)
 
     container.managers = {
         'file_ops': file_ops,
@@ -549,16 +554,18 @@ def setup_api(container: AppContainer, app):
     ns_backups = Namespace('backups', description='Backup and restore')
     ns_cache = Namespace('cache', description='Cache management operations')
     ns_metrics = Namespace('metrics', description='Prometheus metrics and monitoring')
+    ns_diagnostics = Namespace('diagnostics', description='Sanitized diagnostic snapshot for bug reports')
 
     namespaces = [
         ns_certificates, ns_client_certs, ns_ocsp, ns_crl, ns_settings,
-        ns_health, ns_backups, ns_cache, ns_metrics
+        ns_health, ns_backups, ns_cache, ns_metrics, ns_diagnostics
     ]
     for ns in namespaces:
         api.add_namespace(ns)
 
     ns_health.add_resource(api_resources['HealthCheck'], '')
     ns_metrics.add_resource(api_resources['MetricsList'], '')
+    ns_diagnostics.add_resource(api_resources['DiagnosticsSnapshot'], '/snapshot')
     ns_settings.add_resource(api_resources['Settings'], '')
     ns_settings.add_resource(api_resources['DNSProviders'], '/dns-providers')
     ns_settings.add_resource(api_resources['CAProviderTest'], '/test-ca-provider')

@@ -2230,26 +2230,39 @@ CertMate 2.0 is a major release that adds enterprise-grade access control, a not
 - **Mobile Bottom Tab Bar** - Responsive navigation on small screens
 - **HTTP-01 Challenge Support** - Alternative to DNS-01 for simple setups
 
-### Support Checklist
+### Reporting Bugs
 
-Before seeking help, please provide:
+CertMate ships an in-app bug reporter that produces an actionable issue with one click. When an action fails and you're signed in as admin, the error toast surfaces a **Report this issue** button. Clicking it:
 
-- [] CertMate version/commit hash
-- [] DNS provider being used
-- [] Error messages from logs
-- [] Steps to reproduce the issue
-- [] Environment details (Docker, Python version, OS)
+1. Calls `GET /api/diagnostics/snapshot` (admin-only) to collect sanitised operational state — CertMate version, Python version, OS, scheduler status, certificate count, DNS provider name, CA name, challenge type, storage backend, disk free, and the last 5 audit-log entries with all identifiers (resource_id, user, IP address, details, error) stripped.
+2. Merges the snapshot with browser-side context (user agent, current page, viewport, the specific error envelope `endpoint` / `status` / `code` / `message` / `hint`).
+3. Formats the result as Markdown and copies it to your clipboard.
+4. Opens `github.com/fabriziosalmi/certmate/issues/new?template=bug_report.md` with the title pre-filled as `[Bug] <status> <code> on <method> <endpoint>`.
+
+Paste the clipboard contents into the issue body, edit if you want, submit. The flow is fully manual — nothing leaves the install without your explicit click, and you can read everything before submitting (it's right there in the textarea). If your browser blocks the clipboard write or pop-ups, the reporter falls back to a modal with the markdown in an editable textarea and a clickable GitHub link.
+
+### Support Checklist (manual reporting)
+
+If the in-app reporter is unavailable (you're not signed in as admin, or you hit the bug before reaching the UI), please provide:
+
+- [ ] CertMate version/commit hash
+- [ ] DNS provider being used
+- [ ] Error messages from logs
+- [ ] Steps to reproduce the issue
+- [ ] Environment details (Docker, Python version, OS)
 
 ```bash
-# Collect system information
+# Collect system information manually (equivalent of the in-app snapshot)
 echo "=== CertMate Debug Info ==="
-echo "Version: $(docker exec certmate python -c 'import app; print(getattr(app, "__version__", "unknown"))')"
+echo "Version: $(docker exec certmate python -c 'import modules; print(modules.__version__)')"
 echo "Python: $(docker exec certmate python --version)"
 echo "OS: $(docker exec certmate cat /etc/os-release | head -2)"
 echo "Certbot: $(docker exec certmate certbot --version)"
 echo "DNS Plugins: $(docker exec certmate pip list | grep certbot-dns)"
-echo "Certificates: $(docker exec certmate ls -la /app/certificates)"
-echo "Settings: $(docker exec certmate cat /app/data/settings.json | jq .)"
+# DO NOT paste settings.json verbatim into a public issue — it contains
+# credentials. The /api/diagnostics/snapshot endpoint returns a redacted
+# subset; use it instead:
+curl -sS -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/diagnostics/snapshot | jq .
 ```
 
 ## Documentation

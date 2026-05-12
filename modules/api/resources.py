@@ -145,6 +145,111 @@ def create_api_resources(api, models, managers):
                 logger.error(f"Error getting metrics info: {e}")
                 return {'error': 'Failed to get metrics information'}, 500
 
+    # Diagnostic snapshot endpoint — closes #150. Powers the "Report this
+    # issue" button in the error toast: when an admin hits a recoverable
+    # API error, the UI fetches this snapshot, merges it with the
+    # client-side context (browser, page, error envelope), formats the
+    # whole thing as Markdown, copies it to the clipboard, and opens
+    # github.com/issues/new pre-filled. Operators reading the resulting
+    # issue see an actionable bug report instead of "doesn't work".
+    #
+    # Security stance: admin-only via require_role('admin'). The response
+    # is built from a fixed allowlist of scalar fields plus a sanitized
+    # tail of the audit log — never the full settings tree, never any
+    # secret, never resource identifiers from the audit entries
+    # (resource_id / user / ip_address / details / error are stripped).
+    # Sanitization is enforced inline in this handler, not deferred to a
+    # generic mask helper, so a future contributor adding a field is
+    # forced to think about whether to include it.
+    class DiagnosticsSnapshot(Resource):
+        @api.doc(security='Bearer')
+        @auth_manager.require_role('admin')
+        def get(self):
+            """Build a sanitized diagnostic snapshot for bug-report use."""
+            import platform
+            import shutil
+            import sys
+
+            from .. import __version__ as _certmate_version
+
+            errors = {}
+
+            # --- Application / runtime identity ---
+            payload = {
+                'certmate_version': _certmate_version,
+                'python_version': sys.version.split()[0],
+                'os_platform': platform.platform(),
+                'container': Path('/.dockerenv').exists(),
+            }
+
+            # --- Background scheduler liveness ---
+            scheduler = managers.get('scheduler')
+            payload['scheduler_running'] = bool(
+                scheduler and getattr(scheduler, 'running', False)
+            )
+
+            # --- Certificate inventory cardinality ---
+            try:
+                certs = certificate_manager.list_certificates()
+                payload['certificate_count'] = (
+                    len(certs) if isinstance(certs, list) else None
+                )
+            except Exception as e:
+                logger.warning(f"Diagnostic: failed to count certificates: {e}")
+                payload['certificate_count'] = None
+                errors['certificate_count'] = 'failed_to_enumerate'
+
+            # --- Configuration scalars (names only, never credentials) ---
+            try:
+                settings = settings_manager.load_settings() or {}
+                payload['dns_provider'] = settings.get('dns_provider')
+                payload['default_ca'] = settings.get('default_ca')
+                payload['challenge_type'] = settings.get('challenge_type')
+                cert_storage = settings.get('certificate_storage') or {}
+                payload['storage_backend'] = cert_storage.get('backend')
+            except Exception as e:
+                logger.warning(f"Diagnostic: failed to read settings scalars: {e}")
+                errors['settings'] = 'failed_to_read'
+
+            # --- Free disk on the data partition ---
+            try:
+                data_dir = current_app.config.get('DATA_DIR') or '.'
+                usage = shutil.disk_usage(str(data_dir))
+                payload['disk_free_bytes'] = usage.free
+                payload['disk_total_bytes'] = usage.total
+            except Exception as e:
+                logger.warning(f"Diagnostic: disk_usage failed: {e}")
+                payload['disk_free_bytes'] = None
+                payload['disk_total_bytes'] = None
+                errors['disk_usage'] = 'permission_or_path_unavailable'
+
+            # --- Recent audit (sanitized: identifiers stripped) ---
+            # Only timestamp / operation / resource_type / status survive
+            # the round-trip. Domain names, usernames, IP addresses, and
+            # the audit details payload are all dropped before
+            # serialization. Anyone reading the resulting bug report
+            # sees operational tempo without learning who did what to
+            # which domain from which IP.
+            try:
+                raw_entries = audit_logger.get_recent_entries(limit=5) if audit_logger else []
+                payload['recent_audit'] = [
+                    {
+                        'timestamp': (e or {}).get('timestamp'),
+                        'operation': (e or {}).get('operation'),
+                        'resource_type': (e or {}).get('resource_type'),
+                        'status': (e or {}).get('status'),
+                    }
+                    for e in (raw_entries or [])[:5]
+                ]
+            except Exception as e:
+                logger.warning(f"Diagnostic: audit log read failed: {e}")
+                payload['recent_audit'] = []
+                errors['recent_audit'] = 'failed_to_read'
+
+            if errors:
+                payload['errors'] = errors
+            return payload, 200
+
     # Settings endpoints
     class Settings(Resource):
         @api.doc(security='Bearer')
@@ -1934,6 +2039,7 @@ def create_api_resources(api, models, managers):
     return {
         'HealthCheck': HealthCheck,
         'MetricsList': MetricsList,
+        'DiagnosticsSnapshot': DiagnosticsSnapshot,
         'Settings': Settings,
         'DNSProviders': DNSProviders,
         'CacheStats': CacheStats,

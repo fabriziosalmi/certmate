@@ -73,8 +73,10 @@
     }
 
     // Show message function with improved styling
-    function showMessage(message, type) {
-        CertMate.toast(message, type);
+    function showMessage(message, type, options) {
+        // options.errorContext (when supplied) triggers the "Report
+        // this issue" button in the resulting toast — see report-issue.js.
+        CertMate.toast(message, type, undefined, options);
     }
 
     // Clear filters function
@@ -1414,12 +1416,27 @@
                     if (result.hint) {
                         errorMsg += '\n\n\ud83d\udca1 ' + result.hint;
                     }
-                    showMessage(errorMsg, 'error');
+                    showMessage(errorMsg, 'error', {
+                        errorContext: {
+                            endpoint: 'POST /api/certificates/create',
+                            status: response.status,
+                            code: result.code,
+                            message: result.error || result.message,
+                            hint: result.hint
+                        }
+                    });
                 }
             });
         }).catch(function (error) {
             console.error('Error creating certificate:', error);
-            showMessage('Failed to create certificate. Please check your network connection and try again.', 'error');
+            showMessage('Failed to create certificate. Please check your network connection and try again.', 'error', {
+                errorContext: {
+                    endpoint: 'POST /api/certificates/create',
+                    status: 0,
+                    code: 'NETWORK_ERROR',
+                    message: (error && error.message) || 'network error'
+                }
+            });
         }).then(function () {
             hideLoadingModal(progressInterval);
         });
@@ -1490,7 +1507,15 @@
                 var msg = (data.body && data.body.error)
                     ? data.body.error
                     : ('Deploy hook run failed (HTTP ' + data.status + ')');
-                showMessage(msg, 'error');
+                showMessage(msg, 'error', {
+                    errorContext: {
+                        endpoint: 'POST /api/certificates/' + domain + '/deploy',
+                        status: data.status,
+                        code: data.body && data.body.code,
+                        message: data.body && data.body.error,
+                        hint: data.body && data.body.hint
+                    }
+                });
                 return;
             }
             var s = data.body || {};
@@ -1552,7 +1577,7 @@
             method: 'DELETE'
         }).then(function (response) {
             return response.json().then(function (result) {
-                return { ok: response.ok, result: result };
+                return { ok: response.ok, status: response.status, result: result };
             });
         }).then(function (data) {
             if (data.ok) {
@@ -1560,11 +1585,26 @@
                 closeCertDetail();
                 loadCertificates();
             } else {
-                showMessage(data.result.error || 'Failed to delete certificate', 'error');
+                showMessage(data.result.error || 'Failed to delete certificate', 'error', {
+                    errorContext: {
+                        endpoint: 'DELETE /api/certificates/' + domain,
+                        status: data.status || 0,
+                        code: data.result.code,
+                        message: data.result.error,
+                        hint: data.result.hint
+                    }
+                });
             }
         }).catch(function (error) {
             console.error('Error deleting certificate:', error);
-            showMessage('Failed to delete certificate. Please try again.', 'error');
+            showMessage('Failed to delete certificate. Please try again.', 'error', {
+                errorContext: {
+                    endpoint: 'DELETE /api/certificates/' + domain,
+                    status: 0,
+                    code: 'NETWORK_ERROR',
+                    message: (error && error.message) || 'network error'
+                }
+            });
         });
     }
 
@@ -1579,18 +1619,33 @@
             headers: { 'Content-Type': 'application/json' }
         }).then(function (response) {
             return response.json().then(function (result) {
-                return { ok: response.ok, result: result };
+                return { ok: response.ok, status: response.status, result: result };
             });
         }).then(function (data) {
             if (data.ok) {
                 showMessage('Certificate renewed successfully for ' + domain + '!', 'success');
                 setTimeout(function () { loadCertificates(); }, 2000);
             } else {
-                showMessage(data.result.error || data.result.message || 'Failed to renew certificate', 'error');
+                showMessage(data.result.error || data.result.message || 'Failed to renew certificate', 'error', {
+                    errorContext: {
+                        endpoint: 'POST /api/certificates/' + domain + '/renew',
+                        status: data.status,
+                        code: data.result.code,
+                        message: data.result.error || data.result.message,
+                        hint: data.result.hint
+                    }
+                });
             }
         }).catch(function (error) {
             console.error('Error renewing certificate:', error);
-            showMessage('Failed to renew certificate. Please try again.', 'error');
+            showMessage('Failed to renew certificate. Please try again.', 'error', {
+                errorContext: {
+                    endpoint: 'POST /api/certificates/' + domain + '/renew',
+                    status: 0,
+                    code: 'NETWORK_ERROR',
+                    message: (error && error.message) || 'network error'
+                }
+            });
         }).then(function () {
             hideLoadingModal(progressInterval);
         });
