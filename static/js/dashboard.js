@@ -848,6 +848,18 @@
         }).then(function (response) {
             if (response.ok) {
                 return response.json().then(function (result) {
+                    if (result && result.reachable === false) {
+                        return checkDeploymentViaBrowser(domain).then(function (browserResult) {
+                            if (browserResult) {
+                                deploymentCache.set(domain, browserResult);
+                                updateDeploymentUI(domain, browserResult);
+                                return;
+                            }
+                            deploymentCache.set(domain, result);
+                            updateDeploymentUI(domain, result);
+                        });
+                    }
+
                     deploymentCache.set(domain, result);
                     updateDeploymentUI(domain, result);
                 });
