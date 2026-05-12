@@ -918,9 +918,7 @@
                         return checkDeploymentViaBrowser(domain).then(function (browserResult) {
                             if (browserResult) {
                                 queueBrowserDeploymentReport(domain, browserResult);
-                                deploymentCache.set(domain, browserResult);
-                                updateDeploymentUI(domain, browserResult);
-                                return;
+                                result.browser = browserResult;
                             }
                             deploymentCache.set(domain, result);
                             updateDeploymentUI(domain, result);
@@ -948,8 +946,19 @@
                 if (result.reachable) {
                     queueBrowserDeploymentReport(domain, result);
                 }
-                deploymentCache.set(domain, result);
-                updateDeploymentUI(domain, result);
+                // Keep the server-side result as the primary status. The browser
+                // probe is supplemental and may be useful for diagnostics, but it
+                // should not replace the backend's deployed/reachable verdict.
+                deploymentCache.set(domain, {
+                    deployed: false,
+                    reachable: false,
+                    certificate_match: false,
+                    method: 'browser-fallback',
+                    error: 'backend-unavailable',
+                    timestamp: result.timestamp || new Date().toISOString(),
+                    browser: result
+                });
+                updateDeploymentUI(domain, deploymentCache.get(domain));
             });
         }).catch(function () {
             statusElements.forEach(function (statusElement) {
