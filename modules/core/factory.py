@@ -395,6 +395,9 @@ def initialize_managers(container: AppContainer, app):
 
     audit_dir = container.logs_dir / "audit"
     audit_logger = AuditLogger(audit_dir)
+    # Let AuthManager emit RBAC + scope denials through the same audit
+    # surface the rest of the app uses (2026-05-12 API auth audit, F-2).
+    auth_manager.set_audit_logger(audit_logger)
 
     rate_limit_config = RateLimitConfig()
     rate_limiter = SimpleRateLimiter(rate_limit_config)
