@@ -2080,6 +2080,27 @@ CertMate includes a built-in notification system configurable from Settings > No
 
 All notification channels support per-event filtering (created, renewed, expiring, failed) and can be tested from the settings UI.
 
+### Downgrades & Recovery
+
+Downgrading to a version older than the one that wrote `settings.json` is not supported and may result in a broken configuration or loss of accounts. If you see a `DOWNGRADE DETECTED` message in the logs after rolling back, **restore the latest unified backup before using the UI**:
+
+```bash
+# List available backups inside the container
+docker exec certmate ls -lt /app/backups/unified/
+
+# Restore the most recent one
+curl -H "Authorization: Bearer $API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"filename": "backup_YYYYMMDD_HHMMSS.zip", "create_backup_before_restore": true}' \
+  http://localhost:8000/api/backups/restore/unified
+```
+
+If you have lost the admin password and cannot log in, use the emergency reset script (requires container shell access):
+
+```bash
+docker exec -it certmate python scripts/reset_admin_password.py
+```
+
 ## Troubleshooting Guide
 
 ### Common Issues & Solutions
