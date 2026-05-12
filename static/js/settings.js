@@ -591,11 +591,11 @@
                 }
             }
 
-            if (data.auto_renew !== undefined) {
+            {
                 var autoRenewField = document.getElementById('auto_renew');
                 if (autoRenewField) {
-                    autoRenewField.checked = data.auto_renew;
-                    addDebugLog('Auto-renewal set to ' + data.auto_renew, 'info');
+                    autoRenewField.checked = data.auto_renew !== false;
+                    addDebugLog('Auto-renewal set to ' + autoRenewField.checked, 'info');
                 }
             }
 
