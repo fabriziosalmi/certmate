@@ -14,36 +14,80 @@ from flask import request, redirect, url_for
 
 logger = logging.getLogger(__name__)
 
-# Simple login rate limiter (5 attempts per IP per minute)
-_login_attempts = defaultdict(list)
-_LOGIN_RATE_LIMIT = 5
-_LOGIN_RATE_WINDOW = 60  # seconds
+# Login rate limit policy. Two buckets per attempt:
+#
+#   - per-IP        (default 5 attempts / 60s)   throttles a single attacker
+#                                                 from one source IP.
+#   - per-username  (default 10 attempts / 300s) throttles a *target* under
+#                                                 a distributed/botnet attack
+#                                                 where each source IP is
+#                                                 fresh to the per-IP bucket.
+#
+# F-7 (2026-05-12 API auth audit follow-up): per-IP alone fails open to
+# distributed brute force. The per-username bucket caps attempts against
+# a single account regardless of where they come from. The window is
+# wider than the per-IP one because legitimate users may legitimately
+# fat-finger several times in a row from different devices/networks.
+_login_attempts_by_ip = defaultdict(list)
+_LOGIN_RATE_LIMIT_IP = 5
+_LOGIN_RATE_WINDOW_IP = 60  # seconds
+
+_login_attempts_by_user = defaultdict(list)
+_LOGIN_RATE_LIMIT_USER = 10
+_LOGIN_RATE_WINDOW_USER = 300  # seconds (5 minutes)
 
 # Domain name validation pattern
 _DOMAIN_RE = re.compile(r'^(\*\.)?([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$')
 
 
-def _check_login_rate_limit(ip_address):
-    """Check if login attempt is allowed for this IP"""
-    current_time = time()
-    window_start = current_time - _LOGIN_RATE_WINDOW
+def _trim_attempts(bucket, key, window):
+    """Drop attempts older than `window` from bucket[key]. Mutates in place."""
+    cutoff = time() - window
+    bucket[key] = [t for t in bucket[key] if t > cutoff]
 
-    # Clean old attempts
-    _login_attempts[ip_address] = [
-        t for t in _login_attempts[ip_address] if t > window_start
-    ]
 
-    if len(_login_attempts[ip_address]) >= _LOGIN_RATE_LIMIT:
-        oldest = min(_login_attempts[ip_address])
-        retry_after = int(oldest + _LOGIN_RATE_WINDOW - current_time) + 1
+def _check_login_rate_limit(ip_address, username=None):
+    """Check whether a login attempt is allowed.
+
+    Returns ``(allowed, retry_after)`` — ``allowed`` is False if either
+    bucket is full. ``retry_after`` is the worst-case wait across the
+    two buckets, so the client backs off enough to clear both.
+
+    Backward compatible signature: ``username`` is optional. Callers
+    that don't pass it skip the per-username bucket (used by tests
+    and existing callers during the migration window).
+    """
+    now = time()
+    retry_after = None
+
+    # --- per-IP ---
+    _trim_attempts(_login_attempts_by_ip, ip_address, _LOGIN_RATE_WINDOW_IP)
+    if len(_login_attempts_by_ip[ip_address]) >= _LOGIN_RATE_LIMIT_IP:
+        oldest = min(_login_attempts_by_ip[ip_address])
+        retry_after = int(oldest + _LOGIN_RATE_WINDOW_IP - now) + 1
         return False, retry_after
+
+    # --- per-username ---
+    if username:
+        ukey = username.strip().lower()
+        if ukey:
+            _trim_attempts(_login_attempts_by_user, ukey, _LOGIN_RATE_WINDOW_USER)
+            if len(_login_attempts_by_user[ukey]) >= _LOGIN_RATE_LIMIT_USER:
+                oldest = min(_login_attempts_by_user[ukey])
+                retry_after = int(oldest + _LOGIN_RATE_WINDOW_USER - now) + 1
+                return False, retry_after
 
     return True, None
 
 
-def _record_login_attempt(ip_address):
-    """Record a login attempt for rate limiting"""
-    _login_attempts[ip_address].append(time())
+def _record_login_attempt(ip_address, username=None):
+    """Record a failed login attempt against both buckets."""
+    now = time()
+    _login_attempts_by_ip[ip_address].append(now)
+    if username:
+        ukey = username.strip().lower()
+        if ukey:
+            _login_attempts_by_user[ukey].append(now)
 
 
 def _sanitize_domain(domain, cert_base_dir):
