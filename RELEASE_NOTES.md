@@ -1,3 +1,74 @@
+## v2.4.12 (Patch — Sprint 1 security hardening + two open bug fixes + repo hygiene)
+
+Closes the first batch of an internal security audit on the v2.4.x API surface, plus two open community bug reports filed the same day against the dashboard and the deploy menu, plus a small repo-hygiene pass. Eleven atomic commits, 1427 insertions and 9135 deletions on `main` (the deletion total is dominated by seven tracked-by-mistake dev artifacts — `.coverage`, `coverage.xml`, `test_results.json`, `debug_*.py`, a stale Playwright screenshot — being untracked, not by application code being removed). 55 new unit tests in `tests/test_sprint1_security.py`; 86 unit tests pass in total. PR [#147](https://github.com/fabriziosalmi/certmate/pull/147).
+
+### Authorization
+
+- **Strict field whitelist on `POST /api/settings`** (both the Flask-RESTX surface at `/api/settings` and the web blueprint at `/api/web/settings`). The endpoint previously accepted any payload field and let `atomic_update` merge it on top of the on-disk settings. `atomic_update` already preserved `users`, `api_keys`, and `local_auth_enabled`, but did **not** protect `api_bearer_token` (token-rotation hijack via an admin-credentialed client) or `deploy_hooks` (shell-exec injection via the deploy hook command field). Each rejected field is now a `400` with a `hint` pointing at the dedicated endpoint (`/api/users`, `/api/keys`, `/api/auth/config`, `/api/deploy/config`). Unknown fields are also rejected to surface typos instead of silently dropping them. Masked-secret echoes (`'********'` placeholder values returned by the masked GET) are stripped recursively before validation so a UI round-trip POST does not falsely 400; the unmasked GET-then-POST-back round-trip is now a clean no-op.
+
+- **`/api/auth/config` split into two routes.** The previous implementation registered a single `GET|POST` view with `require_role('viewer')` and an inline admin check inside the handler — defense-in-depth fail. Now `GET` is `viewer`, `POST` is `admin`, both enforced at the decorator level. POST also audit-logs the `local_auth_enabled` transition.
+
+- **Scoped API keys with `allowed_domains`.** Optional per-key list of domain patterns; supports exact (`example.com`) and wildcard (`*.example.com`) forms. The wildcard matches subdomains at any depth but not the apex, matching Let's Encrypt's SAN semantics. `None` (or omitted on existing keys) preserves the legacy unrestricted behavior. `[]` is a deliberate locked-out state for staging keys. Enforced on every per-domain endpoint (RESTX + web blueprint): `GET /certificates` (filters the result set), `POST /certificates(/create)` (checks primary + every SAN), `PATCH /certificates/{d}`, `DELETE /certificates/{d}`, `GET /certificates/{d}/download`, `GET /certificates/{d}/dns-alias-check`, `POST /certificates/{d}/renew`, `PUT /certificates/{d}/auto-renew`, `POST /certificates/{d}/deploy`, plus batch create and batch download. Denials return `403 DOMAIN_OUT_OF_SCOPE` and are recorded in the audit log.
+
+### Audit trail
+
+Nine new `AuditLogger` methods cover settings mutations, auth-config toggle, user CRUD, scoped key CRUD, deploy hook changes, CA provider changes, and authorization denials. Wired into seven mutating endpoints. Sensitive values are never serialized — only key names, IDs, and operational metadata. Deploy hook commands themselves are explicitly not logged (log-injection + secret-leak risk).
+
+### Bug fixes
+
+- **[#144](https://github.com/fabriziosalmi/certmate/issues/144) (community, [@ITJamie](https://github.com/ITJamie))** — Dashboard 404s on DNS provider accounts. `dashboard.js` was calling `/api/settings/dns-providers/<p>/accounts`, which is not a registered route. Seven providers, seven 404s on every dashboard load. Corrected to `/api/dns/<p>/accounts`.
+
+- **[#137](https://github.com/fabriziosalmi/certmate/issues/137) (community, [@SpeeDFireCZE](https://github.com/SpeeDFireCZE))** — *Recent Executions* in the Deploy menu showed *unexpected response*. The backend returns `{history: [...]}` but the Alpine.js handler branched only on `Array.isArray(res.body)`, so the wrapped object was discarded and the fallback fired. Handler now accepts both shapes, forward-compatible with any future raw-array return.
+
+- **Drive-by**: `DELETE /api/keys/<id>` was treating `revoke_api_key`'s `(ok, msg)` tuple as truthy, so failed revocations always returned *API key revoked*. Now distinguishes 404 (not found) from 400 (other failure) and surfaces the underlying message.
+
+### UI
+
+- New *Allowed Domains* input on the API Keys settings tab. Comma-separated, inline help, defaults to empty (= unrestricted, preserves the existing zero-click workflow for admins who don't need scoping).
+- New scope badge on the existing-keys list. Shows `N domain(s)` or `locked`, with the full pattern set in the title attribute and as a secondary line in monospace.
+
+### Documentation
+
+README gains two new subsections under *Security & Best Practices*:
+
+- **Settings API Hardening** documents the strict whitelist on `POST /api/settings`, the per-field rejection behavior, and the new audit-log surface.
+- **Secret Storage Hardening** documents the on-disk situation (DNS provider credentials remain in `data/settings.json` in their original form; the bearer token is HMAC-SHA256 hashed) and the five recommended hardening steps in order of effort (external secret backend > volume encryption > non-root user > avoid bind mounts > credential rotation). Explicit callout that the application does not encrypt secrets at the application layer — defers to an external secret backend or volume encryption.
+
+### Repo hygiene
+
+- **Seven tracked dev artifacts untracked** (`.coverage`, `coverage.xml`, `test_results.json`, `debug_response.py`, `debug_storage_simple.py`, `debug_storage_test.py`, and one stale Playwright failure screenshot under `test_screenshots/`). All were left over from local debugging sessions; none are referenced by the test suite, the CI workflow, or the application. `.gitignore` extended with the corresponding patterns so they do not drift back in.
+
+- **Missing issue templates shipped**. `feature_request.md` and `.github/ISSUE_TEMPLATE/config.yml` existed locally but had never been committed, so the GitHub issue picker at `/issues/new/choose` only offered Bug Report and the `?template=feature_request.md` link in the README silently 404'd back to the blank-issue redirect. Both files are now committed; the `config.yml` keeps blank issues disabled and routes contributors at Discussions.
+
+- **GitHub Wiki populated** (off-PR, same day). Eleven pages reflowed from the existing `docs/` tree, navigable left sidebar (`_Sidebar`), per-page footer (`_Footer`), and a project-wide `Home` landing page. Inter-page links rewritten to wiki page references; source-file links rewritten to absolute repo URLs so they resolve from the wiki. Closes [#140](https://github.com/fabriziosalmi/certmate/issues/140).
+
+### Backward compatibility
+
+- API keys without `allowed_domains` (existing rows in `settings.json`) keep full access.
+- Session-authenticated local users and the legacy `api_bearer_token` keep full access.
+- The setup wizard payload (`email`, `dns_provider`, `dns_providers`, `auto_renew`, `setup_completed`) is covered by the whitelist; a regression test guards this.
+- The masked-secret round-trip pattern used by the web UI (GET → populateForm → POST same payload back) is preserved: masked values are stripped pre-validation and unchanged top-level fields are silently dropped as no-op echoes.
+- `atomic_update`'s pre-existing `protected_keys` is unchanged — the whitelist is an additional gate at the HTTP layer, not a replacement.
+
+### Breaking changes (security)
+
+The whitelist on `POST /api/settings` rejects payloads that include `api_bearer_token`, `api_bearer_token_hash`, `deploy_hooks`, `users`, `api_keys`, or `local_auth_enabled` *with a value different from the current on-disk value*, returning `400` and a `hint` field pointing at the correct dedicated endpoint. No-op round-trip echoes of the same fields are silently dropped and do not break existing callers. Any integration that was *intentionally* mutating one of these fields through the generic settings endpoint will need to switch to the dedicated endpoint. The CertMate web UI already uses the dedicated endpoints for these fields and is unaffected.
+
+### Non-goals (explicit)
+
+Items deliberately out of scope for this sprint, listed so they do not get assumed:
+
+- No secrets-at-rest encryption. DNS provider credentials remain in `data/settings.json` in their original form. The README now documents this explicitly and points at the existing external-storage backends (Vault, Infisical, AWS Secrets Manager, Azure Key Vault) as the recommended fix.
+- No HMAC chain or tamper-evidence on the audit log itself.
+- No dedicated API surface for rotating the legacy bearer token; rotation still requires editing `settings.json` or `.env`.
+- No changes to the renewal path, OCSP/CRL, storage backends, or DNS provider plugins.
+
+### Tests
+
+- `tests/test_sprint1_security.py` — 55 new tests across seven classes covering whitelist accept/reject/unknown, settings-diff, masked-sentinel stripping (top-level and nested-collapse), no-op echo silent-drop semantics, scope matcher (exact, wildcard, apex non-match, locked, unrestricted), `_normalize_allowed_domains` validation, key creation with scope, and authentication propagating scope onto `current_user`.
+- `tests/test_apikeys.py` + `tests/test_settings_atomic_update.py` — 31 pre-existing tests, no regressions.
+- Total unit-test surface: 86 passes locally in 0.6s without Docker; the Docker-fixture integration suite (`test_auth.py::TestSetupModeBypass::test_web_settings_post_works`, etc.) runs in CI and passes.
+
 ## v2.4.8 (Patch — community PR merge + JSON download + lint fixes)
 
 Merges the ITJamie PR chain ([#128](https://github.com/fabriziosalmi/certmate/pull/128), [#132](https://github.com/fabriziosalmi/certmate/pull/132), [#133](https://github.com/fabriziosalmi/certmate/pull/133)) and resolves three markdown lint findings. All changes validated end-to-end on a live Docker instance with real Cloudflare DNS-01 certificate creation.
