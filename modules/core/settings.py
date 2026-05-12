@@ -46,6 +46,12 @@ PUBLIC_SETTINGS_WRITABLE_KEYS = frozenset({
     'default_accounts',         # per-DNS-provider default accounts
     'dns_propagation_seconds',
     'cache_ttl',
+    # Configurable certificate key type/size globals.
+    # These are not secrets — they only carry values like 'rsa', '2048',
+    # 'secp256r1'.  The settings UI POSTs them to general settings.
+    'default_key_type',
+    'default_key_size',
+    'default_elliptic_curve',
 })
 
 # Keys whose mutation via the bulk settings endpoint would create a privilege
