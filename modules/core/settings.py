@@ -15,6 +15,99 @@ from .utils import generate_secure_token, validate_email, validate_api_token, va
 logger = logging.getLogger(__name__)
 
 
+# --- POST /api/settings input validation -----------------------------------
+# Strict whitelist enforced by validate_settings_post() below. Two callsites
+# share this: the Flask-RESTX Settings resource (external API) and the web
+# blueprint's api_settings handler (UI). Both go through the same gate so
+# the rules can't drift.
+#
+# Adding a key here authorizes a generic admin POST to mutate it. For
+# anything with side-effects (shell exec, auth/token rotation, RBAC), prefer
+# a dedicated endpoint and keep the key in SETTINGS_REJECT_KEYS.
+
+PUBLIC_SETTINGS_WRITABLE_KEYS = frozenset({
+    'email',
+    'dns_provider',
+    'dns_providers',
+    'domains',
+    'auto_renew',
+    'renewal_threshold_days',
+    'challenge_type',
+    'certificate_storage',
+    'notifications',
+    'setup_completed',
+    'cloudflare_token',         # legacy single-provider token
+    'ca_providers',             # CA provider configuration
+    'default_ca',               # selected CA provider
+    'default_ca_accounts',      # per-CA default accounts
+    'default_accounts',         # per-DNS-provider default accounts
+    'dns_propagation_seconds',
+    'cache_ttl',
+})
+
+# Keys whose mutation via the bulk settings endpoint would create a privilege
+# escalation, RCE injection, or token-rotation risk. Each has (or should have)
+# a dedicated endpoint with its own auth and audit:
+#   - api_bearer_token / _hash : future /api/auth/bearer/rotate
+#   - deploy_hooks             : /api/deploy/config
+#   - users                    : /api/users
+#   - api_keys                 : /api/keys
+#   - local_auth_enabled       : /api/auth/config
+SETTINGS_REJECT_KEYS = frozenset({
+    'api_bearer_token',
+    'api_bearer_token_hash',
+    'deploy_hooks',
+    'users',
+    'api_keys',
+    'local_auth_enabled',
+})
+
+
+def validate_settings_post(payload):
+    """Filter a POST /api/settings payload against the writable whitelist.
+
+    Returns:
+        tuple (filtered, rejected, unknown):
+          filtered: dict of payload restricted to PUBLIC_SETTINGS_WRITABLE_KEYS
+          rejected: list of keys in SETTINGS_REJECT_KEYS that the caller tried
+                    to write (each is a security event — log & audit)
+          unknown:  list of keys neither allowed nor explicitly blocked
+                    (treat as 400; likely a typo or future field that needs
+                    to be added to the whitelist intentionally)
+    """
+    if not isinstance(payload, dict):
+        raise ValueError("Settings payload must be an object")
+
+    filtered = {}
+    rejected = []
+    unknown = []
+    for key, value in payload.items():
+        if key in SETTINGS_REJECT_KEYS:
+            rejected.append(key)
+        elif key in PUBLIC_SETTINGS_WRITABLE_KEYS:
+            filtered[key] = value
+        else:
+            unknown.append(key)
+    return filtered, rejected, unknown
+
+
+def diff_settings_keys(before, after):
+    """Compute the set of top-level keys whose value differs between two
+    settings dicts. Used by audit logging to record what changed without
+    serializing secret values.
+
+    Returns:
+        list of changed top-level key names (sorted)
+    """
+    if not isinstance(before, dict) or not isinstance(after, dict):
+        return []
+    changed = set()
+    for key in set(before.keys()) | set(after.keys()):
+        if before.get(key) != after.get(key):
+            changed.add(key)
+    return sorted(changed)
+
+
 def _bearer_token_from_env_or_generate():
     """Return a valid api_bearer_token for the default settings template.
 
