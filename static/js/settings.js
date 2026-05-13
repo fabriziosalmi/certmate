@@ -213,7 +213,8 @@
             }
 
             // API Bearer Token is only required after initial setup
-            if (!settings.api_bearer_token && currentSettings.setup_completed) {
+            // Allow if hash exists (token was previously configured)
+            if (!settings.api_bearer_token && !currentSettings.api_bearer_token_hash && currentSettings.setup_completed) {
                 throw new Error('API Bearer Token is required');
             }
 
