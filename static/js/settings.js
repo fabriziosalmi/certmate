@@ -212,13 +212,17 @@
                 throw new Error('DNS provider must be selected');
             }
 
-            // API Bearer Token is only required after initial setup
-            if (!settings.api_bearer_token && currentSettings.setup_completed) {
+            // API Bearer Token is only required after initial setup when the
+            // backend has no hashed token already. Post-2.4.8 settings.json
+            // stores only api_bearer_token_hash (the plaintext is intentionally
+            // absent from GET /api/web/settings), so an empty form field on
+            // save means "keep the existing hash", not "no token configured".
+            if (!settings.api_bearer_token && currentSettings.setup_completed && !currentSettings.api_bearer_token_hash) {
                 throw new Error('API Bearer Token is required');
             }
 
             // Auto-generate token for initial setup if not provided
-            if (!settings.api_bearer_token && !currentSettings.setup_completed) {
+            if (!settings.api_bearer_token && !currentSettings.setup_completed && !currentSettings.api_bearer_token_hash) {
                 settings.api_bearer_token = generateRandomToken();
                 var tokenField = document.getElementById('api_bearer_token');
                 if (tokenField) {
@@ -630,6 +634,12 @@
                 if (populateTokenField) {
                     populateTokenField.value = data.api_bearer_token;
                     addDebugLog('API bearer token field populated', 'info');
+                }
+            } else if (data.api_bearer_token_hash) {
+                var hashedTokenField = document.getElementById('api_bearer_token');
+                if (hashedTokenField) {
+                    hashedTokenField.placeholder = 'API token configured — leave empty to keep, or enter a new one to rotate';
+                    addDebugLog('API bearer token already configured (hash present)', 'info');
                 }
             }
 
