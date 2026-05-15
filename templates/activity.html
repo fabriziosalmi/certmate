@@ -96,10 +96,51 @@
             return labels[entry.operation] || entry.operation;
         }
 
+        // Render a status-aware error state so the user knows *why* the
+        // log didn't load. The previous catch-all "Failed to load
+        // activity" hid the difference between an expired session
+        // (actionable: re-login), a missing route (actionable: report),
+        // a server error (actionable: retry), and a true network outage.
+        function renderErrorState(status, rawErr) {
+            var msg, hint;
+            if (status === 401) {
+                msg = 'Authentication required';
+                hint = '<a href="/login" class="text-primary hover:underline">Sign in</a> to view the activity log.';
+            } else if (status === 403) {
+                msg = 'You don’t have permission to view the activity log.';
+                hint = 'Ask an admin to grant you a role with audit access.';
+            } else if (status === 404) {
+                msg = 'Activity endpoint not found';
+                hint = 'The /api/activity route is unavailable on this build. Check the server logs or report this on GitHub.';
+            } else if (status && status >= 500 && status <= 599) {
+                msg = 'Server error (HTTP ' + status + ')';
+                hint = 'Try refreshing in a moment, or check the server logs.';
+            } else {
+                // Network error, CORS error, JSON parse error — all surface
+                // here without a `status` because fetch never resolved.
+                msg = 'Cannot reach the activity service';
+                hint = 'Check your network connection and try the Refresh button.';
+            }
+            console.error('Error loading activity:', status || 'no-status', rawErr);
+            document.getElementById('activityList').innerHTML =
+                '<div class="px-6 py-10 text-center">' +
+                    '<i class="fas fa-exclamation-circle text-red-400 text-2xl mb-3 block"></i>' +
+                    '<div class="text-sm font-medium text-gray-700 dark:text-gray-200">' + escapeHtml(msg) + '</div>' +
+                    '<p class="mt-2 text-xs text-gray-500 dark:text-gray-400">' + hint + '</p>' +
+                '</div>';
+        }
+
         window.loadActivity = function() {
             var filter = document.getElementById('filterOp').value;
             fetch('/api/activity?limit=100', { credentials: 'same-origin' })
-                .then(function(r) { return r.json(); })
+                .then(function(r) {
+                    if (!r.ok) {
+                        var err = new Error('HTTP ' + r.status);
+                        err.status = r.status;
+                        throw err;
+                    }
+                    return r.json();
+                })
                 .then(function(data) {
                     var entries = data.entries || [];
                     if (filter) {
@@ -108,9 +149,7 @@
                     renderEntries(entries);
                 })
                 .catch(function(err) {
-                    console.error('Error loading activity:', err);
-                    document.getElementById('activityList').innerHTML =
-                        '<div class="px-6 py-8 text-center text-gray-500 dark:text-gray-400"><i class="fas fa-exclamation-circle mr-2 text-red-400"></i>Failed to load activity</div>';
+                    renderErrorState(err && err.status, err);
                 });
         };
 
