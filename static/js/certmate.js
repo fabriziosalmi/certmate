@@ -517,11 +517,23 @@
         catch (e) { return false; }
     })();
 
+    // Even with `?debug=1` explicitly opted-in, gate the actual unhide
+    // on the caller being an admin. The debug surfaces leak internal
+    // information (deployment-probe logs, cache hit/miss counters,
+    // settings shape, etc.) that shouldn't be visible to viewer or
+    // operator roles even if they figure out the URL flag — defense in
+    // depth on top of the URL opt-in (8.2 fix).
     if (CM.debugEnabled) {
         document.addEventListener('DOMContentLoaded', function() {
-            document.querySelectorAll('[data-debug-control]').forEach(function(el) {
-                el.classList.remove('hidden');
-            });
+            fetch('/api/auth/me', { credentials: 'same-origin' })
+                .then(function(r) { return r.ok ? r.json() : null; })
+                .then(function(data) {
+                    if (!data || !data.user || data.user.role !== 'admin') return;
+                    document.querySelectorAll('[data-debug-control]').forEach(function(el) {
+                        el.classList.remove('hidden');
+                    });
+                })
+                .catch(function() { /* network/parse error: leave debug hidden */ });
         });
     }
 
