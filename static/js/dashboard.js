@@ -1288,10 +1288,41 @@
         return normalizeDnsName(value).replace(/^_acme-challenge\./i, '');
     }
 
+    // Normalize a hostname the way the cert-create form needs it: lowercase,
+    // strip protocol / port / path / fragment / trailing dot, but keep the
+    // optional `*.` wildcard prefix intact (both the primary and the SAN
+    // fields legitimately accept wildcards). This catches the common QW-15
+    // paste patterns:
+    //   "https://example.com/"       → "example.com"
+    //   "Example.COM"                → "example.com"
+    //   "example.com:443"            → "example.com"
+    //   "example.com."               → "example.com"
+    //   "example.com/path?x=1"       → "example.com"
+    function normalizeHostname(value) {
+        if (!value) return '';
+        var v = String(value).trim().toLowerCase();
+        v = v.replace(/^[a-z][a-z0-9+.\-]*:\/\//, ''); // strip scheme://
+        v = v.replace(/[\/?#].*$/, '');                 // strip path/query/fragment
+        v = v.replace(/:\d+$/, '');                     // strip :port
+        v = v.replace(/\.+$/, '');                      // strip trailing dots
+        return v;
+    }
+
     function parseSanDomainsInput(value) {
-        return value
-            ? value.split(',').map(function (d) { return d.trim(); }).filter(function (d) { return d; })
-            : [];
+        // Accept comma, semicolon, newline, or tab as separators — users
+        // routinely paste from spreadsheets, CLI output, or notepads where
+        // the delimiter isn't always a comma. Each token is normalized via
+        // normalizeHostname; duplicates after normalization are dropped.
+        if (!value) return [];
+        var seen = Object.create(null);
+        var out = [];
+        String(value).split(/[,;\n\t]+/).forEach(function (raw) {
+            var d = normalizeHostname(raw);
+            if (!d || seen[d]) return;
+            seen[d] = true;
+            out.push(d);
+        });
+        return out;
     }
 
     function addUniqueDomain(domains, domain) {
@@ -1482,7 +1513,10 @@
         // submit doesn't leave the form stuck.
         if (isCreatingCert) return;
 
-        var domain = document.getElementById('domain').value.trim();
+        // Primary domain: apply the same paste-normalization as SAN inputs
+        // (lowercase, strip scheme/port/path/trailing-dot) so the request
+        // body matches what the user sees rendered back in the cert row.
+        var domain = normalizeHostname(document.getElementById('domain').value);
         var sanDomainsInput = document.getElementById('san_domains').value.trim();
         var wildcardEnabled = document.getElementById('wildcard-cert').checked;
         var challengeType = document.getElementById('challenge_type_select').value;
