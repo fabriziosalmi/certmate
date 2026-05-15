@@ -65,6 +65,25 @@
             } catch (e) { return ts; }
         }
 
+        // Absolute timestamp for the tooltip — exposes the exact moment a
+        // relative label like "5h ago" or "2d ago" stands for. Uses the
+        // browser locale so users see the format they're used to ("May 12,
+        // 2026, 3:45:12 PM" / "12 maggio 2026, 15:45:12"). Falls back to
+        // the raw upstream string if the value isn't a parseable date.
+        // Guards against `null` (which would otherwise resolve to the
+        // 1970 epoch via new Date(null)).
+        function absoluteTime(ts) {
+            try {
+                if (ts === null || ts === undefined || ts === '') return '';
+                var d = new Date(ts);
+                if (isNaN(d.getTime())) return String(ts);
+                return d.toLocaleString(undefined, {
+                    year: 'numeric', month: 'short', day: 'numeric',
+                    hour: '2-digit', minute: '2-digit', second: '2-digit'
+                });
+            } catch (e) { return String(ts || ''); }
+        }
+
         function opLabel(entry) {
             var labels = {
                 create: 'Created',
@@ -132,7 +151,7 @@
                         (entry.error ? '<p class="text-xs text-red-500 mt-0.5"><i class="fas fa-exclamation-triangle mr-1"></i>' + escapeHtml(entry.error) + '</p>' : '') +
                     '</div>' +
                     '<div class="flex-shrink-0 text-right">' +
-                        '<div class="text-xs text-gray-400">' + escapeHtml(formatTime(entry.timestamp)) + '</div>' +
+                        '<div class="text-xs text-gray-400 cursor-help" title="' + escapeHtml(absoluteTime(entry.timestamp)) + '">' + escapeHtml(formatTime(entry.timestamp)) + '</div>' +
                         '<div class="text-[10px] text-gray-400 mt-1">' + escapeHtml(entry.user || 'system') + '</div>' +
                     '</div>' +
                 '</div>';
