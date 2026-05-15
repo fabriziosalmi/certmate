@@ -62,15 +62,25 @@ class TestWelcomeBanner:
 
 
 class TestHelpPage:
-    """Help page should contain Docker Quick Start section."""
+    """Help page should expose the user-facing section structure."""
 
-    def test_docker_quick_start(self, api):
+    def test_quick_start(self, api):
+        # The v2.5.1 help rewrite renamed the Docker-specific "Getting
+        # Started / Docker Quick Start" sections to a deployment-agnostic
+        # "Quick Start" anchor. Pin the new anchor + a fragment of the
+        # section heading so both the navigation strip and the section
+        # itself stay covered.
         r = api.get("/help")
-        assert "Docker Quick Start" in r.text
+        assert 'id="quick-start"' in r.text
+        assert "Quick Start" in r.text
 
-    def test_getting_started(self, api):
+    def test_report_an_issue(self, api):
+        # New in v2.5.1: a diagnostic-checklist section that gives users
+        # something concrete to attach when filing an issue. Pin it so
+        # a future rewrite doesn't quietly drop the support surface.
         r = api.get("/help")
-        assert "Getting Started" in r.text
+        assert 'id="report-issue"' in r.text
+        assert "Report an issue" in r.text
 
 
 class TestSettingsPage:
