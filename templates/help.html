@@ -1,28 +1,26 @@
 {% extends "base.html" %}
 {% block title %}Help - CertMate{% endblock %}
 {% block content %}
-    <!-- Main Content -->
     <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <!-- Breadcrumb -->
+
+        <!-- Breadcrumb + small inline links to the read-only references
+             (API docs + the live /health probe). The links sit at the
+             top-right of the breadcrumb row so they're discoverable
+             without taking real estate from the content below. -->
         <div class="flex items-center justify-between mb-4 px-4 sm:px-0">
             <nav class="flex items-center text-sm" aria-label="Breadcrumb">
-                <a href="/" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"><i class="fas fa-home"></i></a>
-                <i class="fas fa-chevron-right text-[10px] text-gray-300 dark:text-gray-600 mx-2"></i>
+                <a href="/" aria-label="Home" title="Home" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"><i class="fas fa-home" aria-hidden="true"></i></a>
+                <i class="fas fa-chevron-right text-xs text-gray-300 dark:text-gray-600 mx-2"></i>
                 <span class="text-gray-700 dark:text-gray-200 font-medium">Help</span>
             </nav>
             <div class="flex items-center gap-3 text-xs">
-                <span class="inline-flex items-center px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-                    <i class="fas fa-check-circle mr-1"></i>Active
-                </span>
+                <a href="/health" target="_blank" rel="noopener" class="text-gray-400 hover:text-primary transition-colors" title="Live health endpoint — JSON status of scheduler, cert dir, disk"><i class="fas fa-heartbeat mr-1" aria-hidden="true"></i>Health</a>
                 <a href="/docs/" target="_blank" rel="noopener" class="text-gray-400 hover:text-primary transition-colors" title="Swagger UI — try API requests live"><i class="fas fa-flask mr-1" aria-hidden="true"></i>Swagger</a>
                 <a href="/redoc" target="_blank" rel="noopener" class="text-gray-400 hover:text-primary transition-colors" title="ReDoc — read-only API reference"><i class="fas fa-book mr-1" aria-hidden="true"></i>ReDoc</a>
             </div>
         </div>
 
-        <!-- In-page search (B1). Filters the section blocks below by
-             plain substring on textContent. While a term is active the
-             Quick Links grid is also hidden — it's nav, not content,
-             and is the wrong target for a content search. -->
+        <!-- In-page substring search across [data-help-section] blocks. -->
         <div class="px-4 sm:px-0 mb-4">
             <label for="helpSearch" class="sr-only">Search help</label>
             <div class="relative">
@@ -34,933 +32,290 @@
             </div>
         </div>
 
-        <!-- Quick Links — 6 items on a 1/2/3 column grid so each
-             breakpoint lands a clean rectangle (no orphan trailing row). -->
-        <div id="quickLinksGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-            <a href="#getting-started" class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow hover:shadow-md transition-shadow">
-                <div class="flex items-center">
-                    <i class="fas fa-rocket text-green-600 text-xl mr-3" aria-hidden="true"></i>
-                    <div>
-                        <h3 class="font-medium text-gray-900 dark:text-white">Getting Started</h3>
-                        <p class="text-sm text-gray-500 dark:text-gray-400">Quick start guide</p>
-                    </div>
-                </div>
-            </a>
-            <a href="#dns-providers" class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow hover:shadow-md transition-shadow">
-                <div class="flex items-center">
-                    <i class="fas fa-server text-blue-600 text-xl mr-3" aria-hidden="true"></i>
-                    <div>
-                        <h3 class="font-medium text-gray-900 dark:text-white">DNS Providers</h3>
-                        <p class="text-sm text-gray-500 dark:text-gray-400">Supported providers</p>
-                    </div>
-                </div>
-            </a>
-            <a href="#ca-providers" class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow hover:shadow-md transition-shadow">
-                <div class="flex items-center">
-                    <i class="fas fa-certificate text-purple-600 text-xl mr-3" aria-hidden="true"></i>
-                    <div>
-                        <h3 class="font-medium text-gray-900 dark:text-white">CA Providers</h3>
-                        <p class="text-sm text-gray-500 dark:text-gray-400">Certificate authorities</p>
-                    </div>
-                </div>
-            </a>
-            <a href="#api-usage" class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow hover:shadow-md transition-shadow">
-                <div class="flex items-center">
-                    <i class="fas fa-code text-indigo-600 text-xl mr-3" aria-hidden="true"></i>
-                    <div>
-                        <h3 class="font-medium text-gray-900 dark:text-white">API Usage</h3>
-                        <p class="text-sm text-gray-500 dark:text-gray-400">REST API examples</p>
-                    </div>
-                </div>
-            </a>
-            <a href="#backup-recovery" class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow hover:shadow-md transition-shadow">
-                <div class="flex items-center">
-                    <i class="fas fa-archive text-amber-600 text-xl mr-3" aria-hidden="true"></i>
-                    <div>
-                        <h3 class="font-medium text-gray-900 dark:text-white">Backup &amp; Recovery</h3>
-                        <p class="text-sm text-gray-500 dark:text-gray-400">Settings and certs backup</p>
-                    </div>
-                </div>
-            </a>
-            <a href="#troubleshooting" class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow hover:shadow-md transition-shadow">
-                <div class="flex items-center">
-                    <i class="fas fa-tools text-orange-600 text-xl mr-3" aria-hidden="true"></i>
-                    <div>
-                        <h3 class="font-medium text-gray-900 dark:text-white">Troubleshooting</h3>
-                        <p class="text-sm text-gray-500 dark:text-gray-400">Common issues</p>
-                    </div>
-                </div>
-            </a>
-        </div>
+        <!-- Section navigation. Single horizontal row (scrolls on narrow
+             viewports). Section anchors first, then a divider, then the
+             "What's New" jump-link and the external full changelog. -->
+        <nav class="flex items-center gap-1 mb-6 overflow-x-auto whitespace-nowrap text-sm px-4 sm:px-0 pb-1" aria-label="Help sections">
+            <a href="#quick-start"    class="px-3 py-1.5 rounded-md text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"><i class="fas fa-rocket text-green-600 mr-1.5" aria-hidden="true"></i>Quick Start</a>
+            <a href="#dns-providers"  class="px-3 py-1.5 rounded-md text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"><i class="fas fa-server text-blue-600 mr-1.5" aria-hidden="true"></i>DNS</a>
+            <a href="#ca-providers"   class="px-3 py-1.5 rounded-md text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"><i class="fas fa-certificate text-purple-600 mr-1.5" aria-hidden="true"></i>CA</a>
+            <a href="#api-usage"      class="px-3 py-1.5 rounded-md text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"><i class="fas fa-code text-indigo-600 mr-1.5" aria-hidden="true"></i>API</a>
+            <a href="#multi-account"  class="px-3 py-1.5 rounded-md text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"><i class="fas fa-users text-green-600 mr-1.5" aria-hidden="true"></i>Multi-account</a>
+            <a href="#backup-recovery" class="px-3 py-1.5 rounded-md text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"><i class="fas fa-archive text-amber-600 mr-1.5" aria-hidden="true"></i>Backup</a>
+            <a href="#troubleshooting" class="px-3 py-1.5 rounded-md text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"><i class="fas fa-tools text-orange-600 mr-1.5" aria-hidden="true"></i>Troubleshooting</a>
+            <a href="#report-issue"   class="px-3 py-1.5 rounded-md text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"><i class="fab fa-github text-gray-700 dark:text-gray-300 mr-1.5" aria-hidden="true"></i>Report an issue</a>
+            <span class="mx-1 h-5 w-px bg-gray-200 dark:bg-gray-700" aria-hidden="true"></span>
+            <a href="#whats-new"      class="px-3 py-1.5 rounded-md text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"><i class="fas fa-star text-yellow-500 mr-1.5" aria-hidden="true"></i>What's new</a>
+            <a href="https://github.com/fabriziosalmi/certmate/blob/main/RELEASE_NOTES.md" target="_blank" rel="noopener" class="px-3 py-1.5 rounded-md text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"><i class="fas fa-external-link-alt text-xs text-gray-400 mr-1.5" aria-hidden="true"></i>Full changelog</a>
+        </nav>
 
-        <!-- Content Sections -->
-        <div class="space-y-6">
-            <!-- What's New in v2.x -->
-            <div id="whats-new" data-help-section class="bg-white dark:bg-gray-800 shadow rounded-lg">
-                <div class="px-6 py-6">
-                    <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
-                        <h3 class="text-xl font-semibold text-gray-900 dark:text-white">
-                            <i class="fas fa-star text-yellow-500 mr-2" aria-hidden="true"></i>
-                            What's New in v2.x
-                        </h3>
-                        <a href="https://github.com/fabriziosalmi/certmate/blob/main/RELEASE_NOTES.md" target="_blank" rel="noopener" class="text-sm text-primary hover:underline inline-flex items-center">
-                            <i class="fas fa-external-link-alt mr-1.5 text-xs" aria-hidden="true"></i>Full changelog
-                        </a>
-                    </div>
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        <div class="bg-indigo-50 dark:bg-indigo-900/20 p-4 rounded-lg border border-indigo-200 dark:border-indigo-800">
-                            <h4 class="font-medium text-indigo-900 dark:text-indigo-100 mb-2">
-                                <i class="fas fa-user-shield mr-1"></i> RBAC & API Keys
-                            </h4>
-                            <p class="text-sm text-indigo-700 dark:text-indigo-300">Role-based access control (viewer, operator, admin) and scoped API key management with optional expiry.</p>
-                        </div>
-                        <div class="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border border-green-200 dark:border-green-800">
-                            <h4 class="font-medium text-green-900 dark:text-green-100 mb-2">
-                                <i class="fas fa-bell mr-1"></i> Notifications
-                            </h4>
-                            <p class="text-sm text-green-700 dark:text-green-300">Email, Slack, Discord, and webhook notifications with HMAC signatures. Weekly digest for certificate health.</p>
-                        </div>
-                        <div class="bg-orange-50 dark:bg-orange-900/20 p-4 rounded-lg border border-orange-200 dark:border-orange-800">
-                            <h4 class="font-medium text-orange-900 dark:text-orange-100 mb-2">
-                                <i class="fas fa-rocket mr-1"></i> Deploy Hooks
-                            </h4>
-                            <p class="text-sm text-orange-700 dark:text-orange-300">Post-issuance shell commands to reload Nginx, sync CDN, or run custom scripts. Global and per-domain hooks.</p>
-                        </div>
-                        <div class="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg border border-purple-200 dark:border-purple-800">
-                            <h4 class="font-medium text-purple-900 dark:text-purple-100 mb-2">
-                                <i class="fas fa-keyboard mr-1"></i> Keyboard Shortcuts
-                            </h4>
-                            <p class="text-sm text-purple-700 dark:text-purple-300">Press <kbd class="px-1 bg-gray-200 dark:bg-gray-600 rounded text-xs">?</kbd> for help. Cmd+K command palette, <kbd class="px-1 bg-gray-200 dark:bg-gray-600 rounded text-xs">/</kbd> to search, <kbd class="px-1 bg-gray-200 dark:bg-gray-600 rounded text-xs">g+h</kbd> to navigate.</p>
-                        </div>
-                        <div class="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
-                            <h4 class="font-medium text-blue-900 dark:text-blue-100 mb-2">
-                                <i class="fas fa-magic mr-1"></i> Setup Wizard
-                            </h4>
-                            <p class="text-sm text-blue-700 dark:text-blue-300">Guided first-run configuration for DNS providers, CA settings, and authentication setup.</p>
-                        </div>
-                        <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg border border-gray-200 dark:border-gray-600">
-                            <h4 class="font-medium text-gray-900 dark:text-white mb-2">
-                                <i class="fas fa-stream mr-1"></i> Activity Timeline
-                            </h4>
-                            <p class="text-sm text-gray-600 dark:text-gray-300">Chronological event log for all certificate operations, renewals, and system events.</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
+        <!-- Content sections. All cards use the compact px-4 py-4 padding
+             to reduce vertical footprint while keeping content readable. -->
+        <div class="space-y-4">
 
-            <!-- About CertMate -->
-            <div id="about" data-help-section class="bg-white dark:bg-gray-800 shadow rounded-lg">
-                <div class="px-6 py-6">
-                    <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-                        <i class="fas fa-shield-alt text-primary mr-2"></i>
-                        About CertMate
+            <!-- Quick Start -->
+            <section id="quick-start" data-help-section class="bg-white dark:bg-gray-800 shadow rounded-lg">
+                <div class="px-4 py-4">
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">
+                        <i class="fas fa-rocket text-green-600 mr-2" aria-hidden="true"></i>Quick Start
                     </h3>
-                    <div class="prose prose-gray dark:prose-invert max-w-none">
-                        <p class="text-gray-600 dark:text-gray-300 mb-4">
-                            <strong>CertMate</strong> is a powerful SSL certificate management system designed for modern infrastructure. 
-                            Built with multi-DNS provider support, Docker containerization, and comprehensive REST API, it's the perfect solution 
-                            for managing certificates across multiple datacenters and cloud environments.
-                        </p>
-                        
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
-                            <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
-                                <h4 class="font-medium text-gray-900 dark:text-white mb-2">
-                                    <i class="fas fa-check-circle text-green-600 mr-2"></i>
-                                    Key Features
-                                </h4>
-                                <ul class="text-sm text-gray-600 dark:text-gray-300 space-y-1">
-                                    <li>• Zero-Downtime Automation</li>
-                                    <li>• Multi-Cloud Support (22 DNS providers)</li>
-                                    <li>• Enterprise-Ready with REST API</li>
-                                    <li>• Security-First approach</li>
-                                    <li>• Wildcard & Multi-Domain support</li>
-                                </ul>
-                            </div>
-                            <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
-                                <h4 class="font-medium text-gray-900 dark:text-white mb-2">
-                                    <i class="fas fa-star text-yellow-600 mr-2"></i>
-                                    Benefits
-                                </h4>
-                                <ul class="text-sm text-gray-600 dark:text-gray-300 space-y-1">
-                                    <li>• Automatic certificate renewal</li>
-                                    <li>• Multiple CA providers (Let's Encrypt, DigiCert, Private CA)</li>
-                                    <li>• Modern web dashboard</li>
-                                    <li>• Complete API control</li>
-                                    <li>• Docker & Kubernetes ready</li>
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Getting Started -->
-            <div id="getting-started" data-help-section class="bg-white dark:bg-gray-800 shadow rounded-lg">
-                <div class="px-6 py-6">
-                    <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-                        <i class="fas fa-rocket text-green-600 mr-2"></i>
-                        Getting Started
-                    </h3>
-                    <div class="space-y-4">
-                        <div class="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
-                            <h4 class="font-medium text-blue-900 dark:text-blue-100 mb-2">
-                                <i class="fas fa-info-circle mr-2"></i>
-                                First Steps
-                            </h4>
-                            <ol class="text-sm text-blue-800 dark:text-blue-200 space-y-2 ml-4 list-decimal">
-                                <li>Configure your DNS provider in <a href="/settings" class="underline hover:no-underline">Settings</a></li>
-                                <li>Add your domain(s) to manage</li>
-                                <li>Create your first SSL certificate</li>
-                                <li>Set up automatic renewal</li>
-                                <li>Configure backup settings for data protection</li>
-                            </ol>
-                        </div>
-
-                        <div class="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border border-green-200 dark:border-green-800">
-                            <h4 class="font-medium text-green-900 dark:text-green-100 mb-2">
-                                <i class="fab fa-docker mr-2"></i>
-                                Docker Quick Start
-                            </h4>
-                            <p class="text-sm text-green-800 dark:text-green-200 mb-3">
-                                CertMate starts with authentication <strong>disabled</strong> for easy initial setup. Follow these steps to get up and running:
-                            </p>
-                            <ol class="text-sm text-green-800 dark:text-green-200 space-y-2 ml-4 list-decimal">
-                                <li><strong>Configure DNS provider</strong> &mdash; Go to <a href="/settings" class="underline hover:no-underline">Settings</a>, select your DNS provider (e.g. Cloudflare), and add your API credentials</li>
-                                <li><strong>Create a certificate</strong> &mdash; Return to the <a href="/" class="underline hover:no-underline">Dashboard</a>, enter a domain, and click Create</li>
-                                <li><strong>Secure your instance</strong> &mdash; In <a href="/settings" class="underline hover:no-underline">Settings</a> &gt; User Management, enable Local Authentication and create an admin user</li>
-                                <li><strong>API access</strong> &mdash; The API Bearer Token (Settings &gt; API Security) is auto-generated on first start. Click "Reveal" to view it for programmatic access</li>
-                            </ol>
-                            <div class="mt-3 p-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded text-xs text-amber-800 dark:text-amber-200">
-                                <i class="fas fa-shield-alt mr-1"></i>
-                                <strong>Important:</strong> Enable authentication before exposing CertMate to the internet. Without it, anyone with network access can manage your certificates.
-                            </div>
-                        </div>
-
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
-                                <h4 class="font-medium text-gray-900 dark:text-white mb-2">
-                                    <i class="fas fa-certificate text-primary mr-2"></i>
-                                    Creating Certificates
-                                </h4>
-                                <p class="text-sm text-gray-600 dark:text-gray-300 mb-2">
-                                    Use the <a href="/" class="text-primary hover:underline">Certificates</a> page to:
-                                </p>
-                                <ul class="text-sm text-gray-600 dark:text-gray-300 space-y-1">
-                                    <li>• Add new domains</li>
-                                    <li>• Generate SSL certificates</li>
-                                    <li>• Monitor certificate status</li>
-                                    <li>• Download certificate files</li>
-                                </ul>
-                            </div>
-                            <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
-                                <h4 class="font-medium text-gray-900 dark:text-white mb-2">
-                                    <i class="fas fa-sync-alt text-primary mr-2"></i>
-                                    Automatic Renewal
-                                </h4>
-                                <p class="text-sm text-gray-600 dark:text-gray-300 mb-2">
-                                    CertMate automatically:
-                                </p>
-                                <ul class="text-sm text-gray-600 dark:text-gray-300 space-y-1">
-                                    <li>• Checks certificates daily</li>
-                                    <li>• Renews 30 days before expiry</li>
-                                    <li>• Updates certificate files</li>
-                                    <li>• Maintains service availability</li>
-                                    <li>• Creates automatic backups</li>
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- CA Providers -->
-            <div id="ca-providers" data-help-section class="bg-white dark:bg-gray-800 shadow rounded-lg">
-                <div class="px-6 py-6">
-                    <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-                        <i class="fas fa-certificate text-purple-600 mr-2"></i>
-                        Certificate Authority (CA) Providers
-                    </h3>
-                    <p class="text-gray-600 dark:text-gray-300 mb-6">
-                        CertMate supports multiple Certificate Authority providers, allowing you to choose the best CA for your needs.
+                    <ol class="text-sm text-gray-700 dark:text-gray-200 space-y-1.5 list-decimal ml-5">
+                        <li>Open <a href="/settings" class="text-primary hover:underline">Settings → DNS</a> and add credentials for your DNS provider.</li>
+                        <li>From the <a href="/" class="text-primary hover:underline">Certificates</a> page, enter a domain and click <span class="font-medium">Create New Certificate</span>.</li>
+                        <li>Enable Local Authentication under <a href="/settings#users" class="text-primary hover:underline">Settings → Users</a> before exposing CertMate to the internet — it ships with auth off so the first run is friction-free.</li>
+                        <li>API token lives at <a href="/settings#apikeys" class="text-primary hover:underline">Settings → API Keys</a>. Auto-generated on first start; click <span class="font-medium">Reveal</span> to copy.</li>
+                    </ol>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-3">
+                        Renewal runs daily and refreshes anything within 30 days of expiry. No cron setup needed.
                     </p>
-
-                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        <!-- Let's Encrypt -->
-                        <div class="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border border-green-200 dark:border-green-800">
-                            <h4 class="font-medium text-green-900 dark:text-green-100 mb-2 flex items-center">
-                                <i class="fas fa-leaf text-green-600 mr-2"></i>
-                                Let's Encrypt
-                                <span class="ml-2 text-xs bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 px-2 py-0.5 rounded-full">Free</span>
-                            </h4>
-                            <p class="text-sm text-green-800 dark:text-green-200 mb-3">
-                                Free, automated SSL certificates with 90-day validity and automatic renewal.
-                            </p>
-                            <ul class="text-sm text-green-700 dark:text-green-300 space-y-1">
-                                <li>• <strong>Cost:</strong> Free</li>
-                                <li>• <strong>Validation:</strong> Domain Validation (DV)</li>
-                                <li>• <strong>Wildcard:</strong> ✅ Supported</li>
-                                <li>• <strong>Rate Limits:</strong> 50 certs/week</li>
-                                <li>• <strong>Best For:</strong> Most use cases</li>
-                            </ul>
-                        </div>
-
-                        <!-- DigiCert -->
-                        <div class="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
-                            <h4 class="font-medium text-blue-900 dark:text-blue-100 mb-2 flex items-center">
-                                <i class="fas fa-shield-alt text-blue-600 mr-2"></i>
-                                DigiCert ACME
-                                <span class="ml-2 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 px-2 py-0.5 rounded-full">Enterprise</span>
-                            </h4>
-                            <p class="text-sm text-blue-800 dark:text-blue-200 mb-3">
-                                Enterprise-grade certificates with Extended Validation options and premium support.
-                            </p>
-                            <ul class="text-sm text-blue-700 dark:text-blue-300 space-y-1">
-                                <li>• <strong>Cost:</strong> Paid plans</li>
-                                <li>• <strong>Validation:</strong> DV, OV, EV</li>
-                                <li>• <strong>Wildcard:</strong> ✅ Supported</li>
-                                <li>• <strong>EAB Required:</strong> ✅ Yes</li>
-                                <li>• <strong>Best For:</strong> Enterprise, compliance</li>
-                            </ul>
-                        </div>
-
-                        <!-- Private CA -->
-                        <div class="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg border border-purple-200 dark:border-purple-800">
-                            <h4 class="font-medium text-purple-900 dark:text-purple-100 mb-2 flex items-center">
-                                <i class="fas fa-building text-purple-600 mr-2"></i>
-                                Private CA
-                                <span class="ml-2 text-xs bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 px-2 py-0.5 rounded-full">Custom</span>
-                            </h4>
-                            <p class="text-sm text-purple-800 dark:text-purple-200 mb-3">
-                                Internal or corporate Certificate Authorities for private networks and development.
-                            </p>
-                            <ul class="text-sm text-purple-700 dark:text-purple-300 space-y-1">
-                                <li>• <strong>Cost:</strong> Varies</li>
-                                <li>• <strong>Validation:</strong> Custom</li>
-                                <li>• <strong>Wildcard:</strong> ✅ Usually supported</li>
-                                <li>• <strong>ACME Required:</strong> ✅ Yes</li>
-                                <li>• <strong>Best For:</strong> Internal networks, dev</li>
-                            </ul>
-                        </div>
-                    </div>
-
-                    <div class="mt-6 bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
-                        <h4 class="font-medium text-blue-900 dark:text-blue-100 mb-2">
-                            <i class="fas fa-cog mr-2"></i>
-                            CA Provider Configuration
-                        </h4>
-                        <ol class="text-sm text-blue-800 dark:text-blue-200 space-y-2 ml-4 list-decimal">
-                            <li>Go to <a href="/settings" class="underline hover:no-underline">Settings</a> and scroll to "Certificate Authority (CA) Providers"</li>
-                            <li>Select your default CA provider from the dropdown</li>
-                            <li>Fill in the required configuration fields for your chosen CA</li>
-                            <li>Click "Test CA Connection" to verify the configuration</li>
-                            <li>Save settings once the test succeeds</li>
-                        </ol>
-                        <p class="text-sm text-blue-700 dark:text-blue-300 mt-3">
-                            <strong>💡 Tip:</strong> You can override the default CA when creating individual certificates.
-                        </p>
-                    </div>
                 </div>
-            </div>
+            </section>
 
             <!-- DNS Providers -->
-            <div id="dns-providers" data-help-section class="bg-white dark:bg-gray-800 shadow rounded-lg">
-                <div class="px-6 py-6">
-                    <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-                        <i class="fas fa-server text-blue-600 mr-2"></i>
-                        Supported DNS Providers
+            <section id="dns-providers" data-help-section class="bg-white dark:bg-gray-800 shadow rounded-lg">
+                <div class="px-4 py-4">
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">
+                        <i class="fas fa-server text-blue-600 mr-2" aria-hidden="true"></i>DNS Providers
                     </h3>
-                    <p class="text-gray-600 dark:text-gray-300 mb-6">
-                        CertMate supports <strong>22 DNS providers</strong> for automated certificate validation. The most popular providers are listed first.
+                    <p class="text-sm text-gray-700 dark:text-gray-200 mb-3">
+                        CertMate uses the DNS-01 challenge: it places a TXT record on your zone, Let's Encrypt (or your CA) queries DNS, and once the value matches the cert is issued. You need a credential with permission to create+delete TXT records on the target zone.
                     </p>
-                    
-                    <div class="space-y-6">
-                        <!-- Primary Providers -->
-                        <div>
-                            <h4 class="font-medium text-gray-900 dark:text-white mb-4">
-                                <i class="fas fa-star text-blue-500 mr-2"></i>
-                                Supported DNS Providers
-                            </h4>
-                            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-                                <div class="text-center p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-800">
-                                    <i class="fab fa-cloudflare text-orange-500 text-lg mb-1"></i>
-                                    <div class="text-xs font-medium text-gray-900 dark:text-white">Cloudflare</div>
-                                </div>
-                                <div class="text-center p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-800">
-                                    <i class="fab fa-aws text-orange-400 text-lg mb-1"></i>
-                                    <div class="text-xs font-medium text-gray-900 dark:text-white">Route53</div>
-                                </div>
-                                <div class="text-center p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                                    <i class="fab fa-digital-ocean text-blue-600 text-lg mb-1"></i>
-                                    <div class="text-xs font-medium text-gray-900 dark:text-white">DigitalOcean</div>
-                                </div>
-                                <div class="text-center p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                                    <i class="fab fa-microsoft text-blue-600 text-lg mb-1"></i>
-                                    <div class="text-xs font-medium text-gray-900 dark:text-white">Azure DNS</div>
-                                </div>
-                                <div class="text-center p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
-                                    <i class="fab fa-google text-blue-500 text-lg mb-1"></i>
-                                    <div class="text-xs font-medium text-gray-900 dark:text-white">Google DNS</div>
-                                </div>
-                                <div class="text-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
-                                    <i class="fas fa-server text-gray-600 dark:text-gray-400 text-lg mb-1"></i>
-                                    <div class="text-xs font-medium text-gray-900 dark:text-white">PowerDNS</div>
-                                </div>
-                                <div class="text-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
-                                    <i class="fas fa-exchange-alt text-gray-600 dark:text-gray-400 text-lg mb-1"></i>
-                                    <div class="text-xs font-medium text-gray-900 dark:text-white">RFC2136</div>
-                                </div>
-                                <div class="text-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
-                                    <i class="fas fa-cloud text-green-600 text-lg mb-1"></i>
-                                    <div class="text-xs font-medium text-gray-900 dark:text-white">Linode</div>
-                                </div>
-                                <div class="text-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
-                                    <i class="fas fa-cloud text-blue-600 text-lg mb-1"></i>
-                                    <div class="text-xs font-medium text-gray-900 dark:text-white">Vultr</div>
-                                </div>
-                                <div class="text-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
-                                    <i class="fas fa-server text-red-600 text-lg mb-1"></i>
-                                    <div class="text-xs font-medium text-gray-900 dark:text-white">Hetzner</div>
-                                </div>
-                                <div class="text-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
-                                    <i class="fas fa-globe text-orange-600 text-lg mb-1"></i>
-                                    <div class="text-xs font-medium text-gray-900 dark:text-white">Gandi</div>
-                                </div>
-                                <div class="text-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
-                                    <i class="fas fa-server text-purple-600 text-lg mb-1"></i>
-                                    <div class="text-xs font-medium text-gray-900 dark:text-white">OVH</div>
-                                </div>
-                                <div class="text-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
-                                    <i class="fas fa-shopping-cart text-red-600 text-lg mb-1"></i>
-                                    <div class="text-xs font-medium text-gray-900 dark:text-white">Namecheap</div>
-                                </div>
-                                <div class="text-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
-                                    <i class="fas fa-paw text-pink-600 text-lg mb-1"></i>
-                                    <div class="text-xs font-medium text-gray-900 dark:text-white">Porkbun</div>
-                                </div>
-                                <div class="text-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
-                                    <i class="fas fa-globe text-green-600 text-lg mb-1"></i>
-                                    <div class="text-xs font-medium text-gray-900 dark:text-white">GoDaddy</div>
-                                </div>
-                                <div class="text-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
-                                    <i class="fas fa-cogs text-green-600 text-lg mb-1"></i>
-                                    <div class="text-xs font-medium text-gray-900 dark:text-white">DNS Made Easy</div>
-                                </div>
-                                <div class="text-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
-                                    <i class="fas fa-network-wired text-indigo-600 text-lg mb-1"></i>
-                                    <div class="text-xs font-medium text-gray-900 dark:text-white">NS1</div>
-                                </div>
-                                <div class="text-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
-                                    <i class="fas fa-bolt text-yellow-600 text-lg mb-1"></i>
-                                    <div class="text-xs font-medium text-gray-900 dark:text-white">Hurricane Electric</div>
-                                </div>
-                                <div class="text-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
-                                    <i class="fas fa-sync-alt text-purple-600 text-lg mb-1"></i>
-                                    <div class="text-xs font-medium text-gray-900 dark:text-white">Dynu</div>
-                                </div>
-                                <div class="text-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
-                                    <i class="fas fa-cloud text-blue-600 text-lg mb-1"></i>
-                                    <div class="text-xs font-medium text-gray-900 dark:text-white">ArvanCloud</div>
-                                </div>
-                                <div class="text-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
-                                    <i class="fas fa-globe text-teal-600 text-lg mb-1"></i>
-                                    <div class="text-xs font-medium text-gray-900 dark:text-white">Infomaniak</div>
-                                </div>
-                                <div class="text-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
-                                    <i class="fas fa-server text-gray-600 dark:text-gray-400 text-lg mb-1"></i>
-                                    <div class="text-xs font-medium text-gray-900 dark:text-white">ACME-DNS</div>
-                                </div>
-                            </div>
-                            <p class="text-sm text-gray-500 dark:text-gray-400 mt-4 text-center">
-                                <i class="fas fa-info-circle mr-1"></i>
-                                All 22 providers are available - install additional providers via requirements-extended.txt
-                            </p>
-                        </div>
+                    <p class="text-sm text-gray-700 dark:text-gray-200 mb-3">
+                        Configure providers in <a href="/settings" class="text-primary hover:underline">Settings → DNS</a>. Common ones and the minimum API permission each needs:
+                    </p>
+                    <div class="overflow-x-auto">
+                        <table class="text-sm w-full">
+                            <thead class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                <tr class="border-b border-gray-200 dark:border-gray-700">
+                                    <th class="text-left py-2 pr-4">Provider</th>
+                                    <th class="text-left py-2 pr-4">Token type</th>
+                                    <th class="text-left py-2">Minimum scope</th>
+                                </tr>
+                            </thead>
+                            <tbody class="text-gray-700 dark:text-gray-200">
+                                <tr class="border-b border-gray-100 dark:border-gray-700/50"><td class="py-2 pr-4 font-medium">Cloudflare</td><td class="py-2 pr-4">API token (scoped)</td><td class="py-2">Zone · DNS · Edit on the target zone</td></tr>
+                                <tr class="border-b border-gray-100 dark:border-gray-700/50"><td class="py-2 pr-4 font-medium">Route 53</td><td class="py-2 pr-4">IAM access key</td><td class="py-2"><code class="text-xs">route53:ChangeResourceRecordSets</code>, <code class="text-xs">route53:GetChange</code> on the hosted zone</td></tr>
+                                <tr class="border-b border-gray-100 dark:border-gray-700/50"><td class="py-2 pr-4 font-medium">DigitalOcean</td><td class="py-2 pr-4">Personal access token</td><td class="py-2">Read + Write</td></tr>
+                                <tr class="border-b border-gray-100 dark:border-gray-700/50"><td class="py-2 pr-4 font-medium">Azure DNS</td><td class="py-2 pr-4">Service principal</td><td class="py-2">DNS Zone Contributor on the zone resource</td></tr>
+                                <tr class="border-b border-gray-100 dark:border-gray-700/50"><td class="py-2 pr-4 font-medium">Google Cloud</td><td class="py-2 pr-4">Service account JSON</td><td class="py-2">DNS Administrator (or custom role with <code class="text-xs">dns.changes.create</code>)</td></tr>
+                                <tr><td class="py-2 pr-4 font-medium">PowerDNS</td><td class="py-2 pr-4">HTTP API key</td><td class="py-2">Zone write on the configured zone</td></tr>
+                            </tbody>
+                        </table>
                     </div>
+                    <p class="text-sm text-gray-700 dark:text-gray-200 mt-3">
+                        The dropdown lists 22 providers in total. The four major ones (Cloudflare, Route 53, DigitalOcean, Azure) plus Let's Encrypt-recommended clients ship in the default image. The rest are available via <code class="text-xs bg-gray-100 dark:bg-gray-700 px-1 rounded">EXTRA_REQUIREMENTS</code> at build time — see the <a href="https://github.com/fabriziosalmi/certmate#dns-providers" target="_blank" rel="noopener" class="text-primary hover:underline">README</a>.
+                    </p>
                 </div>
-            </div>
+            </section>
+
+            <!-- CA Providers -->
+            <section id="ca-providers" data-help-section class="bg-white dark:bg-gray-800 shadow rounded-lg">
+                <div class="px-4 py-4">
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">
+                        <i class="fas fa-certificate text-purple-600 mr-2" aria-hidden="true"></i>Certificate Authorities
+                    </h3>
+                    <p class="text-sm text-gray-700 dark:text-gray-200 mb-3">
+                        Pick a CA in <a href="/settings" class="text-primary hover:underline">Settings → CA</a>. You can override per-certificate at create time.
+                    </p>
+                    <ul class="text-sm text-gray-700 dark:text-gray-200 space-y-2">
+                        <li>
+                            <span class="font-medium">Let's Encrypt</span> — Free DV certs, 90 days, no EAB. Rate limit: 50 certs per registered domain per week. Default for most users.
+                        </li>
+                        <li>
+                            <span class="font-medium">DigiCert ACME</span> — Paid DV/OV/EV. <span class="font-medium">Requires External Account Binding</span> (EAB key + HMAC). Get those from your DigiCert account portal and paste them in the CA settings.
+                        </li>
+                        <li>
+                            <span class="font-medium">Private CA</span> — Any ACME-compliant internal CA. Provide the ACME directory URL and, if your CA enforces it, an EAB credential.
+                        </li>
+                    </ul>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-3">
+                        Use the <span class="font-medium">Test CA Connection</span> button in Settings to verify reachability and EAB before issuing a real cert — it counts against rate limits otherwise.
+                    </p>
+                </div>
+            </section>
 
             <!-- API Usage -->
-            <div id="api-usage" data-help-section class="bg-white dark:bg-gray-800 shadow rounded-lg">
-                <div class="px-6 py-6">
-                    <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-                        <i class="fas fa-code text-purple-600 mr-2"></i>
-                        API Usage & Examples
+            <section id="api-usage" data-help-section class="bg-white dark:bg-gray-800 shadow rounded-lg">
+                <div class="px-4 py-4">
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">
+                        <i class="fas fa-code text-indigo-600 mr-2" aria-hidden="true"></i>API
                     </h3>
-                    <div class="space-y-6">
-                        <div class="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg border border-purple-200 dark:border-purple-800">
-                            <h4 class="font-medium text-purple-900 dark:text-purple-100 mb-2">
-                                <i class="fas fa-key mr-2"></i>
-                                Authentication
-                            </h4>
-                            <p class="text-sm text-purple-800 dark:text-purple-200 mb-2">
-                                All API requests require a Bearer token in the Authorization header:
-                            </p>
-                            <code class="block bg-purple-100 dark:bg-purple-900 text-purple-900 dark:text-purple-100 p-2 rounded text-sm">
-                                Authorization: Bearer your_api_token_here
-                            </code>
+                    <p class="text-sm text-gray-700 dark:text-gray-200 mb-3">
+                        Every endpoint requires a bearer token from <a href="/settings#apikeys" class="text-primary hover:underline">Settings → API Keys</a>:
+                    </p>
+                    <pre class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100 p-3 rounded text-xs overflow-x-auto border border-gray-200 dark:border-gray-700"><code>Authorization: Bearer YOUR_TOKEN</code></pre>
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+                        <div>
+                            <h4 class="text-sm font-medium text-gray-900 dark:text-white mb-2">Common endpoints</h4>
+                            <ul class="text-xs text-gray-700 dark:text-gray-200 space-y-1 font-mono">
+                                <li><span class="text-blue-500">GET</span> /api/certificates</li>
+                                <li><span class="text-green-500">POST</span> /api/certificates/create</li>
+                                <li><span class="text-green-500">POST</span> /api/certificates/{domain}/renew</li>
+                                <li><span class="text-blue-500">GET</span> /{domain}/tls <span class="text-gray-400 not-italic">(ZIP bundle)</span></li>
+                                <li><span class="text-blue-500">GET</span> /{domain}/tls/{cert|key|chain|fullchain}</li>
+                                <li><span class="text-blue-500">GET</span> /api/activity</li>
+                                <li><span class="text-blue-500">GET</span> /api/deploy/history</li>
+                            </ul>
                         </div>
+                        <div>
+                            <h4 class="text-sm font-medium text-gray-900 dark:text-white mb-2">curl examples</h4>
+                            <pre class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100 p-3 rounded text-xs overflow-x-auto border border-gray-200 dark:border-gray-700"><code># Create a certificate
+curl -X POST http://localhost:8000/api/certificates/create \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"domain":"example.com"}'
 
-                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            <div>
-                                <h4 class="font-medium text-gray-900 dark:text-white mb-3">
-                                    <i class="fas fa-certificate text-primary mr-2"></i>
-                                    Certificate Operations
-                                </h4>
-                                <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg space-y-3">
-                                    <div>
-                                        <div class="text-sm font-medium text-gray-900 dark:text-white">List Certificates</div>
-                                        <code class="text-xs text-gray-600 dark:text-gray-300">GET /api/certificates</code>
-                                    </div>
-                                    <div>
-                                        <div class="text-sm font-medium text-gray-900 dark:text-white">Create Certificate</div>
-                                        <code class="text-xs text-gray-600 dark:text-gray-300">POST /api/certificates/create</code>
-                                    </div>
-                                    <div>
-                                        <div class="text-sm font-medium text-gray-900 dark:text-white">Renew Certificate</div>
-                                        <code class="text-xs text-gray-600 dark:text-gray-300">POST /api/certificates/{domain}/renew</code>
-                                    </div>
-                                    <div>
-                                        <div class="text-sm font-medium text-gray-900 dark:text-white">Download Certificate (ZIP)</div>
-                                        <code class="text-xs text-gray-600 dark:text-gray-300">GET /{domain}/tls</code>
-                                    </div>
-                                    <div>
-                                        <div class="text-sm font-medium text-gray-900 dark:text-white">Download Individual Component</div>
-                                        <code class="text-xs text-gray-600 dark:text-gray-300">GET /{domain}/tls/{cert|key|chain|fullchain}</code>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div>
-                                <h4 class="font-medium text-gray-900 dark:text-white mb-3">
-                                    <i class="fas fa-terminal text-primary mr-2"></i>
-                                    cURL Examples
-                                </h4>
-                                <div class="bg-gray-900 text-green-400 p-4 rounded-lg text-xs space-y-2 font-mono">
-                                    <div># Create certificate</div>
-                                    <div>curl -X POST "http://localhost:8000/api/certificates/create" \</div>
-                                    <div class="ml-2">-H "Authorization: Bearer YOUR_TOKEN" \</div>
-                                    <div class="ml-2">-H "Content-Type: application/json" \</div>
-                                    <div class="ml-2">-d '{"domain": "example.com"}'</div>
-                                    <div class="mt-3"># Download certificate (ZIP with all files)</div>
-                                    <div>curl -H "Authorization: Bearer YOUR_TOKEN" \</div>
-                                    <div class="ml-2">-o example.com_certificates.zip \</div>
-                                    <div class="ml-2">http://localhost:8000/example.com/tls</div>
-                                    <div class="mt-3"># Download individual components</div>
-                                    <div>curl -H "Authorization: Bearer YOUR_TOKEN" -o cert.pem http://localhost:8000/example.com/tls/cert</div>
-                                    <div>curl -H "Authorization: Bearer YOUR_TOKEN" -o privkey.pem http://localhost:8000/example.com/tls/key</div>
-                                    <div>curl -H "Authorization: Bearer YOUR_TOKEN" -o chain.pem http://localhost:8000/example.com/tls/chain</div>
-                                    <div>curl -H "Authorization: Bearer YOUR_TOKEN" -o fullchain.pem http://localhost:8000/example.com/tls/fullchain</div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg border border-yellow-200 dark:border-yellow-800">
-                            <h4 class="font-medium text-yellow-900 dark:text-yellow-100 mb-2">
-                                <i class="fas fa-book mr-2"></i>
-                                Complete API Documentation
-                            </h4>
-                            <p class="text-sm text-yellow-800 dark:text-yellow-200">
-                                Two flavours of API documentation are available — use Swagger for
-                                interactive try-it-out, ReDoc for read-only browsing:
-                            </p>
-                            <div class="mt-3 flex flex-wrap gap-2">
-                                <a href="/docs/" target="_blank" rel="noopener"
-                                   title="Swagger UI — interactive, run live API requests from the page"
-                                   class="inline-flex items-center px-3 py-1 bg-yellow-200 dark:bg-yellow-800 text-yellow-900 dark:text-yellow-100 rounded-md text-sm hover:bg-yellow-300 dark:hover:bg-yellow-700">
-                                    <i class="fas fa-flask mr-1" aria-hidden="true"></i>
-                                    Swagger UI <span class="opacity-70 ml-1">(/docs/, interactive)</span>
-                                </a>
-                                <a href="/redoc" target="_blank" rel="noopener"
-                                   title="ReDoc — read-only API reference, easier to browse end-to-end"
-                                   class="inline-flex items-center px-3 py-1 bg-yellow-200 dark:bg-yellow-800 text-yellow-900 dark:text-yellow-100 rounded-md text-sm hover:bg-yellow-300 dark:hover:bg-yellow-700">
-                                    <i class="fas fa-book mr-1" aria-hidden="true"></i>
-                                    ReDoc <span class="opacity-70 ml-1">(/redoc, read-only)</span>
-                                </a>
-                            </div>
+# Download full bundle as ZIP
+curl -H "Authorization: Bearer $TOKEN" \
+  -o example.com.zip \
+  http://localhost:8000/example.com/tls</code></pre>
                         </div>
                     </div>
+                    <p class="text-sm text-gray-700 dark:text-gray-200 mt-3">
+                        Full reference: <a href="/docs/" target="_blank" rel="noopener" class="text-primary hover:underline">Swagger</a> (interactive try-it-out) or <a href="/redoc" target="_blank" rel="noopener" class="text-primary hover:underline">ReDoc</a> (read-only).
+                    </p>
                 </div>
-            </div>
+            </section>
+
+            <!-- Multi-account -->
+            <section id="multi-account" data-help-section class="bg-white dark:bg-gray-800 shadow rounded-lg">
+                <div class="px-4 py-4">
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">
+                        <i class="fas fa-users text-green-600 mr-2" aria-hidden="true"></i>Multi-account DNS
+                    </h3>
+                    <p class="text-sm text-gray-700 dark:text-gray-200 mb-2">
+                        Useful when you manage zones under different cloud accounts (e.g. one Cloudflare tenant per customer, or separate Route 53 accounts for prod/staging).
+                    </p>
+                    <ol class="text-sm text-gray-700 dark:text-gray-200 space-y-1 list-decimal ml-5">
+                        <li>In <a href="/settings" class="text-primary hover:underline">Settings → DNS</a>, click <span class="font-medium">Add Account</span> on the relevant provider. Name it (e.g. <code class="text-xs bg-gray-100 dark:bg-gray-700 px-1 rounded">production</code>) and paste credentials.</li>
+                        <li>One account can be marked as default — used when a cert create request doesn't pick one explicitly.</li>
+                        <li>When creating a certificate, an account dropdown appears for providers with more than one configured account.</li>
+                        <li>From the API, pass <code class="text-xs bg-gray-100 dark:bg-gray-700 px-1 rounded">account_id</code> alongside <code class="text-xs bg-gray-100 dark:bg-gray-700 px-1 rounded">dns_provider</code>.</li>
+                    </ol>
+                </div>
+            </section>
+
+            <!-- Backup -->
+            <section id="backup-recovery" data-help-section class="bg-white dark:bg-gray-800 shadow rounded-lg">
+                <div class="px-4 py-4">
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">
+                        <i class="fas fa-archive text-amber-600 mr-2" aria-hidden="true"></i>Backup &amp; Restore
+                    </h3>
+                    <ul class="text-sm text-gray-700 dark:text-gray-200 space-y-1.5">
+                        <li><span class="font-medium">What's in a backup:</span> <code class="text-xs bg-gray-100 dark:bg-gray-700 px-1 rounded">settings.json</code> (DNS credentials, CA config, domains, users) plus every certificate file (<code class="text-xs">.pem</code>, <code class="text-xs">.key</code>, full chain). One ZIP, atomic.</li>
+                        <li><span class="font-medium">Automatic:</span> A snapshot is taken before each configuration change, restore, and before destructive ops.</li>
+                        <li><span class="font-medium">Manual:</span> <a href="/settings#backup" class="text-primary hover:underline">Settings → Backup</a> → <span class="font-medium">Create Backup</span>. Download for off-host storage.</li>
+                        <li><span class="font-medium">Restore:</span> Upload or pick an existing backup, click Restore. A pre-restore snapshot is taken automatically so you can roll back.</li>
+                        <li><span class="font-medium">Retention:</span> Last 10 by default, configurable.</li>
+                    </ul>
+                </div>
+            </section>
 
             <!-- Troubleshooting -->
-            <div id="troubleshooting" data-help-section class="bg-white dark:bg-gray-800 shadow rounded-lg">
-                <div class="px-6 py-6">
-                    <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-                        <i class="fas fa-tools text-orange-600 mr-2"></i>
-                        Troubleshooting
+            <section id="troubleshooting" data-help-section class="bg-white dark:bg-gray-800 shadow rounded-lg">
+                <div class="px-4 py-4">
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">
+                        <i class="fas fa-tools text-orange-600 mr-2" aria-hidden="true"></i>Troubleshooting
                     </h3>
-                    <div class="space-y-4">
-                        <div class="bg-red-50 dark:bg-red-900/20 p-4 rounded-lg border border-red-200 dark:border-red-800">
-                            <h4 class="font-medium text-red-900 dark:text-red-100 mb-2">
-                                <i class="fas fa-exclamation-triangle mr-2"></i>
-                                Common Issues
-                            </h4>
-                            <div class="space-y-3 text-sm">
-                                <div>
-                                    <div class="font-medium text-red-800 dark:text-red-200">DNS Provider Authentication Failed</div>
-                                    <div class="text-red-700 dark:text-red-300">
-                                        • Double-check your API credentials in <a href="/settings" class="underline">Settings</a><br>
-                                        • Ensure API tokens have proper DNS permissions<br>
-                                        • Verify domain is managed by the configured DNS provider
-                                    </div>
-                                </div>
-                                <div>
-                                    <div class="font-medium text-red-800 dark:text-red-200">Certificate Creation Timeout</div>
-                                    <div class="text-red-700 dark:text-red-300">
-                                        • DNS propagation can take up to 10 minutes<br>
-                                        • Check DNS records are properly configured<br>
-                                        • Ensure domain points to correct nameservers
-                                    </div>
-                                </div>
-                                <div>
-                                    <div class="font-medium text-red-800 dark:text-red-200">Let's Encrypt Rate Limits</div>
-                                    <div class="text-red-700 dark:text-red-300">
-                                        • Maximum 20 certificates per domain per week<br>
-                                        • Wait for rate limit window to reset<br>
-                                        • Use staging environment for testing
-                                    </div>
-                                </div>
-                            </div>
+                    <dl class="text-sm text-gray-700 dark:text-gray-200 space-y-3">
+                        <div>
+                            <dt class="font-medium text-gray-900 dark:text-white">DNS provider authentication failed</dt>
+                            <dd class="text-gray-600 dark:text-gray-300 mt-0.5">Token may be wrong, expired, or scoped too narrowly. Re-check it in your provider's console and confirm it can edit DNS records on the target zone. The <span class="font-medium">Test Connection</span> button on each provider card validates without burning a real ACME attempt.</dd>
                         </div>
-
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div class="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border border-green-200 dark:border-green-800">
-                                <h4 class="font-medium text-green-900 dark:text-green-100 mb-2">
-                                    <i class="fas fa-check-circle mr-2"></i>
-                                    Health Checks
-                                </h4>
-                                <div class="text-sm text-green-800 dark:text-green-200 space-y-1">
-                                    <div>• Service Status: <a href="/health" target="_blank" rel="noopener" class="underline">/health</a></div>
-                                    <div>• API Connectivity: <a href="/docs/" target="_blank" rel="noopener" class="underline" title="Swagger UI — interactive API explorer">/docs/ (Swagger)</a> or <a href="/redoc" target="_blank" rel="noopener" class="underline" title="ReDoc — read-only API reference">/redoc</a></div>
-                                    <div>• Certificate Status: <a href="/" class="underline">Dashboard</a></div>
-                                </div>
-                            </div>
-                            <div class="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
-                                <h4 class="font-medium text-blue-900 dark:text-blue-100 mb-2">
-                                    <i class="fas fa-question-circle mr-2"></i>
-                                    Getting Help
-                                </h4>
-                                <div class="text-sm text-blue-800 dark:text-blue-200 space-y-1 mb-3">
-                                    <div>• Check logs in Docker/service manager</div>
-                                    <div>• Verify DNS provider connectivity</div>
-                                    <div>• Test with simple domain first</div>
-                                    <div>• Review API documentation</div>
-                                </div>
-                                <div class="pt-2 border-t border-blue-200 dark:border-blue-700">
-                                    <a href="https://github.com/fabriziosalmi/certmate/issues/new/choose"
-                                       target="_blank" rel="noopener"
-                                       class="inline-flex items-center px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-md transition-colors duration-200 shadow-sm hover:shadow-md">
-                                        <i class="fab fa-github mr-2"></i>
-                                        Report Issue on GitHub
-                                        <i class="fas fa-external-link-alt ml-1 text-xs"></i>
-                                    </a>
-                                </div>
-                            </div>
+                        <div>
+                            <dt class="font-medium text-gray-900 dark:text-white">Certificate creation hangs or times out</dt>
+                            <dd class="text-gray-600 dark:text-gray-300 mt-0.5">Usually slow DNS propagation. Most providers settle within a minute or two, some take up to 10. If a particular provider is reliably slow, raise <code class="text-xs bg-gray-100 dark:bg-gray-700 px-1 rounded">dns_propagation_seconds</code> in Settings.</dd>
                         </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Advanced Features -->
-            <div id="advanced" data-help-section class="bg-white dark:bg-gray-800 shadow rounded-lg">
-                <div class="px-6 py-6">
-                    <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-                        <i class="fas fa-cogs text-gray-600 mr-2"></i>
-                        Advanced Features
-                    </h3>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div class="space-y-4">
-                            <div>
-                                <h4 class="font-medium text-gray-900 dark:text-white mb-2">
-                                    <i class="fas fa-certificate text-primary mr-2"></i>
-                                    Certificate Types
-                                </h4>
-                                <ul class="text-sm text-gray-600 dark:text-gray-300 space-y-1">
-                                    <li>• <strong>Single Domain:</strong> example.com</li>
-                                    <li>• <strong>Wildcard:</strong> *.example.com</li>
-                                    <li>• <strong>Multi-Domain (SAN):</strong> example.com, www.example.com</li>
-                                    <li>• <strong>Combined:</strong> example.com, *.example.com</li>
-                                </ul>
-                            </div>
-                            
-                            <div>
-                                <h4 class="font-medium text-gray-900 dark:text-white mb-2">
-                                    <i class="fas fa-sync-alt text-primary mr-2"></i>
-                                    Automation Features
-                                </h4>
-                                <ul class="text-sm text-gray-600 dark:text-gray-300 space-y-1">
-                                    <li>• Automatic renewal 30 days before expiry</li>
-                                    <li>• Health monitoring and deployment checks</li>
-                                    <li>• API-driven certificate management</li>
-                                    <li>• Bulk operations for multiple domains</li>
-                                </ul>
-                            </div>
+                        <div>
+                            <dt class="font-medium text-gray-900 dark:text-white">Let's Encrypt rate limit hit</dt>
+                            <dd class="text-gray-600 dark:text-gray-300 mt-0.5">50 certs per registered domain per week. The error text from acme is included in the activity log. Switch to the LE staging directory for testing — it has no rate limit and uses a separate trust anchor (browsers won't trust the cert, which is the point).</dd>
                         </div>
-                        
-                        <div class="space-y-4">
-                            <div>
-                                <h4 class="font-medium text-gray-900 dark:text-white mb-2">
-                                    <i class="fas fa-download text-primary mr-2"></i>
-                                    Certificate Downloads
-                                </h4>
-                                <ul class="text-sm text-gray-600 dark:text-gray-300 space-y-1">
-                                    <li>• <strong>ZIP Bundle:</strong> All files in one archive</li>
-                                    <li>• <strong>Individual Files:</strong> cert.pem, chain.pem, etc.</li>
-                                    <li>• <strong>Full Chain:</strong> Certificate + intermediate</li>
-                                    <li>• <strong>Private Key:</strong> Secure key file</li>
-                                </ul>
-                            </div>
-                            
-                            <div>
-                                <h4 class="font-medium text-gray-900 dark:text-white mb-2">
-                                    <i class="fas fa-shield-alt text-primary mr-2"></i>
-                                    Security Features
-                                </h4>
-                                <ul class="text-sm text-gray-600 dark:text-gray-300 space-y-1">
-                                    <li>• Role-based access control (viewer/operator/admin)</li>
-                                    <li>• Scoped API key management</li>
-                                    <li>• Bearer token API authentication</li>
-                                    <li>• Secure file permissions (600/700)</li>
-                                    <li>• Audit logging with activity timeline</li>
-                                </ul>
-                            </div>
+                        <div>
+                            <dt class="font-medium text-gray-900 dark:text-white">Deployment status keeps showing "unknown"</dt>
+                            <dd class="text-gray-600 dark:text-gray-300 mt-0.5">CertMate probes the cert at the deployment endpoint(s) you configured. If none are set, status stays unknown — that's expected. Configure deployment targets in <a href="/settings#deploy" class="text-primary hover:underline">Settings → Deploy</a> or click <span class="font-medium">Check All</span> from the dashboard.</dd>
                         </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Multi-Account Support -->
-            <div id="multi-account" data-help-section class="bg-white dark:bg-gray-800 shadow rounded-lg">
-                <div class="px-6 py-6">
-                    <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-                        <i class="fas fa-users text-green-600 mr-2"></i>
-                        Multi-Account DNS Provider Support
-                    </h3>
-                    <p class="text-gray-600 dark:text-gray-300 mb-6">
-                        Configure multiple accounts for the same DNS provider to support enterprise environments, 
-                        permission separation, and multi-tenant setups.
+                        <div>
+                            <dt class="font-medium text-gray-900 dark:text-white">UI looks broken / Alpine.js failed to load</dt>
+                            <dd class="text-gray-600 dark:text-gray-300 mt-0.5">A red banner appears at the top of the page when this happens. Usually a strict CSP blocking the Alpine CDN, or an offline container. Try a hard refresh (<kbd class="text-xs bg-gray-100 dark:bg-gray-700 px-1 rounded">Cmd+Shift+R</kbd> / <kbd class="text-xs bg-gray-100 dark:bg-gray-700 px-1 rounded">Ctrl+F5</kbd>) and check the browser console for the blocked URL.</dd>
+                        </div>
+                    </dl>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-4">
+                        Liveness: <a href="/health" target="_blank" rel="noopener" class="text-primary hover:underline">/health</a> returns JSON with scheduler, disk, and cert directory checks — useful as an external probe.
                     </p>
-                    
-                    <div class="space-y-6">
-                        <!-- Benefits -->
-                        <div class="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border border-green-200 dark:border-green-800">
-                            <h4 class="font-medium text-green-900 dark:text-green-100 mb-3">
-                                <i class="fas fa-check-circle mr-2"></i>
-                                Benefits
-                            </h4>
-                            <ul class="text-sm text-green-800 dark:text-green-200 space-y-1">
-                                <li>• <strong>Organization Separation:</strong> Different accounts for production, staging, and development</li>
-                                <li>• <strong>Client Management:</strong> Separate Cloudflare accounts for different clients</li>
-                                <li>• <strong>Permission Isolation:</strong> Limit API token scope to specific domains or zones</li>
-                                <li>• <strong>Team Collaboration:</strong> Multiple team members with their own credentials</li>
-                                <li>• <strong>Backup Redundancy:</strong> Fallback accounts for high availability</li>
-                            </ul>
-                        </div>
-
-                        <!-- How to Use -->
-                        <div>
-                            <h4 class="font-medium text-gray-900 dark:text-white mb-3">
-                                <i class="fas fa-cog mr-2"></i>
-                                How to Configure Multiple Accounts
-                            </h4>
-                            <div class="space-y-4">
-                                <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
-                                    <h5 class="font-medium text-gray-900 dark:text-white mb-2">1. Add New Account</h5>
-                                    <ul class="text-sm text-gray-600 dark:text-gray-300 space-y-1">
-                                        <li>• Go to Settings and select your DNS provider</li>
-                                        <li>• Click the "Add Account" button</li>
-                                        <li>• Enter account name, credentials, and optional description</li>
-                                        <li>• Choose whether to set as default account</li>
-                                    </ul>
-                                </div>
-                                
-                                <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
-                                    <h5 class="font-medium text-gray-900 dark:text-white mb-2">2. Manage Accounts</h5>
-                                    <ul class="text-sm text-gray-600 dark:text-gray-300 space-y-1">
-                                        <li>• Edit account details and credentials</li>
-                                        <li>• Set or change the default account</li>
-                                        <li>• Delete unused accounts</li>
-                                        <li>• View account count indicator</li>
-                                    </ul>
-                                </div>
-                                
-                                <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
-                                    <h5 class="font-medium text-gray-900 dark:text-white mb-2">3. Use During Certificate Creation</h5>
-                                    <ul class="text-sm text-gray-600 dark:text-gray-300 space-y-1">
-                                        <li>• Select DNS provider in certificate creation form</li>
-                                        <li>• Choose specific account or leave blank for default</li>
-                                        <li>• Account selection appears automatically for multi-account providers</li>
-                                    </ul>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Backward Compatibility -->
-                        <div class="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
-                            <h4 class="font-medium text-blue-900 dark:text-blue-100 mb-2">
-                                <i class="fas fa-shield-alt mr-2"></i>
-                                Backward Compatibility
-                            </h4>
-                            <p class="text-sm text-blue-800 dark:text-blue-200">
-                                Existing single-account configurations continue to work unchanged. The system automatically 
-                                migrates them to multi-account format when you add additional accounts.
-                            </p>
-                        </div>
-
-                        <!-- API Support -->
-                        <div>
-                            <h4 class="font-medium text-gray-900 dark:text-white mb-3">
-                                <i class="fas fa-code mr-2"></i>
-                                API Support
-                            </h4>
-                            <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
-                                <p class="text-sm text-gray-600 dark:text-gray-300 mb-2">
-                                    Certificate creation with specific account:
-                                </p>
-                                <code class="block bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 p-3 rounded text-sm">
-POST /api/certificates/create
-{
-  "domain": "example.com",
-  "dns_provider": "cloudflare",
-  "account_id": "production"
-}
-                                </code>
-                            </div>
-                        </div>
-                    </div>
                 </div>
-            </div>
+            </section>
 
-            <!-- Backup & Recovery -->
-            <div id="backup-recovery" data-help-section class="bg-white dark:bg-gray-800 shadow rounded-lg">
-                <div class="px-6 py-6">
-                    <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-                        <i class="fas fa-shield-alt text-blue-600 mr-2"></i>
-                        Backup & Recovery
+            <!-- Report an issue -->
+            <section id="report-issue" data-help-section class="bg-white dark:bg-gray-800 shadow rounded-lg">
+                <div class="px-4 py-4">
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">
+                        <i class="fab fa-github text-gray-700 dark:text-gray-300 mr-2" aria-hidden="true"></i>Report an issue
                     </h3>
-                    <p class="text-gray-600 dark:text-gray-300 mb-6">
-                        CertMate provides comprehensive backup and restore capabilities with unified backup system, 
-                        ensuring your data is protected and recoverable with atomic consistency.
+                    <p class="text-sm text-gray-700 dark:text-gray-200 mb-2">
+                        When something goes wrong, including the items below makes the fix faster — most reports stall on missing context, not on hard root causes.
                     </p>
-                    
-                    <div class="space-y-6">
-                        <!-- Automatic Backups -->
-                        <div>
-                            <h4 class="font-medium text-gray-900 dark:text-white mb-3">
-                                <i class="fas fa-sync-alt text-green-600 mr-2"></i>
-                                Automatic Backups
-                            </h4>
-                            <div class="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border border-green-200 dark:border-green-800">
-                                <h5 class="font-medium text-green-900 dark:text-green-100 mb-2">
-                                    <i class="fas fa-archive mr-2"></i>Unified Backup System
-                                </h5>
-                                <ul class="text-sm text-green-800 dark:text-green-200 space-y-1">
-                                    <li>• Triggered automatically on configuration changes</li>
-                                    <li>• Creates atomic snapshots of settings and certificates</li>
-                                    <li>• Includes DNS provider settings and accounts</li>
-                                    <li>• Saves domain configurations and all certificate files</li>
-                                    <li>• Ensures data consistency between settings and certificates</li>
-                                    <li>• Compressed ZIP format for efficient storage</li>
-                                </ul>
-                            </div>
-                        </div>
-
-                        <!-- Manual Backups -->
-                        <div>
-                            <h4 class="font-medium text-gray-900 dark:text-white mb-3">
-                                <i class="fas fa-hand-pointer text-orange-600 mr-2"></i>
-                                Manual Backups
-                            </h4>
-                            <div class="bg-orange-50 dark:bg-orange-900/20 p-4 rounded-lg border border-orange-200 dark:border-orange-800">
-                                <p class="text-sm text-orange-800 dark:text-orange-200 mb-3">
-                                    Create backups on-demand from the <a href="/settings" class="underline hover:no-underline">Settings</a> page:
-                                </p>
-                                <div>
-                                    <h5 class="font-medium text-orange-900 dark:text-orange-100 mb-2">Create Backup</h5>
-                                    <p class="text-sm text-orange-800 dark:text-orange-200">
-                                        Click "Create Backup" to create a unified backup containing both current configuration 
-                                        (DNS providers, domains, application settings) and all certificates with their files.
-                                        This ensures complete atomic consistency between settings and certificates.
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Backup Management -->
-                        <div>
-                            <h4 class="font-medium text-gray-900 dark:text-white mb-3">
-                                <i class="fas fa-archive text-purple-600 mr-2"></i>
-                                Backup Management
-                            </h4>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
-                                    <h5 class="font-medium text-gray-900 dark:text-white mb-2">
-                                        <i class="fas fa-download mr-2"></i>Download & Restore
-                                    </h5>
-                                    <ul class="text-sm text-gray-600 dark:text-gray-300 space-y-1">
-                                        <li>• View all backups in the Settings page</li>
-                                        <li>• Download backups for external storage</li>
-                                        <li>• Restore from any previous backup atomically</li>
-                                        <li>• Preview backup contents and metadata</li>
-                                        <li>• Automatic pre-restore backup creation</li>
-                                    </ul>
-                                </div>
-                                <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
-                                    <h5 class="font-medium text-gray-900 dark:text-white mb-2">
-                                        <i class="fas fa-history mr-2"></i>Retention Policy
-                                    </h5>
-                                    <ul class="text-sm text-gray-600 dark:text-gray-300 space-y-1">
-                                        <li>• Automatic cleanup of old backups</li>
-                                        <li>• Configurable retention period</li>
-                                        <li>• Keeps last 10 backups by default</li>
-                                        <li>• Manual deletion of specific backups</li>
-                                    </ul>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Best Practices -->
-                        <div class="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg border border-yellow-200 dark:border-yellow-800">
-                            <h4 class="font-medium text-yellow-900 dark:text-yellow-100 mb-2">
-                                <i class="fas fa-lightbulb mr-2"></i>
-                                Best Practices
-                            </h4>
-                            <ul class="text-sm text-yellow-800 dark:text-yellow-200 space-y-1">
-                                <li>• Create manual backups before major configuration changes</li>
-                                <li>• Download important backups to external storage systems</li>
-                                <li>• Test backup restoration in a staging environment</li>
-                                <li>• Monitor backup creation for any failures</li>
-                                <li>• Keep multiple generations of backups for different restore points</li>
-                                <li>• Use unified backups for guaranteed data consistency</li>
-                            </ul>
-                        </div>
+                    <ul class="text-sm text-gray-700 dark:text-gray-200 space-y-1 list-disc ml-5">
+                        <li>CertMate version (footer of every page, or <code class="text-xs bg-gray-100 dark:bg-gray-700 px-1 rounded">/health</code>)</li>
+                        <li>How CertMate is running (Docker tag / Kubernetes / bare gunicorn) and host OS</li>
+                        <li>Steps to reproduce, with the domain or operation involved if relevant</li>
+                        <li>What you expected vs. what happened</li>
+                        <li>Browser console errors (<kbd class="text-xs bg-gray-100 dark:bg-gray-700 px-1 rounded">F12</kbd> → Console) for UI issues</li>
+                        <li>Container or gunicorn logs around the failure timestamp (redact tokens before pasting)</li>
+                        <li><a href="/health" target="_blank" rel="noopener" class="text-primary hover:underline">/health</a> JSON output</li>
+                        <li>Screenshots help — especially for layout glitches</li>
+                    </ul>
+                    <div class="mt-4">
+                        <a href="https://github.com/fabriziosalmi/certmate/issues/new/choose"
+                           target="_blank" rel="noopener"
+                           class="inline-flex items-center px-4 py-2 bg-gray-900 hover:bg-gray-800 text-white text-sm font-medium rounded-md transition-colors">
+                            <i class="fab fa-github mr-2" aria-hidden="true"></i>
+                            Open an issue on GitHub
+                            <i class="fas fa-external-link-alt ml-2 text-xs" aria-hidden="true"></i>
+                        </a>
                     </div>
                 </div>
-            </div>
+            </section>
 
-            <!-- No-results placeholder for B1 search (hidden until the
-                 search filter zeroes out all sections). role=status so
-                 SR announces it when toggled visible. -->
+            <!-- What's new (changelog excerpt) -->
+            <section id="whats-new" data-help-section class="bg-white dark:bg-gray-800 shadow rounded-lg">
+                <div class="px-4 py-4">
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                        <i class="fas fa-star text-yellow-500 mr-2" aria-hidden="true"></i>What's new
+                    </h3>
+                    <p class="text-sm text-gray-700 dark:text-gray-200">
+                        Release notes for every version live in
+                        <a href="https://github.com/fabriziosalmi/certmate/blob/main/RELEASE_NOTES.md" target="_blank" rel="noopener" class="text-primary hover:underline">RELEASE_NOTES.md</a>
+                        on the repository — kept in sync with what the running image actually contains.
+                    </p>
+                </div>
+            </section>
+
+            <!-- No-results placeholder for the in-page search. -->
             <div id="noHelpResults" class="hidden bg-white dark:bg-gray-800 shadow rounded-lg p-8 text-center" role="status" aria-live="polite">
                 <i class="fas fa-search text-3xl text-gray-300 dark:text-gray-600 mb-3 block" aria-hidden="true"></i>
                 <p class="text-sm font-medium text-gray-700 dark:text-gray-200">No help sections match your search.</p>
                 <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Try a different term, or clear the search to see the full guide.</p>
             </div>
+
+            <!-- Footer: one-line about + link. No marketing copy — the
+                 source code is the documentation of intent. -->
+            <p class="text-xs text-center text-gray-400 dark:text-gray-500 mt-6 px-4">
+                CertMate is open source.
+                <a href="https://github.com/fabriziosalmi/certmate" target="_blank" rel="noopener" class="hover:text-primary underline">github.com/fabriziosalmi/certmate</a>
+            </p>
         </div>
     </div>
 
     <script>
-    // B1: in-page help search. Filters the [data-help-section] cards by
-    // plain substring match on their textContent. Quick Links grid is
-    // hidden while a term is active because it's nav, not content —
-    // the user is asking "which section talks about X", and Quick
-    // Links is the table of contents not the content.
+    // In-page help search. Filters [data-help-section] blocks by plain
+    // substring match on textContent. The section-nav strip stays
+    // visible during search — it's how the user reorients when the
+    // visible content shrinks.
     (function() {
         var input = document.getElementById('helpSearch');
         if (!input) return;
         var sections = document.querySelectorAll('[data-help-section]');
         var noResults = document.getElementById('noHelpResults');
-        var quickLinks = document.getElementById('quickLinksGrid');
         var debounce;
 
         function applyFilter() {
@@ -968,10 +323,8 @@ POST /api/certificates/create
             if (!term) {
                 sections.forEach(function(s) { s.classList.remove('hidden'); });
                 if (noResults) noResults.classList.add('hidden');
-                if (quickLinks) quickLinks.classList.remove('hidden');
                 return;
             }
-            if (quickLinks) quickLinks.classList.add('hidden');
             var anyMatch = false;
             sections.forEach(function(s) {
                 var matches = (s.textContent || '').toLowerCase().indexOf(term) !== -1;
@@ -986,9 +339,7 @@ POST /api/certificates/create
             debounce = setTimeout(applyFilter, 200);
         });
 
-        // Escape clears the search and restores the full page in one
-        // keystroke. Common UX pattern matching browsers' built-in
-        // Ctrl+F behaviour.
+        // Escape clears the search in one keystroke (browser-Ctrl+F style).
         input.addEventListener('keydown', function(e) {
             if (e.key === 'Escape') {
                 e.preventDefault();
