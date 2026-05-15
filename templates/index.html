@@ -280,19 +280,15 @@
                         </button>
                     </div>
                     
-                    <!-- Quick Info -->
+                    <!-- Help pointer (replaced Quick Tips bullets that
+                         duplicated Help page content) -->
                     <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4">
                         <div class="flex items-start">
-                            <i class="fas fa-lightbulb text-blue-500 mt-0.5 mr-3"></i>
-                            <div class="text-sm text-blue-800 dark:text-blue-300">
-                                <p class="font-medium">💡 Quick Tips:</p>
-                                <ul class="mt-1 space-y-1 text-xs">
-                                    <li>• Wildcard certificates work for unlimited subdomains</li>
-                                    <li>• DigiCert requires EAB credentials (configured in Settings)</li>
-                                    <li>• Private CAs are perfect for internal/corporate use</li>
-                                    <li>• Certificates auto-renew 30 days before expiry</li>
-                                </ul>
-                            </div>
+                            <i class="fas fa-lightbulb text-blue-500 mt-0.5 mr-3" aria-hidden="true"></i>
+                            <p class="text-sm text-blue-800 dark:text-blue-300">
+                                Need a hand with wildcards, DigiCert EAB, Private CAs, or auto-renewal?
+                                <a href="/help" class="font-medium underline hover:text-blue-900 dark:hover:text-blue-100">Read the certificates guide</a>.
+                            </p>
                         </div>
                     </div>
                 </form>
