@@ -21,12 +21,12 @@
                             <option value="30d">Last 30 days</option>
                         </select>
                         <select id="filterOp" aria-label="Filter by operation type" class="px-3 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary">
-                            <option value="">All Operations</option>
+                            <option value="">All user activity</option>
                             <option value="create">Created</option>
                             <option value="renew">Renewed</option>
                             <option value="revoke">Revoked</option>
                             <option value="download">Downloaded</option>
-                            <option value="api_request">API Request</option>
+                            <option value="api_request">API requests only</option>
                         </select>
                         <button type="button" onclick="loadActivity()" class="px-2.5 py-1.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition" title="Refresh" aria-label="Refresh activity log">
                             <i class="fas fa-sync"></i>
@@ -248,6 +248,13 @@
                     var hasMore = rawCount >= currentLimit && currentLimit < ACTIVITY_MAX_LIMIT;
                     if (opFilter) {
                         entries = entries.filter(function(e) { return e.operation === opFilter; });
+                    } else {
+                        // Default view hides api_request entries: those are
+                        // technical audit rows (HTTP method, status code)
+                        // more useful as a dedicated audit log than mixed in
+                        // with user-driven actions. The user opts in via the
+                        // "API requests only" filter.
+                        entries = entries.filter(function(e) { return e.operation !== 'api_request'; });
                     }
                     if (dateFilter) {
                         entries = entries.filter(function(e) { return passesDateFilter(e, dateFilter); });
