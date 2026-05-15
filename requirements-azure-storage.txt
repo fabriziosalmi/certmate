@@ -1,3 +1,12 @@
 # Optional dependencies for Azure Key Vault storage backend
 azure-keyvault-secrets>=4.7.0
+azure-keyvault-certificates>=4.7.0
 azure-identity>=1.12.0
+
+# pyca/cryptography is already pulled in by the main requirements files
+# (certbot needs it), but the Certificate-object code path uses
+# `load_pem_x509_certificates` (plural form, added in 36.0) and the
+# PKCS12 builder. Pin a floor explicitly here so a layered install that
+# starts from a stripped-down base fails loudly with a clear constraint
+# error rather than an opaque ImportError at runtime.
+cryptography>=41.0.0

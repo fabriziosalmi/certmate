@@ -1,3 +1,14 @@
+## Unreleased
+
+### Features
+- **Azure Key Vault stale read detection in `both` mode**: the two storage surfaces (Secrets and Certificate objects) can diverge when a renewal succeeds on one surface but fails on the other. `retrieve_certificate` now compares the `updated_on` timestamps of both surfaces and returns whichever is freshest, preventing stale reads from surface skew.
+- **Azure Key Vault Certificate-object support**: the Azure Key Vault storage backend can now persist certificates as native `Certificate` objects (PKCS12) in addition to — or instead of — the existing per-PEM Secrets layout. The mode is controlled by `certificate_storage.azure_keyvault.storage_mode` (`secrets` / `certificate` / `both`, default `secrets` for backwards compatibility). Certificates imported in `certificate` or `both` mode get `issuer_name="Unknown"` so Key Vault does not try to renew them — CertMate stays the source of truth — and carry domain/DNS-provider/email/etc. metadata as tags. Native Certificate objects unlock direct binding from App Service, Application Gateway, Front Door, API Management and AKS Ingress without exporting/importing PFX manually. A new admin-only endpoint `POST /api/storage/azure-keyvault/backfill-certificates` (and a "Backfill Certificate objects" button in Settings → Storage) imports Certificate objects for existing Secrets-only domains, skipping any already imported. The backfill endpoint accepts an optional `?limit=N` query parameter that caps how many domains it processes per call — large vaults can paginate by calling repeatedly until the response reports `remaining: 0`. The Service Principal needs Certificates `Get/List/Import/Delete` in addition to its previous Secrets permissions in `certificate`/`both` mode.
+
+### Bug Fixes
+- **CRC-aware secret domain listing in Azure Key Vault**: the regex filter in `_list_secret_domains` was `endswith('-metadata')`, which never matched any secret in production because `_sanitize_secret_name` always appends an 8-char CRC32 suffix. Anchored the regex to `^cert-.+-metadata-[0-9a-f]{8}$`. Without this fix, `list_certificates()` and the backfill endpoint would walk an empty domain list for every Azure Key Vault backend, silently showing zero certificates in the list view.
+
+---
+
 ## v2.4.17 (Patch — two community fixes from @rocogamer)
 
 Bundle of two small, surgical community PRs from [@rocogamer](https://github.com/rocogamer) that came out of the maintainer-feedback loop earlier this session. Both are mergeable as-is and ship together because each is too small for a release of its own.
@@ -249,7 +260,7 @@ Escalation of a finding the audit rated INFO/⚠️ in its coverage matrix. `Dow
 The decorator stays `viewer` so the authn check still fires, and the handler now gates per file:
 
 | Path | Allowed roles |
-|---|---|
+|---|---|---|
 | `?file=cert.pem`, `?file=chain.pem`, `?file=fullchain.pem` | viewer, operator, admin |
 | `?include_private=0` (public-only ZIP, new) | viewer, operator, admin |
 | `?file=privkey.pem`, `?file=combined.pem`, `?format=json`, default ZIP / `?include_private=1` | operator, admin |
