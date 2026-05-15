@@ -15,6 +15,13 @@ def register_auth_routes(app, managers, require_web_auth, auth_manager,
         """Login page"""
         if not auth_manager.is_local_auth_enabled() or not auth_manager.has_any_users():
             return redirect(url_for('index'))
+        # If the visitor already has a valid session cookie, skip rendering
+        # the login form entirely and bounce to the dashboard. Doing this
+        # server-side avoids the brief flash of the login UI before the
+        # client-side /api/auth/me probe completes (4.2 fix).
+        session_id = request.cookies.get('certmate_session')
+        if session_id and auth_manager.validate_session(session_id):
+            return redirect(url_for('index'))
         return render_template('login.html')
 
     @app.route('/api/auth/login', methods=['POST'])
