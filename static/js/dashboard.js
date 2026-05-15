@@ -146,9 +146,9 @@
         var rows = [];
         for (var i = 0; i < count; i++) {
             rows.push(
-                '<div class="bg-white dark:bg-surface-card rounded-xl p-4" aria-hidden="true">' +
-                    '<div class="skeleton h-4 w-16 mb-2"></div>' +
-                    '<div class="skeleton h-7 w-10"></div>' +
+                '<div class="bg-white dark:bg-surface-card rounded-xl px-3 py-2" aria-hidden="true">' +
+                    '<div class="skeleton h-3 w-16 mb-1"></div>' +
+                    '<div class="skeleton h-6 w-8"></div>' +
                 '</div>'
             );
         }
@@ -169,14 +169,19 @@
         var statsContainer = document.getElementById('statsCards');
 
         function statCard(label, value, colorClass, iconClass, valueId, subtitle) {
+            // Compact layout: label + icon on a single inline row, value
+            // underneath. Drops vertical footprint by ~40% vs. the
+            // previous icon-on-the-left card while keeping all four
+            // metrics legible side-by-side on md+ screens.
             return '<div class="bg-white dark:bg-surface-card overflow-hidden shadow-card rounded-xl hover:shadow-elevated transition-shadow duration-200">' +
-                '<div class="p-4"><div class="flex items-center">' +
-                '<i class="fas ' + iconClass + ' ' + colorClass + ' text-lg mr-3 flex-shrink-0"></i>' +
-                '<div class="flex-1 min-w-0">' +
+                '<div class="px-3 py-2">' +
+                '<div class="flex items-center justify-between gap-2">' +
                 '<p class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">' + CertMate.escapeHtml(label) + '</p>' +
-                '<p class="text-xl font-bold ' + colorClass + ' tabular-nums"' + (valueId ? ' id="' + valueId + '"' : '') + '>' + value + '</p>' +
-                (subtitle ? '<p class="text-xs text-gray-400 dark:text-gray-500">' + subtitle + '</p>' : '') +
-                '</div></div></div></div>';
+                '<i class="fas ' + iconClass + ' ' + colorClass + ' text-sm flex-shrink-0"></i>' +
+                '</div>' +
+                '<p class="text-lg font-bold ' + colorClass + ' tabular-nums leading-none mt-1"' + (valueId ? ' id="' + valueId + '"' : '') + '>' + value + '</p>' +
+                (subtitle ? '<p class="text-xs text-gray-400 dark:text-gray-500 leading-none mt-1">' + subtitle + '</p>' : '') +
+                '</div></div>';
         }
 
         statsContainer.innerHTML = [
@@ -494,7 +499,7 @@
                     '<div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3 mb-6">' +
                     '<p class="text-xs text-amber-800 dark:text-amber-200"><i class="fas fa-shield-alt mr-1"></i><strong>Security:</strong> Authentication is disabled by default. Enable it before exposing CertMate to the internet.</p>' +
                     '</div>' +
-                    '<div class="text-center"><button onclick="document.getElementById(\'domain\').focus()" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary hover:bg-secondary"><i class="fas fa-plus mr-2"></i>Create Certificate</button></div>' +
+                    '<div class="text-center"><button type="button" onclick="openCreateCertForm()" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary hover:bg-secondary"><i class="fas fa-plus mr-2"></i>Create Certificate</button></div>' +
                     '</div></div>' +
                     '</td></tr>';
             }

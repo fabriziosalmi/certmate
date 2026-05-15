@@ -1,3 +1,64 @@
+## v2.5.1 (Patch — v2.5.0 follow-up: 9 fixes from manual browser testing)
+
+Nine small, scoped follow-ups caught during the manual browser pass on the v2.5.0 image. Each commit is one fix, mergeable in isolation. No API breakage, no data migration, no new env vars.
+
+### `fix(theme)` — only one toggle icon visible at a time
+
+The v2.5.0 swap from inline `style.display` to `classList.toggle('hidden')` broke the dark-mode toggle: FontAwesome's `.fas { display: inline-block }` is loaded after `tailwind.min.css` with equal specificity, so Tailwind's `.hidden` lost the cascade and both moon + sun icons rendered at once. Replaced the JS sync entirely with two CSS rules in `<head>` keyed off the `dark` class on `<html>` — ID-selector specificity (100) beats `.fas` (10), no `!important` needed, no FOUC, no JS race.
+
+### `fix(settings)` — restore icon → text gap on the tab nav
+
+The settings tab nav used `ml-1.5` on the label span. That class only appeared at this single callsite, so PurgeCSS dropped it from the prebuilt `tailwind.min.css` and the gap collapsed to zero. Switched to `ml-2`, which is bundled (32 callsites repo-wide). 2px visual delta.
+
+### `fix(redoc)` — point at the real swagger.json endpoint
+
+`/redoc` has been initialising ReDoc against `/static/swagger.json` since v2.2.0, but that static file has never existed — the OpenAPI spec is served by Flask-RESTx at `/api/swagger.json`. The bug went unnoticed because `/redoc` was an undocumented URL until v2.5.0 added it to the desktop nav and to the help page, surfacing the 404 to actual users.
+
+### `fix(dashboard)` — single-row top toolbar (tabs + Create button)
+
+Reflow the dashboard top-row so the cert-type toggle (Server / Client) sits on the same line as the **Create New Certificate** button on the right, instead of the button taking its own row underneath. `flex-wrap` lets the button drop to a second line on narrow viewports. The visual win is downstream: the stat cards and the certificate list move up by one row's worth of pixels.
+
+### `fix(dashboard)` — compact stat cards
+
+Drop the vertical footprint of the four metric cards (Total, Valid, Expiring, Deployed) by ~40%. The previous layout used a horizontal icon-then-label-and-value composition with `p-4` padding; the new layout stacks label + icon on one row, value on a second, with `px-3 py-2`. The skeleton placeholder is bumped down in lockstep so the pre-paint render matches the real card height — no layout shift when the API call resolves.
+
+### `fix(dashboard)` — empty-state "Create Certificate" button now works
+
+The CTA inside the welcome / empty-state block called `.focus()` directly on `#domain`. That input lives inside the create form container which is `display:none` by default, so `focus()` ran against a hidden element and silently did nothing — clicking the button looked broken. Added an `openCreateCertForm()` helper next to `toggleCreateCertForm()` that expands the form first (no-op if already open), focuses the domain input, and scrolls it into view. The top-right Create button is unaffected.
+
+### `fix(help)` — rewrite for user help, drop marketing, theme-aware code blocks
+
+Major surgery on the help page. The previous version was structured around a 6-card "quick links" grid duplicating the section headings below, an "About CertMate" marketing block, and per-feature promo cards under "What's New" — all of which read like the README, not like help.
+
+- Replaced the 6-card grid + scattered changelog link with one horizontal section-nav strip at the top (Quick Start, DNS, CA, API, Multi-account, Backup, Troubleshooting, Report an issue, What's new, Full changelog). Scrolls horizontally on narrow viewports.
+- Removed the "About CertMate" block entirely. Replaced with a single-line footer: *"CertMate is open source. github.com/fabriziosalmi/certmate"*.
+- Dropped the "What's New" feature-card grid. Now a single sentence linking to `RELEASE_NOTES.md`.
+- All section cards switched to `px-4 py-4` (was `px-6 py-6`): ~30% less vertical footprint.
+- Rewrote content for self-service diagnosis. DNS section gains a 6-row table mapping provider → token type → minimum API scope. CA section trimmed to 3 bullets, calls out EAB requirement on DigiCert + Private CA explicitly. Troubleshooting is now a `<dl>` with 5 concrete failure modes (DNS auth, propagation timeout, LE rate limit, deployment "unknown" status, Alpine.js load failure) plus the fix.
+- **New "Report an issue" section** with a diagnostic checklist (version, runtime, repro steps, console errors, `/health` output, screenshots) and a GitHub issue CTA — concrete artifacts the maintainer needs, not marketing copy.
+- `/health` link added to the top-right alongside Swagger / ReDoc so users can grab a one-line system status to attach.
+- **Theme-aware code blocks**: the two `<pre>` snippets used `bg-gray-900 text-green-300` unconditionally, which read as foreign dark islands inside the white cards in light mode. Switched to `bg-gray-100 text-gray-800` with `dark:` variants — terminal styling in dark mode, integrated with the surrounding card in light mode.
+
+Rendered page weight: 1358 → 709 lines.
+
+### `fix(palette)` — Cmd+K palette: adaptive height, no scrollbar when the viewport allows
+
+The Cmd+K palette's results pane had a fixed `max-h-72` (288px), which produced a scrollbar even on tall viewports where every result would fit without it. Replaced the static cap with a viewport-aware size computed at `open()` time, with a resize listener for live re-sizing while the palette is open. Floor of 180px keeps ~3 rows visible on genuinely short windows.
+
+### `fix(layout)` — reserve the scrollbar gutter to prevent horizontal shift
+
+Navigating between pages of different heights — or between settings sub-tabs (DNS short, Backup tall) — caused the whole layout to jump ~15px horizontally as the scrollbar appeared / disappeared between renders. The shift was small but constant and made the UI feel unstable. Added `scrollbar-gutter: stable; overflow-y: scroll;` on `<html>`. `scrollbar-gutter` does the right thing on Chrome 94+ / Firefox 97+ / Safari 16+; `overflow-y: scroll` covers older Safari / iOS as a fallback.
+
+### Tests
+
+Unit suite green pre-push. CI runs the same suite plus build and security-scan jobs.
+
+### Backward compatibility
+
+All changes are at the template / asset / client-side layer plus the version bump. No API, schema, or env-var changes.
+
+---
+
 ## v2.5.0 (Minor — v3 UI massive pass: 51 fixes across all templates)
 
 A focused, single-branch sweep of the entire UI surface (`templates/`, `static/js/`, `static/css/`). 51 commits, each scoped to one fix, organized into four waves: cross-cutting refactors (R-1..R-6), per-page quick wins (QW-1..QW-15), per-page Tier A / Tier B work, and per-page section passes (2.x base, 3.x dashboard, 4.x settings, 5.x activity, 6.x login, 7.x help, 8.x cross-cutting).
