@@ -34,9 +34,10 @@
                     </div>
                 </div>
             </div>
-            <div id="activityList" class="divide-y divide-gray-100 dark:divide-gray-700/50">
+            <ul id="activityList" role="feed" aria-busy="false" aria-label="Activity log"
+                class="divide-y divide-gray-100 dark:divide-gray-700/50 list-none m-0 p-0">
                 <!-- Skeleton rows; replaced by JS once /api/activity responds. -->
-            </div>
+            </ul>
         </div>
     </div>
 
@@ -135,12 +136,14 @@
                 hint = 'Check your network connection and try the Refresh button.';
             }
             console.error('Error loading activity:', status || 'no-status', rawErr);
-            document.getElementById('activityList').innerHTML =
-                '<div class="px-6 py-10 text-center">' +
+            var list = document.getElementById('activityList');
+            list.setAttribute('aria-busy', 'false');
+            list.innerHTML =
+                '<li role="alert" class="px-6 py-10 text-center">' +
                     '<i class="fas fa-exclamation-circle text-red-400 text-2xl mb-3 block"></i>' +
                     '<div class="text-sm font-medium text-gray-700 dark:text-gray-200">' + escapeHtml(msg) + '</div>' +
                     '<p class="mt-2 text-xs text-gray-500 dark:text-gray-400">' + hint + '</p>' +
-                '</div>';
+                '</li>';
         }
 
         // Build a single lowercase search blob per entry. Operation labels
@@ -180,7 +183,10 @@
             var rows = [];
             for (var i = 0; i < count; i++) {
                 rows.push(
-                    '<div class="flex items-start gap-4 px-4 sm:px-6 py-4" aria-hidden="true">' +
+                    // role="article" satisfies the role="feed" contract on
+                    // the parent <ul>; aria-hidden hides the placeholder
+                    // from screen readers until the real entry lands.
+                    '<li role="article" aria-hidden="true" class="flex items-start gap-4 px-4 sm:px-6 py-4">' +
                         '<div class="flex-shrink-0 mt-0.5">' +
                             '<div class="skeleton w-9 h-9 rounded-full"></div>' +
                         '</div>' +
@@ -192,7 +198,7 @@
                             '<div class="skeleton h-3 w-12 ml-auto"></div>' +
                             '<div class="skeleton h-3 w-16 ml-auto"></div>' +
                         '</div>' +
-                    '</div>'
+                    '</li>'
                 );
             }
             return rows.join('');
@@ -227,8 +233,11 @@
             // Show skeleton placeholders during the request. On a fast
             // network this barely flashes; on a slow one the user has a
             // concrete "something is happening" signal instead of stale
-            // content.
-            document.getElementById('activityList').innerHTML = skeletonRowsHtml(6);
+            // content. aria-busy lets assistive tech defer the new
+            // content announcement until the real entries land.
+            var listEl = document.getElementById('activityList');
+            listEl.setAttribute('aria-busy', 'true');
+            listEl.innerHTML = skeletonRowsHtml(6);
             fetch('/api/activity?limit=' + currentLimit, { credentials: 'same-origin' })
                 .then(function(r) {
                     if (!r.ok) {
@@ -271,8 +280,9 @@
 
         function renderEntries(entries, hasMore) {
             var list = document.getElementById('activityList');
+            list.setAttribute('aria-busy', 'false');
             if (entries.length === 0) {
-                list.innerHTML = '<div class="px-6 py-12 text-center text-gray-500 dark:text-gray-400"><i class="fas fa-inbox text-3xl text-gray-300 dark:text-gray-600 mb-3 block"></i>No activity recorded yet</div>';
+                list.innerHTML = '<li role="presentation" class="px-6 py-12 text-center text-gray-500 dark:text-gray-400"><i class="fas fa-inbox text-3xl text-gray-300 dark:text-gray-600 mb-3 block"></i>No activity recorded yet</li>';
                 return;
             }
 
@@ -294,12 +304,24 @@
                 // load and opens the detail panel. Other entry types
                 // (api_request, etc.) stay as inert <div>s so we don't
                 // promise an action the page can't deliver.
+                // Each entry is wrapped in <li role="article"> so it
+                // satisfies the parent <ul role="feed"> contract; the
+                // aria-label gives screen readers a one-line summary
+                // ("Renewed — certificate foo.example.com, 2h ago").
                 var commonClass = 'flex items-start gap-4 px-4 sm:px-6 py-4 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition';
                 var isCertEntry = entry.resource_type === 'certificate' && entry.resource_id;
-                var wrapperOpen = isCertEntry
-                    ? '<a href="/?cert=' + encodeURIComponent(entry.resource_id) + '" class="' + commonClass + ' cursor-pointer">'
-                    : '<div class="' + commonClass + '">';
-                var wrapperClose = isCertEntry ? '</a>' : '</div>';
+                var ariaLabel = opLabel(entry) +
+                    (entry.status === 'failure' ? ' (failed)' : '') +
+                    ' — ' + (entry.resource_type || '') +
+                    (entry.resource_id ? ' ' + entry.resource_id : '') +
+                    ', ' + formatTime(entry.timestamp);
+                var innerClass = isCertEntry ? commonClass + ' cursor-pointer' : commonClass;
+                var innerOpen = isCertEntry
+                    ? '<a href="/?cert=' + encodeURIComponent(entry.resource_id) + '" class="' + innerClass + '">'
+                    : '<div class="' + innerClass + '">';
+                var innerClose = isCertEntry ? '</a>' : '</div>';
+                var wrapperOpen = '<li role="article" aria-label="' + escapeHtml(ariaLabel) + '">' + innerOpen;
+                var wrapperClose = innerClose + '</li>';
 
                 return wrapperOpen +
                     '<div class="flex-shrink-0 mt-0.5">' +
@@ -326,11 +348,14 @@
             }).join('');
 
             if (hasMore) {
-                var btnHtml = '<div class="px-6 py-4 text-center border-t border-gray-100 dark:border-gray-700/50">' +
+                // Wrap the control row in <li role="presentation"> so it
+                // is valid markup under <ul> but isn't announced as a
+                // feed article.
+                var btnHtml = '<li role="presentation" class="px-6 py-4 text-center border-t border-gray-100 dark:border-gray-700/50">' +
                     '<button id="loadMoreActivity" type="button" class="inline-flex items-center px-4 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 transition">' +
                         '<i class="fas fa-plus mr-2"></i>Load more' +
                     '</button>' +
-                '</div>';
+                '</li>';
                 list.insertAdjacentHTML('beforeend', btnHtml);
                 document.getElementById('loadMoreActivity').addEventListener('click', function() {
                     currentLimit = Math.min(currentLimit + ACTIVITY_INITIAL_LIMIT, ACTIVITY_MAX_LIMIT);
