@@ -14,6 +14,8 @@
     };
 
     var escapeHtml = CertMate.escapeHtml;
+    var browserDeploymentReportQueue = {};
+    var browserDeploymentReportTimer = null;
 
     // --- Role-aware UI gating (audit punch-list M2) -----------------------
     // Default to viewer until /api/auth/me responds. The server is the
@@ -73,8 +75,10 @@
     }
 
     // Show message function with improved styling
-    function showMessage(message, type) {
-        CertMate.toast(message, type);
+    function showMessage(message, type, options) {
+        // options.errorContext (when supplied) triggers the "Report
+        // this issue" button in the resulting toast — see report-issue.js.
+        CertMate.toast(message, type, undefined, options);
     }
 
     // Clear filters function
@@ -82,6 +86,45 @@
         document.getElementById('certificateSearch').value = '';
         document.getElementById('statusFilter').value = 'all';
         filterCertificates();
+    }
+
+    function queueBrowserDeploymentReport(domain, result) {
+        if (!domain || !result || !result.reachable) {
+            return;
+        }
+
+        browserDeploymentReportQueue[domain] = {
+            domain: domain,
+            reachable: true,
+            checked_at: result.timestamp || new Date().toISOString(),
+            method: result.method || 'browser-fallback',
+            source: 'browser'
+        };
+
+        if (!browserDeploymentReportTimer) {
+            browserDeploymentReportTimer = setTimeout(flushBrowserDeploymentReports, 250);
+        }
+    }
+
+    function flushBrowserDeploymentReports() {
+        browserDeploymentReportTimer = null;
+        var reports = Object.keys(browserDeploymentReportQueue).map(function (domain) {
+            return browserDeploymentReportQueue[domain];
+        });
+        browserDeploymentReportQueue = {};
+
+        if (!reports.length) {
+            return Promise.resolve();
+        }
+
+        return fetch('/api/certificates/deployment-status/browser', {
+            method: 'POST',
+            headers: API_HEADERS,
+            credentials: 'same-origin',
+            body: JSON.stringify({ reports: reports })
+        }).catch(function (error) {
+            console.warn('Failed to send browser deployment reports:', error);
+        });
     }
 
     // Update statistics cards with deployment info
@@ -286,25 +329,75 @@
             'title="' + title + '"><i class="fas ' + icon + '"></i></button>';
     }
 
-    // Build deployment status badge HTML
-    function deploymentBadgeHtml(cert) {
+    function deploymentStatusDisplay(role, result) {
+        var isBrowser = role === 'browser';
+        var roleLabel = isBrowser ? 'Browser' : 'Backend';
+        var roleIcon = isBrowser ? 'fa-globe' : 'fa-server';
+        var statusClass;
+        var statusIcon = roleIcon;
+        var statusText;
+
+        if (isBrowser) {
+            if (result && result.reachable) {
+                statusClass = 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400';
+                statusText = 'Reachable';
+            } else if (result && result.reachable === false) {
+                statusClass = 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400';
+                statusText = 'Unreachable';
+            } else {
+                statusClass = 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300';
+                statusText = 'Not Checked';
+            }
+        } else {
+            if (result && result.error === 'backend-unavailable') {
+                statusClass = 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300';
+                statusIcon = 'fa-exclamation-circle';
+                statusText = 'Unavailable';
+            } else if (result && result.deployed && result.certificate_match === true) {
+                statusClass = 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400';
+                statusText = 'Deployed';
+            } else if (result && result.reachable && result.certificate_match === false) {
+                statusClass = 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400';
+                statusText = 'Wrong Cert';
+            } else if (result && result.reachable === false) {
+                statusClass = 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400';
+                statusText = 'Unreachable';
+            } else {
+                statusClass = 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300';
+                statusText = 'Unknown';
+            }
+        }
+
+        return {
+            className: 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ' + statusClass,
+            icon: statusIcon,
+            text: roleLabel + ': ' + statusText
+        };
+    }
+
+    function deploymentBadgeHtml(role, result, safeDomain, domainId) {
+        var badgeId = 'deployment-status-' + domainId + '-' + role;
+        var display = deploymentStatusDisplay(role, result);
+        var title = display.text;
+        if (result && result.method) {
+            title += ' via ' + result.method;
+        }
+        if (result && result.timestamp) {
+            title += ' at ' + result.timestamp;
+        }
+        return '<span data-deployment-domain="' + safeDomain + '" data-deployment-role="' + role + '" id="' + badgeId + '" title="' + escapeHtml(title) + '" class="' + display.className + '"><i class="fas ' + display.icon + ' mr-1"></i>' + display.text + '</span>';
+    }
+
+    // Build deployment status badges HTML
+    function deploymentBadgesHtml(cert) {
         var safeDomain = escapeHtml(cert.domain);
         var domainId = safeDomain.replace(/\./g, '-');
-        var cachedStatus = deploymentCache.get(cert.domain);
-        if (cachedStatus) {
-            var sc, si, st;
-            if (cachedStatus.deployed && cachedStatus.certificate_match) {
-                sc = 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400'; si = 'fa-check-circle'; st = 'Deployed';
-            } else if (cachedStatus.reachable && !cachedStatus.certificate_match) {
-                sc = 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400'; si = 'fa-exclamation-triangle'; st = 'Wrong Cert';
-            } else if (!cachedStatus.reachable) {
-                sc = 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400'; si = 'fa-times-circle'; st = 'Not Deployed';
-            } else {
-                sc = 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'; si = 'fa-question-circle'; st = 'Unknown';
-            }
-            return '<span id="deployment-status-' + domainId + '" class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ' + sc + '"><i class="fas ' + si + ' mr-1"></i>' + st + '</span>';
-        }
-        return '<span id="deployment-status-' + domainId + '" class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300"><i class="fas fa-spinner fa-spin mr-1"></i>Checking...</span>';
+        var cachedStatus = deploymentCache.get(cert.domain) || {};
+        var browserStatus = cachedStatus.browser || null;
+        return '<div class="flex flex-wrap items-center gap-2">' +
+            deploymentBadgeHtml('backend', cachedStatus, safeDomain, domainId) +
+            deploymentBadgeHtml('browser', browserStatus, safeDomain, domainId) +
+            '</div>';
     }
 
     function providerDisplayName(provider) {
@@ -448,10 +541,11 @@
                 <td class="px-4 py-4 whitespace-nowrap"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${rowRaw(statusClass)}"><i class="fas ${rowRaw(statusIcon)} mr-1"></i>${statusText}</span></td>
                 <td class="px-4 py-4 whitespace-nowrap hidden md:table-cell"><div class="text-sm text-gray-900 dark:text-white">${expiryStr}</div><div class="text-xs ${rowRaw(daysClass)}">${cert.days_until_expiry} days</div></td>
                 <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-gray-500 dark:text-gray-400">${rowRaw(providerLabel) || '—'}</td>
-                <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell">${rowRaw(deploymentBadgeHtml(cert))}</td>
+                <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell">${rowRaw(deploymentBadgesHtml(cert))}</td>
                 <td class="px-4 py-4 whitespace-nowrap text-right">
                     <div class="flex items-center justify-end gap-1">
                         ${roleAtLeast('operator') ? actionBtn('renew', cert.domain, 'green', 'Renew', 'fa-sync-alt') : false}
+                        ${roleAtLeast('operator') ? actionBtn('force-renew', cert.domain, 'amber', 'Force renew', 'fa-bolt') : false}
                         ${actionBtn('download', cert.domain, 'blue', 'Download', 'fa-download')}
                         ${actionBtn('curl', cert.domain, 'indigo', 'API', 'fa-code')}
                         ${roleAtLeast('operator') ? rowRaw(autoRenewButtonHtml(escapeHtml(cert.domain), cert.auto_renew !== false)) : false}
@@ -467,6 +561,7 @@
                 var domain = btn.dataset.domain;
                 switch (btn.dataset.action) {
                     case 'renew': renewCertificate(domain); break;
+                    case 'force-renew': renewCertificate(domain, true); break;
                     case 'download': downloadCertificate(domain); break;
                     case 'curl': copyCurlCommand(domain); break;
                     case 'toggle-auto-renew':
@@ -545,7 +640,7 @@
                 (safeDomainAlias ? '<div class="flex justify-between gap-4 py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">DNS-01 Alias</dt><dd class="text-sm font-medium text-right break-all text-blue-600 dark:text-blue-300">' + safeDomainAlias + '</dd></div>' : '') +
                 (safeDomainAlias && aliasProviderLabel ? '<div class="flex justify-between gap-4 py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">Alias Provider</dt><dd class="text-sm font-medium text-right text-gray-900 dark:text-white">' + aliasProviderLabel + '</dd></div>' : '') +
                 '<div class="flex justify-between gap-4 py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">Auto-Renew</dt><dd class="text-sm font-medium text-right ' + (cert.auto_renew !== false ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400') + '">' + (cert.auto_renew !== false ? 'Enabled' : 'Disabled') + '</dd></div>' +
-                '<div class="flex justify-between gap-4 py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">Deployment</dt><dd>' + deploymentBadgeHtml(cert) + '</dd></div>' +
+                '<div class="flex justify-between gap-4 py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">Deployment</dt><dd>' + deploymentBadgesHtml(cert) + '</dd></div>' +
                 '</dl>' +
                 '</div>' +
                 // Actions
@@ -553,11 +648,12 @@
                 '<h4 class="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wider">Actions</h4>' +
                 '<div class="grid grid-cols-1 gap-2">' +
                 (roleAtLeast('operator')
-                    ? '<button type="button" onclick="renewCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-sync-alt mr-2 text-green-600"></i>Renew Certificate</button>'
+                    ? '<button type="button" onclick="renewCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-sync-alt mr-2 text-green-600"></i>Renew Certificate</button>' +
+                    '<button type="button" onclick="renewCertificate(\'' + safeDomain + '\', true)" class="w-full inline-flex items-center justify-center px-4 py-2 border border-amber-300 dark:border-amber-700 shadow-sm text-sm font-medium rounded-md text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/40"><i class="fas fa-bolt mr-2"></i>Force Renew Certificate</button>'
                     : '') +
                 '<button type="button" onclick="downloadCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-download mr-2 text-blue-600"></i>Download Certificate</button>' +
                 '<button type="button" onclick="copyCurlCommand(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-blue-300 dark:border-blue-600 shadow-sm text-sm font-medium rounded-md text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50"><i class="fas fa-code mr-2"></i>Show API Command</button>' +
-                '<button type="button" onclick="checkDeploymentStatus(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-globe mr-2 text-indigo-600"></i>Check Deployment</button>' +
+                '<button type="button" onclick="checkDeploymentStatus(\'' + safeDomain + '\', this, true)" class="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-globe mr-2 text-indigo-600"></i>Check Deployment</button>' +
                 (safeDomainAlias ? '<button type="button" onclick="checkDnsAliasForCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-blue-300 dark:border-blue-600 shadow-sm text-sm font-medium rounded-md text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50"><i class="fas fa-search mr-2"></i>Check DNS-01 Alias</button>' : '') +
                 '<div id="cert_dns_alias_check_result" class="hidden"></div>' +
                 (roleAtLeast('admin')
@@ -790,37 +886,74 @@
     }
 
     // Check deployment status for a specific domain
-    function checkDeploymentStatus(domain) {
-        var statusElement = document.getElementById('deployment-status-' + domain.replace(/\./g, '-'));
-        var textElement = document.getElementById('deployment-text-' + domain.replace(/\./g, '-'));
+    function checkDeploymentStatus(domain, triggerButton, forceRefresh) {
+        var restoreButton = function () {
+            if (!triggerButton) {
+                return;
+            }
+            triggerButton.disabled = false;
+            if (triggerButton.dataset.originalHtml) {
+                triggerButton.innerHTML = triggerButton.dataset.originalHtml;
+                delete triggerButton.dataset.originalHtml;
+            }
+        };
 
-        if (!statusElement) {
+        if (triggerButton) {
+            triggerButton.dataset.originalHtml = triggerButton.innerHTML;
+            triggerButton.disabled = true;
+            triggerButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Checking...';
+        }
+
+        var statusElements = Array.prototype.filter.call(
+            document.querySelectorAll('[data-deployment-domain]'),
+            function (el) {
+                return el.getAttribute('data-deployment-domain') === domain;
+            }
+        );
+
+        if (!statusElements.length) {
+            restoreButton();
             return Promise.resolve();
         }
 
         // Check cache first
-        var cachedResult = deploymentCache.get(domain);
+        var cachedResult = forceRefresh ? null : deploymentCache.get(domain);
         if (cachedResult) {
-            updateDeploymentUI(domain, cachedResult, statusElement);
+            updateDeploymentUI(domain, cachedResult);
+            restoreButton();
             return Promise.resolve();
         }
 
         // Update UI to show checking state
-        statusElement.className = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-600';
-        statusElement.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Checking...';
-        if (textElement) {
-            textElement.textContent = 'Checking...';
-            textElement.className = 'text-sm font-medium text-blue-600';
+        statusElements.forEach(function (statusElement) {
+            statusElement.className = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-600';
+            statusElement.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Checking...';
+        });
+
+        var deploymentUrl = '/api/certificates/' + encodeURIComponent(domain) + '/deployment-status';
+        if (forceRefresh) {
+            deploymentUrl += '?refresh=1';
         }
 
-        return fetch('/api/certificates/' + encodeURIComponent(domain) + '/deployment-status', {
+        return fetch(deploymentUrl, {
             method: 'GET',
             headers: API_HEADERS
         }).then(function (response) {
             if (response.ok) {
                 return response.json().then(function (result) {
+                    if (result && result.reachable === false) {
+                        return checkDeploymentViaBrowser(domain).then(function (browserResult) {
+                            if (browserResult) {
+                                queueBrowserDeploymentReport(domain, browserResult);
+                                result.browser = browserResult;
+                            }
+                            deploymentCache.set(domain, result);
+                            updateDeploymentUI(domain, result);
+                        });
+                    }
+
                     deploymentCache.set(domain, result);
-                    updateDeploymentUI(domain, result, statusElement);
+                    updateDeploymentUI(domain, result);
                 });
             }
             throw new Error('API failed');
@@ -837,12 +970,30 @@
                         timestamp: new Date().toISOString()
                     };
                 }
-                deploymentCache.set(domain, result);
-                updateDeploymentUI(domain, result, statusElement);
+                if (result.reachable) {
+                    queueBrowserDeploymentReport(domain, result);
+                }
+                // Keep the server-side result as the primary status. The browser
+                // probe is supplemental and may be useful for diagnostics, but it
+                // should not replace the backend's deployed/reachable verdict.
+                deploymentCache.set(domain, {
+                    deployed: false,
+                    reachable: false,
+                    certificate_match: false,
+                    method: 'browser-fallback',
+                    error: 'backend-unavailable',
+                    timestamp: result.timestamp || new Date().toISOString(),
+                    browser: result
+                });
+                updateDeploymentUI(domain, deploymentCache.get(domain));
             });
         }).catch(function () {
-            statusElement.className = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300';
-            statusElement.innerHTML = '<i class="fas fa-question-circle mr-1"></i>Error';
+            statusElements.forEach(function (statusElement) {
+                statusElement.className = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300';
+                statusElement.innerHTML = '<i class="fas fa-question-circle mr-1"></i>Error';
+            });
+        }).finally(function () {
+            restoreButton();
         });
     }
 
@@ -881,49 +1032,32 @@
     }
 
     // Update deployment UI based on check result
-    function updateDeploymentUI(domain, result, statusElement) {
-        var textElement = document.getElementById('deployment-text-' + domain.replace(/\./g, '-'));
+    function updateDeploymentUI(domain, result) {
+        var backendResult = result || null;
+        var browserResult = result && result.browser ? result.browser : null;
 
-        if (result.deployed && result.certificate_match !== false) {
-            statusElement.className = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400';
-            statusElement.innerHTML = '<i class="fas fa-check-circle mr-1"></i>Deployed';
-            if (textElement) {
-                textElement.textContent = 'Active';
-                textElement.className = 'text-sm font-medium text-green-600 dark:text-green-400';
-            }
-
-        } else if (result.reachable && result.certificate_match === false) {
-            statusElement.className = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400';
-            statusElement.innerHTML = '<i class="fas fa-exclamation-triangle mr-1"></i>Mismatch';
-            if (textElement) {
-                textElement.textContent = 'Mismatch';
-                textElement.className = 'text-sm font-medium text-yellow-600 dark:text-yellow-400';
-            }
-
-        } else if (result.reachable) {
-            statusElement.className = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400';
-            statusElement.innerHTML = '<i class="fas fa-info-circle mr-1"></i>Unknown';
-            if (textElement) {
-                textElement.textContent = 'Unknown';
-                textElement.className = 'text-sm font-medium text-blue-600 dark:text-blue-400';
-            }
-
-        } else {
-            statusElement.className = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400';
-            statusElement.innerHTML = '<i class="fas fa-times-circle mr-1"></i>Unreachable';
-            if (textElement) {
-                textElement.textContent = 'Unreachable';
-                textElement.className = 'text-sm font-medium text-red-600 dark:text-red-400';
-            }
-        }
-
-        // Add method info to title for debugging
-        if (result.method) {
-            statusElement.title = 'Checked via: ' + result.method + ' at ' + result.timestamp;
-            if (textElement) {
-                textElement.title = statusElement.title;
-            }
-        }
+        ['backend', 'browser'].forEach(function (role) {
+            var roleResult = role === 'browser' ? browserResult : backendResult;
+            var display = deploymentStatusDisplay(role, roleResult);
+            Array.prototype.filter.call(
+                document.querySelectorAll('[data-deployment-domain][data-deployment-role="' + role + '"]'),
+                function (el) {
+                    return el.getAttribute('data-deployment-domain') === domain;
+                }
+            ).forEach(function (statusElement) {
+                statusElement.className = display.className;
+                statusElement.innerHTML = '<i class="fas ' + display.icon + ' mr-1"></i>' + display.text;
+                if (roleResult && roleResult.method) {
+                    var title = display.text + ' via ' + roleResult.method;
+                    if (roleResult.timestamp) {
+                        title += ' at ' + roleResult.timestamp;
+                    }
+                    statusElement.title = title;
+                } else {
+                    statusElement.removeAttribute('title');
+                }
+            });
+        });
     }
 
     // Load certificates with deployment status
@@ -1239,8 +1373,10 @@
             }
             return '<div class="mt-2 text-xs ' + rowClass + '">' +
                 '<div><i class="fas ' + (check.ok ? 'fa-check' : 'fa-times') + ' mr-1"></i>' +
-                '<code class="font-mono bg-gray-100 dark:bg-gray-700 px-1 rounded">' + escapeHtml(check.source) + '</code></div>' +
-                '<div class="mt-1 ml-5">Expected: <code class="font-mono bg-gray-100 dark:bg-gray-700 px-1 rounded">' + escapeHtml(check.expected_target) + '</code></div>' +
+                '<code class="font-mono bg-gray-100 dark:bg-gray-700 px-1 rounded">' + escapeHtml(check.source) + '</code>' +
+                aliasCopyButtonHtml(check.source) + '</div>' +
+                '<div class="mt-1 ml-5">Expected: <code class="font-mono bg-gray-100 dark:bg-gray-700 px-1 rounded">' + escapeHtml(check.expected_target) + '</code>' +
+                aliasCopyButtonHtml(check.expected_target) + '</div>' +
                 '<div class="mt-1 ml-5">Found: <code class="font-mono bg-gray-100 dark:bg-gray-700 px-1 rounded">' + escapeHtml(found) + '</code></div>' +
                 '</div>';
         }).join('');
@@ -1438,12 +1574,27 @@
                     if (result.hint) {
                         errorMsg += '\n\n\ud83d\udca1 ' + result.hint;
                     }
-                    showMessage(errorMsg, 'error');
+                    showMessage(errorMsg, 'error', {
+                        errorContext: {
+                            endpoint: 'POST /api/certificates/create',
+                            status: response.status,
+                            code: result.code,
+                            message: result.error || result.message,
+                            hint: result.hint
+                        }
+                    });
                 }
             });
         }).catch(function (error) {
             console.error('Error creating certificate:', error);
-            showMessage('Failed to create certificate. Please check your network connection and try again.', 'error');
+            showMessage('Failed to create certificate. Please check your network connection and try again.', 'error', {
+                errorContext: {
+                    endpoint: 'POST /api/certificates/create',
+                    status: 0,
+                    code: 'NETWORK_ERROR',
+                    message: (error && error.message) || 'network error'
+                }
+            });
         }).then(function () {
             hideLoadingModal(progressInterval);
         });
@@ -1514,7 +1665,15 @@
                 var msg = (data.body && data.body.error)
                     ? data.body.error
                     : ('Deploy hook run failed (HTTP ' + data.status + ')');
-                showMessage(msg, 'error');
+                showMessage(msg, 'error', {
+                    errorContext: {
+                        endpoint: 'POST /api/certificates/' + domain + '/deploy',
+                        status: data.status,
+                        code: data.body && data.body.code,
+                        message: data.body && data.body.error,
+                        hint: data.body && data.body.hint
+                    }
+                });
                 return;
             }
             var s = data.body || {};
@@ -1576,7 +1735,7 @@
             method: 'DELETE'
         }).then(function (response) {
             return response.json().then(function (result) {
-                return { ok: response.ok, result: result };
+                return { ok: response.ok, status: response.status, result: result };
             });
         }).then(function (data) {
             if (data.ok) {
@@ -1584,37 +1743,69 @@
                 closeCertDetail();
                 loadCertificates();
             } else {
-                showMessage(data.result.error || 'Failed to delete certificate', 'error');
+                showMessage(data.result.error || 'Failed to delete certificate', 'error', {
+                    errorContext: {
+                        endpoint: 'DELETE /api/certificates/' + domain,
+                        status: data.status || 0,
+                        code: data.result.code,
+                        message: data.result.error,
+                        hint: data.result.hint
+                    }
+                });
             }
         }).catch(function (error) {
             console.error('Error deleting certificate:', error);
-            showMessage('Failed to delete certificate. Please try again.', 'error');
+            showMessage('Failed to delete certificate. Please try again.', 'error', {
+                errorContext: {
+                    endpoint: 'DELETE /api/certificates/' + domain,
+                    status: 0,
+                    code: 'NETWORK_ERROR',
+                    message: (error && error.message) || 'network error'
+                }
+            });
         });
     }
 
-    function renewCertificate(domain) {
+    function renewCertificate(domain, force) {
+        force = force === true;
         var progressInterval = showLoadingModal(
-            'Renewing Certificate for ' + domain,
-            'This may take a few minutes...'
+            (force ? 'Force Renewing Certificate for ' : 'Renewing Certificate for ') + domain,
+            force ? 'This bypasses the normal due check and may count against CA rate limits...' : 'This may take a few minutes...'
         );
 
         fetch('/api/certificates/' + encodeURIComponent(domain) + '/renew', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ force: force })
         }).then(function (response) {
             return response.json().then(function (result) {
-                return { ok: response.ok, result: result };
+                return { ok: response.ok, status: response.status, result: result };
             });
         }).then(function (data) {
             if (data.ok) {
-                showMessage('Certificate renewed successfully for ' + domain + '!', 'success');
+                showMessage((force ? 'Forced renewal completed for ' : 'Certificate renewal completed for ') + domain + '!', 'success');
                 setTimeout(function () { loadCertificates(); }, 2000);
             } else {
-                showMessage(data.result.error || data.result.message || 'Failed to renew certificate', 'error');
+                showMessage(data.result.error || data.result.message || 'Failed to renew certificate', 'error', {
+                    errorContext: {
+                        endpoint: 'POST /api/certificates/' + domain + '/renew',
+                        status: data.status,
+                        code: data.result.code,
+                        message: data.result.error || data.result.message,
+                        hint: data.result.hint
+                    }
+                });
             }
         }).catch(function (error) {
             console.error('Error renewing certificate:', error);
-            showMessage('Failed to renew certificate. Please try again.', 'error');
+            showMessage('Failed to renew certificate. Please try again.', 'error', {
+                errorContext: {
+                    endpoint: 'POST /api/certificates/' + domain + '/renew',
+                    status: 0,
+                    code: 'NETWORK_ERROR',
+                    message: (error && error.message) || 'network error'
+                }
+            });
         }).then(function () {
             hideLoadingModal(progressInterval);
         });
@@ -1670,6 +1861,58 @@
             showMessage('Failed to copy command', 'error');
         }
 
+        document.body.removeChild(textArea);
+    }
+
+    function aliasCopyButtonHtml(value) {
+        if (!value) return '';
+        return ' <button type="button" class="ml-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors align-middle"' +
+            ' data-copy="' + escapeHtml(value) + '"' +
+            ' onclick="copyAliasValueToClipboard(this)"' +
+            ' title="Copy to clipboard" aria-label="Copy to clipboard">' +
+            '<i class="fas fa-clipboard text-xs"></i></button>';
+    }
+
+    function copyAliasValueToClipboard(button) {
+        // The raw value is stored in data-copy and trimmed at copy time so the
+        // user can't end up pasting the leading/trailing whitespace that the
+        // browser tends to grab when a CNAME string is selected by hand
+        // (issue #159).
+        var text = String(button.dataset.copy || '').trim();
+        if (!text) return;
+        var icon = button.querySelector('i');
+        var originalIconClass = icon ? icon.className : 'fas fa-clipboard text-xs';
+        function flashSuccess() {
+            if (icon) icon.className = 'fas fa-check text-xs';
+            button.classList.add('text-green-600', 'dark:text-green-400');
+            setTimeout(function () {
+                if (icon) icon.className = originalIconClass;
+                button.classList.remove('text-green-600', 'dark:text-green-400');
+            }, 1500);
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(flashSuccess).catch(function () {
+                aliasFallbackCopy(text, flashSuccess);
+            });
+        } else {
+            aliasFallbackCopy(text, flashSuccess);
+        }
+    }
+
+    function aliasFallbackCopy(text, onSuccess) {
+        var textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.top = '0';
+        textArea.style.left = '0';
+        textArea.style.position = 'fixed';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        try {
+            if (document.execCommand('copy')) onSuccess();
+        } catch (err) {
+            /* swallow: feedback simply won't flash */
+        }
         document.body.removeChild(textArea);
     }
 
@@ -1759,4 +2002,5 @@
     window.updateCAProviderInfo = updateCAProviderInfo;
     window.updateDnsAliasHelp = updateDnsAliasHelp;
     window.checkDnsAliasForCertificate = checkDnsAliasForCertificate;
+    window.copyAliasValueToClipboard = copyAliasValueToClipboard;
 })();

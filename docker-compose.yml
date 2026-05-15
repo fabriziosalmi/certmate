@@ -5,6 +5,15 @@ services:
       context: .
       args:
         REQUIREMENTS_FILE: requirements.txt
+        # Optional extras layered on top of the main requirements.
+        # Accepts a SPACE-SEPARATED list of requirements files so one
+        # image can carry both DNS plugins and remote storage backends.
+        # Set in .env to bake them in at image build time, e.g.:
+        #   EXTRA_REQUIREMENTS=requirements-azure.txt requirements-storage-all.txt
+        #   EXTRA_REQUIREMENTS=requirements-storage-all.txt
+        #   EXTRA_REQUIREMENTS=requirements-aws.txt requirements-gcp.txt
+        # Defaults to empty (skipped).
+        EXTRA_REQUIREMENTS: ${EXTRA_REQUIREMENTS:-}
     # Uncomment to use pre-built multi-platform image instead of building locally:
     # image: YOUR_DOCKERHUB_USERNAME/certmate:latest
     # platform: linux/amd64  # Optional: force specific platform (linux/amd64, linux/arm64)
@@ -18,6 +27,7 @@ services:
       - CLOUDFLARE_TOKEN=${CLOUDFLARE_TOKEN}
       - API_BEARER_TOKEN=${API_BEARER_TOKEN:-}  # Auto-generated if empty; set a strong value for production
       #- API_BEARER_TOKEN_FILE=${API_BEARER_TOKEN_FILE:-}  # Alternative: path to a file containing the bearer token
+      - BEHIND_PROXY=${BEHIND_PROXY:-false}  # Set true when CertMate runs behind nginx or another trusted reverse proxy
       - PORT=${PORT:-8000}                      # Internal listen port; also update ports: mapping if changed
       - GUNICORN_TIMEOUT=${GUNICORN_TIMEOUT:-300}  # Worker timeout; increase for slow DNS providers
       - LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL:-}    # Overrides the email set via the web UI when set

@@ -1,3 +1,150 @@
+## v2.4.17 (Patch — two community fixes from @rocogamer)
+
+Bundle of two small, surgical community PRs from [@rocogamer](https://github.com/rocogamer) that came out of the maintainer-feedback loop earlier this session. Both are mergeable as-is and ship together because each is too small for a release of its own.
+
+### `fix(api): bare-list /api/deploy/history` (closes [#152](https://github.com/fabriziosalmi/certmate/issues/152), PR [#153](https://github.com/fabriziosalmi/certmate/pull/153))
+
+One functional line of diff in `modules/web/settings_routes.py`:
+
+```diff
+-            return jsonify({'history': history})
++            return jsonify(history)
+```
+
+Closes the convention point left as a follow-up after [#142](https://github.com/fabriziosalmi/certmate/pull/142). `GET /api/deploy/history` previously wrapped its result in `{"history": [...]}` while the sibling event-log endpoint `GET /api/webhooks/deliveries` already returned a bare list, and the frontend (`settings-deploy.js`, `settings-notifications.js`) was originally written to the bare-list convention. v2.4.12 had landed a dual-shape frontend handler so the panel would keep working while a backend flip was pending; this PR completes that flip and removes the asymmetry.
+
+The success contract is now a bare list. The error path keeps the `{"error": "..."}` envelope so the frontend's catch branch can still surface a real reason instead of a generic literal.
+
+`tests/test_issue152_deploy_history.py` — 4 new contract tests pinning the post-#152 shape: populated success returns a list in order; empty history returns `[]` (the historically most-visible symptom of the wrap was the empty case); `?limit=N` (capped at 200) and `?domain=...` are still threaded through to `DeployManager.get_history` verbatim; the 503 error path keeps its envelope. All four pass locally in 0.08 s.
+
+The v2.4.12 dual-shape frontend handler stays in place as a forward-compatibility shim; rolling back to v2.4.16 / v2.4.15 won't break the UI, the bare-list path was always accepted.
+
+### `build: EXTRA_REQUIREMENTS build-arg + certbot-dns-azure baked in` (PR [#155](https://github.com/fabriziosalmi/certmate/pull/155))
+
+Two build-level improvements:
+
+**`EXTRA_REQUIREMENTS` Dockerfile build-arg** — accepts a space-separated list of `requirements-*.txt` paths and runs `pip install -r <file>` for each after the main install. Defaults to empty (existing builds unchanged). Wired through `docker-compose.yml` as `EXTRA_REQUIREMENTS: ${EXTRA_REQUIREMENTS:-}` so a single env var in `.env` bakes optional storage / DNS plugins into the image at build time:
+
+```bash
+# Azure DNS + Azure Key Vault in one image
+docker build \
+  --build-arg EXTRA_REQUIREMENTS="requirements-azure-storage.txt" \
+  -t certmate:azure .
+
+# Every remote storage backend
+docker build \
+  --build-arg EXTRA_REQUIREMENTS=requirements-storage-all.txt \
+  -t certmate:full .
+```
+
+The Dockerfile `COPY requirements.txt requirements-minimal.txt ./` was widened to `COPY requirements*.txt ./` so all optional sets are available to the layered install without rebuilding the COPY layer per combination. The intentional word-splitting carries an explicit `# shellcheck disable=SC2086` so a future maintainer doesn't quote it and break the loop.
+
+**`certbot-dns-azure==2.5.0` baked into the main `requirements.txt`** — Azure is one of the four major DNS providers exposed in the UI dropdown, but until now selecting it on a default image produced a "plugin not installed" error. The pin is to 2.5.0 specifically: it's the last version in the `certbot<3.0,>=2.0` line; 2.6.0+ jumped to certbot 3.x and would conflict with the repo-wide `certbot==2.10.0`. The same constraint already lived as a comment in `requirements-azure.txt`; this commit promotes it to the main set.
+
+**Image size note**: the bake-in adds `azure-identity`, `azure-mgmt-dns`, `msrest`, `msal` and their transitive dependencies — about 30–50 MB of image. The trade-off is consistent with the existing four bundled DNS plugins (cloudflare, route53, digitalocean, google), and the build-arg is the escape hatch for anyone who wants a slimmer image: ship without Azure, then layer it back in via `EXTRA_REQUIREMENTS=requirements-azure.txt` on demand.
+
+### Tests
+
+`tests/test_issue152_deploy_history.py` — 4 new contract tests (above). Full unit-test surface: 140 passes (136 pre-existing + 4 new) in ~1.0 s without Docker.
+
+### Backward compatibility
+
+- Both PRs are additive at the API / build level.
+- The v2.4.12 dual-shape frontend handler keeps the deploy history panel working on rollback to older backends.
+- Existing `docker build` invocations without `EXTRA_REQUIREMENTS` produce the same image (plus the `certbot-dns-azure` baked-in package, which on a default build is the only behavioural delta).
+- No existing API call shape changes other than `GET /api/deploy/history` going from envelope to bare list — which the frontend already tolerates and which the documented contract test pins.
+
+### Acknowledgement
+
+Both PRs come out of a tight feedback loop earlier in the session: PR #141 was originally a three-feature monolith, asked to split, and rocogamer turned around four atomic PRs (#153, #154, #155, #156) plus a follow-up issue (#152) within the same day. v2.4.17 ships the two of those that were ready to merge without further changes; #154 (APScheduler `app_context` fix) needs a one-line `global` declaration and a regression test before it can land safely; #156 (configurable certificate key type/size + ECDSA) deserves its own dedicated review window.
+
+## v2.4.16 (Patch — Sprint 1.7: in-app diagnostic snapshot + one-click bug report)
+
+Implements [#150](https://github.com/fabriziosalmi/certmate/issues/150) end-to-end. When an action fails and you're signed in as admin, the error toast now surfaces a **Report this issue** button. One click → fetch `/api/diagnostics/snapshot` → merge with browser context → format Markdown → clipboard + open GitHub with the bug template pre-filled. You paste, review what you're sending, submit. No telemetry, no automatic upload, no new external dependency. PR [#157](https://github.com/fabriziosalmi/certmate/pull/157). Four atomic commits, 11 new unit tests on top of v2.4.15's 125 (136 total, 1.14 s runtime, no Docker).
+
+### Backend — `GET /api/diagnostics/snapshot`
+
+New admin-only resource under a new `/api/diagnostics/` namespace. Returns an **allowlist** (not a serialiser): every field is added by name in the handler, so a future contributor adding a field has to explicitly choose to expose it.
+
+| Field | Source | Notes |
+|---|---|---|
+| `certmate_version`, `python_version`, `os_platform`, `container` | `modules.__version__`, `sys.version`, `platform.platform()`, `/.dockerenv` | public |
+| `scheduler_running` | `container.scheduler.running` | bool |
+| `certificate_count` | `len(certificate_manager.list_certificates())` | int |
+| `dns_provider`, `default_ca`, `challenge_type`, `storage_backend` | settings scalar reads — provider/CA names, never credentials | low |
+| `disk_free_bytes`, `disk_total_bytes` | `shutil.disk_usage(app.config['DATA_DIR'])` | low |
+| `recent_audit` | last 5 entries from `audit_logger.get_recent_entries(5)`, sanitised | mid |
+| `errors` | only present on partial failure | low |
+
+Sanitisation of the audit tail is performed inline in the handler. Each entry is reduced to exactly `{timestamp, operation, resource_type, status}` — `resource_id` (often a domain), `user`, `ip_address`, `details` (full operation payload), and `error` are dropped. A future audit field has to be opted-in explicitly.
+
+Partial-failure tolerance: if certificate enumeration / settings read / `shutil.disk_usage` / audit read raises, that single field becomes `null` and the response carries an `errors: {field: reason}` map alongside the working data — never 500s the whole call.
+
+### Frontend — `static/js/report-issue.js`
+
+`CM.reportIssue(errorContext)` is the public entry point:
+
+1. Fetches `/api/diagnostics/snapshot`.
+2. Merges with browser context (`userAgent`, page, viewport, the error envelope).
+3. Formats a structured Markdown body via the pure `buildMarkdown()` (exposed on `CM.reportIssueInternals` for future test harnesses).
+4. Copies to clipboard via `navigator.clipboard.writeText`.
+5. Opens `github.com/fabriziosalmi/certmate/issues/new?template=bug_report.md&title=[Bug] <status> <code> on <method> <endpoint>` (title encodes the most useful triage facts; truncated at 200 chars).
+
+Defensive plumbing: idempotent (in-flight Promise guards double-clicks), three fallback paths (clipboard reject → modal with editable textarea + clickable GitHub link; popup blocker → same modal; snapshot fetch fail → ship a client-only report tagged "Server snapshot was unavailable"). The user is never stranded.
+
+### Frontend — `CM.toast` extension + role export
+
+- `CM.toast(message, type, duration, options)` gains an optional 4th argument. When `options.errorContext` is supplied and `type === 'error'` and `CM.role === 'admin'`, the toast renders a **Report this issue** button below the message and extends auto-dismiss to 10 s so the user has time to find it. Every existing call works unchanged.
+- `CM.role`, `CM.roleAtLeast`, `CM.refreshRole` exposed on `window.CertMate`. `dashboard.js` already tracked the role for its own UI gating; we mirror it on `CM` so cross-page helpers don't have to depend on `dashboard.js` being loaded (`/settings` doesn't load it). Auto-refresh on `DOMContentLoaded`.
+
+### Wire-up — 8 high-impact error sites
+
+| Action | File | Endpoint |
+|---|---|---|
+| Cert create (server error + network) | `dashboard.js` | `POST /api/certificates/create` |
+| Cert renew | `dashboard.js` | `POST /api/certificates/<d>/renew` |
+| Cert delete | `dashboard.js` | `DELETE /api/certificates/<d>` |
+| Run deploy hooks | `dashboard.js` | `POST /api/certificates/<d>/deploy` |
+| Settings save | `settings.js` | `POST /api/web/settings` |
+| API key create | `settings-apikeys.js` | `POST /api/keys` |
+| Backup create | `settings.js` | `POST /api/backups/create` |
+| Backup restore | `settings.js` | `POST /api/backups/restore/unified` |
+
+Each `errorContext` carries `{endpoint, status, code?, message?, hint?}`. `status: 0, code: 'NETWORK_ERROR'` is the convention for `.catch` branches that never got an HTTP response. The remaining ~80 error toasts in the codebase continue to work as before — they just don't surface the button. The pattern is documented inline so contributors extending coverage know what to pass.
+
+Plumbing changes alongside the wires:
+- `showMessage(msg, type)` in `dashboard.js` / `settings.js` / `settings-apikeys.js` grew an optional 3rd `options` parameter forwarded to `CertMate.toast`.
+- Cert delete / renew handlers propagate `response.status` through their `.then()` wrap.
+- Settings save / backup create / restore catch paths now parse the JSON response body when available and attach it as `error.responseBody` + `error.responseStatus`, so the toast can forward structured fields (`code`, `hint`).
+
+### Tests
+
+`tests/test_diagnostics_snapshot.py` — 11 new tests, 0.47 s runtime:
+
+- **`TestSnapshotShape`** (3) — all 13 documented fields present; cert count reflects the manager; settings scalars round-trip.
+- **`TestSnapshotSanitization`** (4) — response carries **none** of 8 forbidden values planted in the settings + audit fixtures (bearer token, hash, cloudflare_token, audit `details` leak, audit `resource_id`, audit `user`, audit `ip_address`, `password_hash` literal). Audit entries are stripped to exactly the four allowed keys. Audit list capped at 5. Full-settings keys (users, api_keys, dns_providers, deploy_hooks, …) never appear at the top level. The flatten-and-search assertion catches any future leak path that adds one of those tokens anywhere in the response.
+- **`TestSnapshotPartialFailure`** (4) — certificate enumeration, audit log read, and `shutil.disk_usage` each individually injected with failure; the corresponding field becomes `null`, the `errors` map carries a documented reason, and the other fields still populate. Missing audit logger → empty list, no crash.
+
+Total unit-test surface after this release: 136 passes (125 pre-existing + 11 new) in ~1.14 s without Docker.
+
+### Documentation
+
+README gains a **Reporting Bugs** subsection that explains the in-app flow and what's in the snapshot. The existing **Support Checklist** below it is preserved as the manual fallback for users hitting a bug before they can reach the UI; the `cat settings.json` curl example was replaced with a curl against `/api/diagnostics/snapshot` so a user copy-pasting the help guide doesn't leak credentials into a public issue.
+
+### Backward compatibility
+
+- No existing API shape changes; the new endpoint is purely additive.
+- Every existing `CM.toast(msg, type, duration)` and `showMessage(msg, type)` callsite continues to work — the `options` arg is optional everywhere.
+- No new external dependency, no new build step, no new CSP origin required (the GitHub URL is `_blank window.open`, not a same-origin fetch).
+- The remaining ~80 error toasts not wired in this PR simply don't surface the button; their user experience is unchanged.
+
+### Non-goals (explicit)
+
+- No telemetry. No automatic upload. No phone-home. The flow is fully manual end-to-end — the user paste-reviews-submits.
+- No Sentry / Bugsnag integration.
+- No screenshot capture (the strict CSP blocks `html2canvas`; structured fields are more useful anyway).
+- No coverage of all ~90 error sites — many are client-side validation errors with no server status / endpoint to report. The pattern is documented inline; future PRs (community or maintainer) can extend coverage where it adds value.
+
 ## v2.4.15 (Patch — Sprint 1.6 audit polish)
 
 Audit polish sprint: the four zero/low-risk items from the [2026-05-12 API auth audit](https://github.com/fabriziosalmi/certmate/releases/tag/v2.4.12) that didn't need structural design, shipped together because each is small, additive, and shares no code paths. Four atomic commits, 13 new unit tests on top of v2.4.14's 112 (125 total, 0.87s runtime, no Docker). PR [#151](https://github.com/fabriziosalmi/certmate/pull/151).

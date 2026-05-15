@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Optional
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
-from flask import Flask, request
+from flask import Flask, jsonify, request
 from flask_cors import CORS
 from flask_restx import Api, Namespace
 
@@ -32,6 +32,11 @@ from modules.web import register_web_routes
 
 logger = get_certmate_logger('factory')
 request_logger = get_certmate_logger('request-watchdog')
+
+# APScheduler jobs run in background threads where Flask's thread-local
+# current_app proxy is unbound.  We keep a module-level reference so we
+# can explicitly push an app context inside those jobs.
+_flask_app = None
 
 
 class AppContainer:
@@ -430,6 +435,11 @@ def initialize_managers(container: AppContainer, app):
     )
     event_bus.add_listener(deploy_manager.on_certificate_event)
     app.config['EVENT_BUS'] = event_bus
+    # DATA_DIR is the partition the DiagnosticsSnapshot endpoint queries
+    # for disk_free / disk_total. Stored on the Flask app config so the
+    # RESTX resource can resolve it via current_app without holding a
+    # reference to the container.
+    app.config['DATA_DIR'] = str(container.data_dir)
 
     container.managers = {
         'file_ops': file_ops,
@@ -458,32 +468,59 @@ def initialize_managers(container: AppContainer, app):
     }
 
 
+def _run_manager_job(manager_key: str, method_name: str):
+    """Execute a manager method inside a Flask app context.
+
+    APScheduler jobs run in background threads where the thread-local
+    `current_app` proxy is unbound.  We keep a module-level reference to
+    the app instance so we can push an explicit app context before
+    touching any Flask-bound code.
+    """
+    if _flask_app is None:
+        logger.warning(
+            "Background job skipped: Flask app not yet initialised",
+            manager_key=manager_key,
+            method_name=method_name,
+        )
+        return
+    from flask import current_app
+    with _flask_app.app_context():
+        managers = current_app.config.get('MANAGERS')
+        manager = managers.get(manager_key) if managers else None
+        if manager is None:
+            logger.warning(
+                "Background job skipped: manager not found",
+                manager_key=manager_key,
+            )
+            return
+        try:
+            getattr(manager, method_name)()
+        except Exception:
+            logger.exception(
+                "Background job failed",
+                manager_key=manager_key,
+                method_name=method_name,
+            )
+
+
 def _certificate_renewal_job():
     """Picklable wrapper for certificate renewal check"""
-    from flask import current_app
-    managers = current_app.config.get('MANAGERS')
-    if managers and 'certificates' in managers:
-        managers['certificates'].check_renewals()
+    _run_manager_job('certificates', 'check_renewals')
 
 
 def _client_certificate_renewal_job():
     """Picklable wrapper for client certificate renewal check"""
-    from flask import current_app
-    managers = current_app.config.get('MANAGERS')
-    if managers and 'client_certificates' in managers:
-        managers['client_certificates'].check_renewals()
+    _run_manager_job('client_certificates', 'check_renewals')
 
 
 def _weekly_digest_job():
     """Picklable wrapper for weekly digest"""
-    from flask import current_app
-    managers = current_app.config.get('MANAGERS')
-    if managers and 'digest' in managers:
-        managers['digest'].send()
+    _run_manager_job('digest', 'send')
 
 
 def setup_scheduler(container: AppContainer):
     """Set up APScheduler for background tasks with persistent store."""
+    assert _flask_app is not None, "setup_scheduler called before _flask_app was set"
     try:
         from sqlalchemy import create_engine, event as _sa_event
         _db_path = container.data_dir / 'scheduler_jobs.sqlite'
@@ -549,16 +586,18 @@ def setup_api(container: AppContainer, app):
     ns_backups = Namespace('backups', description='Backup and restore')
     ns_cache = Namespace('cache', description='Cache management operations')
     ns_metrics = Namespace('metrics', description='Prometheus metrics and monitoring')
+    ns_diagnostics = Namespace('diagnostics', description='Sanitized diagnostic snapshot for bug reports')
 
     namespaces = [
         ns_certificates, ns_client_certs, ns_ocsp, ns_crl, ns_settings,
-        ns_health, ns_backups, ns_cache, ns_metrics
+        ns_health, ns_backups, ns_cache, ns_metrics, ns_diagnostics
     ]
     for ns in namespaces:
         api.add_namespace(ns)
 
     ns_health.add_resource(api_resources['HealthCheck'], '')
     ns_metrics.add_resource(api_resources['MetricsList'], '')
+    ns_diagnostics.add_resource(api_resources['DiagnosticsSnapshot'], '/snapshot')
     ns_settings.add_resource(api_resources['Settings'], '')
     ns_settings.add_resource(api_resources['DNSProviders'], '/dns-providers')
     ns_settings.add_resource(api_resources['CAProviderTest'], '/test-ca-provider')
@@ -568,6 +607,8 @@ def setup_api(container: AppContainer, app):
     ns_certificates.add_resource(api_resources['CreateCertificate'], '/create')
     ns_certificates.add_resource(api_resources['CheckDNSAlias'], '/check-dns-alias')
     ns_certificates.add_resource(api_resources['CertificateDetail'], '/<string:domain>')
+    ns_certificates.add_resource(api_resources['CertificateDeploymentStatus'], '/<string:domain>/deployment-status')
+    ns_certificates.add_resource(api_resources['CertificateDeploymentBrowserReports'], '/deployment-status/browser')
     ns_certificates.add_resource(api_resources['CertificateDNSAliasCheck'], '/<string:domain>/dns-alias-check')
     ns_certificates.add_resource(api_resources['DownloadCertificate'], '/<string:domain>/download')
     ns_certificates.add_resource(api_resources['RenewCertificate'], '/<string:domain>/renew')
@@ -657,6 +698,44 @@ def setup_csrf_protection(app):
         return None
 
 
+def setup_error_handlers(app):
+    """Force JSON responses for unhandled errors on /api/* paths.
+
+    Without these handlers, Werkzeug serves its HTML default page when a
+    request fails to match a registered route (e.g. a trailing slash that
+    no rule covers) or when an unhandled exception escapes a view function.
+    Frontends that pipe the response through `r.json()` then surface
+    "Unexpected token '<'" / NETWORK_ERROR — the symptom reported in #164.
+    Non-API paths keep Flask's default behaviour.
+    """
+    from werkzeug.exceptions import HTTPException
+
+    @app.errorhandler(HTTPException)
+    def _api_http_exception(e):
+        if request.path.startswith('/api/'):
+            return jsonify({
+                'error': e.name,
+                'message': e.description,
+                'code': e.code,
+            }), e.code
+        return e
+
+    @app.errorhandler(Exception)
+    def _api_unhandled_exception(e):
+        if not request.path.startswith('/api/'):
+            raise e
+        logger.exception(
+            "Unhandled exception in API request",
+            path=request.path,
+            method=request.method,
+        )
+        return jsonify({
+            'error': 'Internal Server Error',
+            'message': 'An unexpected error occurred. Check the server logs for details.',
+            'code': 500,
+        }), 500
+
+
 def setup_security_headers(app):
     @app.after_request
     def add_security_headers(response):
@@ -744,6 +823,7 @@ def setup_rate_limiting(app, container: AppContainer):
 
 def create_app(test_config=None):
     """Application Factory for CertMate"""
+    global _flask_app
     container = AppContainer()
     setup_directories(container, test_config)
 
@@ -768,12 +848,18 @@ def create_app(test_config=None):
 
     configure_app(container, app, test_config)
     initialize_managers(container, app)
+    app.config['MANAGERS'] = container.managers
     setup_api(container, app)
     register_web_routes(app, container.managers)
     setup_csrf_protection(app)
+    setup_error_handlers(app)
     setup_security_headers(app)
     setup_rate_limiting(app, container)
     setup_slow_request_logging(app, container)
+
+    # Make the app instance available to background APScheduler jobs before
+    # starting the scheduler so recovered misfired jobs can push an app context.
+    _flask_app = app
     setup_scheduler(container)
 
     return app, container

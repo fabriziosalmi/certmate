@@ -110,10 +110,12 @@
     // Message display function
     // =============================================
 
-    function showMessage(message, type) {
+    function showMessage(message, type, options) {
         type = type || 'info';
         addDebugLog(message, type);
-        CertMate.toast(message, type);
+        // options.errorContext (when supplied) triggers the "Report this
+        // issue" button in the resulting toast — see report-issue.js.
+        CertMate.toast(message, type, undefined, options);
     }
 
     // =============================================
@@ -221,13 +223,17 @@
                 throw new Error('DNS provider must be selected');
             }
 
-            // API Bearer Token is only required after initial setup
-            if (!settings.api_bearer_token && currentSettings.setup_completed) {
+            // API Bearer Token is only required after initial setup when the
+            // backend has no hashed token already. Post-2.4.8 settings.json
+            // stores only api_bearer_token_hash (the plaintext is intentionally
+            // absent from GET /api/web/settings), so an empty form field on
+            // save means "keep the existing hash", not "no token configured".
+            if (!settings.api_bearer_token && currentSettings.setup_completed && !currentSettings.api_bearer_token_hash) {
                 throw new Error('API Bearer Token is required');
             }
 
             // Auto-generate token for initial setup if not provided
-            if (!settings.api_bearer_token && !currentSettings.setup_completed) {
+            if (!settings.api_bearer_token && !currentSettings.setup_completed && !currentSettings.api_bearer_token_hash) {
                 settings.api_bearer_token = generateRandomToken();
                 var tokenField = document.getElementById('api_bearer_token');
                 if (tokenField) {
@@ -278,7 +284,15 @@
                 .then(function (response) {
                     if (!response.ok) {
                         return response.text().then(function (errorData) {
-                            throw new Error('HTTP ' + response.status + ': ' + errorData);
+                            // Parse JSON body when possible so the bug-report
+                            // errorContext can carry the `code`/`hint` the
+                            // backend returned.
+                            var parsed = null;
+                            try { parsed = errorData ? JSON.parse(errorData) : null; } catch (e) { /* not JSON */ }
+                            var err = new Error('HTTP ' + response.status + ': ' + (parsed && parsed.error ? parsed.error : errorData));
+                            err.responseStatus = response.status;
+                            err.responseBody = parsed;
+                            throw err;
                         });
                     }
                     return response.json();
@@ -292,7 +306,15 @@
                 })
                 .catch(function (error) {
                     addDebugLog('Error saving settings: ' + error.message, 'error');
-                    showMessage('Error saving settings: ' + error.message, 'error');
+                    showMessage('Error saving settings: ' + error.message, 'error', {
+                        errorContext: {
+                            endpoint: 'POST /api/web/settings',
+                            status: error.responseStatus || 0,
+                            code: error.responseBody && error.responseBody.code,
+                            message: (error.responseBody && error.responseBody.error) || error.message,
+                            hint: error.responseBody && error.responseBody.hint
+                        }
+                    });
                 })
                 .then(function () {
                     // finally block equivalent
@@ -648,6 +670,12 @@
                 if (populateTokenField) {
                     populateTokenField.value = data.api_bearer_token;
                     addDebugLog('API bearer token field populated', 'info');
+                }
+            } else if (data.api_bearer_token_hash) {
+                var hashedTokenField = document.getElementById('api_bearer_token');
+                if (hashedTokenField) {
+                    hashedTokenField.placeholder = 'API token configured — leave empty to keep, or enter a new one to rotate';
+                    addDebugLog('API bearer token already configured (hash present)', 'info');
                 }
             }
 
@@ -1356,7 +1384,12 @@
             .then(function (response) {
                 if (!response.ok) {
                     return response.text().then(function (errorData) {
-                        throw new Error('HTTP ' + response.status + ': ' + errorData);
+                        var parsed = null;
+                        try { parsed = errorData ? JSON.parse(errorData) : null; } catch (e) { /* not JSON */ }
+                        var err = new Error('HTTP ' + response.status + ': ' + (parsed && parsed.error ? parsed.error : errorData));
+                        err.responseStatus = response.status;
+                        err.responseBody = parsed;
+                        throw err;
                     });
                 }
                 return response.json();
@@ -1374,12 +1407,22 @@
                     // Refresh backup list
                     return refreshBackupList();
                 } else {
-                    throw new Error(result.error || 'Failed to create backup');
+                    var err = new Error(result.error || 'Failed to create backup');
+                    err.responseBody = result;
+                    throw err;
                 }
             })
             .catch(function (error) {
                 addDebugLog('Error creating backup: ' + error.message, 'error');
-                showMessage('Error creating backup: ' + error.message, 'error');
+                showMessage('Error creating backup: ' + error.message, 'error', {
+                    errorContext: {
+                        endpoint: 'POST /api/backups/create',
+                        status: error.responseStatus || 0,
+                        code: error.responseBody && error.responseBody.code,
+                        message: (error.responseBody && error.responseBody.error) || error.message,
+                        hint: error.responseBody && error.responseBody.hint
+                    }
+                });
             })
             .then(function () {
                 // finally block equivalent - restore button state
@@ -1587,7 +1630,12 @@
                 .then(function (response) {
                     if (!response.ok) {
                         return response.text().then(function (errorData) {
-                            throw new Error('HTTP ' + response.status + ': ' + errorData);
+                            var parsed = null;
+                            try { parsed = errorData ? JSON.parse(errorData) : null; } catch (e) { /* not JSON */ }
+                            var err = new Error('HTTP ' + response.status + ': ' + (parsed && parsed.error ? parsed.error : errorData));
+                            err.responseStatus = response.status;
+                            err.responseBody = parsed;
+                            throw err;
                         });
                     }
                     return response.json();
@@ -1626,7 +1674,15 @@
         })
             .catch(function (error) {
                 addDebugLog('Error during backup restore: ' + error.message, 'error');
-                showMessage('Error restoring backup: ' + error.message, 'error');
+                showMessage('Error restoring backup: ' + error.message, 'error', {
+                    errorContext: {
+                        endpoint: 'POST /api/backups/restore/unified',
+                        status: error.responseStatus || 0,
+                        code: error.responseBody && error.responseBody.code,
+                        message: (error.responseBody && error.responseBody.error) || error.message,
+                        hint: error.responseBody && error.responseBody.hint
+                    }
+                });
             });
     }
 

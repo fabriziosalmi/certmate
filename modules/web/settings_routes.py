@@ -1,6 +1,8 @@
 import logging
 from flask import request, jsonify
 
+from modules.core.constants import iter_cert_domain_dirs
+
 logger = logging.getLogger(__name__)
 
 
@@ -10,6 +12,7 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
     auth_manager_ref = auth_manager
     deploy_manager = managers.get('deployer')
     audit_logger = managers.get('audit')
+    file_ops = managers.get('file_ops')
 
     @app.route('/api/settings', methods=['GET'])
     @app.route('/api/web/settings', methods=['GET'])
@@ -57,6 +60,20 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
                     elif isinstance(d[k], dict):
                         _mask_dict(d[k])
             _mask_dict(masked)
+
+            # Recovery helper: if the UI is about to show the wizard,
+            # surface a flag so the frontend can suggest restoring
+            # from backup instead of silently overwriting settings.
+            has_users = bool(settings.get('users'))
+            has_domains = bool(settings.get('domains'))
+            cert_dir = getattr(settings_manager.file_ops, 'cert_dir', None)
+            has_certs = (
+                cert_dir is not None
+                and any(iter_cert_domain_dirs(cert_dir))
+            ) if cert_dir else False
+            if not has_users and not has_domains and has_certs:
+                masked['certmate_recovery_suggested'] = True
+
             response = jsonify(masked)
             response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, post-check=0, pre-check=0, max-age=0'
             response.headers['Pragma'] = 'no-cache'
@@ -462,7 +479,15 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
     @app.route('/api/deploy/history', methods=['GET'])
     @auth_manager_ref.require_role('admin')
     def api_deploy_history():
-        """Get deploy hook execution history"""
+        """Get deploy hook execution history.
+
+        Returns a bare list ``[...]`` — matches the sibling event-log
+        endpoint ``/api/webhooks/deliveries`` (modules/web/misc_routes.py)
+        and the convention the UI (``static/js/settings-deploy.js``,
+        ``static/js/settings-notifications.js``) was originally written
+        against. The error path keeps the ``{"error": ...}`` envelope so
+        the frontend's catch branch can surface a real reason.
+        """
         if not deploy_manager:
             return jsonify({'error': 'Deploy manager not available'}), 503
 
@@ -470,7 +495,7 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
             limit = min(int(request.args.get('limit', 50)), 200)
             domain = request.args.get('domain')
             history = deploy_manager.get_history(limit=limit, domain=domain)
-            return jsonify({'history': history})
+            return jsonify(history)
         except Exception as e:
             logger.error(f"Failed to get deploy history: {e}")
             return jsonify({'error': 'Failed to get deploy history'}), 500

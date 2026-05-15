@@ -8,6 +8,7 @@ import threading
 import logging
 from pathlib import Path
 
+from modules import __version__ as _CERTMATE_VERSION
 from .constants import iter_cert_domain_dirs
 from .file_operations import FileOperations
 from .utils import (
@@ -399,7 +400,7 @@ class SettingsManager:
 
             try:
                 settings = self.file_ops.safe_file_read(self.settings_file, is_json=True)
-                if settings is None:
+                if not isinstance(settings, dict):
                     logger.warning("Settings file exists but is empty or corrupted, attempting backup restore")
                     settings = self._try_restore_from_backup()
                     if settings is None:
@@ -407,6 +408,36 @@ class SettingsManager:
                         self.save_settings(first_time_template)
                         return first_time_template
                     logger.info("Settings restored successfully from backup")
+
+                # Downgrade detection: warn loudly if settings.json was saved
+                # by a newer version than the one currently running.
+                disk_version = settings.get('certmate_version')
+                if disk_version and disk_version != _CERTMATE_VERSION:
+                    try:
+                        disk_parts = [int(p) for p in str(disk_version).split('.')[:2]]
+                        curr_parts = [int(p) for p in str(_CERTMATE_VERSION).split('.')[:2]]
+                        if tuple(disk_parts) > tuple(curr_parts):
+                            logger.error(
+                                "DOWNGRADE DETECTED: settings.json was written by "
+                                "CertMate %s but this process is %s. The on-disk "
+                                "format may be incompatible. If authentication or "
+                                "certificates are missing, restore the latest backup "
+                                "from %s and restart.",
+                                disk_version, _CERTMATE_VERSION,
+                                self.file_ops.backup_dir / 'unified'
+                            )
+                        else:
+                            logger.info(
+                                "settings.json version %s vs running %s — "
+                                "continuing normally.",
+                                disk_version, _CERTMATE_VERSION
+                            )
+                    except Exception:
+                        logger.warning(
+                            "settings.json has unexpected certmate_version %s "
+                            "(running %s).",
+                            disk_version, _CERTMATE_VERSION
+                        )
 
                 # Apply migrations for backward compatibility
                 settings, was_migrated = self._migrate_settings_format(settings)
@@ -464,6 +495,13 @@ class SettingsManager:
                     was_migrated = True
 
                 # Save migrated settings if any changes were made.
+                # Stamp the current version so downgrade detection can fire
+                # on the next boot if the operator rolls back, but only trigger
+                # a write when the version actually changed.
+                if settings.get('certmate_version') != _CERTMATE_VERSION:
+                    settings['certmate_version'] = _CERTMATE_VERSION
+                    was_migrated = True
+
                 # If the save fails (disk full, permission denied, validation
                 # rejection of a field migrated up from an older format),
                 # the in-memory copy diverges from disk: callers receive the
@@ -479,6 +517,55 @@ class SettingsManager:
                             "now ahead of settings.json on disk. The next "
                             "save will retry; check earlier log lines for "
                             "the validation or I/O error that blocked it."
+                        )
+
+                # Defensive logging when critical fields are unexpectedly
+                # missing from an existing settings file. This happens after
+                # a destructive downgrade or partial corruption and gives
+                # operators a concrete next step before the wizard overwrites
+                # state.
+                if not settings.get('users'):
+                    backups = []
+                    try:
+                        unified = self.file_ops.backup_dir / 'unified'
+                        if unified.exists():
+                            backups = sorted(
+                                [b.name for b in unified.iterdir() if b.suffix == '.zip'],
+                                reverse=True
+                            )[:3]
+                            # Exclude migration-created backups: they were
+                            # produced seconds ago by this boot and don't help
+                            # the operator recover from pre-existing data loss.
+                            backups = [b for b in backups if '_migration' not in b]
+                    except Exception:
+                        pass
+                    if backups:
+                        logger.error(
+                            "CRITICAL: settings.json has no users. If this is "
+                            "unexpected, restore a backup before using the UI: %s",
+                            backups
+                        )
+                    else:
+                        logger.error(
+                            "CRITICAL: settings.json has no users and no backups "
+                            "were found. If this is unexpected, check that the "
+                            "data volume is mounted correctly."
+                        )
+
+                if not settings.get('domains'):
+                    cert_dir = getattr(self.file_ops, 'cert_dir', None)
+                    cert_domains = []
+                    if cert_dir and cert_dir.exists():
+                        try:
+                            cert_domains = [d.name for d in iter_cert_domain_dirs(cert_dir)]
+                        except Exception:
+                            pass
+                    if cert_domains:
+                        logger.warning(
+                            "settings.json has no domains but certificates exist "
+                            "on disk: %s. Use the API or the 'Add Domain' UI flow "
+                            "to re-register them.",
+                            cert_domains
                         )
 
                 # Override settings with environment variables.
