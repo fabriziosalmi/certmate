@@ -44,6 +44,12 @@
     (function() {
         var escapeHtml = CertMate.escapeHtml;
 
+        // Page-state for incremental Load-more pagination. The backend
+        // caps `?limit=` at 500, so once we hit that the button hides.
+        var ACTIVITY_INITIAL_LIMIT = 100;
+        var ACTIVITY_MAX_LIMIT = 500;
+        var currentLimit = ACTIVITY_INITIAL_LIMIT;
+
         var opIcons = {
             create: { icon: 'fa-plus-circle', color: 'text-green-500', bg: 'bg-green-100 dark:bg-green-900/30' },
             renew: { icon: 'fa-sync', color: 'text-blue-500', bg: 'bg-blue-100 dark:bg-blue-900/30' },
@@ -223,7 +229,7 @@
             // concrete "something is happening" signal instead of stale
             // content.
             document.getElementById('activityList').innerHTML = skeletonRowsHtml(6);
-            fetch('/api/activity?limit=100', { credentials: 'same-origin' })
+            fetch('/api/activity?limit=' + currentLimit, { credentials: 'same-origin' })
                 .then(function(r) {
                     if (!r.ok) {
                         var err = new Error('HTTP ' + r.status);
@@ -234,6 +240,12 @@
                 })
                 .then(function(data) {
                     var entries = data.entries || [];
+                    var rawCount = entries.length;
+                    // The backend caps at `data.limit`; if it gave us
+                    // exactly that many, there may be more upstream — show
+                    // the Load-more button. Hide it once we're at the
+                    // hard ceiling.
+                    var hasMore = rawCount >= currentLimit && currentLimit < ACTIVITY_MAX_LIMIT;
                     if (opFilter) {
                         entries = entries.filter(function(e) { return e.operation === opFilter; });
                     }
@@ -243,14 +255,14 @@
                     if (searchTerm) {
                         entries = entries.filter(function(e) { return passesSearchFilter(e, searchTerm); });
                     }
-                    renderEntries(entries);
+                    renderEntries(entries, hasMore);
                 })
                 .catch(function(err) {
                     renderErrorState(err && err.status, err);
                 });
         };
 
-        function renderEntries(entries) {
+        function renderEntries(entries, hasMore) {
             var list = document.getElementById('activityList');
             if (entries.length === 0) {
                 list.innerHTML = '<div class="px-6 py-12 text-center text-gray-500 dark:text-gray-400"><i class="fas fa-inbox text-3xl text-gray-300 dark:text-gray-600 mb-3 block"></i>No activity recorded yet</div>';
@@ -305,6 +317,19 @@
                     '</div>' +
                 wrapperClose;
             }).join('');
+
+            if (hasMore) {
+                var btnHtml = '<div class="px-6 py-4 text-center border-t border-gray-100 dark:border-gray-700/50">' +
+                    '<button id="loadMoreActivity" type="button" class="inline-flex items-center px-4 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 transition">' +
+                        '<i class="fas fa-plus mr-2"></i>Load more' +
+                    '</button>' +
+                '</div>';
+                list.insertAdjacentHTML('beforeend', btnHtml);
+                document.getElementById('loadMoreActivity').addEventListener('click', function() {
+                    currentLimit = Math.min(currentLimit + ACTIVITY_INITIAL_LIMIT, ACTIVITY_MAX_LIMIT);
+                    loadActivity();
+                });
+            }
         }
 
         document.getElementById('filterOp').addEventListener('change', loadActivity);
