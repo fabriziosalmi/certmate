@@ -85,6 +85,17 @@
                         class="w-full py-3 px-4 bg-primary text-white font-semibold rounded-lg hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 dark:focus:ring-offset-gray-800 btn-press transition-all duration-150">
                     <i class="fas fa-sign-in-alt mr-2"></i> Sign In
                 </button>
+
+                <!-- Reset-password hint. CertMate doesn't ship a self-
+                     service flow (no email infra assumption), so the
+                     canonical path is to ask the admin or use the
+                     in-container reset script. -->
+                <p class="text-xs text-gray-500 dark:text-gray-400 text-center mt-2">
+                    Forgot your password? Contact your CertMate
+                    administrator, or run
+                    <code class="font-mono px-1 py-0.5 rounded bg-gray-100 dark:bg-gray-700">scripts/reset_admin_password.py</code>
+                    inside the container.
+                </p>
             </form>
         </div>
 
