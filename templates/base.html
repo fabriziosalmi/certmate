@@ -12,6 +12,16 @@
     <link rel="manifest" href="/static/manifest.json">
     <link href="/static/css/tailwind.min.css" rel="stylesheet">
     <link href="/static/css/fontawesome.min.css" rel="stylesheet">
+    <style>
+        /* Theme-toggle icon visibility keyed off the `dark` class on
+           <html>. ID-selector specificity (100) beats FontAwesome's
+           `.fas { display: inline-block }` (10), so this works without
+           !important. Loaded in <head> after both stylesheets so the
+           initial paint already has the right icon — no FOUC, no JS
+           sync needed beyond the existing classList.toggle('dark'). */
+        html:not(.dark) #theme-icon-sun { display: none; }
+        html.dark #theme-icon-moon { display: none; }
+    </style>
     {% block head %}{% endblock %}
     <script>
     // Apply dark mode before paint to prevent flash
@@ -98,7 +108,7 @@
                     <!-- Dark mode toggle -->
                     <button type="button" id="themeToggle" onclick="toggleTheme()" class="px-2 py-2 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700" title="Toggle theme" aria-label="Toggle dark mode">
                         <i class="fas fa-moon" id="theme-icon-moon"></i>
-                        <i class="fas fa-sun hidden" id="theme-icon-sun"></i>
+                        <i class="fas fa-sun" id="theme-icon-sun"></i>
                     </button>
                     <!-- Logout (rendered only when authenticated; gated
                          server-side via the `current_user` context var, so
@@ -144,17 +154,9 @@
             .then(function(){window.location.href='/login'})
             .catch(function(){window.location.href='/login'});
     }
-    // Theme toggle
-    function _syncThemeIcons() {
-        var isDark = document.documentElement.classList.contains('dark');
-        var moon = document.getElementById('theme-icon-moon');
-        var sun = document.getElementById('theme-icon-sun');
-        // Use Tailwind's `hidden` class instead of inline style.display so
-        // the icons participate in the rest of the design system (focus
-        // ring states, future @apply rules, devtools-friendly).
-        if (moon) moon.classList.toggle('hidden', isDark);
-        if (sun)  sun.classList.toggle('hidden', !isDark);
-    }
+    // Theme toggle. Icon visibility is driven by CSS rules in <head>
+    // that key off the `dark` class on <html>, so this function only
+    // needs to flip the class and persist the choice.
     function toggleTheme(){
         var html = document.documentElement;
         if (html.classList.contains('dark')) {
@@ -164,10 +166,7 @@
             html.classList.add('dark');
             localStorage.setItem('theme', 'dark');
         }
-        _syncThemeIcons();
     }
-    // Sync icons once DOM is ready (handles dark-mode-on-load case)
-    document.addEventListener('DOMContentLoaded', _syncThemeIcons);
     // Notifications — disclosure popup (non-modal): aria-expanded flip on
     // the trigger, focus moves into the panel when opened, focus restored
     // to the trigger on close, Escape dismisses. No focus trap because
