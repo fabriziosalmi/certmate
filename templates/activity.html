@@ -10,8 +10,14 @@
                         <i class="fas fa-chevron-right text-[10px] text-gray-300 dark:text-gray-600 mx-2"></i>
                         <span class="text-gray-700 dark:text-gray-200 font-medium">Activity</span>
                     </nav>
-                    <div class="flex items-center gap-2">
-                        <select id="filterOp" class="px-3 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <select id="filterDate" aria-label="Filter by date range" class="px-3 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary">
+                            <option value="">All time</option>
+                            <option value="today">Today</option>
+                            <option value="7d">Last 7 days</option>
+                            <option value="30d">Last 30 days</option>
+                        </select>
+                        <select id="filterOp" aria-label="Filter by operation type" class="px-3 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary">
                             <option value="">All Operations</option>
                             <option value="create">Created</option>
                             <option value="renew">Renewed</option>
@@ -19,7 +25,7 @@
                             <option value="download">Downloaded</option>
                             <option value="api_request">API Request</option>
                         </select>
-                        <button type="button" onclick="loadActivity()" class="px-2.5 py-1.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition" title="Refresh">
+                        <button type="button" onclick="loadActivity()" class="px-2.5 py-1.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition" title="Refresh" aria-label="Refresh activity log">
                             <i class="fas fa-sync"></i>
                         </button>
                     </div>
@@ -130,8 +136,31 @@
                 '</div>';
         }
 
+        // Date-range filtering happens client-side on the already-fetched
+        // window of entries. Returning false drops the entry. "today" is
+        // calendar-day, not a rolling 24h window — matches what users mean
+        // when they say "what happened today". 7d/30d are rolling windows
+        // ending now (the upstream `?limit=100` cap can still mask older
+        // entries; a paginated fetch is a separate fix).
+        function passesDateFilter(entry, range) {
+            if (!range) return true;
+            var t = new Date(entry.timestamp);
+            if (isNaN(t.getTime())) return true; // can't filter what we can't parse
+            var now = new Date();
+            if (range === 'today') {
+                return t.getFullYear() === now.getFullYear()
+                    && t.getMonth() === now.getMonth()
+                    && t.getDate() === now.getDate();
+            }
+            var days = range === '7d' ? 7 : range === '30d' ? 30 : 0;
+            if (!days) return true;
+            var cutoff = now.getTime() - days * 86400000;
+            return t.getTime() >= cutoff;
+        }
+
         window.loadActivity = function() {
-            var filter = document.getElementById('filterOp').value;
+            var opFilter = document.getElementById('filterOp').value;
+            var dateFilter = document.getElementById('filterDate').value;
             fetch('/api/activity?limit=100', { credentials: 'same-origin' })
                 .then(function(r) {
                     if (!r.ok) {
@@ -143,8 +172,11 @@
                 })
                 .then(function(data) {
                     var entries = data.entries || [];
-                    if (filter) {
-                        entries = entries.filter(function(e) { return e.operation === filter; });
+                    if (opFilter) {
+                        entries = entries.filter(function(e) { return e.operation === opFilter; });
+                    }
+                    if (dateFilter) {
+                        entries = entries.filter(function(e) { return passesDateFilter(e, dateFilter); });
                     }
                     renderEntries(entries);
                 })
@@ -198,6 +230,7 @@
         }
 
         document.getElementById('filterOp').addEventListener('change', loadActivity);
+        document.getElementById('filterDate').addEventListener('change', loadActivity);
         loadActivity();
     })();
     </script>
