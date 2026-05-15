@@ -527,16 +527,23 @@
             var aliasHint = domainAlias
                 ? rowRaw(rowHtml`<div class="mt-1 flex items-center text-xs text-blue-600 dark:text-blue-300 min-w-0"><i class="fas fa-link mr-1 text-blue-500 shrink-0" aria-hidden="true"></i><span class="truncate" title="${domainAlias}">DNS-01 Alias: ${domainAlias}</span></div>`)
                 : false;
-            // Mobile-only Expires line (mirrors the desktop "Expires" column
-            // which is hidden md:table-cell, so we never double-render on
-            // tablet+). For a cert manager the expiry date is the single
-            // most important number on the screen — hiding it < md was the
-            // R-5 critical-info regression. Skipped when the upstream
-            // response didn't include a parseable expiry, to avoid showing
-            // "null days" on the mobile row.
-            var mobileExpiry = (daysKnown && cert.expiry_date)
-                ? rowRaw(rowHtml`<div class="md:hidden mt-1 flex items-center text-xs ${rowRaw(daysClass)} min-w-0"><i class="fas fa-clock mr-1 shrink-0" aria-hidden="true"></i><span class="truncate">${expiryStr} · ${rowRaw(String(cert.days_until_expiry))} days</span></div>`)
+            // R-5 mobile card layout: surface the three desktop-only columns
+            // (Expires / Provider / Deployment) as stacked rows inside the
+            // Domain cell when below md (768 px). The table semantics are
+            // preserved — the dedicated columns still render at md+ via
+            // their `hidden md:table-cell` / `hidden lg:table-cell` rules,
+            // so we never double-render on tablet+. The border-top on the
+            // wrapper gives a visual seam between the domain identity and
+            // the meta block, reading as a card on phones without breaking
+            // the table on bigger screens.
+            var mobileExpiryLine = (daysKnown && cert.expiry_date)
+                ? rowRaw(rowHtml`<div class="flex items-center text-xs ${rowRaw(daysClass)}"><i class="fas fa-clock mr-1.5 w-3 shrink-0" aria-hidden="true"></i><span class="truncate">${expiryStr} · ${rowRaw(String(cert.days_until_expiry))} days left</span></div>`)
                 : false;
+            var mobileProviderLine = providerLabel
+                ? rowRaw(rowHtml`<div class="flex items-center text-xs text-gray-500 dark:text-gray-400"><i class="fas fa-server mr-1.5 w-3 shrink-0" aria-hidden="true"></i><span class="truncate">${rowRaw(providerLabel)}</span></div>`)
+                : false;
+            var mobileDeploymentLine = rowRaw(rowHtml`<div class="flex items-start text-xs text-gray-500 dark:text-gray-400"><i class="fas fa-rocket mr-1.5 mt-0.5 w-3 shrink-0" aria-hidden="true"></i><div class="flex-1 min-w-0">${rowRaw(deploymentBadgesHtml(cert))}</div></div>`);
+            var mobileMeta = rowRaw(rowHtml`<div class="md:hidden mt-2 pt-2 border-t border-gray-100 dark:border-gray-700/50 space-y-1">${mobileExpiryLine}${mobileProviderLine}${mobileDeploymentLine}</div>`);
             var lockColor = isExpired ? 'text-red-400' : isExpiringSoon ? 'text-yellow-400' : 'text-green-500';
             return rowHtml`<tr class="${rowRaw(healthClass)} row-enter hover:bg-blue-50/40 dark:hover:bg-blue-900/10 transition-colors duration-150 cursor-pointer" style="animation-delay:${rowRaw(String(sorted.indexOf(cert) * 30))}ms" onclick="openCertDetail('${cert.domain}')">
                 <td class="px-6 py-4 max-w-0">
@@ -545,7 +552,7 @@
                         <div class="min-w-0">
                             <div class="text-sm font-medium text-gray-900 dark:text-white truncate">${cert.domain}</div>
                             ${aliasHint}
-                            ${mobileExpiry}
+                            ${mobileMeta}
                         </div>
                     </div>
                 </td>
