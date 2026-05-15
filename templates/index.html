@@ -322,14 +322,11 @@
         })();
         </script>
 
-        <!-- Statistics Cards -->
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6" id="statsCards">
-            <!-- Skeleton placeholders (replaced by JS on load) -->
-            <div class="bg-white dark:bg-surface-card rounded-xl p-4"><div class="skeleton h-4 w-16 mb-2"></div><div class="skeleton h-7 w-10"></div></div>
-            <div class="bg-white dark:bg-surface-card rounded-xl p-4"><div class="skeleton h-4 w-16 mb-2"></div><div class="skeleton h-7 w-10"></div></div>
-            <div class="bg-white dark:bg-surface-card rounded-xl p-4"><div class="skeleton h-4 w-16 mb-2"></div><div class="skeleton h-7 w-10"></div></div>
-            <div class="bg-white dark:bg-surface-card rounded-xl p-4"><div class="skeleton h-4 w-16 mb-2"></div><div class="skeleton h-7 w-10"></div></div>
-        </div>
+        <!-- Statistics Cards (skeleton placeholders rendered by JS on
+             DOMContentLoaded; count is driven by STAT_METRICS_COUNT in
+             dashboard.js so the placeholder matches whatever number of
+             cards updateStats() actually emits). -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6" id="statsCards"></div>
 
         <!-- Certificates List -->
         <div class="bg-white dark:bg-surface-card shadow-card rounded-xl overflow-hidden">

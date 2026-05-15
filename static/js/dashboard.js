@@ -135,6 +135,26 @@
     }
 
     // Update statistics cards with deployment info
+    // Number of stat cards `updateStats` emits below (Total, Valid,
+    // Expiring, Deployed). Drives the initial skeleton render so the
+    // placeholder count always matches the real count — when the metric
+    // list changes, bump this constant in lockstep with the statCard()
+    // calls in `updateStats`.
+    var STAT_METRICS_COUNT = 4;
+
+    function statsSkeletonHtml(count) {
+        var rows = [];
+        for (var i = 0; i < count; i++) {
+            rows.push(
+                '<div class="bg-white dark:bg-surface-card rounded-xl p-4" aria-hidden="true">' +
+                    '<div class="skeleton h-4 w-16 mb-2"></div>' +
+                    '<div class="skeleton h-7 w-10"></div>' +
+                '</div>'
+            );
+        }
+        return rows.join('');
+    }
+
     function updateStats(certificates) {
         // Ensure certificates is an array
         if (!Array.isArray(certificates)) {
@@ -2076,6 +2096,13 @@
     }
 
     document.addEventListener('DOMContentLoaded', function () {
+        // Paint the stats-card skeleton placeholders before the cert
+        // fetch returns, so the surface is never an empty grid — count
+        // is driven by STAT_METRICS_COUNT to stay in sync with the
+        // updateStats() output (B4 fix).
+        var statsContainer = document.getElementById('statsCards');
+        if (statsContainer) statsContainer.innerHTML = statsSkeletonHtml(STAT_METRICS_COUNT);
+
         // Resolve the caller's role first so the initial cert list can
         // already render with the right buttons hidden — avoids the
         // viewer briefly seeing admin-only controls before they vanish.
