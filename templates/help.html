@@ -14,7 +14,8 @@
                 <span class="inline-flex items-center px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
                     <i class="fas fa-check-circle mr-1"></i>Active
                 </span>
-                <a href="/docs/" target="_blank" class="text-gray-400 hover:text-primary transition-colors"><i class="fas fa-link mr-1"></i>API Docs</a>
+                <a href="/docs/" target="_blank" rel="noopener" class="text-gray-400 hover:text-primary transition-colors" title="Swagger UI — try API requests live"><i class="fas fa-flask mr-1" aria-hidden="true"></i>Swagger</a>
+                <a href="/redoc" target="_blank" rel="noopener" class="text-gray-400 hover:text-primary transition-colors" title="ReDoc — read-only API reference"><i class="fas fa-book mr-1" aria-hidden="true"></i>ReDoc</a>
             </div>
         </div>
 
@@ -544,16 +545,21 @@
                                 Complete API Documentation
                             </h4>
                             <p class="text-sm text-yellow-800 dark:text-yellow-200">
-                                Explore the full interactive API documentation with examples and testing capabilities:
+                                Two flavours of API documentation are available — use Swagger for
+                                interactive try-it-out, ReDoc for read-only browsing:
                             </p>
-                            <div class="mt-3 space-x-4">
-                                <a href="/docs/" target="_blank" class="inline-flex items-center px-3 py-1 bg-yellow-200 dark:bg-yellow-800 text-yellow-900 dark:text-yellow-100 rounded-md text-sm hover:bg-yellow-300 dark:hover:bg-yellow-700">
-                                    <i class="fas fa-external-link-alt mr-1"></i>
-                                    Swagger UI (/docs/)
+                            <div class="mt-3 flex flex-wrap gap-2">
+                                <a href="/docs/" target="_blank" rel="noopener"
+                                   title="Swagger UI — interactive, run live API requests from the page"
+                                   class="inline-flex items-center px-3 py-1 bg-yellow-200 dark:bg-yellow-800 text-yellow-900 dark:text-yellow-100 rounded-md text-sm hover:bg-yellow-300 dark:hover:bg-yellow-700">
+                                    <i class="fas fa-flask mr-1" aria-hidden="true"></i>
+                                    Swagger UI <span class="opacity-70 ml-1">(/docs/, interactive)</span>
                                 </a>
-                                <a href="/redoc/" target="_blank" class="inline-flex items-center px-3 py-1 bg-yellow-200 dark:bg-yellow-800 text-yellow-900 dark:text-yellow-100 rounded-md text-sm hover:bg-yellow-300 dark:hover:bg-yellow-700">
-                                    <i class="fas fa-external-link-alt mr-1"></i>
-                                    ReDoc (/redoc/)
+                                <a href="/redoc" target="_blank" rel="noopener"
+                                   title="ReDoc — read-only API reference, easier to browse end-to-end"
+                                   class="inline-flex items-center px-3 py-1 bg-yellow-200 dark:bg-yellow-800 text-yellow-900 dark:text-yellow-100 rounded-md text-sm hover:bg-yellow-300 dark:hover:bg-yellow-700">
+                                    <i class="fas fa-book mr-1" aria-hidden="true"></i>
+                                    ReDoc <span class="opacity-70 ml-1">(/redoc, read-only)</span>
                                 </a>
                             </div>
                         </div>
@@ -609,8 +615,8 @@
                                     Health Checks
                                 </h4>
                                 <div class="text-sm text-green-800 dark:text-green-200 space-y-1">
-                                    <div>• Service Status: <a href="/health" target="_blank" class="underline">/health</a></div>
-                                    <div>• API Connectivity: <a href="/docs/" target="_blank" class="underline">/docs/</a></div>
+                                    <div>• Service Status: <a href="/health" target="_blank" rel="noopener" class="underline">/health</a></div>
+                                    <div>• API Connectivity: <a href="/docs/" target="_blank" rel="noopener" class="underline" title="Swagger UI — interactive API explorer">/docs/ (Swagger)</a> or <a href="/redoc" target="_blank" rel="noopener" class="underline" title="ReDoc — read-only API reference">/redoc</a></div>
                                     <div>• Certificate Status: <a href="/" class="underline">Dashboard</a></div>
                                 </div>
                             </div>
@@ -626,8 +632,8 @@
                                     <div>• Review API documentation</div>
                                 </div>
                                 <div class="pt-2 border-t border-blue-200 dark:border-blue-700">
-                                    <a href="https://github.com/fabriziosalmi/certmate/issues/new/choose" 
-                                       target="_blank" 
+                                    <a href="https://github.com/fabriziosalmi/certmate/issues/new/choose"
+                                       target="_blank" rel="noopener"
                                        class="inline-flex items-center px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-md transition-colors duration-200 shadow-sm hover:shadow-md">
                                         <i class="fab fa-github mr-2"></i>
                                         Report Issue on GitHub
