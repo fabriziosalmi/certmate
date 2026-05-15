@@ -252,7 +252,9 @@
             <div class="text-gray-500">Debug console ready. All settings actions will be logged here...</div>
         </div>
     </div>
-    <button onclick="toggleDebugConsole()" class="fixed bottom-4 right-4 bg-gray-800 text-white px-3 py-2 rounded-full shadow-lg z-50 hover:bg-primary">
+    <button type="button" data-debug-control onclick="toggleDebugConsole()"
+            class="hidden fixed bottom-4 right-4 bg-gray-800 text-white px-3 py-2 rounded-full shadow-lg z-50 hover:bg-primary"
+            aria-label="Open settings debug console">
         <i class="fas fa-bug"></i> Debug
     </button>
     <script src="/static/js/settings.js"></script>

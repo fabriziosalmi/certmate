@@ -363,8 +363,9 @@
                             <span class="hidden sm:inline">Check All</span>
                             <span class="sm:hidden">Check</span>
                         </button>
-                        <button onclick="toggleDebugConsole()" 
-                                class="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-lg text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors duration-200 whitespace-nowrap">
+                        <button type="button" data-debug-control onclick="toggleDebugConsole()"
+                                class="hidden inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-lg text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors duration-200 whitespace-nowrap"
+                                aria-label="Open deployment-check debug console">
                             <i class="fas fa-terminal mr-1 sm:mr-2"></i>
                             <span class="hidden sm:inline">Debug</span>
                             <span class="sm:hidden">Debug</span>

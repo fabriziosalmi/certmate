@@ -494,6 +494,37 @@
         });
     }
 
+    // ── Debug-console gating ─────────────────────────────────────
+    // The Debug button + console in index.html / settings.html are
+    // dev-only surfaces. Show them only when explicitly opted in via
+    // `?debug=1` in the URL (persisted to localStorage, so once
+    // toggled it stays on for the session/install) or by setting
+    // localStorage.certmate_debug = '1' directly. `?debug=0` clears
+    // the flag.
+    try {
+        var params = new URLSearchParams(window.location.search);
+        if (params.has('debug')) {
+            if (params.get('debug') === '0') {
+                localStorage.removeItem('certmate_debug');
+            } else {
+                localStorage.setItem('certmate_debug', '1');
+            }
+        }
+    } catch (e) { /* old browser or storage disabled */ }
+
+    CM.debugEnabled = (function() {
+        try { return localStorage.getItem('certmate_debug') === '1'; }
+        catch (e) { return false; }
+    })();
+
+    if (CM.debugEnabled) {
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('[data-debug-control]').forEach(function(el) {
+                el.classList.remove('hidden');
+            });
+        });
+    }
+
     // ── Expose globally ──────────────────────────────────────────
     window.CertMate = CM;
 
