@@ -1373,8 +1373,10 @@
             }
             return '<div class="mt-2 text-xs ' + rowClass + '">' +
                 '<div><i class="fas ' + (check.ok ? 'fa-check' : 'fa-times') + ' mr-1"></i>' +
-                '<code class="font-mono bg-gray-100 dark:bg-gray-700 px-1 rounded">' + escapeHtml(check.source) + '</code></div>' +
-                '<div class="mt-1 ml-5">Expected: <code class="font-mono bg-gray-100 dark:bg-gray-700 px-1 rounded">' + escapeHtml(check.expected_target) + '</code></div>' +
+                '<code class="font-mono bg-gray-100 dark:bg-gray-700 px-1 rounded">' + escapeHtml(check.source) + '</code>' +
+                aliasCopyButtonHtml(check.source) + '</div>' +
+                '<div class="mt-1 ml-5">Expected: <code class="font-mono bg-gray-100 dark:bg-gray-700 px-1 rounded">' + escapeHtml(check.expected_target) + '</code>' +
+                aliasCopyButtonHtml(check.expected_target) + '</div>' +
                 '<div class="mt-1 ml-5">Found: <code class="font-mono bg-gray-100 dark:bg-gray-700 px-1 rounded">' + escapeHtml(found) + '</code></div>' +
                 '</div>';
         }).join('');
@@ -1838,6 +1840,58 @@
         document.body.removeChild(textArea);
     }
 
+    function aliasCopyButtonHtml(value) {
+        if (!value) return '';
+        return ' <button type="button" class="ml-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors align-middle"' +
+            ' data-copy="' + escapeHtml(value) + '"' +
+            ' onclick="copyAliasValueToClipboard(this)"' +
+            ' title="Copy to clipboard" aria-label="Copy to clipboard">' +
+            '<i class="fas fa-clipboard text-xs"></i></button>';
+    }
+
+    function copyAliasValueToClipboard(button) {
+        // The raw value is stored in data-copy and trimmed at copy time so the
+        // user can't end up pasting the leading/trailing whitespace that the
+        // browser tends to grab when a CNAME string is selected by hand
+        // (issue #159).
+        var text = String(button.dataset.copy || '').trim();
+        if (!text) return;
+        var icon = button.querySelector('i');
+        var originalIconClass = icon ? icon.className : 'fas fa-clipboard text-xs';
+        function flashSuccess() {
+            if (icon) icon.className = 'fas fa-check text-xs';
+            button.classList.add('text-green-600', 'dark:text-green-400');
+            setTimeout(function () {
+                if (icon) icon.className = originalIconClass;
+                button.classList.remove('text-green-600', 'dark:text-green-400');
+            }, 1500);
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(flashSuccess).catch(function () {
+                aliasFallbackCopy(text, flashSuccess);
+            });
+        } else {
+            aliasFallbackCopy(text, flashSuccess);
+        }
+    }
+
+    function aliasFallbackCopy(text, onSuccess) {
+        var textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.top = '0';
+        textArea.style.left = '0';
+        textArea.style.position = 'fixed';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        try {
+            if (document.execCommand('copy')) onSuccess();
+        } catch (err) {
+            /* swallow: feedback simply won't flash */
+        }
+        document.body.removeChild(textArea);
+    }
+
     // Initialize on page load
     document.addEventListener('DOMContentLoaded', function () {
         // Resolve the caller's role first so the initial cert list can
@@ -1923,4 +1977,5 @@
     window.updateCAProviderInfo = updateCAProviderInfo;
     window.updateDnsAliasHelp = updateDnsAliasHelp;
     window.checkDnsAliasForCertificate = checkDnsAliasForCertificate;
+    window.copyAliasValueToClipboard = copyAliasValueToClipboard;
 })();
