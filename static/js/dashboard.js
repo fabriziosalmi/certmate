@@ -1704,40 +1704,50 @@
 
     // Delete a certificate and its settings entry (issue #111).
     function deleteCertificate(domain) {
-        if (!window.confirm('Delete certificate for ' + domain + '?\n\nThis removes the certificate files from disk and removes the domain from settings. This action cannot be undone.')) {
-            return;
-        }
-        fetch('/api/certificates/' + encodeURIComponent(domain), {
-            method: 'DELETE'
-        }).then(function (response) {
-            return response.json().then(function (result) {
-                return { ok: response.ok, status: response.status, result: result };
-            });
-        }).then(function (data) {
-            if (data.ok) {
-                showMessage('Certificate deleted for ' + domain, 'success');
-                closeCertDetail();
-                loadCertificates();
-            } else {
-                showMessage(data.result.error || 'Failed to delete certificate', 'error', {
+        // Use CertMate.confirm (in-page modal, danger-styled) for parity
+        // with every other destructive action in the app (revoke client
+        // cert, delete user, delete backup, delete API key). The native
+        // window.confirm bypasses the app theme and is dismissible by
+        // browser "block dialogs" toggles — too weak a guard for an
+        // operation that erases the cert files and the settings entry.
+        CertMate.confirm(
+            'Delete certificate for ' + domain + '? This removes the certificate files from disk and removes the domain from settings. This action cannot be undone.',
+            'Delete Certificate',
+            { confirmText: 'Delete' }
+        ).then(function (confirmed) {
+            if (!confirmed) return;
+            fetch('/api/certificates/' + encodeURIComponent(domain), {
+                method: 'DELETE'
+            }).then(function (response) {
+                return response.json().then(function (result) {
+                    return { ok: response.ok, status: response.status, result: result };
+                });
+            }).then(function (data) {
+                if (data.ok) {
+                    showMessage('Certificate deleted for ' + domain, 'success');
+                    closeCertDetail();
+                    loadCertificates();
+                } else {
+                    showMessage(data.result.error || 'Failed to delete certificate', 'error', {
+                        errorContext: {
+                            endpoint: 'DELETE /api/certificates/' + domain,
+                            status: data.status || 0,
+                            code: data.result.code,
+                            message: data.result.error,
+                            hint: data.result.hint
+                        }
+                    });
+                }
+            }).catch(function (error) {
+                console.error('Error deleting certificate:', error);
+                showMessage('Failed to delete certificate. Please try again.', 'error', {
                     errorContext: {
                         endpoint: 'DELETE /api/certificates/' + domain,
-                        status: data.status || 0,
-                        code: data.result.code,
-                        message: data.result.error,
-                        hint: data.result.hint
+                        status: 0,
+                        code: 'NETWORK_ERROR',
+                        message: (error && error.message) || 'network error'
                     }
                 });
-            }
-        }).catch(function (error) {
-            console.error('Error deleting certificate:', error);
-            showMessage('Failed to delete certificate. Please try again.', 'error', {
-                errorContext: {
-                    endpoint: 'DELETE /api/certificates/' + domain,
-                    status: 0,
-                    code: 'NETWORK_ERROR',
-                    message: (error && error.message) || 'network error'
-                }
             });
         });
     }
