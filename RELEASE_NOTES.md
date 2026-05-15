@@ -1,3 +1,105 @@
+## v2.5.0 (Minor — v3 UI massive pass: 51 fixes across all templates)
+
+A focused, single-branch sweep of the entire UI surface (`templates/`, `static/js/`, `static/css/`). 51 commits, each scoped to one fix, organized into four waves: cross-cutting refactors (R-1..R-6), per-page quick wins (QW-1..QW-15), per-page Tier A / Tier B work, and per-page section passes (2.x base, 3.x dashboard, 4.x settings, 5.x activity, 6.x login, 7.x help, 8.x cross-cutting).
+
+No API breakage. No data migration. No new env vars. All changes are at the template / asset / client-side layer, plus three small `modules/web/` additions to support `?next=` and `current_user` rendering.
+
+### Cross-cutting refactors
+
+- **R-1 — `templates/settings.html` Alpine root repair.** A long-standing structural bug had Alpine partials sitting outside the root `x-data` element due to an `<!-- comment inside attribute -->` that broke HTML parsing. Tabs and modals were silently un-reactive in some browsers. Re-parented partials inside the main card and removed the comment-in-attribute.
+- **R-2 — Standardized modal macro.** New `templates/partials/_modal.html` with a `{% call modal(id, title, size) %}` macro: dialog role, `aria-modal`, `aria-labelledby`, header with `[data-modal-close]`, scrollable body, panel sizing. Paired with `CertMate.modal.open/close` in [static/js/certmate.js](static/js/certmate.js): global Esc handler, backdrop click, focus trap, `modal:close` CustomEvent, MutationObserver-based discovery so partials added at runtime are wired automatically. Settings modals (`addAccountModal`, `editAccountModal`) migrated as the first callsites.
+- **R-3 — Component-class scaffold in [static/css/input.css](static/css/input.css).** New `@layer components` with `.btn`, `.btn-primary/secondary/danger/ghost`, `.btn-sm/lg`, `.card`, `.badge`, `.badge-success/warning/error/info`, `.form-input`, `.form-select`, `.form-label` — all defined via `@apply`. [tailwind.config.js](tailwind.config.js) safelist added so PurgeCSS doesn't drop classes until the migration of callsites lands in a follow-up sprint. No existing markup changed in this release.
+- **R-5 — Dashboard mobile card meta block.** On `md:hidden` widths each row gets a secondary line with expiry, provider, and deployment status. Previously these only rendered on desktop; mobile users couldn't tell certs apart at a glance.
+- **R-6 — Debug surface gating.** `?debug=1` opt-in writes `localStorage.certmate_debug='1'` and exposes `CertMate.debugEnabled`. All `[data-debug-control]` elements stay hidden until both the localStorage flag AND `/api/auth/me` returns `role === 'admin'`. Two-layer defense-in-depth — URL opt-in plus role check.
+
+### `templates/base.html` (2.1–2.3)
+
+- **2.1 / A1** — Theme toggle icon swap switched from `style.display` to `classList.toggle('hidden')` so Tailwind's dark-mode variant cascades correctly.
+- **2.2 / A4** — API Docs `/redoc` link added to the desktop nav alongside `/docs/`.
+- **2.2 / B1** — Logout button now server-side rendered via `{% if current_user %}` instead of a 500 ms client-side `fetch('/api/auth/me')` probe. New Jinja `context_processor` in [modules/web/routes.py](modules/web/routes.py) injects `current_user`.
+- **2.2 / B2** — Mobile-only search button (`sm:hidden`, icon-only).
+- **2.3 / A2** — `aria-label` on every icon-only top-nav button (theme, keyboard shortcuts, notifications, logout, search).
+- **2.3 / A3** — `aria-current="page"` on the active link in both desktop and mobile bottom nav.
+- **2.3 / B3** — Notification panel migrated to a proper Disclosure pattern: `aria-expanded`, `aria-controls`, Esc handler, focus restoration via `_closeNotifPanel()`. No focus trap (it's a disclosure, not a dialog).
+
+### `templates/index.html` (3.1–3.3) — dashboard
+
+- **3.1 / A1** — Debug button + console gated behind `?debug=1` per R-6.
+- **3.1 / A2** — Loading modal split `hidden` / `flex` classes correctly so it shows/hides without an extra reflow tick.
+- **3.2 / A3** — Explanatory `title` / `aria-label` on the Check-All checkbox.
+- **3.2 / A4** — Emoji prefixes dropped from CA provider `<option>` labels.
+- **3.2 / A5** — Quick Tips bullets replaced with a link to the Help page (single source of truth).
+- **3.2 / B3** — Cert-detail panel renders a skeleton on open and clears content on close so stale data never flashes.
+- **3.2 / B4** — Stats cards render a JS-driven skeleton via `STAT_METRICS_COUNT`; empty container shipped in the template.
+- **3.3 / B1** — `aria-label="${title} ${domain}"` on every per-row action button.
+- **3.3 / B2** — Sortable column headers: implicit `columnheader` role on `<th>`, internal `<button>` for interaction, `aria-sort` toggled via `setAttribute` on each sort.
+- **QW-4** — Dark-mode variants on the curl-snippet modal.
+- **QW-5** — Confirm guard on the delete action via `CertMate.confirm`.
+- **QW-11** — `autocomplete="off"` on cert-create domain inputs (primary + SAN), plus a more permissive SAN parser (`,;\n\t` separators, dedup).
+- **QW-12** — Form lock during in-flight create requests: `isCreatingCert` flag, disabled fields, spinner.
+- **QW-15** — `normalizeHostname()` strips scheme / port / path / trailing dot on submit, preserves `*.` wildcard prefix.
+
+### `templates/settings.html` (4.1–4.2)
+
+- **4.1 / A1** — Debug helper renamed `toggleDebugConsole` → `toggleSettingsDebugConsole` so it no longer collides with the dashboard's helper of the same name.
+- **4.2 / A2** — Tabs go icon-only on mobile; `aria-selected` bound to `tab === t.id`.
+- **4.2 / A3** — DNS-scope prefix added to status indicators. Orphan markup retained with an explanatory comment for the follow-up sprint that will migrate it to the new layout.
+
+### `templates/activity.html` (5.1–5.3)
+
+- **5.1** — Differentiated error states via `renderErrorState()` instead of a single generic banner.
+- **5.2** — Date-range filter (Today / 7d / 30d / All), full-text search across loaded entries, skeleton rows during load, clickable cert entries that deep-link into the dashboard detail panel via `?cert=<domain>`, server-side `limit` param + client "Load more" button (also fixed a backend bug — `/api/activity` returned a bare array but the client read `data.entries`, so the page was always empty), and `api_request` event type hidden from the default view (still surfaced when filtered).
+- **5.3** — ARIA semantics: `<ul role="feed">`, `<li role="article">`, `aria-busy` on the container during load. Errors use `role="alert"` with `aria-live="assertive"`.
+- **QW-8** — Tooltip with absolute timestamp on every relative time via `absoluteTime()`.
+
+### `templates/login.html` (6.1–6.3)
+
+- **QW-1** — FOUC fix: dark-mode script in `<head>` mirrors `base.html` so a user who toggled dark inside the app no longer sees a light flash on every `/login` redirect. `meta theme-color` paired for light + dark.
+- **6.2 / A1** — `/login` server-side redirects to `/` (or `?next=`) on a valid session cookie. The previous client-side check is kept as a defensive fallback.
+- **6.2 / A2** — `autocomplete="username"` and `autocomplete="current-password"` so password managers fill correctly.
+- **6.2 / A3** — `?next=` redirect with `safeNextUrl()` open-redirect guard: only same-origin relative paths (`/`-prefixed, no `//`).
+- **6.2 / A4** — Forgot-password hint pointing at the admin + the `scripts/reset_admin_password.py` in-container reset script (no email infra assumption).
+- **6.3 / A5** — Password visibility toggle: `aria-label`, `aria-pressed`, `aria-controls` swapped in lockstep with the icon glyph.
+
+### `templates/help.html` (7.1–7.2)
+
+- **7.1 / A1** — "What's New in v2.0" renamed to "v2.x" with a link to `RELEASE_NOTES.md`.
+- **7.1 / A2** — Clean six-item Quick Links grid (`grid-cols-3`) including a Backup card.
+- **7.2 / A3** — Swagger UI vs ReDoc disambiguated with explicit labels; eight `rel="noopener"` adds on outbound links.
+- **7.2 / B1** — In-page search filter for help sections via `data-help-section` markers.
+
+### Cross-cutting (8.x)
+
+- **8.2 / A2** — Graceful red `role="alert"` banner if `window.Alpine === undefined` after `DOMContentLoaded`, so a CDN failure doesn't leave the UI looking broken-but-silent.
+- **8.2 / A3** — Debug surface admin-role check (R-6 server-side leg).
+- **8.3 / A1** — Skip-to-content link as the first body child on every page (keyboard a11y).
+
+### Server-side additions
+
+Three small, backwards-compatible additions in `modules/web/`:
+
+- [modules/web/routes.py](modules/web/routes.py) — `context_processor` injecting `current_user` into every Jinja template render.
+- [modules/web/ui_routes.py](modules/web/ui_routes.py) — `/` route sets `request.current_user = user_info` after `validate_session`; redirect to login passes `?next=request.path`.
+- [modules/web/auth_routes.py](modules/web/auth_routes.py) — `login_page()` checks the session cookie server-side and 302s to `/` (or to `?next=` if present) instead of always rendering the login form.
+
+### Tests
+
+E2E suite run before push: **99 passed, 12 skipped, 2 xfailed in 55.5 s** against a freshly built `certmate:test` image (Docker fixture in `tests/conftest.py`, port 18888). The 2 xfailed are pre-existing markers in `test_ui.py`; the 12 skipped are real-cert / opt-in UI tests gated on explicit env. Unit suite green.
+
+### Backward compatibility
+
+- No API shape changes. No new required env vars.
+- The `?next=` parameter is opt-in; absence falls back to `/`.
+- `current_user` in Jinja is `None` for unauthenticated requests — no template that uses it assumes it's set.
+- R-3 component classes are scaffolded only; no callsite migrated, no class renamed.
+- Debug surface gating fails-closed: if `/api/auth/me` errors or returns a non-admin role, the surface stays hidden.
+
+### Acknowledgement
+
+This is a single-contributor sweep — 51 commits on `feature/v3-ui-fixes-2026-05-15`, each commit one fix. The discipline came out of the v2.4.x cycle where mixing fixes in single commits made review and rollback harder than they needed to be. Every fix in this release can be reverted in isolation.
+
+---
+
 ## v2.4.17 (Patch — two community fixes from @rocogamer)
 
 Bundle of two small, surgical community PRs from [@rocogamer](https://github.com/rocogamer) that came out of the maintainer-feedback loop earlier this session. Both are mergeable as-is and ship together because each is too small for a release of its own.

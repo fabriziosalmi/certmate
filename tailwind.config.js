@@ -1,6 +1,19 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: ["./templates/**/*.html", "./static/js/**/*.js"],
+  // R-3 component classes are defined in input.css under @layer components.
+  // Until the inline-class call sites are migrated to use them, the content
+  // scan finds 0 references for variants like .btn-primary / .badge-success
+  // and PurgeCSS drops them from the built bundle. This safelist forces
+  // every R-3 class through so migration can land one call site at a time
+  // without having to ship a dummy reference first.
+  safelist: [
+    'btn', 'btn-primary', 'btn-secondary', 'btn-danger', 'btn-ghost',
+    'btn-sm', 'btn-lg',
+    'card',
+    'badge', 'badge-success', 'badge-warning', 'badge-error', 'badge-info',
+    'form-input', 'form-select', 'form-label',
+  ],
   darkMode: 'class',
   theme: {
     extend: {

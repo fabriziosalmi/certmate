@@ -1,11 +1,11 @@
 {% extends "base.html" %}
+{% from "partials/_modal.html" import modal %}
 {% block title %}Settings - CertMate{% endblock %}
 {% block content %}
-    <!-- Main Content -->
+    <!-- Settings page: single Alpine root that tab-switches every section below it. -->
     <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8"
          x-data="{ tab: (location.hash.slice(1) || 'dns') }"
-         x-init="$watch('tab', t => history.replaceState(null, '', '#' + t))"
-         <!-- Settings Tabs (Alpine.js) -->
+         x-init="$watch('tab', t => history.replaceState(null, '', '#' + t))">
         <div class="bg-white dark:bg-surface-card shadow-card rounded-xl">
             <div class="px-6 py-3 border-b border-gray-100 dark:border-white/5 overflow-x-auto">
                 <div class="flex items-center justify-between mb-2">
@@ -14,25 +14,39 @@
                         <i class="fas fa-chevron-right text-[10px] text-gray-300 dark:text-gray-600 mx-2"></i>
                         <span class="text-gray-700 dark:text-gray-200 font-medium">Settings</span>
                     </nav>
-                    <div class="flex items-center text-xs gap-3">
-                        <div class="flex items-center text-green-600 dark:text-green-400" id="connectionStatus" style="display: none;">
-                            <i class="fas fa-check-circle mr-1"></i><span>Connected</span>
+                    <!-- DNS-provider status indicators. No JS path
+                         currently toggles these on (they sit hidden in
+                         the markup so the wiring can land later). When
+                         a wire-up arrives, toggle by removing the
+                         `hidden` class and adding `flex items-center`
+                         at the same time — see the loadingModal pattern
+                         in dashboard.js for the show/hide helper shape.
+                         The "DNS:" prefix on each label makes the
+                         scope explicit; the previous "Connected /
+                         Partial / Not configured" was ambiguous (could
+                         refer to CA or storage). -->
+                    <div class="flex items-center text-xs gap-3" aria-live="polite">
+                        <div class="hidden text-green-600 dark:text-green-400" id="connectionStatus">
+                            <i class="fas fa-check-circle mr-1" aria-hidden="true"></i><span>DNS: Connected</span>
                         </div>
-                        <div class="flex items-center text-yellow-600 dark:text-yellow-400" id="partialStatus" style="display: none;">
-                            <i class="fas fa-exclamation-triangle mr-1"></i><span>Partial</span>
+                        <div class="hidden text-yellow-600 dark:text-yellow-400" id="partialStatus">
+                            <i class="fas fa-exclamation-triangle mr-1" aria-hidden="true"></i><span>DNS: Partial</span>
                         </div>
-                        <div class="flex items-center text-red-600 dark:text-red-400" id="disconnectedStatus" style="display: none;">
-                            <i class="fas fa-times-circle mr-1"></i><span>Not configured</span>
+                        <div class="hidden text-red-600 dark:text-red-400" id="disconnectedStatus">
+                            <i class="fas fa-times-circle mr-1" aria-hidden="true"></i><span>DNS: Not configured</span>
                         </div>
                     </div>
                 </div>
                 <nav class="flex space-x-1 min-w-max" role="tablist">
-                    <template x-for="t in [{id:'dns',icon:'fa-server',label:'DNS',abbr:'DNS'},{id:'ca',icon:'fa-shield-alt',label:'CA',abbr:'CA'},{id:'general',icon:'fa-cogs',label:'General',abbr:'Gen'},{id:'storage',icon:'fa-database',label:'Storage',abbr:'Sto'},{id:'notifications',icon:'fa-bell',label:'Notifications',abbr:'Notif'},{id:'deploy',icon:'fa-rocket',label:'Deploy',abbr:'Dep'},{id:'users',icon:'fa-users',label:'Users',abbr:'Usr'},{id:'apikeys',icon:'fa-key',label:'API Keys',abbr:'Keys'},{id:'backup',icon:'fa-archive',label:'Backup',abbr:'Bkp'}]">
-                        <button type="button" @click="tab = t.id" role="tab" :title="t.label"
+                    <template x-for="t in [{id:'dns',icon:'fa-server',label:'DNS'},{id:'ca',icon:'fa-shield-alt',label:'CA'},{id:'general',icon:'fa-cogs',label:'General'},{id:'storage',icon:'fa-database',label:'Storage'},{id:'notifications',icon:'fa-bell',label:'Notifications'},{id:'deploy',icon:'fa-rocket',label:'Deploy'},{id:'users',icon:'fa-users',label:'Users'},{id:'apikeys',icon:'fa-key',label:'API Keys'},{id:'backup',icon:'fa-archive',label:'Backup'}]">
+                        <button type="button" @click="tab = t.id" role="tab"
+                                :title="t.label"
+                                :aria-label="t.label"
+                                :aria-selected="tab === t.id ? 'true' : 'false'"
                                 :class="tab === t.id
-                                    ? 'px-4 py-2 text-sm font-medium rounded-md text-primary bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700'
-                                    : 'px-4 py-2 text-sm font-medium rounded-md text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700'">
-                            <i class="fas" :class="t.icon" class="mr-1"></i><span class="hidden sm:inline" x-text="' ' + t.label"></span><span class="sm:hidden" x-text="' ' + t.abbr"></span>
+                                    ? 'px-3 sm:px-4 py-2 text-sm font-medium rounded-md text-primary bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700'
+                                    : 'px-3 sm:px-4 py-2 text-sm font-medium rounded-md text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700'">
+                            <i class="fas" :class="t.icon" aria-hidden="true"></i><span class="hidden sm:inline ml-1.5" x-text="t.label"></span>
                         </button>
                     </template>
                 </nav>
@@ -45,15 +59,19 @@
                     {% include 'partials/settings_general.html' %}
                     {% include 'partials/settings_storage.html' %}
                     </form>
-            </div>
-        </div>
 
-        {% include 'partials/settings_notifications.html' %}
+                    <!-- Tabs whose state is managed via dedicated endpoints
+                         (notifications channels, deploy hooks, users, API keys)
+                         sit alongside the form, not inside it. Each partial
+                         still uses x-show="tab === '...'" to react to the
+                         Alpine state in the parent div above. -->
+                    {% include 'partials/settings_notifications.html' %}
                     {% include 'partials/settings_deploy.html' %}
                     {% include 'partials/settings_users.html' %}
                     {% include 'partials/settings_apikeys.html' %}
+
                     <!-- TAB: Backup & Restore Section -->
-        <div x-show="tab === 'backup'" x-cloak class="bg-white dark:bg-surface-card rounded-xl shadow-card p-6 mt-6">
+                    <div x-show="tab === 'backup'" x-cloak class="bg-white dark:bg-surface-card rounded-xl shadow-card p-6 mt-6">
             <div class="flex items-center justify-between mb-4">
                 <h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
                     <i class="fas fa-database mr-2 text-blue-500"></i>
@@ -136,135 +154,111 @@
                     </div>
                 </div>
             </div>
+                    </div>
+            </div>
         </div>
 
         <!-- Status Messages -->
         <div id="statusMessage" class="mt-4 hidden"></div>
     </div>
 
-    <!-- Add Account Modal -->
-    <div id="addAccountModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 hidden">
-        <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white dark:bg-gray-800">
-            <div class="mt-3">
-                <div class="flex items-center justify-between mb-4">
-                    <h3 class="text-lg font-medium text-gray-900 dark:text-white" id="modal-title">
-                        Add Account
-                    </h3>
-                    <button type="button" onclick="closeAddAccountModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-                <form id="addAccountForm" class="space-y-4">
-                    <div>
-                        <label for="account-name" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                            Account Name *
-                        </label>
-                        <input type="text" id="account-name" name="name" required
-                               class="mt-1 block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
-                               placeholder="e.g., Production, Development, Client-A">
-                    </div>
-                    
-                    <div>
-                        <label for="account-description" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                            Description (optional)
-                        </label>
-                        <input type="text" id="account-description" name="description"
-                               class="mt-1 block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
-                               placeholder="Brief description of this account">
-                    </div>
-                    
-                    <!-- Dynamic fields will be populated here based on provider -->
-                    <div id="modal-provider-fields"></div>
-                    
-                    <div class="flex items-center">
-                        <input type="checkbox" id="set-as-default" name="set_as_default" 
-                               class="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded">
-                        <label for="set-as-default" class="ml-2 block text-sm text-gray-700 dark:text-gray-300">
-                            Set as default account
-                        </label>
-                    </div>
-                    
-                    <div class="flex justify-end space-x-3 pt-4">
-                        <button type="button" onclick="closeAddAccountModal()" 
-                                class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">
-                            Cancel
-                        </button>
-                        <button type="button" onclick="saveAccount()" 
-                                class="px-4 py-2 bg-primary text-white rounded-md hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
-                            Add Account
-                        </button>
-                    </div>
-                </form>
+    {% call modal(id="addAccountModal", title="Add Account", size="sm") %}
+        <form id="addAccountForm" class="space-y-4">
+            <div>
+                <label for="account-name" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Account Name *
+                </label>
+                <input type="text" id="account-name" name="name" required
+                       class="mt-1 block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                       placeholder="e.g., Production, Development, Client-A">
             </div>
-        </div>
-    </div>
 
-    <!-- Edit Account Modal -->
-    <div id="editAccountModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 hidden">
-        <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white dark:bg-gray-800">
-            <div class="mt-3">
-                <div class="flex items-center justify-between mb-4">
-                    <h3 class="text-lg font-medium text-gray-900 dark:text-white">
-                        Edit Account
-                    </h3>
-                    <button type="button" onclick="closeEditAccountModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-                <form id="editAccountForm" class="space-y-4">
-                    <input type="hidden" id="edit-account-id" name="edit-account-id">
-                    <input type="hidden" id="edit-provider-name" name="edit-provider-name">
-                    
-                    <div>
-                        <label for="edit-account-name" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                            Account Name *
-                        </label>
-                        <input type="text" id="edit-account-name" name="name" required
-                               class="mt-1 block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary">
-                    </div>
-                    
-                    <div>
-                        <label for="edit-account-description" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                            Description (optional)
-                        </label>
-                        <input type="text" id="edit-account-description" name="description"
-                               class="mt-1 block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary">
-                    </div>
-                    
-                    <!-- Dynamic fields will be populated here based on provider -->
-                    <div id="edit-modal-provider-fields"></div>
-                    
-                    <div class="flex items-center">
-                        <input type="checkbox" id="edit-set-as-default" name="set_as_default" 
-                               class="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded">
-                        <label for="edit-set-as-default" class="ml-2 block text-sm text-gray-700 dark:text-gray-300">
-                            Set as default account
-                        </label>
-                    </div>
-                    
-                    <div class="flex justify-end space-x-3 pt-4">
-                        <button type="button" onclick="closeEditAccountModal()" 
-                                class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">
-                            Cancel
-                        </button>
-                        <button type="button" onclick="saveEditAccount()" 
-                                class="px-4 py-2 bg-primary text-white rounded-md hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
-                            Update Account
-                        </button>
-                    </div>
-                </form>
+            <div>
+                <label for="account-description" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Description (optional)
+                </label>
+                <input type="text" id="account-description" name="description"
+                       class="mt-1 block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                       placeholder="Brief description of this account">
             </div>
-        </div>
-    </div>
+
+            <!-- Dynamic fields will be populated here based on provider -->
+            <div id="modal-provider-fields"></div>
+
+            <div class="flex items-center">
+                <input type="checkbox" id="set-as-default" name="set_as_default"
+                       class="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded">
+                <label for="set-as-default" class="ml-2 block text-sm text-gray-700 dark:text-gray-300">
+                    Set as default account
+                </label>
+            </div>
+
+            <div class="flex justify-end space-x-3 pt-4">
+                <button type="button" data-modal-close
+                        class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">
+                    Cancel
+                </button>
+                <button type="button" onclick="saveAccount()"
+                        class="px-4 py-2 bg-primary text-white rounded-md hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                    Add Account
+                </button>
+            </div>
+        </form>
+    {% endcall %}
+
+    {% call modal(id="editAccountModal", title="Edit Account", size="sm") %}
+        <form id="editAccountForm" class="space-y-4">
+            <input type="hidden" id="edit-account-id" name="edit-account-id">
+            <input type="hidden" id="edit-provider-name" name="edit-provider-name">
+
+            <div>
+                <label for="edit-account-name" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Account Name *
+                </label>
+                <input type="text" id="edit-account-name" name="name" required
+                       class="mt-1 block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary">
+            </div>
+
+            <div>
+                <label for="edit-account-description" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Description (optional)
+                </label>
+                <input type="text" id="edit-account-description" name="description"
+                       class="mt-1 block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary">
+            </div>
+
+            <!-- Dynamic fields will be populated here based on provider -->
+            <div id="edit-modal-provider-fields"></div>
+
+            <div class="flex items-center">
+                <input type="checkbox" id="edit-set-as-default" name="set_as_default"
+                       class="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded">
+                <label for="edit-set-as-default" class="ml-2 block text-sm text-gray-700 dark:text-gray-300">
+                    Set as default account
+                </label>
+            </div>
+
+            <div class="flex justify-end space-x-3 pt-4">
+                <button type="button" data-modal-close
+                        class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">
+                    Cancel
+                </button>
+                <button type="button" onclick="saveEditAccount()"
+                        class="px-4 py-2 bg-primary text-white rounded-md hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                    Update Account
+                </button>
+            </div>
+        </form>
+    {% endcall %}
 
     <!-- Debug Console -->
     <div id="settingsDebugConsole" class="fixed bottom-4 left-4 right-4 bg-black text-green-400 font-mono text-xs rounded-lg shadow-lg border border-gray-600 hidden z-40">
         <div class="flex justify-between items-center px-3 py-2 border-b border-gray-700">
             <span class="text-white font-semibold">Settings Debug Console</span>
-            <button onclick="clearDebugConsole()" class="text-yellow-400 hover:text-yellow-300" title="Clear console">
+            <button type="button" onclick="clearSettingsDebugConsole()" class="text-yellow-400 hover:text-yellow-300" title="Clear console" aria-label="Clear debug console">
                 <i class="fas fa-eraser"></i>
             </button>
-            <button onclick="toggleDebugConsole()" class="text-gray-400 hover:text-white ml-2" title="Close console">
+            <button type="button" onclick="toggleSettingsDebugConsole()" class="text-gray-400 hover:text-white ml-2" title="Close console" aria-label="Close debug console">
                 <i class="fas fa-times"></i>
             </button>
         </div>
@@ -272,7 +266,9 @@
             <div class="text-gray-500">Debug console ready. All settings actions will be logged here...</div>
         </div>
     </div>
-    <button onclick="toggleDebugConsole()" class="fixed bottom-4 right-4 bg-gray-800 text-white px-3 py-2 rounded-full shadow-lg z-50 hover:bg-primary">
+    <button type="button" data-debug-control onclick="toggleSettingsDebugConsole()"
+            class="hidden fixed bottom-4 right-4 bg-gray-800 text-white px-3 py-2 rounded-full shadow-lg z-50 hover:bg-primary"
+            aria-label="Open settings debug console">
         <i class="fas fa-bug"></i> Debug
     </button>
     <script src="/static/js/settings.js"></script>

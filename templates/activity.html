@@ -10,32 +10,46 @@
                         <i class="fas fa-chevron-right text-[10px] text-gray-300 dark:text-gray-600 mx-2"></i>
                         <span class="text-gray-700 dark:text-gray-200 font-medium">Activity</span>
                     </nav>
-                    <div class="flex items-center gap-2">
-                        <select id="filterOp" class="px-3 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary">
-                            <option value="">All Operations</option>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <input type="search" id="filterSearch" aria-label="Search activity log"
+                               placeholder="Search domain, resource, user…"
+                               class="px-3 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-primary w-44 sm:w-56">
+                        <select id="filterDate" aria-label="Filter by date range" class="px-3 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary">
+                            <option value="">All time</option>
+                            <option value="today">Today</option>
+                            <option value="7d">Last 7 days</option>
+                            <option value="30d">Last 30 days</option>
+                        </select>
+                        <select id="filterOp" aria-label="Filter by operation type" class="px-3 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary">
+                            <option value="">All user activity</option>
                             <option value="create">Created</option>
                             <option value="renew">Renewed</option>
                             <option value="revoke">Revoked</option>
                             <option value="download">Downloaded</option>
-                            <option value="api_request">API Request</option>
+                            <option value="api_request">API requests only</option>
                         </select>
-                        <button type="button" onclick="loadActivity()" class="px-2.5 py-1.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition" title="Refresh">
+                        <button type="button" onclick="loadActivity()" class="px-2.5 py-1.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition" title="Refresh" aria-label="Refresh activity log">
                             <i class="fas fa-sync"></i>
                         </button>
                     </div>
                 </div>
             </div>
-            <div id="activityList" class="divide-y divide-gray-100 dark:divide-gray-700/50">
-                <div class="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
-                    <i class="fas fa-spinner fa-spin mr-2"></i>Loading activity...
-                </div>
-            </div>
+            <ul id="activityList" role="feed" aria-busy="false" aria-label="Activity log"
+                class="divide-y divide-gray-100 dark:divide-gray-700/50 list-none m-0 p-0">
+                <!-- Skeleton rows; replaced by JS once /api/activity responds. -->
+            </ul>
         </div>
     </div>
 
     <script>
     (function() {
         var escapeHtml = CertMate.escapeHtml;
+
+        // Page-state for incremental Load-more pagination. The backend
+        // caps `?limit=` at 500, so once we hit that the button hides.
+        var ACTIVITY_INITIAL_LIMIT = 100;
+        var ACTIVITY_MAX_LIMIT = 500;
+        var currentLimit = ACTIVITY_INITIAL_LIMIT;
 
         var opIcons = {
             create: { icon: 'fa-plus-circle', color: 'text-green-500', bg: 'bg-green-100 dark:bg-green-900/30' },
@@ -65,6 +79,25 @@
             } catch (e) { return ts; }
         }
 
+        // Absolute timestamp for the tooltip — exposes the exact moment a
+        // relative label like "5h ago" or "2d ago" stands for. Uses the
+        // browser locale so users see the format they're used to ("May 12,
+        // 2026, 3:45:12 PM" / "12 maggio 2026, 15:45:12"). Falls back to
+        // the raw upstream string if the value isn't a parseable date.
+        // Guards against `null` (which would otherwise resolve to the
+        // 1970 epoch via new Date(null)).
+        function absoluteTime(ts) {
+            try {
+                if (ts === null || ts === undefined || ts === '') return '';
+                var d = new Date(ts);
+                if (isNaN(d.getTime())) return String(ts);
+                return d.toLocaleString(undefined, {
+                    year: 'numeric', month: 'short', day: 'numeric',
+                    hour: '2-digit', minute: '2-digit', second: '2-digit'
+                });
+            } catch (e) { return String(ts || ''); }
+        }
+
         function opLabel(entry) {
             var labels = {
                 create: 'Created',
@@ -77,28 +110,179 @@
             return labels[entry.operation] || entry.operation;
         }
 
+        // Render a status-aware error state so the user knows *why* the
+        // log didn't load. The previous catch-all "Failed to load
+        // activity" hid the difference between an expired session
+        // (actionable: re-login), a missing route (actionable: report),
+        // a server error (actionable: retry), and a true network outage.
+        function renderErrorState(status, rawErr) {
+            var msg, hint;
+            if (status === 401) {
+                msg = 'Authentication required';
+                hint = '<a href="/login" class="text-primary hover:underline">Sign in</a> to view the activity log.';
+            } else if (status === 403) {
+                msg = 'You don’t have permission to view the activity log.';
+                hint = 'Ask an admin to grant you a role with audit access.';
+            } else if (status === 404) {
+                msg = 'Activity endpoint not found';
+                hint = 'The /api/activity route is unavailable on this build. Check the server logs or report this on GitHub.';
+            } else if (status && status >= 500 && status <= 599) {
+                msg = 'Server error (HTTP ' + status + ')';
+                hint = 'Try refreshing in a moment, or check the server logs.';
+            } else {
+                // Network error, CORS error, JSON parse error — all surface
+                // here without a `status` because fetch never resolved.
+                msg = 'Cannot reach the activity service';
+                hint = 'Check your network connection and try the Refresh button.';
+            }
+            console.error('Error loading activity:', status || 'no-status', rawErr);
+            var list = document.getElementById('activityList');
+            list.setAttribute('aria-busy', 'false');
+            list.innerHTML =
+                '<li role="alert" class="px-6 py-10 text-center">' +
+                    '<i class="fas fa-exclamation-circle text-red-400 text-2xl mb-3 block"></i>' +
+                    '<div class="text-sm font-medium text-gray-700 dark:text-gray-200">' + escapeHtml(msg) + '</div>' +
+                    '<p class="mt-2 text-xs text-gray-500 dark:text-gray-400">' + hint + '</p>' +
+                '</li>';
+        }
+
+        // Build a single lowercase search blob per entry. Operation labels
+        // ("Created", "Renewed") are translated through opLabel so a user
+        // searching "renew" still matches `entry.operation === 'renew'`.
+        // The detail fields are joined to catch domain matches buried in
+        // common_name or method. Status and error strings are folded in
+        // for searches like "failed" or "404".
+        function entrySearchBlob(entry) {
+            var parts = [
+                entry.resource_type, entry.resource_id, entry.user,
+                entry.operation, opLabel(entry), entry.status, entry.error,
+            ];
+            var d = entry.details || {};
+            for (var k in d) {
+                if (Object.prototype.hasOwnProperty.call(d, k)) {
+                    parts.push(String(d[k]));
+                }
+            }
+            return parts.filter(Boolean).join(' ').toLowerCase();
+        }
+
+        function passesSearchFilter(entry, term) {
+            if (!term) return true;
+            return entrySearchBlob(entry).indexOf(term) !== -1;
+        }
+
+        // Skeleton rows shown both at first paint and during any refetch.
+        // Shape matches the real entry layout (icon disc on the left, two
+        // text lines in the middle, two-line meta on the right) so the
+        // page doesn't visually jump when the response lands. Uses the
+        // existing `.skeleton` class from input.css/tailwind.min.css which
+        // already carries the shimmer animation and dark-mode variant.
+        function skeletonRowsHtml(count) {
+            var widths = ['w-20', 'w-28', 'w-24', 'w-32', 'w-20', 'w-28'];
+            var subWidths = ['w-3/4', 'w-2/3', 'w-1/2', 'w-3/4', 'w-2/3', 'w-1/2'];
+            var rows = [];
+            for (var i = 0; i < count; i++) {
+                rows.push(
+                    // role="article" satisfies the role="feed" contract on
+                    // the parent <ul>; aria-hidden hides the placeholder
+                    // from screen readers until the real entry lands.
+                    '<li role="article" aria-hidden="true" class="flex items-start gap-4 px-4 sm:px-6 py-4">' +
+                        '<div class="flex-shrink-0 mt-0.5">' +
+                            '<div class="skeleton w-9 h-9 rounded-full"></div>' +
+                        '</div>' +
+                        '<div class="flex-1 min-w-0 space-y-2">' +
+                            '<div class="skeleton h-4 ' + widths[i % widths.length] + '"></div>' +
+                            '<div class="skeleton h-3 ' + subWidths[i % subWidths.length] + '"></div>' +
+                        '</div>' +
+                        '<div class="flex-shrink-0 space-y-2">' +
+                            '<div class="skeleton h-3 w-12 ml-auto"></div>' +
+                            '<div class="skeleton h-3 w-16 ml-auto"></div>' +
+                        '</div>' +
+                    '</li>'
+                );
+            }
+            return rows.join('');
+        }
+
+        // Date-range filtering happens client-side on the already-fetched
+        // window of entries. Returning false drops the entry. "today" is
+        // calendar-day, not a rolling 24h window — matches what users mean
+        // when they say "what happened today". 7d/30d are rolling windows
+        // ending now (the upstream `?limit=100` cap can still mask older
+        // entries; a paginated fetch is a separate fix).
+        function passesDateFilter(entry, range) {
+            if (!range) return true;
+            var t = new Date(entry.timestamp);
+            if (isNaN(t.getTime())) return true; // can't filter what we can't parse
+            var now = new Date();
+            if (range === 'today') {
+                return t.getFullYear() === now.getFullYear()
+                    && t.getMonth() === now.getMonth()
+                    && t.getDate() === now.getDate();
+            }
+            var days = range === '7d' ? 7 : range === '30d' ? 30 : 0;
+            if (!days) return true;
+            var cutoff = now.getTime() - days * 86400000;
+            return t.getTime() >= cutoff;
+        }
+
         window.loadActivity = function() {
-            var filter = document.getElementById('filterOp').value;
-            fetch('/api/activity?limit=100', { credentials: 'same-origin' })
-                .then(function(r) { return r.json(); })
+            var opFilter = document.getElementById('filterOp').value;
+            var dateFilter = document.getElementById('filterDate').value;
+            var searchTerm = (document.getElementById('filterSearch').value || '').trim().toLowerCase();
+            // Show skeleton placeholders during the request. On a fast
+            // network this barely flashes; on a slow one the user has a
+            // concrete "something is happening" signal instead of stale
+            // content. aria-busy lets assistive tech defer the new
+            // content announcement until the real entries land.
+            var listEl = document.getElementById('activityList');
+            listEl.setAttribute('aria-busy', 'true');
+            listEl.innerHTML = skeletonRowsHtml(6);
+            fetch('/api/activity?limit=' + currentLimit, { credentials: 'same-origin' })
+                .then(function(r) {
+                    if (!r.ok) {
+                        var err = new Error('HTTP ' + r.status);
+                        err.status = r.status;
+                        throw err;
+                    }
+                    return r.json();
+                })
                 .then(function(data) {
                     var entries = data.entries || [];
-                    if (filter) {
-                        entries = entries.filter(function(e) { return e.operation === filter; });
+                    var rawCount = entries.length;
+                    // The backend caps at `data.limit`; if it gave us
+                    // exactly that many, there may be more upstream — show
+                    // the Load-more button. Hide it once we're at the
+                    // hard ceiling.
+                    var hasMore = rawCount >= currentLimit && currentLimit < ACTIVITY_MAX_LIMIT;
+                    if (opFilter) {
+                        entries = entries.filter(function(e) { return e.operation === opFilter; });
+                    } else {
+                        // Default view hides api_request entries: those are
+                        // technical audit rows (HTTP method, status code)
+                        // more useful as a dedicated audit log than mixed in
+                        // with user-driven actions. The user opts in via the
+                        // "API requests only" filter.
+                        entries = entries.filter(function(e) { return e.operation !== 'api_request'; });
                     }
-                    renderEntries(entries);
+                    if (dateFilter) {
+                        entries = entries.filter(function(e) { return passesDateFilter(e, dateFilter); });
+                    }
+                    if (searchTerm) {
+                        entries = entries.filter(function(e) { return passesSearchFilter(e, searchTerm); });
+                    }
+                    renderEntries(entries, hasMore);
                 })
                 .catch(function(err) {
-                    console.error('Error loading activity:', err);
-                    document.getElementById('activityList').innerHTML =
-                        '<div class="px-6 py-8 text-center text-gray-500 dark:text-gray-400"><i class="fas fa-exclamation-circle mr-2 text-red-400"></i>Failed to load activity</div>';
+                    renderErrorState(err && err.status, err);
                 });
         };
 
-        function renderEntries(entries) {
+        function renderEntries(entries, hasMore) {
             var list = document.getElementById('activityList');
+            list.setAttribute('aria-busy', 'false');
             if (entries.length === 0) {
-                list.innerHTML = '<div class="px-6 py-12 text-center text-gray-500 dark:text-gray-400"><i class="fas fa-inbox text-3xl text-gray-300 dark:text-gray-600 mb-3 block"></i>No activity recorded yet</div>';
+                list.innerHTML = '<li role="presentation" class="px-6 py-12 text-center text-gray-500 dark:text-gray-400"><i class="fas fa-inbox text-3xl text-gray-300 dark:text-gray-600 mb-3 block"></i>No activity recorded yet</li>';
                 return;
             }
 
@@ -114,7 +298,32 @@
                 if (details.status_code) detailParts.push('HTTP ' + details.status_code);
                 var detailStr = detailParts.length > 0 ? detailParts.join(' · ') : '';
 
-                return '<div class="flex items-start gap-4 px-4 sm:px-6 py-4 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition">' +
+                // Entries whose resource is a certificate become a link to
+                // the dashboard with a `?cert=<domain>` deep-link param,
+                // which dashboard.js picks up after the initial cert list
+                // load and opens the detail panel. Other entry types
+                // (api_request, etc.) stay as inert <div>s so we don't
+                // promise an action the page can't deliver.
+                // Each entry is wrapped in <li role="article"> so it
+                // satisfies the parent <ul role="feed"> contract; the
+                // aria-label gives screen readers a one-line summary
+                // ("Renewed — certificate foo.example.com, 2h ago").
+                var commonClass = 'flex items-start gap-4 px-4 sm:px-6 py-4 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition';
+                var isCertEntry = entry.resource_type === 'certificate' && entry.resource_id;
+                var ariaLabel = opLabel(entry) +
+                    (entry.status === 'failure' ? ' (failed)' : '') +
+                    ' — ' + (entry.resource_type || '') +
+                    (entry.resource_id ? ' ' + entry.resource_id : '') +
+                    ', ' + formatTime(entry.timestamp);
+                var innerClass = isCertEntry ? commonClass + ' cursor-pointer' : commonClass;
+                var innerOpen = isCertEntry
+                    ? '<a href="/?cert=' + encodeURIComponent(entry.resource_id) + '" class="' + innerClass + '">'
+                    : '<div class="' + innerClass + '">';
+                var innerClose = isCertEntry ? '</a>' : '</div>';
+                var wrapperOpen = '<li role="article" aria-label="' + escapeHtml(ariaLabel) + '">' + innerOpen;
+                var wrapperClose = innerClose + '</li>';
+
+                return wrapperOpen +
                     '<div class="flex-shrink-0 mt-0.5">' +
                         '<div class="w-9 h-9 rounded-full ' + style.bg + ' flex items-center justify-center">' +
                             '<i class="fas ' + style.icon + ' ' + style.color + ' text-sm"></i>' +
@@ -132,14 +341,37 @@
                         (entry.error ? '<p class="text-xs text-red-500 mt-0.5"><i class="fas fa-exclamation-triangle mr-1"></i>' + escapeHtml(entry.error) + '</p>' : '') +
                     '</div>' +
                     '<div class="flex-shrink-0 text-right">' +
-                        '<div class="text-xs text-gray-400">' + escapeHtml(formatTime(entry.timestamp)) + '</div>' +
+                        '<div class="text-xs text-gray-400 cursor-help" title="' + escapeHtml(absoluteTime(entry.timestamp)) + '">' + escapeHtml(formatTime(entry.timestamp)) + '</div>' +
                         '<div class="text-[10px] text-gray-400 mt-1">' + escapeHtml(entry.user || 'system') + '</div>' +
                     '</div>' +
-                '</div>';
+                wrapperClose;
             }).join('');
+
+            if (hasMore) {
+                // Wrap the control row in <li role="presentation"> so it
+                // is valid markup under <ul> but isn't announced as a
+                // feed article.
+                var btnHtml = '<li role="presentation" class="px-6 py-4 text-center border-t border-gray-100 dark:border-gray-700/50">' +
+                    '<button id="loadMoreActivity" type="button" class="inline-flex items-center px-4 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 transition">' +
+                        '<i class="fas fa-plus mr-2"></i>Load more' +
+                    '</button>' +
+                '</li>';
+                list.insertAdjacentHTML('beforeend', btnHtml);
+                document.getElementById('loadMoreActivity').addEventListener('click', function() {
+                    currentLimit = Math.min(currentLimit + ACTIVITY_INITIAL_LIMIT, ACTIVITY_MAX_LIMIT);
+                    loadActivity();
+                });
+            }
         }
 
         document.getElementById('filterOp').addEventListener('change', loadActivity);
+        document.getElementById('filterDate').addEventListener('change', loadActivity);
+        // Debounce search-as-you-type so we don't refetch on every keystroke.
+        var searchDebounce;
+        document.getElementById('filterSearch').addEventListener('input', function() {
+            clearTimeout(searchDebounce);
+            searchDebounce = setTimeout(loadActivity, 250);
+        });
         loadActivity();
     })();
     </script>

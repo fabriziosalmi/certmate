@@ -26,7 +26,13 @@
     // Debug console functions
     // =============================================
 
-    function toggleDebugConsole() {
+    // Renamed from toggleDebugConsole / clearDebugConsole to avoid a
+    // naming collision with the identically-named helpers in
+    // dashboard.js — both files export to `window.*` and the two
+    // pages don't load together so there's no runtime breakage today,
+    // but a future bundle / a future page that includes both scripts
+    // would silently overwrite the binding (4.1 fix).
+    function toggleSettingsDebugConsole() {
         var consoleDiv = document.getElementById('settingsDebugConsole');
         if (consoleDiv.classList.contains('hidden')) {
             consoleDiv.classList.remove('hidden');
@@ -35,7 +41,7 @@
         }
     }
 
-    function clearDebugConsole() {
+    function clearSettingsDebugConsole() {
         document.getElementById('settingsDebugOutput').innerHTML = '<div class="text-gray-500">Debug console cleared. All settings actions will be logged here...</div>';
     }
 
@@ -762,7 +768,10 @@
         addDebugLog('Opening add account modal for ' + provider, 'info');
 
         var modal = document.getElementById('addAccountModal');
-        var modalTitle = document.getElementById('modal-title');
+        // R-2: macro emits `<h3 id="<modalId>-title">` for aria-labelledby
+        // wiring; the dynamic per-provider title still lands in the same
+        // <h3>, just renamed from the legacy "modal-title" id.
+        var modalTitle = document.getElementById('addAccountModal-title');
         var providerFields = document.getElementById('modal-provider-fields');
         var accountNameField = document.getElementById('account-name');
         var accountDescField = document.getElementById('account-description');
@@ -2631,6 +2640,16 @@
         saveBtn = document.getElementById('saveBtn');
         statusMessage = document.getElementById('statusMessage');
 
+        // R-2: route every dismiss path (Esc, backdrop, the macro's
+        // close button, the form's Cancel button with [data-modal-close])
+        // through the existing cleanup. The programmatic path —
+        // saveAccount() / saveEditAccount() calling closeXxxModal() on
+        // success — still runs the same body, so cleanup is uniform.
+        var addModalEl = document.getElementById('addAccountModal');
+        if (addModalEl) addModalEl.addEventListener('modal:close', closeAddAccountModal);
+        var editModalEl = document.getElementById('editAccountModal');
+        if (editModalEl) editModalEl.addEventListener('modal:close', closeEditAccountModal);
+
         addDebugLog('DOM loaded, initializing settings page', 'info');
 
         // Add challenge type radio listeners
@@ -2717,8 +2736,8 @@
     window.downloadBackup = downloadBackup;
     window.restoreBackup = restoreBackup;
     window.deleteBackup = deleteBackup;
-    window.clearDebugConsole = clearDebugConsole;
-    window.toggleDebugConsole = toggleDebugConsole;
+    window.clearSettingsDebugConsole = clearSettingsDebugConsole;
+    window.toggleSettingsDebugConsole = toggleSettingsDebugConsole;
     window.toggleChallengeType = toggleChallengeType;
     window.toggleUserStatus = toggleUserStatus;
     window.resetUserPassword = resetUserPassword;

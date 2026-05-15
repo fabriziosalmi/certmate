@@ -24,6 +24,14 @@
     </script>
 </head>
 <body class="bg-surface-light dark:bg-surface-dark min-h-screen pb-16 md:pb-0 transition-colors duration-200 font-sans">
+    <!-- Skip-to-content link for keyboard users. Invisible until focused,
+         then floats above the nav with a high-contrast pill so the
+         destination is obvious. Targets #main-content on the <main>
+         landmark below. -->
+    <a href="#main-content"
+       class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:px-3 focus:py-2 focus:bg-primary focus:text-white focus:rounded-md focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+        Skip to main content
+    </a>
     <!-- Top Navigation -->
     <nav class="bg-white dark:bg-surface-card shadow-card border-b border-gray-200/60 dark:border-white/5">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -41,36 +49,44 @@
                 </div>
                 <div class="flex items-center space-x-1 sm:space-x-4">
                     <!-- Desktop nav links (hidden on mobile — bottom tab bar used instead) -->
-                    <a href="/" class="hidden md:inline-flex items-center px-3 py-2 text-sm {% if request.path == '/' %}nav-active{% else %}nav-inactive{% endif %}">
+                    <a href="/" {% if request.path == '/' %}aria-current="page"{% endif %} class="hidden md:inline-flex items-center px-3 py-2 text-sm {% if request.path == '/' %}nav-active{% else %}nav-inactive{% endif %}">
                         <i class="fas fa-certificate mr-1.5 text-[0.85em] leading-none -translate-y-px"></i> Certificates
                     </a>
 
-                    <a href="/settings" class="hidden md:inline-flex items-center px-3 py-2 text-sm {% if request.path == '/settings' %}nav-active{% else %}nav-inactive{% endif %}">
+                    <a href="/settings" {% if request.path == '/settings' %}aria-current="page"{% endif %} class="hidden md:inline-flex items-center px-3 py-2 text-sm {% if request.path == '/settings' %}nav-active{% else %}nav-inactive{% endif %}">
                         <i class="fas fa-cog mr-1.5 text-[0.85em] leading-none -translate-y-px"></i> Settings
                     </a>
-                    <a href="/help" class="hidden md:inline-flex items-center px-3 py-2 text-sm {% if request.path == '/help' %}nav-active{% else %}nav-inactive{% endif %}">
+                    <a href="/help" {% if request.path == '/help' %}aria-current="page"{% endif %} class="hidden md:inline-flex items-center px-3 py-2 text-sm {% if request.path == '/help' %}nav-active{% else %}nav-inactive{% endif %}">
                         <i class="fas fa-question-circle mr-1.5 text-[0.85em] leading-none -translate-y-px"></i> Help
                     </a>
-                    <a href="/activity" class="hidden md:inline-flex items-center px-3 py-2 text-sm {% if request.path == '/activity' %}nav-active{% else %}nav-inactive{% endif %}">
+                    <a href="/activity" {% if request.path == '/activity' %}aria-current="page"{% endif %} class="hidden md:inline-flex items-center px-3 py-2 text-sm {% if request.path == '/activity' %}nav-active{% else %}nav-inactive{% endif %}">
                         <i class="fas fa-history mr-1.5 text-[0.85em] leading-none -translate-y-px"></i> Activity
                     </a>
-                    <!-- Search (Cmd+K) -->
-                    <button type="button" onclick="document.dispatchEvent(new KeyboardEvent('keydown',{key:'k',metaKey:true}))" class="hidden sm:inline-flex items-center px-2.5 py-1.5 text-sm text-gray-400 bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition" title="Search (Cmd+K)">
+                    <a href="/redoc" {% if request.path == '/redoc' %}aria-current="page"{% endif %} class="hidden md:inline-flex items-center px-3 py-2 text-sm {% if request.path == '/redoc' %}nav-active{% else %}nav-inactive{% endif %}">
+                        <i class="fas fa-code mr-1.5 text-[0.85em] leading-none -translate-y-px"></i> API Docs
+                    </a>
+                    <!-- Search (Cmd+K) — desktop variant with visible label + kbd hint -->
+                    <button type="button" onclick="document.dispatchEvent(new KeyboardEvent('keydown',{key:'k',metaKey:true}))" class="hidden sm:inline-flex items-center px-2.5 py-1.5 text-sm text-gray-400 bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition" title="Search (Cmd+K)" aria-label="Open search">
                         <i class="fas fa-search mr-1.5 text-xs"></i>
                         <span class="text-xs">Search</span>
                         <kbd class="ml-2 px-1.5 py-0.5 text-[10px] bg-white dark:bg-gray-800 rounded border border-gray-300 dark:border-gray-500">&#8984;K</kbd>
                     </button>
+                    <!-- Search — compact icon-only mobile variant. Same keydown dispatch
+                         so the existing Cmd+K command palette handler picks it up. -->
+                    <button type="button" onclick="document.dispatchEvent(new KeyboardEvent('keydown',{key:'k',metaKey:true}))" class="sm:hidden px-2 py-2 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700" title="Search" aria-label="Open search">
+                        <i class="fas fa-search"></i>
+                    </button>
                     <!-- Keyboard shortcuts hint -->
-                    <button type="button" onclick="document.dispatchEvent(new KeyboardEvent('keydown',{key:'?'}))" class="hidden sm:inline-flex items-center px-2 py-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition" title="Keyboard shortcuts (?)">
+                    <button type="button" onclick="document.dispatchEvent(new KeyboardEvent('keydown',{key:'?'}))" class="hidden sm:inline-flex items-center px-2 py-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition" title="Keyboard shortcuts (?)" aria-label="Show keyboard shortcuts">
                         <i class="fas fa-keyboard text-sm"></i>
                     </button>
                     <!-- Notification bell -->
                     <div class="relative">
-                        <button type="button" id="notifBtn" onclick="toggleNotifications()" class="px-2 py-2 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 relative" title="Notifications">
+                        <button type="button" id="notifBtn" onclick="toggleNotifications()" class="px-2 py-2 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 relative" title="Notifications" aria-label="Open notifications" aria-haspopup="true" aria-expanded="false" aria-controls="notifPanel">
                             <i class="fas fa-bell"></i>
                             <span id="notifBadge" class="hidden absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold badge-pulse">0</span>
                         </button>
-                        <div id="notifPanel" class="hidden absolute right-0 mt-2 w-[calc(100vw-2rem)] max-w-sm md:w-80 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 z-50 max-h-96 overflow-y-auto">
+                        <div id="notifPanel" role="region" aria-label="Notifications" class="hidden absolute right-0 mt-2 w-[calc(100vw-2rem)] max-w-sm md:w-80 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 z-50 max-h-96 overflow-y-auto">
                             <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
                                 <h3 class="text-sm font-semibold text-gray-900 dark:text-white">Notifications</h3>
                             </div>
@@ -80,14 +96,19 @@
                         </div>
                     </div>
                     <!-- Dark mode toggle -->
-                    <button id="themeToggle" onclick="toggleTheme()" class="px-2 py-2 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700" title="Toggle theme">
+                    <button type="button" id="themeToggle" onclick="toggleTheme()" class="px-2 py-2 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700" title="Toggle theme" aria-label="Toggle dark mode">
                         <i class="fas fa-moon" id="theme-icon-moon"></i>
-                        <i class="fas fa-sun" id="theme-icon-sun" style="display:none"></i>
+                        <i class="fas fa-sun hidden" id="theme-icon-sun"></i>
                     </button>
-                    <!-- Logout -->
-                    <button id="logoutBtn" onclick="doLogout()" style="display:none" class="px-3 py-2 rounded-md text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 border border-red-200 dark:border-red-700" title="Logout">
+                    <!-- Logout (rendered only when authenticated; gated
+                         server-side via the `current_user` context var, so
+                         the button no longer flashes in then out as the
+                         old JS auth-check completed 500 ms after paint). -->
+                    {% if current_user %}
+                    <button type="button" id="logoutBtn" onclick="doLogout()" class="px-3 py-2 rounded-md text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 border border-red-200 dark:border-red-700" title="Logout" aria-label="Log out">
                         <i class="fas fa-sign-out-alt mr-1"></i><span class="hidden sm:inline"> Logout</span>
                     </button>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -96,32 +117,28 @@
     <!-- Bottom Tab Bar (mobile only) -->
     <nav class="fixed bottom-0 left-0 right-0 md:hidden bg-white dark:bg-surface-card border-t border-gray-200 dark:border-white/5 shadow-[0_-2px_10px_rgba(0,0,0,0.1)] z-40 safe-area-bottom" id="bottomTabBar">
         <div class="flex justify-around h-14">
-            <a href="/" class="flex flex-col items-center justify-center flex-1 py-1 transition-colors duration-150 {% if request.path == '/' %}text-primary{% else %}text-gray-500 dark:text-gray-400{% endif %}">
+            <a href="/" {% if request.path == '/' %}aria-current="page"{% endif %} class="flex flex-col items-center justify-center flex-1 py-1 transition-colors duration-150 {% if request.path == '/' %}text-primary{% else %}text-gray-500 dark:text-gray-400{% endif %}">
                 <i class="fas fa-certificate text-lg"></i>
                 <span class="text-xs mt-0.5 font-medium">Certs</span>
             </a>
-            <a href="/settings" class="flex flex-col items-center justify-center flex-1 py-1 transition-colors duration-150 {% if request.path == '/settings' %}text-primary{% else %}text-gray-500 dark:text-gray-400{% endif %}">
+            <a href="/settings" {% if request.path == '/settings' %}aria-current="page"{% endif %} class="flex flex-col items-center justify-center flex-1 py-1 transition-colors duration-150 {% if request.path == '/settings' %}text-primary{% else %}text-gray-500 dark:text-gray-400{% endif %}">
                 <i class="fas fa-cog text-lg"></i>
                 <span class="text-xs mt-0.5 font-medium">Settings</span>
             </a>
-            <a href="/help" class="flex flex-col items-center justify-center flex-1 py-1 transition-colors duration-150 {% if request.path == '/help' %}text-primary{% else %}text-gray-500 dark:text-gray-400{% endif %}">
+            <a href="/help" {% if request.path == '/help' %}aria-current="page"{% endif %} class="flex flex-col items-center justify-center flex-1 py-1 transition-colors duration-150 {% if request.path == '/help' %}text-primary{% else %}text-gray-500 dark:text-gray-400{% endif %}">
                 <i class="fas fa-question-circle text-lg"></i>
                 <span class="text-xs mt-0.5 font-medium">Help</span>
             </a>
-            <a href="/activity" class="flex flex-col items-center justify-center flex-1 py-1 transition-colors duration-150 {% if request.path == '/activity' %}text-primary{% else %}text-gray-500 dark:text-gray-400{% endif %}">
+            <a href="/activity" {% if request.path == '/activity' %}aria-current="page"{% endif %} class="flex flex-col items-center justify-center flex-1 py-1 transition-colors duration-150 {% if request.path == '/activity' %}text-primary{% else %}text-gray-500 dark:text-gray-400{% endif %}">
                 <i class="fas fa-history text-lg"></i>
                 <span class="text-xs mt-0.5 font-medium">Activity</span>
             </a>
         </div>
     </nav>
     <script>
-    // Auth check -- delayed to avoid competing with page-critical resources
-    setTimeout(function(){
-        fetch('/api/auth/me',{credentials:'same-origin'})
-            .then(function(r){return r.json()})
-            .then(function(d){if(d&&d.user&&d.user.username)document.getElementById('logoutBtn').style.display='inline-block';})
-            .catch(function(){});
-    }, 500);
+    // Logout visibility is now gated server-side via the `current_user`
+    // Jinja context var, so the deferred /api/auth/me probe is no longer
+    // needed — the button either renders or it doesn't, no layout shift.
     function doLogout(){
         fetch('/api/auth/logout',{method:'POST',credentials:'same-origin'})
             .then(function(){window.location.href='/login'})
@@ -132,8 +149,11 @@
         var isDark = document.documentElement.classList.contains('dark');
         var moon = document.getElementById('theme-icon-moon');
         var sun = document.getElementById('theme-icon-sun');
-        if (moon) moon.style.display = isDark ? 'none' : '';
-        if (sun) sun.style.display = isDark ? '' : 'none';
+        // Use Tailwind's `hidden` class instead of inline style.display so
+        // the icons participate in the rest of the design system (focus
+        // ring states, future @apply rules, devtools-friendly).
+        if (moon) moon.classList.toggle('hidden', isDark);
+        if (sun)  sun.classList.toggle('hidden', !isDark);
     }
     function toggleTheme(){
         var html = document.documentElement;
@@ -148,17 +168,43 @@
     }
     // Sync icons once DOM is ready (handles dark-mode-on-load case)
     document.addEventListener('DOMContentLoaded', _syncThemeIcons);
-    // Notifications
+    // Notifications — disclosure popup (non-modal): aria-expanded flip on
+    // the trigger, focus moves into the panel when opened, focus restored
+    // to the trigger on close, Escape dismisses. No focus trap because
+    // this is a disclosure / menu pattern, not a dialog — Tab should be
+    // free to leave the panel (ARIA APG Disclosure pattern).
     var _notifOpen = false;
+    function _closeNotifPanel(restoreFocus) {
+        var panel = document.getElementById('notifPanel');
+        var btn = document.getElementById('notifBtn');
+        panel.classList.add('hidden');
+        if (btn) btn.setAttribute('aria-expanded', 'false');
+        _notifOpen = false;
+        if (restoreFocus && btn) btn.focus();
+    }
     function toggleNotifications() {
         var panel = document.getElementById('notifPanel');
+        var btn = document.getElementById('notifBtn');
         _notifOpen = !_notifOpen;
         panel.classList.toggle('hidden', !_notifOpen);
+        if (btn) btn.setAttribute('aria-expanded', _notifOpen ? 'true' : 'false');
+        if (_notifOpen) {
+            // Move focus into the panel so keyboard users land where they
+            // can act on the contents (first notification link, or the
+            // panel itself if empty).
+            var first = panel.querySelector('a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])');
+            if (first) first.focus();
+        }
     }
     document.addEventListener('click', function(e) {
         if (_notifOpen && !e.target.closest('#notifBtn') && !e.target.closest('#notifPanel')) {
-            document.getElementById('notifPanel').classList.add('hidden');
-            _notifOpen = false;
+            _closeNotifPanel(false);
+        }
+    });
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && _notifOpen) {
+            e.preventDefault();
+            _closeNotifPanel(true);
         }
     });
     function renderNotifications(certs) {
@@ -278,13 +324,35 @@
     })();
     </script>
     <script defer src="/static/js/alpine.min.js"></script>
+    <script>
+    // Alpine load-failure fallback. `defer`-loaded scripts run before
+    // DOMContentLoaded; if `window.Alpine` still isn't defined by then,
+    // the bundle failed (network, parse error on an ancient browser,
+    // resource blocked by an aggressive content filter). Surface a
+    // visible banner so the user understands why tabs/dropdowns/
+    // toggles aren't responding, instead of staring at a quietly
+    // broken UI.
+    document.addEventListener('DOMContentLoaded', function() {
+        if (typeof window.Alpine === 'undefined') {
+            var banner = document.createElement('div');
+            banner.setAttribute('role', 'alert');
+            banner.className = 'fixed top-0 left-0 right-0 z-[200] bg-red-600 text-white text-sm px-4 py-2 text-center shadow-lg';
+            banner.innerHTML =
+                '<i class="fas fa-exclamation-triangle mr-2" aria-hidden="true"></i>' +
+                'Interactive UI failed to load (Alpine.js missing). ' +
+                'Some tabs, dropdowns, and toggles won\'t work — try refreshing the page, ' +
+                'or check the browser console for blocked-resource errors.';
+            document.body.insertBefore(banner, document.body.firstChild);
+        }
+    });
+    </script>
     <script src="/static/js/certmate.js"></script>
     <script defer src="/static/js/report-issue.js"></script>
     <script defer src="/static/js/cmd-palette.js"></script>
     <script defer src="/static/js/shortcuts.js"></script>
     <script defer src="/static/js/setup-wizard.js"></script>
 
-    <main class="page-enter">
+    <main id="main-content" tabindex="-1" class="page-enter">
     {% block content %}{% endblock %}
     </main>
 

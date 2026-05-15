@@ -374,6 +374,169 @@
         }
     };
 
+    // ── Modal standardization (R-2) ───────────────────────────────
+    // Global behavior for any [data-modal-root] element: Esc key,
+    // backdrop click, [data-modal-close] buttons, focus trap inside,
+    // and a `modal:close` CustomEvent dispatched on dismiss so
+    // callsites can subscribe for side-effects (form reset, body
+    // overflow restore) without intercepting individual close
+    // buttons. Visibility is still toggled by `.hidden` class — the
+    // existing showLoadingModal / closeXxxModal helpers don't have
+    // to change shape.
+    var FOCUSABLE_SELECTOR =
+        'a[href], button:not([disabled]), textarea:not([disabled]), ' +
+        'input:not([disabled]):not([type="hidden"]), select:not([disabled]), ' +
+        '[tabindex]:not([tabindex="-1"])';
+    var modalLastFocus = (typeof WeakMap !== 'undefined') ? new WeakMap() : null;
+
+    function isModalVisible(el) {
+        return el && el.matches && el.matches('[data-modal-root]')
+            && !el.classList.contains('hidden');
+    }
+
+    function visibleModal() {
+        var roots = document.querySelectorAll('[data-modal-root]');
+        for (var i = roots.length - 1; i >= 0; i--) {
+            if (isModalVisible(roots[i])) return roots[i];
+        }
+        return null;
+    }
+
+    function focusableIn(root) { return root.querySelectorAll(FOCUSABLE_SELECTOR); }
+
+    function dismissModal(root) {
+        if (!root || root.hasAttribute('data-modal-no-dismiss')) return;
+        root.classList.add('hidden');
+        root.dispatchEvent(new CustomEvent('modal:close', { bubbles: false }));
+    }
+
+    CM.modal = {
+        open: function(id) {
+            var root = document.getElementById(id);
+            if (!root) return;
+            if (modalLastFocus) modalLastFocus.set(root, document.activeElement);
+            root.classList.remove('hidden');
+            var f = focusableIn(root);
+            if (f.length > 0) f[0].focus();
+            root.dispatchEvent(new CustomEvent('modal:open', { bubbles: false }));
+        },
+        close: function(id) {
+            var root = document.getElementById(id);
+            dismissModal(root);
+        }
+    };
+
+    // Esc to close + Tab to trap focus inside the topmost open modal.
+    document.addEventListener('keydown', function(e) {
+        var root = visibleModal();
+        if (!root) return;
+        if (e.key === 'Escape' && !root.hasAttribute('data-modal-no-dismiss')) {
+            e.preventDefault();
+            dismissModal(root);
+            return;
+        }
+        if (e.key === 'Tab') {
+            var f = focusableIn(root);
+            if (f.length === 0) { e.preventDefault(); return; }
+            var first = f[0], last = f[f.length - 1];
+            if (e.shiftKey && document.activeElement === first) {
+                e.preventDefault(); last.focus();
+            } else if (!e.shiftKey && document.activeElement === last) {
+                e.preventDefault(); first.focus();
+            }
+        }
+    });
+
+    // [data-modal-close] anywhere, or click on the root itself (backdrop).
+    document.addEventListener('click', function(e) {
+        var closeBtn = e.target.closest && e.target.closest('[data-modal-close]');
+        if (closeBtn) {
+            var root = closeBtn.closest('[data-modal-root]');
+            if (root) dismissModal(root);
+            return;
+        }
+        var clickedRoot = e.target.closest && e.target.closest('[data-modal-root]');
+        if (clickedRoot && e.target === clickedRoot) {
+            dismissModal(clickedRoot);
+        }
+    });
+
+    // Observe `.hidden` class toggles to auto-focus on open and
+    // restore focus on close. Existing callsites that call
+    // `.classList.remove('hidden')` directly (e.g. showLoadingModal,
+    // showCurlModal flows) get focus management for free.
+    if (typeof MutationObserver !== 'undefined' && modalLastFocus) {
+        var modalObserver = new MutationObserver(function(mutations) {
+            mutations.forEach(function(m) {
+                if (m.attributeName !== 'class') return;
+                var t = m.target;
+                if (!t.matches('[data-modal-root]')) return;
+                var wasHidden = m.oldValue ? m.oldValue.indexOf('hidden') !== -1 : false;
+                var isHidden = t.classList.contains('hidden');
+                if (wasHidden && !isHidden) {
+                    modalLastFocus.set(t, document.activeElement);
+                    var f = focusableIn(t);
+                    if (f.length > 0) f[0].focus();
+                } else if (!wasHidden && isHidden) {
+                    var prev = modalLastFocus.get(t);
+                    if (prev && typeof prev.focus === 'function') {
+                        try { prev.focus(); } catch (e) { /* element gone */ }
+                    }
+                }
+            });
+        });
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('[data-modal-root]').forEach(function(root) {
+                modalObserver.observe(root, {
+                    attributes: true, attributeFilter: ['class'], attributeOldValue: true
+                });
+            });
+        });
+    }
+
+    // ── Debug-console gating ─────────────────────────────────────
+    // The Debug button + console in index.html / settings.html are
+    // dev-only surfaces. Show them only when explicitly opted in via
+    // `?debug=1` in the URL (persisted to localStorage, so once
+    // toggled it stays on for the session/install) or by setting
+    // localStorage.certmate_debug = '1' directly. `?debug=0` clears
+    // the flag.
+    try {
+        var params = new URLSearchParams(window.location.search);
+        if (params.has('debug')) {
+            if (params.get('debug') === '0') {
+                localStorage.removeItem('certmate_debug');
+            } else {
+                localStorage.setItem('certmate_debug', '1');
+            }
+        }
+    } catch (e) { /* old browser or storage disabled */ }
+
+    CM.debugEnabled = (function() {
+        try { return localStorage.getItem('certmate_debug') === '1'; }
+        catch (e) { return false; }
+    })();
+
+    // Even with `?debug=1` explicitly opted-in, gate the actual unhide
+    // on the caller being an admin. The debug surfaces leak internal
+    // information (deployment-probe logs, cache hit/miss counters,
+    // settings shape, etc.) that shouldn't be visible to viewer or
+    // operator roles even if they figure out the URL flag — defense in
+    // depth on top of the URL opt-in (8.2 fix).
+    if (CM.debugEnabled) {
+        document.addEventListener('DOMContentLoaded', function() {
+            fetch('/api/auth/me', { credentials: 'same-origin' })
+                .then(function(r) { return r.ok ? r.json() : null; })
+                .then(function(data) {
+                    if (!data || !data.user || data.user.role !== 'admin') return;
+                    document.querySelectorAll('[data-debug-control]').forEach(function(el) {
+                        el.classList.remove('hidden');
+                    });
+                })
+                .catch(function() { /* network/parse error: leave debug hidden */ });
+        });
+    }
+
     // ── Expose globally ──────────────────────────────────────────
     window.CertMate = CM;
 

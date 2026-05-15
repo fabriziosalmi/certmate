@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "partials/_modal.html" import modal %}
 {% block title %}CertMate - SSL Certificate Manager{% endblock %}
 {% block content %}
     <!-- Main Content -->
@@ -80,7 +81,8 @@
                                     <i class="fas fa-globe mr-2 text-blue-500"></i>
                                     Primary Domain Name
                                 </label>
-                                <input type="text" id="domain" name="domain" 
+                                <input type="text" id="domain" name="domain"
+                                       autocomplete="off"
                                        class="block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg shadow-sm py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-200 placeholder-gray-400"
                                        placeholder="example.com or *.example.com" required>
                                 <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -96,7 +98,8 @@
                                     Additional Domains (SAN)
                                     <span class="font-normal text-xs text-gray-500 dark:text-gray-400 ml-1">Optional</span>
                                 </label>
-                                <input type="text" id="san_domains" name="san_domains" 
+                                <input type="text" id="san_domains" name="san_domains"
+                                       autocomplete="off"
                                        class="block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg shadow-sm py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-200 placeholder-gray-400"
                                        placeholder="www.example.com, mail.example.com, *.api.example.com">
                                 <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -113,14 +116,14 @@
                                 <select id="ca_provider_select" name="ca_provider" 
                                         class="block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg shadow-sm py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-200"
                                         onchange="updateCAProviderInfo()">
-                                    <option value="">🔧 Use default from settings</option>
-                                    <option value="letsencrypt">🌿 Let's Encrypt (Free, DV certificates)</option>
-                                    <option value="zerossl">🟡 ZeroSSL (Free, 90-day DV certificates)</option>
-                                    <option value="google">🔵 Google Trust Services (Free, DV certificates)</option>
-                                    <option value="buypass">🟢 BuyPass Go (Free, 180-day DV certificates)</option>
-                                    <option value="digicert">🛡️ DigiCert ACME (Enterprise, DV/OV/EV)</option>
-                                    <option value="sslcom">🔐 SSL.com (Enterprise, DV/OV/EV)</option>
-                                    <option value="private_ca">🏢 Private CA (Internal/Corporate)</option>
+                                    <option value="">Use default from settings</option>
+                                    <option value="letsencrypt">Let's Encrypt (Free, DV certificates)</option>
+                                    <option value="zerossl">ZeroSSL (Free, 90-day DV certificates)</option>
+                                    <option value="google">Google Trust Services (Free, DV certificates)</option>
+                                    <option value="buypass">BuyPass Go (Free, 180-day DV certificates)</option>
+                                    <option value="digicert">DigiCert ACME (Enterprise, DV/OV/EV)</option>
+                                    <option value="sslcom">SSL.com (Enterprise, DV/OV/EV)</option>
+                                    <option value="private_ca">Private CA (Internal/Corporate)</option>
                                 </select>
                                 <div id="ca-provider-info" class="mt-2 text-xs text-gray-600 dark:text-gray-400 hidden">
                                     <!-- CA provider info will be populated here -->
@@ -248,6 +251,7 @@
                                     DNS-01 Alias Domain <span class="text-xs font-normal text-gray-500 dark:text-gray-400">(optional)</span>
                                 </label>
                                 <input type="text" id="dns_alias_domain" name="dns_alias_domain"
+                                       autocomplete="off"
                                        class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm"
                                        placeholder="e.g. validation.example.org">
                                 <p id="dns_alias_help" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -279,19 +283,15 @@
                         </button>
                     </div>
                     
-                    <!-- Quick Info -->
+                    <!-- Help pointer (replaced Quick Tips bullets that
+                         duplicated Help page content) -->
                     <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4">
                         <div class="flex items-start">
-                            <i class="fas fa-lightbulb text-blue-500 mt-0.5 mr-3"></i>
-                            <div class="text-sm text-blue-800 dark:text-blue-300">
-                                <p class="font-medium">💡 Quick Tips:</p>
-                                <ul class="mt-1 space-y-1 text-xs">
-                                    <li>• Wildcard certificates work for unlimited subdomains</li>
-                                    <li>• DigiCert requires EAB credentials (configured in Settings)</li>
-                                    <li>• Private CAs are perfect for internal/corporate use</li>
-                                    <li>• Certificates auto-renew 30 days before expiry</li>
-                                </ul>
-                            </div>
+                            <i class="fas fa-lightbulb text-blue-500 mt-0.5 mr-3" aria-hidden="true"></i>
+                            <p class="text-sm text-blue-800 dark:text-blue-300">
+                                Need a hand with wildcards, DigiCert EAB, Private CAs, or auto-renewal?
+                                <a href="/help" class="font-medium underline hover:text-blue-900 dark:hover:text-blue-100">Read the certificates guide</a>.
+                            </p>
                         </div>
                     </div>
                 </form>
@@ -325,14 +325,11 @@
         })();
         </script>
 
-        <!-- Statistics Cards -->
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6" id="statsCards">
-            <!-- Skeleton placeholders (replaced by JS on load) -->
-            <div class="bg-white dark:bg-surface-card rounded-xl p-4"><div class="skeleton h-4 w-16 mb-2"></div><div class="skeleton h-7 w-10"></div></div>
-            <div class="bg-white dark:bg-surface-card rounded-xl p-4"><div class="skeleton h-4 w-16 mb-2"></div><div class="skeleton h-7 w-10"></div></div>
-            <div class="bg-white dark:bg-surface-card rounded-xl p-4"><div class="skeleton h-4 w-16 mb-2"></div><div class="skeleton h-7 w-10"></div></div>
-            <div class="bg-white dark:bg-surface-card rounded-xl p-4"><div class="skeleton h-4 w-16 mb-2"></div><div class="skeleton h-7 w-10"></div></div>
-        </div>
+        <!-- Statistics Cards (skeleton placeholders rendered by JS on
+             DOMContentLoaded; count is driven by STAT_METRICS_COUNT in
+             dashboard.js so the placeholder matches whatever number of
+             cards updateStats() actually emits). -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6" id="statsCards"></div>
 
         <!-- Certificates List -->
         <div class="bg-white dark:bg-surface-card shadow-card rounded-xl overflow-hidden">
@@ -356,14 +353,17 @@
                             <option value="expiring">Expiring Soon</option>
                             <option value="expired">Expired</option>
                         </select>
-                        <button onclick="checkAllDeploymentStatuses()" 
-                                class="inline-flex items-center px-3 py-2 border border-indigo-300 dark:border-indigo-600 shadow-sm text-sm font-medium rounded-lg text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/30 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200 whitespace-nowrap">
+                        <button type="button" onclick="checkAllDeploymentStatuses()"
+                                class="inline-flex items-center px-3 py-2 border border-indigo-300 dark:border-indigo-600 shadow-sm text-sm font-medium rounded-lg text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/30 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200 whitespace-nowrap"
+                                title="Re-check deployment status for every certificate in the list. Probes both the backend (TLS handshake from the server) and the browser (this tab), one row at a time."
+                                aria-label="Re-check deployment status for all certificates">
                             <i class="fas fa-sync mr-1 sm:mr-2"></i>
                             <span class="hidden sm:inline">Check All</span>
                             <span class="sm:hidden">Check</span>
                         </button>
-                        <button onclick="toggleDebugConsole()" 
-                                class="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-lg text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors duration-200 whitespace-nowrap">
+                        <button type="button" data-debug-control onclick="toggleDebugConsole()"
+                                class="hidden inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-lg text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors duration-200 whitespace-nowrap"
+                                aria-label="Open deployment-check debug console">
                             <i class="fas fa-terminal mr-1 sm:mr-2"></i>
                             <span class="hidden sm:inline">Debug</span>
                             <span class="sm:hidden">Debug</span>
@@ -375,14 +375,26 @@
                 <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700" id="certificatesTable">
                     <thead class="bg-gray-50/80 dark:bg-gray-700/60 backdrop-blur-md sticky top-0 z-10">
                         <tr>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer select-none hover:text-gray-700 dark:hover:text-gray-200" onclick="sortCertificates('domain')">
-                                Domain <i class="fas fa-sort ml-1 text-gray-400" id="sort-icon-domain"></i>
+                            <th id="sort-th-domain" scope="col" aria-sort="none"
+                                class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                <button type="button" onclick="sortCertificates('domain')"
+                                        class="inline-flex items-center w-full text-left uppercase tracking-wider hover:text-gray-700 dark:hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-inset rounded">
+                                    Domain <i class="fas fa-sort ml-1 text-gray-400" id="sort-icon-domain" aria-hidden="true"></i>
+                                </button>
                             </th>
-                            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer select-none hover:text-gray-700 dark:hover:text-gray-200" onclick="sortCertificates('status')">
-                                Status <i class="fas fa-sort ml-1 text-gray-400" id="sort-icon-status"></i>
+                            <th id="sort-th-status" scope="col" aria-sort="none"
+                                class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                <button type="button" onclick="sortCertificates('status')"
+                                        class="inline-flex items-center w-full text-left uppercase tracking-wider hover:text-gray-700 dark:hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-inset rounded">
+                                    Status <i class="fas fa-sort ml-1 text-gray-400" id="sort-icon-status" aria-hidden="true"></i>
+                                </button>
                             </th>
-                            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer select-none hover:text-gray-700 dark:hover:text-gray-200 hidden md:table-cell" onclick="sortCertificates('expiry')">
-                                Expires <i class="fas fa-sort ml-1 text-gray-400" id="sort-icon-expiry"></i>
+                            <th id="sort-th-expiry" scope="col" aria-sort="none"
+                                class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden md:table-cell">
+                                <button type="button" onclick="sortCertificates('expiry')"
+                                        class="inline-flex items-center w-full text-left uppercase tracking-wider hover:text-gray-700 dark:hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-inset rounded">
+                                    Expires <i class="fas fa-sort ml-1 text-gray-400" id="sort-icon-expiry" aria-hidden="true"></i>
+                                </button>
                             </th>
                             <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden lg:table-cell">
                                 Provider
@@ -428,7 +440,7 @@
     </div>
 
     <!-- Loading Modal -->
-    <div id="loadingModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden flex items-center justify-center z-50">
+    <div id="loadingModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden z-50">
         <div class="bg-white dark:bg-gray-800 rounded-lg p-6 m-4 max-w-md w-full">
             <div class="text-center">
                 <div class="relative">
@@ -448,41 +460,29 @@
     </div>
 
     <!-- Curl Command Modal -->
-    <div id="curlModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden flex items-center justify-center z-50">
-        <div class="bg-white rounded-lg p-6 m-4 max-w-2xl w-full max-h-96 overflow-y-auto">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-lg font-medium text-gray-900">
-                    <i class="fas fa-code mr-2"></i>
-                    Automation curl Command
-                </h3>
-                <button onclick="closeCurlModal()" class="text-gray-400 hover:text-gray-600">
-                    <i class="fas fa-times"></i>
+    {% call modal(id="curlModal", title="Automation curl Command", icon="fa-code", size="md") %}
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Copy this command:</label>
+                <div class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100 p-3 rounded-md font-mono text-sm">
+                    <code id="curlCommandText"></code>
+                </div>
+                <button type="button" onclick="copyFromModal()" class="mt-2 inline-flex items-center px-3 py-1 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
+                    <i class="fas fa-copy mr-1"></i>
+                    Copy Command
                 </button>
             </div>
-            
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Copy this command:</label>
-                    <div class="bg-gray-100 p-3 rounded-md font-mono text-sm">
-                        <code id="curlCommandText"></code>
-                    </div>
-                    <button onclick="copyFromModal()" class="mt-2 inline-flex items-center px-3 py-1 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
-                        <i class="fas fa-copy mr-1"></i>
-                        Copy Command
-                    </button>
-                </div>
-                
-                <div class="text-sm text-gray-600">
-                    <p class="mb-2"><strong>Note:</strong> Replace <code>YOUR_API_TOKEN</code> with your actual API bearer token.</p>
-                    <p class="mb-2"><strong>Usage:</strong> This downloads a ZIP file containing cert.pem, chain.pem, fullchain.pem, and privkey.pem</p>
-                    <p><strong>Example extraction:</strong></p>
-                    <div class="bg-gray-100 p-2 rounded text-xs font-mono mt-1">
-                        <code>unzip domain.com-tls.zip -d /etc/ssl/certs/domain.com/</code>
-                    </div>
+
+            <div class="text-sm text-gray-600 dark:text-gray-300">
+                <p class="mb-2"><strong>Note:</strong> Replace <code class="text-gray-800 dark:text-gray-100">YOUR_API_TOKEN</code> with your actual API bearer token.</p>
+                <p class="mb-2"><strong>Usage:</strong> This downloads a ZIP file containing cert.pem, chain.pem, fullchain.pem, and privkey.pem</p>
+                <p><strong>Example extraction:</strong></p>
+                <div class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100 p-2 rounded text-xs font-mono mt-1">
+                    <code>unzip domain.com-tls.zip -d /etc/ssl/certs/domain.com/</code>
                 </div>
             </div>
         </div>
-    </div>
+    {% endcall %}
 
     <!-- Success/Error Messages -->
     <div id="messages" class="fixed top-4 right-4 z-50"></div>

@@ -12,11 +12,30 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
     @app.route('/api/activity')
     @auth_manager.require_role('viewer')
     def activity_api():
-        """Activity log endpoint"""
+        """Activity log endpoint.
+
+        Honors ``?limit=N`` from the query string, bounded to [1, 500]
+        so the client can implement Load-more pagination without hitting
+        an unbounded read on a large audit log. Response is shaped as
+        ``{entries, count, limit}`` so the client can decide whether to
+        offer a "Load more" affordance (entries.length >= limit
+        ⇒ there may be more).
+        """
         try:
+            raw_limit = request.args.get('limit', 100)
+            try:
+                limit = int(raw_limit)
+            except (TypeError, ValueError):
+                limit = 100
+            limit = max(1, min(limit, 500))
+
             audit_logger = managers['audit']
-            logs = audit_logger.get_recent_entries(limit=50)
-            return jsonify(logs)
+            logs = audit_logger.get_recent_entries(limit=limit)
+            return jsonify({
+                'entries': logs,
+                'count': len(logs),
+                'limit': limit,
+            })
         except Exception as e:
             logger.error(f"Activity API error: {e}")
             return jsonify({'error': 'Failed to fetch activity'}), 500

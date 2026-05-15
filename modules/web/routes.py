@@ -132,8 +132,21 @@ def register_web_routes(app, managers):
                 if user_info:
                     request.current_user = user_info
                     return f(*args, **kwargs)
-            return redirect(url_for('login_page'))
+            # Preserve the originally-requested path as ?next=… so a
+            # successful login can bounce the user back where they
+            # were trying to go (6.2 fix).
+            return redirect(url_for('login_page', next=request.path))
         return decorated
+
+    # Expose the authenticated user to every Jinja template so base.html
+    # can render the logout button server-side instead of via a 500ms-
+    # delayed JS fetch that produces a visible layout shift. Templates
+    # see this as `current_user` (truthy dict / falsy None).
+    @app.context_processor
+    def _inject_current_user():
+        return {
+            'current_user': getattr(request, 'current_user', None),
+        }
 
     from .ui_routes import register_ui_routes
     from .misc_routes import register_misc_routes

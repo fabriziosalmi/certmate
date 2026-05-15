@@ -52,7 +52,12 @@
         document.getElementById('loadingTitle').textContent = title;
         document.getElementById('loadingMessage').textContent = message;
         document.getElementById('progressBar').style.width = '0%';
+        // Toggle `hidden` and the flex centering utilities together — the
+        // static markup keeps only `hidden` so we never ship `hidden flex`
+        // at the same time (display utilities conflicting; works today
+        // only because of Tailwind's class ordering).
         modal.classList.remove('hidden');
+        modal.classList.add('flex', 'items-center', 'justify-center');
 
         // Simulate progress for better UX
         var progress = 0;
@@ -69,7 +74,9 @@
     function hideLoadingModal(progressInterval) {
         document.getElementById('progressBar').style.width = '100%';
         setTimeout(function () {
-            document.getElementById('loadingModal').classList.add('hidden');
+            var modal = document.getElementById('loadingModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex', 'items-center', 'justify-center');
             if (progressInterval) clearInterval(progressInterval);
         }, 500);
     }
@@ -128,6 +135,26 @@
     }
 
     // Update statistics cards with deployment info
+    // Number of stat cards `updateStats` emits below (Total, Valid,
+    // Expiring, Deployed). Drives the initial skeleton render so the
+    // placeholder count always matches the real count — when the metric
+    // list changes, bump this constant in lockstep with the statCard()
+    // calls in `updateStats`.
+    var STAT_METRICS_COUNT = 4;
+
+    function statsSkeletonHtml(count) {
+        var rows = [];
+        for (var i = 0; i < count; i++) {
+            rows.push(
+                '<div class="bg-white dark:bg-surface-card rounded-xl p-4" aria-hidden="true">' +
+                    '<div class="skeleton h-4 w-16 mb-2"></div>' +
+                    '<div class="skeleton h-7 w-10"></div>' +
+                '</div>'
+            );
+        }
+        return rows.join('');
+    }
+
     function updateStats(certificates) {
         // Ensure certificates is an array
         if (!Array.isArray(certificates)) {
@@ -294,13 +321,24 @@
             currentSort.field = field;
             currentSort.dir = 'asc';
         }
-        // Update sort icons
+        // Reset every sortable column's icon + aria-sort to neutral,
+        // then mark the active column with both the right glyph and the
+        // matching aria-sort value (B2). Browsers / screen readers use
+        // aria-sort to announce "ascending" / "descending" — the visual
+        // icon alone was inaccessible to non-sighted users.
         document.querySelectorAll('[id^="sort-icon-"]').forEach(function (icon) {
             icon.className = 'fas fa-sort ml-1 text-gray-400';
+        });
+        document.querySelectorAll('[id^="sort-th-"]').forEach(function (th) {
+            th.setAttribute('aria-sort', 'none');
         });
         var activeIcon = document.getElementById('sort-icon-' + field);
         if (activeIcon) {
             activeIcon.className = 'fas fa-sort-' + (currentSort.dir === 'asc' ? 'up' : 'down') + ' ml-1 text-primary';
+        }
+        var activeTh = document.getElementById('sort-th-' + field);
+        if (activeTh) {
+            activeTh.setAttribute('aria-sort', currentSort.dir === 'asc' ? 'ascending' : 'descending');
         }
         filterCertificates();
     }
@@ -323,10 +361,15 @@
             ? 'text-gray-400 hover:text-purple-600 dark:hover:text-purple-400'
             : 'text-amber-500 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300';
         var title = autoRenewEnabled ? 'Disable auto-renew' : 'Enable auto-renew';
+        // safeDomain is already escapeHtml-ed by the caller (dashboard.js
+        // L581). aria-label combines the action verb with the domain so
+        // screen readers announce "Enable auto-renew foo.example.com"
+        // instead of just "Enable auto-renew" repeated per row (B1 fix).
         return '<button type="button" data-action="toggle-auto-renew" data-domain="' + safeDomain +
             '" data-auto-renew="' + (autoRenewEnabled ? 'true' : 'false') + '" onclick="event.stopPropagation()" ' +
             'class="p-1.5 ' + color + ' rounded hover:bg-gray-100 dark:hover:bg-gray-700" ' +
-            'title="' + title + '"><i class="fas ' + icon + '"></i></button>';
+            'title="' + title + '" aria-label="' + title + ' ' + safeDomain + '">' +
+            '<i class="fas ' + icon + '" aria-hidden="true"></i></button>';
     }
 
     function deploymentStatusDisplay(role, result) {
@@ -467,8 +510,13 @@
         // Action button shorthand. cert.domain flows in raw \u2014 the helper
         // escapes it for both the data-domain attribute and the onclick
         // arg, so we no longer pre-compute a `safeDomain`.
+        // The aria-label is `${title} ${domain}` so screen readers
+        // announce both the action and which row it targets \u2014 without
+        // it, the actions column reads as "Renew, Force renew, Download,
+        // API, Auto-renew, Delete" with no domain context, repeated for
+        // every row in the table (B1 fix).
         function actionBtn(action, domain, hoverColor, title, icon) {
-            return rowRaw(rowHtml`<button type="button" data-action="${action}" data-domain="${domain}" onclick="event.stopPropagation()" class="p-1.5 text-gray-400 hover:text-${rowRaw(hoverColor)}-600 dark:hover:text-${rowRaw(hoverColor)}-400 rounded hover:bg-gray-100 dark:hover:bg-gray-700" title="${title}"><i class="fas ${rowRaw(icon)}"></i></button>`);
+            return rowRaw(rowHtml`<button type="button" data-action="${action}" data-domain="${domain}" onclick="event.stopPropagation()" class="p-1.5 text-gray-400 hover:text-${rowRaw(hoverColor)}-600 dark:hover:text-${rowRaw(hoverColor)}-400 rounded hover:bg-gray-100 dark:hover:bg-gray-700" title="${title}" aria-label="${title} ${domain}"><i class="fas ${rowRaw(icon)}" aria-hidden="true"></i></button>`);
         }
 
         container.innerHTML = sorted.map(function (cert) {
@@ -527,6 +575,23 @@
             var aliasHint = domainAlias
                 ? rowRaw(rowHtml`<div class="mt-1 flex items-center text-xs text-blue-600 dark:text-blue-300 min-w-0"><i class="fas fa-link mr-1 text-blue-500 shrink-0" aria-hidden="true"></i><span class="truncate" title="${domainAlias}">DNS-01 Alias: ${domainAlias}</span></div>`)
                 : false;
+            // R-5 mobile card layout: surface the three desktop-only columns
+            // (Expires / Provider / Deployment) as stacked rows inside the
+            // Domain cell when below md (768 px). The table semantics are
+            // preserved — the dedicated columns still render at md+ via
+            // their `hidden md:table-cell` / `hidden lg:table-cell` rules,
+            // so we never double-render on tablet+. The border-top on the
+            // wrapper gives a visual seam between the domain identity and
+            // the meta block, reading as a card on phones without breaking
+            // the table on bigger screens.
+            var mobileExpiryLine = (daysKnown && cert.expiry_date)
+                ? rowRaw(rowHtml`<div class="flex items-center text-xs ${rowRaw(daysClass)}"><i class="fas fa-clock mr-1.5 w-3 shrink-0" aria-hidden="true"></i><span class="truncate">${expiryStr} · ${rowRaw(String(cert.days_until_expiry))} days left</span></div>`)
+                : false;
+            var mobileProviderLine = providerLabel
+                ? rowRaw(rowHtml`<div class="flex items-center text-xs text-gray-500 dark:text-gray-400"><i class="fas fa-server mr-1.5 w-3 shrink-0" aria-hidden="true"></i><span class="truncate">${rowRaw(providerLabel)}</span></div>`)
+                : false;
+            var mobileDeploymentLine = rowRaw(rowHtml`<div class="flex items-start text-xs text-gray-500 dark:text-gray-400"><i class="fas fa-rocket mr-1.5 mt-0.5 w-3 shrink-0" aria-hidden="true"></i><div class="flex-1 min-w-0">${rowRaw(deploymentBadgesHtml(cert))}</div></div>`);
+            var mobileMeta = rowRaw(rowHtml`<div class="md:hidden mt-2 pt-2 border-t border-gray-100 dark:border-gray-700/50 space-y-1">${mobileExpiryLine}${mobileProviderLine}${mobileDeploymentLine}</div>`);
             var lockColor = isExpired ? 'text-red-400' : isExpiringSoon ? 'text-yellow-400' : 'text-green-500';
             return rowHtml`<tr class="${rowRaw(healthClass)} row-enter hover:bg-blue-50/40 dark:hover:bg-blue-900/10 transition-colors duration-150 cursor-pointer" style="animation-delay:${rowRaw(String(sorted.indexOf(cert) * 30))}ms" onclick="openCertDetail('${cert.domain}')">
                 <td class="px-6 py-4 max-w-0">
@@ -535,6 +600,7 @@
                         <div class="min-w-0">
                             <div class="text-sm font-medium text-gray-900 dark:text-white truncate">${cert.domain}</div>
                             ${aliasHint}
+                            ${mobileMeta}
                         </div>
                     </div>
                 </td>
@@ -585,6 +651,33 @@
     }
 
     // Certificate detail slide-out panel
+    // B3: skeleton mirror of the detail panel layout. Shown briefly while
+    // the panel slides in, so the user never sees an empty card or the
+    // previous cert's contents while the new HTML is rendering. Mirrors
+    // the populated structure (status block, expiry box, action list).
+    function certDetailSkeletonHtml() {
+        return '<div class="space-y-6 animate-pulse" aria-hidden="true">' +
+            // Status block
+            '<div class="space-y-2">' +
+                '<div class="skeleton h-3 w-16"></div>' +
+                '<div class="skeleton h-6 w-32"></div>' +
+            '</div>' +
+            // Definition list (Issuer, SANs, Provider, …)
+            '<div class="space-y-3">' +
+                '<div class="flex justify-between"><div class="skeleton h-3 w-20"></div><div class="skeleton h-3 w-36"></div></div>' +
+                '<div class="flex justify-between"><div class="skeleton h-3 w-16"></div><div class="skeleton h-3 w-40"></div></div>' +
+                '<div class="flex justify-between"><div class="skeleton h-3 w-24"></div><div class="skeleton h-3 w-32"></div></div>' +
+                '<div class="flex justify-between"><div class="skeleton h-3 w-20"></div><div class="skeleton h-3 w-28"></div></div>' +
+            '</div>' +
+            // Action buttons stack
+            '<div class="space-y-2 pt-4">' +
+                '<div class="skeleton h-9 w-full rounded-md"></div>' +
+                '<div class="skeleton h-9 w-full rounded-md"></div>' +
+                '<div class="skeleton h-9 w-full rounded-md"></div>' +
+            '</div>' +
+        '</div>';
+    }
+
     function openCertDetail(domain) {
         var cert = allCertificates.find(function (c) { return c.domain === domain; });
         if (!cert) return;
@@ -593,6 +686,12 @@
         var overlay = document.getElementById('certDetailOverlay');
         var content = document.getElementById('certDetailContent');
         document.getElementById('detailDomain').textContent = cert.domain;
+        // Paint skeleton placeholders before the real content lands. Without
+        // this, opening cert B right after closing cert A briefly showed A's
+        // stale HTML, and on slow devices the panel could slide in over an
+        // empty white card. The skeleton matches the populated layout so the
+        // transition reads as "loading detail" rather than "broken".
+        content.innerHTML = certDetailSkeletonHtml();
 
         var safeDomain = escapeHtml(cert.domain);
         var providerLabel = providerDisplayName(cert.dns_provider);
@@ -679,8 +778,16 @@
     function closeCertDetail() {
         var panel = document.getElementById('certDetailPanel');
         var overlay = document.getElementById('certDetailOverlay');
+        var content = document.getElementById('certDetailContent');
         panel.classList.add('translate-x-full');
-        setTimeout(function () { overlay.classList.add('hidden'); }, 300);
+        setTimeout(function () {
+            overlay.classList.add('hidden');
+            // Clear after the slide-out transition so the next open
+            // starts from a blank surface — prevents the previous cert's
+            // details from flashing visible for a frame when the user
+            // opens cert B right after closing cert A.
+            if (content) content.innerHTML = '';
+        }, 300);
     }
 
     // Close detail panel on Escape key
@@ -1277,10 +1384,41 @@
         return normalizeDnsName(value).replace(/^_acme-challenge\./i, '');
     }
 
+    // Normalize a hostname the way the cert-create form needs it: lowercase,
+    // strip protocol / port / path / fragment / trailing dot, but keep the
+    // optional `*.` wildcard prefix intact (both the primary and the SAN
+    // fields legitimately accept wildcards). This catches the common QW-15
+    // paste patterns:
+    //   "https://example.com/"       → "example.com"
+    //   "Example.COM"                → "example.com"
+    //   "example.com:443"            → "example.com"
+    //   "example.com."               → "example.com"
+    //   "example.com/path?x=1"       → "example.com"
+    function normalizeHostname(value) {
+        if (!value) return '';
+        var v = String(value).trim().toLowerCase();
+        v = v.replace(/^[a-z][a-z0-9+.\-]*:\/\//, ''); // strip scheme://
+        v = v.replace(/[\/?#].*$/, '');                 // strip path/query/fragment
+        v = v.replace(/:\d+$/, '');                     // strip :port
+        v = v.replace(/\.+$/, '');                      // strip trailing dots
+        return v;
+    }
+
     function parseSanDomainsInput(value) {
-        return value
-            ? value.split(',').map(function (d) { return d.trim(); }).filter(function (d) { return d; })
-            : [];
+        // Accept comma, semicolon, newline, or tab as separators — users
+        // routinely paste from spreadsheets, CLI output, or notepads where
+        // the delimiter isn't always a comma. Each token is normalized via
+        // normalizeHostname; duplicates after normalization are dropped.
+        if (!value) return [];
+        var seen = Object.create(null);
+        var out = [];
+        String(value).split(/[,;\n\t]+/).forEach(function (raw) {
+            var d = normalizeHostname(raw);
+            if (!d || seen[d]) return;
+            seen[d] = true;
+            out.push(d);
+        });
+        return out;
     }
 
     function addUniqueDomain(domains, domain) {
@@ -1459,10 +1597,22 @@
     }
 
     // Create certificate
+    var isCreatingCert = false;
     document.getElementById('createCertForm').addEventListener('submit', function (e) {
         e.preventDefault();
 
-        var domain = document.getElementById('domain').value.trim();
+        // QW-12: gate against duplicate submits. A real-cert issue path can
+        // take 30s+ to come back; without this guard, every extra click on
+        // the submit button (or Enter inside any of the inputs) fires another
+        // POST /api/certificates/create with the same body. Validation
+        // early-returns below run before we acquire the lock, so a rejected
+        // submit doesn't leave the form stuck.
+        if (isCreatingCert) return;
+
+        // Primary domain: apply the same paste-normalization as SAN inputs
+        // (lowercase, strip scheme/port/path/trailing-dot) so the request
+        // body matches what the user sees rendered back in the cert row.
+        var domain = normalizeHostname(document.getElementById('domain').value);
         var sanDomainsInput = document.getElementById('san_domains').value.trim();
         var wildcardEnabled = document.getElementById('wildcard-cert').checked;
         var challengeType = document.getElementById('challenge_type_select').value;
@@ -1498,6 +1648,26 @@
         var domainsDisplay = sanDomains.length > 0
             ? domain + ' (+ ' + sanDomains.length + ' SAN' + (sanDomains.length > 1 ? 's' : '') + ')'
             : domain;
+
+        // Lock the form for the duration of the request. Disabling every
+        // field also blocks Enter-to-submit from inside the inputs, which
+        // is the other path a user can re-trigger the POST. The original
+        // disabled state of each field is snapshotted so any field that
+        // was already disabled (e.g. account_select hidden by the DNS
+        // provider toggle) stays disabled after re-enable.
+        isCreatingCert = true;
+        var form = e.target;
+        var formFields = form.querySelectorAll('input, select, textarea, button');
+        var previouslyDisabled = [];
+        formFields.forEach(function (el, i) {
+            previouslyDisabled[i] = el.disabled;
+            el.disabled = true;
+        });
+        var submitBtn = form.querySelector('button[type="submit"]');
+        var submitBtnOriginalHtml = submitBtn ? submitBtn.innerHTML : null;
+        if (submitBtn) {
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Creating...';
+        }
 
         var progressInterval = showLoadingModal(
             'Creating Certificate for ' + domainsDisplay,
@@ -1573,6 +1743,14 @@
             });
         }).then(function () {
             hideLoadingModal(progressInterval);
+            // Re-enable the form regardless of success / error / network outcome.
+            formFields.forEach(function (el, i) {
+                el.disabled = previouslyDisabled[i];
+            });
+            if (submitBtn && submitBtnOriginalHtml !== null) {
+                submitBtn.innerHTML = submitBtnOriginalHtml;
+            }
+            isCreatingCert = false;
         });
     });
 
@@ -1704,40 +1882,50 @@
 
     // Delete a certificate and its settings entry (issue #111).
     function deleteCertificate(domain) {
-        if (!window.confirm('Delete certificate for ' + domain + '?\n\nThis removes the certificate files from disk and removes the domain from settings. This action cannot be undone.')) {
-            return;
-        }
-        fetch('/api/certificates/' + encodeURIComponent(domain), {
-            method: 'DELETE'
-        }).then(function (response) {
-            return response.json().then(function (result) {
-                return { ok: response.ok, status: response.status, result: result };
-            });
-        }).then(function (data) {
-            if (data.ok) {
-                showMessage('Certificate deleted for ' + domain, 'success');
-                closeCertDetail();
-                loadCertificates();
-            } else {
-                showMessage(data.result.error || 'Failed to delete certificate', 'error', {
+        // Use CertMate.confirm (in-page modal, danger-styled) for parity
+        // with every other destructive action in the app (revoke client
+        // cert, delete user, delete backup, delete API key). The native
+        // window.confirm bypasses the app theme and is dismissible by
+        // browser "block dialogs" toggles — too weak a guard for an
+        // operation that erases the cert files and the settings entry.
+        CertMate.confirm(
+            'Delete certificate for ' + domain + '? This removes the certificate files from disk and removes the domain from settings. This action cannot be undone.',
+            'Delete Certificate',
+            { confirmText: 'Delete' }
+        ).then(function (confirmed) {
+            if (!confirmed) return;
+            fetch('/api/certificates/' + encodeURIComponent(domain), {
+                method: 'DELETE'
+            }).then(function (response) {
+                return response.json().then(function (result) {
+                    return { ok: response.ok, status: response.status, result: result };
+                });
+            }).then(function (data) {
+                if (data.ok) {
+                    showMessage('Certificate deleted for ' + domain, 'success');
+                    closeCertDetail();
+                    loadCertificates();
+                } else {
+                    showMessage(data.result.error || 'Failed to delete certificate', 'error', {
+                        errorContext: {
+                            endpoint: 'DELETE /api/certificates/' + domain,
+                            status: data.status || 0,
+                            code: data.result.code,
+                            message: data.result.error,
+                            hint: data.result.hint
+                        }
+                    });
+                }
+            }).catch(function (error) {
+                console.error('Error deleting certificate:', error);
+                showMessage('Failed to delete certificate. Please try again.', 'error', {
                     errorContext: {
                         endpoint: 'DELETE /api/certificates/' + domain,
-                        status: data.status || 0,
-                        code: data.result.code,
-                        message: data.result.error,
-                        hint: data.result.hint
+                        status: 0,
+                        code: 'NETWORK_ERROR',
+                        message: (error && error.message) || 'network error'
                     }
                 });
-            }
-        }).catch(function (error) {
-            console.error('Error deleting certificate:', error);
-            showMessage('Failed to delete certificate. Please try again.', 'error', {
-                errorContext: {
-                    endpoint: 'DELETE /api/certificates/' + domain,
-                    status: 0,
-                    code: 'NETWORK_ERROR',
-                    message: (error && error.message) || 'network error'
-                }
             });
         });
     }
@@ -1893,11 +2081,32 @@
     }
 
     // Initialize on page load
+    // Deep-link helper: when the dashboard is loaded with `?cert=<domain>`
+    // in the query string (typically because the user clicked a cert
+    // entry on /activity), open the detail panel for that domain once
+    // the initial cert list has rendered. Silently no-ops on
+    // unparseable URLs / missing param / unknown domain — openCertDetail
+    // itself handles the not-found case via showMessage.
+    function maybeOpenCertFromQuery() {
+        try {
+            var params = new URLSearchParams(window.location.search);
+            var domain = params.get('cert');
+            if (domain) openCertDetail(domain);
+        } catch (e) { /* old browser, skip */ }
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
+        // Paint the stats-card skeleton placeholders before the cert
+        // fetch returns, so the surface is never an empty grid — count
+        // is driven by STAT_METRICS_COUNT to stay in sync with the
+        // updateStats() output (B4 fix).
+        var statsContainer = document.getElementById('statsCards');
+        if (statsContainer) statsContainer.innerHTML = statsSkeletonHtml(STAT_METRICS_COUNT);
+
         // Resolve the caller's role first so the initial cert list can
         // already render with the right buttons hidden — avoids the
         // viewer briefly seeing admin-only controls before they vanish.
-        refreshCurrentRole().then(function () { loadCertificates(); });
+        refreshCurrentRole().then(function () { loadCertificates().then(maybeOpenCertFromQuery); });
         loadProviderAccounts();
 
         // Initialize search and filters

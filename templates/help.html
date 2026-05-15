@@ -14,15 +14,32 @@
                 <span class="inline-flex items-center px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
                     <i class="fas fa-check-circle mr-1"></i>Active
                 </span>
-                <a href="/docs/" target="_blank" class="text-gray-400 hover:text-primary transition-colors"><i class="fas fa-link mr-1"></i>API Docs</a>
+                <a href="/docs/" target="_blank" rel="noopener" class="text-gray-400 hover:text-primary transition-colors" title="Swagger UI — try API requests live"><i class="fas fa-flask mr-1" aria-hidden="true"></i>Swagger</a>
+                <a href="/redoc" target="_blank" rel="noopener" class="text-gray-400 hover:text-primary transition-colors" title="ReDoc — read-only API reference"><i class="fas fa-book mr-1" aria-hidden="true"></i>ReDoc</a>
             </div>
         </div>
 
-        <!-- Quick Links -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <!-- In-page search (B1). Filters the section blocks below by
+             plain substring on textContent. While a term is active the
+             Quick Links grid is also hidden — it's nav, not content,
+             and is the wrong target for a content search. -->
+        <div class="px-4 sm:px-0 mb-4">
+            <label for="helpSearch" class="sr-only">Search help</label>
+            <div class="relative">
+                <input type="search" id="helpSearch"
+                       placeholder="Search the help page…"
+                       aria-label="Search help content"
+                       class="w-full pl-10 pr-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary">
+                <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none" aria-hidden="true"></i>
+            </div>
+        </div>
+
+        <!-- Quick Links — 6 items on a 1/2/3 column grid so each
+             breakpoint lands a clean rectangle (no orphan trailing row). -->
+        <div id="quickLinksGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
             <a href="#getting-started" class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow hover:shadow-md transition-shadow">
                 <div class="flex items-center">
-                    <i class="fas fa-rocket text-green-600 text-xl mr-3"></i>
+                    <i class="fas fa-rocket text-green-600 text-xl mr-3" aria-hidden="true"></i>
                     <div>
                         <h3 class="font-medium text-gray-900 dark:text-white">Getting Started</h3>
                         <p class="text-sm text-gray-500 dark:text-gray-400">Quick start guide</p>
@@ -31,37 +48,46 @@
             </a>
             <a href="#dns-providers" class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow hover:shadow-md transition-shadow">
                 <div class="flex items-center">
-                    <i class="fas fa-server text-blue-600 text-xl mr-3"></i>
+                    <i class="fas fa-server text-blue-600 text-xl mr-3" aria-hidden="true"></i>
                     <div>
                         <h3 class="font-medium text-gray-900 dark:text-white">DNS Providers</h3>
                         <p class="text-sm text-gray-500 dark:text-gray-400">Supported providers</p>
                     </div>
                 </div>
             </a>
+            <a href="#ca-providers" class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow hover:shadow-md transition-shadow">
+                <div class="flex items-center">
+                    <i class="fas fa-certificate text-purple-600 text-xl mr-3" aria-hidden="true"></i>
+                    <div>
+                        <h3 class="font-medium text-gray-900 dark:text-white">CA Providers</h3>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">Certificate authorities</p>
+                    </div>
+                </div>
+            </a>
             <a href="#api-usage" class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow hover:shadow-md transition-shadow">
                 <div class="flex items-center">
-                    <i class="fas fa-code text-purple-600 text-xl mr-3"></i>
+                    <i class="fas fa-code text-indigo-600 text-xl mr-3" aria-hidden="true"></i>
                     <div>
                         <h3 class="font-medium text-gray-900 dark:text-white">API Usage</h3>
                         <p class="text-sm text-gray-500 dark:text-gray-400">REST API examples</p>
                     </div>
                 </div>
             </a>
-            <a href="#troubleshooting" class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow hover:shadow-md transition-shadow">
+            <a href="#backup-recovery" class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow hover:shadow-md transition-shadow">
                 <div class="flex items-center">
-                    <i class="fas fa-tools text-orange-600 text-xl mr-3"></i>
+                    <i class="fas fa-archive text-amber-600 text-xl mr-3" aria-hidden="true"></i>
                     <div>
-                        <h3 class="font-medium text-gray-900 dark:text-white">Troubleshooting</h3>
-                        <p class="text-sm text-gray-500 dark:text-gray-400">Common issues</p>
+                        <h3 class="font-medium text-gray-900 dark:text-white">Backup &amp; Recovery</h3>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">Settings and certs backup</p>
                     </div>
                 </div>
             </a>
-            <a href="#ca-providers" class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow hover:shadow-md transition-shadow">
+            <a href="#troubleshooting" class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow hover:shadow-md transition-shadow">
                 <div class="flex items-center">
-                    <i class="fas fa-certificate text-purple-600 text-xl mr-3"></i>
+                    <i class="fas fa-tools text-orange-600 text-xl mr-3" aria-hidden="true"></i>
                     <div>
-                        <h3 class="font-medium text-gray-900 dark:text-white">CA Providers</h3>
-                        <p class="text-sm text-gray-500 dark:text-gray-400">Certificate authorities</p>
+                        <h3 class="font-medium text-gray-900 dark:text-white">Troubleshooting</h3>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">Common issues</p>
                     </div>
                 </div>
             </a>
@@ -69,13 +95,18 @@
 
         <!-- Content Sections -->
         <div class="space-y-6">
-            <!-- What's New in v2.0 -->
-            <div id="whats-new" class="bg-white dark:bg-gray-800 shadow rounded-lg">
+            <!-- What's New in v2.x -->
+            <div id="whats-new" data-help-section class="bg-white dark:bg-gray-800 shadow rounded-lg">
                 <div class="px-6 py-6">
-                    <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-                        <i class="fas fa-star text-yellow-500 mr-2"></i>
-                        What's New in v2.0
-                    </h3>
+                    <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+                        <h3 class="text-xl font-semibold text-gray-900 dark:text-white">
+                            <i class="fas fa-star text-yellow-500 mr-2" aria-hidden="true"></i>
+                            What's New in v2.x
+                        </h3>
+                        <a href="https://github.com/fabriziosalmi/certmate/blob/main/RELEASE_NOTES.md" target="_blank" rel="noopener" class="text-sm text-primary hover:underline inline-flex items-center">
+                            <i class="fas fa-external-link-alt mr-1.5 text-xs" aria-hidden="true"></i>Full changelog
+                        </a>
+                    </div>
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         <div class="bg-indigo-50 dark:bg-indigo-900/20 p-4 rounded-lg border border-indigo-200 dark:border-indigo-800">
                             <h4 class="font-medium text-indigo-900 dark:text-indigo-100 mb-2">
@@ -118,7 +149,7 @@
             </div>
 
             <!-- About CertMate -->
-            <div id="about" class="bg-white dark:bg-gray-800 shadow rounded-lg">
+            <div id="about" data-help-section class="bg-white dark:bg-gray-800 shadow rounded-lg">
                 <div class="px-6 py-6">
                     <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">
                         <i class="fas fa-shield-alt text-primary mr-2"></i>
@@ -164,7 +195,7 @@
             </div>
 
             <!-- Getting Started -->
-            <div id="getting-started" class="bg-white dark:bg-gray-800 shadow rounded-lg">
+            <div id="getting-started" data-help-section class="bg-white dark:bg-gray-800 shadow rounded-lg">
                 <div class="px-6 py-6">
                     <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">
                         <i class="fas fa-rocket text-green-600 mr-2"></i>
@@ -243,7 +274,7 @@
             </div>
 
             <!-- CA Providers -->
-            <div id="ca-providers" class="bg-white dark:bg-gray-800 shadow rounded-lg">
+            <div id="ca-providers" data-help-section class="bg-white dark:bg-gray-800 shadow rounded-lg">
                 <div class="px-6 py-6">
                     <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">
                         <i class="fas fa-certificate text-purple-600 mr-2"></i>
@@ -332,7 +363,7 @@
             </div>
 
             <!-- DNS Providers -->
-            <div id="dns-providers" class="bg-white dark:bg-gray-800 shadow rounded-lg">
+            <div id="dns-providers" data-help-section class="bg-white dark:bg-gray-800 shadow rounded-lg">
                 <div class="px-6 py-6">
                     <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">
                         <i class="fas fa-server text-blue-600 mr-2"></i>
@@ -449,7 +480,7 @@
             </div>
 
             <!-- API Usage -->
-            <div id="api-usage" class="bg-white dark:bg-gray-800 shadow rounded-lg">
+            <div id="api-usage" data-help-section class="bg-white dark:bg-gray-800 shadow rounded-lg">
                 <div class="px-6 py-6">
                     <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">
                         <i class="fas fa-code text-purple-600 mr-2"></i>
@@ -529,16 +560,21 @@
                                 Complete API Documentation
                             </h4>
                             <p class="text-sm text-yellow-800 dark:text-yellow-200">
-                                Explore the full interactive API documentation with examples and testing capabilities:
+                                Two flavours of API documentation are available — use Swagger for
+                                interactive try-it-out, ReDoc for read-only browsing:
                             </p>
-                            <div class="mt-3 space-x-4">
-                                <a href="/docs/" target="_blank" class="inline-flex items-center px-3 py-1 bg-yellow-200 dark:bg-yellow-800 text-yellow-900 dark:text-yellow-100 rounded-md text-sm hover:bg-yellow-300 dark:hover:bg-yellow-700">
-                                    <i class="fas fa-external-link-alt mr-1"></i>
-                                    Swagger UI (/docs/)
+                            <div class="mt-3 flex flex-wrap gap-2">
+                                <a href="/docs/" target="_blank" rel="noopener"
+                                   title="Swagger UI — interactive, run live API requests from the page"
+                                   class="inline-flex items-center px-3 py-1 bg-yellow-200 dark:bg-yellow-800 text-yellow-900 dark:text-yellow-100 rounded-md text-sm hover:bg-yellow-300 dark:hover:bg-yellow-700">
+                                    <i class="fas fa-flask mr-1" aria-hidden="true"></i>
+                                    Swagger UI <span class="opacity-70 ml-1">(/docs/, interactive)</span>
                                 </a>
-                                <a href="/redoc/" target="_blank" class="inline-flex items-center px-3 py-1 bg-yellow-200 dark:bg-yellow-800 text-yellow-900 dark:text-yellow-100 rounded-md text-sm hover:bg-yellow-300 dark:hover:bg-yellow-700">
-                                    <i class="fas fa-external-link-alt mr-1"></i>
-                                    ReDoc (/redoc/)
+                                <a href="/redoc" target="_blank" rel="noopener"
+                                   title="ReDoc — read-only API reference, easier to browse end-to-end"
+                                   class="inline-flex items-center px-3 py-1 bg-yellow-200 dark:bg-yellow-800 text-yellow-900 dark:text-yellow-100 rounded-md text-sm hover:bg-yellow-300 dark:hover:bg-yellow-700">
+                                    <i class="fas fa-book mr-1" aria-hidden="true"></i>
+                                    ReDoc <span class="opacity-70 ml-1">(/redoc, read-only)</span>
                                 </a>
                             </div>
                         </div>
@@ -547,7 +583,7 @@
             </div>
 
             <!-- Troubleshooting -->
-            <div id="troubleshooting" class="bg-white dark:bg-gray-800 shadow rounded-lg">
+            <div id="troubleshooting" data-help-section class="bg-white dark:bg-gray-800 shadow rounded-lg">
                 <div class="px-6 py-6">
                     <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">
                         <i class="fas fa-tools text-orange-600 mr-2"></i>
@@ -594,8 +630,8 @@
                                     Health Checks
                                 </h4>
                                 <div class="text-sm text-green-800 dark:text-green-200 space-y-1">
-                                    <div>• Service Status: <a href="/health" target="_blank" class="underline">/health</a></div>
-                                    <div>• API Connectivity: <a href="/docs/" target="_blank" class="underline">/docs/</a></div>
+                                    <div>• Service Status: <a href="/health" target="_blank" rel="noopener" class="underline">/health</a></div>
+                                    <div>• API Connectivity: <a href="/docs/" target="_blank" rel="noopener" class="underline" title="Swagger UI — interactive API explorer">/docs/ (Swagger)</a> or <a href="/redoc" target="_blank" rel="noopener" class="underline" title="ReDoc — read-only API reference">/redoc</a></div>
                                     <div>• Certificate Status: <a href="/" class="underline">Dashboard</a></div>
                                 </div>
                             </div>
@@ -611,8 +647,8 @@
                                     <div>• Review API documentation</div>
                                 </div>
                                 <div class="pt-2 border-t border-blue-200 dark:border-blue-700">
-                                    <a href="https://github.com/fabriziosalmi/certmate/issues/new/choose" 
-                                       target="_blank" 
+                                    <a href="https://github.com/fabriziosalmi/certmate/issues/new/choose"
+                                       target="_blank" rel="noopener"
                                        class="inline-flex items-center px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-md transition-colors duration-200 shadow-sm hover:shadow-md">
                                         <i class="fab fa-github mr-2"></i>
                                         Report Issue on GitHub
@@ -626,7 +662,7 @@
             </div>
 
             <!-- Advanced Features -->
-            <div id="advanced" class="bg-white dark:bg-gray-800 shadow rounded-lg">
+            <div id="advanced" data-help-section class="bg-white dark:bg-gray-800 shadow rounded-lg">
                 <div class="px-6 py-6">
                     <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">
                         <i class="fas fa-cogs text-gray-600 mr-2"></i>
@@ -694,7 +730,7 @@
             </div>
 
             <!-- Multi-Account Support -->
-            <div id="multi-account" class="bg-white dark:bg-gray-800 shadow rounded-lg">
+            <div id="multi-account" data-help-section class="bg-white dark:bg-gray-800 shadow rounded-lg">
                 <div class="px-6 py-6">
                     <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">
                         <i class="fas fa-users text-green-600 mr-2"></i>
@@ -796,7 +832,7 @@ POST /api/certificates/create
             </div>
 
             <!-- Backup & Recovery -->
-            <div id="backup-recovery" class="bg-white dark:bg-gray-800 shadow rounded-lg">
+            <div id="backup-recovery" data-help-section class="bg-white dark:bg-gray-800 shadow rounded-lg">
                 <div class="px-6 py-6">
                     <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">
                         <i class="fas fa-shield-alt text-blue-600 mr-2"></i>
@@ -901,6 +937,66 @@ POST /api/certificates/create
                     </div>
                 </div>
             </div>
+
+            <!-- No-results placeholder for B1 search (hidden until the
+                 search filter zeroes out all sections). role=status so
+                 SR announces it when toggled visible. -->
+            <div id="noHelpResults" class="hidden bg-white dark:bg-gray-800 shadow rounded-lg p-8 text-center" role="status" aria-live="polite">
+                <i class="fas fa-search text-3xl text-gray-300 dark:text-gray-600 mb-3 block" aria-hidden="true"></i>
+                <p class="text-sm font-medium text-gray-700 dark:text-gray-200">No help sections match your search.</p>
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Try a different term, or clear the search to see the full guide.</p>
+            </div>
         </div>
     </div>
+
+    <script>
+    // B1: in-page help search. Filters the [data-help-section] cards by
+    // plain substring match on their textContent. Quick Links grid is
+    // hidden while a term is active because it's nav, not content —
+    // the user is asking "which section talks about X", and Quick
+    // Links is the table of contents not the content.
+    (function() {
+        var input = document.getElementById('helpSearch');
+        if (!input) return;
+        var sections = document.querySelectorAll('[data-help-section]');
+        var noResults = document.getElementById('noHelpResults');
+        var quickLinks = document.getElementById('quickLinksGrid');
+        var debounce;
+
+        function applyFilter() {
+            var term = input.value.trim().toLowerCase();
+            if (!term) {
+                sections.forEach(function(s) { s.classList.remove('hidden'); });
+                if (noResults) noResults.classList.add('hidden');
+                if (quickLinks) quickLinks.classList.remove('hidden');
+                return;
+            }
+            if (quickLinks) quickLinks.classList.add('hidden');
+            var anyMatch = false;
+            sections.forEach(function(s) {
+                var matches = (s.textContent || '').toLowerCase().indexOf(term) !== -1;
+                s.classList.toggle('hidden', !matches);
+                if (matches) anyMatch = true;
+            });
+            if (noResults) noResults.classList.toggle('hidden', anyMatch);
+        }
+
+        input.addEventListener('input', function() {
+            clearTimeout(debounce);
+            debounce = setTimeout(applyFilter, 200);
+        });
+
+        // Escape clears the search and restores the full page in one
+        // keystroke. Common UX pattern matching browsers' built-in
+        // Ctrl+F behaviour.
+        input.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                input.value = '';
+                applyFilter();
+                input.blur();
+            }
+        });
+    })();
+    </script>
 {% endblock %}
