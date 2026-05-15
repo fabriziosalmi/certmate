@@ -876,6 +876,16 @@ class CertificateManager:
                 'certbot', 'renew',
                 '--cert-name', domain,
                 '--quiet',
+                # certbot's default `renew` injects a random sleep of up
+                # to ~8 minutes before contacting the ACME server, to
+                # avoid stampeding Let's Encrypt when run from a flock
+                # of crontabs. We're always invoked interactively from
+                # the API/UI, so the sleep just makes the POST time out
+                # in the browser — and the random delay is reported as
+                # a NETWORK_ERROR to the user even though certbot
+                # eventually completes the renewal in the background.
+                # See issue #171.
+                '--no-random-sleep-on-renew',
                 '--config-dir', str(domain_dir),
                 '--work-dir', str(work_dir),
                 '--logs-dir', str(logs_dir)
