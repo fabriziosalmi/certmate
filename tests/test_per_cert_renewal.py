@@ -10,6 +10,7 @@ and settings manager directly with a temporary data directory.
 """
 
 from unittest.mock import MagicMock
+from types import SimpleNamespace
 
 import pytest
 
@@ -119,6 +120,40 @@ def test_check_renewals_legacy_string_entries_default_to_enabled(cert_manager, m
     assert renewed == ['legacy.example.com']
 
 
+def test_forced_renew_adds_certbot_force_flag(cert_manager, tmp_path):
+    domain_dir = cert_manager.cert_dir / "force.example.com"
+    domain_dir.mkdir()
+    (domain_dir / "cert.pem").write_text("placeholder cert")
+    (domain_dir / "live" / "force.example.com").mkdir(parents=True)
+
+    cert_manager.shell_executor.run = MagicMock(
+        return_value=SimpleNamespace(returncode=0, stdout="", stderr="")
+    )
+
+    result = cert_manager.renew_certificate("force.example.com", force=True)
+
+    assert result["success"] is True
+    cmd = cert_manager.shell_executor.run.call_args.args[0]
+    assert "--force-renewal" in cmd
+
+
+def test_scheduled_renew_uses_certbot_due_logic(cert_manager, tmp_path):
+    domain_dir = cert_manager.cert_dir / "scheduled.example.com"
+    domain_dir.mkdir()
+    (domain_dir / "cert.pem").write_text("placeholder cert")
+    (domain_dir / "live" / "scheduled.example.com").mkdir(parents=True)
+
+    cert_manager.shell_executor.run = MagicMock(
+        return_value=SimpleNamespace(returncode=0, stdout="", stderr="")
+    )
+
+    result = cert_manager.renew_certificate("scheduled.example.com")
+
+    assert result["success"] is True
+    cmd = cert_manager.shell_executor.run.call_args.args[0]
+    assert "--force-renewal" not in cmd
+
+
 def test_set_auto_renew_persists_flag(cert_manager):
     """set_auto_renew updates the dict entry and saves to disk."""
     _seed_settings(cert_manager, [
@@ -158,5 +193,3 @@ def test_set_auto_renew_upgrades_legacy_string_entry(cert_manager):
         if isinstance(d, dict) and d.get('domain') == 'legacy.example.com'
     )
     assert entry['auto_renew'] is False
-
-

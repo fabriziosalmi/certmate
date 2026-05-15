@@ -1208,10 +1208,12 @@ def create_api_resources(api, models, managers):
         def post(self, domain):
             """Renew an existing certificate"""
             try:
+                payload = request.get_json(silent=True) or {}
+                force = bool(payload.get('force', False))
                 scope_err = _check_domain_scope(domain, 'renew')
                 if scope_err:
                     return scope_err
-                result = certificate_manager.renew_certificate(domain)
+                result = certificate_manager.renew_certificate(domain, force=force)
 
                 event_bus = current_app.config.get('EVENT_BUS')
                 if event_bus:
