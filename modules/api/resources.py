@@ -5,6 +5,8 @@ Defines Flask-RESTX Resource classes for REST API endpoints
 
 import logging
 import re
+import socket
+import ssl
 import tempfile
 import zipfile
 import os
@@ -16,6 +18,7 @@ from flask_restx import Resource, fields
 from ..core.metrics import get_metrics_summary, is_prometheus_available
 from ..core.constants import CERTIFICATE_FILES, iter_cert_domain_dirs
 from ..core.auth import ROLE_HIERARCHY
+from ..core.utils import utc_now_iso
 
 _DOMAIN_RE = re.compile(r'^(\*\.)?([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$')
 
@@ -46,6 +49,41 @@ def _validate_domain_path(domain, cert_base_dir):
     except (OSError, ValueError):
         return None, 'Invalid domain path'
     return cert_dir, None
+
+
+def _certificate_fingerprint(cert_bytes):
+    """Return a stable SHA-256 fingerprint for a PEM or DER certificate."""
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes
+
+    cert_bytes = cert_bytes or b''
+    if not cert_bytes:
+        return None
+
+    try:
+        cert = x509.load_pem_x509_certificate(cert_bytes)
+    except ValueError:
+        cert = x509.load_der_x509_certificate(cert_bytes)
+    return cert.fingerprint(hashes.SHA256()).hex()
+
+
+def _probe_https_certificate(domain, timeout=5):
+    """Return the live TLS certificate for a domain, if reachable."""
+    host = domain[2:] if domain.startswith('*.') else domain
+    context = ssl.create_default_context()
+    # We intentionally disable PKI validation here. The goal is to compare the
+    # served certificate fingerprint against the stored certificate, even when
+    # the live cert is invalid or otherwise not trusted.
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_NONE
+
+    with socket.create_connection((host, 443), timeout=timeout) as raw_sock:
+        with context.wrap_socket(raw_sock, server_hostname=host) as tls_sock:
+            cert_bytes = tls_sock.getpeercert(binary_form=True)
+            return {
+                'reachable': True,
+                'certificate_bytes': cert_bytes,
+            }
 
 
 logger = logging.getLogger(__name__)
@@ -879,6 +917,135 @@ def create_api_resources(api, models, managers):
     def _user_has_role(user, min_role):
         level = ROLE_HIERARCHY.get((user or {}).get('role'), -1)
         return level >= ROLE_HIERARCHY.get(min_role, 999)
+
+    class CertificateDeploymentStatus(Resource):
+        @api.doc(security='Bearer')
+        @auth_manager.require_role('viewer')
+        @api.marshal_with(models['deployment_status_model'])
+        def get(self, domain):
+            """Check whether the domain is serving the expected certificate."""
+            refresh_requested = str(request.args.get('refresh', '')).lower() in {'1', 'true', 'yes', 'on'}
+            _, err = _validate_domain_path(domain, file_ops.cert_dir)
+            if err:
+                return {'error': err}, 400
+            scope_err = _check_domain_scope(domain, 'deployment_status')
+            if scope_err:
+                return scope_err
+
+            cert_info = certificate_manager.get_certificate_info(domain)
+            if not cert_info or not cert_info.get('exists'):
+                return {'error': f'Certificate not found for domain: {domain}'}, 404
+
+            if refresh_requested:
+                cache_manager.remove_from_cache(domain)
+            else:
+                cached_result = cache_manager.get_deployment_status(domain)
+                if isinstance(cached_result, dict) and cached_result.get('domain') == domain:
+                    return cached_result, 200
+
+            expected_bytes = None
+            storage_manager = getattr(certificate_manager, 'storage_manager', None)
+            if storage_manager is not None:
+                try:
+                    storage_result = storage_manager.retrieve_certificate(domain)
+                    if storage_result:
+                        cert_files, _metadata = storage_result
+                        expected_bytes = cert_files.get('cert.pem')
+                except Exception as e:
+                    logger.warning(f"Could not read stored certificate for {domain}: {e}")
+
+            if expected_bytes is None:
+                cert_path = Path(file_ops.cert_dir) / domain / 'cert.pem'
+                if cert_path.exists():
+                    expected_bytes = cert_path.read_bytes()
+
+            if not expected_bytes:
+                return {'error': f'Certificate file not found for domain: {domain}'}, 404
+
+            expected_fingerprint = _certificate_fingerprint(expected_bytes)
+            if not expected_fingerprint:
+                return {'error': f'Could not parse certificate for domain: {domain}'}, 500
+
+            result = {
+                'domain': domain,
+                'deployed': False,
+                'reachable': False,
+                'certificate_match': False,
+                'method': 'https-tls',
+                'timestamp': utc_now_iso(),
+            }
+
+            try:
+                probe = _probe_https_certificate(domain)
+                result['reachable'] = True
+                result['deployed'] = True
+                result['certificate_match'] = (
+                    _certificate_fingerprint(probe.get('certificate_bytes')) == expected_fingerprint
+                )
+            except Exception as e:
+                result['error'] = str(e)
+
+            persisted_status = certificate_manager.get_deployment_status_record(domain)
+            if isinstance(persisted_status, dict) and persisted_status.get('browser'):
+                result['browser'] = persisted_status.get('browser')
+
+            certificate_manager.record_backend_deployment_status(domain, result)
+            cache_manager.set_deployment_status(domain, result)
+            return result, 200
+
+    class CertificateDeploymentBrowserReports(Resource):
+        @api.doc(security='Bearer')
+        @auth_manager.require_role('viewer')
+        @api.expect(models['browser_deployment_reports_model'])
+        def post(self):
+            """Persist browser-reported reachability for one or more domains."""
+            payload = request.get_json(silent=True) or {}
+            reports = payload.get('reports')
+            if not isinstance(reports, list) or not reports:
+                return {'error': 'reports must be a non-empty array'}, 400
+
+            updated = []
+            skipped = []
+            for report in reports:
+                if not isinstance(report, dict):
+                    skipped.append({'error': 'invalid report payload'})
+                    continue
+
+                domain = (report.get('domain') or '').strip()
+                if not domain:
+                    skipped.append({'error': 'missing domain'})
+                    continue
+
+                _, err = _validate_domain_path(domain, file_ops.cert_dir)
+                if err:
+                    skipped.append({'domain': domain, 'error': err})
+                    continue
+                scope_err = _check_domain_scope(domain, 'browser_report')
+                if scope_err:
+                    skipped.append({'domain': domain, 'error': 'out of scope'})
+                    continue
+
+                browser_status = certificate_manager.record_browser_deployment_status(domain, report)
+                persisted = certificate_manager.get_deployment_status_record(domain)
+                backend = persisted.get('backend') if isinstance(persisted, dict) else None
+                merged = {
+                    'domain': domain,
+                    'deployed': bool(backend.get('deployed')) if isinstance(backend, dict) else False,
+                    'reachable': bool(backend.get('reachable')) if isinstance(backend, dict) else False,
+                    'certificate_match': backend.get('certificate_match') if isinstance(backend, dict) else False,
+                    'method': backend.get('method') if isinstance(backend, dict) else 'browser-report',
+                    'timestamp': backend.get('timestamp') if isinstance(backend, dict) else None,
+                    'error': backend.get('error') if isinstance(backend, dict) else None,
+                    'browser': browser_status.get('browser') if isinstance(browser_status, dict) else None,
+                }
+                cache_manager.set_deployment_status(domain, merged)
+                updated.append(domain)
+
+            return {
+                'updated': updated,
+                'skipped': skipped,
+                'count': len(updated),
+            }, 200
 
     class DownloadCertificate(Resource):
         @api.doc(security='Bearer')
@@ -1946,6 +2113,8 @@ def create_api_resources(api, models, managers):
         'CheckDNSAlias': CheckDNSAlias,
         'CertificateDNSAliasCheck': CertificateDNSAliasCheck,
         'CertificateDetail': CertificateDetail,
+        'CertificateDeploymentStatus': CertificateDeploymentStatus,
+        'CertificateDeploymentBrowserReports': CertificateDeploymentBrowserReports,
         'DownloadCertificate': DownloadCertificate,
         'RenewCertificate': RenewCertificate,
         'CertificateAutoRenew': CertificateAutoRenew,

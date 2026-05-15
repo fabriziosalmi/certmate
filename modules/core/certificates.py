@@ -21,7 +21,7 @@ from datetime import datetime, timedelta
 from .shell import ShellExecutor
 from .dns_strategies import DNSStrategyFactory, HTTP01Strategy, check_certbot_plugin_installed
 from .constants import CERTIFICATE_FILES, get_domain_name
-from .utils import validate_domain, utc_now
+from .utils import validate_domain, utc_now, utc_now_iso
 
 logger = logging.getLogger(__name__)
 
@@ -105,6 +105,72 @@ class CertificateManager:
             if domain not in self._domain_locks:
                 self._domain_locks[domain] = threading.Lock()
             return self._domain_locks[domain]
+
+    def _metadata_path(self, domain: str) -> Path:
+        return self.cert_dir / domain / 'metadata.json'
+
+    def _load_metadata(self, domain: str) -> dict:
+        metadata_file = self._metadata_path(domain)
+        if not metadata_file.exists():
+            return {}
+        try:
+            with open(metadata_file, 'r', encoding='utf-8') as f:
+                metadata = json.load(f)
+                return metadata if isinstance(metadata, dict) else {}
+        except Exception as e:
+            logger.warning(f"Failed to read metadata for {domain}: {e}")
+            return {}
+
+    def _save_metadata(self, domain: str, metadata: dict) -> bool:
+        metadata_file = self._metadata_path(domain)
+        try:
+            self._atomic_json_write(metadata_file, metadata)
+            return True
+        except Exception as e:
+            logger.warning(f"Failed to save metadata for {domain}: {e}")
+            return False
+
+    def get_deployment_status_record(self, domain: str) -> dict:
+        metadata = self._load_metadata(domain)
+        status = metadata.get('deployment_status')
+        return status if isinstance(status, dict) else {}
+
+    def record_backend_deployment_status(self, domain: str, backend_status: dict) -> dict:
+        metadata = self._load_metadata(domain)
+        deployment_status = metadata.get('deployment_status')
+        if not isinstance(deployment_status, dict):
+            deployment_status = {}
+
+        deployment_status['backend'] = {
+            'domain': backend_status.get('domain', domain),
+            'deployed': bool(backend_status.get('deployed', False)),
+            'reachable': bool(backend_status.get('reachable', False)),
+            'certificate_match': backend_status.get('certificate_match'),
+            'method': backend_status.get('method'),
+            'timestamp': backend_status.get('timestamp') or utc_now_iso(),
+            'error': backend_status.get('error'),
+        }
+
+        metadata['deployment_status'] = deployment_status
+        self._save_metadata(domain, metadata)
+        return deployment_status
+
+    def record_browser_deployment_status(self, domain: str, browser_status: dict) -> dict:
+        metadata = self._load_metadata(domain)
+        deployment_status = metadata.get('deployment_status')
+        if not isinstance(deployment_status, dict):
+            deployment_status = {}
+
+        deployment_status['browser'] = {
+            'reachable': bool(browser_status.get('reachable', False)),
+            'checked_at': browser_status.get('checked_at') or utc_now_iso(),
+            'method': browser_status.get('method') or 'browser-fallback',
+            'source': browser_status.get('source') or 'browser',
+        }
+
+        metadata['deployment_status'] = deployment_status
+        self._save_metadata(domain, metadata)
+        return deployment_status
 
     @staticmethod
     def _create_dns_alias_hook_config(dns_provider, dns_config, domain_alias, propagation_seconds):
