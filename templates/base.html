@@ -74,11 +74,11 @@
                     </button>
                     <!-- Notification bell -->
                     <div class="relative">
-                        <button type="button" id="notifBtn" onclick="toggleNotifications()" class="px-2 py-2 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 relative" title="Notifications" aria-label="Open notifications" aria-haspopup="true" aria-expanded="false">
+                        <button type="button" id="notifBtn" onclick="toggleNotifications()" class="px-2 py-2 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 relative" title="Notifications" aria-label="Open notifications" aria-haspopup="true" aria-expanded="false" aria-controls="notifPanel">
                             <i class="fas fa-bell"></i>
                             <span id="notifBadge" class="hidden absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold badge-pulse">0</span>
                         </button>
-                        <div id="notifPanel" class="hidden absolute right-0 mt-2 w-[calc(100vw-2rem)] max-w-sm md:w-80 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 z-50 max-h-96 overflow-y-auto">
+                        <div id="notifPanel" role="region" aria-label="Notifications" class="hidden absolute right-0 mt-2 w-[calc(100vw-2rem)] max-w-sm md:w-80 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 z-50 max-h-96 overflow-y-auto">
                             <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
                                 <h3 class="text-sm font-semibold text-gray-900 dark:text-white">Notifications</h3>
                             </div>
@@ -160,17 +160,43 @@
     }
     // Sync icons once DOM is ready (handles dark-mode-on-load case)
     document.addEventListener('DOMContentLoaded', _syncThemeIcons);
-    // Notifications
+    // Notifications — disclosure popup (non-modal): aria-expanded flip on
+    // the trigger, focus moves into the panel when opened, focus restored
+    // to the trigger on close, Escape dismisses. No focus trap because
+    // this is a disclosure / menu pattern, not a dialog — Tab should be
+    // free to leave the panel (ARIA APG Disclosure pattern).
     var _notifOpen = false;
+    function _closeNotifPanel(restoreFocus) {
+        var panel = document.getElementById('notifPanel');
+        var btn = document.getElementById('notifBtn');
+        panel.classList.add('hidden');
+        if (btn) btn.setAttribute('aria-expanded', 'false');
+        _notifOpen = false;
+        if (restoreFocus && btn) btn.focus();
+    }
     function toggleNotifications() {
         var panel = document.getElementById('notifPanel');
+        var btn = document.getElementById('notifBtn');
         _notifOpen = !_notifOpen;
         panel.classList.toggle('hidden', !_notifOpen);
+        if (btn) btn.setAttribute('aria-expanded', _notifOpen ? 'true' : 'false');
+        if (_notifOpen) {
+            // Move focus into the panel so keyboard users land where they
+            // can act on the contents (first notification link, or the
+            // panel itself if empty).
+            var first = panel.querySelector('a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])');
+            if (first) first.focus();
+        }
     }
     document.addEventListener('click', function(e) {
         if (_notifOpen && !e.target.closest('#notifBtn') && !e.target.closest('#notifPanel')) {
-            document.getElementById('notifPanel').classList.add('hidden');
-            _notifOpen = false;
+            _closeNotifPanel(false);
+        }
+    });
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && _notifOpen) {
+            e.preventDefault();
+            _closeNotifPanel(true);
         }
     });
     function renderNotifications(certs) {
