@@ -762,7 +762,10 @@
         addDebugLog('Opening add account modal for ' + provider, 'info');
 
         var modal = document.getElementById('addAccountModal');
-        var modalTitle = document.getElementById('modal-title');
+        // R-2: macro emits `<h3 id="<modalId>-title">` for aria-labelledby
+        // wiring; the dynamic per-provider title still lands in the same
+        // <h3>, just renamed from the legacy "modal-title" id.
+        var modalTitle = document.getElementById('addAccountModal-title');
         var providerFields = document.getElementById('modal-provider-fields');
         var accountNameField = document.getElementById('account-name');
         var accountDescField = document.getElementById('account-description');
@@ -2630,6 +2633,16 @@
         form = document.getElementById('settingsForm');
         saveBtn = document.getElementById('saveBtn');
         statusMessage = document.getElementById('statusMessage');
+
+        // R-2: route every dismiss path (Esc, backdrop, the macro's
+        // close button, the form's Cancel button with [data-modal-close])
+        // through the existing cleanup. The programmatic path —
+        // saveAccount() / saveEditAccount() calling closeXxxModal() on
+        // success — still runs the same body, so cleanup is uniform.
+        var addModalEl = document.getElementById('addAccountModal');
+        if (addModalEl) addModalEl.addEventListener('modal:close', closeAddAccountModal);
+        var editModalEl = document.getElementById('editAccountModal');
+        if (editModalEl) editModalEl.addEventListener('modal:close', closeEditAccountModal);
 
         addDebugLog('DOM loaded, initializing settings page', 'info');
 

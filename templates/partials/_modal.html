@@ -1,0 +1,60 @@
+{#
+  Standard modal scaffold (R-2). Use as:
+
+      {% from "partials/_modal.html" import modal %}
+      {% call modal(id="myModal", title="Title here", icon="fa-cog", size="md") %}
+          <p>Body goes here. Caller renders inside .px-6 .py-4.</p>
+      {% endcall %}
+
+  Behavior provided by the global handler in static/js/certmate.js:
+    - Esc key dismisses the visible modal (unless dismissible=false).
+    - Backdrop click dismisses it.
+    - Any element with [data-modal-close] inside dismisses it.
+    - First focusable inside is focused on open; Tab cycles within
+      the modal; closing restores focus to the previously focused
+      element on the page.
+    - Dispatches `modal:close` (CustomEvent) on the root when
+      dismissed, so callsites with side-effects (form reset, body
+      overflow restore) can subscribe instead of intercepting the
+      close button.
+
+  Visibility is still controlled by toggling the `hidden` Tailwind
+  class on the root, matching the existing showLoadingModal /
+  closeXxxModal call patterns in dashboard.js and settings.js.
+#}
+{% macro modal(id, title='', icon='', size='md', dismissible=true) -%}
+{%- set size_class = {
+    'sm': 'max-w-md',
+    'md': 'max-w-2xl',
+    'lg': 'max-w-4xl',
+    'xl': 'max-w-6xl'
+}[size] -%}
+    <div id="{{ id }}"
+         data-modal-root
+         {%- if not dismissible %} data-modal-no-dismiss{% endif %}
+         role="dialog"
+         aria-modal="true"
+         {%- if title %} aria-labelledby="{{ id }}-title"{% endif %}
+         class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+        <div data-modal-panel class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full {{ size_class }} max-h-[90vh] flex flex-col overflow-hidden">
+            {%- if title %}
+            <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+                <h3 id="{{ id }}-title" class="text-lg font-medium text-gray-900 dark:text-white flex items-center">
+                    {%- if icon %}<i class="fas {{ icon }} mr-2"></i>{% endif -%}
+                    {{ title }}
+                </h3>
+                {%- if dismissible %}
+                <button type="button" data-modal-close
+                        class="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-200"
+                        aria-label="Close">
+                    <i class="fas fa-times"></i>
+                </button>
+                {%- endif %}
+            </div>
+            {%- endif %}
+            <div class="px-6 py-4 overflow-y-auto">
+                {{ caller() }}
+            </div>
+        </div>
+    </div>
+{%- endmacro %}
