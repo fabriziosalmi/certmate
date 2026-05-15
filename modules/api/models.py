@@ -238,6 +238,10 @@ def create_api_models(api):
         'method': fields.String(description='Check method'),
         'timestamp': fields.String(description='Check timestamp'),
         'error': fields.String(description='Optional error message'),
+        # Machine-readable error code surfaced when _check_domain_scope denies
+        # a scoped API key (e.g. 'DOMAIN_OUT_OF_SCOPE'). Without listing it
+        # here, @api.marshal_with would silently strip it from the 403 body.
+        'code': fields.String(description='Optional machine-readable error code'),
         'browser': fields.Nested(browser_deployment_model, description='Browser-reported reachability')
     })
 
