@@ -35,9 +35,7 @@
                 </div>
             </div>
             <div id="activityList" class="divide-y divide-gray-100 dark:divide-gray-700/50">
-                <div class="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
-                    <i class="fas fa-spinner fa-spin mr-2"></i>Loading activity...
-                </div>
+                <!-- Skeleton rows; replaced by JS once /api/activity responds. -->
             </div>
         </div>
     </div>
@@ -164,6 +162,36 @@
             return entrySearchBlob(entry).indexOf(term) !== -1;
         }
 
+        // Skeleton rows shown both at first paint and during any refetch.
+        // Shape matches the real entry layout (icon disc on the left, two
+        // text lines in the middle, two-line meta on the right) so the
+        // page doesn't visually jump when the response lands. Uses the
+        // existing `.skeleton` class from input.css/tailwind.min.css which
+        // already carries the shimmer animation and dark-mode variant.
+        function skeletonRowsHtml(count) {
+            var widths = ['w-20', 'w-28', 'w-24', 'w-32', 'w-20', 'w-28'];
+            var subWidths = ['w-3/4', 'w-2/3', 'w-1/2', 'w-3/4', 'w-2/3', 'w-1/2'];
+            var rows = [];
+            for (var i = 0; i < count; i++) {
+                rows.push(
+                    '<div class="flex items-start gap-4 px-4 sm:px-6 py-4" aria-hidden="true">' +
+                        '<div class="flex-shrink-0 mt-0.5">' +
+                            '<div class="skeleton w-9 h-9 rounded-full"></div>' +
+                        '</div>' +
+                        '<div class="flex-1 min-w-0 space-y-2">' +
+                            '<div class="skeleton h-4 ' + widths[i % widths.length] + '"></div>' +
+                            '<div class="skeleton h-3 ' + subWidths[i % subWidths.length] + '"></div>' +
+                        '</div>' +
+                        '<div class="flex-shrink-0 space-y-2">' +
+                            '<div class="skeleton h-3 w-12 ml-auto"></div>' +
+                            '<div class="skeleton h-3 w-16 ml-auto"></div>' +
+                        '</div>' +
+                    '</div>'
+                );
+            }
+            return rows.join('');
+        }
+
         // Date-range filtering happens client-side on the already-fetched
         // window of entries. Returning false drops the entry. "today" is
         // calendar-day, not a rolling 24h window — matches what users mean
@@ -190,6 +218,11 @@
             var opFilter = document.getElementById('filterOp').value;
             var dateFilter = document.getElementById('filterDate').value;
             var searchTerm = (document.getElementById('filterSearch').value || '').trim().toLowerCase();
+            // Show skeleton placeholders during the request. On a fast
+            // network this barely flashes; on a slow one the user has a
+            // concrete "something is happening" signal instead of stale
+            // content.
+            document.getElementById('activityList').innerHTML = skeletonRowsHtml(6);
             fetch('/api/activity?limit=100', { credentials: 'same-origin' })
                 .then(function(r) {
                     if (!r.ok) {
