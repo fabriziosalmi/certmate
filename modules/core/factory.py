@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Optional
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
-from flask import Flask, request
+from flask import Flask, jsonify, request
 from flask_cors import CORS
 from flask_restx import Api, Namespace
 
@@ -696,6 +696,44 @@ def setup_csrf_protection(app):
         return None
 
 
+def setup_error_handlers(app):
+    """Force JSON responses for unhandled errors on /api/* paths.
+
+    Without these handlers, Werkzeug serves its HTML default page when a
+    request fails to match a registered route (e.g. a trailing slash that
+    no rule covers) or when an unhandled exception escapes a view function.
+    Frontends that pipe the response through `r.json()` then surface
+    "Unexpected token '<'" / NETWORK_ERROR — the symptom reported in #164.
+    Non-API paths keep Flask's default behaviour.
+    """
+    from werkzeug.exceptions import HTTPException
+
+    @app.errorhandler(HTTPException)
+    def _api_http_exception(e):
+        if request.path.startswith('/api/'):
+            return jsonify({
+                'error': e.name,
+                'message': e.description,
+                'code': e.code,
+            }), e.code
+        return e
+
+    @app.errorhandler(Exception)
+    def _api_unhandled_exception(e):
+        if not request.path.startswith('/api/'):
+            raise e
+        logger.exception(
+            "Unhandled exception in API request",
+            path=request.path,
+            method=request.method,
+        )
+        return jsonify({
+            'error': 'Internal Server Error',
+            'message': 'An unexpected error occurred. Check the server logs for details.',
+            'code': 500,
+        }), 500
+
+
 def setup_security_headers(app):
     @app.after_request
     def add_security_headers(response):
@@ -812,6 +850,7 @@ def create_app(test_config=None):
     setup_api(container, app)
     register_web_routes(app, container.managers)
     setup_csrf_protection(app)
+    setup_error_handlers(app)
     setup_security_headers(app)
     setup_rate_limiting(app, container)
     setup_slow_request_logging(app, container)
