@@ -18,11 +18,12 @@
             </div>
         </div>
 
-        <!-- Quick Links -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <!-- Quick Links — 6 items on a 1/2/3 column grid so each
+             breakpoint lands a clean rectangle (no orphan trailing row). -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
             <a href="#getting-started" class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow hover:shadow-md transition-shadow">
                 <div class="flex items-center">
-                    <i class="fas fa-rocket text-green-600 text-xl mr-3"></i>
+                    <i class="fas fa-rocket text-green-600 text-xl mr-3" aria-hidden="true"></i>
                     <div>
                         <h3 class="font-medium text-gray-900 dark:text-white">Getting Started</h3>
                         <p class="text-sm text-gray-500 dark:text-gray-400">Quick start guide</p>
@@ -31,37 +32,46 @@
             </a>
             <a href="#dns-providers" class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow hover:shadow-md transition-shadow">
                 <div class="flex items-center">
-                    <i class="fas fa-server text-blue-600 text-xl mr-3"></i>
+                    <i class="fas fa-server text-blue-600 text-xl mr-3" aria-hidden="true"></i>
                     <div>
                         <h3 class="font-medium text-gray-900 dark:text-white">DNS Providers</h3>
                         <p class="text-sm text-gray-500 dark:text-gray-400">Supported providers</p>
                     </div>
                 </div>
             </a>
+            <a href="#ca-providers" class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow hover:shadow-md transition-shadow">
+                <div class="flex items-center">
+                    <i class="fas fa-certificate text-purple-600 text-xl mr-3" aria-hidden="true"></i>
+                    <div>
+                        <h3 class="font-medium text-gray-900 dark:text-white">CA Providers</h3>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">Certificate authorities</p>
+                    </div>
+                </div>
+            </a>
             <a href="#api-usage" class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow hover:shadow-md transition-shadow">
                 <div class="flex items-center">
-                    <i class="fas fa-code text-purple-600 text-xl mr-3"></i>
+                    <i class="fas fa-code text-indigo-600 text-xl mr-3" aria-hidden="true"></i>
                     <div>
                         <h3 class="font-medium text-gray-900 dark:text-white">API Usage</h3>
                         <p class="text-sm text-gray-500 dark:text-gray-400">REST API examples</p>
                     </div>
                 </div>
             </a>
-            <a href="#troubleshooting" class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow hover:shadow-md transition-shadow">
+            <a href="#backup-recovery" class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow hover:shadow-md transition-shadow">
                 <div class="flex items-center">
-                    <i class="fas fa-tools text-orange-600 text-xl mr-3"></i>
+                    <i class="fas fa-archive text-amber-600 text-xl mr-3" aria-hidden="true"></i>
                     <div>
-                        <h3 class="font-medium text-gray-900 dark:text-white">Troubleshooting</h3>
-                        <p class="text-sm text-gray-500 dark:text-gray-400">Common issues</p>
+                        <h3 class="font-medium text-gray-900 dark:text-white">Backup &amp; Recovery</h3>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">Settings and certs backup</p>
                     </div>
                 </div>
             </a>
-            <a href="#ca-providers" class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow hover:shadow-md transition-shadow">
+            <a href="#troubleshooting" class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow hover:shadow-md transition-shadow">
                 <div class="flex items-center">
-                    <i class="fas fa-certificate text-purple-600 text-xl mr-3"></i>
+                    <i class="fas fa-tools text-orange-600 text-xl mr-3" aria-hidden="true"></i>
                     <div>
-                        <h3 class="font-medium text-gray-900 dark:text-white">CA Providers</h3>
-                        <p class="text-sm text-gray-500 dark:text-gray-400">Certificate authorities</p>
+                        <h3 class="font-medium text-gray-900 dark:text-white">Troubleshooting</h3>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">Common issues</p>
                     </div>
                 </div>
             </a>
