@@ -241,10 +241,10 @@
     <div id="settingsDebugConsole" class="fixed bottom-4 left-4 right-4 bg-black text-green-400 font-mono text-xs rounded-lg shadow-lg border border-gray-600 hidden z-40">
         <div class="flex justify-between items-center px-3 py-2 border-b border-gray-700">
             <span class="text-white font-semibold">Settings Debug Console</span>
-            <button onclick="clearDebugConsole()" class="text-yellow-400 hover:text-yellow-300" title="Clear console">
+            <button type="button" onclick="clearSettingsDebugConsole()" class="text-yellow-400 hover:text-yellow-300" title="Clear console" aria-label="Clear debug console">
                 <i class="fas fa-eraser"></i>
             </button>
-            <button onclick="toggleDebugConsole()" class="text-gray-400 hover:text-white ml-2" title="Close console">
+            <button type="button" onclick="toggleSettingsDebugConsole()" class="text-gray-400 hover:text-white ml-2" title="Close console" aria-label="Close debug console">
                 <i class="fas fa-times"></i>
             </button>
         </div>
@@ -252,7 +252,7 @@
             <div class="text-gray-500">Debug console ready. All settings actions will be logged here...</div>
         </div>
     </div>
-    <button type="button" data-debug-control onclick="toggleDebugConsole()"
+    <button type="button" data-debug-control onclick="toggleSettingsDebugConsole()"
             class="hidden fixed bottom-4 right-4 bg-gray-800 text-white px-3 py-2 rounded-full shadow-lg z-50 hover:bg-primary"
             aria-label="Open settings debug console">
         <i class="fas fa-bug"></i> Debug

@@ -26,7 +26,13 @@
     // Debug console functions
     // =============================================
 
-    function toggleDebugConsole() {
+    // Renamed from toggleDebugConsole / clearDebugConsole to avoid a
+    // naming collision with the identically-named helpers in
+    // dashboard.js — both files export to `window.*` and the two
+    // pages don't load together so there's no runtime breakage today,
+    // but a future bundle / a future page that includes both scripts
+    // would silently overwrite the binding (4.1 fix).
+    function toggleSettingsDebugConsole() {
         var consoleDiv = document.getElementById('settingsDebugConsole');
         if (consoleDiv.classList.contains('hidden')) {
             consoleDiv.classList.remove('hidden');
@@ -35,7 +41,7 @@
         }
     }
 
-    function clearDebugConsole() {
+    function clearSettingsDebugConsole() {
         document.getElementById('settingsDebugOutput').innerHTML = '<div class="text-gray-500">Debug console cleared. All settings actions will be logged here...</div>';
     }
 
@@ -2730,8 +2736,8 @@
     window.downloadBackup = downloadBackup;
     window.restoreBackup = restoreBackup;
     window.deleteBackup = deleteBackup;
-    window.clearDebugConsole = clearDebugConsole;
-    window.toggleDebugConsole = toggleDebugConsole;
+    window.clearSettingsDebugConsole = clearSettingsDebugConsole;
+    window.toggleSettingsDebugConsole = toggleSettingsDebugConsole;
     window.toggleChallengeType = toggleChallengeType;
     window.toggleUserStatus = toggleUserStatus;
     window.resetUserPassword = resetUserPassword;
