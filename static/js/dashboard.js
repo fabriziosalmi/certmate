@@ -1459,8 +1459,17 @@
     }
 
     // Create certificate
+    var isCreatingCert = false;
     document.getElementById('createCertForm').addEventListener('submit', function (e) {
         e.preventDefault();
+
+        // QW-12: gate against duplicate submits. A real-cert issue path can
+        // take 30s+ to come back; without this guard, every extra click on
+        // the submit button (or Enter inside any of the inputs) fires another
+        // POST /api/certificates/create with the same body. Validation
+        // early-returns below run before we acquire the lock, so a rejected
+        // submit doesn't leave the form stuck.
+        if (isCreatingCert) return;
 
         var domain = document.getElementById('domain').value.trim();
         var sanDomainsInput = document.getElementById('san_domains').value.trim();
@@ -1498,6 +1507,26 @@
         var domainsDisplay = sanDomains.length > 0
             ? domain + ' (+ ' + sanDomains.length + ' SAN' + (sanDomains.length > 1 ? 's' : '') + ')'
             : domain;
+
+        // Lock the form for the duration of the request. Disabling every
+        // field also blocks Enter-to-submit from inside the inputs, which
+        // is the other path a user can re-trigger the POST. The original
+        // disabled state of each field is snapshotted so any field that
+        // was already disabled (e.g. account_select hidden by the DNS
+        // provider toggle) stays disabled after re-enable.
+        isCreatingCert = true;
+        var form = e.target;
+        var formFields = form.querySelectorAll('input, select, textarea, button');
+        var previouslyDisabled = [];
+        formFields.forEach(function (el, i) {
+            previouslyDisabled[i] = el.disabled;
+            el.disabled = true;
+        });
+        var submitBtn = form.querySelector('button[type="submit"]');
+        var submitBtnOriginalHtml = submitBtn ? submitBtn.innerHTML : null;
+        if (submitBtn) {
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Creating...';
+        }
 
         var progressInterval = showLoadingModal(
             'Creating Certificate for ' + domainsDisplay,
@@ -1573,6 +1602,14 @@
             });
         }).then(function () {
             hideLoadingModal(progressInterval);
+            // Re-enable the form regardless of success / error / network outcome.
+            formFields.forEach(function (el, i) {
+                el.disabled = previouslyDisabled[i];
+            });
+            if (submitBtn && submitBtnOriginalHtml !== null) {
+                submitBtn.innerHTML = submitBtnOriginalHtml;
+            }
+            isCreatingCert = false;
         });
     });
 
