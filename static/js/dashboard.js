@@ -52,7 +52,12 @@
         document.getElementById('loadingTitle').textContent = title;
         document.getElementById('loadingMessage').textContent = message;
         document.getElementById('progressBar').style.width = '0%';
+        // Toggle `hidden` and the flex centering utilities together — the
+        // static markup keeps only `hidden` so we never ship `hidden flex`
+        // at the same time (display utilities conflicting; works today
+        // only because of Tailwind's class ordering).
         modal.classList.remove('hidden');
+        modal.classList.add('flex', 'items-center', 'justify-center');
 
         // Simulate progress for better UX
         var progress = 0;
@@ -69,7 +74,9 @@
     function hideLoadingModal(progressInterval) {
         document.getElementById('progressBar').style.width = '100%';
         setTimeout(function () {
-            document.getElementById('loadingModal').classList.add('hidden');
+            var modal = document.getElementById('loadingModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex', 'items-center', 'justify-center');
             if (progressInterval) clearInterval(progressInterval);
         }, 500);
     }
