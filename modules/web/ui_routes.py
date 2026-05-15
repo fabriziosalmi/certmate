@@ -14,7 +14,7 @@ def register_ui_routes(app, managers, require_web_auth, auth_manager):
         session_id = request.cookies.get('certmate_session')
         user_info = auth_manager.validate_session(session_id)
         if not user_info:
-            return redirect(url_for('login_page'))
+            return redirect(url_for('login_page', next=request.path))
         # Mirror the require_role decorator behavior so the context
         # processor in routes.py sees the authenticated user and the
         # template can render the logout button server-side.

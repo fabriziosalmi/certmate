@@ -132,7 +132,10 @@ def register_web_routes(app, managers):
                 if user_info:
                     request.current_user = user_info
                     return f(*args, **kwargs)
-            return redirect(url_for('login_page'))
+            # Preserve the originally-requested path as ?next=… so a
+            # successful login can bounce the user back where they
+            # were trying to go (6.2 fix).
+            return redirect(url_for('login_page', next=request.path))
         return decorated
 
     # Expose the authenticated user to every Jinja template so base.html

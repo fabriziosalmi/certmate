@@ -120,6 +120,19 @@
             document.getElementById('errorMessage').classList.add('hidden');
         }
 
+        // Read the ?next= query param and treat it as the post-login
+        // destination. Validate to a same-origin relative path so a
+        // crafted /login?next=https://evil.example/ link can't be used
+        // to bounce users off the site after authenticating.
+        function safeNextUrl() {
+            try {
+                var raw = new URLSearchParams(window.location.search).get('next');
+                if (!raw || typeof raw !== 'string') return '/';
+                if (!raw.startsWith('/') || raw.startsWith('//')) return '/';
+                return raw;
+            } catch (e) { return '/'; }
+        }
+
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             hideError();
@@ -148,8 +161,9 @@
                 const data = await response.json();
 
                 if (response.ok) {
-                    // Redirect to main page on successful login
-                    window.location.href = '/';
+                    // Redirect to ?next= (validated) or to the dashboard
+                    // root when no next was provided.
+                    window.location.href = safeNextUrl();
                 } else {
                     showError(data.error || 'Login failed');
                 }
@@ -162,14 +176,19 @@
             }
         });
 
-        // Check if already logged in
+        // Client-side already-logged-in check kept as a defensive
+        // fallback. The /login route now server-side redirects on
+        // valid session (auth_routes.py), so in production this branch
+        // never fires — but if a stale cookie sneaks past the server
+        // check, we still bounce to the next-url instead of letting
+        // the user re-authenticate unnecessarily.
         (async () => {
             try {
                 const response = await fetch('/api/auth/me');
                 if (response.ok) {
                     const data = await response.json();
                     if (data.user) {
-                        window.location.href = '/';
+                        window.location.href = safeNextUrl();
                     }
                 }
             } catch (e) {
