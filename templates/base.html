@@ -57,11 +57,16 @@
                     <a href="/redoc" {% if request.path == '/redoc' %}aria-current="page"{% endif %} class="hidden md:inline-flex items-center px-3 py-2 text-sm {% if request.path == '/redoc' %}nav-active{% else %}nav-inactive{% endif %}">
                         <i class="fas fa-code mr-1.5 text-[0.85em] leading-none -translate-y-px"></i> API Docs
                     </a>
-                    <!-- Search (Cmd+K) -->
-                    <button type="button" onclick="document.dispatchEvent(new KeyboardEvent('keydown',{key:'k',metaKey:true}))" class="hidden sm:inline-flex items-center px-2.5 py-1.5 text-sm text-gray-400 bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition" title="Search (Cmd+K)">
+                    <!-- Search (Cmd+K) — desktop variant with visible label + kbd hint -->
+                    <button type="button" onclick="document.dispatchEvent(new KeyboardEvent('keydown',{key:'k',metaKey:true}))" class="hidden sm:inline-flex items-center px-2.5 py-1.5 text-sm text-gray-400 bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition" title="Search (Cmd+K)" aria-label="Open search">
                         <i class="fas fa-search mr-1.5 text-xs"></i>
                         <span class="text-xs">Search</span>
                         <kbd class="ml-2 px-1.5 py-0.5 text-[10px] bg-white dark:bg-gray-800 rounded border border-gray-300 dark:border-gray-500">&#8984;K</kbd>
+                    </button>
+                    <!-- Search — compact icon-only mobile variant. Same keydown dispatch
+                         so the existing Cmd+K command palette handler picks it up. -->
+                    <button type="button" onclick="document.dispatchEvent(new KeyboardEvent('keydown',{key:'k',metaKey:true}))" class="sm:hidden px-2 py-2 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700" title="Search" aria-label="Open search">
+                        <i class="fas fa-search"></i>
                     </button>
                     <!-- Keyboard shortcuts hint -->
                     <button type="button" onclick="document.dispatchEvent(new KeyboardEvent('keydown',{key:'?'}))" class="hidden sm:inline-flex items-center px-2 py-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition" title="Keyboard shortcuts (?)" aria-label="Show keyboard shortcuts">
@@ -83,7 +88,7 @@
                         </div>
                     </div>
                     <!-- Dark mode toggle -->
-                    <button id="themeToggle" onclick="toggleTheme()" class="px-2 py-2 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700" title="Toggle theme" aria-label="Toggle dark mode">
+                    <button type="button" id="themeToggle" onclick="toggleTheme()" class="px-2 py-2 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700" title="Toggle theme" aria-label="Toggle dark mode">
                         <i class="fas fa-moon" id="theme-icon-moon"></i>
                         <i class="fas fa-sun hidden" id="theme-icon-sun"></i>
                     </button>
