@@ -54,6 +54,9 @@
                     <a href="/activity" {% if request.path == '/activity' %}aria-current="page"{% endif %} class="hidden md:inline-flex items-center px-3 py-2 text-sm {% if request.path == '/activity' %}nav-active{% else %}nav-inactive{% endif %}">
                         <i class="fas fa-history mr-1.5 text-[0.85em] leading-none -translate-y-px"></i> Activity
                     </a>
+                    <a href="/redoc" {% if request.path == '/redoc' %}aria-current="page"{% endif %} class="hidden md:inline-flex items-center px-3 py-2 text-sm {% if request.path == '/redoc' %}nav-active{% else %}nav-inactive{% endif %}">
+                        <i class="fas fa-code mr-1.5 text-[0.85em] leading-none -translate-y-px"></i> API Docs
+                    </a>
                     <!-- Search (Cmd+K) -->
                     <button type="button" onclick="document.dispatchEvent(new KeyboardEvent('keydown',{key:'k',metaKey:true}))" class="hidden sm:inline-flex items-center px-2.5 py-1.5 text-sm text-gray-400 bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition" title="Search (Cmd+K)">
                         <i class="fas fa-search mr-1.5 text-xs"></i>
