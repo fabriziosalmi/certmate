@@ -324,6 +324,28 @@
     })();
     </script>
     <script defer src="/static/js/alpine.min.js"></script>
+    <script>
+    // Alpine load-failure fallback. `defer`-loaded scripts run before
+    // DOMContentLoaded; if `window.Alpine` still isn't defined by then,
+    // the bundle failed (network, parse error on an ancient browser,
+    // resource blocked by an aggressive content filter). Surface a
+    // visible banner so the user understands why tabs/dropdowns/
+    // toggles aren't responding, instead of staring at a quietly
+    // broken UI.
+    document.addEventListener('DOMContentLoaded', function() {
+        if (typeof window.Alpine === 'undefined') {
+            var banner = document.createElement('div');
+            banner.setAttribute('role', 'alert');
+            banner.className = 'fixed top-0 left-0 right-0 z-[200] bg-red-600 text-white text-sm px-4 py-2 text-center shadow-lg';
+            banner.innerHTML =
+                '<i class="fas fa-exclamation-triangle mr-2" aria-hidden="true"></i>' +
+                'Interactive UI failed to load (Alpine.js missing). ' +
+                'Some tabs, dropdowns, and toggles won\'t work — try refreshing the page, ' +
+                'or check the browser console for blocked-resource errors.';
+            document.body.insertBefore(banner, document.body.firstChild);
+        }
+    });
+    </script>
     <script src="/static/js/certmate.js"></script>
     <script defer src="/static/js/report-issue.js"></script>
     <script defer src="/static/js/cmd-palette.js"></script>
