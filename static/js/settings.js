@@ -197,7 +197,6 @@
                 challenge_type: formData.get('challenge_type') || 'dns-01',
                 api_bearer_token: tokenValue,
                 cache_ttl: parseInt(formData.get('cache_ttl')) || 300,
-                storage_backend: formData.get('storage_backend'),
                 certificate_storage: collectStorageBackendSettings(),
                 default_ca: defaultCA,
                 ca_providers: caProviders
