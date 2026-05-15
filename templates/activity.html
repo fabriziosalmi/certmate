@@ -11,6 +11,9 @@
                         <span class="text-gray-700 dark:text-gray-200 font-medium">Activity</span>
                     </nav>
                     <div class="flex items-center gap-2 flex-wrap">
+                        <input type="search" id="filterSearch" aria-label="Search activity log"
+                               placeholder="Search domain, resource, user…"
+                               class="px-3 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-primary w-44 sm:w-56">
                         <select id="filterDate" aria-label="Filter by date range" class="px-3 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary">
                             <option value="">All time</option>
                             <option value="today">Today</option>
@@ -136,6 +139,31 @@
                 '</div>';
         }
 
+        // Build a single lowercase search blob per entry. Operation labels
+        // ("Created", "Renewed") are translated through opLabel so a user
+        // searching "renew" still matches `entry.operation === 'renew'`.
+        // The detail fields are joined to catch domain matches buried in
+        // common_name or method. Status and error strings are folded in
+        // for searches like "failed" or "404".
+        function entrySearchBlob(entry) {
+            var parts = [
+                entry.resource_type, entry.resource_id, entry.user,
+                entry.operation, opLabel(entry), entry.status, entry.error,
+            ];
+            var d = entry.details || {};
+            for (var k in d) {
+                if (Object.prototype.hasOwnProperty.call(d, k)) {
+                    parts.push(String(d[k]));
+                }
+            }
+            return parts.filter(Boolean).join(' ').toLowerCase();
+        }
+
+        function passesSearchFilter(entry, term) {
+            if (!term) return true;
+            return entrySearchBlob(entry).indexOf(term) !== -1;
+        }
+
         // Date-range filtering happens client-side on the already-fetched
         // window of entries. Returning false drops the entry. "today" is
         // calendar-day, not a rolling 24h window — matches what users mean
@@ -161,6 +189,7 @@
         window.loadActivity = function() {
             var opFilter = document.getElementById('filterOp').value;
             var dateFilter = document.getElementById('filterDate').value;
+            var searchTerm = (document.getElementById('filterSearch').value || '').trim().toLowerCase();
             fetch('/api/activity?limit=100', { credentials: 'same-origin' })
                 .then(function(r) {
                     if (!r.ok) {
@@ -177,6 +206,9 @@
                     }
                     if (dateFilter) {
                         entries = entries.filter(function(e) { return passesDateFilter(e, dateFilter); });
+                    }
+                    if (searchTerm) {
+                        entries = entries.filter(function(e) { return passesSearchFilter(e, searchTerm); });
                     }
                     renderEntries(entries);
                 })
@@ -231,6 +263,12 @@
 
         document.getElementById('filterOp').addEventListener('change', loadActivity);
         document.getElementById('filterDate').addEventListener('change', loadActivity);
+        // Debounce search-as-you-type so we don't refetch on every keystroke.
+        var searchDebounce;
+        document.getElementById('filterSearch').addEventListener('input', function() {
+            clearTimeout(searchDebounce);
+            searchDebounce = setTimeout(loadActivity, 250);
+        });
         loadActivity();
     })();
     </script>
