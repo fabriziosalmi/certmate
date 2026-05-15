@@ -330,10 +330,15 @@
             ? 'text-gray-400 hover:text-purple-600 dark:hover:text-purple-400'
             : 'text-amber-500 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300';
         var title = autoRenewEnabled ? 'Disable auto-renew' : 'Enable auto-renew';
+        // safeDomain is already escapeHtml-ed by the caller (dashboard.js
+        // L581). aria-label combines the action verb with the domain so
+        // screen readers announce "Enable auto-renew foo.example.com"
+        // instead of just "Enable auto-renew" repeated per row (B1 fix).
         return '<button type="button" data-action="toggle-auto-renew" data-domain="' + safeDomain +
             '" data-auto-renew="' + (autoRenewEnabled ? 'true' : 'false') + '" onclick="event.stopPropagation()" ' +
             'class="p-1.5 ' + color + ' rounded hover:bg-gray-100 dark:hover:bg-gray-700" ' +
-            'title="' + title + '"><i class="fas ' + icon + '"></i></button>';
+            'title="' + title + '" aria-label="' + title + ' ' + safeDomain + '">' +
+            '<i class="fas ' + icon + '" aria-hidden="true"></i></button>';
     }
 
     function deploymentStatusDisplay(role, result) {
@@ -474,8 +479,13 @@
         // Action button shorthand. cert.domain flows in raw \u2014 the helper
         // escapes it for both the data-domain attribute and the onclick
         // arg, so we no longer pre-compute a `safeDomain`.
+        // The aria-label is `${title} ${domain}` so screen readers
+        // announce both the action and which row it targets \u2014 without
+        // it, the actions column reads as "Renew, Force renew, Download,
+        // API, Auto-renew, Delete" with no domain context, repeated for
+        // every row in the table (B1 fix).
         function actionBtn(action, domain, hoverColor, title, icon) {
-            return rowRaw(rowHtml`<button type="button" data-action="${action}" data-domain="${domain}" onclick="event.stopPropagation()" class="p-1.5 text-gray-400 hover:text-${rowRaw(hoverColor)}-600 dark:hover:text-${rowRaw(hoverColor)}-400 rounded hover:bg-gray-100 dark:hover:bg-gray-700" title="${title}"><i class="fas ${rowRaw(icon)}"></i></button>`);
+            return rowRaw(rowHtml`<button type="button" data-action="${action}" data-domain="${domain}" onclick="event.stopPropagation()" class="p-1.5 text-gray-400 hover:text-${rowRaw(hoverColor)}-600 dark:hover:text-${rowRaw(hoverColor)}-400 rounded hover:bg-gray-100 dark:hover:bg-gray-700" title="${title}" aria-label="${title} ${domain}"><i class="fas ${rowRaw(icon)}" aria-hidden="true"></i></button>`);
         }
 
         container.innerHTML = sorted.map(function (cert) {
