@@ -21,6 +21,14 @@
            sync needed beyond the existing classList.toggle('dark'). */
         html:not(.dark) #theme-icon-sun { display: none; }
         html.dark #theme-icon-moon { display: none; }
+
+        /* Reserve the scrollbar gutter always, so navigating between
+           pages or settings sub-tabs of different heights doesn't shift
+           the whole layout horizontally by ~15px when the scrollbar
+           appears or disappears. Supported in Chrome 94+, Firefox 97+,
+           Safari 16+. The `overflow-y: scroll` fallback covers older
+           Safari/iOS by forcing a permanent scrollbar in the same gutter. */
+        html { scrollbar-gutter: stable; overflow-y: scroll; }
     </style>
     {% block head %}{% endblock %}
     <script>
