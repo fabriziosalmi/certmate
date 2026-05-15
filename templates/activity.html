@@ -269,7 +269,20 @@
                 if (details.status_code) detailParts.push('HTTP ' + details.status_code);
                 var detailStr = detailParts.length > 0 ? detailParts.join(' · ') : '';
 
-                return '<div class="flex items-start gap-4 px-4 sm:px-6 py-4 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition">' +
+                // Entries whose resource is a certificate become a link to
+                // the dashboard with a `?cert=<domain>` deep-link param,
+                // which dashboard.js picks up after the initial cert list
+                // load and opens the detail panel. Other entry types
+                // (api_request, etc.) stay as inert <div>s so we don't
+                // promise an action the page can't deliver.
+                var commonClass = 'flex items-start gap-4 px-4 sm:px-6 py-4 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition';
+                var isCertEntry = entry.resource_type === 'certificate' && entry.resource_id;
+                var wrapperOpen = isCertEntry
+                    ? '<a href="/?cert=' + encodeURIComponent(entry.resource_id) + '" class="' + commonClass + ' cursor-pointer">'
+                    : '<div class="' + commonClass + '">';
+                var wrapperClose = isCertEntry ? '</a>' : '</div>';
+
+                return wrapperOpen +
                     '<div class="flex-shrink-0 mt-0.5">' +
                         '<div class="w-9 h-9 rounded-full ' + style.bg + ' flex items-center justify-center">' +
                             '<i class="fas ' + style.icon + ' ' + style.color + ' text-sm"></i>' +
@@ -290,7 +303,7 @@
                         '<div class="text-xs text-gray-400 cursor-help" title="' + escapeHtml(absoluteTime(entry.timestamp)) + '">' + escapeHtml(formatTime(entry.timestamp)) + '</div>' +
                         '<div class="text-[10px] text-gray-400 mt-1">' + escapeHtml(entry.user || 'system') + '</div>' +
                     '</div>' +
-                '</div>';
+                wrapperClose;
             }).join('');
         }
 

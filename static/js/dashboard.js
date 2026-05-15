@@ -1992,11 +1992,25 @@
     }
 
     // Initialize on page load
+    // Deep-link helper: when the dashboard is loaded with `?cert=<domain>`
+    // in the query string (typically because the user clicked a cert
+    // entry on /activity), open the detail panel for that domain once
+    // the initial cert list has rendered. Silently no-ops on
+    // unparseable URLs / missing param / unknown domain — openCertDetail
+    // itself handles the not-found case via showMessage.
+    function maybeOpenCertFromQuery() {
+        try {
+            var params = new URLSearchParams(window.location.search);
+            var domain = params.get('cert');
+            if (domain) openCertDetail(domain);
+        } catch (e) { /* old browser, skip */ }
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
         // Resolve the caller's role first so the initial cert list can
         // already render with the right buttons hidden — avoids the
         // viewer briefly seeing admin-only controls before they vanish.
-        refreshCurrentRole().then(function () { loadCertificates(); });
+        refreshCurrentRole().then(function () { loadCertificates().then(maybeOpenCertFromQuery); });
         loadProviderAccounts();
 
         // Initialize search and filters
