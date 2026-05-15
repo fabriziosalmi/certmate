@@ -88,6 +88,121 @@ html.dark {
     transform: scale(0.97);
     filter: brightness(0.92);
   }
+
+  /* ── R-3 Component system ──────────────────────────────────
+     Canonical componentized versions of the button / card /
+     badge / form patterns currently inlined across the
+     templates. Use as:
+       <button class="btn btn-primary">…</button>
+       <button class="btn btn-secondary btn-sm">…</button>
+       <button class="btn btn-ghost" aria-label="Close">…</button>
+       <div class="card p-6">…</div>
+       <span class="badge badge-success">Valid</span>
+       <input class="form-input" />
+       <select class="form-select">…</select>
+       <label class="form-label">…</label>
+     Migration of existing call sites is incremental; the inline
+     Tailwind classes still render until each site is converted.
+     ─────────────────────────────────────────────────────────── */
+
+  /* Buttons ─────────────────────────────────────────────────── */
+  /* `.btn` carries shape / sizing / focus; pair with a variant
+     for color. Default size matches the px-4 py-2 used in the
+     bulk of the existing forms (Add Account, Save Settings). */
+  .btn {
+    @apply inline-flex items-center justify-center
+           px-4 py-2 text-sm font-medium rounded-md
+           border border-transparent
+           focus:outline-none focus:ring-2 focus:ring-offset-2
+           transition-colors duration-150
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-primary {
+    @apply bg-primary text-white hover:bg-secondary
+           focus:ring-primary focus:ring-offset-white
+           dark:focus:ring-offset-gray-800;
+  }
+  .btn-secondary {
+    @apply bg-white dark:bg-gray-700
+           text-gray-700 dark:text-gray-200
+           border-gray-300 dark:border-gray-600
+           hover:bg-gray-50 dark:hover:bg-gray-600
+           focus:ring-gray-300 dark:focus:ring-gray-500;
+  }
+  .btn-danger {
+    @apply bg-red-600 text-white hover:bg-red-700
+           focus:ring-red-500 focus:ring-offset-white
+           dark:focus:ring-offset-gray-800;
+  }
+  /* Icon-only / minimal-chrome button (modal close X, refresh
+     icon in a header). Inherits .btn's focus ring but skips
+     the heavy border / coloured background. */
+  .btn-ghost {
+    @apply text-gray-400 hover:text-gray-600
+           dark:text-gray-500 dark:hover:text-gray-200
+           bg-transparent hover:bg-gray-100 dark:hover:bg-gray-700
+           border-transparent
+           focus:ring-gray-300 dark:focus:ring-gray-500;
+  }
+  /* Size overrides — combine with .btn and a variant: */
+  .btn-sm { @apply px-3 py-1.5 text-xs; }
+  .btn-lg { @apply px-6 py-3 text-base; }
+
+  /* Card ────────────────────────────────────────────────────── */
+  /* Canonical surface for grouped content: same shadow / radius
+     used by index.html top-level panels, settings sections, and
+     the activity log. Pair with .p-6 (or similar) at the call
+     site for inner padding — kept out of .card so a card with
+     a header-band + body can split padding across rows. */
+  .card {
+    @apply bg-white dark:bg-surface-card
+           border border-gray-200 dark:border-white/5
+           shadow-card rounded-xl;
+  }
+
+  /* Badges ──────────────────────────────────────────────────── */
+  /* Pair `.badge` (shape) with a `.badge-*` color variant. */
+  .badge {
+    @apply inline-flex items-center
+           px-2 py-0.5 rounded-full
+           text-xs font-medium
+           ring-1 ring-inset;
+  }
+  .badge-success {
+    @apply bg-green-500/10 text-green-700 dark:text-green-400
+           ring-green-500/20;
+  }
+  .badge-warning {
+    @apply bg-yellow-500/10 text-yellow-700 dark:text-yellow-400
+           ring-yellow-500/20;
+  }
+  .badge-error {
+    @apply bg-red-500/10 text-red-700 dark:text-red-400
+           ring-red-500/20;
+  }
+  .badge-info {
+    @apply bg-blue-500/10 text-blue-700 dark:text-blue-400
+           ring-blue-500/20;
+  }
+
+  /* Forms ───────────────────────────────────────────────────── */
+  /* `.form-input` / `.form-select` mirror the literal class set
+     used by the add-account / edit-account / settings forms. */
+  .form-input,
+  .form-select {
+    @apply block w-full
+           border border-gray-300 dark:border-gray-600
+           bg-white dark:bg-gray-700
+           text-gray-900 dark:text-white
+           placeholder-gray-400
+           rounded-md shadow-sm py-2 px-3
+           focus:outline-none focus:ring-primary focus:border-primary
+           disabled:opacity-60 disabled:cursor-not-allowed;
+  }
+  .form-label {
+    @apply block text-sm font-medium
+           text-gray-700 dark:text-gray-300;
+  }
 }
 /* Global press feedback for all primary-colored buttons */
 button[class*="bg-primary"]:active,
