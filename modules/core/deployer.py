@@ -236,7 +236,17 @@ class DeployManager:
                 f.write(json.dumps(result) + '\n')
             self._truncate_history()
         except OSError as e:
-            logger.debug(f"Failed to write deploy history: {e}")
+            # Surface write failures at warning level so the "history is
+            # empty even after a manual trigger" symptom (#165) is
+            # diagnosable from production logs. The typical cause on
+            # Kubernetes is a PersistentVolume mounted with an owner
+            # uid that doesn't match the certmate user (uid 1000) in
+            # the container image.
+            logger.warning(
+                "Failed to write deploy history to %s: %s. "
+                "Check that the data volume is writable by uid 1000.",
+                self._history_path, e,
+            )
 
     def _truncate_history(self):
         """Keep only the last MAX_HISTORY_ENTRIES entries (atomic)."""
@@ -291,15 +301,28 @@ class DeployManager:
                 raw = raw.strip()
                 if not raw:
                     continue
-                entry = json.loads(raw)
+                try:
+                    entry = json.loads(raw)
+                except json.JSONDecodeError:
+                    # A single corrupted line should not blank the whole
+                    # history pane. Skip it and carry on with the rest.
+                    logger.debug(
+                        "Skipping corrupted deploy history line in %s",
+                        self._history_path,
+                    )
+                    continue
                 if domain and entry.get('domain') != domain:
                     continue
                 entries.append(entry)
                 if len(entries) >= limit:
                     break
             return entries
-        except (OSError, json.JSONDecodeError) as e:
-            logger.debug(f"Failed to read deploy history: {e}")
+        except OSError as e:
+            logger.warning(
+                "Failed to read deploy history from %s: %s. "
+                "Check filesystem permissions on the data volume.",
+                self._history_path, e,
+            )
             return []
 
     # ------------------------------------------------------------------
