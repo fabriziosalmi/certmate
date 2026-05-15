@@ -41,17 +41,17 @@
                 </div>
                 <div class="flex items-center space-x-1 sm:space-x-4">
                     <!-- Desktop nav links (hidden on mobile — bottom tab bar used instead) -->
-                    <a href="/" class="hidden md:inline-flex items-center px-3 py-2 text-sm {% if request.path == '/' %}nav-active{% else %}nav-inactive{% endif %}">
+                    <a href="/" {% if request.path == '/' %}aria-current="page"{% endif %} class="hidden md:inline-flex items-center px-3 py-2 text-sm {% if request.path == '/' %}nav-active{% else %}nav-inactive{% endif %}">
                         <i class="fas fa-certificate mr-1.5 text-[0.85em] leading-none -translate-y-px"></i> Certificates
                     </a>
 
-                    <a href="/settings" class="hidden md:inline-flex items-center px-3 py-2 text-sm {% if request.path == '/settings' %}nav-active{% else %}nav-inactive{% endif %}">
+                    <a href="/settings" {% if request.path == '/settings' %}aria-current="page"{% endif %} class="hidden md:inline-flex items-center px-3 py-2 text-sm {% if request.path == '/settings' %}nav-active{% else %}nav-inactive{% endif %}">
                         <i class="fas fa-cog mr-1.5 text-[0.85em] leading-none -translate-y-px"></i> Settings
                     </a>
-                    <a href="/help" class="hidden md:inline-flex items-center px-3 py-2 text-sm {% if request.path == '/help' %}nav-active{% else %}nav-inactive{% endif %}">
+                    <a href="/help" {% if request.path == '/help' %}aria-current="page"{% endif %} class="hidden md:inline-flex items-center px-3 py-2 text-sm {% if request.path == '/help' %}nav-active{% else %}nav-inactive{% endif %}">
                         <i class="fas fa-question-circle mr-1.5 text-[0.85em] leading-none -translate-y-px"></i> Help
                     </a>
-                    <a href="/activity" class="hidden md:inline-flex items-center px-3 py-2 text-sm {% if request.path == '/activity' %}nav-active{% else %}nav-inactive{% endif %}">
+                    <a href="/activity" {% if request.path == '/activity' %}aria-current="page"{% endif %} class="hidden md:inline-flex items-center px-3 py-2 text-sm {% if request.path == '/activity' %}nav-active{% else %}nav-inactive{% endif %}">
                         <i class="fas fa-history mr-1.5 text-[0.85em] leading-none -translate-y-px"></i> Activity
                     </a>
                     <!-- Search (Cmd+K) -->
@@ -96,19 +96,19 @@
     <!-- Bottom Tab Bar (mobile only) -->
     <nav class="fixed bottom-0 left-0 right-0 md:hidden bg-white dark:bg-surface-card border-t border-gray-200 dark:border-white/5 shadow-[0_-2px_10px_rgba(0,0,0,0.1)] z-40 safe-area-bottom" id="bottomTabBar">
         <div class="flex justify-around h-14">
-            <a href="/" class="flex flex-col items-center justify-center flex-1 py-1 transition-colors duration-150 {% if request.path == '/' %}text-primary{% else %}text-gray-500 dark:text-gray-400{% endif %}">
+            <a href="/" {% if request.path == '/' %}aria-current="page"{% endif %} class="flex flex-col items-center justify-center flex-1 py-1 transition-colors duration-150 {% if request.path == '/' %}text-primary{% else %}text-gray-500 dark:text-gray-400{% endif %}">
                 <i class="fas fa-certificate text-lg"></i>
                 <span class="text-xs mt-0.5 font-medium">Certs</span>
             </a>
-            <a href="/settings" class="flex flex-col items-center justify-center flex-1 py-1 transition-colors duration-150 {% if request.path == '/settings' %}text-primary{% else %}text-gray-500 dark:text-gray-400{% endif %}">
+            <a href="/settings" {% if request.path == '/settings' %}aria-current="page"{% endif %} class="flex flex-col items-center justify-center flex-1 py-1 transition-colors duration-150 {% if request.path == '/settings' %}text-primary{% else %}text-gray-500 dark:text-gray-400{% endif %}">
                 <i class="fas fa-cog text-lg"></i>
                 <span class="text-xs mt-0.5 font-medium">Settings</span>
             </a>
-            <a href="/help" class="flex flex-col items-center justify-center flex-1 py-1 transition-colors duration-150 {% if request.path == '/help' %}text-primary{% else %}text-gray-500 dark:text-gray-400{% endif %}">
+            <a href="/help" {% if request.path == '/help' %}aria-current="page"{% endif %} class="flex flex-col items-center justify-center flex-1 py-1 transition-colors duration-150 {% if request.path == '/help' %}text-primary{% else %}text-gray-500 dark:text-gray-400{% endif %}">
                 <i class="fas fa-question-circle text-lg"></i>
                 <span class="text-xs mt-0.5 font-medium">Help</span>
             </a>
-            <a href="/activity" class="flex flex-col items-center justify-center flex-1 py-1 transition-colors duration-150 {% if request.path == '/activity' %}text-primary{% else %}text-gray-500 dark:text-gray-400{% endif %}">
+            <a href="/activity" {% if request.path == '/activity' %}aria-current="page"{% endif %} class="flex flex-col items-center justify-center flex-1 py-1 transition-colors duration-150 {% if request.path == '/activity' %}text-primary{% else %}text-gray-500 dark:text-gray-400{% endif %}">
                 <i class="fas fa-history text-lg"></i>
                 <span class="text-xs mt-0.5 font-medium">Activity</span>
             </a>
