@@ -317,6 +317,19 @@
             // Persist state in sessionStorage
             try { sessionStorage.setItem('cm_create_form_open', isHidden ? '1' : '0'); } catch(e){}
         }
+        // Open the form (no-op if already open), focus the domain input,
+        // and scroll it into view. Called from the empty-state CTA
+        // rendered by dashboard.js — that button previously just called
+        // .focus() on a hidden input, which silently did nothing.
+        function openCreateCertForm() {
+            var c = document.getElementById('createCertFormContainer');
+            if (c && c.classList.contains('hidden')) toggleCreateCertForm();
+            var dom = document.getElementById('domain');
+            if (dom) {
+                dom.focus();
+                dom.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
         // Restore form state on load
         (function() {
             try {
