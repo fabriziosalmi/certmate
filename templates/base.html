@@ -61,12 +61,12 @@
                         <kbd class="ml-2 px-1.5 py-0.5 text-[10px] bg-white dark:bg-gray-800 rounded border border-gray-300 dark:border-gray-500">&#8984;K</kbd>
                     </button>
                     <!-- Keyboard shortcuts hint -->
-                    <button type="button" onclick="document.dispatchEvent(new KeyboardEvent('keydown',{key:'?'}))" class="hidden sm:inline-flex items-center px-2 py-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition" title="Keyboard shortcuts (?)">
+                    <button type="button" onclick="document.dispatchEvent(new KeyboardEvent('keydown',{key:'?'}))" class="hidden sm:inline-flex items-center px-2 py-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition" title="Keyboard shortcuts (?)" aria-label="Show keyboard shortcuts">
                         <i class="fas fa-keyboard text-sm"></i>
                     </button>
                     <!-- Notification bell -->
                     <div class="relative">
-                        <button type="button" id="notifBtn" onclick="toggleNotifications()" class="px-2 py-2 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 relative" title="Notifications">
+                        <button type="button" id="notifBtn" onclick="toggleNotifications()" class="px-2 py-2 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 relative" title="Notifications" aria-label="Open notifications" aria-haspopup="true" aria-expanded="false">
                             <i class="fas fa-bell"></i>
                             <span id="notifBadge" class="hidden absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold badge-pulse">0</span>
                         </button>
@@ -80,12 +80,12 @@
                         </div>
                     </div>
                     <!-- Dark mode toggle -->
-                    <button id="themeToggle" onclick="toggleTheme()" class="px-2 py-2 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700" title="Toggle theme">
+                    <button id="themeToggle" onclick="toggleTheme()" class="px-2 py-2 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700" title="Toggle theme" aria-label="Toggle dark mode">
                         <i class="fas fa-moon" id="theme-icon-moon"></i>
                         <i class="fas fa-sun hidden" id="theme-icon-sun"></i>
                     </button>
-                    <!-- Logout -->
-                    <button id="logoutBtn" onclick="doLogout()" style="display:none" class="px-3 py-2 rounded-md text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 border border-red-200 dark:border-red-700" title="Logout">
+                    <!-- Logout (label is icon-only on phones; aria-label covers the SR path) -->
+                    <button id="logoutBtn" onclick="doLogout()" style="display:none" class="px-3 py-2 rounded-md text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 border border-red-200 dark:border-red-700" title="Logout" aria-label="Log out">
                         <i class="fas fa-sign-out-alt mr-1"></i><span class="hidden sm:inline"> Logout</span>
                     </button>
                 </div>
