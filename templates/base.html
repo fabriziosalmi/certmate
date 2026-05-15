@@ -24,6 +24,14 @@
     </script>
 </head>
 <body class="bg-surface-light dark:bg-surface-dark min-h-screen pb-16 md:pb-0 transition-colors duration-200 font-sans">
+    <!-- Skip-to-content link for keyboard users. Invisible until focused,
+         then floats above the nav with a high-contrast pill so the
+         destination is obvious. Targets #main-content on the <main>
+         landmark below. -->
+    <a href="#main-content"
+       class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:px-3 focus:py-2 focus:bg-primary focus:text-white focus:rounded-md focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+        Skip to main content
+    </a>
     <!-- Top Navigation -->
     <nav class="bg-white dark:bg-surface-card shadow-card border-b border-gray-200/60 dark:border-white/5">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -322,7 +330,7 @@
     <script defer src="/static/js/shortcuts.js"></script>
     <script defer src="/static/js/setup-wizard.js"></script>
 
-    <main class="page-enter">
+    <main id="main-content" tabindex="-1" class="page-enter">
     {% block content %}{% endblock %}
     </main>
 
