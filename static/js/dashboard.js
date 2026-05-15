@@ -527,6 +527,16 @@
             var aliasHint = domainAlias
                 ? rowRaw(rowHtml`<div class="mt-1 flex items-center text-xs text-blue-600 dark:text-blue-300 min-w-0"><i class="fas fa-link mr-1 text-blue-500 shrink-0" aria-hidden="true"></i><span class="truncate" title="${domainAlias}">DNS-01 Alias: ${domainAlias}</span></div>`)
                 : false;
+            // Mobile-only Expires line (mirrors the desktop "Expires" column
+            // which is hidden md:table-cell, so we never double-render on
+            // tablet+). For a cert manager the expiry date is the single
+            // most important number on the screen — hiding it < md was the
+            // R-5 critical-info regression. Skipped when the upstream
+            // response didn't include a parseable expiry, to avoid showing
+            // "null days" on the mobile row.
+            var mobileExpiry = (daysKnown && cert.expiry_date)
+                ? rowRaw(rowHtml`<div class="md:hidden mt-1 flex items-center text-xs ${rowRaw(daysClass)} min-w-0"><i class="fas fa-clock mr-1 shrink-0" aria-hidden="true"></i><span class="truncate">${expiryStr} · ${rowRaw(String(cert.days_until_expiry))} days</span></div>`)
+                : false;
             var lockColor = isExpired ? 'text-red-400' : isExpiringSoon ? 'text-yellow-400' : 'text-green-500';
             return rowHtml`<tr class="${rowRaw(healthClass)} row-enter hover:bg-blue-50/40 dark:hover:bg-blue-900/10 transition-colors duration-150 cursor-pointer" style="animation-delay:${rowRaw(String(sorted.indexOf(cert) * 30))}ms" onclick="openCertDetail('${cert.domain}')">
                 <td class="px-6 py-4 max-w-0">
@@ -535,6 +545,7 @@
                         <div class="min-w-0">
                             <div class="text-sm font-medium text-gray-900 dark:text-white truncate">${cert.domain}</div>
                             ${aliasHint}
+                            ${mobileExpiry}
                         </div>
                     </div>
                 </td>
