@@ -357,8 +357,10 @@
                             <option value="expiring">Expiring Soon</option>
                             <option value="expired">Expired</option>
                         </select>
-                        <button onclick="checkAllDeploymentStatuses()" 
-                                class="inline-flex items-center px-3 py-2 border border-indigo-300 dark:border-indigo-600 shadow-sm text-sm font-medium rounded-lg text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/30 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200 whitespace-nowrap">
+                        <button type="button" onclick="checkAllDeploymentStatuses()"
+                                class="inline-flex items-center px-3 py-2 border border-indigo-300 dark:border-indigo-600 shadow-sm text-sm font-medium rounded-lg text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/30 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200 whitespace-nowrap"
+                                title="Re-check deployment status for every certificate in the list. Probes both the backend (TLS handshake from the server) and the browser (this tab), one row at a time."
+                                aria-label="Re-check deployment status for all certificates">
                             <i class="fas fa-sync mr-1 sm:mr-2"></i>
                             <span class="hidden sm:inline">Check All</span>
                             <span class="sm:hidden">Check</span>
