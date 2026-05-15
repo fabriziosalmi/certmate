@@ -81,7 +81,8 @@
                                     <i class="fas fa-globe mr-2 text-blue-500"></i>
                                     Primary Domain Name
                                 </label>
-                                <input type="text" id="domain" name="domain" 
+                                <input type="text" id="domain" name="domain"
+                                       autocomplete="off"
                                        class="block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg shadow-sm py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-200 placeholder-gray-400"
                                        placeholder="example.com or *.example.com" required>
                                 <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -97,7 +98,8 @@
                                     Additional Domains (SAN)
                                     <span class="font-normal text-xs text-gray-500 dark:text-gray-400 ml-1">Optional</span>
                                 </label>
-                                <input type="text" id="san_domains" name="san_domains" 
+                                <input type="text" id="san_domains" name="san_domains"
+                                       autocomplete="off"
                                        class="block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg shadow-sm py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-200 placeholder-gray-400"
                                        placeholder="www.example.com, mail.example.com, *.api.example.com">
                                 <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -249,6 +251,7 @@
                                     DNS-01 Alias Domain <span class="text-xs font-normal text-gray-500 dark:text-gray-400">(optional)</span>
                                 </label>
                                 <input type="text" id="dns_alias_domain" name="dns_alias_domain"
+                                       autocomplete="off"
                                        class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm"
                                        placeholder="e.g. validation.example.org">
                                 <p id="dns_alias_help" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
