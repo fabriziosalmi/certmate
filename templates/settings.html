@@ -14,15 +14,26 @@
                         <i class="fas fa-chevron-right text-[10px] text-gray-300 dark:text-gray-600 mx-2"></i>
                         <span class="text-gray-700 dark:text-gray-200 font-medium">Settings</span>
                     </nav>
-                    <div class="flex items-center text-xs gap-3">
-                        <div class="flex items-center text-green-600 dark:text-green-400" id="connectionStatus" style="display: none;">
-                            <i class="fas fa-check-circle mr-1"></i><span>Connected</span>
+                    <!-- DNS-provider status indicators. No JS path
+                         currently toggles these on (they sit hidden in
+                         the markup so the wiring can land later). When
+                         a wire-up arrives, toggle by removing the
+                         `hidden` class and adding `flex items-center`
+                         at the same time — see the loadingModal pattern
+                         in dashboard.js for the show/hide helper shape.
+                         The "DNS:" prefix on each label makes the
+                         scope explicit; the previous "Connected /
+                         Partial / Not configured" was ambiguous (could
+                         refer to CA or storage). -->
+                    <div class="flex items-center text-xs gap-3" aria-live="polite">
+                        <div class="hidden text-green-600 dark:text-green-400" id="connectionStatus">
+                            <i class="fas fa-check-circle mr-1" aria-hidden="true"></i><span>DNS: Connected</span>
                         </div>
-                        <div class="flex items-center text-yellow-600 dark:text-yellow-400" id="partialStatus" style="display: none;">
-                            <i class="fas fa-exclamation-triangle mr-1"></i><span>Partial</span>
+                        <div class="hidden text-yellow-600 dark:text-yellow-400" id="partialStatus">
+                            <i class="fas fa-exclamation-triangle mr-1" aria-hidden="true"></i><span>DNS: Partial</span>
                         </div>
-                        <div class="flex items-center text-red-600 dark:text-red-400" id="disconnectedStatus" style="display: none;">
-                            <i class="fas fa-times-circle mr-1"></i><span>Not configured</span>
+                        <div class="hidden text-red-600 dark:text-red-400" id="disconnectedStatus">
+                            <i class="fas fa-times-circle mr-1" aria-hidden="true"></i><span>DNS: Not configured</span>
                         </div>
                     </div>
                 </div>
