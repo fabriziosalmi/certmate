@@ -301,13 +301,24 @@
             currentSort.field = field;
             currentSort.dir = 'asc';
         }
-        // Update sort icons
+        // Reset every sortable column's icon + aria-sort to neutral,
+        // then mark the active column with both the right glyph and the
+        // matching aria-sort value (B2). Browsers / screen readers use
+        // aria-sort to announce "ascending" / "descending" — the visual
+        // icon alone was inaccessible to non-sighted users.
         document.querySelectorAll('[id^="sort-icon-"]').forEach(function (icon) {
             icon.className = 'fas fa-sort ml-1 text-gray-400';
+        });
+        document.querySelectorAll('[id^="sort-th-"]').forEach(function (th) {
+            th.setAttribute('aria-sort', 'none');
         });
         var activeIcon = document.getElementById('sort-icon-' + field);
         if (activeIcon) {
             activeIcon.className = 'fas fa-sort-' + (currentSort.dir === 'asc' ? 'up' : 'down') + ' ml-1 text-primary';
+        }
+        var activeTh = document.getElementById('sort-th-' + field);
+        if (activeTh) {
+            activeTh.setAttribute('aria-sort', currentSort.dir === 'asc' ? 'ascending' : 'descending');
         }
         filterCertificates();
     }
