@@ -1,11 +1,10 @@
 {% extends "base.html" %}
 {% block title %}Settings - CertMate{% endblock %}
 {% block content %}
-    <!-- Main Content -->
+    <!-- Settings page: single Alpine root that tab-switches every section below it. -->
     <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8"
          x-data="{ tab: (location.hash.slice(1) || 'dns') }"
-         x-init="$watch('tab', t => history.replaceState(null, '', '#' + t))"
-         <!-- Settings Tabs (Alpine.js) -->
+         x-init="$watch('tab', t => history.replaceState(null, '', '#' + t))">
         <div class="bg-white dark:bg-surface-card shadow-card rounded-xl">
             <div class="px-6 py-3 border-b border-gray-100 dark:border-white/5 overflow-x-auto">
                 <div class="flex items-center justify-between mb-2">
@@ -45,15 +44,19 @@
                     {% include 'partials/settings_general.html' %}
                     {% include 'partials/settings_storage.html' %}
                     </form>
-            </div>
-        </div>
 
-        {% include 'partials/settings_notifications.html' %}
+                    <!-- Tabs whose state is managed via dedicated endpoints
+                         (notifications channels, deploy hooks, users, API keys)
+                         sit alongside the form, not inside it. Each partial
+                         still uses x-show="tab === '...'" to react to the
+                         Alpine state in the parent div above. -->
+                    {% include 'partials/settings_notifications.html' %}
                     {% include 'partials/settings_deploy.html' %}
                     {% include 'partials/settings_users.html' %}
                     {% include 'partials/settings_apikeys.html' %}
+
                     <!-- TAB: Backup & Restore Section -->
-        <div x-show="tab === 'backup'" x-cloak class="bg-white dark:bg-surface-card rounded-xl shadow-card p-6 mt-6">
+                    <div x-show="tab === 'backup'" x-cloak class="bg-white dark:bg-surface-card rounded-xl shadow-card p-6 mt-6">
             <div class="flex items-center justify-between mb-4">
                 <h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
                     <i class="fas fa-database mr-2 text-blue-500"></i>
@@ -135,6 +138,8 @@
                         </div>
                     </div>
                 </div>
+            </div>
+                    </div>
             </div>
         </div>
 
