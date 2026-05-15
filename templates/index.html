@@ -7,36 +7,41 @@
          x-data="{ certView: (location.hash === '#client' ? 'client' : 'server') }"
          x-init="$watch('certView', v => { history.replaceState(null, '', v === 'client' ? '#client' : '#'); if (v === 'client') initClientCerts(); })">
 
-        <!-- Certificate Type Toggle -->
-        <div class="flex items-center space-x-1 mb-6 bg-gray-100 dark:bg-gray-700/50 rounded-lg p-1 w-fit">
-            <button type="button" @click="certView = 'server'"
-                    :class="certView === 'server'
-                        ? 'bg-white dark:bg-gray-800 shadow text-gray-900 dark:text-white'
-                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'"
-                    class="px-4 py-2 text-sm font-medium rounded-md transition-all">
-                <i class="fas fa-globe mr-1.5"></i>Server Certificates
-            </button>
-            <button type="button" @click="certView = 'client'"
-                    :class="certView === 'client'
-                        ? 'bg-white dark:bg-gray-800 shadow text-gray-900 dark:text-white'
-                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'"
-                    class="px-4 py-2 text-sm font-medium rounded-md transition-all">
-                <i class="fas fa-id-card mr-1.5"></i>Client Certificates
-            </button>
+        <!-- Top toolbar: certificate type toggle on the left, create-new
+             button on the right (`ml-auto`). `flex-wrap` lets the
+             button drop to the second line on narrow viewports instead
+             of overflowing. The button is only shown on the server view
+             — client certs have their own create UI inside that partial. -->
+        <div class="flex flex-wrap items-center gap-3 mb-6">
+            <div class="flex items-center space-x-1 bg-gray-100 dark:bg-gray-700/50 rounded-lg p-1 w-fit">
+                <button type="button" @click="certView = 'server'"
+                        :class="certView === 'server'
+                            ? 'bg-white dark:bg-gray-800 shadow text-gray-900 dark:text-white'
+                            : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'"
+                        class="px-4 py-2 text-sm font-medium rounded-md transition-all">
+                    <i class="fas fa-globe mr-1.5"></i>Server Certificates
+                </button>
+                <button type="button" @click="certView = 'client'"
+                        :class="certView === 'client'
+                            ? 'bg-white dark:bg-gray-800 shadow text-gray-900 dark:text-white'
+                            : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'"
+                        class="px-4 py-2 text-sm font-medium rounded-md transition-all">
+                    <i class="fas fa-id-card mr-1.5"></i>Client Certificates
+                </button>
+            </div>
+            <div x-show="certView === 'server'" x-cloak class="ml-auto">
+                <button type="button" id="toggleCreateForm"
+                        onclick="toggleCreateCertForm()"
+                        class="inline-flex items-center px-5 py-2.5 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-gradient-to-r from-primary to-secondary hover:from-secondary hover:to-primary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-all duration-200">
+                    <i class="fas fa-plus-circle mr-2"></i>
+                    <span id="toggleCreateFormText">Create New Certificate</span>
+                    <i id="toggleCreateFormChevron" class="fas fa-chevron-down ml-2 transform transition-transform duration-200"></i>
+                </button>
+            </div>
         </div>
 
         <!-- SERVER CERTIFICATES -->
         <div x-show="certView === 'server'">
-        <!-- Create Certificate Toggle Button (fix #131: form hidden by default) -->
-        <div class="mb-6">
-            <button type="button" id="toggleCreateForm"
-                    onclick="toggleCreateCertForm()"
-                    class="inline-flex items-center px-5 py-2.5 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-gradient-to-r from-primary to-secondary hover:from-secondary hover:to-primary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-all duration-200">
-                <i class="fas fa-plus-circle mr-2"></i>
-                <span id="toggleCreateFormText">Create New Certificate</span>
-                <i id="toggleCreateFormChevron" class="fas fa-chevron-down ml-2 transform transition-transform duration-200"></i>
-            </button>
-        </div>
 
         <!-- Create Certificate Form (hidden by default) -->
         <div id="createCertFormContainer" class="hidden">
