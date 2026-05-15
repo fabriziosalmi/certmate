@@ -1,3 +1,58 @@
+## v2.5.2 (Patch — issue triage: 2 community bugs + 1 inconsistent web-auth response)
+
+Three scoped fixes from the v2.5.x issue triage. Each commit is one fix, mergeable in isolation. No API breakage, no data migration, no new env vars.
+
+### `fix(renew)` — pass `--no-random-sleep-on-renew` to certbot (closes [#171](https://github.com/fabriziosalmi/certmate/issues/171))
+
+`certbot renew` injects a random sleep of up to ~8 minutes before contacting the ACME server. The default exists to avoid stampeding Let's Encrypt when run from a flock of crontabs; CertMate's renewal endpoint is always invoked interactively from the UI / API, so the sleep doesn't help — it makes the POST time out as `NETWORK_ERROR` in the browser even though certbot eventually completes the renewal in the background. End state: cert refreshes on disk but the user sees a flat error.
+
+Add `--no-random-sleep-on-renew` unconditionally to the `cmd` built in [`modules/core/certificates.py:875-883`](modules/core/certificates.py#L875-L883). The flag has been in certbot since 1.5 (2020), so no version concern.
+
+Regression test: [`tests/test_issue171_no_random_sleep_renew.py`](tests/test_issue171_no_random_sleep_renew.py) mocks the shell executor, drives `renew_certificate()` against a fake on-disk cert, and asserts the cmd list contains the flag. Pins the behaviour so a future refactor of the cmd construction cannot quietly drop it.
+
+Reporter: [@ITJamie](https://github.com/ITJamie).
+
+### `fix(dashboard)` — give Domain column a `w-1/2` width hint (closes [#170](https://github.com/fabriziosalmi/certmate/issues/170))
+
+The Domain column used `max-w-0` + `truncate` on the `<td>` — the standard Tailwind technique for "let me truncate this cell in a table". It only works when the column has a width to truncate against. With the table's default `table-layout: auto` and no width on the `<th>`, the other `whitespace-nowrap` columns (Status, Expires "May 15, 2026 · 30 days left", Provider, Deployment, Actions) claimed their natural content width first and Domain got the leftover crumbs. On a viewport with all six columns visible the remaining space shrunk well below the width of any realistic FQDN and domain text truncated aggressively.
+
+Add `w-1/2` to the Domain `<th>`. With auto layout this acts as a floor, not a max: Domain claims at least 50% of the table width but can grow when there's spare. On a 1280px viewport that's a 640px floor — comfortably wide for any practical FQDN. The `<td>` keeps `max-w-0` + `truncate` so genuinely long names (rare wildcards under deep subdomains) still clip with an ellipsis.
+
+Reporter: [@ITJamie](https://github.com/ITJamie).
+
+### `fix(auth)` — redirect browser to `/login` on auth failure (was JSON 401)
+
+The `require_role` and `require_auth` decorators returned the API-style JSON
+`{"code":"AUTH_HEADER_MISSING","error":"Authorization header required"}`
+to every caller that wasn't authenticated, including browsers loading the protected HTML page routes (`/help`, `/settings`, `/audit`, `/activity`, `/redoc`, `/client-certificates`). Users saw the raw JSON body in the tab. The dashboard route `/` already redirected correctly via its hand-rolled flow; the rest were inconsistent.
+
+Add a helper `_is_browser_html_request()` that returns True only when both:
+- `request.path` does NOT live under `/api/` (the API surface is always JSON)
+- `request.accept_mimetypes` prefers `text/html` over `application/json` (a browser POST that `fetch()`s to `/api/...` is unaffected)
+
+Both decorators use it: on auth failure for browser HTML requests, return `redirect('/login?next=<path>')`; otherwise keep the existing JSON 401 byte-for-byte so curl, fetch, and API clients see no change.
+
+Regression test pins all three branches:
+- browser GET `/help` → 302 to `/login?next=/help`
+- JSON GET `/help` → 401 JSON, `code=AUTH_HEADER_MISSING`
+- browser GET `/api/...` → 401 JSON (never redirected)
+
+Reporter: [@fabriziosalmi](https://github.com/fabriziosalmi) (live observation while testing v2.5.1).
+
+### Tests
+
+Full non-UI suite green (438 passed, 9 skipped, 15 deselected). New test files:
+- `tests/test_issue171_no_random_sleep_renew.py` (1 test)
+- `tests/test_help_browser_redirect.py` (3 tests)
+
+### Backward compatibility
+
+- Renewal endpoint: same shape, faster response (no 5-8 min stall).
+- API responses to `/api/*` paths: byte-identical to v2.5.1.
+- Browsers hitting protected HTML routes without a session now get a 302 to `/login?next=<path>` instead of a JSON body. Pre-existing browser behaviour on `/` was already this; v2.5.2 makes the other web routes match.
+
+---
+
 ## v2.5.1 (Patch — v2.5.0 follow-up: 9 fixes from manual browser testing)
 
 Nine small, scoped follow-ups caught during the manual browser pass on the v2.5.0 image. Each commit is one fix, mergeable in isolation. No API breakage, no data migration, no new env vars.
