@@ -27,12 +27,15 @@
                     </div>
                 </div>
                 <nav class="flex space-x-1 min-w-max" role="tablist">
-                    <template x-for="t in [{id:'dns',icon:'fa-server',label:'DNS',abbr:'DNS'},{id:'ca',icon:'fa-shield-alt',label:'CA',abbr:'CA'},{id:'general',icon:'fa-cogs',label:'General',abbr:'Gen'},{id:'storage',icon:'fa-database',label:'Storage',abbr:'Sto'},{id:'notifications',icon:'fa-bell',label:'Notifications',abbr:'Notif'},{id:'deploy',icon:'fa-rocket',label:'Deploy',abbr:'Dep'},{id:'users',icon:'fa-users',label:'Users',abbr:'Usr'},{id:'apikeys',icon:'fa-key',label:'API Keys',abbr:'Keys'},{id:'backup',icon:'fa-archive',label:'Backup',abbr:'Bkp'}]">
-                        <button type="button" @click="tab = t.id" role="tab" :title="t.label"
+                    <template x-for="t in [{id:'dns',icon:'fa-server',label:'DNS'},{id:'ca',icon:'fa-shield-alt',label:'CA'},{id:'general',icon:'fa-cogs',label:'General'},{id:'storage',icon:'fa-database',label:'Storage'},{id:'notifications',icon:'fa-bell',label:'Notifications'},{id:'deploy',icon:'fa-rocket',label:'Deploy'},{id:'users',icon:'fa-users',label:'Users'},{id:'apikeys',icon:'fa-key',label:'API Keys'},{id:'backup',icon:'fa-archive',label:'Backup'}]">
+                        <button type="button" @click="tab = t.id" role="tab"
+                                :title="t.label"
+                                :aria-label="t.label"
+                                :aria-selected="tab === t.id ? 'true' : 'false'"
                                 :class="tab === t.id
-                                    ? 'px-4 py-2 text-sm font-medium rounded-md text-primary bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700'
-                                    : 'px-4 py-2 text-sm font-medium rounded-md text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700'">
-                            <i class="fas" :class="t.icon" class="mr-1"></i><span class="hidden sm:inline" x-text="' ' + t.label"></span><span class="sm:hidden" x-text="' ' + t.abbr"></span>
+                                    ? 'px-3 sm:px-4 py-2 text-sm font-medium rounded-md text-primary bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700'
+                                    : 'px-3 sm:px-4 py-2 text-sm font-medium rounded-md text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700'">
+                            <i class="fas" :class="t.icon" aria-hidden="true"></i><span class="hidden sm:inline ml-1.5" x-text="t.label"></span>
                         </button>
                     </template>
                 </nav>
