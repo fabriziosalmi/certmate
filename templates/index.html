@@ -393,8 +393,17 @@
                 <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700" id="certificatesTable">
                     <thead class="bg-gray-50/80 dark:bg-gray-700/60 backdrop-blur-md sticky top-0 z-10">
                         <tr>
+                            <!-- Domain column gets a 50% width hint so the
+                                 browser allocates most of the table to it
+                                 instead of giving every other (nowrap)
+                                 column its natural width and leaving only
+                                 the leftover crumbs to Domain. With
+                                 `table-layout: auto` the width acts as a
+                                 floor, not a max, so on viewports with
+                                 spare horizontal room Domain still grows.
+                                 See issue #170. -->
                             <th id="sort-th-domain" scope="col" aria-sort="none"
-                                class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-1/2">
                                 <button type="button" onclick="sortCertificates('domain')"
                                         class="inline-flex items-center w-full text-left uppercase tracking-wider hover:text-gray-700 dark:hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-inset rounded">
                                     Domain <i class="fas fa-sort ml-1 text-gray-400" id="sort-icon-domain" aria-hidden="true"></i>

@@ -673,12 +673,45 @@ class AuthManager:
             return None, ({'error': 'Authentication failed',
                            'code': 'AUTH_ERROR'}, 401)
 
+    def _is_browser_html_request(self):
+        """True when the current request looks like a browser asking for HTML.
+
+        Used by the auth decorators to decide between a 302 to /login
+        (browser, friendly) and the API-style JSON 401 (curl, fetch).
+        Two conditions both have to hold so a browser POST to /api/...
+        isn't redirected away from its JSON error path:
+
+          - request.path does NOT live under /api/  -- our API surface
+            lives under /api/ and always wants JSON responses
+          - request.accept_mimetypes prefers text/html over JSON --
+            browsers send `Accept: text/html,application/xhtml+xml,...`,
+            fetch() and curl typically send `Accept: */*` or JSON
+        """
+        try:
+            if request.path.startswith('/api/'):
+                return False
+            accept = request.accept_mimetypes
+            # best_match returns text/html when the browser-style Accept
+            # ranks it above application/json; for `Accept: */*` from
+            # curl, html wins by alphabetical tiebreak, which is fine —
+            # curl users typically hit /api/ paths anyway.
+            best = accept.best_match(['text/html', 'application/json'])
+            return best == 'text/html'
+        except Exception:
+            return False
+
     def require_auth(self, f):
         """Decorator: require authentication (API token or session)."""
         @wraps(f)
         def decorated_function(*args, **kwargs):
             user, err = self._authenticate_request()
             if err is not None:
+                # Same browser-vs-API split as require_role — keep the
+                # two decorators behaviourally consistent so a route
+                # author doesn't have to remember which one redirects.
+                if self._is_browser_html_request():
+                    from flask import redirect, url_for
+                    return redirect(url_for('login_page', next=request.path))
                 return err
             request.current_user = user
             return f(*args, **kwargs)
@@ -697,6 +730,17 @@ class AuthManager:
             def decorated_function(*args, **kwargs):
                 user, err = self._authenticate_request()
                 if err is not None:
+                    # When a browser hits an HTML page route without a
+                    # session, return a 302 to /login?next=<path> instead
+                    # of the API-style 401 JSON. Without this the user
+                    # sees a bare {"code":"AUTH_HEADER_MISSING",…} body
+                    # in the browser tab — disorienting because the
+                    # adjacent dashboard route (`/`) already redirects
+                    # cleanly via its hand-rolled flow. /api/ paths and
+                    # non-HTML clients keep getting the JSON response.
+                    if self._is_browser_html_request():
+                        from flask import redirect, url_for
+                        return redirect(url_for('login_page', next=request.path))
                     return err
 
                 # current_user is set here only after auth is known to
