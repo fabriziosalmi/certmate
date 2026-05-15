@@ -87,10 +87,15 @@
                         <i class="fas fa-moon" id="theme-icon-moon"></i>
                         <i class="fas fa-sun hidden" id="theme-icon-sun"></i>
                     </button>
-                    <!-- Logout (label is icon-only on phones; aria-label covers the SR path) -->
-                    <button id="logoutBtn" onclick="doLogout()" style="display:none" class="px-3 py-2 rounded-md text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 border border-red-200 dark:border-red-700" title="Logout" aria-label="Log out">
+                    <!-- Logout (rendered only when authenticated; gated
+                         server-side via the `current_user` context var, so
+                         the button no longer flashes in then out as the
+                         old JS auth-check completed 500 ms after paint). -->
+                    {% if current_user %}
+                    <button type="button" id="logoutBtn" onclick="doLogout()" class="px-3 py-2 rounded-md text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 border border-red-200 dark:border-red-700" title="Logout" aria-label="Log out">
                         <i class="fas fa-sign-out-alt mr-1"></i><span class="hidden sm:inline"> Logout</span>
                     </button>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -118,13 +123,9 @@
         </div>
     </nav>
     <script>
-    // Auth check -- delayed to avoid competing with page-critical resources
-    setTimeout(function(){
-        fetch('/api/auth/me',{credentials:'same-origin'})
-            .then(function(r){return r.json()})
-            .then(function(d){if(d&&d.user&&d.user.username)document.getElementById('logoutBtn').style.display='inline-block';})
-            .catch(function(){});
-    }, 500);
+    // Logout visibility is now gated server-side via the `current_user`
+    // Jinja context var, so the deferred /api/auth/me probe is no longer
+    // needed — the button either renders or it doesn't, no layout shift.
     function doLogout(){
         fetch('/api/auth/logout',{method:'POST',credentials:'same-origin'})
             .then(function(){window.location.href='/login'})
