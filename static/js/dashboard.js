@@ -631,6 +631,33 @@
     }
 
     // Certificate detail slide-out panel
+    // B3: skeleton mirror of the detail panel layout. Shown briefly while
+    // the panel slides in, so the user never sees an empty card or the
+    // previous cert's contents while the new HTML is rendering. Mirrors
+    // the populated structure (status block, expiry box, action list).
+    function certDetailSkeletonHtml() {
+        return '<div class="space-y-6 animate-pulse" aria-hidden="true">' +
+            // Status block
+            '<div class="space-y-2">' +
+                '<div class="skeleton h-3 w-16"></div>' +
+                '<div class="skeleton h-6 w-32"></div>' +
+            '</div>' +
+            // Definition list (Issuer, SANs, Provider, …)
+            '<div class="space-y-3">' +
+                '<div class="flex justify-between"><div class="skeleton h-3 w-20"></div><div class="skeleton h-3 w-36"></div></div>' +
+                '<div class="flex justify-between"><div class="skeleton h-3 w-16"></div><div class="skeleton h-3 w-40"></div></div>' +
+                '<div class="flex justify-between"><div class="skeleton h-3 w-24"></div><div class="skeleton h-3 w-32"></div></div>' +
+                '<div class="flex justify-between"><div class="skeleton h-3 w-20"></div><div class="skeleton h-3 w-28"></div></div>' +
+            '</div>' +
+            // Action buttons stack
+            '<div class="space-y-2 pt-4">' +
+                '<div class="skeleton h-9 w-full rounded-md"></div>' +
+                '<div class="skeleton h-9 w-full rounded-md"></div>' +
+                '<div class="skeleton h-9 w-full rounded-md"></div>' +
+            '</div>' +
+        '</div>';
+    }
+
     function openCertDetail(domain) {
         var cert = allCertificates.find(function (c) { return c.domain === domain; });
         if (!cert) return;
@@ -639,6 +666,12 @@
         var overlay = document.getElementById('certDetailOverlay');
         var content = document.getElementById('certDetailContent');
         document.getElementById('detailDomain').textContent = cert.domain;
+        // Paint skeleton placeholders before the real content lands. Without
+        // this, opening cert B right after closing cert A briefly showed A's
+        // stale HTML, and on slow devices the panel could slide in over an
+        // empty white card. The skeleton matches the populated layout so the
+        // transition reads as "loading detail" rather than "broken".
+        content.innerHTML = certDetailSkeletonHtml();
 
         var safeDomain = escapeHtml(cert.domain);
         var providerLabel = providerDisplayName(cert.dns_provider);
@@ -725,8 +758,16 @@
     function closeCertDetail() {
         var panel = document.getElementById('certDetailPanel');
         var overlay = document.getElementById('certDetailOverlay');
+        var content = document.getElementById('certDetailContent');
         panel.classList.add('translate-x-full');
-        setTimeout(function () { overlay.classList.add('hidden'); }, 300);
+        setTimeout(function () {
+            overlay.classList.add('hidden');
+            // Clear after the slide-out transition so the next open
+            // starts from a blank surface — prevents the previous cert's
+            // details from flashing visible for a frame when the user
+            // opens cert B right after closing cert A.
+            if (content) content.innerHTML = '';
+        }, 300);
     }
 
     // Close detail panel on Escape key
