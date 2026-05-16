@@ -144,6 +144,13 @@ SECRET_KEY=your_flask_secret_key
 # Option B: path to a file containing the key (takes precedence over SECRET_KEY)
 SECRET_KEY_FILE=/run/secrets/secret_key
 
+# Reverse proxy — set to 'true' when CertMate is fronted by Nginx,
+# HAProxy, Traefik, Cloudflare, etc. Without this, request.remote_addr
+# resolves to the proxy's IP for every request, which collapses per-
+# client rate-limiting into a single bucket. See the "Behind a reverse
+# proxy" section under Production Deployment for details.
+BEHIND_PROXY=true
+
 # DNS Providers (choose one or multiple)
 CLOUDFLARE_TOKEN=your_cloudflare_token
 AWS_ACCESS_KEY_ID=your_aws_access_key
@@ -173,6 +180,46 @@ POWERDNS_API_KEY=your_powerdns_key
 ---
 
 ## Production Deployment
+
+### Behind a reverse proxy
+
+If CertMate sits behind a reverse proxy (Nginx, HAProxy, Traefik,
+Cloudflare, Kubernetes Ingress) — which is the recommended way to run
+it for TLS termination — set `BEHIND_PROXY=true` in the container
+environment. This enables Werkzeug's `ProxyFix` middleware so the
+following trust the `X-Forwarded-*` headers from your proxy:
+
+- `request.remote_addr` resolves to the original client IP instead of
+  the proxy's IP. Rate limiting, audit-log entries, and the
+  "invalid API token attempt from X" warnings all become per-client
+  instead of per-proxy.
+- The proxy's scheme / host / prefix headers are honored, which keeps
+  generated URLs and cookie scopes correct.
+
+```yaml
+# docker-compose.yml snippet
+services:
+  certmate:
+    image: fabriziosalmi/certmate:latest
+    environment:
+      BEHIND_PROXY: "true"
+    volumes:
+      - ./data:/app/data
+```
+
+**When NOT to enable it.** If you expose CertMate directly to the
+network with no proxy in front, leave `BEHIND_PROXY` unset. With it
+set, anyone who can reach the listener could spoof `X-Forwarded-For`
+and bypass per-client rate limits. The proxy is the trust boundary.
+
+Your proxy must of course forward the headers. Nginx example:
+
+```nginx
+proxy_set_header Host              $host;
+proxy_set_header X-Real-IP         $remote_addr;
+proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+proxy_set_header X-Forwarded-Proto $scheme;
+```
 
 ### Storage location for the data directory
 
