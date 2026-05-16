@@ -136,7 +136,15 @@ class DeployManager:
         hook_name = hook.get('name', 'unnamed')
         command = hook.get('command', '')
         logger.info("Running deploy hook '%s' for %s: %s", hook_name, domain, command[:120])
-        timeout = min(max(hook.get('timeout', DEFAULT_TIMEOUT), 1), MAX_TIMEOUT)
+        # Coerce to int defensively: save_config (line ~473) already does this
+        # on the write path, but a hand-edited settings.json or a hook coming
+        # from an older config schema could carry a string. max(str, 1) raises
+        # TypeError in Python 3, which would crash the renewal worker.
+        try:
+            raw_timeout = int(hook.get('timeout', DEFAULT_TIMEOUT))
+        except (TypeError, ValueError):
+            raw_timeout = DEFAULT_TIMEOUT
+        timeout = min(max(raw_timeout, 1), MAX_TIMEOUT)
 
         deploy_env = os.environ.copy()
         deploy_env['CERTMATE_DOMAIN'] = domain
@@ -398,8 +406,23 @@ class DeployManager:
         # Strip out whitelisted env var references before applying the
         # dangerous-pattern check. CertMate injects these into the hook
         # environment (see _run_hook), so they're safe to reference.
-        # Both $CERTMATE_FOO and ${CERTMATE_FOO} forms are allowed.
-        _safe_vars = re.compile(r'\$\{?CERTMATE_[A-Z_]+\}?')
+        # Two exact forms are allowed:
+        #   $CERTMATE_FOO        (no braces)
+        #   ${CERTMATE_FOO}      (braces with name and immediate close)
+        # The previous regex `\$\{?CERTMATE_[A-Z_]+\}?` accepted partial
+        # brace forms — `${CERTMATE_FOO` (no close) and `${CERTMATE_FOO}`
+        # were both matched — which let an attacker smuggle bash parameter
+        # expansion operators past the validator:
+        #   ${CERTMATE_FOO:-/etc/passwd}    -> opens any path at runtime
+        #   ${CERTMATE_FOO:+anything}       -> conditional substitution
+        #   ${CERTMATE_FOO//a/b}            -> in-string substitution
+        # All three matched the old safe_vars (stripping `${CERTMATE_FOO`)
+        # and left only `:-/etc/passwd}` etc., which contains no metachar
+        # the dangerous regex catches. By requiring the closing brace
+        # IMMEDIATELY after the variable name, none of these forms are
+        # ever substituted; the dangerous-shell rule `\$\{` then catches
+        # them and the command is rejected.
+        _safe_vars = re.compile(r'\$CERTMATE_[A-Z_]+|\$\{CERTMATE_[A-Z_]+\}')
         sanitized = _safe_vars.sub('__SAFE__', command)
 
         # Block shell metacharacters that enable code injection.

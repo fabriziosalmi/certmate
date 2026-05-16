@@ -485,13 +485,24 @@
                 }
             });
         });
-        document.addEventListener('DOMContentLoaded', function() {
+        // Attach the observer to every modal root. If the script loaded
+        // BEFORE DOMContentLoaded we have to wait for it (the roots may not
+        // exist yet); if it loaded AFTER (defer / dynamic import), the event
+        // has already fired and `addEventListener` would silently never run —
+        // leaving modals without Esc / backdrop / focus-trap support. Mirror
+        // the readyState pattern used by CM.refreshRole above.
+        function _attachModalObservers() {
             document.querySelectorAll('[data-modal-root]').forEach(function(root) {
                 modalObserver.observe(root, {
                     attributes: true, attributeFilter: ['class'], attributeOldValue: true
                 });
             });
-        });
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', _attachModalObservers);
+        } else {
+            _attachModalObservers();
+        }
     }
 
     // ── Debug-console gating ─────────────────────────────────────

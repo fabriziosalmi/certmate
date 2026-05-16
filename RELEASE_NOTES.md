@@ -1,3 +1,161 @@
+## v2.5.3 (Patch — multi-pass audit response + draconian test coverage push)
+
+Twenty atomic commits over a single branch, the result of running every
+finding from a multi-source audit (security CRITICAL/HIGH/MEDIUM/LOW + a
+performance audit + a UI audit) through empirical verification before
+acting. ~62 audit findings were checked; only the ones that survived
+verification turned into commits. Honest summary: 8 real bugs fixed, 10
+parziali / defense-in-depth landed, 35 false positives documented, the
+rest pre-existing-and-deferred.
+
+The release also nearly doubles unit test coverage on previously-uncovered
+critical-path modules: +160 new tests across 5 new test files (570 unit
+tests total, up from 410).
+
+### Real bug fixes
+
+- **`fix(certificates)`: race condition on metadata RMW** —
+  `record_backend_deployment_status` and `record_browser_deployment_status`
+  did load → mutate → save without holding the per-domain lock that already
+  exists in the class. Two concurrent deployment-status updates lost one
+  of the writes silently.
+
+- **`fix(deployer)`: deploy-hook parameter-expansion bypass** — the
+  safe-vars regex `\$\{?CERTMATE_[A-Z_]+\}?` accepted partial brace forms,
+  letting `${CERTMATE_FOO:-/etc/passwd}` and the other bash expansion
+  operators smuggle arbitrary paths past the validator. Closing-brace is
+  now required immediately after the var name.
+
+- **`fix(file_operations)`: UnboundLocalError in safe_file_write** —
+  if `mkstemp()` raised before `temp_file` was bound, the except handlers
+  referenced an unbound local, masking the actual OSError. Operators saw
+  "no local variable temp_file" instead of "No space left on device".
+
+- **`fix(certificates)`: corrupt metadata.json silently clobbered** —
+  `_load_metadata` swallowed `JSONDecodeError` along with everything else
+  and returned `{}`; the next save would overwrite the only copy. Now
+  JSON corruption is quarantined to `metadata.json.corrupt-<utc>` and
+  logged at ERROR, separately from IO errors which still get the empty-
+  dict fallback.
+
+- **`fix(health)`: scheduler-setup failure now surfaces on /health** —
+  if APScheduler setup raised, the only signal was a single ERROR log
+  line. `/health` now reports `scheduler: failed` with the exception
+  message and timestamp; admins can detect a broken scheduler without
+  grepping logs.
+
+- **`fix(tests)`: stale UI test assertions rewritten against v2.5.x** —
+  four `tests/test_ui.py` assertions had been failing on main since v2.5.0
+  rewrote the help page and the dashboard create-form toggle. Updated
+  them to current selectors + handle the setup-wizard overlay during
+  Playwright clicks. e2e suite: 112 passed, 0 failed.
+
+### Performance fixes
+
+- **`perf(settings)`: request-scoped cache for load_settings** — typical
+  `/api/certificates` requests called `settings_manager.load_settings()`
+  ~100 times when listing 50 certs. Now cached on `flask.g` for the
+  request's lifetime; first call hits disk, subsequent calls return a
+  deepcopy. ~15-30ms saved per typical request; more at scale.
+
+- **`perf(renewal)`: thread settings through check_renewals** — the
+  request-scoped cache doesn't fire in background threads. Pass the
+  once-loaded settings down to `get_certificate_info` so the hourly
+  renewal job hits disk once, not N times.
+
+- **`perf(probe)`: TLS probe timeout 5s → 3s + slow-probe warning** —
+  unreachable hosts block a Flask worker for the full timeout. Tightened
+  default + added `CERTMATE_TLS_PROBE_TIMEOUT_SECONDS` env var (clamped
+  to `[1, 30]`) + WARN log when a probe takes more than 1s.
+
+- **`perf(rate-limit)`: bound login-attempt dicts** — botnet IP rotation
+  could grow `_login_attempts_by_ip` unbounded. Sweep empty buckets when
+  either dict crosses the 10K soft cap.
+
+- **`perf(backup)`: single iterdir pass in create_unified_backup** —
+  `cert_dir.iterdir()` was called twice. Now once.
+
+### Hardening (defense-in-depth)
+
+- **`chore(hardening)`: SQLite WAL fallback detection** — `PRAGMA
+  journal_mode=WAL` silently falls back on filesystems that don't support
+  WAL (NFS, network mounts). Now logs a warning at startup if the effective
+  mode is anything but WAL.
+- **`chore(hardening)`: deploy-hook timeout int coercion** — `_run_hook`
+  read `hook.get('timeout')` without `int()`; a string timeout from a
+  hand-edited settings.json crashed the renewal worker. Coerce defensively.
+- **`chore(ux)`: SSE retry give-up after 10 failures** — logged-out tabs
+  produced a 401-every-30s loop indefinitely. Now gives up after ~3 minutes
+  of exponential retries.
+- **`chore(ux)`: MutationObserver readyState guard** — modal focus-trap
+  observer was attached in `DOMContentLoaded` only; if certmate.js loaded
+  later the listener never ran. Mirror the readyState pattern used by
+  `CM.refreshRole`.
+- **`chore(ux)`: confirm dialog before clear-cache** — settings.js's
+  `clearDeploymentCache` now matches the dashboard's `invalidateAllCache`
+  with a `CertMate.confirm()` step.
+
+### Documentation
+
+- **`docs(installation)`: document `BEHIND_PROXY=true`** — undocumented
+  before; without it, per-client rate limiting collapses to per-proxy
+  when CertMate sits behind nginx / traefik / cloudflare.
+- **`docs(installation)`: NFS guidance** — Python blocking I/O semantics
+  + recommended `soft,timeo=30,retrans=3` mount options.
+- **`docs`: neutralize DNS provider counts** — README and docs/ cited
+  22/23/24 inconsistently. Switched prose to neutral wording; canonical
+  number lives only in the table at `docs/dns-providers.md`. Same change
+  pushed to the GitHub Wiki.
+
+### Test coverage push (the draconian part)
+
+Five new test files, +160 unit tests on previously-uncovered modules:
+
+| Module | Before | New tests | Focus |
+|---|---|---|---|
+| `modules/core/private_ca.py` | 0% | 34 | CA shape (RSA-4096, BC=CA-true, KU.keyCertSign), CSR signing, signature verification, CRL generation |
+| `modules/core/csr_handler.py` | 0% | 38 | Validator entry-point: empty/garbage/truncated PEM, no-CN, control-char CN attacks (NUL, newline, CR), SAN ceiling at 100 |
+| `modules/core/ocsp_crl.py` | 0% | 20 | Status branches (good/revoked/unknown), CRL signature verification, manager-failure → 'unknown' not 'good' |
+| `modules/core/storage_backends.py` | ~25% | 56 | _is_transient heuristic, _with_retry decorator, _validate_storage_domain, Azure secret-name collision avoidance, StorageManager dispatch + fallback |
+| `modules/core/certificates.py` (gaps) | ~40% | 12 | Concurrent-issuance non-blocking lock, DNS alias status surfacing (ok/missing/mismatch/error), trailing-dot normalisation |
+
+Tests use real `cryptography` primitives (no mocked crypto operations);
+cloud-SDK request paths deliberately out of scope (they're covered by
+e2e). Total unit suite: 570 passed in ~12s.
+
+### Audit precision summary (transparency)
+
+Out of ~62 audit findings across 7 lists (CRITICAL/HIGH/MEDIUM/LOW for
+security + perf-CRITICAL/HIGH + perf-MEDIUM/LOW + UI CRITICAL/HIGH):
+- 8 true positives → fixes shipped
+- 10 partial / defense-in-depth → hardening shipped
+- 35 false positives → documented in commit messages why they were skipped
+- 2 already fixed incidentally during earlier waves
+- 7 YAGNI / over-engineering → deferred
+
+Each audit list was verified empirically (test scripts in Python where
+applicable) before deciding whether to commit. The audit author appears
+to have pattern-matched on code SHAPES (`innerHTML`, no .catch, no
+debounce, `except Exception`, `mkstemp`, etc.) without verifying the
+actual behaviour — the most clamorous claim ("validator allows
+backticks") was falsifiable in two lines of Python.
+
+### Backward compatibility
+
+- No API breakage. No data migration. No new required env vars.
+- New optional env vars: `BEHIND_PROXY`, `CERTMATE_TLS_PROBE_TIMEOUT_SECONDS`.
+- `/health` adds two new fields when the scheduler is in failure state
+  (`checks.scheduler == "failed"` plus `scheduler_error` + `scheduler_failed_at`).
+  Existing consumers that only read `status` and `checks.scheduler` see no
+  contract change for the success path.
+
+### Test results
+
+- 570 unit tests pass in ~12s
+- 112 e2e tests pass (real Cloudflare DNS-01 issuance + Playwright UI), 0 failures
+
+---
+
 ## v2.5.2 (Patch — issue triage: 2 community bugs + 1 inconsistent web-auth response)
 
 Three scoped fixes from the v2.5.x issue triage. Each commit is one fix, mergeable in isolation. No API breakage, no data migration, no new env vars.

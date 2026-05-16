@@ -117,7 +117,28 @@ class CertificateManager:
             with open(metadata_file, 'r', encoding='utf-8') as f:
                 metadata = json.load(f)
                 return metadata if isinstance(metadata, dict) else {}
-        except Exception as e:
+        except json.JSONDecodeError as e:
+            # The on-disk metadata is unparseable. Quarantine it before
+            # returning {} — otherwise the next _save_metadata would overwrite
+            # the only copy with an empty dict and destroy whatever was in it.
+            quarantine = metadata_file.with_suffix(
+                f'.json.corrupt-{utc_now().strftime("%Y%m%dT%H%M%SZ")}'
+            )
+            try:
+                metadata_file.rename(quarantine)
+                logger.error(
+                    f"Corrupt metadata for {domain}: {e}. "
+                    f"Quarantined to {quarantine.name}; downstream callers "
+                    f"will see an empty metadata dict until a fresh write."
+                )
+            except OSError as rename_err:
+                logger.error(
+                    f"Corrupt metadata for {domain}: {e}. "
+                    f"Could not quarantine ({rename_err}); leaving file in "
+                    f"place to avoid clobbering on next save."
+                )
+            return {}
+        except OSError as e:
             logger.warning(f"Failed to read metadata for {domain}: {e}")
             return {}
 
@@ -136,41 +157,46 @@ class CertificateManager:
         return status if isinstance(status, dict) else {}
 
     def record_backend_deployment_status(self, domain: str, backend_status: dict) -> dict:
-        metadata = self._load_metadata(domain)
-        deployment_status = metadata.get('deployment_status')
-        if not isinstance(deployment_status, dict):
-            deployment_status = {}
+        # Hold the per-domain lock around the read-modify-write so a concurrent
+        # record_browser_deployment_status for the same domain cannot overwrite
+        # the backend block we are about to persist (lost-write window).
+        with self._get_domain_lock(domain):
+            metadata = self._load_metadata(domain)
+            deployment_status = metadata.get('deployment_status')
+            if not isinstance(deployment_status, dict):
+                deployment_status = {}
 
-        deployment_status['backend'] = {
-            'domain': backend_status.get('domain', domain),
-            'deployed': bool(backend_status.get('deployed', False)),
-            'reachable': bool(backend_status.get('reachable', False)),
-            'certificate_match': backend_status.get('certificate_match'),
-            'method': backend_status.get('method'),
-            'timestamp': backend_status.get('timestamp') or utc_now_iso(),
-            'error': backend_status.get('error'),
-        }
+            deployment_status['backend'] = {
+                'domain': backend_status.get('domain', domain),
+                'deployed': bool(backend_status.get('deployed', False)),
+                'reachable': bool(backend_status.get('reachable', False)),
+                'certificate_match': backend_status.get('certificate_match'),
+                'method': backend_status.get('method'),
+                'timestamp': backend_status.get('timestamp') or utc_now_iso(),
+                'error': backend_status.get('error'),
+            }
 
-        metadata['deployment_status'] = deployment_status
-        self._save_metadata(domain, metadata)
-        return deployment_status
+            metadata['deployment_status'] = deployment_status
+            self._save_metadata(domain, metadata)
+            return deployment_status
 
     def record_browser_deployment_status(self, domain: str, browser_status: dict) -> dict:
-        metadata = self._load_metadata(domain)
-        deployment_status = metadata.get('deployment_status')
-        if not isinstance(deployment_status, dict):
-            deployment_status = {}
+        with self._get_domain_lock(domain):
+            metadata = self._load_metadata(domain)
+            deployment_status = metadata.get('deployment_status')
+            if not isinstance(deployment_status, dict):
+                deployment_status = {}
 
-        deployment_status['browser'] = {
-            'reachable': bool(browser_status.get('reachable', False)),
-            'checked_at': browser_status.get('checked_at') or utc_now_iso(),
-            'method': browser_status.get('method') or 'browser-fallback',
-            'source': browser_status.get('source') or 'browser',
-        }
+            deployment_status['browser'] = {
+                'reachable': bool(browser_status.get('reachable', False)),
+                'checked_at': browser_status.get('checked_at') or utc_now_iso(),
+                'method': browser_status.get('method') or 'browser-fallback',
+                'source': browser_status.get('source') or 'browser',
+            }
 
-        metadata['deployment_status'] = deployment_status
-        self._save_metadata(domain, metadata)
-        return deployment_status
+            metadata['deployment_status'] = deployment_status
+            self._save_metadata(domain, metadata)
+            return deployment_status
 
     @staticmethod
     def _create_dns_alias_hook_config(dns_provider, dns_config, domain_alias, propagation_seconds):
@@ -331,8 +357,18 @@ class CertificateManager:
 
 
 
-    def get_certificate_info(self, domain):
-        """Get certificate information for a domain"""
+    def get_certificate_info(self, domain, settings=None):
+        """Get certificate information for a domain.
+
+        ``settings`` is an optional pre-loaded settings dict. Callers
+        that already have settings in hand (notably check_renewals,
+        which iterates 100s of domains in a background job) should
+        pass it in to skip the per-domain load_settings call inside
+        this method and _parse_certificate_info — outside a Flask
+        request context the request-scoped cache does not apply, so
+        without this parameter the renewal job hit disk once per
+        domain for the same settings.json.
+        """
         if not domain:
             return None
         
@@ -359,32 +395,28 @@ class CertificateManager:
             logger.info(f"Certificate file does not exist for domain: {domain}")
             return self._create_empty_cert_info(domain)
         
-        # Get DNS provider info from metadata file first, then fall back to settings
-        dns_provider = None
-        metadata_file = cert_path / "metadata.json"
-        metadata = {}
-        
-        if metadata_file.exists():
-            try:
-                import json
-                with open(metadata_file, 'r') as f:
-                    metadata = json.load(f)
-                    dns_provider = metadata.get('dns_provider')
-                    logger.debug(f"Found DNS provider '{dns_provider}' in metadata for {domain}")
-            except Exception as e:
-                logger.warning(f"Failed to read metadata for {domain}: {e}")
+        # Get DNS provider info from metadata file first, then fall back to
+        # settings. Uses the centralised _load_metadata so a corrupt JSON file
+        # gets quarantined consistently and we don't have two divergent
+        # readers handling JSONDecodeError differently.
+        metadata = self._load_metadata(domain)
+        dns_provider = metadata.get('dns_provider') if metadata else None
+        if dns_provider:
+            logger.debug(f"Found DNS provider '{dns_provider}' in metadata for {domain}")
         
         if not dns_provider:
-            # Fall back to current settings
-            settings = self.settings_manager.load_settings()
+            # Fall back to current settings. Reuse the caller-supplied dict
+            # when present (renewal job) to avoid reloading from disk.
+            if settings is None:
+                settings = self.settings_manager.load_settings()
             dns_provider = self.settings_manager.get_domain_dns_provider(domain, settings)
             logger.debug(f"Using DNS provider '{dns_provider}' from settings for {domain}")
-        
+
         # Read certificate file and parse info
         try:
             with open(cert_file, 'rb') as f:
                 cert_content = f.read()
-            return self._parse_certificate_info(domain, cert_content, metadata)
+            return self._parse_certificate_info(domain, cert_content, metadata, settings=settings)
         except Exception as e:
             logger.error(f"Failed to read certificate file for {domain}: {e}")
             return self._create_empty_cert_info(domain)
@@ -404,8 +436,13 @@ class CertificateManager:
                 continue
         raise ValueError(f"Unable to parse certificate date: {date_str!r}")
 
-    def _parse_certificate_info(self, domain, cert_content, metadata=None):
-        """Parse certificate information from certificate content"""
+    def _parse_certificate_info(self, domain, cert_content, metadata=None, settings=None):
+        """Parse certificate information from certificate content.
+
+        ``settings`` mirrors the get_certificate_info parameter: callers
+        that pre-loaded settings (renewal job) pass it in to skip the
+        per-domain reload from disk.
+        """
         if metadata is None:
             metadata = {}
 
@@ -413,7 +450,8 @@ class CertificateManager:
         domain_alias = metadata.get('domain_alias')
         alias_dns_provider = metadata.get('alias_dns_provider')
         san_domains = metadata.get('san_domains') or []
-        settings = self.settings_manager.load_settings()
+        if settings is None:
+            settings = self.settings_manager.load_settings()
         if not dns_provider:
             # Fall back to current settings
             dns_provider = self.settings_manager.get_domain_dns_provider(domain, settings)
@@ -1045,7 +1083,12 @@ class CertificateManager:
                     logger.info(f"Skipping renewal for {domain}: auto_renew disabled for this certificate")
                     continue
 
-                cert_info = self.get_certificate_info(domain)
+                # Pass the once-loaded settings into get_certificate_info so
+                # the per-domain disk reload (which the request-scoped cache
+                # cannot help with — this is a background job, no flask.g)
+                # is avoided. For a 1000-domain renewal job that's 1000
+                # redundant settings.json reads collapsed to one.
+                cert_info = self.get_certificate_info(domain, settings=settings)
 
                 if cert_info and cert_info.get('needs_renewal'):
                     logger.info(f"Renewing certificate for {domain}")

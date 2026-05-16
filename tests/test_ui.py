@@ -102,7 +102,11 @@ class TestNavigation:
         browser_page.click('a[href="/help"]')
         browser_page.wait_for_url("**/help")
         browser_page.wait_for_load_state("networkidle")
-        expect(browser_page.locator("text=Getting Started").first).to_be_visible()
+        # v2.5.0 rewrote the help page: the old "Getting Started" anchor was
+        # replaced with "Quick Start" as the first section. Match the current
+        # nav strip + section heading so the test reflects the shipping UI.
+        expect(browser_page.locator("nav[aria-label='Help sections']")).to_be_visible()
+        expect(browser_page.locator("h3:has-text('Quick Start')")).to_be_visible()
 
     @pytest.mark.xfail(reason="Alpine.js defer timing in headless Chromium", strict=False)
     def test_client_certs_navigation(self, browser_page):
@@ -255,12 +259,32 @@ class TestCertCreationFlow:
         browser_page.goto(BASE_URL)
         browser_page.wait_for_load_state("networkidle")
 
-        # Fill domain
-        domain_input = browser_page.locator("#domain")
+        # The first-run setup wizard is rendered as a fixed-position overlay
+        # (#setupWizard, z-[110]) by static/js/setup-wizard.js when
+        # setup_completed is False — which is the case in a freshly-started
+        # test container. The overlay intercepts every pointer event, so any
+        # subsequent click against the dashboard times out. Remove the
+        # overlay DOM node so the test interacts with the live dashboard.
+        browser_page.evaluate(
+            "() => { const w = document.getElementById('setupWizard'); if (w) w.remove(); }"
+        )
+
+        # v2.5.0 (QW-15) put the create form behind a toggle: the
+        # #createCertFormContainer is `hidden` by default and the
+        # #toggleCreateForm button calls toggleCreateCertForm() to expand it.
+        # Before this fix the test did `#domain.fill(...)` directly against a
+        # hidden input and Playwright timed out with strict-mode violation.
+        toggle_btn = browser_page.locator('#toggleCreateForm')
+        expect(toggle_btn).to_be_visible()
+        toggle_btn.click()
+
+        # Now the form is visible and the input is fillable.
+        domain_input = browser_page.locator('#domain')
+        expect(domain_input).to_be_visible()
         domain_input.fill(test_domain)
 
-        # Click create button
-        create_btn = browser_page.locator('button:has-text("Create")')
+        # Click create button inside the now-visible form
+        create_btn = browser_page.locator('#createCertForm button[type="submit"], #createCertForm button:has-text("Create")')
         if create_btn.first.is_visible():
             create_btn.first.click()
             # Wait for cert creation (can take 30-120s)
@@ -268,13 +292,27 @@ class TestCertCreationFlow:
 
 
 class TestHelpPageUI:
-    """Help page UI."""
+    """Help page UI.
 
-    def test_docker_quick_start_visible(self, browser_page):
+    These tests originally asserted "Docker Quick Start" and "First Steps"
+    from the pre-v2.5.0 help page card grid. v2.5.0 / v2.5.1 rewrote the
+    help page (RELEASE_NOTES.md `fix(help): rewrite for user help, drop
+    marketing`) replacing the grid with a horizontal section-nav strip and
+    sections keyed by anchor id. The assertions are now repointed at two
+    stable sections that exist in the new structure.
+    """
+
+    def test_quick_start_section_visible(self, browser_page):
+        """The Quick Start section is the first content card and a stable anchor."""
         browser_page.goto(f"{BASE_URL}/help")
         browser_page.wait_for_load_state("networkidle")
-        expect(browser_page.locator("text=Docker Quick Start")).to_be_visible()
+        expect(browser_page.locator("section#quick-start")).to_be_visible()
+        expect(browser_page.locator("section#quick-start h3")).to_contain_text("Quick Start")
 
-    def test_first_steps_visible(self, browser_page):
+    def test_troubleshooting_section_visible(self, browser_page):
+        """The Troubleshooting section is the diagnostic anchor users hit when
+        something breaks; pinning its presence catches a regression that
+        accidentally removed it during a future help-page refactor."""
         browser_page.goto(f"{BASE_URL}/help")
-        expect(browser_page.locator("text=First Steps")).to_be_visible()
+        browser_page.wait_for_load_state("networkidle")
+        expect(browser_page.locator("section#troubleshooting")).to_be_visible()

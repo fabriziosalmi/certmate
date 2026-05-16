@@ -59,8 +59,19 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
 
         # Scheduler
         scheduler = managers.get('scheduler')
-        checks['scheduler'] = 'running' if (scheduler and scheduler.running) else 'not_running'
-        if checks['scheduler'] != 'running':
+        scheduler_status = managers.get('scheduler_status') or {}
+        if scheduler and scheduler.running:
+            checks['scheduler'] = 'running'
+        elif scheduler_status.get('state') == 'failed':
+            # Setup raised an exception. Surface the reason so operators can
+            # diagnose without grepping logs; without this the /health response
+            # collapsed to a bare 'not_running' that hid the actual cause.
+            checks['scheduler'] = 'failed'
+            checks['scheduler_error'] = scheduler_status.get('error')
+            checks['scheduler_failed_at'] = scheduler_status.get('timestamp')
+            overall = 'degraded'
+        else:
+            checks['scheduler'] = 'not_running'
             overall = 'degraded'
 
         # Cert directory

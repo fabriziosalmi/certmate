@@ -389,30 +389,42 @@
     }
 
     function clearDeploymentCache() {
-        addDebugLog('Clearing deployment cache...', 'info');
+        // Mirror the confirm pattern used by the dashboard's invalidateAllCache.
+        // The clear itself is non-destructive (next dashboard load re-probes
+        // each domain) but a misclick still wastes a round of probes and
+        // momentarily flickers every cert's deployment badge — annoying enough
+        // to warrant the same two-step interaction.
+        return CertMate.confirm(
+            'Clear all server-side deployment status cache? The next dashboard render will re-probe every cert.',
+            'Clear Cache',
+            { danger: false }
+        ).then(function (confirmed) {
+            if (!confirmed) return Promise.resolve();
+            addDebugLog('Clearing deployment cache...', 'info');
 
-        return fetch('/api/web/cache/clear', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        })
-            .then(function (response) {
-                if (response.ok) {
-                    return response.json().then(function (result) {
-                        addDebugLog('Cache cleared successfully', 'info');
-                        showMessage('Cache cleared successfully', 'success');
-                        return refreshCacheStats();
-                    });
-                } else {
-                    addDebugLog('Failed to clear cache', 'warn');
-                    showMessage('Failed to clear cache', 'error');
+            return fetch('/api/web/cache/clear', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
                 }
             })
-            .catch(function (error) {
-                addDebugLog('Error clearing cache: ' + error.message, 'error');
-                showMessage('Error clearing cache', 'error');
-            });
+                .then(function (response) {
+                    if (response.ok) {
+                        return response.json().then(function (result) {
+                            addDebugLog('Cache cleared successfully', 'info');
+                            showMessage('Cache cleared successfully', 'success');
+                            return refreshCacheStats();
+                        });
+                    } else {
+                        addDebugLog('Failed to clear cache', 'warn');
+                        showMessage('Failed to clear cache', 'error');
+                    }
+                })
+                .catch(function (error) {
+                    addDebugLog('Error clearing cache: ' + error.message, 'error');
+                    showMessage('Error clearing cache', 'error');
+                });
+        });
     }
 
     // =============================================
