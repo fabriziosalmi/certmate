@@ -136,7 +136,15 @@ class DeployManager:
         hook_name = hook.get('name', 'unnamed')
         command = hook.get('command', '')
         logger.info("Running deploy hook '%s' for %s: %s", hook_name, domain, command[:120])
-        timeout = min(max(hook.get('timeout', DEFAULT_TIMEOUT), 1), MAX_TIMEOUT)
+        # Coerce to int defensively: save_config (line ~473) already does this
+        # on the write path, but a hand-edited settings.json or a hook coming
+        # from an older config schema could carry a string. max(str, 1) raises
+        # TypeError in Python 3, which would crash the renewal worker.
+        try:
+            raw_timeout = int(hook.get('timeout', DEFAULT_TIMEOUT))
+        except (TypeError, ValueError):
+            raw_timeout = DEFAULT_TIMEOUT
+        timeout = min(max(raw_timeout, 1), MAX_TIMEOUT)
 
         deploy_env = os.environ.copy()
         deploy_env['CERTMATE_DOMAIN'] = domain

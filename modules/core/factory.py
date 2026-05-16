@@ -533,7 +533,27 @@ def setup_scheduler(container: AppContainer):
 
         @_sa_event.listens_for(_engine, 'connect')
         def _set_wal_mode(dbapi_conn, _record):
+            # `PRAGMA journal_mode=WAL` does NOT raise when the filesystem
+            # doesn't support WAL (NFS, some network mounts, old FAT). SQLite
+            # silently falls back to the previous journal mode, which still
+            # works but has worse concurrency. Verify the mode took effect
+            # and log a warning if not — otherwise the only signal would be
+            # "scheduler feels slow" with no clue why.
             dbapi_conn.execute('PRAGMA journal_mode=WAL')
+            try:
+                cur = dbapi_conn.execute('PRAGMA journal_mode')
+                row = cur.fetchone()
+                effective = row[0] if row else None
+                if effective and str(effective).lower() != 'wal':
+                    logger.warning(
+                        f"Scheduler SQLite store could not enter WAL mode; "
+                        f"running in journal_mode={effective!r}. The filesystem "
+                        f"may not support WAL (NFS, network mounts). Renewal "
+                        f"correctness is unaffected; concurrency will be lower."
+                    )
+            except Exception as e:
+                # Diagnostic only — don't break connection if PRAGMA readback fails.
+                logger.debug(f"Could not verify SQLite journal_mode: {e}")
             dbapi_conn.execute('PRAGMA synchronous=NORMAL')
 
         jobstores = {

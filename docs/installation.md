@@ -174,6 +174,26 @@ POWERDNS_API_KEY=your_powerdns_key
 
 ## Production Deployment
 
+### Storage location for the data directory
+
+CertMate uses standard Python blocking file I/O for everything under
+`data/` (settings, certificates, audit log, scheduler SQLite store).
+Local disk is strongly recommended.
+
+If you mount `data/` on a network filesystem (NFS, SMB), be aware:
+
+- A frozen NFS server can hang Python file reads indefinitely with no
+  built-in timeout. The renewal worker, the audit log writer, and the
+  /health probe will all block on the same underlying mount.
+- SQLite's WAL journal mode requires lock semantics that NFS does not
+  always provide. CertMate logs a warning if it had to fall back to a
+  weaker journal mode; correctness is preserved, but concurrency drops.
+
+If NFS is unavoidable, mount with `soft,timeo=30,retrans=3` (or your
+distro's equivalent) so I/O fails fast instead of hanging on a stalled
+server, and check `data/logs/certmate.log` for the WAL-fallback line
+after first start.
+
 ### Using Gunicorn
 
 ```bash
