@@ -286,10 +286,20 @@
         if (typeof EventSource === 'undefined') return;
         var sse = null;
         var retryDelay = 1000;
+        // Stop reconnecting after this many consecutive failures so a tab
+        // that logged out (or that lost network indefinitely) doesn't keep
+        // firing a 401 every 30s forever. With exponential backoff the
+        // sequence is 1, 2, 4, 8, 16, 30, 30, 30, 30, 30 = ~3 minutes
+        // before giving up. A page refresh restarts the connection.
+        var consecutiveFailures = 0;
+        var MAX_SSE_RETRIES = 10;
 
         function connectSSE() {
             sse = new EventSource('/api/events/stream');
-            sse.onopen = function() { retryDelay = 1000; };
+            sse.onopen = function() {
+                retryDelay = 1000;
+                consecutiveFailures = 0;
+            };
             sse.addEventListener('certificate_created', function(e) {
                 try {
                     var d = JSON.parse(e.data);
@@ -318,6 +328,15 @@
             });
             sse.onerror = function() {
                 sse.close();
+                consecutiveFailures++;
+                if (consecutiveFailures >= MAX_SSE_RETRIES) {
+                    // Stop hammering the server. A logged-out session would
+                    // otherwise produce one 401 every 30s for the lifetime of
+                    // the open tab. Page refresh resets the counter.
+                    console.warn('CertMate SSE: stopping after ' + MAX_SSE_RETRIES +
+                                 ' consecutive failures. Refresh the page to retry.');
+                    return;
+                }
                 setTimeout(connectSSE, Math.min(retryDelay, 30000));
                 retryDelay *= 2;
             };
