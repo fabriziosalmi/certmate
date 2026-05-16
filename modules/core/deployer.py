@@ -398,8 +398,23 @@ class DeployManager:
         # Strip out whitelisted env var references before applying the
         # dangerous-pattern check. CertMate injects these into the hook
         # environment (see _run_hook), so they're safe to reference.
-        # Both $CERTMATE_FOO and ${CERTMATE_FOO} forms are allowed.
-        _safe_vars = re.compile(r'\$\{?CERTMATE_[A-Z_]+\}?')
+        # Two exact forms are allowed:
+        #   $CERTMATE_FOO        (no braces)
+        #   ${CERTMATE_FOO}      (braces with name and immediate close)
+        # The previous regex `\$\{?CERTMATE_[A-Z_]+\}?` accepted partial
+        # brace forms — `${CERTMATE_FOO` (no close) and `${CERTMATE_FOO}`
+        # were both matched — which let an attacker smuggle bash parameter
+        # expansion operators past the validator:
+        #   ${CERTMATE_FOO:-/etc/passwd}    -> opens any path at runtime
+        #   ${CERTMATE_FOO:+anything}       -> conditional substitution
+        #   ${CERTMATE_FOO//a/b}            -> in-string substitution
+        # All three matched the old safe_vars (stripping `${CERTMATE_FOO`)
+        # and left only `:-/etc/passwd}` etc., which contains no metachar
+        # the dangerous regex catches. By requiring the closing brace
+        # IMMEDIATELY after the variable name, none of these forms are
+        # ever substituted; the dangerous-shell rule `\$\{` then catches
+        # them and the command is rejected.
+        _safe_vars = re.compile(r'\$CERTMATE_[A-Z_]+|\$\{CERTMATE_[A-Z_]+\}')
         sanitized = _safe_vars.sub('__SAFE__', command)
 
         # Block shell metacharacters that enable code injection.
