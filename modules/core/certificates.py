@@ -357,8 +357,18 @@ class CertificateManager:
 
 
 
-    def get_certificate_info(self, domain):
-        """Get certificate information for a domain"""
+    def get_certificate_info(self, domain, settings=None):
+        """Get certificate information for a domain.
+
+        ``settings`` is an optional pre-loaded settings dict. Callers
+        that already have settings in hand (notably check_renewals,
+        which iterates 100s of domains in a background job) should
+        pass it in to skip the per-domain load_settings call inside
+        this method and _parse_certificate_info — outside a Flask
+        request context the request-scoped cache does not apply, so
+        without this parameter the renewal job hit disk once per
+        domain for the same settings.json.
+        """
         if not domain:
             return None
         
@@ -395,16 +405,18 @@ class CertificateManager:
             logger.debug(f"Found DNS provider '{dns_provider}' in metadata for {domain}")
         
         if not dns_provider:
-            # Fall back to current settings
-            settings = self.settings_manager.load_settings()
+            # Fall back to current settings. Reuse the caller-supplied dict
+            # when present (renewal job) to avoid reloading from disk.
+            if settings is None:
+                settings = self.settings_manager.load_settings()
             dns_provider = self.settings_manager.get_domain_dns_provider(domain, settings)
             logger.debug(f"Using DNS provider '{dns_provider}' from settings for {domain}")
-        
+
         # Read certificate file and parse info
         try:
             with open(cert_file, 'rb') as f:
                 cert_content = f.read()
-            return self._parse_certificate_info(domain, cert_content, metadata)
+            return self._parse_certificate_info(domain, cert_content, metadata, settings=settings)
         except Exception as e:
             logger.error(f"Failed to read certificate file for {domain}: {e}")
             return self._create_empty_cert_info(domain)
@@ -424,8 +436,13 @@ class CertificateManager:
                 continue
         raise ValueError(f"Unable to parse certificate date: {date_str!r}")
 
-    def _parse_certificate_info(self, domain, cert_content, metadata=None):
-        """Parse certificate information from certificate content"""
+    def _parse_certificate_info(self, domain, cert_content, metadata=None, settings=None):
+        """Parse certificate information from certificate content.
+
+        ``settings`` mirrors the get_certificate_info parameter: callers
+        that pre-loaded settings (renewal job) pass it in to skip the
+        per-domain reload from disk.
+        """
         if metadata is None:
             metadata = {}
 
@@ -433,7 +450,8 @@ class CertificateManager:
         domain_alias = metadata.get('domain_alias')
         alias_dns_provider = metadata.get('alias_dns_provider')
         san_domains = metadata.get('san_domains') or []
-        settings = self.settings_manager.load_settings()
+        if settings is None:
+            settings = self.settings_manager.load_settings()
         if not dns_provider:
             # Fall back to current settings
             dns_provider = self.settings_manager.get_domain_dns_provider(domain, settings)
@@ -1065,7 +1083,12 @@ class CertificateManager:
                     logger.info(f"Skipping renewal for {domain}: auto_renew disabled for this certificate")
                     continue
 
-                cert_info = self.get_certificate_info(domain)
+                # Pass the once-loaded settings into get_certificate_info so
+                # the per-domain disk reload (which the request-scoped cache
+                # cannot help with — this is a background job, no flask.g)
+                # is avoided. For a 1000-domain renewal job that's 1000
+                # redundant settings.json reads collapsed to one.
+                cert_info = self.get_certificate_info(domain, settings=settings)
 
                 if cert_info and cert_info.get('needs_renewal'):
                     logger.info(f"Renewing certificate for {domain}")
