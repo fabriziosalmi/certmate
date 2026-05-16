@@ -1601,6 +1601,18 @@
         });
     }
 
+    // Show RSA key-size picker only when the operator chose RSA, ECDSA curve
+    // picker only when they chose ECDSA. Leaving "Use global default" hides
+    // both — the form then sends no key fields and the backend inherits the
+    // configured default.
+    function toggleCertKeyOptions() {
+        var keyType = document.getElementById('cert_key_type').value;
+        var sizeEl = document.getElementById('cert_key_size_container');
+        var curveEl = document.getElementById('cert_elliptic_curve_container');
+        if (sizeEl) sizeEl.style.display = (keyType === 'rsa') ? '' : 'none';
+        if (curveEl) curveEl.style.display = (keyType === 'ecdsa') ? '' : 'none';
+    }
+
     // Create certificate
     var isCreatingCert = false;
     document.getElementById('createCertForm').addEventListener('submit', function (e) {
@@ -1697,6 +1709,18 @@
         }
         if (dnsAliasDomain) {
             requestBody.domain_alias = dnsAliasDomain;
+        }
+
+        // Optional key-shape override. Only sent when the operator picked a
+        // non-default value, so an empty selector inherits the global default
+        // configured in Settings.
+        var certKeyType = (document.getElementById('cert_key_type') || {}).value;
+        if (certKeyType === 'rsa') {
+            requestBody.key_type = 'rsa';
+            requestBody.key_size = parseInt(document.getElementById('cert_key_size').value, 10);
+        } else if (certKeyType === 'ecdsa') {
+            requestBody.key_type = 'ecdsa';
+            requestBody.elliptic_curve = document.getElementById('cert_elliptic_curve').value;
         }
 
         fetch('/api/certificates/create', {
@@ -2186,6 +2210,7 @@
     window.invalidateAllCache = invalidateAllCache;
     window.checkAllDeploymentStatuses = checkAllDeploymentStatuses;
     window.toggleAdvancedOptions = toggleAdvancedOptions;
+    window.toggleCertKeyOptions = toggleCertKeyOptions;
     window.toggleDnsProviderVisibility = toggleDnsProviderVisibility;
     window.updateAccountSelection = updateAccountSelection;
     window.updateCAProviderInfo = updateCAProviderInfo;
