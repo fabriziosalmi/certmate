@@ -36,6 +36,32 @@ _login_attempts_by_user = defaultdict(list)
 _LOGIN_RATE_LIMIT_USER = 10
 _LOGIN_RATE_WINDOW_USER = 300  # seconds (5 minutes)
 
+# Soft caps on the rate-limit bucket dicts. Per-IP attempts are bounded by
+# _LOGIN_RATE_LIMIT_IP (the rate-limit kicks in at 5 attempts/min), so each
+# list is tiny — but the DICT itself acquires one entry per unique IP that
+# ever attempted, even after the window passed and the list was trimmed to
+# []. A botnet rotating through millions of source IPs would grow the dict
+# unbounded. The sweep below drops empty buckets when the dict crosses the
+# soft cap; non-empty buckets stay (those are active rate-limit windows).
+_MAX_TRACKED_IPS = 10000
+_MAX_TRACKED_USERS = 10000
+
+
+def _sweep_empty_buckets():
+    """Drop dict entries whose attempt list has been trimmed to empty.
+
+    Called opportunistically from _check_login_rate_limit when either dict
+    crosses its soft cap. O(n) one-time scan; the work is at most O(cap)
+    since we never let the dicts grow past 2x cap before sweeping again.
+    """
+    if len(_login_attempts_by_ip) > _MAX_TRACKED_IPS:
+        for k in [k for k, v in list(_login_attempts_by_ip.items()) if not v]:
+            del _login_attempts_by_ip[k]
+    if len(_login_attempts_by_user) > _MAX_TRACKED_USERS:
+        for k in [k for k, v in list(_login_attempts_by_user.items()) if not v]:
+            del _login_attempts_by_user[k]
+
+
 # Domain name validation pattern
 _DOMAIN_RE = re.compile(r'^(\*\.)?([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$')
 
@@ -57,6 +83,10 @@ def _check_login_rate_limit(ip_address, username=None):
     that don't pass it skip the per-username bucket (used by tests
     and existing callers during the migration window).
     """
+    # Cheap O(1) check; the actual sweep only runs when the dict crossed
+    # its soft cap. Keeps the dicts bounded under botnet IP rotation.
+    _sweep_empty_buckets()
+
     now = time()
     retry_after = None
 
