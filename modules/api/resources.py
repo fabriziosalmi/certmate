@@ -8,6 +8,7 @@ import re
 import socket
 import ssl
 import tempfile
+import time
 import zipfile
 import os
 import io
@@ -67,8 +68,35 @@ def _certificate_fingerprint(cert_bytes):
     return cert.fingerprint(hashes.SHA256()).hex()
 
 
-def _probe_https_certificate(domain, timeout=5):
-    """Return the live TLS certificate for a domain, if reachable."""
+def _tls_probe_timeout_seconds():
+    """Read CERTMATE_TLS_PROBE_TIMEOUT_SECONDS, clamped to [1, 30]. Default 3s.
+
+    Each probe blocks one Flask worker thread for up to this many seconds on
+    an unreachable host. Lower = workers free up faster; higher = fewer false
+    negatives on legitimately-slow targets. The default of 3s is a deliberate
+    drop from the previous 5s — production /api/certificates dashboards that
+    surface deployment status for ~50 domains can otherwise stall an
+    operator-facing handler for tens of seconds when several targets are
+    down.
+    """
+    raw = os.getenv('CERTMATE_TLS_PROBE_TIMEOUT_SECONDS', '').strip()
+    if not raw:
+        return 3.0
+    try:
+        value = float(raw)
+    except ValueError:
+        return 3.0
+    return max(1.0, min(value, 30.0))
+
+
+def _probe_https_certificate(domain, timeout=None):
+    """Return the live TLS certificate for a domain, if reachable.
+
+    timeout=None reads CERTMATE_TLS_PROBE_TIMEOUT_SECONDS via the helper above
+    so deployments can tune the per-probe budget without touching the code.
+    """
+    if timeout is None:
+        timeout = _tls_probe_timeout_seconds()
     host = domain[2:] if domain.startswith('*.') else domain
     context = ssl.create_default_context()
     # We intentionally disable PKI validation here. The goal is to compare the
@@ -77,13 +105,29 @@ def _probe_https_certificate(domain, timeout=5):
     context.check_hostname = False
     context.verify_mode = ssl.CERT_NONE
 
-    with socket.create_connection((host, 443), timeout=timeout) as raw_sock:
-        with context.wrap_socket(raw_sock, server_hostname=host) as tls_sock:
-            cert_bytes = tls_sock.getpeercert(binary_form=True)
-            return {
-                'reachable': True,
-                'certificate_bytes': cert_bytes,
-            }
+    started = time.monotonic()
+    try:
+        with socket.create_connection((host, 443), timeout=timeout) as raw_sock:
+            with context.wrap_socket(raw_sock, server_hostname=host) as tls_sock:
+                cert_bytes = tls_sock.getpeercert(binary_form=True)
+                return {
+                    'reachable': True,
+                    'certificate_bytes': cert_bytes,
+                }
+    finally:
+        # A probe that takes more than 1s is a strong hint the target is slow
+        # or unreachable. Surfacing it in the application log lets an operator
+        # spot the offending domain without reproducing a multi-second
+        # dashboard stall — and lets them tune CERTMATE_TLS_PROBE_TIMEOUT_SECONDS
+        # if the slowness is real but expected.
+        elapsed = time.monotonic() - started
+        if elapsed > 1.0:
+            logger.warning(
+                "Slow TLS probe for %s: %.2fs (timeout=%.1fs). "
+                "Consider lowering CERTMATE_TLS_PROBE_TIMEOUT_SECONDS to "
+                "free Flask workers faster.",
+                host, elapsed, timeout,
+            )
 
 
 logger = logging.getLogger(__name__)
