@@ -69,6 +69,12 @@ class FileOperations:
 
     def safe_file_write(self, file_path, data, is_json=True):
         """Safely write data to a file with proper error handling and atomic operations"""
+        # Initialise the cleanup target before any code that could raise. If
+        # mkstemp() (below) fails — disk full, parent dir unwritable, sandbox
+        # restriction — control jumps straight to one of the except blocks
+        # where `temp_file.exists()` would otherwise raise UnboundLocalError
+        # and mask the original OSError from the operator log.
+        temp_file = None
         try:
             # Validate file path to prevent path traversal
             file_path = Path(file_path).resolve()
@@ -110,14 +116,13 @@ class FileOperations:
             
         except (PermissionError, OSError) as e:
             logger.error(f"Error writing file {file_path}: {e}")
-            # Clean up temp file if it exists
-            if temp_file.exists():
+            # Clean up temp file if it was created before the failure.
+            if temp_file is not None and temp_file.exists():
                 temp_file.unlink(missing_ok=True)
             return False
         except Exception as e:
             logger.error(f"Unexpected error writing file {file_path}: {e}")
-            # Clean up temp file if it exists
-            if temp_file.exists():
+            if temp_file is not None and temp_file.exists():
                 temp_file.unlink(missing_ok=True)
             return False
 
