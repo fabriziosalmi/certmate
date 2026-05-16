@@ -136,41 +136,46 @@ class CertificateManager:
         return status if isinstance(status, dict) else {}
 
     def record_backend_deployment_status(self, domain: str, backend_status: dict) -> dict:
-        metadata = self._load_metadata(domain)
-        deployment_status = metadata.get('deployment_status')
-        if not isinstance(deployment_status, dict):
-            deployment_status = {}
+        # Hold the per-domain lock around the read-modify-write so a concurrent
+        # record_browser_deployment_status for the same domain cannot overwrite
+        # the backend block we are about to persist (lost-write window).
+        with self._get_domain_lock(domain):
+            metadata = self._load_metadata(domain)
+            deployment_status = metadata.get('deployment_status')
+            if not isinstance(deployment_status, dict):
+                deployment_status = {}
 
-        deployment_status['backend'] = {
-            'domain': backend_status.get('domain', domain),
-            'deployed': bool(backend_status.get('deployed', False)),
-            'reachable': bool(backend_status.get('reachable', False)),
-            'certificate_match': backend_status.get('certificate_match'),
-            'method': backend_status.get('method'),
-            'timestamp': backend_status.get('timestamp') or utc_now_iso(),
-            'error': backend_status.get('error'),
-        }
+            deployment_status['backend'] = {
+                'domain': backend_status.get('domain', domain),
+                'deployed': bool(backend_status.get('deployed', False)),
+                'reachable': bool(backend_status.get('reachable', False)),
+                'certificate_match': backend_status.get('certificate_match'),
+                'method': backend_status.get('method'),
+                'timestamp': backend_status.get('timestamp') or utc_now_iso(),
+                'error': backend_status.get('error'),
+            }
 
-        metadata['deployment_status'] = deployment_status
-        self._save_metadata(domain, metadata)
-        return deployment_status
+            metadata['deployment_status'] = deployment_status
+            self._save_metadata(domain, metadata)
+            return deployment_status
 
     def record_browser_deployment_status(self, domain: str, browser_status: dict) -> dict:
-        metadata = self._load_metadata(domain)
-        deployment_status = metadata.get('deployment_status')
-        if not isinstance(deployment_status, dict):
-            deployment_status = {}
+        with self._get_domain_lock(domain):
+            metadata = self._load_metadata(domain)
+            deployment_status = metadata.get('deployment_status')
+            if not isinstance(deployment_status, dict):
+                deployment_status = {}
 
-        deployment_status['browser'] = {
-            'reachable': bool(browser_status.get('reachable', False)),
-            'checked_at': browser_status.get('checked_at') or utc_now_iso(),
-            'method': browser_status.get('method') or 'browser-fallback',
-            'source': browser_status.get('source') or 'browser',
-        }
+            deployment_status['browser'] = {
+                'reachable': bool(browser_status.get('reachable', False)),
+                'checked_at': browser_status.get('checked_at') or utc_now_iso(),
+                'method': browser_status.get('method') or 'browser-fallback',
+                'source': browser_status.get('source') or 'browser',
+            }
 
-        metadata['deployment_status'] = deployment_status
-        self._save_metadata(domain, metadata)
-        return deployment_status
+            metadata['deployment_status'] = deployment_status
+            self._save_metadata(domain, metadata)
+            return deployment_status
 
     @staticmethod
     def _create_dns_alias_hook_config(dns_provider, dns_config, domain_alias, propagation_seconds):
