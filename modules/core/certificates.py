@@ -117,7 +117,28 @@ class CertificateManager:
             with open(metadata_file, 'r', encoding='utf-8') as f:
                 metadata = json.load(f)
                 return metadata if isinstance(metadata, dict) else {}
-        except Exception as e:
+        except json.JSONDecodeError as e:
+            # The on-disk metadata is unparseable. Quarantine it before
+            # returning {} — otherwise the next _save_metadata would overwrite
+            # the only copy with an empty dict and destroy whatever was in it.
+            quarantine = metadata_file.with_suffix(
+                f'.json.corrupt-{utc_now().strftime("%Y%m%dT%H%M%SZ")}'
+            )
+            try:
+                metadata_file.rename(quarantine)
+                logger.error(
+                    f"Corrupt metadata for {domain}: {e}. "
+                    f"Quarantined to {quarantine.name}; downstream callers "
+                    f"will see an empty metadata dict until a fresh write."
+                )
+            except OSError as rename_err:
+                logger.error(
+                    f"Corrupt metadata for {domain}: {e}. "
+                    f"Could not quarantine ({rename_err}); leaving file in "
+                    f"place to avoid clobbering on next save."
+                )
+            return {}
+        except OSError as e:
             logger.warning(f"Failed to read metadata for {domain}: {e}")
             return {}
 
@@ -364,20 +385,14 @@ class CertificateManager:
             logger.info(f"Certificate file does not exist for domain: {domain}")
             return self._create_empty_cert_info(domain)
         
-        # Get DNS provider info from metadata file first, then fall back to settings
-        dns_provider = None
-        metadata_file = cert_path / "metadata.json"
-        metadata = {}
-        
-        if metadata_file.exists():
-            try:
-                import json
-                with open(metadata_file, 'r') as f:
-                    metadata = json.load(f)
-                    dns_provider = metadata.get('dns_provider')
-                    logger.debug(f"Found DNS provider '{dns_provider}' in metadata for {domain}")
-            except Exception as e:
-                logger.warning(f"Failed to read metadata for {domain}: {e}")
+        # Get DNS provider info from metadata file first, then fall back to
+        # settings. Uses the centralised _load_metadata so a corrupt JSON file
+        # gets quarantined consistently and we don't have two divergent
+        # readers handling JSONDecodeError differently.
+        metadata = self._load_metadata(domain)
+        dns_provider = metadata.get('dns_provider') if metadata else None
+        if dns_provider:
+            logger.debug(f"Found DNS provider '{dns_provider}' in metadata for {domain}")
         
         if not dns_provider:
             # Fall back to current settings
