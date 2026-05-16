@@ -45,6 +45,11 @@ class AppContainer:
         self.app = None
         self.api = None
         self.scheduler = None
+        # Snapshot of the scheduler's startup outcome. Consumed by /health so
+        # operators can detect a silent setup failure without grepping logs.
+        # Shape: {"state": "uninitialized" | "running" | "failed",
+        #         "error": str | None, "timestamp": iso-utc-str | None}
+        self.scheduler_status = {"state": "uninitialized", "error": None, "timestamp": None}
         self.managers = {}
         self.cert_dir = None
         self.data_dir = None
@@ -554,6 +559,11 @@ def setup_scheduler(container: AppContainer):
         )
         container.scheduler = scheduler
         container.managers['scheduler'] = scheduler
+        from .utils import utc_now_iso
+        container.scheduler_status = {
+            "state": "running", "error": None, "timestamp": utc_now_iso(),
+        }
+        container.managers['scheduler_status'] = container.scheduler_status
     except Exception as e:
         logger.error(f"Scheduler setup failed — automatic certificate renewal will NOT run: {e}")
         import warnings
@@ -562,6 +572,15 @@ def setup_scheduler(container: AppContainer):
             "Automatic certificate renewal is DISABLED.",
             RuntimeWarning, stacklevel=2,
         )
+        # Record the failure so /health surfaces it. Without this the only
+        # signal of a broken scheduler was a single ERROR line in the logs;
+        # operators that don't tail logs would never know automatic renewal
+        # had silently stopped working.
+        from .utils import utc_now_iso
+        container.scheduler_status = {
+            "state": "failed", "error": str(e), "timestamp": utc_now_iso(),
+        }
+        container.managers['scheduler_status'] = container.scheduler_status
 
 
 def setup_api(container: AppContainer, app):
