@@ -230,6 +230,53 @@ class SettingsManager:
         # Wired by the factory after AuthManager is constructed.
         self._token_hasher = None
 
+    # ------------------------------------------------------------------
+    # Request-scoped settings cache
+    # ------------------------------------------------------------------
+    # load_settings() is called 15+ times per typical /api/certificates
+    # request (once at the top, then again from get_certificate_info and
+    # _parse_certificate_info for every domain). Each call hit the disk,
+    # parsed JSON, ran the migration/default-fill logic, and acquired the
+    # write lock. With 50 certs the same request fired ~100 redundant
+    # full settings loads.
+    #
+    # We cache the parsed result on `flask.g` for the duration of one HTTP
+    # request. Outside a request context (scheduler, deploy worker, tests)
+    # the cache no-ops and behaviour is identical to before.
+    #
+    # save_settings/atomic_update clear the cache after a successful write
+    # so a route that loads → mutates via settings_manager → reads again
+    # sees the new values.
+    _CACHE_ATTR = '_certmate_settings_cache'
+
+    @classmethod
+    def _request_cache_get(cls):
+        try:
+            from flask import g, has_request_context
+            if has_request_context():
+                return getattr(g, cls._CACHE_ATTR, None)
+        except (ImportError, RuntimeError):
+            return None
+        return None
+
+    @classmethod
+    def _request_cache_set(cls, value):
+        try:
+            from flask import g, has_request_context
+            if has_request_context():
+                setattr(g, cls._CACHE_ATTR, value)
+        except (ImportError, RuntimeError):
+            pass
+
+    @classmethod
+    def _request_cache_clear(cls):
+        try:
+            from flask import g, has_request_context
+            if has_request_context() and hasattr(g, cls._CACHE_ATTR):
+                delattr(g, cls._CACHE_ATTR)
+        except (ImportError, RuntimeError):
+            pass
+
     def set_token_hasher(self, hasher):
         """Inject the hasher used to migrate legacy api_bearer_token to its
         hashed form on the next save. None disables migration."""
@@ -298,7 +345,20 @@ class SettingsManager:
 
         Acquires the re-entrant lock so concurrent saves cannot observe a
         half-written file or race with the migration write below.
+
+        Within a Flask request, the first call hits disk; subsequent calls
+        return a deepcopy of the cached parsed dict. The cache is cleared
+        on any successful save (atomic_update / save_settings) and lives
+        only for the current request. See `_request_cache_*` above.
         """
+        cached = self._request_cache_get()
+        if cached is not None:
+            # Deepcopy so callers that mutate the returned dict (load →
+            # mutate in place → save) don't pollute the request-scoped
+            # cache for the next reader within the same request.
+            import copy as _copy
+            return _copy.deepcopy(cached)
+
         with self._lock:
             default_settings = {
                 'cloudflare_token': '',
@@ -570,11 +630,23 @@ class SettingsManager:
                         accounts['default'] = default_account
                     default_account['api_token'] = os.getenv('CLOUDFLARE_TOKEN')
 
+                # Cache the canonical version. Return a deepcopy so the
+                # caller's in-place mutations cannot pollute the cache for
+                # subsequent readers in the same request. (See the cache-hit
+                # branch at the top of this method for the symmetric copy.)
+                self._request_cache_set(settings)
+                if self._request_cache_get() is not None:
+                    import copy as _copy
+                    return _copy.deepcopy(settings)
                 return settings
 
             except Exception as e:
                 logger.error(f"Error loading settings: {e}")
                 logger.warning("Returning default settings in-memory (existing file preserved on disk)")
+                # Don't cache the fallback default — if the next reader is
+                # called after the underlying file becomes readable, we want
+                # them to hit disk again rather than serve defaults all
+                # request long.
                 return default_settings
 
     def save_settings(self, settings, backup_reason="auto_save"):
@@ -711,6 +783,10 @@ class SettingsManager:
                 # Save settings
                 if self.file_ops.safe_file_write(self.settings_file, settings, is_json=True):
                     logger.info("Settings saved successfully")
+                    # Invalidate the request-scoped cache: a caller in the
+                    # same request that loads again must see the new values
+                    # rather than the pre-write copy stashed on flask.g.
+                    self._request_cache_clear()
                     return True
                 else:
                     logger.error("Failed to save settings")
