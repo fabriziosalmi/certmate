@@ -1,6 +1,6 @@
 # DNS Providers
 
-CertMate supports **24 DNS providers** for Let's Encrypt DNS-01 challenges through individual certbot plugins.
+CertMate supports a wide range of DNS providers for Let's Encrypt DNS-01 challenges through individual certbot plugins. The full list is in the table below.
 
 ---
 

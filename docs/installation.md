@@ -99,7 +99,7 @@ brew install python3 openssl libffi
 
 ## DNS Provider Setup
 
-After installation, configure your DNS provider credentials. See the [DNS Providers Guide](./dns-providers.md) for detailed setup instructions for all 22 supported providers.
+After installation, configure your DNS provider credentials. See the [DNS Providers Guide](./dns-providers.md) for detailed setup instructions for every supported provider.
 
 Quick setup for common providers:
 

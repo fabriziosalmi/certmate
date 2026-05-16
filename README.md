@@ -31,7 +31,7 @@
 CertMate solves the complexity of SSL certificate management in modern distributed architectures. Whether you're running a single application or managing certificates across multiple datacenters, CertMate provides:
 
 - **Zero-Downtime Automation** - Certificates renew automatically 30 days before expiry, with deploy hooks to reload services
-- **Multi-Cloud Support** - Works with **23 DNS providers** (Cloudflare, AWS, Azure, GCP, Akamai Edge DNS, Hetzner, Porkbun, GoDaddy, and more)
+- **Multi-Cloud Support** - Works with two dozen+ DNS providers (Cloudflare, AWS, Azure, GCP, Akamai Edge DNS, Hetzner, Porkbun, GoDaddy, and more — see [docs/dns-providers.md](docs/dns-providers.md) for the full list)
 - **Enterprise-Ready** - RBAC, scoped API keys, Docker, Kubernetes, REST API, and monitoring built-in
 - **Simple Integration** - One-URL certificate downloads for easy automation
 - **Security-First** - Role-based access control, scoped API keys, audit logging, HMAC-signed webhooks
@@ -127,7 +127,7 @@ CertMate solves the complexity of SSL certificate management in modern distribut
 
 ## Supported DNS Providers
 
-CertMate supports **23 DNS providers** through Let's Encrypt DNS-01 challenge via individual certbot plugins that provide reliable, well-tested DNS challenge support. **Multi-account support** is available for major providers, enabling enterprise-grade deployments with separate accounts for production, staging, and disaster recovery.
+CertMate supports a wide range of DNS providers through Let's Encrypt DNS-01 challenge via individual certbot plugins that provide reliable, well-tested DNS challenge support. The complete list is in the table below. **Multi-account support** is available for major providers, enabling enterprise-grade deployments with separate accounts for production, staging, and disaster recovery.
 
 | Provider               | Credentials Required          | Multi-Account | Use Case                        | Status     |
 | ---------------------- | ----------------------------- | ------------- | ------------------------------- | ---------- |
@@ -2294,7 +2294,7 @@ curl -sS -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/diagnostics
 | -------------------------------------------------- | ----------------------------------- | --------------------- |
 | **[README.md](README.md)**                         | Main documentation and quick start  | All users             |
 | **[docs/installation.md](docs/installation.md)**   | Installation and deployment         | System administrators |
-| **[docs/dns-providers.md](docs/dns-providers.md)** | DNS provider setup (22 providers)   | DevOps engineers      |
+| **[docs/dns-providers.md](docs/dns-providers.md)** | DNS provider setup                  | DevOps engineers      |
 | **[docs/ca-providers.md](docs/ca-providers.md)**   | Certificate Authority configuration | Enterprise users      |
 | **[docs/docker.md](docs/docker.md)**               | Docker and multi-platform builds    | DevOps engineers      |
 | **[docs/testing.md](docs/testing.md)**             | Testing framework and CI/CD         | Developers            |
