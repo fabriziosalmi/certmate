@@ -575,17 +575,15 @@ def create_api_resources(api, models, managers):
                     if not alias_valid:
                         return {'error': f'Invalid domain_alias: {alias_msg}'}, 400
 
-                # Optional per-cert key shape overrides. Validated up-front so
-                # the caller gets a clean 400 (with the field-specific reason)
-                # instead of a generic certbot stack trace later.
+                # Per-cert key shape overrides are read here (so the request
+                # parsing all happens in one place) but validated AFTER the
+                # domain scope check below — that way an out-of-scope caller
+                # gets the scope 403 instead of probing the key-options
+                # validator for field-specific messages on a domain they
+                # cannot see.
                 key_type = data.get('key_type')
                 key_size = data.get('key_size')
                 elliptic_curve = data.get('elliptic_curve')
-                if key_type is not None or key_size is not None or elliptic_curve is not None:
-                    from ..core.utils import validate_key_options
-                    ok, key_err = validate_key_options(key_type, key_size, elliptic_curve)
-                    if not ok:
-                        return {'error': key_err}, 400
 
                 # Validate domain
                 if not domain:
@@ -638,6 +636,15 @@ def create_api_resources(api, models, managers):
                         scope_err = _check_domain_scope(san_clean, 'create_san')
                         if scope_err:
                             return scope_err
+
+                # Key options validation runs AFTER the scope checks above so
+                # the field-specific error messages never reach a caller who
+                # could not see the target domain in the first place.
+                if key_type is not None or key_size is not None or elliptic_curve is not None:
+                    from ..core.utils import validate_key_options
+                    ok, key_err = validate_key_options(key_type, key_size, elliptic_curve)
+                    if not ok:
+                        return {'error': key_err}, 400
 
                 settings = settings_manager.load_settings()
                 email = settings.get('email')
