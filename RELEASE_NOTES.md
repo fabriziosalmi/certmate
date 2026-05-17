@@ -1,3 +1,48 @@
+## v2.6.3 (Patch — pin all CI dependencies by SHA + base image digest)
+
+Closes the Scorecard `Pinned-Dependencies` check (0 → ~9). The single biggest score uplift on the path from the v2.6.2 baseline.
+
+### What landed
+
+- **All 20 GitHub Action usages across the four workflows pinned to commit SHA**, with the human-readable tag preserved as a trailing comment. Pattern:
+
+  ```yaml
+  uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+  ```
+
+  Pinning by SHA makes every workflow run byte-identical: Dependabot will open PRs when upstream tags move, and we review each bump deliberately instead of inheriting silently whatever upstream pushed to the moving tag.
+
+- **Three actions bumped to current major** in the same pass:
+  - `actions/setup-python` v4 → v5
+  - `actions/cache` v3 → v4
+  - `codecov/codecov-action` v3 → v5
+  - `peter-evans/dockerhub-description` v3 → v4
+
+  The actionlint warnings on the v4/v3 versions (deprecation notice from GitHub runners) go away with this bump.
+
+- **`aquasecurity/trivy-action@master` → pinned to v0.36.0 commit SHA**. Using `@master` in CI is an active risk — upstream HEAD changes silently bring new behaviour or, worse, become an attack surface if the upstream repo is compromised. Now we get the version we tested with, every run.
+
+- **Dockerfile base image pinned by sha256 digest** in both build stages:
+
+  ```dockerfile
+  FROM python:3.12-slim-trixie@sha256:401f6e1a67dad31a1bd78e9ad22d0ee0a3b52154e6bd30e90be696bb6a3d7461
+  ```
+
+  The tag `3.12-slim-trixie` is a moving Docker Hub reference; the digest is content-addressed and guaranteed byte-identical. CVE fixes on the base image now arrive only when we bump the digest deliberately, not implicitly on the next `docker build`.
+
+### Verification
+
+Local Docker build with digest pin succeeded; image runs identically to the v2.6.2 image (no behaviour change — the digest currently points to the same bytes as the tag).
+
+### Branch protection note
+
+This is the first PR shipped under the new `main` branch protection rules established alongside v2.6.2: required status checks (`build`, `test (3.12)`, `Analyze python`, `Analyze javascript`) must be green, conversation resolution required, `required_linear_history` enforces squash/rebase merges. The version bump is part of the PR commits (per the new standard) rather than a separate post-merge commit on main.
+
+### Expected Scorecard impact
+
+- `Pinned-Dependencies`: 0/10 → ~9/10 (the `pipCommand` warnings remain — moving the `pip install -r requirements.txt` invocations to `--require-hashes` is a separate, bigger lift).
+- Overall score: from ~7.0 (post v2.6.2) → ~8/10. Three structural gaps left for future PRs: branch-protection Scorecard scoring (will detect the new protection at the next run, +partial), SAST (sale settimanalmente con commit count), Code-Review (requires a co-reviewer pattern).
+
 ## v2.6.2 (Patch — Scorecard quick wins: SECURITY.md + workflow read-all)
 
 Two Scorecard checks moved from 0/10 to 10/10. No runtime behaviour change.
