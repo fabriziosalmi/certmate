@@ -749,7 +749,21 @@ class AzureKeyVaultBackend(CertificateStorageBackend):
             if secrets_result is not None and cert_update is not None:
                 cert_files, metadata, secrets_update = secrets_result
                 if secrets_update is not None and cert_update > secrets_update:
-                    return self._get_cert_importer().export_certificate(domain)
+                    # Cert API claims a fresher copy than Secrets. Try to
+                    # serve it, but if the export fails for any reason
+                    # (companion Secret deleted manually, base64 garbage,
+                    # PFX parse error — all paths return None from
+                    # export_certificate), fall back to the older Secrets
+                    # snapshot we already loaded. Returning None here would
+                    # force callers to refetch from ACME unnecessarily.
+                    exported = self._get_cert_importer().export_certificate(domain)
+                    if exported is not None:
+                        return exported
+                    logger.warning(
+                        f"Azure KV both-mode: Certificate API claims a fresher "
+                        f"copy of {domain} but export_certificate returned "
+                        f"None; falling back to older Secrets snapshot."
+                    )
                 if not metadata:
                     metadata = self._get_cert_importer().get_metadata_tags(domain)
                 return cert_files, metadata
