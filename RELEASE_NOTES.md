@@ -1,3 +1,14 @@
+## v2.6.2 (Patch — Scorecard quick wins: SECURITY.md + workflow read-all)
+
+Two Scorecard checks moved from 0/10 to 10/10. No runtime behaviour change.
+
+### What landed
+
+- **`SECURITY.md`**: closes Scorecard `Security-Policy` (0 → 10). Declares the supported version line (latest minor only — `2.6.x` today, retired the day `2.7.0` ships), reporting channels (**GitHub Private Vulnerability Reporting** as the recommended path, **fabrizio.salmi@gmail.com** as fallback), response SLAs (72h acknowledgement, 7d triage, 30d fix for high/critical), in/out-of-scope boundaries, and coordinated-disclosure expectations. Private Vulnerability Reporting has been enabled on the repository so the advisory form is live.
+- **`permissions: read-all` top-level** on `ci.yml` + `docker-multiplatform.yml`: closes Scorecard `Token-Permissions` (0 → 10). The two pre-existing workflows that silently inherited the repo default now declare read-only at the workflow level. Neither needs write — coverage upload goes through `codecov-action`'s own auth, Docker push uses `DOCKERHUB_TOKEN`, not `GITHUB_TOKEN`. The two workflows shipped in v2.6.1 already followed this pattern.
+
+Expected next Scorecard run: 5.6 → ~7.0.
+
 ## v2.6.1 (Patch — trust-signal upgrade: Scorecard, CodeQL, Codecov)
 
 Phase 1 of a "serious project" trust-signal pass. Three atomic CI/docs commits, no runtime behaviour change.
