@@ -1,11 +1,25 @@
-## Unreleased — Azure Key Vault native Certificate-object storage mode (PR #139)
+## v2.6.0 (Minor — Azure Key Vault native Certificate-object storage mode)
 
-### Features
-- **Azure Key Vault stale read detection in `both` mode**: the two storage surfaces (Secrets and Certificate objects) can diverge when a renewal succeeds on one surface but fails on the other. `retrieve_certificate` now compares the `updated_on` timestamps of both surfaces and returns whichever is freshest, preventing stale reads from surface skew.
-- **Azure Key Vault Certificate-object support**: the Azure Key Vault storage backend can now persist certificates as native `Certificate` objects (PKCS12) in addition to — or instead of — the existing per-PEM Secrets layout. The mode is controlled by `certificate_storage.azure_keyvault.storage_mode` (`secrets` / `certificate` / `both`, default `secrets` for backwards compatibility). Certificates imported in `certificate` or `both` mode get `issuer_name="Unknown"` so Key Vault does not try to renew them — CertMate stays the source of truth — and carry domain/DNS-provider/email/etc. metadata as tags. Native Certificate objects unlock direct binding from App Service, Application Gateway, Front Door, API Management and AKS Ingress without exporting/importing PFX manually. A new admin-only endpoint `POST /api/storage/azure-keyvault/backfill-certificates` (and a "Backfill Certificate objects" button in Settings → Storage) imports Certificate objects for existing Secrets-only domains, skipping any already imported. The backfill endpoint accepts an optional `?limit=N` query parameter that caps how many domains it processes per call — large vaults can paginate by calling repeatedly until the response reports `remaining: 0`. The Service Principal needs Certificates `Get/List/Import/Delete` in addition to its previous Secrets permissions in `certificate`/`both` mode.
+Community contribution from [@rocogamer](https://github.com/rocogamer) (PR #139, clean rebase of #118). Adds a configurable `storage_mode` to the Azure Key Vault storage backend so it can persist certificates as native `Certificate` objects (PKCS12, `issuer_name="Unknown"`) in addition to — or instead of — the existing per-PEM Secrets layout. Native Certificate objects bind directly from Azure App Service, Application Gateway, Front Door, API Management and AKS Ingress without manual PFX export.
 
-### Bug Fixes
-- **CRC-aware secret domain listing in Azure Key Vault**: the regex filter in `_list_secret_domains` was `endswith('-metadata')`, which never matched any secret in production because `_sanitize_secret_name` always appends an 8-char CRC32 suffix. Anchored the regex to `^cert-.+-metadata-[0-9a-f]{8}$`. Without this fix, `list_certificates()` and the backfill endpoint would walk an empty domain list for every Azure Key Vault backend, silently showing zero certificates in the list view.
+### What landed
+
+- **`storage_mode: secrets`** (default) — current per-PEM Secrets layout, fully backwards-compatible. Existing installs see zero behaviour change after upgrade.
+- **`storage_mode: certificate`** — single Certificate object per domain. Metadata (domain, DNS provider, email, etc.) stored as tags on the Certificate object. `issuer_name="Unknown"` so Key Vault never tries to renew — CertMate stays the source of truth.
+- **`storage_mode: both`** — writes to both surfaces. Reads compare `updated_on` timestamps and return the freshest copy (stale-read detection across surface skew when a renewal succeeds on one surface but fails on the other).
+- **New admin endpoint** `POST /api/storage/azure-keyvault/backfill-certificates` (and a "Backfill Certificate objects" button in Settings → Storage) imports Certificate objects for existing Secrets-only domains. Idempotent: already-imported domains are reported as `skipped`. Accepts `?limit=N` to cap how many domains are processed per call; response includes a `remaining` count for paginating large vaults.
+- **CRC-aware secret domain listing**: bug-fix bundled in the same PR. The regex in `_list_secret_domains` was `endswith('-metadata')`, which never matched any secret in production because `_sanitize_secret_name` always appends an 8-char CRC32 suffix. Anchored to `^cert-.+-metadata-[0-9a-f]{8}$`. Pre-existing Azure KV backends were silently walking an empty domain list — `list_certificates()` and the backfill endpoint had no effect — without this fix.
+- **40 unit tests added** in `tests/test_azure_keyvault_certificate_storage.py` covering build_pfx round-trip, store/retrieve/delete routing across all three modes, tag truncation, metadata round-trip, surface-independence contracts, and settings migration. 38 pass + 2 skip cleanly when `azure-keyvault-certificates` SDK is not installed.
+
+### Permissions
+
+In `certificate` or `both` mode the Service Principal needs Certificates `Get/List/Import/Delete` in addition to its previous Secrets permissions. See `docs/architecture.md` for the full permissions table and the security note on Secrets/Get exposure (importing a Certificate object auto-creates a Secret containing the full PFX).
+
+### Verification
+
+Pre-merge: full test suite green on the merge-with-main tree — 97 passed, 1 skipped, 2 pre-existing xfail (docker + Playwright + Cloudflare real-cert lifecycle). Azure KV unit tests: 38 pass + 2 skip as designed.
+
+Follow-ups from review tracked separately — 1 minor graceful-degradation gap in `both`-mode retrieve fallback + 1 metadata-delete silence, no shipping behaviour affected.
 
 ## v2.5.5 (Minor — configurable cert key type/size, RSA + ECDSA)
 
