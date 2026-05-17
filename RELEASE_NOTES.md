@@ -1,3 +1,27 @@
+## v2.6.1 (Patch — trust-signal upgrade: Scorecard, CodeQL, Codecov)
+
+Phase 1 of a "serious project" trust-signal pass. Three atomic CI/docs commits, no runtime behaviour change.
+
+### What landed
+
+- **OSSF Scorecard workflow** (`.github/workflows/scorecard.yml`): runs `ossf/scorecard-action` on every main push, weekly cron, and manual dispatch. Publishes to scorecard.dev so the README badge renders the live score. SARIF uploaded to the Security tab. Permissions scoped per-job (`security-events: write`, `id-token: write`); workflow default stays `read-all`.
+- **CodeQL SAST workflow** (`.github/workflows/codeql.yml`): analyses python and javascript on every main push + PR + weekly cron. Uses the `security-extended` query suite. Findings land in the Security tab via `github/codeql-action/analyze`. Default-setup was `not-configured` — this PR wires it up explicitly so the analysis is reproducible and reviewable.
+- **README badges**: CodeQL, OSSF Scorecard, Codecov. The CI workflow already uploaded coverage via `codecov/codecov-action@v3` — the badge surfaces a number that was already being computed but invisible. Placed in the engineering-signal cluster next to CI / Build Multi-Platform, before the promo badges.
+
+### Out of scope (Phase 2)
+
+SLSA Provenance Level 3 on the Docker images pushed by `docker-multiplatform.yml` (cryptographic attestation that the image came from this exact source). Deferred to its own PR — the release path needs its own review window.
+
+### Follow-ups for the Scorecard score
+
+Initial score will likely sit around 6-7/10. Known gaps that the workflow will flag:
+
+- **Pinned-Dependencies**: action versions are pinned to major tags (`@v4`, `@v3`), not SHAs. Tightening to SHA across all workflows is the biggest single uplift.
+- **Branch-Protection**: `main` has no required reviews / required status checks configured at the repo level.
+- **Token-Permissions**: pre-existing workflows (`ci.yml`, `docker-multiplatform.yml`) don't declare `permissions:` blocks. New workflows in this PR do.
+
+These are tracked separately and not blocking — the workflow lands first so we have a baseline measurement.
+
 ## v2.6.0 (Minor — Azure Key Vault native Certificate-object storage mode)
 
 Community contribution from [@rocogamer](https://github.com/rocogamer) (PR #139, clean rebase of #118). Adds a configurable `storage_mode` to the Azure Key Vault storage backend so it can persist certificates as native `Certificate` objects (PKCS12, `issuer_name="Unknown"`) in addition to — or instead of — the existing per-PEM Secrets layout. Native Certificate objects bind directly from Azure App Service, Application Gateway, Front Door, API Management and AKS Ingress without manual PFX export.
