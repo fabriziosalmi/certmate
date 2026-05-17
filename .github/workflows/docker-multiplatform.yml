@@ -23,6 +23,12 @@ env:
   REGISTRY: docker.io
   IMAGE_NAME: certmate
 
+# Default to read-only. The build job authenticates to Docker Hub via the
+# DOCKERHUB_TOKEN secret, not the workflow GITHUB_TOKEN, so no write
+# permission on the repo is needed for the push. If we ever add SLSA
+# attestation here (Phase 2), `id-token: write` lands at the job level.
+permissions: read-all
+
 jobs:
   build:
     runs-on: ubuntu-latest
