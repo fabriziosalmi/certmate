@@ -560,6 +560,35 @@ class TestDeleteCertificateRouting:
 
         assert backend.delete_certificate("test.example.com") is False
 
+    def test_delete_secrets_metadata_failure_flags_surface_as_failed(self, vault_config):
+        """Closes the MINOR finding from the v2.6.0 review: a failure to
+        delete the metadata secret must flip _delete_secrets to return
+        False, so the outer delete_certificate reports the partial
+        failure. Previously a metadata-delete exception was only
+        debug-logged and the surface returned True, which would leave
+        a stale metadata secret behind and mislead the next
+        list_certificates / backfill pass into thinking the domain
+        still existed."""
+        from modules.core.storage_backends import AzureKeyVaultBackend
+        backend = AzureKeyVaultBackend({**vault_config, "storage_mode": "secrets"})
+
+        secret_client = MagicMock()
+
+        def delete_side_effect(secret_name):
+            if "metadata" in secret_name:
+                raise RuntimeError("metadata delete failed (e.g. soft-delete pending)")
+            # Per-PEM deletions succeed.
+            return None
+
+        secret_client.begin_delete_secret.side_effect = delete_side_effect
+        backend._client = secret_client
+
+        assert backend._delete_secrets("flagged.example.com") is False, (
+            "Metadata-delete failure must flag the surface as not cleanly deleted"
+        )
+        # The walk still attempted every PEM + the metadata: 4 + 1 = 5 calls.
+        assert secret_client.begin_delete_secret.call_count == 5
+
 
 # ---------------------------------------------------------------------------
 # certificate_exists across modes
@@ -816,6 +845,54 @@ class TestRetrieveBothMode:
         _, metadata = result
         assert metadata["version"] == "new"
         importer.export_certificate.assert_not_called()
+
+    def test_both_mode_cert_newer_but_export_fails_falls_back_to_secrets(self, vault_config, caplog):
+        """Closes the MAJOR finding from the v2.6.0 review: when the
+        Certificate API claims a fresher copy than Secrets but
+        export_certificate returns None (companion Secret deleted, PFX
+        parse error, b64 garbage — every failure path inside export_
+        certificate returns None), the older Secrets snapshot must still
+        be returned rather than propagating None. Otherwise a fully
+        intact Secrets copy is silently discarded and the caller is
+        forced into a needless ACME refetch."""
+        from modules.core.storage_backends import AzureKeyVaultBackend
+        backend = AzureKeyVaultBackend({**vault_config, "storage_mode": "both"})
+
+        secret_client = MagicMock()
+        secrets_ts = datetime.datetime(2026, 1, 1, 0, 0, 0)
+
+        def get_secret(name):
+            secret = MagicMock()
+            secret.properties.updated_on = secrets_ts
+            if "metadata" in name:
+                secret.value = json.dumps({"domain": "fallback.example.com", "version": "older-but-intact"})
+            else:
+                secret.value = "OLDER-PEM"
+            return secret
+
+        secret_client.get_secret.side_effect = get_secret
+        backend._client = secret_client
+
+        cert_ts = datetime.datetime(2026, 6, 1, 0, 0, 0)
+        importer = MagicMock()
+        importer.get_certificate_update_time.return_value = cert_ts
+        importer.export_certificate.return_value = None  # the regression-prone path
+        backend._cert_importer = importer
+
+        result = backend.retrieve_certificate("fallback.example.com")
+        assert result is not None, (
+            "Older-but-intact Secrets snapshot must be returned when "
+            "the fresher Certificate-API export fails"
+        )
+        _, metadata = result
+        assert metadata["version"] == "older-but-intact"
+        # Sanity: export was tried before the fallback fired.
+        importer.export_certificate.assert_called_once_with("fallback.example.com")
+        # A warning must surface so the operator can investigate the skew.
+        assert any(
+            "fresher copy" in rec.message and "fallback" in rec.message.lower()
+            for rec in caplog.records
+        ), "Expected a warning explaining the fallback path"
 
 
 # ---------------------------------------------------------------------------
