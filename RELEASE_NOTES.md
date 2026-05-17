@@ -1,3 +1,15 @@
+## v2.6.7 (Patch — close #194: Azure Key Vault both-mode robustness + delete contract)
+
+Closes the follow-up issue [#194](https://github.com/fabriziosalmi/certmate/issues/194) raised against PR #139 / v2.6.0. Three commits: two narrow fixes on the Azure Key Vault storage backend plus a coupled test, both addressing surface-skew handling.
+
+### What landed
+
+- **`fix(azure-kv)`: both-mode retrieve falls back to Secrets when cert export fails** (the MAJOR finding). When the Certificate API claims a fresher copy than Secrets but `export_certificate` returns None (companion Secret deleted manually, base64 garbage, PFX parse error), the older Secrets snapshot was silently discarded and the caller saw None. Now the fallback fires and a `WARNING`-level log surfaces the skew so the operator can investigate. No data loss either way — renewal would refetch from ACME — but a needless ACME round trip for a recoverable skew is inferior to serving the slightly older copy.
+
+- **`fix(azure-kv)`: `_delete_secrets` metadata failure flags the surface as failed** (the MINOR finding). The per-PEM secrets loop set `ok = False` on per-file failure, but the metadata-secret delete used a separate try/except that only debug-logged exceptions. `ok` stayed True even when the metadata secret was potentially still in the vault — which violates the surface-independence contract the rest of `delete_certificate` already enforces and would mislead the next `list_certificates` / backfill pass. Metadata-delete failures now flip `ok = False` and log at `WARNING`.
+
+- Two new tests in `tests/test_azure_keyvault_certificate_storage.py` pinning both behaviours. Suite: 40 passed + 2 skipped (SDK optional, unchanged).
+
 ## v2.6.6 (Patch — close #193: 4 cleanup points from the v2.5.5 key-options review)
 
 Four atomic commits closing the follow-up issue [#193](https://github.com/fabriziosalmi/certmate/issues/193) raised against PR #156 / v2.5.5. Each commit is a single review nit, mergeable in isolation. No behaviour change visible to operators; one tiny information-disclosure tightening on the API.
