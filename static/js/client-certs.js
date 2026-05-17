@@ -288,7 +288,11 @@
             '<div><strong>Email:</strong> ' + escapeHtml(cert.email || 'N/A') + '</div>' +
             '<div><strong>Organization:</strong> ' + escapeHtml(cert.organization || '') + '</div>' +
             '<div><strong>Usage:</strong> ' + escapeHtml(cert.cert_usage || '') + '</div>' +
-            '<div><strong>Serial:</strong> ' + escapeHtml(String(cert.serial_number || '')) + '</div>' +
+            // Serial numbers are 30+ digit integers with no natural break points,
+            // so the browser wouldn't wrap them and they'd overflow the modal on
+            // the right edge. Render in a smaller monospace span with break-all
+            // so the number wraps cleanly to a second line when needed.
+            '<div><strong>Serial:</strong> <span class="font-mono text-xs break-all">' + escapeHtml(String(cert.serial_number || '')) + '</span></div>' +
             '<div><strong>Created:</strong> ' + escapeHtml(new Date(cert.created_at).toLocaleString()) + '</div>' +
             '<div><strong>Expires:</strong> ' + escapeHtml(new Date(cert.expires_at).toLocaleString()) + '</div>' +
             '<div><strong>Status:</strong> ' + (cert.revoked ? 'Revoked' : 'Active') + '</div>';
