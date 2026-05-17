@@ -132,7 +132,14 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     if: github.event_name != 'pull_request'
-    
+    # Job-level permission override: the workflow default is read-all
+    # (set at the top of this file in v2.6.2), but the Trivy SARIF
+    # upload step needs to write into the Security > Code scanning
+    # tab. Granting it here keeps every other step read-only.
+    permissions:
+      security-events: write
+      contents: read
+
     steps:
     - name: Run Trivy vulnerability scanner
       # Pinned to v0.36.0 (was @master — never pin to a mutable branch
