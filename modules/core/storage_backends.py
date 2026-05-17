@@ -749,7 +749,21 @@ class AzureKeyVaultBackend(CertificateStorageBackend):
             if secrets_result is not None and cert_update is not None:
                 cert_files, metadata, secrets_update = secrets_result
                 if secrets_update is not None and cert_update > secrets_update:
-                    return self._get_cert_importer().export_certificate(domain)
+                    # Cert API claims a fresher copy than Secrets. Try to
+                    # serve it, but if the export fails for any reason
+                    # (companion Secret deleted manually, base64 garbage,
+                    # PFX parse error — all paths return None from
+                    # export_certificate), fall back to the older Secrets
+                    # snapshot we already loaded. Returning None here would
+                    # force callers to refetch from ACME unnecessarily.
+                    exported = self._get_cert_importer().export_certificate(domain)
+                    if exported is not None:
+                        return exported
+                    logger.warning(
+                        f"Azure KV both-mode: Certificate API claims a fresher "
+                        f"copy of {domain} but export_certificate returned "
+                        f"None; falling back to older Secrets snapshot."
+                    )
                 if not metadata:
                     metadata = self._get_cert_importer().get_metadata_tags(domain)
                 return cert_files, metadata
@@ -809,7 +823,16 @@ class AzureKeyVaultBackend(CertificateStorageBackend):
             metadata_name = self._sanitize_secret_name(f"cert-{domain}-metadata")
             client.begin_delete_secret(metadata_name)
         except Exception as e:
-            logger.debug(f"Could not delete metadata for {domain} from Azure Key Vault: {e}")
+            # Same surface-independence contract as the per-PEM secrets
+            # above: a metadata-delete failure must flag the surface as
+            # not-cleanly-deleted so callers can react. Without this, the
+            # outer delete_certificate could return True even though the
+            # metadata secret is still around and would mislead a later
+            # list_certificates / backfill pass.
+            logger.warning(
+                f"Could not delete metadata for {domain} from Azure Key Vault: {e}"
+            )
+            ok = False
         return ok
 
     def delete_certificate(self, domain: str) -> bool:
