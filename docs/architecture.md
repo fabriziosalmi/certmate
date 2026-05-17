@@ -217,9 +217,26 @@ All settings are stored in `data/settings.json`:
   "certificate_storage": {
     "backend": "local_filesystem",
     "cert_dir": "certificates"
-  }
+  },
+  "default_key_type": "rsa",
+  "default_key_size": 2048,
+  "default_elliptic_curve": "secp256r1"
 }
 ```
+
+### Certificate key type/size
+
+Three top-level keys control the public-key shape of newly issued certificates:
+
+| Key | Values | Applies when |
+|---|---|---|
+| `default_key_type` | `rsa` (default) / `ecdsa` | always |
+| `default_key_size` | `2048` (default) / `3072` / `4096` | `default_key_type == "rsa"` |
+| `default_elliptic_curve` | `secp256r1` (default) / `secp384r1` | `default_key_type == "ecdsa"` |
+
+A per-certificate override is supported: each entry in `domains` may carry an optional `key_type` plus either `key_size` (RSA) or `elliptic_curve` (ECDSA). When the override is present it wins; otherwise the global default applies. The defaults `rsa`/`2048` mirror the implicit certbot default that CertMate emitted before this setting existed, so upgraded installs see no change unless the operator picks something else.
+
+Renewals always preserve the shape that was in effect at creation time: certbot persists `--key-type`, `--rsa-key-size` and `--elliptic-curve` into its own `renewal/<domain>.conf` during the first issuance, and `certbot renew --cert-name <domain>` reuses those values automatically.
 
 ---
 
