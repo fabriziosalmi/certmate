@@ -7,7 +7,10 @@
 
     var escapeHtml = CertMate.escapeHtml;
 
-    // DNS provider definitions with required fields
+    // DNS provider definitions with required fields.
+    // Field keys must match modules/core/utils.py _MULTI_PROVIDER_REQUIRED_FIELDS
+    // and the per-provider create_*_config() signatures, since these values are
+    // posted verbatim to /api/web/settings and consumed by certbot plugins.
     var PROVIDERS = {
         cloudflare:    { label: 'Cloudflare', icon: 'fa-cloud', fields: [{ key: 'api_token', label: 'API Token', type: 'password' }] },
         route53:       { label: 'AWS Route 53', icon: 'fa-cloud-upload-alt', fields: [{ key: 'access_key_id', label: 'Access Key ID', type: 'text' }, { key: 'secret_access_key', label: 'Secret Access Key', type: 'password' }, { key: 'region', label: 'Region', type: 'text', placeholder: 'us-east-1' }] },
@@ -16,13 +19,20 @@
         gandi:         { label: 'Gandi', icon: 'fa-globe', fields: [{ key: 'api_token', label: 'API Token', type: 'password' }] },
         linode:        { label: 'Akamai Connected Cloud (Linode)', icon: 'fa-cloud', fields: [{ key: 'api_key', label: 'API Key', type: 'password' }] },
         edgedns:       { label: 'Akamai Edge DNS', icon: 'fa-cloud', fields: [{ key: 'client_token', label: 'Client Token', type: 'password' }, { key: 'client_secret', label: 'Client Secret', type: 'password' }, { key: 'access_token', label: 'Access Token', type: 'password' }, { key: 'host', label: 'API Host', type: 'text', placeholder: 'akab-XXXX.luna.akamaiapis.net' }] },
-        porkbun:       { label: 'Porkbun', icon: 'fa-globe', fields: [{ key: 'api_key', label: 'API Key', type: 'password' }, { key: 'secret_api_key', label: 'Secret API Key', type: 'password' }] },
-        godaddy:       { label: 'GoDaddy', icon: 'fa-globe', fields: [{ key: 'api_key', label: 'API Key', type: 'password' }, { key: 'api_secret', label: 'API Secret', type: 'password' }] },
+        porkbun:       { label: 'Porkbun', icon: 'fa-globe', fields: [{ key: 'api_key', label: 'API Key', type: 'password' }, { key: 'secret_key', label: 'Secret Key', type: 'password' }] },
+        godaddy:       { label: 'GoDaddy', icon: 'fa-globe', fields: [{ key: 'api_key', label: 'API Key', type: 'password' }, { key: 'secret', label: 'API Secret', type: 'password' }] },
         namecheap:     { label: 'Namecheap', icon: 'fa-globe', fields: [{ key: 'username', label: 'Username', type: 'text' }, { key: 'api_key', label: 'API Key', type: 'password' }] },
         vultr:         { label: 'Vultr', icon: 'fa-cloud', fields: [{ key: 'api_key', label: 'API Key', type: 'password' }] },
         ovh:           { label: 'OVH', icon: 'fa-globe', fields: [{ key: 'endpoint', label: 'Endpoint', type: 'text', placeholder: 'ovh-eu' }, { key: 'application_key', label: 'Application Key', type: 'text' }, { key: 'application_secret', label: 'Application Secret', type: 'password' }, { key: 'consumer_key', label: 'Consumer Key', type: 'password' }] },
         azure:         { label: 'Azure DNS', icon: 'fa-cube', fields: [{ key: 'subscription_id', label: 'Subscription ID', type: 'text' }, { key: 'resource_group', label: 'Resource Group', type: 'text' }, { key: 'tenant_id', label: 'Tenant ID', type: 'text' }, { key: 'client_id', label: 'Client ID', type: 'text' }, { key: 'client_secret', label: 'Client Secret', type: 'password' }] },
-        google:        { label: 'Google Cloud DNS', icon: 'fa-cloud-meatball', fields: [{ key: 'project_id', label: 'Project ID', type: 'text' }, { key: 'service_account_key', label: 'Service Account Key (JSON)', type: 'textarea' }] }
+        google:        { label: 'Google Cloud DNS', icon: 'fa-cloud-meatball', fields: [{ key: 'project_id', label: 'Project ID', type: 'text' }, { key: 'service_account_key', label: 'Service Account Key (JSON)', type: 'textarea' }] },
+        powerdns:      { label: 'PowerDNS', icon: 'fa-bolt', fields: [{ key: 'api_url', label: 'API URL', type: 'text', placeholder: 'https://powerdns.example.com:8081' }, { key: 'api_key', label: 'API Key', type: 'password' }] },
+        rfc2136:       { label: 'RFC2136 (BIND/Knot)', icon: 'fa-network-wired', fields: [{ key: 'nameserver', label: 'Nameserver', type: 'text', placeholder: 'ns.example.com' }, { key: 'tsig_key', label: 'TSIG Key Name', type: 'text', placeholder: 'mykey' }, { key: 'tsig_secret', label: 'TSIG Secret', type: 'password', placeholder: 'Base64-encoded secret' }] },
+        dnsmadeeasy:   { label: 'DNS Made Easy', icon: 'fa-globe', fields: [{ key: 'api_key', label: 'API Key', type: 'password' }, { key: 'secret_key', label: 'Secret Key', type: 'password' }] },
+        nsone:         { label: 'NS1', icon: 'fa-circle-nodes', fields: [{ key: 'api_key', label: 'API Key', type: 'password' }] },
+        'he-ddns':     { label: 'Hurricane Electric', icon: 'fa-bolt', fields: [{ key: 'username', label: 'Username', type: 'text' }, { key: 'password', label: 'Password', type: 'password' }] },
+        dynudns:       { label: 'Dynu', icon: 'fa-globe', fields: [{ key: 'token', label: 'API Token', type: 'password' }] },
+        duckdns:       { label: 'DuckDNS', icon: 'fa-cloud', fields: [{ key: 'api_token', label: 'Account Token', type: 'password', placeholder: 'UUID-format token from your DuckDNS account page' }] }
     };
 
     var state = { step: 1, email: '', provider: '', credentials: {} };
