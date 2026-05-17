@@ -1,0 +1,53 @@
+name: OSSF Scorecard
+
+on:
+  # Re-run on default-branch pushes so the badge stays current after merges.
+  push:
+    branches: [ main ]
+  # Weekly cron — Scorecard relies on this for the "Maintained" check.
+  schedule:
+    - cron: '23 4 * * 1'
+  # Allow manual reruns from the Actions tab.
+  workflow_dispatch:
+
+# Default permissions are read-only. The analysis job below grants the
+# narrower writes it actually needs — never spread these to the whole
+# workflow.
+permissions: read-all
+
+jobs:
+  analysis:
+    name: Scorecard analysis
+    runs-on: ubuntu-latest
+    permissions:
+      # Upload SARIF to GitHub code scanning.
+      security-events: write
+      # Mint OIDC token for publishing results to scorecard.dev.
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Run Scorecard analysis
+        uses: ossf/scorecard-action@v2.4.0
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          # Publish to scorecard.dev so the README badge renders the
+          # live score. Requires the repo to be public (it is).
+          publish_results: true
+
+      - name: Upload SARIF artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: scorecard-results
+          path: results.sarif
+          retention-days: 7
+
+      - name: Upload SARIF to code scanning
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif
