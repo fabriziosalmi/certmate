@@ -210,10 +210,13 @@ class TestSettingsKeyDefaultsMigration:
         assert loaded['default_elliptic_curve'] == 'secp256r1'
 
     def test_save_settings_rejects_inconsistent_global_defaults(self, tmp_path):
-        """save_settings must reject ``key_type='rsa'`` paired with an
-        elliptic_curve override on the global defaults — otherwise a UI bug
-        could silently persist a contradiction the renew loop would later
-        choke on."""
+        """save_settings must reject the active key shape when it is itself
+        invalid (here: RSA with key_size=1024, which validate_key_options
+        rejects). Pins that an unusable shape never makes it onto disk.
+
+        Note: the inactive branch is NOT validated against the active one,
+        on purpose — see ``test_save_settings_accepts_inactive_branch_stash``
+        for the soft-validate contract."""
         from modules.core.file_operations import FileOperations
         from modules.core.settings import SettingsManager
 
@@ -239,3 +242,44 @@ class TestSettingsKeyDefaultsMigration:
             'default_elliptic_curve': 'secp256r1',
         })
         assert ok is False
+
+    def test_save_settings_accepts_inactive_branch_stash(self, tmp_path):
+        """The active branch wins: save_settings only validates the fields
+        the active key_type uses. RSA + a populated elliptic_curve passes
+        cleanly because the curve is not on the active branch (the certbot
+        command builder only consults key_size for RSA), and downstream code
+        never reads the inactive value.
+
+        This is intentional: the UI keeps the inactive field populated when
+        the user toggles RSA <-> ECDSA so they don't lose the previously
+        entered value, and we don't want round-trip toggles to fail."""
+        from modules.core.file_operations import FileOperations
+        from modules.core.settings import SettingsManager
+
+        cert_dir = tmp_path / 'certificates'
+        data_dir = tmp_path / 'data'
+        backup_dir = tmp_path / 'backups'
+        logs_dir = tmp_path / 'logs'
+        for d in (cert_dir, data_dir, backup_dir, logs_dir):
+            d.mkdir()
+
+        file_ops = FileOperations(
+            cert_dir=cert_dir, data_dir=data_dir,
+            backup_dir=backup_dir, logs_dir=logs_dir,
+        )
+        sm = SettingsManager(file_ops=file_ops, settings_file=data_dir / 'settings.json')
+
+        ok = sm.save_settings({
+            'email': 'ops@example.com',
+            'dns_provider': 'cloudflare',
+            'api_bearer_token_hash': 'placeholder',
+            'default_key_type': 'rsa',
+            'default_key_size': 3072,
+            'default_elliptic_curve': 'secp384r1',  # inactive — stashed, not validated against
+        })
+        assert ok is True
+        loaded = sm.load_settings()
+        assert loaded['default_key_type'] == 'rsa'
+        assert loaded['default_key_size'] == 3072
+        # Inactive value persisted verbatim — UI can show it if user toggles back.
+        assert loaded['default_elliptic_curve'] == 'secp384r1'
