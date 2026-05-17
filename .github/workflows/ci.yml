@@ -7,6 +7,11 @@ on:
     branches: [ main, develop ]
   workflow_dispatch:
 
+# Default to read-only. The single job below only reads source and uploads
+# coverage via codecov-action (which manages its own auth via the upload
+# token, not the GITHUB_TOKEN), so no job needs write here.
+permissions: read-all
+
 jobs:
   test:
     runs-on: ubuntu-latest
