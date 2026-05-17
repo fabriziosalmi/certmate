@@ -177,10 +177,52 @@ All backends implement `CertificateStorageBackend`:
 | Backend | Storage Location |
 |---------|-----------------|
 | **Local Filesystem** | `certificates/{domain}/` (default) |
-| **Azure Key Vault** | Azure Key Vault secrets |
+| **Azure Key Vault** | Secrets, native Certificate objects, or both — see below |
 | **AWS Secrets Manager** | AWS Secrets Manager |
 | **HashiCorp Vault** | Vault KV v1/v2 |
 | **Infisical** | Infisical secrets |
+
+#### Azure Key Vault — storage modes
+
+The Azure Key Vault backend can persist certificates as Secrets (the
+default), as native Certificate objects, or both, controlled by
+`certificate_storage.azure_keyvault.storage_mode` in `settings.json`.
+
+| Mode | Writes Secrets | Writes Certificate object | When to use |
+|---|---|---|---|
+| `secrets` (default) | yes | no | Backwards-compatible behaviour. Each `cert.pem` / `chain.pem` / `fullchain.pem` / `privkey.pem` and the metadata are stored as separate Key Vault Secrets. |
+| `certificate` | no | yes | Bind directly from App Service, Application Gateway, Front Door, API Management, AKS Ingress, etc. The cert + chain + private key are imported as a single PKCS12 `Certificate` object with `issuer_name="Unknown"` so Key Vault does not try to renew it. |
+| `both` | yes | yes | Transitional or mixed-consumer setups. Reads still prefer the Secrets path (cheaper). |
+
+A manual **Backfill Certificate objects** action in the Storage settings
+panel (`POST /api/storage/azure-keyvault/backfill-certificates`) imports a
+Certificate object for every domain that already lives in the vault as
+Secrets but does not yet have one. Existing Certificate objects are
+skipped. The endpoint accepts an optional `?limit=N` query parameter to
+cap how many domains it processes per call; large vaults can paginate by
+calling repeatedly until the response reports `0` remaining.
+
+##### Security note — Certificate objects expose the private key via the Secrets API
+
+When Key Vault imports a PKCS12 Certificate object, it also creates a
+companion **Secret** with the same name whose value is the full PFX
+(including the private key). This is by-design in Azure: it is the
+documented way for VM extensions and App Service to consume the cert,
+and any principal granted `Secrets/Get` on the vault can therefore
+download the private key — *the Certificates `Get` permission alone is
+not sufficient to extract the private key, but `Secrets/Get` is*.
+Operators running CertMate in `certificate` or `both` mode should scope
+`Secrets/Get` carefully and prefer Azure RBAC over vault access policies
+for finer-grained control. See
+[Microsoft Learn — Certificates in Key Vault](https://learn.microsoft.com/azure/key-vault/certificates/about-certificates)
+for the full model.
+
+##### Service Principal permissions
+
+| Mode | Required permissions on the vault |
+|---|---|
+| `secrets` | Secrets `Get/Set/List/Delete` |
+| `certificate` / `both` | Adds Certificates `Get/List/Import/Delete` and keeps Secrets `Get/List` (Key Vault exposes the imported PFX, including the private key, only via the Secret with the same name as the Certificate object). |
 
 ---
 

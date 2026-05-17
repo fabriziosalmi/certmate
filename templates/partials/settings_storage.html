@@ -74,16 +74,42 @@
                                         </div>
                                         <div>
                                             <label class="block text-xs text-blue-800 dark:text-blue-200 mb-1">Client Secret</label>
-                                            <input type="password" id="azure-client-secret" 
+                                            <input type="password" id="azure-client-secret"
                                                    class="w-full px-2 py-1 text-sm border border-blue-300 dark:border-blue-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                                                    placeholder="Enter client secret"
-                                                   autocomplete="new-password" 
+                                                   autocomplete="new-password"
                                                    spellcheck="false"
                                                    data-lpignore="true">
                                         </div>
+                                        <div class="md:col-span-2">
+                                            <label class="block text-xs text-blue-800 dark:text-blue-200 mb-1">Storage mode</label>
+                                            <select id="azure-storage-mode"
+                                                    class="w-full px-2 py-1 text-sm border border-blue-300 dark:border-blue-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                                    onchange="toggleAzureBackfillRow()">
+                                                <option value="secrets">Secrets only (default)</option>
+                                                <option value="certificate">Certificate object only</option>
+                                                <option value="both">Both (Secrets + Certificate object)</option>
+                                            </select>
+                                            <p class="text-xs text-blue-700 dark:text-blue-300 mt-1">
+                                                Use <strong>Certificate object</strong> or <strong>Both</strong> for native consumption from App Service, Application Gateway, Front Door, API Management or AKS Ingress.
+                                                The Service Principal needs Certificates <code>Get/List/Import/Delete</code> in addition to Secrets <code>Get/List</code>.
+                                            </p>
+                                        </div>
+                                        <div id="azure-backfill-row" class="md:col-span-2" style="display: none;">
+                                            <button type="button"
+                                                    id="azure-backfill-btn"
+                                                    onclick="backfillAzureCertificateObjects()"
+                                                    class="px-3 py-1.5 text-xs font-medium rounded bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 disabled:cursor-not-allowed">
+                                                <i class="fas fa-cloud-upload-alt mr-1"></i> Backfill Certificate objects
+                                            </button>
+                                            <p class="text-xs text-blue-700 dark:text-blue-300 mt-1">
+                                                Imports a Certificate object for every domain that already lives in this vault as Secrets but does not yet have one. Skips entries already imported.
+                                            </p>
+                                            <pre id="azure-backfill-output" class="hidden mt-2 max-h-60 overflow-auto p-2 text-xs rounded bg-blue-100 dark:bg-blue-900/40 text-blue-900 dark:text-blue-100"></pre>
+                                        </div>
                                     </div>
                                     <p class="text-xs text-blue-700 dark:text-blue-300 mt-2">
-                                        Certificates will be stored as secrets in Azure Key Vault with enhanced security and audit capabilities.
+                                        Certificates are stored in Azure Key Vault with audit and access control. Pick the mode that matches how downstream services consume them.
                                     </p>
                                 </div>
                             </div>
