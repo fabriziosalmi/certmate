@@ -214,10 +214,14 @@ button[class*="bg-red-6"]:active {
 }
 
 /* ── Table row health strip ──────────────────────────────────── */
-.health-valid   { border-left: 3px solid #22c55e; }
-.health-warning { border-left: 3px solid #f59e0b; }
-.health-expired { border-left: 3px solid #ef4444; }
-.health-unknown { border-left: 3px solid #6b7280; }
+/* Target the row's first cell rather than the <tr> itself: with
+   border-collapse: separate (Tailwind default), borders on <tr>
+   render inconsistently — Chrome paints only the first row, so
+   rows 2+ silently lose their strip (issue #189). */
+.health-valid   > td:first-child { border-left: 3px solid #22c55e; }
+.health-warning > td:first-child { border-left: 3px solid #f59e0b; }
+.health-expired > td:first-child { border-left: 3px solid #ef4444; }
+.health-unknown > td:first-child { border-left: 3px solid #6b7280; }
 
 /* ── Row stagger entrance ────────────────────────────────────── */
 @keyframes rowSlideIn {
