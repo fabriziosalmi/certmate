@@ -1,3 +1,32 @@
+## v2.5.4 (Patch — 2 community-reported bug fixes)
+
+Two atomic commits resolving issues reported by contributors on GitHub.
+Fast + UI test suite and the Cloudflare real-cert lifecycle e2e both
+green locally (97 passed, 1 skipped, 2 pre-existing xfail).
+
+### Real bug fixes
+
+- **`fix(wizard)`: list all 21 backend-supported DNS providers (#87)** —
+  the setup wizard's PROVIDERS map only knew 14 providers, so users on
+  PowerDNS, rfc2136, NS1, DNS Made Easy, Hurricane Electric, Dynu or
+  DuckDNS had no way to finish the wizard — *Skip wizard* (by design)
+  does not persist `setup_completed`, so the wizard reappeared on every
+  refresh. The list is now the full set of providers the backend
+  supports via `_MULTI_PROVIDER_REQUIRED_FIELDS`. Side-fix in the same
+  commit: corrects two pre-existing silent typos where the wizard saved
+  credentials under keys the certbot plugins do not read — `porkbun`
+  `secret_api_key` → `secret_key`, `godaddy` `api_secret` → `secret`.
+  Credentials saved through the wizard are now usable for first cert
+  issuance without a detour through Settings.
+
+- **`fix(ui)`: paint health strip on every cert row, not just the first
+  (#189)** — the `.health-*` selectors put `border-left` on the `<tr>`,
+  but the certificates table uses `border-collapse: separate` (Tailwind
+  default), where Chrome silently paints only the first row's border
+  and drops it on rows 2+. Moved the strip to `td:first-child` of the
+  row so the colored health indicator renders reliably on every row,
+  regardless of collapse mode.
+
 ## v2.5.3 (Patch — multi-pass audit response + draconian test coverage push)
 
 Twenty atomic commits over a single branch, the result of running every
