@@ -8,9 +8,13 @@ import threading
 import logging
 from pathlib import Path
 
+from modules import __version__ as _CERTMATE_VERSION
 from .constants import iter_cert_domain_dirs
 from .file_operations import FileOperations
-from .utils import generate_secure_token, validate_email, validate_api_token, validate_domain
+from .utils import (
+    generate_secure_token, validate_email, validate_api_token, validate_domain,
+    validate_key_options,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +47,12 @@ PUBLIC_SETTINGS_WRITABLE_KEYS = frozenset({
     'default_accounts',         # per-DNS-provider default accounts
     'dns_propagation_seconds',
     'cache_ttl',
+    # Configurable certificate key type/size globals.
+    # These are not secrets — they only carry values like 'rsa', '2048',
+    # 'secp256r1'.  The settings UI POSTs them to general settings.
+    'default_key_type',
+    'default_key_size',
+    'default_elliptic_curve',
 })
 
 # Keys whose mutation via the bulk settings endpoint would create a privilege
@@ -229,6 +239,53 @@ class SettingsManager:
         # Wired by the factory after AuthManager is constructed.
         self._token_hasher = None
 
+    # ------------------------------------------------------------------
+    # Request-scoped settings cache
+    # ------------------------------------------------------------------
+    # load_settings() is called 15+ times per typical /api/certificates
+    # request (once at the top, then again from get_certificate_info and
+    # _parse_certificate_info for every domain). Each call hit the disk,
+    # parsed JSON, ran the migration/default-fill logic, and acquired the
+    # write lock. With 50 certs the same request fired ~100 redundant
+    # full settings loads.
+    #
+    # We cache the parsed result on `flask.g` for the duration of one HTTP
+    # request. Outside a request context (scheduler, deploy worker, tests)
+    # the cache no-ops and behaviour is identical to before.
+    #
+    # save_settings/atomic_update clear the cache after a successful write
+    # so a route that loads → mutates via settings_manager → reads again
+    # sees the new values.
+    _CACHE_ATTR = '_certmate_settings_cache'
+
+    @classmethod
+    def _request_cache_get(cls):
+        try:
+            from flask import g, has_request_context
+            if has_request_context():
+                return getattr(g, cls._CACHE_ATTR, None)
+        except (ImportError, RuntimeError):
+            return None
+        return None
+
+    @classmethod
+    def _request_cache_set(cls, value):
+        try:
+            from flask import g, has_request_context
+            if has_request_context():
+                setattr(g, cls._CACHE_ATTR, value)
+        except (ImportError, RuntimeError):
+            pass
+
+    @classmethod
+    def _request_cache_clear(cls):
+        try:
+            from flask import g, has_request_context
+            if has_request_context() and hasattr(g, cls._CACHE_ATTR):
+                delattr(g, cls._CACHE_ATTR)
+        except (ImportError, RuntimeError):
+            pass
+
     def set_token_hasher(self, hasher):
         """Inject the hasher used to migrate legacy api_bearer_token to its
         hashed form on the next save. None disables migration."""
@@ -297,7 +354,20 @@ class SettingsManager:
 
         Acquires the re-entrant lock so concurrent saves cannot observe a
         half-written file or race with the migration write below.
+
+        Within a Flask request, the first call hits disk; subsequent calls
+        return a deepcopy of the cached parsed dict. The cache is cleared
+        on any successful save (atomic_update / save_settings) and lives
+        only for the current request. See `_request_cache_*` above.
         """
+        cached = self._request_cache_get()
+        if cached is not None:
+            # Deepcopy so callers that mutate the returned dict (load →
+            # mutate in place → save) don't pollute the request-scoped
+            # cache for the next reader within the same request.
+            import copy as _copy
+            return _copy.deepcopy(cached)
+
         with self._lock:
             default_settings = {
                 'cloudflare_token': '',
@@ -309,6 +379,13 @@ class SettingsManager:
                 'setup_completed': False,  # Track if initial setup is done
                 'dns_provider': 'cloudflare',
                 'challenge_type': 'dns-01',  # 'dns-01' or 'http-01'
+                # Default certificate key shape applied to any cert that does
+                # not carry a per-domain override. 'rsa'/2048 mirrors the
+                # implicit certbot default that CertMate emitted before this
+                # setting existed, so upgraded installs see no change.
+                'default_key_type': 'rsa',
+                'default_key_size': 2048,
+                'default_elliptic_curve': 'secp256r1',
                 'dns_providers': {},  # Start with empty DNS providers - only add what's actually configured
                 'certificate_storage': {  # New storage backend configuration
                     'backend': 'local_filesystem',  # Default to local filesystem for backward compatibility
@@ -352,6 +429,9 @@ class SettingsManager:
                 'setup_completed': False,
                 'dns_provider': 'cloudflare',
                 'challenge_type': 'dns-01',
+                'default_key_type': 'rsa',
+                'default_key_size': 2048,
+                'default_elliptic_curve': 'secp256r1',
                 'dns_providers': {
                     'cloudflare': {'api_token': ''},
                     'route53': {'access_key_id': '', 'secret_access_key': '', 'region': 'us-east-1'},
@@ -381,7 +461,7 @@ class SettingsManager:
 
             try:
                 settings = self.file_ops.safe_file_read(self.settings_file, is_json=True)
-                if settings is None:
+                if not isinstance(settings, dict):
                     logger.warning("Settings file exists but is empty or corrupted, attempting backup restore")
                     settings = self._try_restore_from_backup()
                     if settings is None:
@@ -390,11 +470,49 @@ class SettingsManager:
                         return first_time_template
                     logger.info("Settings restored successfully from backup")
 
+                # Downgrade detection: warn loudly if settings.json was saved
+                # by a newer version than the one currently running.
+                disk_version = settings.get('certmate_version')
+                if disk_version and disk_version != _CERTMATE_VERSION:
+                    try:
+                        disk_parts = [int(p) for p in str(disk_version).split('.')[:2]]
+                        curr_parts = [int(p) for p in str(_CERTMATE_VERSION).split('.')[:2]]
+                        if tuple(disk_parts) > tuple(curr_parts):
+                            logger.error(
+                                "DOWNGRADE DETECTED: settings.json was written by "
+                                "CertMate %s but this process is %s. The on-disk "
+                                "format may be incompatible. If authentication or "
+                                "certificates are missing, restore the latest backup "
+                                "from %s and restart.",
+                                disk_version, _CERTMATE_VERSION,
+                                self.file_ops.backup_dir / 'unified'
+                            )
+                        else:
+                            logger.info(
+                                "settings.json version %s vs running %s — "
+                                "continuing normally.",
+                                disk_version, _CERTMATE_VERSION
+                            )
+                    except Exception:
+                        logger.warning(
+                            "settings.json has unexpected certmate_version %s "
+                            "(running %s).",
+                            disk_version, _CERTMATE_VERSION
+                        )
+
                 # Apply migrations for backward compatibility
                 settings, was_migrated = self._migrate_settings_format(settings)
 
-                # Only merge essential missing keys, NOT the full dns_providers template
-                essential_keys = ['cloudflare_token', 'domains', 'email', 'auto_renew', 'renewal_threshold_days', 'api_bearer_token', 'setup_completed', 'dns_provider', 'challenge_type']
+                # Only merge essential missing keys, NOT the full dns_providers template.
+                # ``default_key_*`` are listed here so an upgraded install picks up
+                # rsa/2048 (matching the implicit certbot default that CertMate
+                # used before the setting existed) without requiring manual edit.
+                essential_keys = [
+                    'cloudflare_token', 'domains', 'email', 'auto_renew',
+                    'renewal_threshold_days', 'api_bearer_token', 'setup_completed',
+                    'dns_provider', 'challenge_type',
+                    'default_key_type', 'default_key_size', 'default_elliptic_curve',
+                ]
                 for key in essential_keys:
                     if key not in settings:
                         # Don't regenerate api_bearer_token if its hash is already
@@ -452,6 +570,13 @@ class SettingsManager:
                     was_migrated = True
 
                 # Save migrated settings if any changes were made.
+                # Stamp the current version so downgrade detection can fire
+                # on the next boot if the operator rolls back, but only trigger
+                # a write when the version actually changed.
+                if settings.get('certmate_version') != _CERTMATE_VERSION:
+                    settings['certmate_version'] = _CERTMATE_VERSION
+                    was_migrated = True
+
                 # If the save fails (disk full, permission denied, validation
                 # rejection of a field migrated up from an older format),
                 # the in-memory copy diverges from disk: callers receive the
@@ -467,6 +592,55 @@ class SettingsManager:
                             "now ahead of settings.json on disk. The next "
                             "save will retry; check earlier log lines for "
                             "the validation or I/O error that blocked it."
+                        )
+
+                # Defensive logging when critical fields are unexpectedly
+                # missing from an existing settings file. This happens after
+                # a destructive downgrade or partial corruption and gives
+                # operators a concrete next step before the wizard overwrites
+                # state.
+                if not settings.get('users'):
+                    backups = []
+                    try:
+                        unified = self.file_ops.backup_dir / 'unified'
+                        if unified.exists():
+                            backups = sorted(
+                                [b.name for b in unified.iterdir() if b.suffix == '.zip'],
+                                reverse=True
+                            )[:3]
+                            # Exclude migration-created backups: they were
+                            # produced seconds ago by this boot and don't help
+                            # the operator recover from pre-existing data loss.
+                            backups = [b for b in backups if '_migration' not in b]
+                    except Exception:
+                        pass
+                    if backups:
+                        logger.error(
+                            "CRITICAL: settings.json has no users. If this is "
+                            "unexpected, restore a backup before using the UI: %s",
+                            backups
+                        )
+                    else:
+                        logger.error(
+                            "CRITICAL: settings.json has no users and no backups "
+                            "were found. If this is unexpected, check that the "
+                            "data volume is mounted correctly."
+                        )
+
+                if not settings.get('domains'):
+                    cert_dir = getattr(self.file_ops, 'cert_dir', None)
+                    cert_domains = []
+                    if cert_dir and cert_dir.exists():
+                        try:
+                            cert_domains = [d.name for d in iter_cert_domain_dirs(cert_dir)]
+                        except Exception:
+                            pass
+                    if cert_domains:
+                        logger.warning(
+                            "settings.json has no domains but certificates exist "
+                            "on disk: %s. Use the API or the 'Add Domain' UI flow "
+                            "to re-register them.",
+                            cert_domains
                         )
 
                 # Override settings with environment variables.
@@ -498,11 +672,23 @@ class SettingsManager:
                         accounts['default'] = default_account
                     default_account['api_token'] = os.getenv('CLOUDFLARE_TOKEN')
 
+                # Cache the canonical version. Return a deepcopy so the
+                # caller's in-place mutations cannot pollute the cache for
+                # subsequent readers in the same request. (See the cache-hit
+                # branch at the top of this method for the symmetric copy.)
+                self._request_cache_set(settings)
+                if self._request_cache_get() is not None:
+                    import copy as _copy
+                    return _copy.deepcopy(settings)
                 return settings
 
             except Exception as e:
                 logger.error(f"Error loading settings: {e}")
                 logger.warning("Returning default settings in-memory (existing file preserved on disk)")
+                # Don't cache the fallback default — if the next reader is
+                # called after the underlying file becomes readable, we want
+                # them to hit disk again rather than serve defaults all
+                # request long.
                 return default_settings
 
     def save_settings(self, settings, backup_reason="auto_save"):
@@ -582,6 +768,33 @@ class SettingsManager:
                     logger.error(f"Invalid dns_provider: {settings['dns_provider']}")
                     return False
 
+                # Validate the global certificate-key defaults if any of them
+                # are present. The shape is enforced as a triple so a payload
+                # that would silently disagree (e.g. key_type=rsa with an
+                # elliptic_curve set) is rejected before it can poison cert
+                # creation. The migration path above guarantees all three keys
+                # exist for upgraded installs, so the only callers that hit
+                # this branch with a partial set are POSTs from the UI/API.
+                key_type = settings.get('default_key_type')
+                key_size = settings.get('default_key_size')
+                elliptic_curve = settings.get('default_elliptic_curve')
+                if key_type is not None or key_size is not None or elliptic_curve is not None:
+                    # Save-time validation only checks the active branch
+                    # (RSA → key_size; ECDSA → elliptic_curve). The unused
+                    # field on the inactive branch is allowed to keep its
+                    # default value (so toggling RSA↔ECDSA via the UI does
+                    # not require both to be wiped on every switch).
+                    if key_type == 'rsa':
+                        check = validate_key_options(key_type, key_size, None)
+                    elif key_type == 'ecdsa':
+                        check = validate_key_options(key_type, None, elliptic_curve)
+                    else:
+                        check = validate_key_options(key_type, key_size, elliptic_curve)
+                    is_valid, err = check
+                    if not is_valid:
+                        logger.error(f"Invalid certificate key defaults: {err}")
+                        return False
+
                 # Validate domains
                 if 'domains' in settings:
                     validated_domains = []
@@ -639,6 +852,10 @@ class SettingsManager:
                 # Save settings
                 if self.file_ops.safe_file_write(self.settings_file, settings, is_json=True):
                     logger.info("Settings saved successfully")
+                    # Invalidate the request-scoped cache: a caller in the
+                    # same request that loads again must see the new values
+                    # rather than the pre-write copy stashed on flask.g.
+                    self._request_cache_clear()
                     return True
                 else:
                     logger.error("Failed to save settings")

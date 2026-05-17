@@ -45,7 +45,7 @@
                            'class="flex-1 py-3 bg-transparent text-gray-900 dark:text-white placeholder-gray-400 outline-none text-sm">' +
                     '<kbd class="hidden sm:inline-flex items-center px-2 py-0.5 text-xs text-gray-400 bg-gray-100 dark:bg-gray-700 rounded">ESC</kbd>' +
                 '</div>' +
-                '<div id="cmdPaletteResults" class="max-h-72 overflow-y-auto py-2"></div>' +
+                '<div id="cmdPaletteResults" class="overflow-y-auto py-2"></div>' +
                 '<div class="px-4 py-2 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between text-xs text-gray-400">' +
                     '<div><kbd class="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded mr-1">&uarr;&darr;</kbd> navigate <kbd class="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded mx-1">&crarr;</kbd> select</div>' +
                     '<div><kbd class="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded">esc</kbd> close</div>' +
@@ -60,6 +60,21 @@
         document.getElementById('cmdPaletteOverlay').addEventListener('click', closePalette);
         inputEl.addEventListener('input', onSearch);
         inputEl.addEventListener('keydown', onKeyDown);
+        // Re-size the results pane on viewport changes while open.
+        window.addEventListener('resize', function() {
+            if (isOpen()) sizeResults();
+        });
+    }
+
+    // Size the results pane to fit the viewport without overflowing.
+    // Panel sits at top-[15vh] with ~82px of chrome (input + footer +
+    // borders); we leave a 20px breathing margin at the bottom. On tall
+    // viewports this means no scrollbar at all; on short ones we floor
+    // to 180px so the user still sees ~3 rows.
+    function sizeResults() {
+        if (!resultsEl) return;
+        var max = Math.max(180, Math.round(window.innerHeight * 0.85) - 102);
+        resultsEl.style.maxHeight = max + 'px';
     }
 
     function openPalette() {
@@ -67,6 +82,7 @@
         paletteEl.classList.remove('hidden');
         inputEl.value = '';
         selectedIndex = 0;
+        sizeResults();
         onSearch();
         // Delay focus to ensure visible
         setTimeout(function() { inputEl.focus(); }, 50);

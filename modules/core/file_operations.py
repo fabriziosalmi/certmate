@@ -69,6 +69,12 @@ class FileOperations:
 
     def safe_file_write(self, file_path, data, is_json=True):
         """Safely write data to a file with proper error handling and atomic operations"""
+        # Initialise the cleanup target before any code that could raise. If
+        # mkstemp() (below) fails — disk full, parent dir unwritable, sandbox
+        # restriction — control jumps straight to one of the except blocks
+        # where `temp_file.exists()` would otherwise raise UnboundLocalError
+        # and mask the original OSError from the operator log.
+        temp_file = None
         try:
             # Validate file path to prevent path traversal
             file_path = Path(file_path).resolve()
@@ -110,14 +116,13 @@ class FileOperations:
             
         except (PermissionError, OSError) as e:
             logger.error(f"Error writing file {file_path}: {e}")
-            # Clean up temp file if it exists
-            if temp_file.exists():
+            # Clean up temp file if it was created before the failure.
+            if temp_file is not None and temp_file.exists():
                 temp_file.unlink(missing_ok=True)
             return False
         except Exception as e:
             logger.error(f"Unexpected error writing file {file_path}: {e}")
-            # Clean up temp file if it exists
-            if temp_file.exists():
+            if temp_file is not None and temp_file.exists():
                 temp_file.unlink(missing_ok=True)
             return False
 
@@ -132,13 +137,18 @@ class FileOperations:
             # Ensure backup directory exists
             backup_path.parent.mkdir(parents=True, exist_ok=True)
             
-            # Create unified backup metadata
-            domains = []
+            # Single iterdir pass: collect the Path objects once so we don't
+            # walk cert_dir twice (once for the domain-name list embedded in
+            # the metadata, then again to copy files into the zip). Saves
+            # N stat() calls per backup — minor on local SSD, noticeable on
+            # NFS / spinning disk.
+            domain_dirs = []
             if self.cert_dir.exists():
                 for domain_dir in self.cert_dir.iterdir():
                     if domain_dir.is_dir():
-                        domains.append(domain_dir.name)
-            
+                        domain_dirs.append(domain_dir)
+            domains = [d.name for d in domain_dirs]
+
             metadata = {
                 "backup_id": backup_id,
                 "timestamp": datetime.now().isoformat(),
@@ -149,7 +159,7 @@ class FileOperations:
                 "settings_domains": [d.get('domain') if isinstance(d, dict) else d for d in settings_data.get('domains', [])],
                 "total_domains": len(domains)
             }
-            
+
             # Create ZIP file with both settings and certificates
             with zipfile.ZipFile(backup_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
                 # Add settings data
@@ -158,16 +168,15 @@ class FileOperations:
                     "settings": settings_data
                 }
                 zipf.writestr("settings.json", json.dumps(settings_backup, indent=2))
-                
-                # Add all certificate files
-                if self.cert_dir.exists():
-                    for domain_dir in self.cert_dir.iterdir():
-                        if domain_dir.is_dir():
-                            for cert_file in domain_dir.rglob("*"):
-                                if cert_file.is_file():
-                                    # Add file to zip with relative path under certificates/
-                                    arc_path = f"certificates/{cert_file.relative_to(self.cert_dir)}"
-                                    zipf.write(cert_file, arc_path)
+
+                # Reuse the domain_dirs list from above instead of doing a
+                # second iterdir + is_dir() on the same cert_dir.
+                for domain_dir in domain_dirs:
+                    for cert_file in domain_dir.rglob("*"):
+                        if cert_file.is_file():
+                            # Add file to zip with relative path under certificates/
+                            arc_path = f"certificates/{cert_file.relative_to(self.cert_dir)}"
+                            zipf.write(cert_file, arc_path)
                 
                 # Add unified metadata
                 zipf.writestr("backup_metadata.json", json.dumps(metadata, indent=2))

@@ -301,10 +301,9 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
 
             # Use the directory name (domain) for renewal
             domain_name = cert_dir.name
-            success, message = certificate_manager.renew_certificate(domain_name)
-            if success:
-                return jsonify({'message': message})
-            return jsonify({'error': message}), 400
+            force = bool((request.get_json(silent=True) or {}).get('force', False))
+            result = certificate_manager.renew_certificate(domain_name, force=force)
+            return jsonify({'message': result.get('message', 'Certificate renewed successfully')})
         except FileNotFoundError as e:
             return jsonify({'error': str(e)}), 404
         except RuntimeError as e:

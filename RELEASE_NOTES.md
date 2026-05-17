@@ -1,4 +1,4 @@
-## Unreleased
+## Unreleased — Azure Key Vault native Certificate-object storage mode (PR #139)
 
 ### Features
 - **Azure Key Vault stale read detection in `both` mode**: the two storage surfaces (Secrets and Certificate objects) can diverge when a renewal succeeds on one surface but fails on the other. `retrieve_certificate` now compares the `updated_on` timestamps of both surfaces and returns whichever is freshest, preventing stale reads from surface skew.
@@ -6,6 +6,451 @@
 
 ### Bug Fixes
 - **CRC-aware secret domain listing in Azure Key Vault**: the regex filter in `_list_secret_domains` was `endswith('-metadata')`, which never matched any secret in production because `_sanitize_secret_name` always appends an 8-char CRC32 suffix. Anchored the regex to `^cert-.+-metadata-[0-9a-f]{8}$`. Without this fix, `list_certificates()` and the backfill endpoint would walk an empty domain list for every Azure Key Vault backend, silently showing zero certificates in the list view.
+
+## v2.5.5 (Minor — configurable cert key type/size, RSA + ECDSA)
+
+Community contribution from [@rocogamer](https://github.com/rocogamer) (PR #156). Every cert issued by CertMate was previously hardcoded to RSA-2048 because `CAManager.build_certbot_command` never passed `--key-type` or `--rsa-key-size` to certbot. Two real-world asks made this awkward — compliance operators required RSA-3072/4096, and modern stacks prefer ECDSA for smaller certs and faster TLS handshakes. Both groups had to patch the code or fork.
+
+### What landed
+
+- **Global default** under Settings → General → "Default Certificate Key":
+  `default_key_type` (`rsa` / `ecdsa`), `default_key_size` (`2048` / `3072` / `4096`),
+  `default_elliptic_curve` (`secp256r1` / `secp384r1`). Mutually exclusive selectors
+  in the UI.
+- **Per-cert override** under the create-cert form's "Advanced Options". Leaving it
+  on "Use global default" sends no key fields and the backend inherits the configured
+  default.
+- **Renewals preserve the original shape automatically** — certbot persists the
+  `--key-type` / `--rsa-key-size` / `--elliptic-curve` flags into its own
+  `renewal/<domain>.conf` at create time, so no new bookkeeping in CertMate.
+- **Backwards-compatible default**: settings without these fields migrate to
+  `rsa` / `2048` / `secp256r1` at load time, so existing installs see no behaviour
+  change after upgrade.
+- **`validate_key_options()` helper** rejects contradictory shapes up-front with a
+  400: RSA + curve, ECDSA + size, unsupported sizes, unsupported curves.
+- **Side-fix**: the GET `/api/settings` masking regex matched the `key` substring
+  in `default_key_type`, returning `'********'` which matched no `<option>` in the
+  UI dropdown. Fixed via an explicit `_NON_SECRET_KEYS` allowlist.
+- **24 unit tests added** (`tests/test_key_options.py`, `tests/test_settings_masking_allowlist.py`).
+
+### Verification
+
+Pre-merge smoke gate against `certmate.org` with random subdomains:
+
+- ECDSA + `secp384r1` override: cert emitted, `openssl x509 -text` confirms
+  `id-ecPublicKey`, `NIST CURVE: P-384`, `ecdsa-with-SHA384`. Force-renew preserves
+  the shape end-to-end.
+- RSA + `key_size=3072` override: cert emitted, `Public-Key: (3072 bit)`,
+  `sha256WithRSAEncryption`. Force-renew preserves the shape end-to-end.
+- Full test suite (docker + Playwright + Cloudflare real-cert lifecycle):
+  97 passed, 1 skipped, 2 pre-existing xfail.
+
+Follow-ups from review (4 minor non-blocking points: stale test docstring, info-leak
+in scope-check ordering, dead state in settings, module-scope nit) tracked separately
+and will land in a cleanup PR — none affect the shipping behaviour.
+
+## v2.5.4 (Patch — 2 community-reported bug fixes)
+
+Two atomic commits resolving issues reported by contributors on GitHub.
+Fast + UI test suite and the Cloudflare real-cert lifecycle e2e both
+green locally (97 passed, 1 skipped, 2 pre-existing xfail).
+
+### Real bug fixes
+
+- **`fix(wizard)`: list all 21 backend-supported DNS providers (#87)** —
+  the setup wizard's PROVIDERS map only knew 14 providers, so users on
+  PowerDNS, rfc2136, NS1, DNS Made Easy, Hurricane Electric, Dynu or
+  DuckDNS had no way to finish the wizard — *Skip wizard* (by design)
+  does not persist `setup_completed`, so the wizard reappeared on every
+  refresh. The list is now the full set of providers the backend
+  supports via `_MULTI_PROVIDER_REQUIRED_FIELDS`. Side-fix in the same
+  commit: corrects two pre-existing silent typos where the wizard saved
+  credentials under keys the certbot plugins do not read — `porkbun`
+  `secret_api_key` → `secret_key`, `godaddy` `api_secret` → `secret`.
+  Credentials saved through the wizard are now usable for first cert
+  issuance without a detour through Settings.
+
+- **`fix(ui)`: paint health strip on every cert row, not just the first
+  (#189)** — the `.health-*` selectors put `border-left` on the `<tr>`,
+  but the certificates table uses `border-collapse: separate` (Tailwind
+  default), where Chrome silently paints only the first row's border
+  and drops it on rows 2+. Moved the strip to `td:first-child` of the
+  row so the colored health indicator renders reliably on every row,
+  regardless of collapse mode.
+
+## v2.5.3 (Patch — multi-pass audit response + draconian test coverage push)
+
+Twenty atomic commits over a single branch, the result of running every
+finding from a multi-source audit (security CRITICAL/HIGH/MEDIUM/LOW + a
+performance audit + a UI audit) through empirical verification before
+acting. ~62 audit findings were checked; only the ones that survived
+verification turned into commits. Honest summary: 8 real bugs fixed, 10
+parziali / defense-in-depth landed, 35 false positives documented, the
+rest pre-existing-and-deferred.
+
+The release also nearly doubles unit test coverage on previously-uncovered
+critical-path modules: +160 new tests across 5 new test files (570 unit
+tests total, up from 410).
+
+### Real bug fixes
+
+- **`fix(certificates)`: race condition on metadata RMW** —
+  `record_backend_deployment_status` and `record_browser_deployment_status`
+  did load → mutate → save without holding the per-domain lock that already
+  exists in the class. Two concurrent deployment-status updates lost one
+  of the writes silently.
+
+- **`fix(deployer)`: deploy-hook parameter-expansion bypass** — the
+  safe-vars regex `\$\{?CERTMATE_[A-Z_]+\}?` accepted partial brace forms,
+  letting `${CERTMATE_FOO:-/etc/passwd}` and the other bash expansion
+  operators smuggle arbitrary paths past the validator. Closing-brace is
+  now required immediately after the var name.
+
+- **`fix(file_operations)`: UnboundLocalError in safe_file_write** —
+  if `mkstemp()` raised before `temp_file` was bound, the except handlers
+  referenced an unbound local, masking the actual OSError. Operators saw
+  "no local variable temp_file" instead of "No space left on device".
+
+- **`fix(certificates)`: corrupt metadata.json silently clobbered** —
+  `_load_metadata` swallowed `JSONDecodeError` along with everything else
+  and returned `{}`; the next save would overwrite the only copy. Now
+  JSON corruption is quarantined to `metadata.json.corrupt-<utc>` and
+  logged at ERROR, separately from IO errors which still get the empty-
+  dict fallback.
+
+- **`fix(health)`: scheduler-setup failure now surfaces on /health** —
+  if APScheduler setup raised, the only signal was a single ERROR log
+  line. `/health` now reports `scheduler: failed` with the exception
+  message and timestamp; admins can detect a broken scheduler without
+  grepping logs.
+
+- **`fix(tests)`: stale UI test assertions rewritten against v2.5.x** —
+  four `tests/test_ui.py` assertions had been failing on main since v2.5.0
+  rewrote the help page and the dashboard create-form toggle. Updated
+  them to current selectors + handle the setup-wizard overlay during
+  Playwright clicks. e2e suite: 112 passed, 0 failed.
+
+### Performance fixes
+
+- **`perf(settings)`: request-scoped cache for load_settings** — typical
+  `/api/certificates` requests called `settings_manager.load_settings()`
+  ~100 times when listing 50 certs. Now cached on `flask.g` for the
+  request's lifetime; first call hits disk, subsequent calls return a
+  deepcopy. ~15-30ms saved per typical request; more at scale.
+
+- **`perf(renewal)`: thread settings through check_renewals** — the
+  request-scoped cache doesn't fire in background threads. Pass the
+  once-loaded settings down to `get_certificate_info` so the hourly
+  renewal job hits disk once, not N times.
+
+- **`perf(probe)`: TLS probe timeout 5s → 3s + slow-probe warning** —
+  unreachable hosts block a Flask worker for the full timeout. Tightened
+  default + added `CERTMATE_TLS_PROBE_TIMEOUT_SECONDS` env var (clamped
+  to `[1, 30]`) + WARN log when a probe takes more than 1s.
+
+- **`perf(rate-limit)`: bound login-attempt dicts** — botnet IP rotation
+  could grow `_login_attempts_by_ip` unbounded. Sweep empty buckets when
+  either dict crosses the 10K soft cap.
+
+- **`perf(backup)`: single iterdir pass in create_unified_backup** —
+  `cert_dir.iterdir()` was called twice. Now once.
+
+### Hardening (defense-in-depth)
+
+- **`chore(hardening)`: SQLite WAL fallback detection** — `PRAGMA
+  journal_mode=WAL` silently falls back on filesystems that don't support
+  WAL (NFS, network mounts). Now logs a warning at startup if the effective
+  mode is anything but WAL.
+- **`chore(hardening)`: deploy-hook timeout int coercion** — `_run_hook`
+  read `hook.get('timeout')` without `int()`; a string timeout from a
+  hand-edited settings.json crashed the renewal worker. Coerce defensively.
+- **`chore(ux)`: SSE retry give-up after 10 failures** — logged-out tabs
+  produced a 401-every-30s loop indefinitely. Now gives up after ~3 minutes
+  of exponential retries.
+- **`chore(ux)`: MutationObserver readyState guard** — modal focus-trap
+  observer was attached in `DOMContentLoaded` only; if certmate.js loaded
+  later the listener never ran. Mirror the readyState pattern used by
+  `CM.refreshRole`.
+- **`chore(ux)`: confirm dialog before clear-cache** — settings.js's
+  `clearDeploymentCache` now matches the dashboard's `invalidateAllCache`
+  with a `CertMate.confirm()` step.
+
+### Documentation
+
+- **`docs(installation)`: document `BEHIND_PROXY=true`** — undocumented
+  before; without it, per-client rate limiting collapses to per-proxy
+  when CertMate sits behind nginx / traefik / cloudflare.
+- **`docs(installation)`: NFS guidance** — Python blocking I/O semantics
+  + recommended `soft,timeo=30,retrans=3` mount options.
+- **`docs`: neutralize DNS provider counts** — README and docs/ cited
+  22/23/24 inconsistently. Switched prose to neutral wording; canonical
+  number lives only in the table at `docs/dns-providers.md`. Same change
+  pushed to the GitHub Wiki.
+
+### Test coverage push (the draconian part)
+
+Five new test files, +160 unit tests on previously-uncovered modules:
+
+| Module | Before | New tests | Focus |
+|---|---|---|---|
+| `modules/core/private_ca.py` | 0% | 34 | CA shape (RSA-4096, BC=CA-true, KU.keyCertSign), CSR signing, signature verification, CRL generation |
+| `modules/core/csr_handler.py` | 0% | 38 | Validator entry-point: empty/garbage/truncated PEM, no-CN, control-char CN attacks (NUL, newline, CR), SAN ceiling at 100 |
+| `modules/core/ocsp_crl.py` | 0% | 20 | Status branches (good/revoked/unknown), CRL signature verification, manager-failure → 'unknown' not 'good' |
+| `modules/core/storage_backends.py` | ~25% | 56 | _is_transient heuristic, _with_retry decorator, _validate_storage_domain, Azure secret-name collision avoidance, StorageManager dispatch + fallback |
+| `modules/core/certificates.py` (gaps) | ~40% | 12 | Concurrent-issuance non-blocking lock, DNS alias status surfacing (ok/missing/mismatch/error), trailing-dot normalisation |
+
+Tests use real `cryptography` primitives (no mocked crypto operations);
+cloud-SDK request paths deliberately out of scope (they're covered by
+e2e). Total unit suite: 570 passed in ~12s.
+
+### Audit precision summary (transparency)
+
+Out of ~62 audit findings across 7 lists (CRITICAL/HIGH/MEDIUM/LOW for
+security + perf-CRITICAL/HIGH + perf-MEDIUM/LOW + UI CRITICAL/HIGH):
+- 8 true positives → fixes shipped
+- 10 partial / defense-in-depth → hardening shipped
+- 35 false positives → documented in commit messages why they were skipped
+- 2 already fixed incidentally during earlier waves
+- 7 YAGNI / over-engineering → deferred
+
+Each audit list was verified empirically (test scripts in Python where
+applicable) before deciding whether to commit. The audit author appears
+to have pattern-matched on code SHAPES (`innerHTML`, no .catch, no
+debounce, `except Exception`, `mkstemp`, etc.) without verifying the
+actual behaviour — the most clamorous claim ("validator allows
+backticks") was falsifiable in two lines of Python.
+
+### Backward compatibility
+
+- No API breakage. No data migration. No new required env vars.
+- New optional env vars: `BEHIND_PROXY`, `CERTMATE_TLS_PROBE_TIMEOUT_SECONDS`.
+- `/health` adds two new fields when the scheduler is in failure state
+  (`checks.scheduler == "failed"` plus `scheduler_error` + `scheduler_failed_at`).
+  Existing consumers that only read `status` and `checks.scheduler` see no
+  contract change for the success path.
+
+### Test results
+
+- 570 unit tests pass in ~12s
+- 112 e2e tests pass (real Cloudflare DNS-01 issuance + Playwright UI), 0 failures
+
+---
+
+## v2.5.2 (Patch — issue triage: 2 community bugs + 1 inconsistent web-auth response)
+
+Three scoped fixes from the v2.5.x issue triage. Each commit is one fix, mergeable in isolation. No API breakage, no data migration, no new env vars.
+
+### `fix(renew)` — pass `--no-random-sleep-on-renew` to certbot (closes [#171](https://github.com/fabriziosalmi/certmate/issues/171))
+
+`certbot renew` injects a random sleep of up to ~8 minutes before contacting the ACME server. The default exists to avoid stampeding Let's Encrypt when run from a flock of crontabs; CertMate's renewal endpoint is always invoked interactively from the UI / API, so the sleep doesn't help — it makes the POST time out as `NETWORK_ERROR` in the browser even though certbot eventually completes the renewal in the background. End state: cert refreshes on disk but the user sees a flat error.
+
+Add `--no-random-sleep-on-renew` unconditionally to the `cmd` built in [`modules/core/certificates.py:875-883`](modules/core/certificates.py#L875-L883). The flag has been in certbot since 1.5 (2020), so no version concern.
+
+Regression test: [`tests/test_issue171_no_random_sleep_renew.py`](tests/test_issue171_no_random_sleep_renew.py) mocks the shell executor, drives `renew_certificate()` against a fake on-disk cert, and asserts the cmd list contains the flag. Pins the behaviour so a future refactor of the cmd construction cannot quietly drop it.
+
+Reporter: [@ITJamie](https://github.com/ITJamie).
+
+### `fix(dashboard)` — give Domain column a `w-1/2` width hint (closes [#170](https://github.com/fabriziosalmi/certmate/issues/170))
+
+The Domain column used `max-w-0` + `truncate` on the `<td>` — the standard Tailwind technique for "let me truncate this cell in a table". It only works when the column has a width to truncate against. With the table's default `table-layout: auto` and no width on the `<th>`, the other `whitespace-nowrap` columns (Status, Expires "May 15, 2026 · 30 days left", Provider, Deployment, Actions) claimed their natural content width first and Domain got the leftover crumbs. On a viewport with all six columns visible the remaining space shrunk well below the width of any realistic FQDN and domain text truncated aggressively.
+
+Add `w-1/2` to the Domain `<th>`. With auto layout this acts as a floor, not a max: Domain claims at least 50% of the table width but can grow when there's spare. On a 1280px viewport that's a 640px floor — comfortably wide for any practical FQDN. The `<td>` keeps `max-w-0` + `truncate` so genuinely long names (rare wildcards under deep subdomains) still clip with an ellipsis.
+
+Reporter: [@ITJamie](https://github.com/ITJamie).
+
+### `fix(auth)` — redirect browser to `/login` on auth failure (was JSON 401)
+
+The `require_role` and `require_auth` decorators returned the API-style JSON
+`{"code":"AUTH_HEADER_MISSING","error":"Authorization header required"}`
+to every caller that wasn't authenticated, including browsers loading the protected HTML page routes (`/help`, `/settings`, `/audit`, `/activity`, `/redoc`, `/client-certificates`). Users saw the raw JSON body in the tab. The dashboard route `/` already redirected correctly via its hand-rolled flow; the rest were inconsistent.
+
+Add a helper `_is_browser_html_request()` that returns True only when both:
+- `request.path` does NOT live under `/api/` (the API surface is always JSON)
+- `request.accept_mimetypes` prefers `text/html` over `application/json` (a browser POST that `fetch()`s to `/api/...` is unaffected)
+
+Both decorators use it: on auth failure for browser HTML requests, return `redirect('/login?next=<path>')`; otherwise keep the existing JSON 401 byte-for-byte so curl, fetch, and API clients see no change.
+
+Regression test pins all three branches:
+- browser GET `/help` → 302 to `/login?next=/help`
+- JSON GET `/help` → 401 JSON, `code=AUTH_HEADER_MISSING`
+- browser GET `/api/...` → 401 JSON (never redirected)
+
+Reporter: [@fabriziosalmi](https://github.com/fabriziosalmi) (live observation while testing v2.5.1).
+
+### Tests
+
+Full non-UI suite green (438 passed, 9 skipped, 15 deselected). New test files:
+- `tests/test_issue171_no_random_sleep_renew.py` (1 test)
+- `tests/test_help_browser_redirect.py` (3 tests)
+
+### Backward compatibility
+
+- Renewal endpoint: same shape, faster response (no 5-8 min stall).
+- API responses to `/api/*` paths: byte-identical to v2.5.1.
+- Browsers hitting protected HTML routes without a session now get a 302 to `/login?next=<path>` instead of a JSON body. Pre-existing browser behaviour on `/` was already this; v2.5.2 makes the other web routes match.
+
+---
+
+## v2.5.1 (Patch — v2.5.0 follow-up: 9 fixes from manual browser testing)
+
+Nine small, scoped follow-ups caught during the manual browser pass on the v2.5.0 image. Each commit is one fix, mergeable in isolation. No API breakage, no data migration, no new env vars.
+
+### `fix(theme)` — only one toggle icon visible at a time
+
+The v2.5.0 swap from inline `style.display` to `classList.toggle('hidden')` broke the dark-mode toggle: FontAwesome's `.fas { display: inline-block }` is loaded after `tailwind.min.css` with equal specificity, so Tailwind's `.hidden` lost the cascade and both moon + sun icons rendered at once. Replaced the JS sync entirely with two CSS rules in `<head>` keyed off the `dark` class on `<html>` — ID-selector specificity (100) beats `.fas` (10), no `!important` needed, no FOUC, no JS race.
+
+### `fix(settings)` — restore icon → text gap on the tab nav
+
+The settings tab nav used `ml-1.5` on the label span. That class only appeared at this single callsite, so PurgeCSS dropped it from the prebuilt `tailwind.min.css` and the gap collapsed to zero. Switched to `ml-2`, which is bundled (32 callsites repo-wide). 2px visual delta.
+
+### `fix(redoc)` — point at the real swagger.json endpoint
+
+`/redoc` has been initialising ReDoc against `/static/swagger.json` since v2.2.0, but that static file has never existed — the OpenAPI spec is served by Flask-RESTx at `/api/swagger.json`. The bug went unnoticed because `/redoc` was an undocumented URL until v2.5.0 added it to the desktop nav and to the help page, surfacing the 404 to actual users.
+
+### `fix(dashboard)` — single-row top toolbar (tabs + Create button)
+
+Reflow the dashboard top-row so the cert-type toggle (Server / Client) sits on the same line as the **Create New Certificate** button on the right, instead of the button taking its own row underneath. `flex-wrap` lets the button drop to a second line on narrow viewports. The visual win is downstream: the stat cards and the certificate list move up by one row's worth of pixels.
+
+### `fix(dashboard)` — compact stat cards
+
+Drop the vertical footprint of the four metric cards (Total, Valid, Expiring, Deployed) by ~40%. The previous layout used a horizontal icon-then-label-and-value composition with `p-4` padding; the new layout stacks label + icon on one row, value on a second, with `px-3 py-2`. The skeleton placeholder is bumped down in lockstep so the pre-paint render matches the real card height — no layout shift when the API call resolves.
+
+### `fix(dashboard)` — empty-state "Create Certificate" button now works
+
+The CTA inside the welcome / empty-state block called `.focus()` directly on `#domain`. That input lives inside the create form container which is `display:none` by default, so `focus()` ran against a hidden element and silently did nothing — clicking the button looked broken. Added an `openCreateCertForm()` helper next to `toggleCreateCertForm()` that expands the form first (no-op if already open), focuses the domain input, and scrolls it into view. The top-right Create button is unaffected.
+
+### `fix(help)` — rewrite for user help, drop marketing, theme-aware code blocks
+
+Major surgery on the help page. The previous version was structured around a 6-card "quick links" grid duplicating the section headings below, an "About CertMate" marketing block, and per-feature promo cards under "What's New" — all of which read like the README, not like help.
+
+- Replaced the 6-card grid + scattered changelog link with one horizontal section-nav strip at the top (Quick Start, DNS, CA, API, Multi-account, Backup, Troubleshooting, Report an issue, What's new, Full changelog). Scrolls horizontally on narrow viewports.
+- Removed the "About CertMate" block entirely. Replaced with a single-line footer: *"CertMate is open source. github.com/fabriziosalmi/certmate"*.
+- Dropped the "What's New" feature-card grid. Now a single sentence linking to `RELEASE_NOTES.md`.
+- All section cards switched to `px-4 py-4` (was `px-6 py-6`): ~30% less vertical footprint.
+- Rewrote content for self-service diagnosis. DNS section gains a 6-row table mapping provider → token type → minimum API scope. CA section trimmed to 3 bullets, calls out EAB requirement on DigiCert + Private CA explicitly. Troubleshooting is now a `<dl>` with 5 concrete failure modes (DNS auth, propagation timeout, LE rate limit, deployment "unknown" status, Alpine.js load failure) plus the fix.
+- **New "Report an issue" section** with a diagnostic checklist (version, runtime, repro steps, console errors, `/health` output, screenshots) and a GitHub issue CTA — concrete artifacts the maintainer needs, not marketing copy.
+- `/health` link added to the top-right alongside Swagger / ReDoc so users can grab a one-line system status to attach.
+- **Theme-aware code blocks**: the two `<pre>` snippets used `bg-gray-900 text-green-300` unconditionally, which read as foreign dark islands inside the white cards in light mode. Switched to `bg-gray-100 text-gray-800` with `dark:` variants — terminal styling in dark mode, integrated with the surrounding card in light mode.
+
+Rendered page weight: 1358 → 709 lines.
+
+### `fix(palette)` — Cmd+K palette: adaptive height, no scrollbar when the viewport allows
+
+The Cmd+K palette's results pane had a fixed `max-h-72` (288px), which produced a scrollbar even on tall viewports where every result would fit without it. Replaced the static cap with a viewport-aware size computed at `open()` time, with a resize listener for live re-sizing while the palette is open. Floor of 180px keeps ~3 rows visible on genuinely short windows.
+
+### `fix(layout)` — reserve the scrollbar gutter to prevent horizontal shift
+
+Navigating between pages of different heights — or between settings sub-tabs (DNS short, Backup tall) — caused the whole layout to jump ~15px horizontally as the scrollbar appeared / disappeared between renders. The shift was small but constant and made the UI feel unstable. Added `scrollbar-gutter: stable; overflow-y: scroll;` on `<html>`. `scrollbar-gutter` does the right thing on Chrome 94+ / Firefox 97+ / Safari 16+; `overflow-y: scroll` covers older Safari / iOS as a fallback.
+
+### Tests
+
+Unit suite green pre-push. CI runs the same suite plus build and security-scan jobs.
+
+### Backward compatibility
+
+All changes are at the template / asset / client-side layer plus the version bump. No API, schema, or env-var changes.
+
+---
+
+## v2.5.0 (Minor — v3 UI massive pass: 51 fixes across all templates)
+
+A focused, single-branch sweep of the entire UI surface (`templates/`, `static/js/`, `static/css/`). 51 commits, each scoped to one fix, organized into four waves: cross-cutting refactors (R-1..R-6), per-page quick wins (QW-1..QW-15), per-page Tier A / Tier B work, and per-page section passes (2.x base, 3.x dashboard, 4.x settings, 5.x activity, 6.x login, 7.x help, 8.x cross-cutting).
+
+No API breakage. No data migration. No new env vars. All changes are at the template / asset / client-side layer, plus three small `modules/web/` additions to support `?next=` and `current_user` rendering.
+
+### Cross-cutting refactors
+
+- **R-1 — `templates/settings.html` Alpine root repair.** A long-standing structural bug had Alpine partials sitting outside the root `x-data` element due to an `<!-- comment inside attribute -->` that broke HTML parsing. Tabs and modals were silently un-reactive in some browsers. Re-parented partials inside the main card and removed the comment-in-attribute.
+- **R-2 — Standardized modal macro.** New `templates/partials/_modal.html` with a `{% call modal(id, title, size) %}` macro: dialog role, `aria-modal`, `aria-labelledby`, header with `[data-modal-close]`, scrollable body, panel sizing. Paired with `CertMate.modal.open/close` in [static/js/certmate.js](static/js/certmate.js): global Esc handler, backdrop click, focus trap, `modal:close` CustomEvent, MutationObserver-based discovery so partials added at runtime are wired automatically. Settings modals (`addAccountModal`, `editAccountModal`) migrated as the first callsites.
+- **R-3 — Component-class scaffold in [static/css/input.css](static/css/input.css).** New `@layer components` with `.btn`, `.btn-primary/secondary/danger/ghost`, `.btn-sm/lg`, `.card`, `.badge`, `.badge-success/warning/error/info`, `.form-input`, `.form-select`, `.form-label` — all defined via `@apply`. [tailwind.config.js](tailwind.config.js) safelist added so PurgeCSS doesn't drop classes until the migration of callsites lands in a follow-up sprint. No existing markup changed in this release.
+- **R-5 — Dashboard mobile card meta block.** On `md:hidden` widths each row gets a secondary line with expiry, provider, and deployment status. Previously these only rendered on desktop; mobile users couldn't tell certs apart at a glance.
+- **R-6 — Debug surface gating.** `?debug=1` opt-in writes `localStorage.certmate_debug='1'` and exposes `CertMate.debugEnabled`. All `[data-debug-control]` elements stay hidden until both the localStorage flag AND `/api/auth/me` returns `role === 'admin'`. Two-layer defense-in-depth — URL opt-in plus role check.
+
+### `templates/base.html` (2.1–2.3)
+
+- **2.1 / A1** — Theme toggle icon swap switched from `style.display` to `classList.toggle('hidden')` so Tailwind's dark-mode variant cascades correctly.
+- **2.2 / A4** — API Docs `/redoc` link added to the desktop nav alongside `/docs/`.
+- **2.2 / B1** — Logout button now server-side rendered via `{% if current_user %}` instead of a 500 ms client-side `fetch('/api/auth/me')` probe. New Jinja `context_processor` in [modules/web/routes.py](modules/web/routes.py) injects `current_user`.
+- **2.2 / B2** — Mobile-only search button (`sm:hidden`, icon-only).
+- **2.3 / A2** — `aria-label` on every icon-only top-nav button (theme, keyboard shortcuts, notifications, logout, search).
+- **2.3 / A3** — `aria-current="page"` on the active link in both desktop and mobile bottom nav.
+- **2.3 / B3** — Notification panel migrated to a proper Disclosure pattern: `aria-expanded`, `aria-controls`, Esc handler, focus restoration via `_closeNotifPanel()`. No focus trap (it's a disclosure, not a dialog).
+
+### `templates/index.html` (3.1–3.3) — dashboard
+
+- **3.1 / A1** — Debug button + console gated behind `?debug=1` per R-6.
+- **3.1 / A2** — Loading modal split `hidden` / `flex` classes correctly so it shows/hides without an extra reflow tick.
+- **3.2 / A3** — Explanatory `title` / `aria-label` on the Check-All checkbox.
+- **3.2 / A4** — Emoji prefixes dropped from CA provider `<option>` labels.
+- **3.2 / A5** — Quick Tips bullets replaced with a link to the Help page (single source of truth).
+- **3.2 / B3** — Cert-detail panel renders a skeleton on open and clears content on close so stale data never flashes.
+- **3.2 / B4** — Stats cards render a JS-driven skeleton via `STAT_METRICS_COUNT`; empty container shipped in the template.
+- **3.3 / B1** — `aria-label="${title} ${domain}"` on every per-row action button.
+- **3.3 / B2** — Sortable column headers: implicit `columnheader` role on `<th>`, internal `<button>` for interaction, `aria-sort` toggled via `setAttribute` on each sort.
+- **QW-4** — Dark-mode variants on the curl-snippet modal.
+- **QW-5** — Confirm guard on the delete action via `CertMate.confirm`.
+- **QW-11** — `autocomplete="off"` on cert-create domain inputs (primary + SAN), plus a more permissive SAN parser (`,;\n\t` separators, dedup).
+- **QW-12** — Form lock during in-flight create requests: `isCreatingCert` flag, disabled fields, spinner.
+- **QW-15** — `normalizeHostname()` strips scheme / port / path / trailing dot on submit, preserves `*.` wildcard prefix.
+
+### `templates/settings.html` (4.1–4.2)
+
+- **4.1 / A1** — Debug helper renamed `toggleDebugConsole` → `toggleSettingsDebugConsole` so it no longer collides with the dashboard's helper of the same name.
+- **4.2 / A2** — Tabs go icon-only on mobile; `aria-selected` bound to `tab === t.id`.
+- **4.2 / A3** — DNS-scope prefix added to status indicators. Orphan markup retained with an explanatory comment for the follow-up sprint that will migrate it to the new layout.
+
+### `templates/activity.html` (5.1–5.3)
+
+- **5.1** — Differentiated error states via `renderErrorState()` instead of a single generic banner.
+- **5.2** — Date-range filter (Today / 7d / 30d / All), full-text search across loaded entries, skeleton rows during load, clickable cert entries that deep-link into the dashboard detail panel via `?cert=<domain>`, server-side `limit` param + client "Load more" button (also fixed a backend bug — `/api/activity` returned a bare array but the client read `data.entries`, so the page was always empty), and `api_request` event type hidden from the default view (still surfaced when filtered).
+- **5.3** — ARIA semantics: `<ul role="feed">`, `<li role="article">`, `aria-busy` on the container during load. Errors use `role="alert"` with `aria-live="assertive"`.
+- **QW-8** — Tooltip with absolute timestamp on every relative time via `absoluteTime()`.
+
+### `templates/login.html` (6.1–6.3)
+
+- **QW-1** — FOUC fix: dark-mode script in `<head>` mirrors `base.html` so a user who toggled dark inside the app no longer sees a light flash on every `/login` redirect. `meta theme-color` paired for light + dark.
+- **6.2 / A1** — `/login` server-side redirects to `/` (or `?next=`) on a valid session cookie. The previous client-side check is kept as a defensive fallback.
+- **6.2 / A2** — `autocomplete="username"` and `autocomplete="current-password"` so password managers fill correctly.
+- **6.2 / A3** — `?next=` redirect with `safeNextUrl()` open-redirect guard: only same-origin relative paths (`/`-prefixed, no `//`).
+- **6.2 / A4** — Forgot-password hint pointing at the admin + the `scripts/reset_admin_password.py` in-container reset script (no email infra assumption).
+- **6.3 / A5** — Password visibility toggle: `aria-label`, `aria-pressed`, `aria-controls` swapped in lockstep with the icon glyph.
+
+### `templates/help.html` (7.1–7.2)
+
+- **7.1 / A1** — "What's New in v2.0" renamed to "v2.x" with a link to `RELEASE_NOTES.md`.
+- **7.1 / A2** — Clean six-item Quick Links grid (`grid-cols-3`) including a Backup card.
+- **7.2 / A3** — Swagger UI vs ReDoc disambiguated with explicit labels; eight `rel="noopener"` adds on outbound links.
+- **7.2 / B1** — In-page search filter for help sections via `data-help-section` markers.
+
+### Cross-cutting (8.x)
+
+- **8.2 / A2** — Graceful red `role="alert"` banner if `window.Alpine === undefined` after `DOMContentLoaded`, so a CDN failure doesn't leave the UI looking broken-but-silent.
+- **8.2 / A3** — Debug surface admin-role check (R-6 server-side leg).
+- **8.3 / A1** — Skip-to-content link as the first body child on every page (keyboard a11y).
+
+### Server-side additions
+
+Three small, backwards-compatible additions in `modules/web/`:
+
+- [modules/web/routes.py](modules/web/routes.py) — `context_processor` injecting `current_user` into every Jinja template render.
+- [modules/web/ui_routes.py](modules/web/ui_routes.py) — `/` route sets `request.current_user = user_info` after `validate_session`; redirect to login passes `?next=request.path`.
+- [modules/web/auth_routes.py](modules/web/auth_routes.py) — `login_page()` checks the session cookie server-side and 302s to `/` (or to `?next=` if present) instead of always rendering the login form.
+
+### Tests
+
+E2E suite run before push: **99 passed, 12 skipped, 2 xfailed in 55.5 s** against a freshly built `certmate:test` image (Docker fixture in `tests/conftest.py`, port 18888). The 2 xfailed are pre-existing markers in `test_ui.py`; the 12 skipped are real-cert / opt-in UI tests gated on explicit env. Unit suite green.
+
+### Backward compatibility
+
+- No API shape changes. No new required env vars.
+- The `?next=` parameter is opt-in; absence falls back to `/`.
+- `current_user` in Jinja is `None` for unauthenticated requests — no template that uses it assumes it's set.
+- R-3 component classes are scaffolded only; no callsite migrated, no class renamed.
+- Debug surface gating fails-closed: if `/api/auth/me` errors or returns a non-admin role, the surface stays hidden.
+
+### Acknowledgement
+
+This is a single-contributor sweep — 51 commits on `feature/v3-ui-fixes-2026-05-15`, each commit one fix. The discipline came out of the v2.4.x cycle where mixing fixes in single commits made review and rollback harder than they needed to be. Every fix in this release can be reverted in isolation.
 
 ---
 
@@ -442,6 +887,14 @@ Merges the ITJamie PR chain ([#128](https://github.com/fabriziosalmi/certmate/pu
 - 2 new test cases in `test_cert_lifecycle.py` (JSON download success + invalid format)
 - 1 new test case in `test_download_file_param.py` (JSON 404 for missing domains)
 - All validated against live Cloudflare DNS-01 with random subdomain `pr133test-91e7c166.certmate.org`
+
+## Unreleased
+
+### Features
+- **Configurable certificate key type/size**: every cert was hardcoded to RSA-2048 because `CAManager.build_certbot_command` never passed `--key-type` or `--rsa-key-size` to certbot. Operators with compliance requirements (RSA-3072/4096) or modern stacks (ECDSA, smaller certs and faster handshakes) had to patch the code. The settings page now exposes a global default (`default_key_type` / `default_key_size` / `default_elliptic_curve`) and the certificate creation form has an optional per-cert override under "Advanced Options". Renewals automatically preserve the original shape of each cert because certbot persists the `--key-type`/`--rsa-key-size`/`--elliptic-curve` flags into its own `renewal/<domain>.conf` at create time. Default for upgraded installs stays at `rsa`/`2048` so behaviour does not change unless the operator opts in. RSA accepts 2048/3072/4096; ECDSA accepts `secp256r1` and `secp384r1`. Validation runs on every save and every cert creation so a contradictory shape (e.g. `key_type=rsa` with an `elliptic_curve` override) is rejected with a 400 instead of failing later inside certbot.
+
+---
+
 
 ## v2.4.7 (Patch — base image bump bookworm → trixie)
 

@@ -7,7 +7,10 @@
 
     var escapeHtml = CertMate.escapeHtml;
 
-    // DNS provider definitions with required fields
+    // DNS provider definitions with required fields.
+    // Field keys must match modules/core/utils.py _MULTI_PROVIDER_REQUIRED_FIELDS
+    // and the per-provider create_*_config() signatures, since these values are
+    // posted verbatim to /api/web/settings and consumed by certbot plugins.
     var PROVIDERS = {
         cloudflare:    { label: 'Cloudflare', icon: 'fa-cloud', fields: [{ key: 'api_token', label: 'API Token', type: 'password' }] },
         route53:       { label: 'AWS Route 53', icon: 'fa-cloud-upload-alt', fields: [{ key: 'access_key_id', label: 'Access Key ID', type: 'text' }, { key: 'secret_access_key', label: 'Secret Access Key', type: 'password' }, { key: 'region', label: 'Region', type: 'text', placeholder: 'us-east-1' }] },
@@ -16,13 +19,20 @@
         gandi:         { label: 'Gandi', icon: 'fa-globe', fields: [{ key: 'api_token', label: 'API Token', type: 'password' }] },
         linode:        { label: 'Akamai Connected Cloud (Linode)', icon: 'fa-cloud', fields: [{ key: 'api_key', label: 'API Key', type: 'password' }] },
         edgedns:       { label: 'Akamai Edge DNS', icon: 'fa-cloud', fields: [{ key: 'client_token', label: 'Client Token', type: 'password' }, { key: 'client_secret', label: 'Client Secret', type: 'password' }, { key: 'access_token', label: 'Access Token', type: 'password' }, { key: 'host', label: 'API Host', type: 'text', placeholder: 'akab-XXXX.luna.akamaiapis.net' }] },
-        porkbun:       { label: 'Porkbun', icon: 'fa-globe', fields: [{ key: 'api_key', label: 'API Key', type: 'password' }, { key: 'secret_api_key', label: 'Secret API Key', type: 'password' }] },
-        godaddy:       { label: 'GoDaddy', icon: 'fa-globe', fields: [{ key: 'api_key', label: 'API Key', type: 'password' }, { key: 'api_secret', label: 'API Secret', type: 'password' }] },
+        porkbun:       { label: 'Porkbun', icon: 'fa-globe', fields: [{ key: 'api_key', label: 'API Key', type: 'password' }, { key: 'secret_key', label: 'Secret Key', type: 'password' }] },
+        godaddy:       { label: 'GoDaddy', icon: 'fa-globe', fields: [{ key: 'api_key', label: 'API Key', type: 'password' }, { key: 'secret', label: 'API Secret', type: 'password' }] },
         namecheap:     { label: 'Namecheap', icon: 'fa-globe', fields: [{ key: 'username', label: 'Username', type: 'text' }, { key: 'api_key', label: 'API Key', type: 'password' }] },
         vultr:         { label: 'Vultr', icon: 'fa-cloud', fields: [{ key: 'api_key', label: 'API Key', type: 'password' }] },
         ovh:           { label: 'OVH', icon: 'fa-globe', fields: [{ key: 'endpoint', label: 'Endpoint', type: 'text', placeholder: 'ovh-eu' }, { key: 'application_key', label: 'Application Key', type: 'text' }, { key: 'application_secret', label: 'Application Secret', type: 'password' }, { key: 'consumer_key', label: 'Consumer Key', type: 'password' }] },
         azure:         { label: 'Azure DNS', icon: 'fa-cube', fields: [{ key: 'subscription_id', label: 'Subscription ID', type: 'text' }, { key: 'resource_group', label: 'Resource Group', type: 'text' }, { key: 'tenant_id', label: 'Tenant ID', type: 'text' }, { key: 'client_id', label: 'Client ID', type: 'text' }, { key: 'client_secret', label: 'Client Secret', type: 'password' }] },
-        google:        { label: 'Google Cloud DNS', icon: 'fa-cloud-meatball', fields: [{ key: 'project_id', label: 'Project ID', type: 'text' }, { key: 'service_account_key', label: 'Service Account Key (JSON)', type: 'textarea' }] }
+        google:        { label: 'Google Cloud DNS', icon: 'fa-cloud-meatball', fields: [{ key: 'project_id', label: 'Project ID', type: 'text' }, { key: 'service_account_key', label: 'Service Account Key (JSON)', type: 'textarea' }] },
+        powerdns:      { label: 'PowerDNS', icon: 'fa-bolt', fields: [{ key: 'api_url', label: 'API URL', type: 'text', placeholder: 'https://powerdns.example.com:8081' }, { key: 'api_key', label: 'API Key', type: 'password' }] },
+        rfc2136:       { label: 'RFC2136 (BIND/Knot)', icon: 'fa-network-wired', fields: [{ key: 'nameserver', label: 'Nameserver', type: 'text', placeholder: 'ns.example.com' }, { key: 'tsig_key', label: 'TSIG Key Name', type: 'text', placeholder: 'mykey' }, { key: 'tsig_secret', label: 'TSIG Secret', type: 'password', placeholder: 'Base64-encoded secret' }] },
+        dnsmadeeasy:   { label: 'DNS Made Easy', icon: 'fa-globe', fields: [{ key: 'api_key', label: 'API Key', type: 'password' }, { key: 'secret_key', label: 'Secret Key', type: 'password' }] },
+        nsone:         { label: 'NS1', icon: 'fa-circle-nodes', fields: [{ key: 'api_key', label: 'API Key', type: 'password' }] },
+        'he-ddns':     { label: 'Hurricane Electric', icon: 'fa-bolt', fields: [{ key: 'username', label: 'Username', type: 'text' }, { key: 'password', label: 'Password', type: 'password' }] },
+        dynudns:       { label: 'Dynu', icon: 'fa-globe', fields: [{ key: 'token', label: 'API Token', type: 'password' }] },
+        duckdns:       { label: 'DuckDNS', icon: 'fa-cloud', fields: [{ key: 'api_token', label: 'Account Token', type: 'password', placeholder: 'UUID-format token from your DuckDNS account page' }] }
     };
 
     var state = { step: 1, email: '', provider: '', credentials: {} };
@@ -32,7 +42,9 @@
         fetch('/api/web/settings?t=' + t, { credentials: 'same-origin', cache: 'no-store' })
             .then(function(r) { return r.json(); })
             .then(function(data) {
-                if (data && data.setup_completed === false) {
+                if (data && data.certmate_recovery_suggested) {
+                    showRecoveryPrompt();
+                } else if (data && data.setup_completed === false) {
                     showWizard();
                 }
             })
@@ -43,6 +55,45 @@
                 // legitimately be in a state where /api/web/settings 401s.
                 console.error('Setup-detection request failed:', err);
             });
+    }
+
+    function showRecoveryPrompt() {
+        var overlay = document.createElement('div');
+        overlay.id = 'setupRecoveryPrompt';
+        overlay.className = 'fixed inset-0 z-[110] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4';
+        overlay.innerHTML =
+            '<div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg p-8 text-center">' +
+                '<div class="w-16 h-16 bg-yellow-100 dark:bg-yellow-900/30 rounded-full flex items-center justify-center mx-auto mb-4">' +
+                    '<i class="fas fa-exclamation-triangle text-yellow-600 dark:text-yellow-400 text-2xl"></i>' +
+                '</div>' +
+                '<h2 class="text-xl font-bold text-gray-900 dark:text-white mb-2">Existing Data Detected</h2>' +
+                '<p class="text-sm text-gray-500 dark:text-gray-400 mb-6">' +
+                    'CertMate found certificates on this volume but no matching configuration. ' +
+                    'This usually happens after a downgrade. You can restore the latest backup to recover your users and domains, or start fresh.' +
+                '</p>' +
+                '<div class="space-y-3">' +
+                    '<button id="recoveryRestore" class="w-full px-6 py-3 bg-primary hover:bg-secondary text-white font-medium rounded-lg text-sm transition">' +
+                        '<i class="fas fa-archive mr-2"></i>Restore from Backup' +
+                    '</button>' +
+                    '<button id="recoveryFresh" class="w-full px-6 py-3 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 font-medium rounded-lg text-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition">' +
+                        'Start Fresh Setup' +
+                    '</button>' +
+                '</div>' +
+                '<p class="mt-4 text-xs text-gray-400">' +
+                    'Need help? Check the logs for <code class="bg-gray-100 dark:bg-gray-700 px-1 rounded">DOWNGRADE DETECTED</code> or run <code class="bg-gray-100 dark:bg-gray-700 px-1 rounded">scripts/reset_admin_password.py</code> inside the container to regain access.' +
+                '</p>' +
+            '</div>';
+        document.body.appendChild(overlay);
+        document.getElementById('recoveryRestore').addEventListener('click', function() {
+            window.location.href = '/settings#backup';
+        });
+        document.getElementById('recoveryFresh').addEventListener('click', closeRecoveryPrompt);
+        document.getElementById('recoveryFresh').addEventListener('click', showWizard);
+    }
+
+    function closeRecoveryPrompt() {
+        var el = document.getElementById('setupRecoveryPrompt');
+        if (el) el.remove();
     }
 
     function showWizard() {

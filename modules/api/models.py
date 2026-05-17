@@ -180,7 +180,19 @@ def create_api_models(api):
                 'acme-dns', 'duckdns', 'edgedns'
             ]
         ),
-        'dns_providers': fields.Nested(dns_providers_model, description='DNS provider configurations')
+        'dns_providers': fields.Nested(dns_providers_model, description='DNS provider configurations'),
+        'default_key_type': fields.String(
+            description='Global default key type for new certificates (per-domain overrides take precedence).',
+            enum=['rsa', 'ecdsa']
+        ),
+        'default_key_size': fields.Integer(
+            description="Global default RSA key size — applied when default_key_type='rsa'.",
+            enum=[2048, 3072, 4096]
+        ),
+        'default_elliptic_curve': fields.String(
+            description="Global default ECDSA curve — applied when default_key_type='ecdsa'.",
+            enum=['secp256r1', 'secp384r1']
+        )
     })
 
     create_cert_model = api.model('CreateCertificate', {
@@ -200,7 +212,22 @@ def create_api_models(api):
         'account_id': fields.String(description='DNS provider account ID'),
         'ca_provider': fields.String(description='CA provider (optional)',
                                      enum=['letsencrypt', 'digicert', 'private_ca']),
-        'domain_alias': fields.String(description='Optional domain alias for DNS validation')
+        'domain_alias': fields.String(description='Optional domain alias for DNS validation'),
+        'key_type': fields.String(
+            description=(
+                "Optional override of the global default key type. Omit to "
+                "inherit settings.default_key_type."
+            ),
+            enum=['rsa', 'ecdsa']
+        ),
+        'key_size': fields.Integer(
+            description="RSA key size in bits — required when key_type='rsa'.",
+            enum=[2048, 3072, 4096]
+        ),
+        'elliptic_curve': fields.String(
+            description="ECDSA curve — required when key_type='ecdsa'.",
+            enum=['secp256r1', 'secp384r1']
+        )
     })
 
     # Cache models
@@ -221,6 +248,40 @@ def create_api_models(api):
         'success': fields.Boolean(description='Whether cache was cleared successfully'),
         'message': fields.String(description='Status message'),
         'cleared_entries': fields.Integer(description='Number of entries that were cleared')
+    })
+
+    browser_deployment_model = api.model('BrowserDeploymentStatus', {
+        'reachable': fields.Boolean(description='Whether the browser could reach the domain'),
+        'checked_at': fields.String(description='When the browser check happened'),
+        'method': fields.String(description='How the browser check was performed'),
+        'source': fields.String(description='Source of the browser report')
+    })
+
+    deployment_status_model = api.model('DeploymentStatus', {
+        'domain': fields.String(description='Domain name'),
+        'deployed': fields.Boolean(description='Whether the domain is serving a certificate'),
+        'reachable': fields.Boolean(description='Whether the domain responds over HTTPS'),
+        'certificate_match': fields.Raw(description='Whether the served certificate matches the local certificate'),
+        'method': fields.String(description='Check method'),
+        'timestamp': fields.String(description='Check timestamp'),
+        'error': fields.String(description='Optional error message'),
+        # Machine-readable error code surfaced when _check_domain_scope denies
+        # a scoped API key (e.g. 'DOMAIN_OUT_OF_SCOPE'). Without listing it
+        # here, @api.marshal_with would silently strip it from the 403 body.
+        'code': fields.String(description='Optional machine-readable error code'),
+        'browser': fields.Nested(browser_deployment_model, description='Browser-reported reachability')
+    })
+
+    browser_deployment_report_model = api.model('BrowserDeploymentReport', {
+        'domain': fields.String(required=True, description='Domain name'),
+        'reachable': fields.Boolean(required=True, description='Whether the browser could reach the domain'),
+        'checked_at': fields.String(description='When the browser check happened'),
+        'method': fields.String(description='How the browser check was performed'),
+        'source': fields.String(description='Source of the browser report')
+    })
+
+    browser_deployment_reports_model = api.model('BrowserDeploymentReports', {
+        'reports': fields.List(fields.Nested(browser_deployment_report_model), required=True, description='Batch of browser deployment reports')
     })
 
     # Backup models
@@ -348,6 +409,10 @@ def create_api_models(api):
         'dns_providers_model': dns_providers_model,
         'cache_stats_model': cache_stats_model,
         'cache_clear_response_model': cache_clear_response_model,
+        'browser_deployment_model': browser_deployment_model,
+        'browser_deployment_report_model': browser_deployment_report_model,
+        'browser_deployment_reports_model': browser_deployment_reports_model,
+        'deployment_status_model': deployment_status_model,
         'certificate_model': certificate_model,
         'create_cert_model': create_cert_model,
         'cache_entry_model': cache_entry_model,

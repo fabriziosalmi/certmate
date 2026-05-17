@@ -1,6 +1,8 @@
 import logging
 from flask import request, jsonify
 
+from modules.core.constants import iter_cert_domain_dirs
+
 logger = logging.getLogger(__name__)
 
 
@@ -10,6 +12,7 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
     auth_manager_ref = auth_manager
     deploy_manager = managers.get('deployer')
     audit_logger = managers.get('audit')
+    file_ops = managers.get('file_ops')
 
     @app.route('/api/settings', methods=['GET'])
     @app.route('/api/web/settings', methods=['GET'])
@@ -34,15 +37,43 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
                 r'(token|secret|password|key|credential)',
                 re.IGNORECASE
             )
+            # The 'key' fragment in the regex matches any field name
+            # containing "key" — including the cryptographic-shape
+            # defaults, whose values ('rsa', '2048', 'secp256r1', …)
+            # are not secrets. Masking them breaks the settings UI:
+            # the populated <select> ends up with no matching <option>
+            # and renders empty, and a save-without-edit then trips
+            # the validate_key_options check.
+            _NON_SECRET_KEYS = {
+                'default_key_type',
+                'default_key_size',
+                'default_elliptic_curve',
+            }
             def _mask_dict(d):
                 if not isinstance(d, dict):
                     return
                 for k in list(d.keys()):
+                    if k in _NON_SECRET_KEYS:
+                        continue
                     if _SECRET_KEYS.search(k) and isinstance(d[k], str) and d[k]:
                         d[k] = '********'
                     elif isinstance(d[k], dict):
                         _mask_dict(d[k])
             _mask_dict(masked)
+
+            # Recovery helper: if the UI is about to show the wizard,
+            # surface a flag so the frontend can suggest restoring
+            # from backup instead of silently overwriting settings.
+            has_users = bool(settings.get('users'))
+            has_domains = bool(settings.get('domains'))
+            cert_dir = getattr(settings_manager.file_ops, 'cert_dir', None)
+            has_certs = (
+                cert_dir is not None
+                and any(iter_cert_domain_dirs(cert_dir))
+            ) if cert_dir else False
+            if not has_users and not has_domains and has_certs:
+                masked['certmate_recovery_suggested'] = True
+
             response = jsonify(masked)
             response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, post-check=0, pre-check=0, max-age=0'
             response.headers['Pragma'] = 'no-cache'

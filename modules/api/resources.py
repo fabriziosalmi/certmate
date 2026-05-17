@@ -5,7 +5,10 @@ Defines Flask-RESTX Resource classes for REST API endpoints
 
 import logging
 import re
+import socket
+import ssl
 import tempfile
+import time
 import zipfile
 import os
 import io
@@ -16,6 +19,7 @@ from flask_restx import Resource, fields
 from ..core.metrics import get_metrics_summary, is_prometheus_available
 from ..core.constants import CERTIFICATE_FILES, iter_cert_domain_dirs
 from ..core.auth import ROLE_HIERARCHY
+from ..core.utils import utc_now_iso
 
 _DOMAIN_RE = re.compile(r'^(\*\.)?([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$')
 
@@ -46,6 +50,84 @@ def _validate_domain_path(domain, cert_base_dir):
     except (OSError, ValueError):
         return None, 'Invalid domain path'
     return cert_dir, None
+
+
+def _certificate_fingerprint(cert_bytes):
+    """Return a stable SHA-256 fingerprint for a PEM or DER certificate."""
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes
+
+    cert_bytes = cert_bytes or b''
+    if not cert_bytes:
+        return None
+
+    try:
+        cert = x509.load_pem_x509_certificate(cert_bytes)
+    except ValueError:
+        cert = x509.load_der_x509_certificate(cert_bytes)
+    return cert.fingerprint(hashes.SHA256()).hex()
+
+
+def _tls_probe_timeout_seconds():
+    """Read CERTMATE_TLS_PROBE_TIMEOUT_SECONDS, clamped to [1, 30]. Default 3s.
+
+    Each probe blocks one Flask worker thread for up to this many seconds on
+    an unreachable host. Lower = workers free up faster; higher = fewer false
+    negatives on legitimately-slow targets. The default of 3s is a deliberate
+    drop from the previous 5s — production /api/certificates dashboards that
+    surface deployment status for ~50 domains can otherwise stall an
+    operator-facing handler for tens of seconds when several targets are
+    down.
+    """
+    raw = os.getenv('CERTMATE_TLS_PROBE_TIMEOUT_SECONDS', '').strip()
+    if not raw:
+        return 3.0
+    try:
+        value = float(raw)
+    except ValueError:
+        return 3.0
+    return max(1.0, min(value, 30.0))
+
+
+def _probe_https_certificate(domain, timeout=None):
+    """Return the live TLS certificate for a domain, if reachable.
+
+    timeout=None reads CERTMATE_TLS_PROBE_TIMEOUT_SECONDS via the helper above
+    so deployments can tune the per-probe budget without touching the code.
+    """
+    if timeout is None:
+        timeout = _tls_probe_timeout_seconds()
+    host = domain[2:] if domain.startswith('*.') else domain
+    context = ssl.create_default_context()
+    # We intentionally disable PKI validation here. The goal is to compare the
+    # served certificate fingerprint against the stored certificate, even when
+    # the live cert is invalid or otherwise not trusted.
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_NONE
+
+    started = time.monotonic()
+    try:
+        with socket.create_connection((host, 443), timeout=timeout) as raw_sock:
+            with context.wrap_socket(raw_sock, server_hostname=host) as tls_sock:
+                cert_bytes = tls_sock.getpeercert(binary_form=True)
+                return {
+                    'reachable': True,
+                    'certificate_bytes': cert_bytes,
+                }
+    finally:
+        # A probe that takes more than 1s is a strong hint the target is slow
+        # or unreachable. Surfacing it in the application log lets an operator
+        # spot the offending domain without reproducing a multi-second
+        # dashboard stall — and lets them tune CERTMATE_TLS_PROBE_TIMEOUT_SECONDS
+        # if the slowness is real but expected.
+        elapsed = time.monotonic() - started
+        if elapsed > 1.0:
+            logger.warning(
+                "Slow TLS probe for %s: %.2fs (timeout=%.1fs). "
+                "Consider lowering CERTMATE_TLS_PROBE_TIMEOUT_SECONDS to "
+                "free Flask workers faster.",
+                host, elapsed, timeout,
+            )
 
 
 logger = logging.getLogger(__name__)
@@ -493,6 +575,18 @@ def create_api_resources(api, models, managers):
                     if not alias_valid:
                         return {'error': f'Invalid domain_alias: {alias_msg}'}, 400
 
+                # Optional per-cert key shape overrides. Validated up-front so
+                # the caller gets a clean 400 (with the field-specific reason)
+                # instead of a generic certbot stack trace later.
+                key_type = data.get('key_type')
+                key_size = data.get('key_size')
+                elliptic_curve = data.get('elliptic_curve')
+                if key_type is not None or key_size is not None or elliptic_curve is not None:
+                    from ..core.utils import validate_key_options
+                    ok, key_err = validate_key_options(key_type, key_size, elliptic_curve)
+                    if not ok:
+                        return {'error': key_err}, 400
+
                 # Validate domain
                 if not domain:
                     return {
@@ -582,7 +676,10 @@ def create_api_resources(api, models, managers):
                     ca_provider=ca_provider,
                     domain_alias=domain_alias,
                     san_domains=san_domains,
-                    challenge_type=challenge_type
+                    challenge_type=challenge_type,
+                    key_type=key_type,
+                    key_size=key_size,
+                    elliptic_curve=elliptic_curve,
                 )
 
                 # Append the new domain to settings under the manager's
@@ -598,11 +695,25 @@ def create_api_resources(api, models, managers):
                     )
                     if already_present:
                         return
-                    domains_list.append({
+                    entry = {
                         'domain': domain,
                         'dns_provider': _resolved_dns_provider,
                         'dns_account_id': account_id,
-                    })
+                    }
+                    # Only persist key overrides the operator picked
+                    # explicitly. Inheriting from the global default keeps
+                    # the entry small and lets later changes to the global
+                    # apply to certs that never specified a per-cert shape.
+                    # Renewals still preserve the original shape because
+                    # certbot persists --key-type/--rsa-key-size/--elliptic-curve
+                    # in its own renewal/<domain>.conf at create time.
+                    if key_type is not None:
+                        entry['key_type'] = key_type
+                    if key_size is not None:
+                        entry['key_size'] = key_size
+                    if elliptic_curve is not None:
+                        entry['elliptic_curve'] = elliptic_curve
+                    domains_list.append(entry)
                     s['domains'] = domains_list
 
                 settings_manager.update(_add_domain, "certificate_created")
@@ -880,6 +991,135 @@ def create_api_resources(api, models, managers):
         level = ROLE_HIERARCHY.get((user or {}).get('role'), -1)
         return level >= ROLE_HIERARCHY.get(min_role, 999)
 
+    class CertificateDeploymentStatus(Resource):
+        @api.doc(security='Bearer')
+        @auth_manager.require_role('viewer')
+        @api.marshal_with(models['deployment_status_model'])
+        def get(self, domain):
+            """Check whether the domain is serving the expected certificate."""
+            refresh_requested = str(request.args.get('refresh', '')).lower() in {'1', 'true', 'yes', 'on'}
+            _, err = _validate_domain_path(domain, file_ops.cert_dir)
+            if err:
+                return {'error': err}, 400
+            scope_err = _check_domain_scope(domain, 'deployment_status')
+            if scope_err:
+                return scope_err
+
+            cert_info = certificate_manager.get_certificate_info(domain)
+            if not cert_info or not cert_info.get('exists'):
+                return {'error': f'Certificate not found for domain: {domain}'}, 404
+
+            if refresh_requested:
+                cache_manager.remove_from_cache(domain)
+            else:
+                cached_result = cache_manager.get_deployment_status(domain)
+                if isinstance(cached_result, dict) and cached_result.get('domain') == domain:
+                    return cached_result, 200
+
+            expected_bytes = None
+            storage_manager = getattr(certificate_manager, 'storage_manager', None)
+            if storage_manager is not None:
+                try:
+                    storage_result = storage_manager.retrieve_certificate(domain)
+                    if storage_result:
+                        cert_files, _metadata = storage_result
+                        expected_bytes = cert_files.get('cert.pem')
+                except Exception as e:
+                    logger.warning(f"Could not read stored certificate for {domain}: {e}")
+
+            if expected_bytes is None:
+                cert_path = Path(file_ops.cert_dir) / domain / 'cert.pem'
+                if cert_path.exists():
+                    expected_bytes = cert_path.read_bytes()
+
+            if not expected_bytes:
+                return {'error': f'Certificate file not found for domain: {domain}'}, 404
+
+            expected_fingerprint = _certificate_fingerprint(expected_bytes)
+            if not expected_fingerprint:
+                return {'error': f'Could not parse certificate for domain: {domain}'}, 500
+
+            result = {
+                'domain': domain,
+                'deployed': False,
+                'reachable': False,
+                'certificate_match': False,
+                'method': 'https-tls',
+                'timestamp': utc_now_iso(),
+            }
+
+            try:
+                probe = _probe_https_certificate(domain)
+                result['reachable'] = True
+                result['deployed'] = True
+                result['certificate_match'] = (
+                    _certificate_fingerprint(probe.get('certificate_bytes')) == expected_fingerprint
+                )
+            except Exception as e:
+                result['error'] = str(e)
+
+            persisted_status = certificate_manager.get_deployment_status_record(domain)
+            if isinstance(persisted_status, dict) and persisted_status.get('browser'):
+                result['browser'] = persisted_status.get('browser')
+
+            certificate_manager.record_backend_deployment_status(domain, result)
+            cache_manager.set_deployment_status(domain, result)
+            return result, 200
+
+    class CertificateDeploymentBrowserReports(Resource):
+        @api.doc(security='Bearer')
+        @auth_manager.require_role('viewer')
+        @api.expect(models['browser_deployment_reports_model'])
+        def post(self):
+            """Persist browser-reported reachability for one or more domains."""
+            payload = request.get_json(silent=True) or {}
+            reports = payload.get('reports')
+            if not isinstance(reports, list) or not reports:
+                return {'error': 'reports must be a non-empty array'}, 400
+
+            updated = []
+            skipped = []
+            for report in reports:
+                if not isinstance(report, dict):
+                    skipped.append({'error': 'invalid report payload'})
+                    continue
+
+                domain = (report.get('domain') or '').strip()
+                if not domain:
+                    skipped.append({'error': 'missing domain'})
+                    continue
+
+                _, err = _validate_domain_path(domain, file_ops.cert_dir)
+                if err:
+                    skipped.append({'domain': domain, 'error': err})
+                    continue
+                scope_err = _check_domain_scope(domain, 'browser_report')
+                if scope_err:
+                    skipped.append({'domain': domain, 'error': 'out of scope'})
+                    continue
+
+                browser_status = certificate_manager.record_browser_deployment_status(domain, report)
+                persisted = certificate_manager.get_deployment_status_record(domain)
+                backend = persisted.get('backend') if isinstance(persisted, dict) else None
+                merged = {
+                    'domain': domain,
+                    'deployed': bool(backend.get('deployed')) if isinstance(backend, dict) else False,
+                    'reachable': bool(backend.get('reachable')) if isinstance(backend, dict) else False,
+                    'certificate_match': backend.get('certificate_match') if isinstance(backend, dict) else False,
+                    'method': backend.get('method') if isinstance(backend, dict) else 'browser-report',
+                    'timestamp': backend.get('timestamp') if isinstance(backend, dict) else None,
+                    'error': backend.get('error') if isinstance(backend, dict) else None,
+                    'browser': browser_status.get('browser') if isinstance(browser_status, dict) else None,
+                }
+                cache_manager.set_deployment_status(domain, merged)
+                updated.append(domain)
+
+            return {
+                'updated': updated,
+                'skipped': skipped,
+                'count': len(updated),
+            }, 200
+
     class DownloadCertificate(Resource):
         @api.doc(security='Bearer')
         @auth_manager.require_role('viewer')
@@ -1041,10 +1281,12 @@ def create_api_resources(api, models, managers):
         def post(self, domain):
             """Renew an existing certificate"""
             try:
+                payload = request.get_json(silent=True) or {}
+                force = bool(payload.get('force', False))
                 scope_err = _check_domain_scope(domain, 'renew')
                 if scope_err:
                     return scope_err
-                result = certificate_manager.renew_certificate(domain)
+                result = certificate_manager.renew_certificate(domain, force=force)
 
                 event_bus = current_app.config.get('EVENT_BUS')
                 if event_bus:
@@ -2049,6 +2291,8 @@ def create_api_resources(api, models, managers):
         'CheckDNSAlias': CheckDNSAlias,
         'CertificateDNSAliasCheck': CertificateDNSAliasCheck,
         'CertificateDetail': CertificateDetail,
+        'CertificateDeploymentStatus': CertificateDeploymentStatus,
+        'CertificateDeploymentBrowserReports': CertificateDeploymentBrowserReports,
         'DownloadCertificate': DownloadCertificate,
         'RenewCertificate': RenewCertificate,
         'CertificateAutoRenew': CertificateAutoRenew,

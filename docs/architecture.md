@@ -20,13 +20,13 @@ This document covers the complete CertMate architecture — both the main server
 
 ## Main System Architecture
 
-CertMate is a modular, pluggable SSL/TLS certificate management system built with Python/Flask. It supports multiple CA providers, 22+ DNS providers, and pluggable storage backends.
+CertMate is a modular, pluggable SSL/TLS certificate management system built with Python/Flask. It supports multiple CA providers, two dozen+ DNS providers, and pluggable storage backends.
 
 **Key Facts:**
 - **Language**: Python 3.9+ (Flask, Flask-RESTX)
 - **Storage**: Local filesystem default + 4 cloud backends (Azure Key Vault, AWS Secrets Manager, HashiCorp Vault, Infisical)
 - **CA Providers**: Let's Encrypt, DigiCert ACME, Private CA
-- **DNS Providers**: 22 supported (Cloudflare, AWS Route53, Azure, Google, and more)
+- **DNS Providers**: two dozen+ supported (Cloudflare, AWS Route53, Azure, Google, and more — see [DNS Providers](./dns-providers.md) for the full list)
 - **API**: REST with Swagger/OpenAPI via Flask-RESTX
 - **Current Certificate Types**: Server-side TLS (DV, OV, EV)
 
@@ -259,9 +259,26 @@ All settings are stored in `data/settings.json`:
   "certificate_storage": {
     "backend": "local_filesystem",
     "cert_dir": "certificates"
-  }
+  },
+  "default_key_type": "rsa",
+  "default_key_size": 2048,
+  "default_elliptic_curve": "secp256r1"
 }
 ```
+
+### Certificate key type/size
+
+Three top-level keys control the public-key shape of newly issued certificates:
+
+| Key | Values | Applies when |
+|---|---|---|
+| `default_key_type` | `rsa` (default) / `ecdsa` | always |
+| `default_key_size` | `2048` (default) / `3072` / `4096` | `default_key_type == "rsa"` |
+| `default_elliptic_curve` | `secp256r1` (default) / `secp384r1` | `default_key_type == "ecdsa"` |
+
+A per-certificate override is supported: each entry in `domains` may carry an optional `key_type` plus either `key_size` (RSA) or `elliptic_curve` (ECDSA). When the override is present it wins; otherwise the global default applies. The defaults `rsa`/`2048` mirror the implicit certbot default that CertMate emitted before this setting existed, so upgraded installs see no change unless the operator picks something else.
+
+Renewals always preserve the shape that was in effect at creation time: certbot persists `--key-type`, `--rsa-key-size` and `--elliptic-curve` into its own `renewal/<domain>.conf` during the first issuance, and `certbot renew --cert-name <domain>` reuses those values automatically.
 
 ---
 

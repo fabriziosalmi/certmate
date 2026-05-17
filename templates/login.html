@@ -7,8 +7,23 @@
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico">
     <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <meta name="theme-color" content="#3b82f6" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#0b1120" media="(prefers-color-scheme: dark)">
     <link href="/static/css/tailwind.min.css" rel="stylesheet">
     <link href="/static/css/fontawesome.min.css" rel="stylesheet">
+    <script>
+    // Apply dark mode before paint to prevent flash. Mirrors the snippet in
+    // base.html so login.html honours the same `localStorage.theme` value
+    // (set by the theme toggle inside the app) and the same OS-preference
+    // fallback. Without this, a user who toggled dark inside the app sees
+    // a light flash on every /login redirect.
+    (function() {
+        var theme = localStorage.getItem('theme');
+        if (theme === 'dark' || (theme !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        }
+    })();
+    </script>
 </head>
 <body class="login-ambient min-h-screen flex items-center justify-center transition-colors duration-200 font-sans">
     <div class="max-w-md w-full mx-4">
@@ -34,6 +49,7 @@
                         <i class="fas fa-user mr-1"></i> Username
                     </label>
                     <input type="text" id="username" name="username" required
+                           autocomplete="username"
                            class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                            placeholder="Enter your username">
                 </div>
@@ -45,11 +61,13 @@
                     </label>
                     <div class="relative">
                         <input type="password" id="password" name="password" required
+                               autocomplete="current-password"
                                class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                                placeholder="Enter your password">
-                        <button type="button" onclick="togglePassword()" 
+                        <button type="button" id="passwordToggleBtn" onclick="togglePassword()"
+                                aria-label="Show password" aria-pressed="false" aria-controls="password"
                                 class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
-                            <i class="fas fa-eye" id="passwordToggleIcon"></i>
+                            <i class="fas fa-eye" id="passwordToggleIcon" aria-hidden="true"></i>
                         </button>
                     </div>
                 </div>
@@ -68,6 +86,17 @@
                         class="w-full py-3 px-4 bg-primary text-white font-semibold rounded-lg hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 dark:focus:ring-offset-gray-800 btn-press transition-all duration-150">
                     <i class="fas fa-sign-in-alt mr-2"></i> Sign In
                 </button>
+
+                <!-- Reset-password hint. CertMate doesn't ship a self-
+                     service flow (no email infra assumption), so the
+                     canonical path is to ask the admin or use the
+                     in-container reset script. -->
+                <p class="text-xs text-gray-500 dark:text-gray-400 text-center mt-2">
+                    Forgot your password? Contact your CertMate
+                    administrator, or run
+                    <code class="font-mono px-1 py-0.5 rounded bg-gray-100 dark:bg-gray-700">scripts/reset_admin_password.py</code>
+                    inside the container.
+                </p>
             </form>
         </div>
 
@@ -81,16 +110,15 @@
         function togglePassword() {
             const passwordField = document.getElementById('password');
             const toggleIcon = document.getElementById('passwordToggleIcon');
-            
-            if (passwordField.type === 'password') {
-                passwordField.type = 'text';
-                toggleIcon.classList.remove('fa-eye');
-                toggleIcon.classList.add('fa-eye-slash');
-            } else {
-                passwordField.type = 'password';
-                toggleIcon.classList.remove('fa-eye-slash');
-                toggleIcon.classList.add('fa-eye');
-            }
+            const toggleBtn = document.getElementById('passwordToggleBtn');
+            const willBeVisible = passwordField.type === 'password';
+            // Swap input type, icon glyph, and the ARIA state in lockstep
+            // so screen readers announce the new toggle state on click.
+            passwordField.type = willBeVisible ? 'text' : 'password';
+            toggleIcon.classList.toggle('fa-eye', !willBeVisible);
+            toggleIcon.classList.toggle('fa-eye-slash', willBeVisible);
+            toggleBtn.setAttribute('aria-pressed', willBeVisible ? 'true' : 'false');
+            toggleBtn.setAttribute('aria-label', willBeVisible ? 'Hide password' : 'Show password');
         }
 
         function showError(message) {
@@ -101,6 +129,19 @@
 
         function hideError() {
             document.getElementById('errorMessage').classList.add('hidden');
+        }
+
+        // Read the ?next= query param and treat it as the post-login
+        // destination. Validate to a same-origin relative path so a
+        // crafted /login?next=https://evil.example/ link can't be used
+        // to bounce users off the site after authenticating.
+        function safeNextUrl() {
+            try {
+                var raw = new URLSearchParams(window.location.search).get('next');
+                if (!raw || typeof raw !== 'string') return '/';
+                if (!raw.startsWith('/') || raw.startsWith('//')) return '/';
+                return raw;
+            } catch (e) { return '/'; }
         }
 
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
@@ -131,8 +172,9 @@
                 const data = await response.json();
 
                 if (response.ok) {
-                    // Redirect to main page on successful login
-                    window.location.href = '/';
+                    // Redirect to ?next= (validated) or to the dashboard
+                    // root when no next was provided.
+                    window.location.href = safeNextUrl();
                 } else {
                     showError(data.error || 'Login failed');
                 }
@@ -145,14 +187,19 @@
             }
         });
 
-        // Check if already logged in
+        // Client-side already-logged-in check kept as a defensive
+        // fallback. The /login route now server-side redirects on
+        // valid session (auth_routes.py), so in production this branch
+        // never fires — but if a stale cookie sneaks past the server
+        // check, we still bounce to the next-url instead of letting
+        // the user re-authenticate unnecessarily.
         (async () => {
             try {
                 const response = await fetch('/api/auth/me');
                 if (response.ok) {
                     const data = await response.json();
                     if (data.user) {
-                        window.location.href = '/';
+                        window.location.href = safeNextUrl();
                     }
                 }
             } catch (e) {

@@ -26,7 +26,13 @@
     // Debug console functions
     // =============================================
 
-    function toggleDebugConsole() {
+    // Renamed from toggleDebugConsole / clearDebugConsole to avoid a
+    // naming collision with the identically-named helpers in
+    // dashboard.js — both files export to `window.*` and the two
+    // pages don't load together so there's no runtime breakage today,
+    // but a future bundle / a future page that includes both scripts
+    // would silently overwrite the binding (4.1 fix).
+    function toggleSettingsDebugConsole() {
         var consoleDiv = document.getElementById('settingsDebugConsole');
         if (consoleDiv.classList.contains('hidden')) {
             consoleDiv.classList.remove('hidden');
@@ -35,7 +41,7 @@
         }
     }
 
-    function clearDebugConsole() {
+    function clearSettingsDebugConsole() {
         document.getElementById('settingsDebugOutput').innerHTML = '<div class="text-gray-500">Debug console cleared. All settings actions will be logged here...</div>';
     }
 
@@ -182,6 +188,14 @@
             var tokenRaw = formData.get('api_bearer_token');
             var tokenValue = tokenRaw ? tokenRaw.trim() : undefined;
 
+            // Default certificate-key shape selectors. RSA always carries
+            // a key_size, ECDSA always a curve — the inactive branch is
+            // omitted from the payload so save_settings doesn't trip the
+            // mutual-exclusion validator.
+            var defaultKeyType = formData.get('default_key_type') || 'rsa';
+            var defaultKeySize = parseInt(formData.get('default_key_size'), 10);
+            var defaultEllipticCurve = formData.get('default_elliptic_curve') || 'secp256r1';
+
             var settings = {
                 email: email.trim(),
                 domains: domainsValue,
@@ -191,10 +205,12 @@
                 challenge_type: formData.get('challenge_type') || 'dns-01',
                 api_bearer_token: tokenValue,
                 cache_ttl: parseInt(formData.get('cache_ttl')) || 300,
-                storage_backend: formData.get('storage_backend'),
                 certificate_storage: collectStorageBackendSettings(),
                 default_ca: defaultCA,
-                ca_providers: caProviders
+                ca_providers: caProviders,
+                default_key_type: defaultKeyType,
+                default_key_size: defaultKeyType === 'rsa' ? (defaultKeySize || 2048) : 2048,
+                default_elliptic_curve: defaultEllipticCurve
             };
 
             // Validate required fields - email comes from the selected CA provider
@@ -212,13 +228,17 @@
                 throw new Error('DNS provider must be selected');
             }
 
-            // API Bearer Token is only required after initial setup
-            if (!settings.api_bearer_token && currentSettings.setup_completed) {
+            // API Bearer Token is only required after initial setup when the
+            // backend has no hashed token already. Post-2.4.8 settings.json
+            // stores only api_bearer_token_hash (the plaintext is intentionally
+            // absent from GET /api/web/settings), so an empty form field on
+            // save means "keep the existing hash", not "no token configured".
+            if (!settings.api_bearer_token && currentSettings.setup_completed && !currentSettings.api_bearer_token_hash) {
                 throw new Error('API Bearer Token is required');
             }
 
             // Auto-generate token for initial setup if not provided
-            if (!settings.api_bearer_token && !currentSettings.setup_completed) {
+            if (!settings.api_bearer_token && !currentSettings.setup_completed && !currentSettings.api_bearer_token_hash) {
                 settings.api_bearer_token = generateRandomToken();
                 var tokenField = document.getElementById('api_bearer_token');
                 if (tokenField) {
@@ -380,30 +400,42 @@
     }
 
     function clearDeploymentCache() {
-        addDebugLog('Clearing deployment cache...', 'info');
+        // Mirror the confirm pattern used by the dashboard's invalidateAllCache.
+        // The clear itself is non-destructive (next dashboard load re-probes
+        // each domain) but a misclick still wastes a round of probes and
+        // momentarily flickers every cert's deployment badge — annoying enough
+        // to warrant the same two-step interaction.
+        return CertMate.confirm(
+            'Clear all server-side deployment status cache? The next dashboard render will re-probe every cert.',
+            'Clear Cache',
+            { danger: false }
+        ).then(function (confirmed) {
+            if (!confirmed) return Promise.resolve();
+            addDebugLog('Clearing deployment cache...', 'info');
 
-        return fetch('/api/web/cache/clear', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        })
-            .then(function (response) {
-                if (response.ok) {
-                    return response.json().then(function (result) {
-                        addDebugLog('Cache cleared successfully', 'info');
-                        showMessage('Cache cleared successfully', 'success');
-                        return refreshCacheStats();
-                    });
-                } else {
-                    addDebugLog('Failed to clear cache', 'warn');
-                    showMessage('Failed to clear cache', 'error');
+            return fetch('/api/web/cache/clear', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
                 }
             })
-            .catch(function (error) {
-                addDebugLog('Error clearing cache: ' + error.message, 'error');
-                showMessage('Error clearing cache', 'error');
-            });
+                .then(function (response) {
+                    if (response.ok) {
+                        return response.json().then(function (result) {
+                            addDebugLog('Cache cleared successfully', 'info');
+                            showMessage('Cache cleared successfully', 'success');
+                            return refreshCacheStats();
+                        });
+                    } else {
+                        addDebugLog('Failed to clear cache', 'warn');
+                        showMessage('Failed to clear cache', 'error');
+                    }
+                })
+                .catch(function (error) {
+                    addDebugLog('Error clearing cache: ' + error.message, 'error');
+                    showMessage('Error clearing cache', 'error');
+                });
+        });
     }
 
     // =============================================
@@ -625,11 +657,42 @@
                 }
             }
 
+            // Default certificate-key shape — populate selectors from the
+            // loaded settings so the form reflects the persisted defaults
+            // (and the operator can edit them without losing the others).
+            if (data.default_key_type) {
+                var keyTypeField = document.getElementById('default_key_type');
+                if (keyTypeField) {
+                    keyTypeField.value = data.default_key_type;
+                }
+            }
+            if (data.default_key_size) {
+                var keySizeField = document.getElementById('default_key_size');
+                if (keySizeField) {
+                    keySizeField.value = String(data.default_key_size);
+                }
+            }
+            if (data.default_elliptic_curve) {
+                var curveField = document.getElementById('default_elliptic_curve');
+                if (curveField) {
+                    curveField.value = data.default_elliptic_curve;
+                }
+            }
+            if (typeof toggleDefaultKeyOptions === 'function') {
+                toggleDefaultKeyOptions();
+            }
+
             if (data.api_bearer_token) {
                 var populateTokenField = document.getElementById('api_bearer_token');
                 if (populateTokenField) {
                     populateTokenField.value = data.api_bearer_token;
                     addDebugLog('API bearer token field populated', 'info');
+                }
+            } else if (data.api_bearer_token_hash) {
+                var hashedTokenField = document.getElementById('api_bearer_token');
+                if (hashedTokenField) {
+                    hashedTokenField.placeholder = 'API token configured — leave empty to keep, or enter a new one to rotate';
+                    addDebugLog('API bearer token already configured (hash present)', 'info');
                 }
             }
 
@@ -752,7 +815,10 @@
         addDebugLog('Opening add account modal for ' + provider, 'info');
 
         var modal = document.getElementById('addAccountModal');
-        var modalTitle = document.getElementById('modal-title');
+        // R-2: macro emits `<h3 id="<modalId>-title">` for aria-labelledby
+        // wiring; the dynamic per-provider title still lands in the same
+        // <h3>, just renamed from the legacy "modal-title" id.
+        var modalTitle = document.getElementById('addAccountModal-title');
         var providerFields = document.getElementById('modal-provider-fields');
         var accountNameField = document.getElementById('account-name');
         var accountDescField = document.getElementById('account-description');
@@ -1886,6 +1952,19 @@
     // STORAGE BACKEND MANAGEMENT FUNCTIONS
     // =============================================
 
+    // Mirror the cert-form behaviour for Settings → Default Certificate Key:
+    // show the RSA key-size picker only when the operator picked RSA, the
+    // ECDSA curve picker only when they picked ECDSA. Keeping both visible
+    // would let the form post a contradictory pair (e.g. type=rsa with a
+    // curve set), which save_settings would reject.
+    function toggleDefaultKeyOptions() {
+        var keyType = (document.getElementById('default_key_type') || {}).value;
+        var sizeEl = document.getElementById('default_key_size_container');
+        var curveEl = document.getElementById('default_elliptic_curve_container');
+        if (sizeEl) sizeEl.style.display = (keyType === 'ecdsa') ? 'none' : '';
+        if (curveEl) curveEl.style.display = (keyType === 'ecdsa') ? '' : 'none';
+    }
+
     function toggleStorageBackendConfig() {
         var backend = document.getElementById('storage-backend').value;
         var configs = document.querySelectorAll('.storage-config');
@@ -2705,6 +2784,16 @@
         saveBtn = document.getElementById('saveBtn');
         statusMessage = document.getElementById('statusMessage');
 
+        // R-2: route every dismiss path (Esc, backdrop, the macro's
+        // close button, the form's Cancel button with [data-modal-close])
+        // through the existing cleanup. The programmatic path —
+        // saveAccount() / saveEditAccount() calling closeXxxModal() on
+        // success — still runs the same body, so cleanup is uniform.
+        var addModalEl = document.getElementById('addAccountModal');
+        if (addModalEl) addModalEl.addEventListener('modal:close', closeAddAccountModal);
+        var editModalEl = document.getElementById('editAccountModal');
+        if (editModalEl) editModalEl.addEventListener('modal:close', closeEditAccountModal);
+
         addDebugLog('DOM loaded, initializing settings page', 'info');
 
         // Add challenge type radio listeners
@@ -2779,6 +2868,7 @@
     window.toggleTokenVisibility = toggleTokenVisibility;
     window.generateToken = generateToken;
     window.toggleStorageBackendConfig = toggleStorageBackendConfig;
+    window.toggleDefaultKeyOptions = toggleDefaultKeyOptions;
     window.testStorageBackend = testStorageBackend;
     window.toggleAzureBackfillRow = toggleAzureBackfillRow;
     window.backfillAzureCertificateObjects = backfillAzureCertificateObjects;
@@ -2793,8 +2883,8 @@
     window.downloadBackup = downloadBackup;
     window.restoreBackup = restoreBackup;
     window.deleteBackup = deleteBackup;
-    window.clearDebugConsole = clearDebugConsole;
-    window.toggleDebugConsole = toggleDebugConsole;
+    window.clearSettingsDebugConsole = clearSettingsDebugConsole;
+    window.toggleSettingsDebugConsole = toggleSettingsDebugConsole;
     window.toggleChallengeType = toggleChallengeType;
     window.toggleUserStatus = toggleUserStatus;
     window.resetUserPassword = resetUserPassword;

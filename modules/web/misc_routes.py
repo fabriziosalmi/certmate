@@ -12,11 +12,30 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
     @app.route('/api/activity')
     @auth_manager.require_role('viewer')
     def activity_api():
-        """Activity log endpoint"""
+        """Activity log endpoint.
+
+        Honors ``?limit=N`` from the query string, bounded to [1, 500]
+        so the client can implement Load-more pagination without hitting
+        an unbounded read on a large audit log. Response is shaped as
+        ``{entries, count, limit}`` so the client can decide whether to
+        offer a "Load more" affordance (entries.length >= limit
+        ⇒ there may be more).
+        """
         try:
+            raw_limit = request.args.get('limit', 100)
+            try:
+                limit = int(raw_limit)
+            except (TypeError, ValueError):
+                limit = 100
+            limit = max(1, min(limit, 500))
+
             audit_logger = managers['audit']
-            logs = audit_logger.get_recent_entries(limit=50)
-            return jsonify(logs)
+            logs = audit_logger.get_recent_entries(limit=limit)
+            return jsonify({
+                'entries': logs,
+                'count': len(logs),
+                'limit': limit,
+            })
         except Exception as e:
             logger.error(f"Activity API error: {e}")
             return jsonify({'error': 'Failed to fetch activity'}), 500
@@ -40,8 +59,19 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
 
         # Scheduler
         scheduler = managers.get('scheduler')
-        checks['scheduler'] = 'running' if (scheduler and scheduler.running) else 'not_running'
-        if checks['scheduler'] != 'running':
+        scheduler_status = managers.get('scheduler_status') or {}
+        if scheduler and scheduler.running:
+            checks['scheduler'] = 'running'
+        elif scheduler_status.get('state') == 'failed':
+            # Setup raised an exception. Surface the reason so operators can
+            # diagnose without grepping logs; without this the /health response
+            # collapsed to a bare 'not_running' that hid the actual cause.
+            checks['scheduler'] = 'failed'
+            checks['scheduler_error'] = scheduler_status.get('error')
+            checks['scheduler_failed_at'] = scheduler_status.get('timestamp')
+            overall = 'degraded'
+        else:
+            checks['scheduler'] = 'not_running'
             overall = 'degraded'
 
         # Cert directory

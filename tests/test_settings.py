@@ -42,6 +42,38 @@ class TestSettingsSave:
         data = r.json()
         assert data.get("email") == email
 
+    def test_save_full_ui_payload_shape(self, api):
+        r = api.post_json("/api/web/settings", {
+            "email": "ui-shape@example.com",
+            "domains": [],
+            "auto_renew": True,
+            "renewal_threshold_days": 30,
+            "dns_provider": "cloudflare",
+            "challenge_type": "dns-01",
+            "cache_ttl": 300,
+            "certificate_storage": {
+                "backend": "local_filesystem",
+                "cert_dir": "/data/certs",
+            },
+            "default_ca": "letsencrypt",
+            "ca_providers": {
+                "letsencrypt": {"email": "ui-shape@example.com"},
+            },
+        })
+        assert r.status_code == 200, r.text
+        assert r.json() == {"message": "Settings updated"}
+
+    def test_save_rejects_unknown_top_level_field(self, api):
+        r = api.post_json("/api/web/settings", {
+            "email": "unknown-field@example.com",
+            "dns_provider": "cloudflare",
+            "totally_made_up_field": "nope",
+        })
+        assert r.status_code == 400
+        data = r.json()
+        assert data["error"] == "Unknown fields in payload"
+        assert data["unknown"] == ["totally_made_up_field"]
+
 
 class TestDNSProviderAccounts:
     """DNS provider account CRUD."""

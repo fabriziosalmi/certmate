@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Optional
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
-from flask import Flask, request
+from flask import Flask, jsonify, request
 from flask_cors import CORS
 from flask_restx import Api, Namespace
 
@@ -33,6 +33,11 @@ from modules.web import register_web_routes
 logger = get_certmate_logger('factory')
 request_logger = get_certmate_logger('request-watchdog')
 
+# APScheduler jobs run in background threads where Flask's thread-local
+# current_app proxy is unbound.  We keep a module-level reference so we
+# can explicitly push an app context inside those jobs.
+_flask_app = None
+
 
 class AppContainer:
     """DI Container holding all managers and application state"""
@@ -40,6 +45,11 @@ class AppContainer:
         self.app = None
         self.api = None
         self.scheduler = None
+        # Snapshot of the scheduler's startup outcome. Consumed by /health so
+        # operators can detect a silent setup failure without grepping logs.
+        # Shape: {"state": "uninitialized" | "running" | "failed",
+        #         "error": str | None, "timestamp": iso-utc-str | None}
+        self.scheduler_status = {"state": "uninitialized", "error": None, "timestamp": None}
         self.managers = {}
         self.cert_dir = None
         self.data_dir = None
@@ -463,32 +473,59 @@ def initialize_managers(container: AppContainer, app):
     }
 
 
+def _run_manager_job(manager_key: str, method_name: str):
+    """Execute a manager method inside a Flask app context.
+
+    APScheduler jobs run in background threads where the thread-local
+    `current_app` proxy is unbound.  We keep a module-level reference to
+    the app instance so we can push an explicit app context before
+    touching any Flask-bound code.
+    """
+    if _flask_app is None:
+        logger.warning(
+            "Background job skipped: Flask app not yet initialised",
+            manager_key=manager_key,
+            method_name=method_name,
+        )
+        return
+    from flask import current_app
+    with _flask_app.app_context():
+        managers = current_app.config.get('MANAGERS')
+        manager = managers.get(manager_key) if managers else None
+        if manager is None:
+            logger.warning(
+                "Background job skipped: manager not found",
+                manager_key=manager_key,
+            )
+            return
+        try:
+            getattr(manager, method_name)()
+        except Exception:
+            logger.exception(
+                "Background job failed",
+                manager_key=manager_key,
+                method_name=method_name,
+            )
+
+
 def _certificate_renewal_job():
     """Picklable wrapper for certificate renewal check"""
-    from flask import current_app
-    managers = current_app.config.get('MANAGERS')
-    if managers and 'certificates' in managers:
-        managers['certificates'].check_renewals()
+    _run_manager_job('certificates', 'check_renewals')
 
 
 def _client_certificate_renewal_job():
     """Picklable wrapper for client certificate renewal check"""
-    from flask import current_app
-    managers = current_app.config.get('MANAGERS')
-    if managers and 'client_certificates' in managers:
-        managers['client_certificates'].check_renewals()
+    _run_manager_job('client_certificates', 'check_renewals')
 
 
 def _weekly_digest_job():
     """Picklable wrapper for weekly digest"""
-    from flask import current_app
-    managers = current_app.config.get('MANAGERS')
-    if managers and 'digest' in managers:
-        managers['digest'].send()
+    _run_manager_job('digest', 'send')
 
 
 def setup_scheduler(container: AppContainer):
     """Set up APScheduler for background tasks with persistent store."""
+    assert _flask_app is not None, "setup_scheduler called before _flask_app was set"
     try:
         from sqlalchemy import create_engine, event as _sa_event
         _db_path = container.data_dir / 'scheduler_jobs.sqlite'
@@ -496,7 +533,27 @@ def setup_scheduler(container: AppContainer):
 
         @_sa_event.listens_for(_engine, 'connect')
         def _set_wal_mode(dbapi_conn, _record):
+            # `PRAGMA journal_mode=WAL` does NOT raise when the filesystem
+            # doesn't support WAL (NFS, some network mounts, old FAT). SQLite
+            # silently falls back to the previous journal mode, which still
+            # works but has worse concurrency. Verify the mode took effect
+            # and log a warning if not — otherwise the only signal would be
+            # "scheduler feels slow" with no clue why.
             dbapi_conn.execute('PRAGMA journal_mode=WAL')
+            try:
+                cur = dbapi_conn.execute('PRAGMA journal_mode')
+                row = cur.fetchone()
+                effective = row[0] if row else None
+                if effective and str(effective).lower() != 'wal':
+                    logger.warning(
+                        f"Scheduler SQLite store could not enter WAL mode; "
+                        f"running in journal_mode={effective!r}. The filesystem "
+                        f"may not support WAL (NFS, network mounts). Renewal "
+                        f"correctness is unaffected; concurrency will be lower."
+                    )
+            except Exception as e:
+                # Diagnostic only — don't break connection if PRAGMA readback fails.
+                logger.debug(f"Could not verify SQLite journal_mode: {e}")
             dbapi_conn.execute('PRAGMA synchronous=NORMAL')
 
         jobstores = {
@@ -522,6 +579,11 @@ def setup_scheduler(container: AppContainer):
         )
         container.scheduler = scheduler
         container.managers['scheduler'] = scheduler
+        from .utils import utc_now_iso
+        container.scheduler_status = {
+            "state": "running", "error": None, "timestamp": utc_now_iso(),
+        }
+        container.managers['scheduler_status'] = container.scheduler_status
     except Exception as e:
         logger.error(f"Scheduler setup failed — automatic certificate renewal will NOT run: {e}")
         import warnings
@@ -530,6 +592,15 @@ def setup_scheduler(container: AppContainer):
             "Automatic certificate renewal is DISABLED.",
             RuntimeWarning, stacklevel=2,
         )
+        # Record the failure so /health surfaces it. Without this the only
+        # signal of a broken scheduler was a single ERROR line in the logs;
+        # operators that don't tail logs would never know automatic renewal
+        # had silently stopped working.
+        from .utils import utc_now_iso
+        container.scheduler_status = {
+            "state": "failed", "error": str(e), "timestamp": utc_now_iso(),
+        }
+        container.managers['scheduler_status'] = container.scheduler_status
 
 
 def setup_api(container: AppContainer, app):
@@ -575,6 +646,8 @@ def setup_api(container: AppContainer, app):
     ns_certificates.add_resource(api_resources['CreateCertificate'], '/create')
     ns_certificates.add_resource(api_resources['CheckDNSAlias'], '/check-dns-alias')
     ns_certificates.add_resource(api_resources['CertificateDetail'], '/<string:domain>')
+    ns_certificates.add_resource(api_resources['CertificateDeploymentStatus'], '/<string:domain>/deployment-status')
+    ns_certificates.add_resource(api_resources['CertificateDeploymentBrowserReports'], '/deployment-status/browser')
     ns_certificates.add_resource(api_resources['CertificateDNSAliasCheck'], '/<string:domain>/dns-alias-check')
     ns_certificates.add_resource(api_resources['DownloadCertificate'], '/<string:domain>/download')
     ns_certificates.add_resource(api_resources['RenewCertificate'], '/<string:domain>/renew')
@@ -664,6 +737,44 @@ def setup_csrf_protection(app):
         return None
 
 
+def setup_error_handlers(app):
+    """Force JSON responses for unhandled errors on /api/* paths.
+
+    Without these handlers, Werkzeug serves its HTML default page when a
+    request fails to match a registered route (e.g. a trailing slash that
+    no rule covers) or when an unhandled exception escapes a view function.
+    Frontends that pipe the response through `r.json()` then surface
+    "Unexpected token '<'" / NETWORK_ERROR — the symptom reported in #164.
+    Non-API paths keep Flask's default behaviour.
+    """
+    from werkzeug.exceptions import HTTPException
+
+    @app.errorhandler(HTTPException)
+    def _api_http_exception(e):
+        if request.path.startswith('/api/'):
+            return jsonify({
+                'error': e.name,
+                'message': e.description,
+                'code': e.code,
+            }), e.code
+        return e
+
+    @app.errorhandler(Exception)
+    def _api_unhandled_exception(e):
+        if not request.path.startswith('/api/'):
+            raise e
+        logger.exception(
+            "Unhandled exception in API request",
+            path=request.path,
+            method=request.method,
+        )
+        return jsonify({
+            'error': 'Internal Server Error',
+            'message': 'An unexpected error occurred. Check the server logs for details.',
+            'code': 500,
+        }), 500
+
+
 def setup_security_headers(app):
     @app.after_request
     def add_security_headers(response):
@@ -751,6 +862,7 @@ def setup_rate_limiting(app, container: AppContainer):
 
 def create_app(test_config=None):
     """Application Factory for CertMate"""
+    global _flask_app
     container = AppContainer()
     setup_directories(container, test_config)
 
@@ -775,12 +887,18 @@ def create_app(test_config=None):
 
     configure_app(container, app, test_config)
     initialize_managers(container, app)
+    app.config['MANAGERS'] = container.managers
     setup_api(container, app)
     register_web_routes(app, container.managers)
     setup_csrf_protection(app)
+    setup_error_handlers(app)
     setup_security_headers(app)
     setup_rate_limiting(app, container)
     setup_slow_request_logging(app, container)
+
+    # Make the app instance available to background APScheduler jobs before
+    # starting the scheduler so recovered misfired jobs can push an app context.
+    _flask_app = app
     setup_scheduler(container)
 
     return app, container

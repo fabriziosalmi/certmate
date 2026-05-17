@@ -14,6 +14,8 @@
     };
 
     var escapeHtml = CertMate.escapeHtml;
+    var browserDeploymentReportQueue = {};
+    var browserDeploymentReportTimer = null;
 
     // --- Role-aware UI gating (audit punch-list M2) -----------------------
     // Default to viewer until /api/auth/me responds. The server is the
@@ -50,7 +52,12 @@
         document.getElementById('loadingTitle').textContent = title;
         document.getElementById('loadingMessage').textContent = message;
         document.getElementById('progressBar').style.width = '0%';
+        // Toggle `hidden` and the flex centering utilities together — the
+        // static markup keeps only `hidden` so we never ship `hidden flex`
+        // at the same time (display utilities conflicting; works today
+        // only because of Tailwind's class ordering).
         modal.classList.remove('hidden');
+        modal.classList.add('flex', 'items-center', 'justify-center');
 
         // Simulate progress for better UX
         var progress = 0;
@@ -67,7 +74,9 @@
     function hideLoadingModal(progressInterval) {
         document.getElementById('progressBar').style.width = '100%';
         setTimeout(function () {
-            document.getElementById('loadingModal').classList.add('hidden');
+            var modal = document.getElementById('loadingModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex', 'items-center', 'justify-center');
             if (progressInterval) clearInterval(progressInterval);
         }, 500);
     }
@@ -86,7 +95,66 @@
         filterCertificates();
     }
 
+    function queueBrowserDeploymentReport(domain, result) {
+        if (!domain || !result || !result.reachable) {
+            return;
+        }
+
+        browserDeploymentReportQueue[domain] = {
+            domain: domain,
+            reachable: true,
+            checked_at: result.timestamp || new Date().toISOString(),
+            method: result.method || 'browser-fallback',
+            source: 'browser'
+        };
+
+        if (!browserDeploymentReportTimer) {
+            browserDeploymentReportTimer = setTimeout(flushBrowserDeploymentReports, 250);
+        }
+    }
+
+    function flushBrowserDeploymentReports() {
+        browserDeploymentReportTimer = null;
+        var reports = Object.keys(browserDeploymentReportQueue).map(function (domain) {
+            return browserDeploymentReportQueue[domain];
+        });
+        browserDeploymentReportQueue = {};
+
+        if (!reports.length) {
+            return Promise.resolve();
+        }
+
+        return fetch('/api/certificates/deployment-status/browser', {
+            method: 'POST',
+            headers: API_HEADERS,
+            credentials: 'same-origin',
+            body: JSON.stringify({ reports: reports })
+        }).catch(function (error) {
+            console.warn('Failed to send browser deployment reports:', error);
+        });
+    }
+
     // Update statistics cards with deployment info
+    // Number of stat cards `updateStats` emits below (Total, Valid,
+    // Expiring, Deployed). Drives the initial skeleton render so the
+    // placeholder count always matches the real count — when the metric
+    // list changes, bump this constant in lockstep with the statCard()
+    // calls in `updateStats`.
+    var STAT_METRICS_COUNT = 4;
+
+    function statsSkeletonHtml(count) {
+        var rows = [];
+        for (var i = 0; i < count; i++) {
+            rows.push(
+                '<div class="bg-white dark:bg-surface-card rounded-xl px-3 py-2" aria-hidden="true">' +
+                    '<div class="skeleton h-3 w-16 mb-1"></div>' +
+                    '<div class="skeleton h-6 w-8"></div>' +
+                '</div>'
+            );
+        }
+        return rows.join('');
+    }
+
     function updateStats(certificates) {
         // Ensure certificates is an array
         if (!Array.isArray(certificates)) {
@@ -101,14 +169,19 @@
         var statsContainer = document.getElementById('statsCards');
 
         function statCard(label, value, colorClass, iconClass, valueId, subtitle) {
+            // Compact layout: label + icon on a single inline row, value
+            // underneath. Drops vertical footprint by ~40% vs. the
+            // previous icon-on-the-left card while keeping all four
+            // metrics legible side-by-side on md+ screens.
             return '<div class="bg-white dark:bg-surface-card overflow-hidden shadow-card rounded-xl hover:shadow-elevated transition-shadow duration-200">' +
-                '<div class="p-4"><div class="flex items-center">' +
-                '<i class="fas ' + iconClass + ' ' + colorClass + ' text-lg mr-3 flex-shrink-0"></i>' +
-                '<div class="flex-1 min-w-0">' +
+                '<div class="px-3 py-2">' +
+                '<div class="flex items-center justify-between gap-2">' +
                 '<p class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">' + CertMate.escapeHtml(label) + '</p>' +
-                '<p class="text-xl font-bold ' + colorClass + ' tabular-nums"' + (valueId ? ' id="' + valueId + '"' : '') + '>' + value + '</p>' +
-                (subtitle ? '<p class="text-xs text-gray-400 dark:text-gray-500">' + subtitle + '</p>' : '') +
-                '</div></div></div></div>';
+                '<i class="fas ' + iconClass + ' ' + colorClass + ' text-sm flex-shrink-0"></i>' +
+                '</div>' +
+                '<p class="text-lg font-bold ' + colorClass + ' tabular-nums leading-none mt-1"' + (valueId ? ' id="' + valueId + '"' : '') + '>' + value + '</p>' +
+                (subtitle ? '<p class="text-xs text-gray-400 dark:text-gray-500 leading-none mt-1">' + subtitle + '</p>' : '') +
+                '</div></div>';
         }
 
         statsContainer.innerHTML = [
@@ -253,13 +326,24 @@
             currentSort.field = field;
             currentSort.dir = 'asc';
         }
-        // Update sort icons
+        // Reset every sortable column's icon + aria-sort to neutral,
+        // then mark the active column with both the right glyph and the
+        // matching aria-sort value (B2). Browsers / screen readers use
+        // aria-sort to announce "ascending" / "descending" — the visual
+        // icon alone was inaccessible to non-sighted users.
         document.querySelectorAll('[id^="sort-icon-"]').forEach(function (icon) {
             icon.className = 'fas fa-sort ml-1 text-gray-400';
+        });
+        document.querySelectorAll('[id^="sort-th-"]').forEach(function (th) {
+            th.setAttribute('aria-sort', 'none');
         });
         var activeIcon = document.getElementById('sort-icon-' + field);
         if (activeIcon) {
             activeIcon.className = 'fas fa-sort-' + (currentSort.dir === 'asc' ? 'up' : 'down') + ' ml-1 text-primary';
+        }
+        var activeTh = document.getElementById('sort-th-' + field);
+        if (activeTh) {
+            activeTh.setAttribute('aria-sort', currentSort.dir === 'asc' ? 'ascending' : 'descending');
         }
         filterCertificates();
     }
@@ -282,31 +366,86 @@
             ? 'text-gray-400 hover:text-purple-600 dark:hover:text-purple-400'
             : 'text-amber-500 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300';
         var title = autoRenewEnabled ? 'Disable auto-renew' : 'Enable auto-renew';
+        // safeDomain is already escapeHtml-ed by the caller (dashboard.js
+        // L581). aria-label combines the action verb with the domain so
+        // screen readers announce "Enable auto-renew foo.example.com"
+        // instead of just "Enable auto-renew" repeated per row (B1 fix).
         return '<button type="button" data-action="toggle-auto-renew" data-domain="' + safeDomain +
             '" data-auto-renew="' + (autoRenewEnabled ? 'true' : 'false') + '" onclick="event.stopPropagation()" ' +
             'class="p-1.5 ' + color + ' rounded hover:bg-gray-100 dark:hover:bg-gray-700" ' +
-            'title="' + title + '"><i class="fas ' + icon + '"></i></button>';
+            'title="' + title + '" aria-label="' + title + ' ' + safeDomain + '">' +
+            '<i class="fas ' + icon + '" aria-hidden="true"></i></button>';
     }
 
-    // Build deployment status badge HTML
-    function deploymentBadgeHtml(cert) {
+    function deploymentStatusDisplay(role, result) {
+        var isBrowser = role === 'browser';
+        var roleLabel = isBrowser ? 'Browser' : 'Backend';
+        var roleIcon = isBrowser ? 'fa-globe' : 'fa-server';
+        var statusClass;
+        var statusIcon = roleIcon;
+        var statusText;
+
+        if (isBrowser) {
+            if (result && result.reachable) {
+                statusClass = 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400';
+                statusText = 'Reachable';
+            } else if (result && result.reachable === false) {
+                statusClass = 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400';
+                statusText = 'Unreachable';
+            } else {
+                statusClass = 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300';
+                statusText = 'Not Checked';
+            }
+        } else {
+            if (result && result.error === 'backend-unavailable') {
+                statusClass = 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300';
+                statusIcon = 'fa-exclamation-circle';
+                statusText = 'Unavailable';
+            } else if (result && result.deployed && result.certificate_match === true) {
+                statusClass = 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400';
+                statusText = 'Deployed';
+            } else if (result && result.reachable && result.certificate_match === false) {
+                statusClass = 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400';
+                statusText = 'Wrong Cert';
+            } else if (result && result.reachable === false) {
+                statusClass = 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400';
+                statusText = 'Unreachable';
+            } else {
+                statusClass = 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300';
+                statusText = 'Unknown';
+            }
+        }
+
+        return {
+            className: 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ' + statusClass,
+            icon: statusIcon,
+            text: roleLabel + ': ' + statusText
+        };
+    }
+
+    function deploymentBadgeHtml(role, result, safeDomain, domainId) {
+        var badgeId = 'deployment-status-' + domainId + '-' + role;
+        var display = deploymentStatusDisplay(role, result);
+        var title = display.text;
+        if (result && result.method) {
+            title += ' via ' + result.method;
+        }
+        if (result && result.timestamp) {
+            title += ' at ' + result.timestamp;
+        }
+        return '<span data-deployment-domain="' + safeDomain + '" data-deployment-role="' + role + '" id="' + badgeId + '" title="' + escapeHtml(title) + '" class="' + display.className + '"><i class="fas ' + display.icon + ' mr-1"></i>' + display.text + '</span>';
+    }
+
+    // Build deployment status badges HTML
+    function deploymentBadgesHtml(cert) {
         var safeDomain = escapeHtml(cert.domain);
         var domainId = safeDomain.replace(/\./g, '-');
-        var cachedStatus = deploymentCache.get(cert.domain);
-        if (cachedStatus) {
-            var sc, si, st;
-            if (cachedStatus.deployed && cachedStatus.certificate_match) {
-                sc = 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400'; si = 'fa-check-circle'; st = 'Deployed';
-            } else if (cachedStatus.reachable && !cachedStatus.certificate_match) {
-                sc = 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400'; si = 'fa-exclamation-triangle'; st = 'Wrong Cert';
-            } else if (!cachedStatus.reachable) {
-                sc = 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400'; si = 'fa-times-circle'; st = 'Not Deployed';
-            } else {
-                sc = 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'; si = 'fa-question-circle'; st = 'Unknown';
-            }
-            return '<span id="deployment-status-' + domainId + '" class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ' + sc + '"><i class="fas ' + si + ' mr-1"></i>' + st + '</span>';
-        }
-        return '<span id="deployment-status-' + domainId + '" class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300"><i class="fas fa-spinner fa-spin mr-1"></i>Checking...</span>';
+        var cachedStatus = deploymentCache.get(cert.domain) || {};
+        var browserStatus = cachedStatus.browser || null;
+        return '<div class="flex flex-wrap items-center gap-2">' +
+            deploymentBadgeHtml('backend', cachedStatus, safeDomain, domainId) +
+            deploymentBadgeHtml('browser', browserStatus, safeDomain, domainId) +
+            '</div>';
     }
 
     function providerDisplayName(provider) {
@@ -360,7 +499,7 @@
                     '<div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3 mb-6">' +
                     '<p class="text-xs text-amber-800 dark:text-amber-200"><i class="fas fa-shield-alt mr-1"></i><strong>Security:</strong> Authentication is disabled by default. Enable it before exposing CertMate to the internet.</p>' +
                     '</div>' +
-                    '<div class="text-center"><button onclick="document.getElementById(\'domain\').focus()" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary hover:bg-secondary"><i class="fas fa-plus mr-2"></i>Create Certificate</button></div>' +
+                    '<div class="text-center"><button type="button" onclick="openCreateCertForm()" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary hover:bg-secondary"><i class="fas fa-plus mr-2"></i>Create Certificate</button></div>' +
                     '</div></div>' +
                     '</td></tr>';
             }
@@ -376,8 +515,13 @@
         // Action button shorthand. cert.domain flows in raw \u2014 the helper
         // escapes it for both the data-domain attribute and the onclick
         // arg, so we no longer pre-compute a `safeDomain`.
+        // The aria-label is `${title} ${domain}` so screen readers
+        // announce both the action and which row it targets \u2014 without
+        // it, the actions column reads as "Renew, Force renew, Download,
+        // API, Auto-renew, Delete" with no domain context, repeated for
+        // every row in the table (B1 fix).
         function actionBtn(action, domain, hoverColor, title, icon) {
-            return rowRaw(rowHtml`<button type="button" data-action="${action}" data-domain="${domain}" onclick="event.stopPropagation()" class="p-1.5 text-gray-400 hover:text-${rowRaw(hoverColor)}-600 dark:hover:text-${rowRaw(hoverColor)}-400 rounded hover:bg-gray-100 dark:hover:bg-gray-700" title="${title}"><i class="fas ${rowRaw(icon)}"></i></button>`);
+            return rowRaw(rowHtml`<button type="button" data-action="${action}" data-domain="${domain}" onclick="event.stopPropagation()" class="p-1.5 text-gray-400 hover:text-${rowRaw(hoverColor)}-600 dark:hover:text-${rowRaw(hoverColor)}-400 rounded hover:bg-gray-100 dark:hover:bg-gray-700" title="${title}" aria-label="${title} ${domain}"><i class="fas ${rowRaw(icon)}" aria-hidden="true"></i></button>`);
         }
 
         container.innerHTML = sorted.map(function (cert) {
@@ -436,6 +580,23 @@
             var aliasHint = domainAlias
                 ? rowRaw(rowHtml`<div class="mt-1 flex items-center text-xs text-blue-600 dark:text-blue-300 min-w-0"><i class="fas fa-link mr-1 text-blue-500 shrink-0" aria-hidden="true"></i><span class="truncate" title="${domainAlias}">DNS-01 Alias: ${domainAlias}</span></div>`)
                 : false;
+            // R-5 mobile card layout: surface the three desktop-only columns
+            // (Expires / Provider / Deployment) as stacked rows inside the
+            // Domain cell when below md (768 px). The table semantics are
+            // preserved — the dedicated columns still render at md+ via
+            // their `hidden md:table-cell` / `hidden lg:table-cell` rules,
+            // so we never double-render on tablet+. The border-top on the
+            // wrapper gives a visual seam between the domain identity and
+            // the meta block, reading as a card on phones without breaking
+            // the table on bigger screens.
+            var mobileExpiryLine = (daysKnown && cert.expiry_date)
+                ? rowRaw(rowHtml`<div class="flex items-center text-xs ${rowRaw(daysClass)}"><i class="fas fa-clock mr-1.5 w-3 shrink-0" aria-hidden="true"></i><span class="truncate">${expiryStr} · ${rowRaw(String(cert.days_until_expiry))} days left</span></div>`)
+                : false;
+            var mobileProviderLine = providerLabel
+                ? rowRaw(rowHtml`<div class="flex items-center text-xs text-gray-500 dark:text-gray-400"><i class="fas fa-server mr-1.5 w-3 shrink-0" aria-hidden="true"></i><span class="truncate">${rowRaw(providerLabel)}</span></div>`)
+                : false;
+            var mobileDeploymentLine = rowRaw(rowHtml`<div class="flex items-start text-xs text-gray-500 dark:text-gray-400"><i class="fas fa-rocket mr-1.5 mt-0.5 w-3 shrink-0" aria-hidden="true"></i><div class="flex-1 min-w-0">${rowRaw(deploymentBadgesHtml(cert))}</div></div>`);
+            var mobileMeta = rowRaw(rowHtml`<div class="md:hidden mt-2 pt-2 border-t border-gray-100 dark:border-gray-700/50 space-y-1">${mobileExpiryLine}${mobileProviderLine}${mobileDeploymentLine}</div>`);
             var lockColor = isExpired ? 'text-red-400' : isExpiringSoon ? 'text-yellow-400' : 'text-green-500';
             return rowHtml`<tr class="${rowRaw(healthClass)} row-enter hover:bg-blue-50/40 dark:hover:bg-blue-900/10 transition-colors duration-150 cursor-pointer" style="animation-delay:${rowRaw(String(sorted.indexOf(cert) * 30))}ms" onclick="openCertDetail('${cert.domain}')">
                 <td class="px-6 py-4 max-w-0">
@@ -444,16 +605,18 @@
                         <div class="min-w-0">
                             <div class="text-sm font-medium text-gray-900 dark:text-white truncate">${cert.domain}</div>
                             ${aliasHint}
+                            ${mobileMeta}
                         </div>
                     </div>
                 </td>
                 <td class="px-4 py-4 whitespace-nowrap"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${rowRaw(statusClass)}"><i class="fas ${rowRaw(statusIcon)} mr-1"></i>${statusText}</span></td>
                 <td class="px-4 py-4 whitespace-nowrap hidden md:table-cell"><div class="text-sm text-gray-900 dark:text-white">${expiryStr}</div><div class="text-xs ${rowRaw(daysClass)}">${cert.days_until_expiry} days</div></td>
                 <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-gray-500 dark:text-gray-400">${rowRaw(providerLabel) || '—'}</td>
-                <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell">${rowRaw(deploymentBadgeHtml(cert))}</td>
+                <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell">${rowRaw(deploymentBadgesHtml(cert))}</td>
                 <td class="px-4 py-4 whitespace-nowrap text-right">
                     <div class="flex items-center justify-end gap-1">
                         ${roleAtLeast('operator') ? actionBtn('renew', cert.domain, 'green', 'Renew', 'fa-sync-alt') : false}
+                        ${roleAtLeast('operator') ? actionBtn('force-renew', cert.domain, 'amber', 'Force renew', 'fa-bolt') : false}
                         ${actionBtn('download', cert.domain, 'blue', 'Download', 'fa-download')}
                         ${actionBtn('curl', cert.domain, 'indigo', 'API', 'fa-code')}
                         ${roleAtLeast('operator') ? rowRaw(autoRenewButtonHtml(escapeHtml(cert.domain), cert.auto_renew !== false)) : false}
@@ -469,6 +632,7 @@
                 var domain = btn.dataset.domain;
                 switch (btn.dataset.action) {
                     case 'renew': renewCertificate(domain); break;
+                    case 'force-renew': renewCertificate(domain, true); break;
                     case 'download': downloadCertificate(domain); break;
                     case 'curl': copyCurlCommand(domain); break;
                     case 'toggle-auto-renew':
@@ -492,6 +656,33 @@
     }
 
     // Certificate detail slide-out panel
+    // B3: skeleton mirror of the detail panel layout. Shown briefly while
+    // the panel slides in, so the user never sees an empty card or the
+    // previous cert's contents while the new HTML is rendering. Mirrors
+    // the populated structure (status block, expiry box, action list).
+    function certDetailSkeletonHtml() {
+        return '<div class="space-y-6 animate-pulse" aria-hidden="true">' +
+            // Status block
+            '<div class="space-y-2">' +
+                '<div class="skeleton h-3 w-16"></div>' +
+                '<div class="skeleton h-6 w-32"></div>' +
+            '</div>' +
+            // Definition list (Issuer, SANs, Provider, …)
+            '<div class="space-y-3">' +
+                '<div class="flex justify-between"><div class="skeleton h-3 w-20"></div><div class="skeleton h-3 w-36"></div></div>' +
+                '<div class="flex justify-between"><div class="skeleton h-3 w-16"></div><div class="skeleton h-3 w-40"></div></div>' +
+                '<div class="flex justify-between"><div class="skeleton h-3 w-24"></div><div class="skeleton h-3 w-32"></div></div>' +
+                '<div class="flex justify-between"><div class="skeleton h-3 w-20"></div><div class="skeleton h-3 w-28"></div></div>' +
+            '</div>' +
+            // Action buttons stack
+            '<div class="space-y-2 pt-4">' +
+                '<div class="skeleton h-9 w-full rounded-md"></div>' +
+                '<div class="skeleton h-9 w-full rounded-md"></div>' +
+                '<div class="skeleton h-9 w-full rounded-md"></div>' +
+            '</div>' +
+        '</div>';
+    }
+
     function openCertDetail(domain) {
         var cert = allCertificates.find(function (c) { return c.domain === domain; });
         if (!cert) return;
@@ -500,6 +691,12 @@
         var overlay = document.getElementById('certDetailOverlay');
         var content = document.getElementById('certDetailContent');
         document.getElementById('detailDomain').textContent = cert.domain;
+        // Paint skeleton placeholders before the real content lands. Without
+        // this, opening cert B right after closing cert A briefly showed A's
+        // stale HTML, and on slow devices the panel could slide in over an
+        // empty white card. The skeleton matches the populated layout so the
+        // transition reads as "loading detail" rather than "broken".
+        content.innerHTML = certDetailSkeletonHtml();
 
         var safeDomain = escapeHtml(cert.domain);
         var providerLabel = providerDisplayName(cert.dns_provider);
@@ -547,7 +744,7 @@
                 (safeDomainAlias ? '<div class="flex justify-between gap-4 py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">DNS-01 Alias</dt><dd class="text-sm font-medium text-right break-all text-blue-600 dark:text-blue-300">' + safeDomainAlias + '</dd></div>' : '') +
                 (safeDomainAlias && aliasProviderLabel ? '<div class="flex justify-between gap-4 py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">Alias Provider</dt><dd class="text-sm font-medium text-right text-gray-900 dark:text-white">' + aliasProviderLabel + '</dd></div>' : '') +
                 '<div class="flex justify-between gap-4 py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">Auto-Renew</dt><dd class="text-sm font-medium text-right ' + (cert.auto_renew !== false ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400') + '">' + (cert.auto_renew !== false ? 'Enabled' : 'Disabled') + '</dd></div>' +
-                '<div class="flex justify-between gap-4 py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">Deployment</dt><dd>' + deploymentBadgeHtml(cert) + '</dd></div>' +
+                '<div class="flex justify-between gap-4 py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">Deployment</dt><dd>' + deploymentBadgesHtml(cert) + '</dd></div>' +
                 '</dl>' +
                 '</div>' +
                 // Actions
@@ -555,11 +752,12 @@
                 '<h4 class="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wider">Actions</h4>' +
                 '<div class="grid grid-cols-1 gap-2">' +
                 (roleAtLeast('operator')
-                    ? '<button type="button" onclick="renewCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-sync-alt mr-2 text-green-600"></i>Renew Certificate</button>'
+                    ? '<button type="button" onclick="renewCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-sync-alt mr-2 text-green-600"></i>Renew Certificate</button>' +
+                    '<button type="button" onclick="renewCertificate(\'' + safeDomain + '\', true)" class="w-full inline-flex items-center justify-center px-4 py-2 border border-amber-300 dark:border-amber-700 shadow-sm text-sm font-medium rounded-md text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/40"><i class="fas fa-bolt mr-2"></i>Force Renew Certificate</button>'
                     : '') +
                 '<button type="button" onclick="downloadCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-download mr-2 text-blue-600"></i>Download Certificate</button>' +
                 '<button type="button" onclick="copyCurlCommand(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-blue-300 dark:border-blue-600 shadow-sm text-sm font-medium rounded-md text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50"><i class="fas fa-code mr-2"></i>Show API Command</button>' +
-                '<button type="button" onclick="checkDeploymentStatus(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-globe mr-2 text-indigo-600"></i>Check Deployment</button>' +
+                '<button type="button" onclick="checkDeploymentStatus(\'' + safeDomain + '\', this, true)" class="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-globe mr-2 text-indigo-600"></i>Check Deployment</button>' +
                 (safeDomainAlias ? '<button type="button" onclick="checkDnsAliasForCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-blue-300 dark:border-blue-600 shadow-sm text-sm font-medium rounded-md text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50"><i class="fas fa-search mr-2"></i>Check DNS-01 Alias</button>' : '') +
                 '<div id="cert_dns_alias_check_result" class="hidden"></div>' +
                 (roleAtLeast('admin')
@@ -585,8 +783,16 @@
     function closeCertDetail() {
         var panel = document.getElementById('certDetailPanel');
         var overlay = document.getElementById('certDetailOverlay');
+        var content = document.getElementById('certDetailContent');
         panel.classList.add('translate-x-full');
-        setTimeout(function () { overlay.classList.add('hidden'); }, 300);
+        setTimeout(function () {
+            overlay.classList.add('hidden');
+            // Clear after the slide-out transition so the next open
+            // starts from a blank surface — prevents the previous cert's
+            // details from flashing visible for a frame when the user
+            // opens cert B right after closing cert A.
+            if (content) content.innerHTML = '';
+        }, 300);
     }
 
     // Close detail panel on Escape key
@@ -792,37 +998,74 @@
     }
 
     // Check deployment status for a specific domain
-    function checkDeploymentStatus(domain) {
-        var statusElement = document.getElementById('deployment-status-' + domain.replace(/\./g, '-'));
-        var textElement = document.getElementById('deployment-text-' + domain.replace(/\./g, '-'));
+    function checkDeploymentStatus(domain, triggerButton, forceRefresh) {
+        var restoreButton = function () {
+            if (!triggerButton) {
+                return;
+            }
+            triggerButton.disabled = false;
+            if (triggerButton.dataset.originalHtml) {
+                triggerButton.innerHTML = triggerButton.dataset.originalHtml;
+                delete triggerButton.dataset.originalHtml;
+            }
+        };
 
-        if (!statusElement) {
+        if (triggerButton) {
+            triggerButton.dataset.originalHtml = triggerButton.innerHTML;
+            triggerButton.disabled = true;
+            triggerButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Checking...';
+        }
+
+        var statusElements = Array.prototype.filter.call(
+            document.querySelectorAll('[data-deployment-domain]'),
+            function (el) {
+                return el.getAttribute('data-deployment-domain') === domain;
+            }
+        );
+
+        if (!statusElements.length) {
+            restoreButton();
             return Promise.resolve();
         }
 
         // Check cache first
-        var cachedResult = deploymentCache.get(domain);
+        var cachedResult = forceRefresh ? null : deploymentCache.get(domain);
         if (cachedResult) {
-            updateDeploymentUI(domain, cachedResult, statusElement);
+            updateDeploymentUI(domain, cachedResult);
+            restoreButton();
             return Promise.resolve();
         }
 
         // Update UI to show checking state
-        statusElement.className = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-600';
-        statusElement.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Checking...';
-        if (textElement) {
-            textElement.textContent = 'Checking...';
-            textElement.className = 'text-sm font-medium text-blue-600';
+        statusElements.forEach(function (statusElement) {
+            statusElement.className = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-600';
+            statusElement.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Checking...';
+        });
+
+        var deploymentUrl = '/api/certificates/' + encodeURIComponent(domain) + '/deployment-status';
+        if (forceRefresh) {
+            deploymentUrl += '?refresh=1';
         }
 
-        return fetch('/api/certificates/' + encodeURIComponent(domain) + '/deployment-status', {
+        return fetch(deploymentUrl, {
             method: 'GET',
             headers: API_HEADERS
         }).then(function (response) {
             if (response.ok) {
                 return response.json().then(function (result) {
+                    if (result && result.reachable === false) {
+                        return checkDeploymentViaBrowser(domain).then(function (browserResult) {
+                            if (browserResult) {
+                                queueBrowserDeploymentReport(domain, browserResult);
+                                result.browser = browserResult;
+                            }
+                            deploymentCache.set(domain, result);
+                            updateDeploymentUI(domain, result);
+                        });
+                    }
+
                     deploymentCache.set(domain, result);
-                    updateDeploymentUI(domain, result, statusElement);
+                    updateDeploymentUI(domain, result);
                 });
             }
             throw new Error('API failed');
@@ -839,12 +1082,30 @@
                         timestamp: new Date().toISOString()
                     };
                 }
-                deploymentCache.set(domain, result);
-                updateDeploymentUI(domain, result, statusElement);
+                if (result.reachable) {
+                    queueBrowserDeploymentReport(domain, result);
+                }
+                // Keep the server-side result as the primary status. The browser
+                // probe is supplemental and may be useful for diagnostics, but it
+                // should not replace the backend's deployed/reachable verdict.
+                deploymentCache.set(domain, {
+                    deployed: false,
+                    reachable: false,
+                    certificate_match: false,
+                    method: 'browser-fallback',
+                    error: 'backend-unavailable',
+                    timestamp: result.timestamp || new Date().toISOString(),
+                    browser: result
+                });
+                updateDeploymentUI(domain, deploymentCache.get(domain));
             });
         }).catch(function () {
-            statusElement.className = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300';
-            statusElement.innerHTML = '<i class="fas fa-question-circle mr-1"></i>Error';
+            statusElements.forEach(function (statusElement) {
+                statusElement.className = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300';
+                statusElement.innerHTML = '<i class="fas fa-question-circle mr-1"></i>Error';
+            });
+        }).finally(function () {
+            restoreButton();
         });
     }
 
@@ -883,49 +1144,32 @@
     }
 
     // Update deployment UI based on check result
-    function updateDeploymentUI(domain, result, statusElement) {
-        var textElement = document.getElementById('deployment-text-' + domain.replace(/\./g, '-'));
+    function updateDeploymentUI(domain, result) {
+        var backendResult = result || null;
+        var browserResult = result && result.browser ? result.browser : null;
 
-        if (result.deployed && result.certificate_match !== false) {
-            statusElement.className = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400';
-            statusElement.innerHTML = '<i class="fas fa-check-circle mr-1"></i>Deployed';
-            if (textElement) {
-                textElement.textContent = 'Active';
-                textElement.className = 'text-sm font-medium text-green-600 dark:text-green-400';
-            }
-
-        } else if (result.reachable && result.certificate_match === false) {
-            statusElement.className = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400';
-            statusElement.innerHTML = '<i class="fas fa-exclamation-triangle mr-1"></i>Mismatch';
-            if (textElement) {
-                textElement.textContent = 'Mismatch';
-                textElement.className = 'text-sm font-medium text-yellow-600 dark:text-yellow-400';
-            }
-
-        } else if (result.reachable) {
-            statusElement.className = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400';
-            statusElement.innerHTML = '<i class="fas fa-info-circle mr-1"></i>Unknown';
-            if (textElement) {
-                textElement.textContent = 'Unknown';
-                textElement.className = 'text-sm font-medium text-blue-600 dark:text-blue-400';
-            }
-
-        } else {
-            statusElement.className = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400';
-            statusElement.innerHTML = '<i class="fas fa-times-circle mr-1"></i>Unreachable';
-            if (textElement) {
-                textElement.textContent = 'Unreachable';
-                textElement.className = 'text-sm font-medium text-red-600 dark:text-red-400';
-            }
-        }
-
-        // Add method info to title for debugging
-        if (result.method) {
-            statusElement.title = 'Checked via: ' + result.method + ' at ' + result.timestamp;
-            if (textElement) {
-                textElement.title = statusElement.title;
-            }
-        }
+        ['backend', 'browser'].forEach(function (role) {
+            var roleResult = role === 'browser' ? browserResult : backendResult;
+            var display = deploymentStatusDisplay(role, roleResult);
+            Array.prototype.filter.call(
+                document.querySelectorAll('[data-deployment-domain][data-deployment-role="' + role + '"]'),
+                function (el) {
+                    return el.getAttribute('data-deployment-domain') === domain;
+                }
+            ).forEach(function (statusElement) {
+                statusElement.className = display.className;
+                statusElement.innerHTML = '<i class="fas ' + display.icon + ' mr-1"></i>' + display.text;
+                if (roleResult && roleResult.method) {
+                    var title = display.text + ' via ' + roleResult.method;
+                    if (roleResult.timestamp) {
+                        title += ' at ' + roleResult.timestamp;
+                    }
+                    statusElement.title = title;
+                } else {
+                    statusElement.removeAttribute('title');
+                }
+            });
+        });
     }
 
     // Load certificates with deployment status
@@ -1145,10 +1389,41 @@
         return normalizeDnsName(value).replace(/^_acme-challenge\./i, '');
     }
 
+    // Normalize a hostname the way the cert-create form needs it: lowercase,
+    // strip protocol / port / path / fragment / trailing dot, but keep the
+    // optional `*.` wildcard prefix intact (both the primary and the SAN
+    // fields legitimately accept wildcards). This catches the common QW-15
+    // paste patterns:
+    //   "https://example.com/"       → "example.com"
+    //   "Example.COM"                → "example.com"
+    //   "example.com:443"            → "example.com"
+    //   "example.com."               → "example.com"
+    //   "example.com/path?x=1"       → "example.com"
+    function normalizeHostname(value) {
+        if (!value) return '';
+        var v = String(value).trim().toLowerCase();
+        v = v.replace(/^[a-z][a-z0-9+.\-]*:\/\//, ''); // strip scheme://
+        v = v.replace(/[\/?#].*$/, '');                 // strip path/query/fragment
+        v = v.replace(/:\d+$/, '');                     // strip :port
+        v = v.replace(/\.+$/, '');                      // strip trailing dots
+        return v;
+    }
+
     function parseSanDomainsInput(value) {
-        return value
-            ? value.split(',').map(function (d) { return d.trim(); }).filter(function (d) { return d; })
-            : [];
+        // Accept comma, semicolon, newline, or tab as separators — users
+        // routinely paste from spreadsheets, CLI output, or notepads where
+        // the delimiter isn't always a comma. Each token is normalized via
+        // normalizeHostname; duplicates after normalization are dropped.
+        if (!value) return [];
+        var seen = Object.create(null);
+        var out = [];
+        String(value).split(/[,;\n\t]+/).forEach(function (raw) {
+            var d = normalizeHostname(raw);
+            if (!d || seen[d]) return;
+            seen[d] = true;
+            out.push(d);
+        });
+        return out;
     }
 
     function addUniqueDomain(domains, domain) {
@@ -1241,8 +1516,10 @@
             }
             return '<div class="mt-2 text-xs ' + rowClass + '">' +
                 '<div><i class="fas ' + (check.ok ? 'fa-check' : 'fa-times') + ' mr-1"></i>' +
-                '<code class="font-mono bg-gray-100 dark:bg-gray-700 px-1 rounded">' + escapeHtml(check.source) + '</code></div>' +
-                '<div class="mt-1 ml-5">Expected: <code class="font-mono bg-gray-100 dark:bg-gray-700 px-1 rounded">' + escapeHtml(check.expected_target) + '</code></div>' +
+                '<code class="font-mono bg-gray-100 dark:bg-gray-700 px-1 rounded">' + escapeHtml(check.source) + '</code>' +
+                aliasCopyButtonHtml(check.source) + '</div>' +
+                '<div class="mt-1 ml-5">Expected: <code class="font-mono bg-gray-100 dark:bg-gray-700 px-1 rounded">' + escapeHtml(check.expected_target) + '</code>' +
+                aliasCopyButtonHtml(check.expected_target) + '</div>' +
                 '<div class="mt-1 ml-5">Found: <code class="font-mono bg-gray-100 dark:bg-gray-700 px-1 rounded">' + escapeHtml(found) + '</code></div>' +
                 '</div>';
         }).join('');
@@ -1324,11 +1601,35 @@
         });
     }
 
+    // Show RSA key-size picker only when the operator chose RSA, ECDSA curve
+    // picker only when they chose ECDSA. Leaving "Use global default" hides
+    // both — the form then sends no key fields and the backend inherits the
+    // configured default.
+    function toggleCertKeyOptions() {
+        var keyType = document.getElementById('cert_key_type').value;
+        var sizeEl = document.getElementById('cert_key_size_container');
+        var curveEl = document.getElementById('cert_elliptic_curve_container');
+        if (sizeEl) sizeEl.style.display = (keyType === 'rsa') ? '' : 'none';
+        if (curveEl) curveEl.style.display = (keyType === 'ecdsa') ? '' : 'none';
+    }
+
     // Create certificate
+    var isCreatingCert = false;
     document.getElementById('createCertForm').addEventListener('submit', function (e) {
         e.preventDefault();
 
-        var domain = document.getElementById('domain').value.trim();
+        // QW-12: gate against duplicate submits. A real-cert issue path can
+        // take 30s+ to come back; without this guard, every extra click on
+        // the submit button (or Enter inside any of the inputs) fires another
+        // POST /api/certificates/create with the same body. Validation
+        // early-returns below run before we acquire the lock, so a rejected
+        // submit doesn't leave the form stuck.
+        if (isCreatingCert) return;
+
+        // Primary domain: apply the same paste-normalization as SAN inputs
+        // (lowercase, strip scheme/port/path/trailing-dot) so the request
+        // body matches what the user sees rendered back in the cert row.
+        var domain = normalizeHostname(document.getElementById('domain').value);
         var sanDomainsInput = document.getElementById('san_domains').value.trim();
         var wildcardEnabled = document.getElementById('wildcard-cert').checked;
         var challengeType = document.getElementById('challenge_type_select').value;
@@ -1365,6 +1666,26 @@
             ? domain + ' (+ ' + sanDomains.length + ' SAN' + (sanDomains.length > 1 ? 's' : '') + ')'
             : domain;
 
+        // Lock the form for the duration of the request. Disabling every
+        // field also blocks Enter-to-submit from inside the inputs, which
+        // is the other path a user can re-trigger the POST. The original
+        // disabled state of each field is snapshotted so any field that
+        // was already disabled (e.g. account_select hidden by the DNS
+        // provider toggle) stays disabled after re-enable.
+        isCreatingCert = true;
+        var form = e.target;
+        var formFields = form.querySelectorAll('input, select, textarea, button');
+        var previouslyDisabled = [];
+        formFields.forEach(function (el, i) {
+            previouslyDisabled[i] = el.disabled;
+            el.disabled = true;
+        });
+        var submitBtn = form.querySelector('button[type="submit"]');
+        var submitBtnOriginalHtml = submitBtn ? submitBtn.innerHTML : null;
+        if (submitBtn) {
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Creating...';
+        }
+
         var progressInterval = showLoadingModal(
             'Creating Certificate for ' + domainsDisplay,
             'Validating domain ownership and generating certificate...'
@@ -1388,6 +1709,18 @@
         }
         if (dnsAliasDomain) {
             requestBody.domain_alias = dnsAliasDomain;
+        }
+
+        // Optional key-shape override. Only sent when the operator picked a
+        // non-default value, so an empty selector inherits the global default
+        // configured in Settings.
+        var certKeyType = (document.getElementById('cert_key_type') || {}).value;
+        if (certKeyType === 'rsa') {
+            requestBody.key_type = 'rsa';
+            requestBody.key_size = parseInt(document.getElementById('cert_key_size').value, 10);
+        } else if (certKeyType === 'ecdsa') {
+            requestBody.key_type = 'ecdsa';
+            requestBody.elliptic_curve = document.getElementById('cert_elliptic_curve').value;
         }
 
         fetch('/api/certificates/create', {
@@ -1439,6 +1772,14 @@
             });
         }).then(function () {
             hideLoadingModal(progressInterval);
+            // Re-enable the form regardless of success / error / network outcome.
+            formFields.forEach(function (el, i) {
+                el.disabled = previouslyDisabled[i];
+            });
+            if (submitBtn && submitBtnOriginalHtml !== null) {
+                submitBtn.innerHTML = submitBtnOriginalHtml;
+            }
+            isCreatingCert = false;
         });
     });
 
@@ -1570,60 +1911,72 @@
 
     // Delete a certificate and its settings entry (issue #111).
     function deleteCertificate(domain) {
-        if (!window.confirm('Delete certificate for ' + domain + '?\n\nThis removes the certificate files from disk and removes the domain from settings. This action cannot be undone.')) {
-            return;
-        }
-        fetch('/api/certificates/' + encodeURIComponent(domain), {
-            method: 'DELETE'
-        }).then(function (response) {
-            return response.json().then(function (result) {
-                return { ok: response.ok, status: response.status, result: result };
-            });
-        }).then(function (data) {
-            if (data.ok) {
-                showMessage('Certificate deleted for ' + domain, 'success');
-                closeCertDetail();
-                loadCertificates();
-            } else {
-                showMessage(data.result.error || 'Failed to delete certificate', 'error', {
+        // Use CertMate.confirm (in-page modal, danger-styled) for parity
+        // with every other destructive action in the app (revoke client
+        // cert, delete user, delete backup, delete API key). The native
+        // window.confirm bypasses the app theme and is dismissible by
+        // browser "block dialogs" toggles — too weak a guard for an
+        // operation that erases the cert files and the settings entry.
+        CertMate.confirm(
+            'Delete certificate for ' + domain + '? This removes the certificate files from disk and removes the domain from settings. This action cannot be undone.',
+            'Delete Certificate',
+            { confirmText: 'Delete' }
+        ).then(function (confirmed) {
+            if (!confirmed) return;
+            fetch('/api/certificates/' + encodeURIComponent(domain), {
+                method: 'DELETE'
+            }).then(function (response) {
+                return response.json().then(function (result) {
+                    return { ok: response.ok, status: response.status, result: result };
+                });
+            }).then(function (data) {
+                if (data.ok) {
+                    showMessage('Certificate deleted for ' + domain, 'success');
+                    closeCertDetail();
+                    loadCertificates();
+                } else {
+                    showMessage(data.result.error || 'Failed to delete certificate', 'error', {
+                        errorContext: {
+                            endpoint: 'DELETE /api/certificates/' + domain,
+                            status: data.status || 0,
+                            code: data.result.code,
+                            message: data.result.error,
+                            hint: data.result.hint
+                        }
+                    });
+                }
+            }).catch(function (error) {
+                console.error('Error deleting certificate:', error);
+                showMessage('Failed to delete certificate. Please try again.', 'error', {
                     errorContext: {
                         endpoint: 'DELETE /api/certificates/' + domain,
-                        status: data.status || 0,
-                        code: data.result.code,
-                        message: data.result.error,
-                        hint: data.result.hint
+                        status: 0,
+                        code: 'NETWORK_ERROR',
+                        message: (error && error.message) || 'network error'
                     }
                 });
-            }
-        }).catch(function (error) {
-            console.error('Error deleting certificate:', error);
-            showMessage('Failed to delete certificate. Please try again.', 'error', {
-                errorContext: {
-                    endpoint: 'DELETE /api/certificates/' + domain,
-                    status: 0,
-                    code: 'NETWORK_ERROR',
-                    message: (error && error.message) || 'network error'
-                }
             });
         });
     }
 
-    function renewCertificate(domain) {
+    function renewCertificate(domain, force) {
+        force = force === true;
         var progressInterval = showLoadingModal(
-            'Renewing Certificate for ' + domain,
-            'This may take a few minutes...'
+            (force ? 'Force Renewing Certificate for ' : 'Renewing Certificate for ') + domain,
+            force ? 'This bypasses the normal due check and may count against CA rate limits...' : 'This may take a few minutes...'
         );
 
         fetch('/api/certificates/' + encodeURIComponent(domain) + '/renew', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ force: force })
         }).then(function (response) {
             return response.json().then(function (result) {
                 return { ok: response.ok, status: response.status, result: result };
             });
         }).then(function (data) {
             if (data.ok) {
-                showMessage('Certificate renewed successfully for ' + domain + '!', 'success');
+                showMessage((force ? 'Forced renewal completed for ' : 'Certificate renewal completed for ') + domain + '!', 'success');
                 setTimeout(function () { loadCertificates(); }, 2000);
             } else {
                 showMessage(data.result.error || data.result.message || 'Failed to renew certificate', 'error', {
@@ -1704,12 +2057,85 @@
         document.body.removeChild(textArea);
     }
 
+    function aliasCopyButtonHtml(value) {
+        if (!value) return '';
+        return ' <button type="button" class="ml-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors align-middle"' +
+            ' data-copy="' + escapeHtml(value) + '"' +
+            ' onclick="copyAliasValueToClipboard(this)"' +
+            ' title="Copy to clipboard" aria-label="Copy to clipboard">' +
+            '<i class="fas fa-clipboard text-xs"></i></button>';
+    }
+
+    function copyAliasValueToClipboard(button) {
+        // The raw value is stored in data-copy and trimmed at copy time so the
+        // user can't end up pasting the leading/trailing whitespace that the
+        // browser tends to grab when a CNAME string is selected by hand
+        // (issue #159).
+        var text = String(button.dataset.copy || '').trim();
+        if (!text) return;
+        var icon = button.querySelector('i');
+        var originalIconClass = icon ? icon.className : 'fas fa-clipboard text-xs';
+        function flashSuccess() {
+            if (icon) icon.className = 'fas fa-check text-xs';
+            button.classList.add('text-green-600', 'dark:text-green-400');
+            setTimeout(function () {
+                if (icon) icon.className = originalIconClass;
+                button.classList.remove('text-green-600', 'dark:text-green-400');
+            }, 1500);
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(flashSuccess).catch(function () {
+                aliasFallbackCopy(text, flashSuccess);
+            });
+        } else {
+            aliasFallbackCopy(text, flashSuccess);
+        }
+    }
+
+    function aliasFallbackCopy(text, onSuccess) {
+        var textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.top = '0';
+        textArea.style.left = '0';
+        textArea.style.position = 'fixed';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        try {
+            if (document.execCommand('copy')) onSuccess();
+        } catch (err) {
+            /* swallow: feedback simply won't flash */
+        }
+        document.body.removeChild(textArea);
+    }
+
     // Initialize on page load
+    // Deep-link helper: when the dashboard is loaded with `?cert=<domain>`
+    // in the query string (typically because the user clicked a cert
+    // entry on /activity), open the detail panel for that domain once
+    // the initial cert list has rendered. Silently no-ops on
+    // unparseable URLs / missing param / unknown domain — openCertDetail
+    // itself handles the not-found case via showMessage.
+    function maybeOpenCertFromQuery() {
+        try {
+            var params = new URLSearchParams(window.location.search);
+            var domain = params.get('cert');
+            if (domain) openCertDetail(domain);
+        } catch (e) { /* old browser, skip */ }
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
+        // Paint the stats-card skeleton placeholders before the cert
+        // fetch returns, so the surface is never an empty grid — count
+        // is driven by STAT_METRICS_COUNT to stay in sync with the
+        // updateStats() output (B4 fix).
+        var statsContainer = document.getElementById('statsCards');
+        if (statsContainer) statsContainer.innerHTML = statsSkeletonHtml(STAT_METRICS_COUNT);
+
         // Resolve the caller's role first so the initial cert list can
         // already render with the right buttons hidden — avoids the
         // viewer briefly seeing admin-only controls before they vanish.
-        refreshCurrentRole().then(function () { loadCertificates(); });
+        refreshCurrentRole().then(function () { loadCertificates().then(maybeOpenCertFromQuery); });
         loadProviderAccounts();
 
         // Initialize search and filters
@@ -1784,9 +2210,11 @@
     window.invalidateAllCache = invalidateAllCache;
     window.checkAllDeploymentStatuses = checkAllDeploymentStatuses;
     window.toggleAdvancedOptions = toggleAdvancedOptions;
+    window.toggleCertKeyOptions = toggleCertKeyOptions;
     window.toggleDnsProviderVisibility = toggleDnsProviderVisibility;
     window.updateAccountSelection = updateAccountSelection;
     window.updateCAProviderInfo = updateCAProviderInfo;
     window.updateDnsAliasHelp = updateDnsAliasHelp;
     window.checkDnsAliasForCertificate = checkDnsAliasForCertificate;
+    window.copyAliasValueToClipboard = copyAliasValueToClipboard;
 })();
