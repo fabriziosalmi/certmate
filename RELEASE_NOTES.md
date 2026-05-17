@@ -1,3 +1,45 @@
+## v2.5.5 (Minor — configurable cert key type/size, RSA + ECDSA)
+
+Community contribution from [@rocogamer](https://github.com/rocogamer) (PR #156). Every cert issued by CertMate was previously hardcoded to RSA-2048 because `CAManager.build_certbot_command` never passed `--key-type` or `--rsa-key-size` to certbot. Two real-world asks made this awkward — compliance operators required RSA-3072/4096, and modern stacks prefer ECDSA for smaller certs and faster TLS handshakes. Both groups had to patch the code or fork.
+
+### What landed
+
+- **Global default** under Settings → General → "Default Certificate Key":
+  `default_key_type` (`rsa` / `ecdsa`), `default_key_size` (`2048` / `3072` / `4096`),
+  `default_elliptic_curve` (`secp256r1` / `secp384r1`). Mutually exclusive selectors
+  in the UI.
+- **Per-cert override** under the create-cert form's "Advanced Options". Leaving it
+  on "Use global default" sends no key fields and the backend inherits the configured
+  default.
+- **Renewals preserve the original shape automatically** — certbot persists the
+  `--key-type` / `--rsa-key-size` / `--elliptic-curve` flags into its own
+  `renewal/<domain>.conf` at create time, so no new bookkeeping in CertMate.
+- **Backwards-compatible default**: settings without these fields migrate to
+  `rsa` / `2048` / `secp256r1` at load time, so existing installs see no behaviour
+  change after upgrade.
+- **`validate_key_options()` helper** rejects contradictory shapes up-front with a
+  400: RSA + curve, ECDSA + size, unsupported sizes, unsupported curves.
+- **Side-fix**: the GET `/api/settings` masking regex matched the `key` substring
+  in `default_key_type`, returning `'********'` which matched no `<option>` in the
+  UI dropdown. Fixed via an explicit `_NON_SECRET_KEYS` allowlist.
+- **24 unit tests added** (`tests/test_key_options.py`, `tests/test_settings_masking_allowlist.py`).
+
+### Verification
+
+Pre-merge smoke gate against `certmate.org` with random subdomains:
+
+- ECDSA + `secp384r1` override: cert emitted, `openssl x509 -text` confirms
+  `id-ecPublicKey`, `NIST CURVE: P-384`, `ecdsa-with-SHA384`. Force-renew preserves
+  the shape end-to-end.
+- RSA + `key_size=3072` override: cert emitted, `Public-Key: (3072 bit)`,
+  `sha256WithRSAEncryption`. Force-renew preserves the shape end-to-end.
+- Full test suite (docker + Playwright + Cloudflare real-cert lifecycle):
+  97 passed, 1 skipped, 2 pre-existing xfail.
+
+Follow-ups from review (4 minor non-blocking points: stale test docstring, info-leak
+in scope-check ordering, dead state in settings, module-scope nit) tracked separately
+and will land in a cleanup PR — none affect the shipping behaviour.
+
 ## v2.5.4 (Patch — 2 community-reported bug fixes)
 
 Two atomic commits resolving issues reported by contributors on GitHub.
