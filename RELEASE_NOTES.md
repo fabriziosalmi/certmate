@@ -1,3 +1,17 @@
+## v2.6.6 (Patch — close #193: 4 cleanup points from the v2.5.5 key-options review)
+
+Four atomic commits closing the follow-up issue [#193](https://github.com/fabriziosalmi/certmate/issues/193) raised against PR #156 / v2.5.5. Each commit is a single review nit, mergeable in isolation. No behaviour change visible to operators; one tiny information-disclosure tightening on the API.
+
+### What landed
+
+- **`test(key-options)`: fix stale docstring + pin soft-validate contract** — `test_save_settings_rejects_inconsistent_global_defaults`'s docstring claimed to test rejection of `rsa` + `elliptic_curve`, but the body actually tested rejection of `rsa` + `key_size=1024`. The test was correct; the docstring described behaviour the code doesn't implement. Docstring updated, and a new `test_save_settings_accepts_inactive_branch_stash` pins the deliberate soft-validate contract (inactive field is stashed verbatim so the UI can preserve the previous value on RSA <-> ECDSA toggles without round-trip failures).
+
+- **`fix(api)`: run key-options validation after domain scope check** — `validate_key_options` ran *before* `_check_domain_scope` on the cert-create endpoint, so an out-of-scope caller could probe field-specific 400 messages for a domain they were not allowed to see. Moved the validation to fire after the scope check + after the SAN scope loop. In-scope path is byte-identical; out-of-scope callers now get the scope 403 instead of a 400 carrying field-level reasoning.
+
+- **`fix(api)`: stop persisting per-cert key overrides as dead state** — the cert-create endpoint wrote `key_type`/`key_size`/`elliptic_curve` into the domain entry of `settings.json`, but no code path read them (verified by grepping every accessor pattern across the modules tree). Renewals preserve the original shape because certbot writes `--key-type` / `--rsa-key-size` / `--elliptic-curve` into its own `renewal/<domain>.conf` at create time. The `settings.json` copy was a no-op write that risked future readers being misled into trusting an unsynchronised value.
+
+- **`refactor(settings)`: hoist `_SECRET_KEYS` / `_NON_SECRET_KEYS` to module scope** — both were rebuilt on every settings GET. Negligible overhead in absolute terms, but the regex re-compiled and the set literal re-instantiated each request. Pulled to module scope; same behaviour, smaller hot path.
+
 ## v2.6.5 (Patch — UI polish: top-nav icon centering + cert-detail serial wrap)
 
 Two small UI fixes spotted in manual browser testing. No code path changes, no API surface change, no behavior change beyond pixels.
