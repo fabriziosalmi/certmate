@@ -1,3 +1,25 @@
+## v2.6.4 (Patch — hotfix: docker-multiplatform security-scan job permissions)
+
+Regression introduced in v2.6.2 (PR #196) by the `permissions: read-all` top-level on `docker-multiplatform.yml`. The `security-scan` job uploads Trivy SARIF to the GitHub Security tab via `github/codeql-action/upload-sarif`, which requires `security-events: write`. Under read-all the upload step failed every build on main / on tag pushes with:
+
+> Resource not accessible by integration - https://docs.github.com/rest
+
+(PR builds were unaffected because the `security-scan` job is gated on `github.event_name != 'pull_request'`, so the failure only surfaced after merge.)
+
+### Fix
+
+Job-level permissions override on `security-scan` granting the narrow scopes it actually needs:
+
+```yaml
+permissions:
+  security-events: write
+  contents: read
+```
+
+The workflow default stays `read-all`; every other step (`build`) is unaffected.
+
+The two failed runs in the activity log (the v2.6.3 merge commit and the v2.6.3 tag push) will not be retried automatically — they remain as historical failures. Future pushes will succeed.
+
 ## v2.6.3 (Patch — pin all CI dependencies by SHA + base image digest)
 
 Closes the Scorecard `Pinned-Dependencies` check (0 → ~9). The single biggest score uplift on the path from the v2.6.2 baseline.
