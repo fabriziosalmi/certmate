@@ -1,3 +1,19 @@
+## v2.6.8 (Patch — coverage push on security-critical modules: dns_providers + auth + notifier)
+
+Three new unit-test files, **+135 tests**, lifting overall project coverage from 51% to **56%** with the biggest gains on the modules an operator's threat model cares about.
+
+### What landed
+
+- **`tests/test_dns_manager_coverage.py`** — 44 tests. `modules/core/dns_providers.py` from **8% → 91%**. Covers `get_available_providers`, `get_dns_provider_account_config` (every branch: multi-account / default-account / first-credentialed / legacy single-account / missing / exception), `list_dns_provider_accounts`, `list_accounts` (cross-provider aggregation), `suggest_dns_provider_for_domain` (every confidence tier + the pattern matchers), `create_dns_account` + `add_account` alias (first-account-default contract, audit label), `delete_dns_account` + `delete_account` alias (default promotion + last-account default removal), `set_default_account`.
+- **`tests/test_auth_manager_coverage.py`** — 59 tests. `modules/core/auth.py` security boundary covered: role normalisation (legacy `user` -> `operator`, unknown -> `viewer` so no silent privilege escalation), password hashing round-trip (bcrypt + legacy SHA-256), `_normalize_allowed_domains`, `domain_matches_scope` (the multi-tenant boundary — every cell of the truth table pinned), `user_can_access_domain`, API token HMAC + plain-SHA-256 verification including legacy-tokens-after-HMAC-key-set, user lifecycle (create / authenticate / list / update / delete + the "cannot delete the last admin" guard), session lifecycle (create / validate / invalidate / uniqueness / expiry), local-auth toggle.
+- **`tests/test_notifier_coverage.py`** — 31 tests. `modules/core/notifier.py` from **14% → 91%**. Covers `notify()` dispatch + every gating branch, webhook payload shapes (Slack, Discord, generic + custom headers + HMAC-SHA256 signature), URL scheme defence (`file://` / `ftp://` / `javascript:` refused), retry-with-backoff (success / fail-then-success / exhaustion), delivery log JSONL write + read + cap + malformed-line tolerance, SMTP send path with strict args assertion, `test_channel()` dispatch.
+
+### Overall
+
+`pytest -m "not e2e and not ui"`: **767 passed** (was 632), 2 skipped, 115 deselected. Coverage 51% -> 56%. No source-code changes — all uplift is from test files.
+
+The picks are deliberate: a tool that handles TLS private keys, DNS provider credentials, and multi-tenant API scoping should be honest about test coverage on those exact surfaces. The remaining low-coverage modules (`modules/api/resources.py` 32%, `modules/web/cert_routes.py` 16%, `modules/core/client_certificates.py` 15%) are next-session candidates; they need Flask app context and a richer fixture story.
+
 ## v2.6.7 (Patch — close #194: Azure Key Vault both-mode robustness + delete contract)
 
 Closes the follow-up issue [#194](https://github.com/fabriziosalmi/certmate/issues/194) raised against PR #139 / v2.6.0. Three commits: two narrow fixes on the Azure Key Vault storage backend plus a coupled test, both addressing surface-skew handling.
