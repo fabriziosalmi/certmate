@@ -1,3 +1,19 @@
+## v2.6.5 (Patch — UI polish: top-nav icon centering + cert-detail serial wrap)
+
+Two small UI fixes spotted in manual browser testing. No code path changes, no API surface change, no behavior change beyond pixels.
+
+### What landed
+
+- **`fix(nav)`: center desktop top-nav icons with their labels**. The five top-nav links (Certificates / Settings / Help / Activity / API Docs) had `-translate-y-px` on the `<i>`, which pushed each icon glyph one pixel above the text baseline. The parent `<a>` already does the right thing with `inline-flex items-center`, so the nudge fought it and the row read visibly off-center. Dropping the translate restores flex centering; `text-[0.85em] leading-none` stay — the slightly smaller icon is by design.
+
+- **`fix(modal)`: wrap long cert serial numbers so they fit the modal**. The Serial field in the Client Certificate Details modal rendered a 30+ digit decimal as a single unbreakable run, overflowing past the right edge of the modal. Render the value in a `font-mono text-xs break-all` span so the number wraps cleanly to a second line. Monospace also visually de-emphasises the value relative to the bold `Serial:` label — right for an identifier humans rarely read in full.
+
+The other long fields (Identifier, Common Name) already wrap because they contain hyphens — only the serial needed the treatment.
+
+### Verification
+
+Browser smoke test in a fresh Docker container (isolated data dir): screenshot of `/` confirms the top-nav row now has each icon vertically centered with its label. The serial-wrap change is a 3-line CSS modifier on an already-escaped value; verified by inspection. Full Cloudflare real-cert e2e is overkill for a pixel fix, skipped.
+
 ## v2.6.4 (Patch — hotfix: docker-multiplatform security-scan job permissions)
 
 Regression introduced in v2.6.2 (PR #196) by the `permissions: read-all` top-level on `docker-multiplatform.yml`. The `security-scan` job uploads Trivy SARIF to the GitHub Security tab via `github/codeql-action/upload-sarif`, which requires `security-events: write`. Under read-all the upload step failed every build on main / on tag pushes with:
