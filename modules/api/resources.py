@@ -707,19 +707,13 @@ def create_api_resources(api, models, managers):
                         'dns_provider': _resolved_dns_provider,
                         'dns_account_id': account_id,
                     }
-                    # Only persist key overrides the operator picked
-                    # explicitly. Inheriting from the global default keeps
-                    # the entry small and lets later changes to the global
-                    # apply to certs that never specified a per-cert shape.
-                    # Renewals still preserve the original shape because
-                    # certbot persists --key-type/--rsa-key-size/--elliptic-curve
-                    # in its own renewal/<domain>.conf at create time.
-                    if key_type is not None:
-                        entry['key_type'] = key_type
-                    if key_size is not None:
-                        entry['key_size'] = key_size
-                    if elliptic_curve is not None:
-                        entry['elliptic_curve'] = elliptic_curve
+                    # Per-cert key overrides are NOT persisted into the
+                    # domain entry: nothing downstream reads them. Renewals
+                    # preserve the original shape because certbot writes
+                    # --key-type/--rsa-key-size/--elliptic-curve into its
+                    # own renewal/<domain>.conf at create time, and the
+                    # renewal job invokes certbot without overriding any
+                    # of those flags — certbot reuses what it persisted.
                     domains_list.append(entry)
                     s['domains'] = domains_list
 
