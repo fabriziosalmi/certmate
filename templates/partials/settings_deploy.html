@@ -231,7 +231,13 @@
                                 </thead>
                                 <tbody>
                                     <template x-for="entry in history" :key="entry.timestamp + entry.hook_id">
-                                        <tr class="border-b border-gray-100 dark:border-gray-700/50">
+                                        <tr class="border-b border-gray-100 dark:border-gray-700/50 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/30 transition"
+                                            role="button"
+                                            tabindex="0"
+                                            @click="showExecutionDetail(entry)"
+                                            @keydown.enter.prevent="showExecutionDetail(entry)"
+                                            @keydown.space.prevent="showExecutionDetail(entry)"
+                                            :aria-label="'View execution detail for ' + (entry.hook_name || 'hook') + ' on ' + entry.domain">
                                             <td class="py-1.5 pr-3 text-gray-500 dark:text-gray-400 whitespace-nowrap" x-text="entry.timestamp ? entry.timestamp.replace('T',' ').replace('Z','') : ''"></td>
                                             <td class="py-1.5 pr-3 text-gray-900 dark:text-white" x-text="entry.hook_name"></td>
                                             <td class="py-1.5 pr-3 text-gray-600 dark:text-gray-300 font-mono" x-text="entry.domain"></td>
@@ -262,6 +268,92 @@
                     <i class="fas fa-save mr-2"></i>Save Deploy Settings
                 </button>
             </div>
+
+            {#
+                Execution-detail drill-down modal (issue #207 enhancement 1).
+                Backend already records all fields per run in data/deploy_history.jsonl
+                (see modules/core/deployer.py:165-179); this surface just exposes
+                them. Inside the x-data="deployManager()" scope so x-text bindings
+                read `selectedExecution` directly. All bindings use x-text (DOM
+                textContent), never x-html, so untrusted stdout/stderr can't
+                introduce HTML/script.
+            #}
+            {% call modal(id="executionDetailModal", title="Execution Detail", icon="fa-terminal", size="lg") %}
+                <template x-if="selectedExecution">
+                    <div class="space-y-4 text-sm">
+                        <!-- Header metadata -->
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 pb-3 border-b border-gray-200 dark:border-gray-700">
+                            <div>
+                                <div class="text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-400">Time</div>
+                                <div class="text-gray-900 dark:text-white font-mono text-xs" x-text="selectedExecution.timestamp ? selectedExecution.timestamp.replace('T',' ').replace('Z','') : '—'"></div>
+                            </div>
+                            <div class="min-w-0">
+                                <div class="text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-400">Hook</div>
+                                <div class="text-gray-900 dark:text-white truncate" x-text="selectedExecution.hook_name || '(unnamed)'" :title="selectedExecution.hook_name || ''"></div>
+                                <div class="text-[10px] text-gray-400 dark:text-gray-500 font-mono truncate" x-text="selectedExecution.hook_id || ''" :title="selectedExecution.hook_id || ''"></div>
+                            </div>
+                            <div class="min-w-0">
+                                <div class="text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-400">Domain</div>
+                                <div class="text-gray-900 dark:text-white font-mono text-xs break-all" x-text="selectedExecution.domain"></div>
+                            </div>
+                            <div>
+                                <div class="text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-400">Event</div>
+                                <div class="flex items-center gap-1 flex-wrap">
+                                    <span class="px-1.5 py-0.5 rounded text-[10px] font-medium"
+                                          :class="selectedExecution.event === 'test' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'"
+                                          x-text="selectedExecution.event"></span>
+                                    <span x-show="selectedExecution.dry_run"
+                                          class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">
+                                        dry-run
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Status + duration -->
+                        <div class="flex flex-wrap items-center gap-2">
+                            <span class="px-2 py-0.5 rounded text-xs font-medium"
+                                  :class="selectedExecution.success ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'"
+                                  x-text="selectedExecution.success ? 'success' : ('exit ' + (selectedExecution.exit_code !== null && selectedExecution.exit_code !== undefined ? selectedExecution.exit_code : 'error'))"></span>
+                            <span class="text-xs text-gray-500 dark:text-gray-400" x-text="(selectedExecution.duration_ms || 0) + ' ms'"></span>
+                        </div>
+
+                        <!-- Error (only when set) -->
+                        <template x-if="selectedExecution.error">
+                            <div>
+                                <div class="text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">Error</div>
+                                <div class="text-xs bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded px-3 py-2 text-red-700 dark:text-red-300 break-words" x-text="selectedExecution.error"></div>
+                            </div>
+                        </template>
+
+                        <!-- Command -->
+                        <div>
+                            <div class="text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">Command</div>
+                            <pre class="text-xs font-mono bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 rounded px-3 py-2 max-h-32 overflow-auto whitespace-pre-wrap break-all text-gray-800 dark:text-gray-200" x-text="selectedExecution.command || '(empty)'"></pre>
+                        </div>
+
+                        <!-- stdout -->
+                        <div>
+                            <div class="text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">stdout</div>
+                            <pre class="text-xs font-mono bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 rounded px-3 py-2 max-h-48 overflow-auto whitespace-pre-wrap break-all text-gray-800 dark:text-gray-200"
+                                 :class="selectedExecution.stdout ? '' : 'italic text-gray-400 dark:text-gray-500'"
+                                 x-text="selectedExecution.stdout || '(no output)'"></pre>
+                        </div>
+
+                        <!-- stderr -->
+                        <div>
+                            <div class="text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">stderr</div>
+                            <pre class="text-xs font-mono bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 rounded px-3 py-2 max-h-48 overflow-auto whitespace-pre-wrap break-all text-gray-800 dark:text-gray-200"
+                                 :class="selectedExecution.stderr ? '' : 'italic text-gray-400 dark:text-gray-500'"
+                                 x-text="selectedExecution.stderr || '(no output)'"></pre>
+                        </div>
+
+                        <div class="text-[10px] text-gray-400 dark:text-gray-500 italic">
+                            stdout / stderr are captured at execution time and truncated to 4096 chars per stream.
+                        </div>
+                    </div>
+                </template>
+            {% endcall %}
         </div>
 
 
