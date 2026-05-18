@@ -166,12 +166,26 @@ class Route53Strategy(DNSProviderStrategy):
 
 class AzureStrategy(DNSProviderStrategy):
     def create_config_file(self, config_data: Dict[str, Any]) -> Optional[Path]:
+        # ``_zone_domain`` is injected by the caller (see
+        # CertificateManager.create_certificate / renew_certificate) so the
+        # generated azure.ini can include the ``dns_azure_zone1`` mapping
+        # that certbot-dns-azure 2.x requires. Without a zone mapping the
+        # plugin aborts with "At least one zone mapping needs to be
+        # provided" before any DNS challenge can run.
+        zone_domain = str(config_data.get('_zone_domain') or '').strip()
+        if not zone_domain:
+            raise ValueError(
+                "Azure DNS config requires a zone domain. The caller must "
+                "inject '_zone_domain' into dns_config before calling "
+                "AzureStrategy.create_config_file()."
+            )
         return create_azure_config(
             config_data.get('subscription_id', ''),
             config_data.get('resource_group', ''),
             config_data.get('tenant_id', ''),
             config_data.get('client_id', ''),
             config_data.get('client_secret', ''),
+            zone_domain,
         )
 
     @property

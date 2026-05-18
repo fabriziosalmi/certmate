@@ -360,14 +360,30 @@ def create_route53_config(access_key_id: str, secret_access_key: str) -> Path:
     content = f"dns_route53_access_key_id = {access_key_id}\ndns_route53_secret_access_key = {secret_access_key}\n"
     return _create_config_file("route53", content)
 
-def create_azure_config(subscription_id: str, resource_group: str, tenant_id: str, client_id: str, client_secret: str) -> Path:
-    """Create Azure DNS credentials file."""
+def create_azure_config(subscription_id: str, resource_group: str, tenant_id: str, client_id: str, client_secret: str, zone_domain: str) -> Path:
+    """Create Azure DNS credentials file for certbot-dns-azure (terrycain).
+
+    The plugin (certbot-dns-azure >= 2.x) expects:
+
+    * ``dns_azure_sp_client_id`` / ``dns_azure_sp_client_secret`` /
+      ``dns_azure_tenant_id`` — service principal credentials. Note the
+      ``sp_`` prefix; the older bare ``dns_azure_client_id`` keys that
+      certmate used previously are ignored and the plugin reports
+      "No authentication methods have been configured for Azure DNS".
+    * ``dns_azure_zoneN = <zone>:<azure-resource-id>`` — at least one
+      zone mapping. ``subscription_id`` and ``resource_group`` are NOT
+      top-level keys; they live inside the resource id of the zone line.
+
+    See ``certbot_dns_azure/_internal/dns_azure.py:_validate_credentials``
+    in v2.5.0 for the validation that drives this format.
+    """
+    zone_resource_id = f"/subscriptions/{subscription_id}/resourceGroups/{resource_group}"
     content = (
-        f"dns_azure_subscription_id = {subscription_id}\n"
-        f"dns_azure_resource_group = {resource_group}\n"
+        f"dns_azure_sp_client_id = {client_id}\n"
+        f"dns_azure_sp_client_secret = {client_secret}\n"
         f"dns_azure_tenant_id = {tenant_id}\n"
-        f"dns_azure_client_id = {client_id}\n"
-        f"dns_azure_client_secret = {client_secret}\n"
+        f"dns_azure_environment = AzurePublicCloud\n"
+        f"dns_azure_zone1 = {zone_domain}:{zone_resource_id}\n"
     )
     return _create_config_file("azure", content)
 

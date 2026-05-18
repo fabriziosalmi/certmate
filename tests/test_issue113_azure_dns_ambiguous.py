@@ -39,6 +39,7 @@ class TestAzureStrategyAvoidsAmbiguousFlag:
             'tenant_id': 'tenant',
             'client_id': 'client',
             'client_secret': 'shhh',
+            '_zone_domain': 'example.com',
         })
 
         cmd = []
@@ -94,6 +95,7 @@ class TestBaseStrategyAvoidsAmbiguousFlag:
             'tenant_id': 'tenant',
             'client_id': 'client',
             'client_secret': 'shhh',
+            '_zone_domain': 'example.com',
         })
 
         cmd = []
