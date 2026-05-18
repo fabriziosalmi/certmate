@@ -22,6 +22,11 @@
             showHistory: false,
             history: [],
             newDomain: '',
+            // Drives the execution-detail modal in settings_deploy.html.
+            // null = nothing selected; the modal is gated on this via x-if so
+            // the bindings are skipped entirely until showExecutionDetail()
+            // sets it from a row click.
+            selectedExecution: null,
 
             loadConfig: function () {
                 var self = this;
@@ -171,6 +176,18 @@
                         addDebugLog('Test request failed for hook "' + hookLabel + '": ' + (err && err.message || err), 'error');
                         CertMate.toast('Test request failed', 'error');
                     });
+            },
+
+            showExecutionDetail: function (entry) {
+                // Open the drill-down modal for a single deploy_history.jsonl
+                // row. All fields already arrive via /api/deploy/history; this
+                // surface is read-only and never re-fetches.
+                this.selectedExecution = entry;
+                if (window.CertMate && CertMate.modal && typeof CertMate.modal.open === 'function') {
+                    CertMate.modal.open('executionDetailModal');
+                }
+                var label = (entry && entry.hook_name) || (entry && entry.hook_id) || 'unnamed';
+                addDebugLog('Opened execution detail: ' + label + ' on ' + (entry && entry.domain), 'info');
             },
 
             loadHistory: function () {

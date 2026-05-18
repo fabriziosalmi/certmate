@@ -1,3 +1,21 @@
+## v2.6.11 (Feature — close #207 enhancement 1: drill-down modal on Recent Executions)
+
+Surfaces every field the backend already records per deploy-hook run. Clicking a row in the **Settings → Deployment → Recent Executions** table now opens a modal showing the full execution: timestamp, hook name + id, domain, event, dry-run flag, success / exit code, duration, error (when present), and the captured `command`, `stdout` and `stderr` streams. Backend was already storing all of these in `data/deploy_history.jsonl` ([`modules/core/deployer.py:165-179`](https://github.com/fabriziosalmi/certmate/blob/main/modules/core/deployer.py#L165-L179)); the UI just wasn't surfacing them. Closes enhancement 1 of issue [#207](https://github.com/fabriziosalmi/certmate/issues/207) raised by @tuxpowered.
+
+### What landed
+
+- **`templates/partials/settings_deploy.html`** — each `<tr>` in the Recent Executions table is now `role="button" tabindex="0"` and binds `@click` / `@keydown.enter|space` to `showExecutionDetail(entry)`. Hover affordance + `aria-label` per row carrying the hook name and domain. A new modal block at the end of the deploy panel renders the detail via the standard `_modal.html` macro (`size="lg"`). Body is gated by `<template x-if="selectedExecution">` so bindings are skipped until a row is clicked.
+- **`static/js/settings-deploy.js`** — adds `selectedExecution: null` data and a `showExecutionDetail(entry)` method that stashes the entry and calls `CertMate.modal.open('executionDetailModal')`. Read-only; no extra fetch (the entry came from the existing `/api/deploy/history` payload).
+- **No backend change.** The `/api/deploy/history` endpoint ([`modules/web/settings_routes.py:482-504`](https://github.com/fabriziosalmi/certmate/blob/main/modules/web/settings_routes.py#L482-L504)) was already returning the full 13-field execution dict.
+
+### Security
+
+All modal fields render via `x-text` (DOM `textContent`), never `x-html`. Operator-controlled `command` / `stdout` / `stderr` / `error` / `hook_name` strings cannot inject HTML or script tags. The route serving the data is `@require_role('admin')`-gated as before. Captured streams are truncated to 4096 chars at write time in the deployer; a footer line in the modal calls this out so a viewer is not surprised by clipped output.
+
+### Out of scope
+
+The other two enhancements in #207 — relabeling the "Hook name" field and a dedicated webhook delivery flow distinct from shell scripts — remain open and will be tracked separately.
+
 ## v2.6.10 (Patch — close #207 bug: install bash in the image so `#!/bin/bash` deploy hooks resolve)
 
 Closes the bug part of issue [#207](https://github.com/fabriziosalmi/certmate/issues/207) raised by @tuxpowered.
