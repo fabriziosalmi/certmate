@@ -38,7 +38,7 @@
                     </div>
                 </div>
                 <nav class="flex space-x-1 min-w-max" role="tablist">
-                    <template x-for="t in [{id:'dns',icon:'fa-server',label:'DNS'},{id:'ca',icon:'fa-shield-alt',label:'CA'},{id:'general',icon:'fa-cogs',label:'General'},{id:'storage',icon:'fa-database',label:'Storage'},{id:'notifications',icon:'fa-bell',label:'Notifications'},{id:'deploy',icon:'fa-rocket',label:'Deploy'},{id:'users',icon:'fa-users',label:'Users'},{id:'apikeys',icon:'fa-key',label:'API Keys'},{id:'backup',icon:'fa-archive',label:'Backup'}]">
+                    <template x-for="t in [{id:'dns',icon:'fa-server',label:'DNS'},{id:'ca',icon:'fa-shield-alt',label:'CA'},{id:'general',icon:'fa-cogs',label:'General'},{id:'storage',icon:'fa-database',label:'Storage'},{id:'notifications',icon:'fa-bell',label:'Notifications'},{id:'deploy',icon:'fa-rocket',label:'Deploy'},{id:'users',icon:'fa-users',label:'Users'},{id:'apikeys',icon:'fa-key',label:'API Keys'},{id:'oidc',icon:'fa-id-badge',label:'SSO'},{id:'backup',icon:'fa-archive',label:'Backup'}]">
                         <button type="button" @click="tab = t.id" role="tab"
                                 :title="t.label"
                                 :aria-label="t.label"
@@ -69,6 +69,7 @@
                     {% include 'partials/settings_deploy.html' %}
                     {% include 'partials/settings_users.html' %}
                     {% include 'partials/settings_apikeys.html' %}
+                    {% include 'partials/settings_oidc.html' %}
 
                     <!-- TAB: Backup & Restore Section -->
                     <div x-show="tab === 'backup'" x-cloak class="bg-white dark:bg-surface-card rounded-xl shadow-card p-6 mt-6">
@@ -275,4 +276,5 @@
     <script src="/static/js/settings-notifications.js"></script>
     <script src="/static/js/settings-deploy.js"></script>
     <script src="/static/js/settings-apikeys.js"></script>
+    <script src="/static/js/settings-oidc.js"></script>
 {% endblock %}

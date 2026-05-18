@@ -98,6 +98,22 @@
                     inside the container.
                 </p>
             </form>
+
+            <!-- SSO section. Hidden until /api/auth/oidc/config reports
+                 enabled=true, populated dynamically so a misconfigured
+                 IdP doesn't render a broken button. -->
+            <div id="ssoSection" class="hidden mt-6">
+                <div class="relative flex items-center my-4">
+                    <div class="flex-grow border-t border-gray-300 dark:border-gray-600"></div>
+                    <span class="flex-shrink mx-3 text-xs text-gray-500 dark:text-gray-400">or</span>
+                    <div class="flex-grow border-t border-gray-300 dark:border-gray-600"></div>
+                </div>
+                <a id="ssoButton" href="/api/auth/oidc/login"
+                   class="w-full inline-flex justify-center items-center py-3 px-4 bg-gray-800 hover:bg-gray-900 dark:bg-gray-700 dark:hover:bg-gray-600 text-white font-semibold rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 dark:focus:ring-offset-gray-800 btn-press transition-all duration-150">
+                    <i class="fas fa-id-badge mr-2"></i>
+                    Sign in with <span id="ssoProviderName" class="ml-1">SSO</span>
+                </a>
+            </div>
         </div>
 
         <!-- Footer -->
@@ -205,6 +221,42 @@
             } catch (e) {
                 // Not logged in, stay on login page
             }
+        })();
+
+        // OIDC affordance probe. Public endpoint so the SSO button
+        // renders even on a fully-fresh visit; failure leaves the
+        // section hidden (fail-closed).
+        (async () => {
+            try {
+                const response = await fetch('/api/auth/oidc/config');
+                if (!response.ok) return;
+                const data = await response.json();
+                if (!data || !data.enabled) return;
+                const section = document.getElementById('ssoSection');
+                const button = document.getElementById('ssoButton');
+                const nameSpan = document.getElementById('ssoProviderName');
+                if (data.provider_name && nameSpan) {
+                    nameSpan.textContent = data.provider_name;
+                }
+                if (button && data.login_url) {
+                    button.href = data.login_url + '?next=' + encodeURIComponent(safeNextUrl());
+                }
+                if (section) section.classList.remove('hidden');
+            } catch (e) {
+                // No OIDC available; leave the section hidden.
+            }
+        })();
+
+        // Surface ?error=oidc_* in the existing error banner so failed
+        // OIDC attempts (token_exchange, idp_error, no_user, …) are
+        // visible to the user instead of silently bouncing them to /login.
+        (function() {
+            try {
+                var err = new URLSearchParams(window.location.search).get('error');
+                if (!err) return;
+                var label = err.replace(/^oidc_/, '').replace(/_/g, ' ');
+                showError('Single sign-on failed: ' + label);
+            } catch (e) { /* no-op */ }
         })();
     </script>
 </body>

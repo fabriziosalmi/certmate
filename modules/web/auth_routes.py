@@ -9,6 +9,7 @@ def register_auth_routes(app, managers, require_web_auth, auth_manager,
                          _check_login_rate_limit, _record_login_attempt):
     """Register authentication routes"""
     audit_logger = managers.get('audit')
+    oidc_manager = managers.get('oidc')
 
     @app.route('/login', methods=['GET'])
     def login_page():
@@ -73,11 +74,29 @@ def register_auth_routes(app, managers, require_web_auth, auth_manager,
 
     @app.route('/api/auth/logout', methods=['POST'])
     def api_logout():
-        """Logout endpoint"""
+        """Logout endpoint.
+
+        For OIDC-minted sessions where a post_logout_redirect_uri is
+        configured, returns ``oidc_logout_url`` so the frontend can
+        follow the IdP's end-session flow (single-logout). Local
+        sessions get the original no-frills response — unchanged.
+        """
         session_id = request.cookies.get('certmate_session')
+        oidc_logout_url = None
         if session_id:
+            # Look up the session source BEFORE invalidating so we know
+            # whether to build an end-session URL.
+            try:
+                info = auth_manager.validate_session(session_id)
+                if info and info.get('source') == 'oidc' and oidc_manager is not None:
+                    oidc_logout_url = oidc_manager.build_end_session_url()
+            except Exception as exc:
+                logger.debug(f"OIDC logout URL lookup failed: {exc}")
             auth_manager.invalidate_session(session_id)
-        response = jsonify({'message': 'Logged out successfully'})
+        body = {'message': 'Logged out successfully'}
+        if oidc_logout_url:
+            body['oidc_logout_url'] = oidc_logout_url
+        response = jsonify(body)
         response.delete_cookie('certmate_session', path='/')
         return response
 

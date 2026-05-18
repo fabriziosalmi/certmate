@@ -71,6 +71,10 @@ SETTINGS_REJECT_KEYS = frozenset({
     'users',
     'api_keys',
     'local_auth_enabled',
+    # OIDC config contains client_secret + identity-source rules. Mutated
+    # via the dedicated /api/auth/oidc/settings endpoint with its own
+    # validation + audit. Bulk POST would skip both.
+    'oidc',
 })
 
 
@@ -574,6 +578,27 @@ class SettingsManager:
                         'project_id': '',
                         'environment': 'prod'
                     }
+                },
+                # OIDC/SSO identity source. Disabled by default; opt-in via
+                # the Settings → SSO tab. Coexists with local auth and API
+                # keys — never replaces them. See modules/core/oidc.py for
+                # the consumer.
+                'oidc': {
+                    'enabled': False,
+                    'provider_name': 'SSO',
+                    'issuer_url': '',
+                    'client_id': '',
+                    'client_secret': '',
+                    'scopes': ['openid', 'email', 'profile', 'groups'],
+                    'redirect_uri_override': '',
+                    'username_claim': 'preferred_username',
+                    'email_claim': 'email',
+                    'role_claim': 'groups',
+                    'role_mappings': [],
+                    'default_role': 'viewer',
+                    'auto_create_users': True,
+                    'link_by_email': True,
+                    'post_logout_redirect_uri': '',
                 }
             }
 
@@ -609,7 +634,8 @@ class SettingsManager:
                     'duckdns': {'api_token': ''},
                     'hetzner-cloud': {'api_token': ''}
                 },
-                'certificate_storage': default_settings['certificate_storage']
+                'certificate_storage': default_settings['certificate_storage'],
+                'oidc': default_settings['oidc'],
             }
 
             if not self.settings_file.exists():
@@ -671,6 +697,7 @@ class SettingsManager:
                     'renewal_threshold_days', 'api_bearer_token', 'setup_completed',
                     'dns_provider', 'challenge_type',
                     'default_key_type', 'default_key_size', 'default_elliptic_curve',
+                    'oidc',
                 ]
                 for key in essential_keys:
                     if key not in settings:
