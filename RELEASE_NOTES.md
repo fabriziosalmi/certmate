@@ -1,3 +1,37 @@
+## v2.6.10 (Patch — close #207 bug: install bash in the image so `#!/bin/bash` deploy hooks resolve)
+
+Closes the bug part of issue [#207](https://github.com/fabriziosalmi/certmate/issues/207) raised by @tuxpowered.
+
+### Root cause
+
+The base image (`python:3.12-slim-trixie`) ships with `/bin/sh` (dash) but no `/bin/bash`. The deployer invokes hook scripts via `['sh', '-c', command]` (see [`modules/core/deployer.py:187`](https://github.com/fabriziosalmi/certmate/blob/main/modules/core/deployer.py#L187)); dash then `exec`s the script path and the kernel reads the shebang. A script starting with `#!/bin/bash` causes `execve('/bin/bash', ...)` to return `ENOENT`, which surfaces as exit code **127** in the deploy history.
+
+There was also a latent inconsistency: the Dockerfile already declared `useradd --create-home --shell /bin/bash certmate`, so the certmate user's login shell was bash — but bash itself was never installed.
+
+### Fix
+
+One-line change in the Dockerfile: add `bash` to the `apt-get install -y` line so `/bin/bash` resolves and shebang-bash deploy scripts run. Python deployer code is untouched — operator-provided hooks remain executed via `sh -c`, the shebang still controls which interpreter runs the script body.
+
+### Operator impact
+
+- Existing deploy hooks with `#!/bin/sh` keep working (no change).
+- Hooks with `#!/bin/bash` (the common default for ops scripts) now run instead of failing with 127.
+- Image size delta: roughly +6 MB compressed for bash + its read-only data files.
+
+### Verification
+
+- Docker build smoke: `docker run --rm certmate:v2.6.10-test which bash` returns `/usr/bin/bash`, and a `#!/bin/bash` script invoked via `sh -c '/path/to/script.sh'` returns its real exit code instead of 127.
+- Full unit + integration suite (Python 3.12.12): **871 passed, 14 skipped, 2 xfailed, 0 failed** — no source-code changes, baseline unchanged.
+
+### Out of scope (separate follow-ups)
+
+Issue #207 also requested three enhancements that are not in this patch:
+- Click-through drill-down on Recent Executions to inspect stdout / stderr / payload / response (backend already stores these in `data/deploy_history.jsonl`; the UI just doesn't surface them).
+- Relabel "Hook name" → "path to script or cmd" + "Description" prefix on the example field.
+- A dedicated webhook configuration flow (URL + method + auth + freeform JSON payload + variable selector), distinct from the shell-script hook flow.
+
+These will land as separate atomic PRs.
+
 ## v2.6.9 (Patch — close #204: Azure DNS sp_* keys + zoneN mapping)
 
 Closes issue [#204](https://github.com/fabriziosalmi/certmate/issues/204) via [PR #205](https://github.com/fabriziosalmi/certmate/pull/205) from @rocogamer.

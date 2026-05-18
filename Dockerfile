@@ -52,11 +52,15 @@ FROM python:3.12-slim-trixie@sha256:401f6e1a67dad31a1bd78e9ad22d0ee0a3b52154e6bd
 # Set working directory
 WORKDIR /app
 
-# Install runtime dependencies + tini for proper PID 1 signal handling
+# Install runtime dependencies + tini for proper PID 1 signal handling.
+# bash is needed because: (a) the certmate user is created with /bin/bash as
+# its login shell on the line below, and (b) operator-provided deploy hooks
+# routinely start with `#!/bin/bash` — without bash the kernel cannot resolve
+# the shebang and the script returns exit 127 (issue #207).
 # apt-get upgrade pulls security patches for glibc, zlib, etc.
 RUN apt-get update && \
     apt-get upgrade -y -o Acquire::Retries=3 && \
-    apt-get install -y -o Acquire::Retries=3 curl tini && \
+    apt-get install -y -o Acquire::Retries=3 bash curl tini && \
     rm -rf /var/lib/apt/lists/* && \
     useradd --create-home --shell /bin/bash certmate
 
