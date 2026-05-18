@@ -199,6 +199,21 @@ class CertificateManager:
             return deployment_status
 
     @staticmethod
+    def _dns_config_for_strategy(dns_provider, dns_config, domain):
+        """Return a strategy-ready copy of dns_config with provider-specific extras.
+
+        Azure DNS is the only provider that needs the certificate's primary
+        domain at config-file-creation time (it goes into the
+        ``dns_azure_zone1`` mapping). Injecting it here keeps that knowledge
+        out of the generic flow without forcing every strategy to accept a
+        domain argument.
+        """
+        if dns_provider != 'azure':
+            return dns_config
+        zone_domain = (domain or '').strip().removeprefix('*.')
+        return {**dns_config, '_zone_domain': zone_domain}
+
+    @staticmethod
     def _create_dns_alias_hook_config(dns_provider, dns_config, domain_alias, propagation_seconds):
         """Write temporary config consumed by the DNS alias hook."""
         if dns_provider not in DNS_ALIAS_SUPPORTED_PROVIDERS:
@@ -806,7 +821,8 @@ class CertificateManager:
                 self._configure_dns_alias_arguments(certbot_cmd, credentials_file)
             else:
                 # Create Config File
-                credentials_file = strategy.create_config_file(dns_config)
+                strategy_config = self._dns_config_for_strategy(dns_provider, dns_config, domain)
+                credentials_file = strategy.create_config_file(strategy_config)
 
                 # Configure Args
                 strategy.configure_certbot_arguments(certbot_cmd, credentials_file, domain_alias=domain_alias)
@@ -1032,7 +1048,8 @@ class CertificateManager:
                     strategy = DNSStrategyFactory.get_strategy(dns_provider)
                     strategy.prepare_environment(process_env, dns_config)
                     # Create credentials file for providers that need one
-                    credentials_file = strategy.create_config_file(dns_config)
+                    strategy_config = self._dns_config_for_strategy(dns_provider, dns_config, domain)
+                    credentials_file = strategy.create_config_file(strategy_config)
                     logger.info(f"Prepared DNS environment for renewal of {domain} with {dns_provider}")
                 else:
                     logger.warning(
