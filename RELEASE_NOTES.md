@@ -1,3 +1,28 @@
+## v2.6.9 (Patch — close #204: Azure DNS sp_* keys + zoneN mapping)
+
+Closes issue [#204](https://github.com/fabriziosalmi/certmate/issues/204) via [PR #205](https://github.com/fabriziosalmi/certmate/pull/205) from @rocogamer.
+
+`certbot-dns-azure` (terrycain) >= 2.x reads service-principal credentials from `sp_`-prefixed keys (`dns_azure_sp_client_id` / `dns_azure_sp_client_secret`) and parses subscription + resource group out of a per-zone resource id on `dns_azure_zoneN` lines. certmate was emitting the older, plugin-ignored key names — the plugin reached its first auth check, found nothing populated and aborted with `"No authentication methods have been configured for Azure DNS"` before any DNS challenge could run.
+
+### What landed
+
+- **`modules/core/utils.py::create_azure_config`** — writes `dns_azure_sp_client_id`, `dns_azure_sp_client_secret`, `dns_azure_tenant_id`, `dns_azure_environment` and `dns_azure_zone1 = <zone>:/subscriptions/<sub>/resourceGroups/<rg>`. Subscription + resource group are no longer top-level keys; they live inside the zone-line resource id, which is the only shape the plugin parses.
+
+- **`modules/core/dns_strategies.py::AzureStrategy.create_config_file`** — reads a `_zone_domain` injected by the caller and raises an explicit `ValueError` when missing. Defense in depth so a future regression fails loudly rather than producing a config the plugin rejects with a less actionable error.
+
+- **`modules/core/certificates.py`** — new `_dns_config_for_strategy` helper injects the (wildcard-stripped) primary domain into `dns_config` for Azure only, in both `create_certificate` and `renew_certificate`. Keeps provider-specific knowledge out of the shared certbot flow; non-Azure providers are untouched.
+
+### Tests
+
+- **`tests/test_azure_dns_credentials_format.py`** (new, 6 tests) pins the contract `_validate_credentials` enforces: `sp_*` keys present, legacy keys absent, `zone1` line shape with subscription + resource group, environment line, missing `_zone_domain` raises, wildcard prefix never leaks.
+- **`tests/test_issue113_azure_dns_ambiguous.py`** updated to pass the new `_zone_domain` field. Original ambiguous-flag contract from #113 unchanged.
+
+### Maintainer validation
+
+Full local suite (Python 3.12.12): **871 passed, 14 skipped, 2 xfailed, 0 failed** (73s). Runtime smoke test against `certbot-dns-azure==2.5.0` inside the built docker image confirmed the new INI format is accepted by the plugin's `_validate_credentials`; the previous format reproduces the `"No authentication methods have been configured"` error verbatim.
+
+Credit: @rocogamer for the root-cause analysis and the regression tests pinning the plugin's actual contract.
+
 ## v2.6.8 (Patch — coverage push on security-critical modules: dns_providers + auth + notifier)
 
 Three new unit-test files, **+135 tests**, lifting overall project coverage from 51% to **56%** with the biggest gains on the modules an operator's threat model cares about.
