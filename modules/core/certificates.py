@@ -921,8 +921,16 @@ class CertificateManager:
             )
 
             if result.returncode != 0:
+                # Log the FULL stderr internally for operator debugging.
+                # certbot-dns-azure and a few other plugins echo the
+                # offending credentials .ini line on parse failure, so
+                # the raw stderr carries secret material. Sanitise
+                # before bubbling up into the exception that becomes
+                # the API response body. Internal audit finding H3.
                 logger.error(f"Certbot failed for {domain}: {result.stderr}")
-                raise RuntimeError(f"Certificate creation failed: {result.stderr}")
+                from .utils import sanitize_certbot_stderr
+                safe_stderr = sanitize_certbot_stderr(result.stderr)
+                raise RuntimeError(f"Certificate creation failed: {safe_stderr}")
             
             # Move certificates to standard location
             live_dir = cert_output_dir / 'live' / domain
@@ -1156,9 +1164,14 @@ class CertificateManager:
                     'message': "Certificate renewed successfully"
                 }
             else:
+                # Mirror the create-path sanitisation: log raw stderr,
+                # surface a redacted copy. See sanitize_certbot_stderr
+                # docstring for the precise stripping rules.
                 error_msg = result.stderr or "Certificate not found"
                 logger.error(f"Certificate renewal failed for {domain}: {error_msg}")
-                raise RuntimeError(f"Renewal failed: {error_msg}")
+                from .utils import sanitize_certbot_stderr
+                safe_error = sanitize_certbot_stderr(error_msg) if result.stderr else error_msg
+                raise RuntimeError(f"Renewal failed: {safe_error}")
         except Exception as e:
             error_msg = str(e)
             logger.error(f"Exception during certificate renewal for {domain}: {error_msg}")
