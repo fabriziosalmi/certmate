@@ -126,17 +126,71 @@ class FileOperations:
                 temp_file.unlink(missing_ok=True)
             return False
 
-    def create_unified_backup(self, settings_data, backup_reason="manual"):
-        """Create a unified backup containing both settings and certificates"""
+    def _mask_settings_secrets(self, settings_dict):
+        """Walk a settings dict and replace credential-bearing values with
+        the canonical mask sentinel.
+
+        Uses the same ``_is_secret_key`` predicate as the masked GET path
+        on ``/api/web/settings`` (modules/web/settings_routes.py:55) — any
+        field whose name matches the project's secret regex (excluding
+        the documented non-secret allowlist like ``default_key_type``)
+        becomes ``SECRET_MASK_SENTINEL``. Restore reuses the
+        ``_strip_masked_values`` + deep-merge pipeline from PR #215, so
+        the sentinel signals "preserve the existing on-disk secret" when
+        restoring on top of an existing install. On a fresh restore the
+        sentinel stays as-is and the operator must re-enter credentials
+        (acknowledged trade-off — see the audit notes on the
+        ``create_unified_backup`` ``include_secrets`` flag).
+
+        Returns a deep-copied + masked structure; the caller's
+        ``settings_dict`` is never mutated.
+        """
+        from .settings import _is_secret_key, SECRET_MASK_SENTINEL
+
+        def _walk(node):
+            if isinstance(node, dict):
+                out = {}
+                for key, value in node.items():
+                    if _is_secret_key(key) and isinstance(value, str) and value:
+                        out[key] = SECRET_MASK_SENTINEL
+                    else:
+                        out[key] = _walk(value)
+                return out
+            if isinstance(node, list):
+                return [_walk(item) for item in node]
+            return node
+
+        return _walk(settings_dict)
+
+    def create_unified_backup(self, settings_data, backup_reason="manual", include_secrets=False):
+        """Create a unified backup containing both settings and certificates.
+
+        ``include_secrets`` controls whether secret-bearing fields in
+        ``settings_data`` (DNS provider tokens, storage backend
+        credentials, ``api_bearer_token``, ``smtp_password``, OIDC
+        ``client_secret``, user password hashes, …) appear in plaintext
+        in the resulting zip. Default ``False`` writes the canonical
+        mask sentinel in place of every secret, so a leaked backup file
+        does NOT also leak every CertMate credential. The opt-in
+        ``include_secrets=True`` path produces a plaintext backup for
+        full disaster-recovery use; callers MUST audit-log the opt-in
+        because the resulting file on disk is now a credential dump
+        that survives outside the API role gate.
+
+        Output file is always chmod 0600 — only the certmate process
+        user can read it — so backup-dir-readable threats (rsync,
+        accidental Docker image bake, ops bastion) at least see
+        an `EPERM` first.
+        """
         try:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
             backup_id = f"backup_{timestamp}_{backup_reason}"
             backup_filename = f"{backup_id}.zip"
             backup_path = self.backup_dir / "unified" / backup_filename
-            
+
             # Ensure backup directory exists
             backup_path.parent.mkdir(parents=True, exist_ok=True)
-            
+
             # Single iterdir pass: collect the Path objects once so we don't
             # walk cert_dir twice (once for the domain-name list embedded in
             # the metadata, then again to copy files into the zip). Saves
@@ -149,6 +203,8 @@ class FileOperations:
                         domain_dirs.append(domain_dir)
             domains = [d.name for d in domain_dirs]
 
+            settings_to_write = settings_data if include_secrets else self._mask_settings_secrets(settings_data)
+
             metadata = {
                 "backup_id": backup_id,
                 "timestamp": datetime.now().isoformat(),
@@ -157,7 +213,11 @@ class FileOperations:
                 "type": "unified",
                 "domains": domains,
                 "settings_domains": [d.get('domain') if isinstance(d, dict) else d for d in settings_data.get('domains', [])],
-                "total_domains": len(domains)
+                "total_domains": len(domains),
+                # Pin the secret-handling mode on the backup itself so an
+                # operator inspecting an old archive can see whether it's
+                # a share-safe (masked) snapshot or a full-restore one.
+                "secrets_masked": not include_secrets,
             }
 
             # Create ZIP file with both settings and certificates
@@ -165,7 +225,7 @@ class FileOperations:
                 # Add settings data
                 settings_backup = {
                     "metadata": metadata,
-                    "settings": settings_data
+                    "settings": settings_to_write
                 }
                 zipf.writestr("settings.json", json.dumps(settings_backup, indent=2))
 
@@ -177,11 +237,21 @@ class FileOperations:
                             # Add file to zip with relative path under certificates/
                             arc_path = f"certificates/{cert_file.relative_to(self.cert_dir)}"
                             zipf.write(cert_file, arc_path)
-                
+
                 # Add unified metadata
                 zipf.writestr("backup_metadata.json", json.dumps(metadata, indent=2))
-            
-            logger.info(f"Unified backup created: {backup_filename} (contains {len(domains)} domains)")
+
+            # Lock the file down. Default umask leaves the zip world-
+            # readable on most distros; the contents are a JSON blob of
+            # operator-facing material (private keys live in the cert
+            # subtree but still). 0600 = certmate-user only.
+            try:
+                os.chmod(backup_path, 0o600)
+            except OSError as perm_err:
+                logger.warning(f"Could not tighten permissions on {backup_path}: {perm_err}")
+
+            mode_tag = 'plaintext' if include_secrets else 'masked'
+            logger.info(f"Unified backup created: {backup_filename} (contains {len(domains)} domains; secrets={mode_tag})")
             self._prune_unified_backups()
             return backup_filename
 
@@ -259,34 +329,157 @@ class FileOperations:
             logger.error(f"Error listing backups: {e}")
             return {"unified": []}
 
+    @staticmethod
+    def _revalidate_restored_deploy_hooks(settings_data):
+        """Run the current ``DeployManager._validate_hook`` over every
+        hook present in the restored ``settings_data``. Returns ``None``
+        if every hook passes, or a human-readable error string naming
+        the offending hook otherwise. A restore that would install
+        even one rejectable hook is refused (audit finding M1)."""
+        try:
+            from .deployer import DeployManager
+        except Exception as imp_err:
+            logger.warning(f"Could not import DeployManager for restore validation: {imp_err}")
+            return None
+
+        hooks = []
+        deploy_block = settings_data.get('deploy_hooks') or {}
+        if isinstance(deploy_block, dict):
+            global_hooks = deploy_block.get('global_hooks') or []
+            if isinstance(global_hooks, list):
+                hooks.extend(h for h in global_hooks if isinstance(h, dict))
+        if not hooks:
+            return None
+
+        # Instantiate without a settings_manager argument — _validate_hook
+        # only reads from the hook dict itself, so a bare instance works.
+        try:
+            dm = DeployManager.__new__(DeployManager)
+        except Exception as ctor_err:
+            logger.warning(f"Could not construct DeployManager for hook re-validation: {ctor_err}")
+            return None
+
+        for hook in hooks:
+            try:
+                ok, err = dm._validate_hook(hook)
+            except Exception as ve:
+                return f"hook validator raised {type(ve).__name__}: {ve}"
+            if not ok:
+                return err or "hook failed current validator"
+        return None
+
     def restore_unified_backup(self, backup_file_path):
-        """Restore from a unified backup file (both settings and certificates)"""
+        """Restore from a unified backup file (both settings and certificates).
+
+        Two safety gates run before the restored ``settings.json`` is
+        written to disk:
+
+        1. If the restored payload contains any ``deploy_hooks.global_hooks``
+           entry whose ``command`` field fails the current
+           ``DeployManager._validate_hook`` rules, the entire restore is
+           aborted. Hook commands stored under older, more-permissive
+           validator versions (or smuggled in via a tampered backup zip)
+           would otherwise execute on the next renewal via ``sh -c`` —
+           the pre-restore safety net depends on ``pre_restore_backup``
+           which the caller creates before invoking us.
+
+        2. If the backup was created in masked-secrets mode (see
+           ``create_unified_backup(include_secrets=False)``), every
+           credential field arrives as the ``SECRET_MASK_SENTINEL``
+           string. Existing on-disk secrets are preserved via the same
+           ``_strip_masked_values`` + deep-merge pipeline used by the
+           settings POST path (PR #215). On a fresh restore where no
+           on-disk settings file exists yet, the masked sentinels stay
+           in place and the response log surfaces a warning so the
+           operator knows to re-enter credentials.
+        """
         try:
             logger.info(f"Starting unified backup restore from: {backup_file_path}")
             backup_path = Path(backup_file_path)
-            
+
             if not backup_path.exists():
                 logger.error(f"Backup file not found: {backup_path}")
                 return False
-            
+
             # Ensure directories exist
             self.cert_dir.mkdir(parents=True, exist_ok=True)
             self.data_dir.mkdir(parents=True, exist_ok=True)
-            
+
             restored_domains = []
             settings_data = None
-            
+
             # Extract unified backup
             with zipfile.ZipFile(backup_path, 'r') as zipf:
                 # First, restore settings
                 if "settings.json" in zipf.namelist():
                     settings_content = zipf.read("settings.json")
                     settings_backup = json.loads(settings_content.decode('utf-8'))
-                    
+
                     if "settings" in settings_backup:
                         settings_data = settings_backup["settings"]
+
+                        # Gate 1: re-validate deploy hooks against the
+                        # current validator before we trust anything in
+                        # this settings dict. Importing DeployManager
+                        # lazily because file_operations.py is imported
+                        # early in the boot path and DeployManager pulls
+                        # in scheduler/event-bus state we don't want at
+                        # module-import time.
+                        hook_err = self._revalidate_restored_deploy_hooks(settings_data)
+                        if hook_err:
+                            logger.error(
+                                f"Refusing restore: deploy hook validation failed "
+                                f"({hook_err}). Original on-disk settings untouched; "
+                                f"see pre_restore_backup for rollback."
+                            )
+                            return False
+
+                        # Gate 2: if the backup is masked, deep-merge
+                        # against the on-disk settings so existing
+                        # secrets survive. The merge falls back to the
+                        # raw payload when the backup is plaintext
+                        # (legacy v2.2.0 backups or include_secrets=True
+                        # snapshots).
+                        from .settings import (
+                            _strip_masked_values,
+                            _deep_merge_dict,
+                            _DEEP_MERGE_SETTINGS_KEYS,
+                        )
+                        cleaned_payload = _strip_masked_values(settings_data)
+                        masked_mode = (
+                            isinstance(settings_backup.get('metadata'), dict)
+                            and settings_backup['metadata'].get('secrets_masked') is True
+                        )
                         settings_file = self.data_dir / "settings.json"
-                        if self.safe_file_write(settings_file, settings_data, is_json=True):
+                        if masked_mode and settings_file.exists():
+                            try:
+                                with open(settings_file, 'r', encoding='utf-8') as existing_fp:
+                                    existing = json.load(existing_fp) or {}
+                            except (OSError, json.JSONDecodeError):
+                                existing = {}
+                            merged = dict(existing)
+                            for key, value in cleaned_payload.items():
+                                if (
+                                    key in _DEEP_MERGE_SETTINGS_KEYS
+                                    and isinstance(existing.get(key), dict)
+                                    and isinstance(value, dict)
+                                ):
+                                    merged[key] = _deep_merge_dict(existing[key], value)
+                                else:
+                                    merged[key] = value
+                            settings_data_to_write = merged
+                        else:
+                            settings_data_to_write = cleaned_payload
+                            if masked_mode:
+                                logger.warning(
+                                    "Restoring a masked backup onto a fresh "
+                                    "install: secret fields will remain as the "
+                                    "mask sentinel. Operator must re-enter "
+                                    "DNS / storage / SMTP credentials before "
+                                    "the next renewal."
+                                )
+
+                        if self.safe_file_write(settings_file, settings_data_to_write, is_json=True):
                             logger.info("Settings restored from unified backup")
                         else:
                             logger.error("Failed to restore settings from unified backup")

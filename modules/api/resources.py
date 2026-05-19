@@ -1527,7 +1527,18 @@ def create_api_resources(api, models, managers):
         @api.expect(api.model('BackupCreateRequest', {
             'type': fields.String(required=True, enum=['unified', 'settings', 'certificates', 'both'],
                                   description='Type of backup to create (unified recommended for data consistency)'),
-            'reason': fields.String(description='Reason for backup creation', default='manual')
+            'reason': fields.String(description='Reason for backup creation', default='manual'),
+            'include_secrets': fields.Boolean(
+                description=(
+                    'Default false: every secret-bearing field is replaced '
+                    'with the mask sentinel in the resulting zip, so the '
+                    'file is safe to share. true: produces a plaintext '
+                    'snapshot for disaster-recovery restore; the resulting '
+                    'file on disk now contains every credential and a '
+                    'dedicated audit-log entry records the opt-in.'
+                ),
+                default=False,
+            ),
         }))
         @auth_manager.require_role('admin')
         def post(self):
@@ -1536,15 +1547,18 @@ def create_api_resources(api, models, managers):
                 data = api.payload
                 backup_type = data.get('type', 'unified')  # Default to unified
                 reason = data.get('reason', 'manual')
+                include_secrets = bool(data.get('include_secrets', False))
 
                 created_backups = []
 
                 # Only support unified backup (legacy removed)
                 settings = settings_manager.load_settings()
-                filename = file_ops.create_unified_backup(settings, reason)
+                filename = file_ops.create_unified_backup(
+                    settings, reason, include_secrets=include_secrets,
+                )
                 if filename:
                     created_backups.append({'type': 'unified', 'filename': filename})
-                    logger.info(f"Created unified backup: {filename}")
+                    logger.info(f"Created unified backup: {filename} (include_secrets={include_secrets})")
 
                 if created_backups:
                     if audit_logger:
@@ -1554,14 +1568,24 @@ def create_api_resources(api, models, managers):
                             resource_type='backup',
                             resource_id=created_backups[0].get('filename', 'unknown'),
                             status='success',
-                            details={'type': 'unified', 'reason': reason},
+                            details={
+                                'type': 'unified',
+                                'reason': reason,
+                                # Pin the secret-handling mode on the
+                                # audit record so a SIEM can flag the
+                                # opt-in path (the resulting file on
+                                # disk is a credential dump).
+                                'include_secrets': include_secrets,
+                                'secrets_masked': not include_secrets,
+                            },
                             user=user.get('username'),
                             ip_address=request.remote_addr,
                         )
                     return {
                         'message': 'Backup created successfully',
                         'backups': created_backups,
-                        'recommendation': 'Use unified backup' if backup_type != 'unified' else None
+                        'secrets_masked': not include_secrets,
+                        'recommendation': 'Use unified backup' if backup_type != 'unified' else None,
                     }, 201
                 else:
                     return {'error': 'Failed to create backup'}, 500

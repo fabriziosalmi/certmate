@@ -19,13 +19,26 @@ def register_backup_cache_routes(app, managers, require_web_auth,
     @app.route('/api/web/backups/create', methods=['POST'])
     @auth_manager.require_role('admin')
     def create_backup_web():
-        """Create a new backup"""
+        """Create a new backup.
+
+        ``include_secrets`` (boolean, default false) mirrors the RESTX
+        endpoint contract: false produces a share-safe masked snapshot,
+        true produces a plaintext disaster-recovery snapshot. The opt-in
+        path is admin-only and surfaces in audit_logger.
+        """
         try:
             data = request.json or {}
             backup_reason = data.get('reason', 'manual')
+            include_secrets = bool(data.get('include_secrets', False))
             settings_data = settings_manager.load_settings()
-            filename = file_ops.create_unified_backup(settings_data, backup_reason)
-            return jsonify({'message': 'Backup created', 'filename': filename})
+            filename = file_ops.create_unified_backup(
+                settings_data, backup_reason, include_secrets=include_secrets,
+            )
+            return jsonify({
+                'message': 'Backup created',
+                'filename': filename,
+                'secrets_masked': not include_secrets,
+            })
         except Exception as e:
             return jsonify({'error': 'Backup creation failed'}), 500
 
