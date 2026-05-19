@@ -79,6 +79,17 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
             if not domain:
                 return jsonify({'error': 'Domain is required'}), 400
 
+            # Full structural validation at the write boundary. Without
+            # this gate a poisoned ``domain`` ("../poisoned") flows into
+            # ``cert_dir / domain`` for ``mkdir(parents=True)`` and gets
+            # persisted into ``settings.json`` for replay through
+            # ``check_renewals``. Same fix shape applied to the API
+            # variant in modules/api/resources.py::CreateCertificate.post.
+            from ..core.utils import validate_domain
+            primary_valid, primary_msg = validate_domain(domain)
+            if not primary_valid:
+                return jsonify({'error': f'Invalid domain: {primary_msg}'}), 400
+
             # Scope check: primary domain + every SAN must be in scope.
             denial = _scope_denied(domain, 'create')
             if denial:
@@ -171,10 +182,22 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
             user = getattr(request, 'current_user', None) or {}
             scope = user.get('allowed_domains')
 
+            from ..core.utils import validate_domain
             results = []
             for domain in domains:
                 domain = (domain if isinstance(domain, str) else '').strip()
                 if not domain:
+                    continue
+                # Structural validation BEFORE scope check so a poisoned
+                # entry (e.g. "../escape") never even reaches the cert
+                # manager or settings.json. Same gate the single-cert path
+                # now applies.
+                d_valid, d_msg = validate_domain(domain)
+                if not d_valid:
+                    results.append({
+                        'domain': domain, 'success': False,
+                        'message': f'Invalid domain: {d_msg}',
+                    })
                     continue
                 if not auth_manager.domain_matches_scope(domain, scope):
                     if audit_logger:
