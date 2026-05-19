@@ -70,7 +70,11 @@ def create_client_certificate_resources(api, managers):
 
     # Client Certificate List Resource
     class ClientCertificateList(Resource):
-        method_decorators = [auth_manager.require_auth]
+        # Internal security audit (May 2026) — H1: `require_auth` only
+        # checks identity, not role. Aligning every client-cert Resource
+        # with the same role stratification the TLS cert path already
+        # uses: viewer reads, operator mints/renews, admin revokes.
+        method_decorators = [auth_manager.require_role('viewer')]
 
         def get(self):
             """Get list of client certificates with optional filtering."""
@@ -99,7 +103,9 @@ def create_client_certificate_resources(api, managers):
 
     # Client Certificate Create Resource
     class ClientCertificateCreate(Resource):
-        method_decorators = [auth_manager.require_auth]
+        # Mint a CA-signed identity — operator+ (parity with TLS cert
+        # CreateCertificate which is `require_role('operator')`).
+        method_decorators = [auth_manager.require_role('operator')]
 
         def post(self):
             """Create a new client certificate."""
@@ -156,7 +162,7 @@ def create_client_certificate_resources(api, managers):
 
     # Client Certificate Detail Resource
     class ClientCertificateDetail(Resource):
-        method_decorators = [auth_manager.require_auth]
+        method_decorators = [auth_manager.require_role('viewer')]
 
         def get(self, identifier):
             """Get certificate metadata."""
@@ -176,7 +182,19 @@ def create_client_certificate_resources(api, managers):
 
     # Client Certificate Download Resource
     class ClientCertificateDownload(Resource):
-        method_decorators = [auth_manager.require_auth]
+        # Decorator runs at request-time so the role check is enforced
+        # uniformly; the per-file_type stratification (private key gates
+        # at operator+, public material at viewer) runs inside the handler
+        # mirroring DownloadCertificate/DownloadCertificateFile on the TLS
+        # path. Viewer is the floor — anything that mints or modifies
+        # state lives on other Resources.
+        method_decorators = [auth_manager.require_role('viewer')]
+
+        # File types whose download exposes the private key. Caller must
+        # hold operator+ regardless of which Resource entry point they
+        # use (path-style or otherwise). Mirrors `_PRIVATE_KEY_FILES` on
+        # the TLS cert side (modules/api/resources.py).
+        _PRIVATE_FILE_TYPES = frozenset({'key'})
 
         def get(self, identifier, file_type):
             """Download certificate, key, or CSR."""
@@ -185,6 +203,16 @@ def create_client_certificate_resources(api, managers):
                     abort(400, "Invalid certificate identifier")
                 if file_type not in ['crt', 'key', 'csr']:
                     abort(400, "Invalid file type. Must be 'crt', 'key', or 'csr'")
+
+                # Per-file role gate: viewer reads public material only;
+                # private key needs operator+. Mirrors the TLS cert
+                # DownloadCertificate / DownloadCertificateFile pattern.
+                if file_type in self._PRIVATE_FILE_TYPES:
+                    user = getattr(request, 'current_user', None) or {}
+                    role = user.get('role')
+                    from ..core.auth import ROLE_HIERARCHY
+                    if ROLE_HIERARCHY.get(role, -1) < ROLE_HIERARCHY.get('operator', 999):
+                        abort(403, "operator role required to download client certificate private key")
 
                 # Get file
                 file_content = client_cert_manager.get_certificate_file(
@@ -204,12 +232,22 @@ def create_client_certificate_resources(api, managers):
                 )
 
             except Exception as e:
+                # Let HTTPException pass through — the bare `abort(...)`
+                # calls above raise werkzeug HTTPException, which IS a
+                # subclass of Exception. Without this re-raise the
+                # 400/403/404 statuses would be rewritten to 500 here.
+                from werkzeug.exceptions import HTTPException
+                if isinstance(e, HTTPException):
+                    raise
                 logger.error(f"Error downloading certificate file: {str(e)}")
                 abort(500, "Failed to download certificate file")
 
     # Client Certificate Revoke Resource
     class ClientCertificateRevoke(Resource):
-        method_decorators = [auth_manager.require_auth]
+        # Revoking a CA-signed identity is destructive and analogous
+        # to deleting a TLS cert (admin). Aligns with the TLS-side
+        # `CertificateDelete` admin gating.
+        method_decorators = [auth_manager.require_role('admin')]
 
         def post(self, identifier):
             """Revoke a client certificate."""
@@ -236,7 +274,9 @@ def create_client_certificate_resources(api, managers):
 
     # Client Certificate Renew Resource
     class ClientCertificateRenew(Resource):
-        method_decorators = [auth_manager.require_auth]
+        # Renew re-mints a CA-signed identity — operator+ (parity with
+        # TLS-side `RenewCertificate`).
+        method_decorators = [auth_manager.require_role('operator')]
 
         def post(self, identifier):
             """Renew a client certificate."""
@@ -259,7 +299,7 @@ def create_client_certificate_resources(api, managers):
 
     # Client Certificate Statistics Resource
     class ClientCertificateStatistics(Resource):
-        method_decorators = [auth_manager.require_auth]
+        method_decorators = [auth_manager.require_role('viewer')]
 
         def get(self):
             """Get certificate statistics."""
@@ -273,7 +313,9 @@ def create_client_certificate_resources(api, managers):
 
     # Client Certificate Batch Resource
     class ClientCertificateBatch(Resource):
-        method_decorators = [auth_manager.require_auth]
+        # Batch mint up to 100 identities — operator+ (same role as
+        # single-cert ClientCertificateCreate).
+        method_decorators = [auth_manager.require_role('operator')]
 
         def post(self):
             """Create multiple certificates from CSV data."""
@@ -358,6 +400,14 @@ def create_client_certificate_resources(api, managers):
                 abort(500, "Failed to process batch certificate creation")
 
     # OCSP Status Resource
+    #
+    # Intentionally unauthenticated: RFC 6960 OCSP responders are public
+    # endpoints that any relying party can query. The information returned
+    # (good / revoked / unknown for a serial number) is exactly what an
+    # OCSP responder is supposed to expose, and serial numbers are not
+    # operator-secret. Role-gating this endpoint would break the standard
+    # client interaction. Pinned here so the internal security audit's
+    # "missing decorator" hit lands as Info, not Bug, on future passes.
     class OCSPStatus(Resource):
         def get(self, serial_number):
             """Get OCSP status for certificate."""
@@ -380,6 +430,11 @@ def create_client_certificate_resources(api, managers):
                 abort(500, "Failed to get OCSP status")
 
     # CRL Distribution Resource
+    #
+    # Intentionally unauthenticated: RFC 5280 §4.2.1.13 (CRLDistributionPoints)
+    # expects CRLs to be retrievable by any relying party without
+    # authentication — that is the entire point of distribution. Same
+    # reasoning as OCSPStatus above.
     class CRLDistribution(Resource):
         def get(self, format_type='pem'):
             """Get Certificate Revocation List."""
