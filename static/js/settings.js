@@ -2462,11 +2462,16 @@
     }
 
     function performStorageMigration() {
-        var currentBackend = document.getElementById('storage-backend').value;
         var newConfig = collectStorageBackendSettings();
+        // Pull the per-backend sub-config out of the envelope produced by
+        // collectStorageBackendSettings (which nests under the backend key,
+        // e.g. { backend: 'azure_keyvault', azure_keyvault: {...} }). The
+        // server validator runs against the sub-config, not the envelope.
+        var targetSubConfig = (newConfig.backend === 'local_filesystem')
+            ? { cert_dir: newConfig.cert_dir }
+            : (newConfig[newConfig.backend] || {});
 
-        // Validate new configuration first
-        if (!validateStorageConfig(newConfig.backend, newConfig)) {
+        if (!validateStorageConfig(newConfig.backend, targetSubConfig)) {
             showMessage('Please configure and test the new storage backend before migrating.', 'error');
             return;
         }
@@ -2474,20 +2479,36 @@
         showMessage('Starting certificate migration...', 'info');
         closeStorageMigrationModal();
 
+        // Send target_backend explicitly + the envelope as target_config. The
+        // server defaults source_backend/source_config from the currently
+        // saved certificate_storage, so the UI doesn't have to track the
+        // pre-edit backend identity itself.
         fetch('/api/storage/migrate', {
             method: 'POST',
             headers: API_HEADERS,
             body: JSON.stringify({
-                source_backend: currentBackend,
+                target_backend: newConfig.backend,
                 target_config: newConfig
             })
         })
-            .then(function (response) { return response.json(); })
-            .then(function (data) {
-                if (data.success) {
-                    showMessage('Migration completed successfully. ' + (data.migrated_count || 0) + ' certificates migrated.', 'success');
+            .then(function (response) {
+                return response.json().then(function (body) {
+                    return { ok: response.ok, body: body };
+                });
+            })
+            .then(function (result) {
+                var data = result.body || {};
+                if (result.ok && data.success) {
+                    var migrated = (data.migrated_count != null) ? data.migrated_count : 0;
+                    var failed = (data.failed_count != null) ? data.failed_count : 0;
+                    var msg = 'Migration completed. ' + migrated + ' certificates migrated';
+                    if (failed > 0) {
+                        msg += ', ' + failed + ' failed (see server logs)';
+                    }
+                    msg += '.';
+                    showMessage(msg, failed > 0 ? 'warning' : 'success');
                 } else {
-                    showMessage('Migration failed: ' + (data.message || 'Unknown error'), 'error');
+                    showMessage('Migration failed: ' + (data.message || data.error || 'Unknown error'), 'error');
                 }
             })
             .catch(function (error) {
