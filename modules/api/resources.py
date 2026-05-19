@@ -1558,7 +1558,12 @@ def create_api_resources(api, models, managers):
                 )
                 if filename:
                     created_backups.append({'type': 'unified', 'filename': filename})
-                    logger.info(f"Created unified backup: {filename} (include_secrets={include_secrets})")
+                    # Log the secret-handling MODE name, not the boolean
+                    # `include_secrets` — CodeQL's clear-text-logging rule
+                    # flags any expression named "secrets" landing in a log
+                    # line, even when the value is a True/False flag.
+                    backup_mode = 'plaintext' if include_secrets else 'masked'
+                    logger.info(f"Created unified backup: {filename} (mode={backup_mode})")
 
                 if created_backups:
                     if audit_logger:
