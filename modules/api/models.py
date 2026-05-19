@@ -352,10 +352,14 @@ def create_api_models(api):
     })
 
     storage_migration_config_model = api.model('StorageMigrationConfig', {
-        'source_backend': fields.String(description='Source storage backend type', required=True),
-        'target_backend': fields.String(description='Target storage backend type', required=True),
-        'source_config': fields.Raw(description='Source backend configuration', required=True),
-        'target_config': fields.Raw(description='Target backend configuration', required=True)
+        # All four fields are optional: source defaults to the active
+        # certificate_storage from settings and target_backend can be read
+        # from target_config['backend'] (the envelope shape the settings
+        # form emits via collectStorageBackendSettings()).
+        'source_backend': fields.String(description='Source storage backend type (defaults to current certificate_storage.backend)'),
+        'target_backend': fields.String(description='Target storage backend type (defaults to target_config.backend)'),
+        'source_config': fields.Raw(description='Source backend configuration (defaults to current certificate_storage)'),
+        'target_config': fields.Raw(description='Target backend configuration; accepts either the per-backend dict or the {backend, <backend>: {...}} envelope', required=True)
     })
 
     # CA Provider models

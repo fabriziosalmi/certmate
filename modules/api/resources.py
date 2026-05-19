@@ -2196,71 +2196,119 @@ def create_api_resources(api, models, managers):
         @auth_manager.require_role('admin')
         @api.expect(models['storage_migration_config_model'])
         def post(self):
-            """Migrate certificates between storage backends"""
-            try:
-                data = api.payload
-                source_backend_type = data.get('source_backend')
-                target_backend_type = data.get('target_backend')
-                source_config = data.get('source_config', {})
-                target_config = data.get('target_config', {})
+            """Migrate certificates between storage backends.
 
-                # Import storage backends
-                from ..core.storage_backends import (
-                    LocalFileSystemBackend, AzureKeyVaultBackend,
-                    AWSSecretsManagerBackend, HashiCorpVaultBackend,
-                    InfisicalBackend
+            Payload is forgiving on purpose: the UI's "Start Migration"
+            button has no way to remember the previously-active backend
+            (the dropdown already shows the user's new target choice),
+            so we accept either the explicit four-field form
+            (``source_backend`` + ``source_config`` + ``target_backend`` +
+            ``target_config``) or a minimal payload where source defaults
+            to the currently-saved ``certificate_storage`` and the target
+            comes in as the structured ``{backend, <backend>: {...}}`` blob
+            the settings form already produces.
+            """
+            from ..core.storage_backends import (
+                LocalFileSystemBackend, AzureKeyVaultBackend,
+                AWSSecretsManagerBackend, HashiCorpVaultBackend,
+                InfisicalBackend
+            )
+
+            backend_classes = {
+                'local_filesystem': LocalFileSystemBackend,
+                'azure_keyvault': AzureKeyVaultBackend,
+                'aws_secrets_manager': AWSSecretsManagerBackend,
+                'hashicorp_vault': HashiCorpVaultBackend,
+                'infisical': InfisicalBackend,
+            }
+
+            def _resolve_config(backend_type, raw):
+                """Pull the per-backend sub-config out of either a flat dict
+                (already the right shape) or the structured envelope the
+                settings form emits (``{backend, <backend>: {...}}``)."""
+                if not isinstance(raw, dict):
+                    return {}
+                if backend_type in raw and isinstance(raw[backend_type], dict):
+                    return raw[backend_type]
+                # local_filesystem stores ``cert_dir`` at the top level both
+                # in settings and in the form payload, so the envelope and
+                # the flat form are indistinguishable — return as-is.
+                return {k: v for k, v in raw.items() if k != 'backend'}
+
+            def _build_backend(backend_type, config):
+                if backend_type == 'local_filesystem':
+                    return LocalFileSystemBackend(
+                        Path(config.get('cert_dir', 'certificates')))
+                return backend_classes[backend_type](config)
+
+            try:
+                data = api.payload or {}
+                target_raw = data.get('target_config') or {}
+                source_raw = data.get('source_config') or {}
+
+                # Source defaults to the currently-active backend if the
+                # caller didn't pass one — that's the dominant UI path.
+                source_backend_type = data.get('source_backend')
+                if not source_backend_type or not source_raw:
+                    current = settings_manager.load_settings() or {}
+                    current_storage = current.get('certificate_storage') or {}
+                    if not source_backend_type:
+                        source_backend_type = current_storage.get(
+                            'backend', 'local_filesystem')
+                    if not source_raw:
+                        source_raw = current_storage
+
+                # Target backend may be passed explicitly or inferred from
+                # the envelope produced by collectStorageBackendSettings().
+                target_backend_type = (
+                    data.get('target_backend')
+                    or (target_raw.get('backend') if isinstance(target_raw, dict) else None)
                 )
 
-                # Create backend instances
-                backend_classes = {
-                    'local_filesystem': LocalFileSystemBackend,
-                    'azure_keyvault': AzureKeyVaultBackend,
-                    'aws_secrets_manager': AWSSecretsManagerBackend,
-                    'hashicorp_vault': HashiCorpVaultBackend,
-                    'infisical': InfisicalBackend
-                }
+                if source_backend_type not in backend_classes:
+                    return {'error': 'Invalid source backend type'}, 400
+                if target_backend_type not in backend_classes:
+                    return {'error': 'Invalid target backend type'}, 400
 
-                if source_backend_type not in backend_classes or target_backend_type not in backend_classes:
-                    return {'error': 'Invalid backend type'}, 400
+                source_config = _resolve_config(source_backend_type, source_raw)
+                target_config = _resolve_config(target_backend_type, target_raw)
 
                 try:
-                    # Initialize backends
-                    if source_backend_type == 'local_filesystem':
-                        source_backend = LocalFileSystemBackend(Path(source_config.get('cert_dir', 'certificates')))
-                    else:
-                        source_backend = backend_classes[source_backend_type](source_config)
+                    source_backend = _build_backend(source_backend_type, source_config)
+                    target_backend = _build_backend(target_backend_type, target_config)
 
-                    if target_backend_type == 'local_filesystem':
-                        target_backend = LocalFileSystemBackend(Path(target_config.get('cert_dir', 'certificates')))
-                    else:
-                        target_backend = backend_classes[target_backend_type](target_config)
-
-                    # Perform migration using storage manager
                     storage_manager = managers.get('storage')
                     if not storage_manager:
                         return {'error': 'Storage manager not available'}, 500
 
-                    migration_results = storage_manager.migrate_certificates(source_backend, target_backend)
+                    migration_results = storage_manager.migrate_certificates(
+                        source_backend, target_backend)
 
-                    successful = sum(1 for success in migration_results.values() if success)
+                    successful = sum(1 for ok in migration_results.values() if ok)
                     total = len(migration_results)
+                    failed = total - successful
 
                     return {
                         'success': True,
                         'message': f'Migration completed: {successful}/{total} certificates migrated',
+                        # migrated_count is the field the UI reads — keep it
+                        # alongside migration_results for older API callers.
+                        'migrated_count': successful,
+                        'failed_count': failed,
+                        'total': total,
                         'migration_results': migration_results,
                         'source_backend': source_backend_type,
-                        'target_backend': target_backend_type
+                        'target_backend': target_backend_type,
                     }
 
                 except Exception as migration_error:
                     logger.error(f"Storage migration failed: {migration_error}")
                     return {
                         'success': False,
-                        'message': 'Migration failed',
+                        'message': f'Migration failed: {migration_error}',
                         'source_backend': source_backend_type,
-                        'target_backend': target_backend_type
-                    }
+                        'target_backend': target_backend_type,
+                    }, 500
 
             except Exception as e:
                 logger.error(f"Error during storage migration: {e}")
