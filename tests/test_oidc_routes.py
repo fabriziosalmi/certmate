@@ -34,7 +34,7 @@ def _allow_all(_min_role):
     return deco
 
 
-def _build_app(tmp_path, *, has_users=True, oidc_overrides=None):
+def _build_app(tmp_path, *, has_users=True, oidc_overrides=None, audit_logger=None):
     cert_dir = tmp_path / "certificates"
     data_dir = tmp_path / "data"
     backup_dir = tmp_path / "backups"
@@ -88,7 +88,7 @@ def _build_app(tmp_path, *, has_users=True, oidc_overrides=None):
     # don't depend on the module-level state in modules/web/routes.py.
     register_oidc_routes(
         app,
-        managers={'audit': MagicMock()},
+        managers={'audit': audit_logger or MagicMock()},
         auth_manager=auth_manager,
         oidc_manager=oidc_manager,
         _check_login_rate_limit=lambda ip, username=None: (True, None),
@@ -305,6 +305,59 @@ def test_settings_post_roundtrip_preserves_masked_secret(tmp_path):
 
     on_disk = settings_manager.load_settings()['oidc']['client_secret']
     assert on_disk == 'real-secret'
+
+
+def test_settings_post_audits_client_secret_rotation(tmp_path):
+    """A non-sentinel client_secret in the payload is a genuine rotation;
+    the masked before/after snapshot comparison alone hides it, so the
+    audit details must call it out explicitly. Locks the fix for the
+    SIEM blind-spot reported in the PR review."""
+    audit = MagicMock()
+    app, settings_manager, *_ = _build_app(
+        tmp_path,
+        oidc_overrides={'client_secret': 'SECRET-A'},
+        audit_logger=audit,
+    )
+    client = app.test_client()
+    body = client.get('/api/auth/oidc/settings').get_json()
+    # Replace the masked sentinel with a fresh, real secret.
+    body['client_secret'] = 'SECRET-B-rotated'
+    r = client.post('/api/auth/oidc/settings', json=body)
+    assert r.status_code == 200, r.get_json()
+
+    # On-disk secret was rotated.
+    on_disk = settings_manager.load_settings()['oidc']['client_secret']
+    assert on_disk == 'SECRET-B-rotated'
+
+    # Audit must surface the rotation in both `changed_keys` and `sensitive_changed`.
+    config_calls = [c for c in audit.log_operation.call_args_list
+                    if c.kwargs.get('operation') == 'oidc_config_changed']
+    assert config_calls, 'expected oidc_config_changed audit entry'
+    details = config_calls[-1].kwargs.get('details') or {}
+    assert 'client_secret' in details.get('sensitive_changed', []), details
+    assert 'client_secret' in details.get('changed_keys', []), details
+
+
+def test_settings_post_roundtrip_does_not_log_secret_change(tmp_path):
+    """The masked-sentinel round-trip (no real rotation) must NOT trigger
+    a sensitive_changed entry — otherwise SIEMs would fire on every save."""
+    audit = MagicMock()
+    app, *_ = _build_app(
+        tmp_path,
+        oidc_overrides={'client_secret': 'SECRET-A'},
+        audit_logger=audit,
+    )
+    client = app.test_client()
+    body = client.get('/api/auth/oidc/settings').get_json()
+    # Don't touch client_secret — it stays as '********'.
+    r = client.post('/api/auth/oidc/settings', json=body)
+    assert r.status_code == 200, r.get_json()
+
+    config_calls = [c for c in audit.log_operation.call_args_list
+                    if c.kwargs.get('operation') == 'oidc_config_changed']
+    assert config_calls, 'expected oidc_config_changed audit entry'
+    details = config_calls[-1].kwargs.get('details') or {}
+    assert 'client_secret' not in details.get('sensitive_changed', []), details
 
 
 # ---------------------------------------------------------------------------

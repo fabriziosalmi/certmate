@@ -85,7 +85,10 @@ def register_auth_routes(app, managers, require_web_auth, auth_manager,
         oidc_logout_url = None
         if session_id:
             # Look up the session source BEFORE invalidating so we know
-            # whether to build an end-session URL.
+            # whether to build an end-session URL — and so the URL is
+            # built while ``flask.session['_oidc_id_token']`` is still
+            # populated (build_end_session_url reads it as
+            # ``id_token_hint``).
             try:
                 info = auth_manager.validate_session(session_id)
                 if info and info.get('source') == 'oidc' and oidc_manager is not None:
@@ -93,6 +96,13 @@ def register_auth_routes(app, managers, require_web_auth, auth_manager,
             except Exception as exc:
                 logger.debug(f"OIDC logout URL lookup failed: {exc}")
             auth_manager.invalidate_session(session_id)
+        # Drop OIDC artefacts after the URL is built so a stale id_token
+        # doesn't leak into a future SSO session if the user logs back in.
+        if oidc_manager is not None:
+            try:
+                oidc_manager.clear_session_artifacts()
+            except Exception as exc:
+                logger.debug(f"OIDC session cleanup failed: {exc}")
         body = {'message': 'Logged out successfully'}
         if oidc_logout_url:
             body['oidc_logout_url'] = oidc_logout_url

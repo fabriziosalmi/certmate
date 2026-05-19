@@ -207,6 +207,37 @@ def test_map_role_missing_claim_uses_default(oidc, settings_manager):
     assert role == 'viewer'
 
 
+def test_map_role_is_case_insensitive(oidc, settings_manager):
+    """IdPs are inconsistent about group casing — AD ships uppercase
+    (``Domain Admins``), Authentik capitalises (``Admin``), Keycloak
+    follows whatever the realm operator typed. Admins should be able
+    to configure ``eng-admins`` once and have it match every casing the
+    IdP returns. Locks the case-insensitive contract."""
+    # 1. Lowercase config + capitalised IdP claim must match.
+    _enable_oidc(settings_manager, role_mappings=[
+        {'claim_value': 'eng-admins', 'role': 'admin'},
+        {'claim_value': 'eng', 'role': 'operator'},
+    ])
+    cfg = oidc._load_config()
+    assert oidc._map_role({'groups': ['ENG-Admins']}, cfg) == 'admin'
+    assert oidc._map_role({'groups': ['Domain ENG']}, cfg) == 'viewer'
+
+    # 2. Capitalised config + lowercase IdP claim must match.
+    _enable_oidc(settings_manager, role_mappings=[
+        {'claim_value': 'Eng-Admins', 'role': 'admin'},
+    ])
+    cfg = oidc._load_config()
+    assert oidc._map_role({'groups': ['eng-admins']}, cfg) == 'admin'
+
+    # 3. First-match-wins semantics preserved across cases.
+    _enable_oidc(settings_manager, role_mappings=[
+        {'claim_value': 'eng-admins', 'role': 'admin'},
+        {'claim_value': 'eng', 'role': 'operator'},
+    ])
+    cfg = oidc._load_config()
+    assert oidc._map_role({'groups': ['ENG', 'ENG-ADMINS']}, cfg) == 'admin'
+
+
 # ---------------------------------------------------------------------------
 # JIT provisioning + linking + subject lookup
 # ---------------------------------------------------------------------------
@@ -359,3 +390,64 @@ def test_public_config_omits_secrets(oidc, settings_manager):
     assert 'client_secret' not in cfg
     assert 'role_mappings' not in cfg
     assert 'role_claim' not in cfg
+
+
+# ---------------------------------------------------------------------------
+# End-session URL construction
+# ---------------------------------------------------------------------------
+
+
+def test_build_end_session_url_includes_id_token_hint(oidc, settings_manager):
+    """The OIDC RP-Initiated Logout spec marks ``id_token_hint`` as
+    RECOMMENDED, and Keycloak/Okta/Authentik treat it as effectively
+    required: without it the IdP keeps the SSO session alive past a
+    CertMate logout, so the next ``Login with SSO`` silently
+    re-authenticates the just-logged-out user. Lock that the URL
+    carries the hint when one is available."""
+    from flask import Flask, session as flask_session
+    _enable_oidc(settings_manager,
+                 post_logout_redirect_uri='https://certmate.example.com/login')
+
+    class _FakeClient:
+        server_metadata = {
+            'end_session_endpoint': 'https://idp.example.com/oauth2/logout',
+        }
+
+    oidc._client = lambda app: _FakeClient()  # type: ignore[assignment]
+
+    app = Flask(__name__)
+    app.secret_key = 'test'
+    with app.test_request_context('/'):
+        flask_session['_oidc_id_token'] = 'eyJhbGciOi.fake.idtoken'
+        url = oidc.build_end_session_url()
+
+    assert url is not None
+    assert 'id_token_hint=eyJhbGciOi.fake.idtoken' in url
+    # client_id helps Keycloak's headless logout path.
+    assert 'client_id=cm-test' in url
+    assert 'post_logout_redirect_uri=' in url
+
+
+def test_build_end_session_url_without_id_token(oidc, settings_manager):
+    """When no id_token was stashed (older session, downgrade), the URL
+    must still come back — just without the hint. Don't break the existing
+    redirect contract."""
+    from flask import Flask
+    _enable_oidc(settings_manager,
+                 post_logout_redirect_uri='https://certmate.example.com/login')
+
+    class _FakeClient:
+        server_metadata = {
+            'end_session_endpoint': 'https://idp.example.com/oauth2/logout',
+        }
+
+    oidc._client = lambda app: _FakeClient()  # type: ignore[assignment]
+
+    app = Flask(__name__)
+    app.secret_key = 'test'
+    with app.test_request_context('/'):
+        url = oidc.build_end_session_url()
+
+    assert url is not None
+    assert 'id_token_hint=' not in url
+    assert 'post_logout_redirect_uri=' in url

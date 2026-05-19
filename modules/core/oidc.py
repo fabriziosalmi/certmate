@@ -97,6 +97,10 @@ class OIDCManager:
     # validate the callback. Authlib itself manages most of them under
     # ``_state_<client>_<state>`` internally; we only keep ``next`` here.
     _SESSION_NEXT_KEY = '_oidc_next'
+    # id_token retained past the callback so build_end_session_url can
+    # emit it as ``id_token_hint`` — Keycloak/Okta/Authentik treat the
+    # hint as effectively required for RP-initiated logout.
+    _SESSION_ID_TOKEN_KEY = '_oidc_id_token'
 
     def __init__(self, settings_manager, auth_manager, audit_logger=None):
         self.settings_manager = settings_manager
@@ -306,6 +310,17 @@ class OIDCManager:
             logger.warning(f"OIDC token exchange failed: {exc}")
             return None, 'token_exchange'
 
+        # Retain the raw id_token past this request so
+        # ``build_end_session_url`` can emit it as ``id_token_hint`` at
+        # logout time. Several major IdPs (Keycloak/Okta/Authentik)
+        # silently no-op the end-session call without it.
+        id_token = token.get('id_token') if isinstance(token, dict) else None
+        if id_token:
+            try:
+                flask_session[self._SESSION_ID_TOKEN_KEY] = id_token
+            except Exception:
+                logger.debug("OIDC id_token stash skipped (session unavailable)")
+
         # userinfo() is optional — some IdPs return all claims in the
         # id_token. Merge both so role/email/username claims can come
         # from either side.
@@ -422,10 +437,12 @@ class OIDCManager:
     def _map_role(self, claims: dict, cfg: dict) -> str:
         """Apply the configured role_mappings against the chosen claim.
 
-        First match wins. The claim value may be a list (typical for
-        ``groups``) or a scalar (typical for ``role``). Comparison is
-        case-sensitive — IdPs are inconsistent so we trust the admin's
-        configured value verbatim.
+        First match wins (in mapping order). Comparison is case-insensitive:
+        AD ships uppercase (``Domain Admins``), Authentik capitalises
+        (``Admin``), Keycloak follows whatever the realm operator typed —
+        admins should be able to configure ``eng-admins`` once and have it
+        match every casing the IdP returns. The claim value may be a list
+        (typical for ``groups``) or a scalar (typical for ``role``).
         """
         claim_name = cfg.get('role_claim') or 'groups'
         default_role = cfg.get('default_role', 'viewer')
@@ -436,12 +453,13 @@ class OIDCManager:
         if raw_value is None:
             return default_role
         values = raw_value if isinstance(raw_value, list) else [raw_value]
-        values = [str(v) for v in values]
+        values_lower = {str(v).lower() for v in values}
 
         for mapping in cfg.get('role_mappings', []):
             cv = mapping.get('claim_value')
             role = mapping.get('role')
-            if cv in values and role in VALID_ROLES:
+            if (isinstance(cv, str) and cv.lower() in values_lower
+                    and role in VALID_ROLES):
                 return role
         return default_role
 
@@ -495,6 +513,10 @@ class OIDCManager:
 
         Best-effort: requires that the OAuth registry was already built
         (i.e. the user previously logged in via OIDC this process).
+        Emits ``id_token_hint`` (when retained from the callback) and
+        ``client_id`` alongside ``post_logout_redirect_uri`` because
+        Keycloak/Okta/Authentik treat the hint as effectively required
+        for headless RP-initiated logout.
         """
         try:
             from flask import current_app
@@ -505,12 +527,37 @@ class OIDCManager:
                 return None
             cfg = self._load_config()
             redirect = (post_logout_redirect_uri or cfg.get('post_logout_redirect_uri') or '').strip()
-            if not redirect:
+            params: dict = {}
+            try:
+                id_token = flask_session.get(self._SESSION_ID_TOKEN_KEY)
+            except Exception:
+                id_token = None
+            if id_token:
+                params['id_token_hint'] = id_token
+            client_id = (cfg.get('client_id') or '').strip()
+            if client_id:
+                params['client_id'] = client_id
+            if redirect:
+                params['post_logout_redirect_uri'] = redirect
+            if not params:
                 return end_session
-            return f"{end_session}?{urlencode({'post_logout_redirect_uri': redirect})}"
+            return f"{end_session}?{urlencode(params)}"
         except Exception as exc:
             logger.debug(f"build_end_session_url failed: {exc}")
             return None
+
+    def clear_session_artifacts(self) -> None:
+        """Drop OIDC-specific values from the Flask session.
+
+        Called by the logout handler after invalidating the CertMate
+        session cookie so the next OIDC login starts from a clean slate.
+        Safe to call when no session exists.
+        """
+        try:
+            flask_session.pop(self._SESSION_ID_TOKEN_KEY, None)
+            flask_session.pop(self._SESSION_NEXT_KEY, None)
+        except Exception:
+            logger.debug("OIDC session cleanup skipped (session unavailable)")
 
     # ------------------------------------------------------------- audit
 

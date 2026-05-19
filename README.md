@@ -603,8 +603,8 @@ For a Keycloak realm that exposes a `groups` claim, the configuration block in `
 
 ### Provisioning and linking
 
-- **Just-in-time provisioning** (`auto_create_users`) creates a CertMate user row on first login. The row has an empty password hash so SSO-only accounts cannot fall back to local login.
-- **Email linking** (`link_by_email`) detects collisions with existing local users and merges identities — the user keeps their existing role; the IdP `sub` claim is stored on the local row for future logins.
+- **Just-in-time provisioning** (`auto_create_users`) creates a CertMate user row on first login. The row has an empty password hash so JIT-provisioned SSO accounts cannot fall back to local login.
+- **Email linking** (`link_by_email`) detects collisions with existing local users and merges identities — the user keeps their existing role and **their existing password hash**, so a local-then-linked account can still log in either way during a rollout. Disable `link_by_email` if you want JIT-only provisioning with no local-password fallback.
 - Subject (`sub` + `iss`) lookup always wins over email matching, so an already-linked SSO user is never accidentally re-merged when their IdP email changes.
 
 ### Security

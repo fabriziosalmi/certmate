@@ -25,6 +25,8 @@ from urllib.parse import urlparse
 
 from flask import jsonify, redirect, request, url_for
 
+from modules.core.oidc import SECRET_MASK_SENTINEL
+
 logger = logging.getLogger(__name__)
 
 
@@ -198,6 +200,20 @@ def register_oidc_routes(app, managers, auth_manager, oidc_manager,
                 changed = sorted(k for k in after.keys()
                                  if before.get(k) != after.get(k))
                 sensitive = [k for k in changed if 'secret' in k or 'client_secret' in k]
+                # ``before`` and ``after`` both come from get_admin_config(),
+                # which masks ``client_secret`` to '********'. A genuine
+                # rotation is therefore invisible to the snapshot diff —
+                # detect it from the raw payload so SIEMs keyed on
+                # ``sensitive_changed`` don't go blind on secret rotations.
+                raw_secret = (payload.get('client_secret')
+                              if isinstance(payload, dict) else None)
+                if (isinstance(raw_secret, str) and raw_secret
+                        and raw_secret != SECRET_MASK_SENTINEL):
+                    if 'client_secret' not in changed:
+                        changed.append('client_secret')
+                        changed.sort()
+                    if 'client_secret' not in sensitive:
+                        sensitive.append('client_secret')
                 user = getattr(request, 'current_user', {}) or {}
                 audit_logger.log_operation(
                     operation='oidc_config_changed',
