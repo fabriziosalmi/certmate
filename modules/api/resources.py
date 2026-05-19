@@ -1276,6 +1276,98 @@ def create_api_resources(api, models, managers):
                 logger.error(f"Error downloading certificate for {domain}: {e}")
                 return {'error': 'Failed to download certificate'}, 500
 
+    class DownloadCertificateFile(Resource):
+        # Path-style alias for the query-string form on DownloadCertificate.
+        # Documented in discussion #183 as the canonical scripting URL
+        # (curl ... /api/certificates/<domain>/download/fullchain). Without
+        # this route the documented URL returned 404 (issue #212).
+        #
+        # Short names map 1:1 to the on-disk filenames. The role gate and
+        # path-traversal guards mirror the ?file= branch in
+        # DownloadCertificate.get() — keep the two in sync.
+        _SHORT_NAME_TO_FILE = {
+            'cert': 'cert.pem',
+            'chain': 'chain.pem',
+            'fullchain': 'fullchain.pem',
+            'privkey': 'privkey.pem',
+            'combined': 'combined.pem',
+        }
+
+        @api.doc(security='Bearer')
+        @auth_manager.require_role('viewer')
+        def get(self, domain, file_type):
+            """Download a single certificate file by short name.
+
+            Path-style equivalent of ``?file=<name>.pem`` on the parent
+            ``/download`` route. ``file_type`` is one of ``cert``,
+            ``chain``, ``fullchain``, ``privkey``, ``combined``.
+
+            Role gating: viewers can pull public material (cert, chain,
+            fullchain); ``privkey`` and ``combined`` require operator+.
+            """
+            requested_file = self._SHORT_NAME_TO_FILE.get(file_type)
+            if requested_file is None:
+                return {
+                    'error': f'Invalid file type: {file_type}',
+                    'hint': f"Allowed: {sorted(self._SHORT_NAME_TO_FILE)}",
+                }, 400
+
+            try:
+                scope_err = _check_domain_scope(domain, 'download')
+                if scope_err:
+                    return scope_err
+                cert_dir, err = _validate_domain_path(domain, file_ops.cert_dir)
+                if err:
+                    return {'error': err}, 400
+                if not cert_dir.exists():
+                    return {'error': f'Certificate not found for domain: {domain}'}, 404
+
+                user = getattr(request, 'current_user', None) or {}
+
+                if requested_file in _PRIVATE_KEY_FILES and not _user_has_role(user, 'operator'):
+                    if audit_logger:
+                        audit_logger.log_authz_denied(
+                            operation='download',
+                            resource_type='certificate',
+                            resource_id=domain,
+                            reason=f'viewer cannot download private-key material ({requested_file})',
+                            user=user.get('username'),
+                            ip_address=request.remote_addr,
+                        )
+                    return {
+                        'error': 'operator role required to download private key material',
+                        'code': 'PRIVKEY_REQUIRES_OPERATOR',
+                        'hint': 'Use /download/fullchain to pull public material as a viewer.',
+                    }, 403
+
+                if requested_file == 'combined.pem':
+                    try:
+                        fullchain = (cert_dir / 'fullchain.pem').read_text(encoding='utf-8')
+                        privkey = (cert_dir / 'privkey.pem').read_text(encoding='utf-8')
+                        combined_data = io.BytesIO(f"{fullchain}{privkey}".encode())
+                        return send_file(
+                            combined_data,
+                            as_attachment=True,
+                            download_name=f'{domain}_combined.pem',
+                            mimetype='application/x-pem-file'
+                        )
+                    except FileNotFoundError:
+                        return {'error': f'Required cert files not found for domain {domain}'}, 404
+
+                file_path = cert_dir / requested_file
+                if not file_path.exists():
+                    return {'error': f'File {requested_file} not found for domain {domain}'}, 404
+
+                return send_file(
+                    file_path,
+                    as_attachment=True,
+                    download_name=f'{domain}_{requested_file}',
+                    mimetype='application/x-pem-file'
+                )
+            except Exception as e:
+                logger.error(f"Error downloading {file_type} for {domain}: {e}")
+                return {'error': 'Failed to download certificate file'}, 500
+
     class RenewCertificate(Resource):
         @api.doc(security='Bearer')
         @auth_manager.require_role('operator')
@@ -2295,6 +2387,7 @@ def create_api_resources(api, models, managers):
         'CertificateDeploymentStatus': CertificateDeploymentStatus,
         'CertificateDeploymentBrowserReports': CertificateDeploymentBrowserReports,
         'DownloadCertificate': DownloadCertificate,
+        'DownloadCertificateFile': DownloadCertificateFile,
         'RenewCertificate': RenewCertificate,
         'CertificateAutoRenew': CertificateAutoRenew,
         'CertificateRunDeploy': CertificateRunDeploy,
