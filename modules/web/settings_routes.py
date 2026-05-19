@@ -59,6 +59,26 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
             # the older local walker missed (audit finding M2).
             masked = mask_secrets_in_settings(settings)
 
+            # Audit M4: scoped API keys (allowed_domains set) must not
+            # see the full org-wide `domains` array. Mirrors the same
+            # scope filter `Settings.get` applies in resources.py. The
+            # `masked` dict is a fresh deep-copy from
+            # `mask_secrets_in_settings`, so mutating it in place here
+            # cannot affect the on-disk settings.
+            user = getattr(request, 'current_user', None) or {}
+            scope = user.get('allowed_domains')
+            if scope is not None:
+                raw_domains = masked.get('domains') or []
+                filtered = []
+                for entry in raw_domains:
+                    domain_name = (
+                        entry if isinstance(entry, str)
+                        else (entry.get('domain') if isinstance(entry, dict) else None)
+                    )
+                    if domain_name and auth_manager.domain_matches_scope(domain_name, scope):
+                        filtered.append(entry)
+                masked['domains'] = filtered
+
             # Recovery helper: if the UI is about to show the wizard,
             # surface a flag so the frontend can suggest restoring
             # from backup instead of silently overwriting settings.

@@ -338,11 +338,40 @@ def create_api_resources(api, models, managers):
         @auth_manager.require_role('viewer')
         @api.marshal_with(models['settings_model'])
         def get(self):
-            """Get current settings"""
+            """Get current settings.
+
+            Internal security audit (May 2026), finding M4: this
+            endpoint previously returned the full ``settings['domains']``
+            array to any viewer-role caller. A scoped API key
+            (``allowed_domains`` set to a tenant pattern) could
+            therefore enumerate every domain the host had ever issued
+            a cert for, regardless of scope. Filter ``domains`` in
+            place by ``auth_manager.domain_matches_scope`` — same
+            shape as ``CertificateList.get`` already uses.
+
+            Unrestricted callers (legacy bearer tokens, local users
+            without an explicit ``allowed_domains`` list) keep seeing
+            every domain — ``domain_matches_scope(_, None)`` is True
+            for them by design.
+            """
             try:
                 settings = settings_manager.load_settings()
                 if not settings:
                     return {}, 200
+                user = getattr(request, 'current_user', None) or {}
+                scope = user.get('allowed_domains')
+                if scope is not None:
+                    settings = dict(settings)
+                    raw_domains = settings.get('domains') or []
+                    filtered = []
+                    for entry in raw_domains:
+                        domain_name = (
+                            entry if isinstance(entry, str)
+                            else (entry.get('domain') if isinstance(entry, dict) else None)
+                        )
+                        if domain_name and auth_manager.domain_matches_scope(domain_name, scope):
+                            filtered.append(entry)
+                    settings['domains'] = filtered
                 return settings
             except ValueError as e:
                 logger.error(f"Invalid settings format: {e}")
@@ -807,6 +836,23 @@ def create_api_resources(api, models, managers):
 
             if not domain or not domain_alias:
                 return {'error': 'domain and domain_alias are required'}, 400
+
+            # Audit M5: the path-style variant
+            # `CertificateDNSAliasCheck.get(domain)` already runs
+            # `_check_domain_scope`. This body-style variant did not,
+            # so a scoped viewer could probe DNS-alias topology for
+            # any out-of-scope domain (information disclosure: confirms
+            # which `_acme-challenge` alias targets exist). Apply the
+            # same scope gate to the primary domain AND every SAN.
+            scope_err = _check_domain_scope(domain, 'check_dns_alias')
+            if scope_err:
+                return scope_err
+            for san in (san_domains or []):
+                san_clean = san.strip() if isinstance(san, str) else ''
+                if san_clean:
+                    scope_err = _check_domain_scope(san_clean, 'check_dns_alias_san')
+                    if scope_err:
+                        return scope_err
 
             return certificate_manager.check_dns_alias_records(
                 domain,
