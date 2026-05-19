@@ -184,8 +184,25 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
             if not isinstance(data, dict):
                 return jsonify({'error': 'Body must be a JSON object'}), 400
 
+            # Audit H4 (May 2026): the prior `s['notifications'] = data`
+            # wholesale-replaced the subtree. The UI round-trips a GET
+            # response — where SMTP `smtp_password` and webhook URLs
+            # arrive masked as `'********'` — back into POST, and the
+            # plain assignment overwrote real on-disk secrets with the
+            # literal sentinel. Strip the sentinel BEFORE the write
+            # (same shape PR #215 + audit C2 fix applied elsewhere)
+            # and deep-merge against the existing notifications block
+            # so a partial UI submit (e.g. toggling `enabled` without
+            # re-typing the SMTP password) does not destroy siblings.
+            from modules.core.settings import _strip_masked_values, _deep_merge_dict
+            clean_data = _strip_masked_values(data)
+
             def _mutator(s):
-                s['notifications'] = data
+                existing = s.get('notifications')
+                if isinstance(existing, dict) and isinstance(clean_data, dict):
+                    s['notifications'] = _deep_merge_dict(existing, clean_data)
+                else:
+                    s['notifications'] = clean_data
                 return s
 
             settings_manager.update(_mutator)

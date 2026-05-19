@@ -1896,24 +1896,33 @@ def create_api_resources(api, models, managers):
                 if backend_type not in valid_backends:
                     return {'error': 'Invalid backend type'}, 400
 
-                # Build only the storage subtree and merge atomically so we
-                # don't race with concurrent writes or wipe other settings keys.
-                current = settings_manager.load_settings()
-                storage = dict(current.get('certificate_storage') or {})
-                storage['backend'] = backend_type
-
+                # Build only the storage subtree to merge atomically.
+                # Audit C2 (May 2026): the prior version wholesale-set
+                # the per-backend dict (e.g. `storage['azure_keyvault']
+                # = data.get('azure_keyvault', {})`). When the UI POSTs
+                # the round-trip from GET /api/web/settings, the masked
+                # sentinel `'********'` rides inside that dict and the
+                # deep-merge propagates it down to the leaf — overwriting
+                # the on-disk credential with the literal sentinel. The
+                # fix is the same shape PR #215 applied to the settings
+                # POST path: strip the sentinel BEFORE the merge so any
+                # masked / empty secret field falls back to its on-disk
+                # value, only genuinely-changed values overwrite.
+                from ..core.settings import _strip_masked_values
+                storage_update = {'backend': backend_type}
                 if backend_type == 'local_filesystem':
-                    storage['cert_dir'] = data.get('cert_dir', 'certificates')
+                    storage_update['cert_dir'] = data.get('cert_dir', 'certificates')
                 elif backend_type == 'azure_keyvault':
-                    storage['azure_keyvault'] = data.get('azure_keyvault', {})
+                    storage_update['azure_keyvault'] = data.get('azure_keyvault', {})
                 elif backend_type == 'aws_secrets_manager':
-                    storage['aws_secrets_manager'] = data.get('aws_secrets_manager', {})
+                    storage_update['aws_secrets_manager'] = data.get('aws_secrets_manager', {})
                 elif backend_type == 'hashicorp_vault':
-                    storage['hashicorp_vault'] = data.get('hashicorp_vault', {})
+                    storage_update['hashicorp_vault'] = data.get('hashicorp_vault', {})
                 elif backend_type == 'infisical':
-                    storage['infisical'] = data.get('infisical', {})
+                    storage_update['infisical'] = data.get('infisical', {})
 
-                success = settings_manager.atomic_update({'certificate_storage': storage})
+                clean_payload = _strip_masked_values({'certificate_storage': storage_update})
+                success = settings_manager.atomic_update(clean_payload)
 
                 if success:
                     return {
