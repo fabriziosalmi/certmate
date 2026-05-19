@@ -30,7 +30,7 @@ top-level dependency.
 from __future__ import annotations
 
 import logging
-from typing import Dict, List, Optional, Protocol
+from typing import Dict, List, Optional, Protocol, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -144,27 +144,78 @@ def has_zone_discovery(provider: str) -> bool:
     return provider in _ZONE_DISCOVERY
 
 
+def _match_fqdns_to_zones(
+    provider: str,
+    zones: List[str],
+    fqdns: List[str],
+) -> Tuple[List[str], List[Tuple[str, str]]]:
+    """Shared matcher used by both the live-discovery and explicit-list
+    paths. Returns the deduplicated longest-first list of matched zones
+    and the per-FQDN ``(fqdn, zone)`` mapping (for caller logging).
+
+    Raises ``ValueError`` when any FQDN is not covered, surfacing the
+    full configured zone set so the operator can fix either the cert
+    request or the zone configuration.
+    """
+    from .utils import find_covering_zone
+
+    if not fqdns:
+        raise ValueError(
+            f"Cannot resolve DNS zones for provider '{provider}': no FQDNs "
+            "supplied. This is a programming error in the caller — every "
+            "cert request must include at least the primary domain."
+        )
+
+    matched: List[str] = []
+    per_fqdn: List[Tuple[str, str]] = []
+    unmatched: List[str] = []
+    for fqdn in fqdns:
+        zone = find_covering_zone(fqdn, zones)
+        if zone is None:
+            unmatched.append(fqdn)
+            continue
+        per_fqdn.append((fqdn, zone))
+        if zone not in matched:
+            matched.append(zone)
+
+    if unmatched:
+        raise ValueError(
+            "The following certificate names are not covered by any "
+            f"hosted DNS zone configured for provider '{provider}': "
+            f"{', '.join(unmatched)}. Hosted zones configured: "
+            f"{', '.join(zones) or '(none)'}."
+        )
+
+    # Sort longest-first so the resulting ``dns_azure_zoneN`` lines
+    # encode the operator's intent stably and the plugin's longest-match
+    # picks the most specific zone for each challenge.
+    matched.sort(key=len, reverse=True)
+    return matched, per_fqdn
+
+
 def resolve_zones_for_domains(
     provider: str,
     account_config: Dict,
     fqdns: List[str],
     *,
     cache: Optional[Dict] = None,
-) -> List[str]:
+) -> Tuple[List[str], List[Tuple[str, str]]]:
     """For a provider that needs explicit zone identity, resolve each
     FQDN in *fqdns* to its longest covering zone in the account and
-    return the deduplicated list of matched zones (longest first).
+    return ``(matched_zones, per_fqdn_map)``:
+
+    * ``matched_zones`` — deduplicated longest-first list, ready to feed
+      into ``dns_azure_zoneN`` lines.
+    * ``per_fqdn_map`` — ordered list of ``(fqdn, zone)`` pairs so the
+      caller can log a single concise INFO line with the full mapping.
 
     Raises:
-        ValueError: if any FQDN is not covered by a hosted zone. The
-            message lists the configured zones so the operator can fix
-            either the cert request or the Azure DNS setup.
+        ValueError: if any FQDN is not covered by a hosted zone, or if
+            *fqdns* is empty (a programming error in the caller).
         RuntimeError: if zone discovery itself failed (auth, network,
             missing SDK). The cert-issuance layer converts this into
             a 5xx-style error.
     """
-    from .utils import find_covering_zone
-
     discovery = get_zone_discovery(provider)
     cache_key = None
     if cache is not None:
@@ -194,25 +245,30 @@ def resolve_zones_for_domains(
             "actually contains DNS zones."
         )
 
-    matched: List[str] = []
-    unmatched: List[str] = []
-    for fqdn in fqdns:
-        zone = find_covering_zone(fqdn, zones)
-        if zone is None:
-            unmatched.append(fqdn)
-        elif zone not in matched:
-            matched.append(zone)
+    return _match_fqdns_to_zones(provider, zones, fqdns)
 
-    if unmatched:
+
+def resolve_zones_against_explicit_list(
+    provider: str,
+    zones: List[str],
+    fqdns: List[str],
+) -> Tuple[List[str], List[Tuple[str, str]]]:
+    """RBAC escape hatch: match *fqdns* against an operator-supplied
+    zone list without hitting the provider's discovery API.
+
+    Existed Azure service principals scoped to ``dnsZones/TXT/write``
+    on specific zones lack the ``dnsZones/read`` permission on the
+    resource group that the auto-discovery path needs. Operators in
+    that position can declare their hosted zones on the account
+    (``account_config['zone_domains']``) and CertMate uses that list
+    directly. Same matching, fail-early, and longest-first semantics
+    as :func:`resolve_zones_for_domains`.
+    """
+    cleaned = [str(z).strip() for z in (zones or []) if str(z or '').strip()]
+    if not cleaned:
         raise ValueError(
-            "The following certificate names are not covered by any "
-            f"hosted DNS zone configured for provider '{provider}': "
-            f"{', '.join(unmatched)}. Hosted zones discovered: "
-            f"{', '.join(zones) or '(none)'}."
+            f"Explicit zone_domains list for provider '{provider}' is empty "
+            "after sanitisation; remove the field to fall back to live "
+            "zone discovery."
         )
-
-    # Sort longest-first so the resulting ``dns_azure_zoneN`` lines
-    # encode the operator's intent stably and the plugin's longest-match
-    # picks the most specific zone for each challenge.
-    matched.sort(key=len, reverse=True)
-    return matched
+    return _match_fqdns_to_zones(provider, cleaned, fqdns)

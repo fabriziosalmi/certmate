@@ -14,7 +14,7 @@ import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 from urllib.parse import urlparse
 
 
@@ -411,7 +411,7 @@ def create_route53_config(access_key_id: str, secret_access_key: str) -> Path:
     content = f"dns_route53_access_key_id = {access_key_id}\ndns_route53_secret_access_key = {secret_access_key}\n"
     return _create_config_file("route53", content)
 
-def create_azure_config(subscription_id: str, resource_group: str, tenant_id: str, client_id: str, client_secret: str, zone_domain) -> Path:
+def create_azure_config(subscription_id: str, resource_group: str, tenant_id: str, client_id: str, client_secret: str, zone_domain: Union[str, List[str]]) -> Path:
     """Create Azure DNS credentials file for certbot-dns-azure (terrycain).
 
     The plugin (certbot-dns-azure >= 2.x) expects:

@@ -212,6 +212,15 @@ class CertificateManager:
         against a parent hosted zone — e.g. issuing
         ``*.example2.example.com`` when Azure only hosts ``example.com``.
 
+        **RBAC escape hatch**: if ``dns_config`` carries an explicit
+        ``zone_domains`` list (set by the operator on the account), we
+        skip the live discovery call and use the supplied list directly.
+        That keeps existing Azure service principals working when their
+        scope only includes ``Microsoft.Network/dnsZones/TXT/write`` on
+        specific zones and lacks ``dnsZones/read`` on the resource group
+        — granting the broader read permission for auto-discovery would
+        otherwise be a hard prerequisite for the v2.6.10 upgrade.
+
         For any provider without a discovery hook the legacy single-zone
         shape is preserved: the cert FQDN apex goes into ``_zone_domain``
         and the strategy uses it verbatim. Today that branch is unused
@@ -222,7 +231,10 @@ class CertificateManager:
         if dns_provider != 'azure':
             return dns_config
 
-        from .dns_zone_discovery import has_zone_discovery, resolve_zones_for_domains
+        from .dns_zone_discovery import (
+            has_zone_discovery, resolve_zones_for_domains,
+            resolve_zones_against_explicit_list,
+        )
 
         if has_zone_discovery(dns_provider):
             fqdns = [domain]
@@ -230,20 +242,29 @@ class CertificateManager:
                 for san in san_domains:
                     if san and san not in fqdns:
                         fqdns.append(san)
-            zone_domains = resolve_zones_for_domains(
-                dns_provider, dns_config, fqdns,
+
+            explicit_zones = dns_config.get('zone_domains') if isinstance(dns_config, dict) else None
+            if explicit_zones:
+                # Operator-supplied list — no Azure ARM call needed.
+                # Same matching + fail-early semantics as the discovery
+                # path; just skips the SDK round-trip.
+                zone_domains, per_fqdn = resolve_zones_against_explicit_list(
+                    dns_provider, explicit_zones, fqdns,
+                )
+                source = 'explicit zone_domains'
+            else:
+                zone_domains, per_fqdn = resolve_zones_for_domains(
+                    dns_provider, dns_config, fqdns,
+                )
+                source = 'discovery'
+
+            # One INFO per cert with the full FQDN -> zone map; avoids the
+            # N-line spam a SAN cert with many entries used to produce.
+            logger.info(
+                "Resolved %s DNS zones (%s) for %d FQDN(s): %s",
+                dns_provider, source, len(fqdns),
+                ', '.join(f"{f}->{z}" for f, z in per_fqdn),
             )
-            for fqdn in fqdns:
-                # Mirror the matched zone per FQDN in the log so the
-                # operator can confirm what happened from the run log
-                # without enabling debug. find_covering_zone is cheap.
-                from .utils import find_covering_zone
-                match = find_covering_zone(fqdn, zone_domains)
-                if match:
-                    logger.info(
-                        "Resolved %s DNS zone for %s -> %s",
-                        dns_provider, fqdn, match,
-                    )
             return {**dns_config, '_zone_domains': zone_domains}
 
         # Legacy single-zone fallback (no discovery registered).

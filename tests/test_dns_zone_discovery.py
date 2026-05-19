@@ -20,6 +20,7 @@ from modules.core.dns_zone_discovery import (
     _NullZoneDiscovery,
     get_zone_discovery,
     has_zone_discovery,
+    resolve_zones_against_explicit_list,
     resolve_zones_for_domains,
 )
 from modules.core.utils import find_covering_zone
@@ -222,22 +223,29 @@ def _patched_resolve(monkeypatch, provider, zones):
 class TestResolveZonesForDomains:
     def test_single_fqdn_matches_parent_zone(self, monkeypatch):
         _patched_resolve(monkeypatch, 'azure', ['example.com'])
-        zones = resolve_zones_for_domains(
+        zones, per_fqdn = resolve_zones_for_domains(
             'azure', {}, ['*.example2.example.com']
         )
         assert zones == ['example.com']
+        assert per_fqdn == [('*.example2.example.com', 'example.com')]
 
     def test_san_list_spanning_two_zones_writes_both(self, monkeypatch):
         _patched_resolve(
             monkeypatch, 'azure',
             ['example.com', 'anotherdomain.org'],
         )
-        zones = resolve_zones_for_domains(
+        zones, per_fqdn = resolve_zones_for_domains(
             'azure', {},
             ['app.example.com', '*.api.anotherdomain.org'],
         )
         # Longest-first ordering for stable azure.ini output.
         assert zones == ['anotherdomain.org', 'example.com']
+        # Per-FQDN mapping preserves caller order — that's what the
+        # cert-issuance log uses to render a single concise INFO line.
+        assert per_fqdn == [
+            ('app.example.com', 'example.com'),
+            ('*.api.anotherdomain.org', 'anotherdomain.org'),
+        ]
 
     def test_longest_match_wins_for_each_fqdn(self, monkeypatch):
         """Mirrors the user's stated priority: subdomain-zone first,
@@ -246,7 +254,7 @@ class TestResolveZonesForDomains:
             monkeypatch, 'azure',
             ['example.com', 'staging.example.com'],
         )
-        zones = resolve_zones_for_domains(
+        zones, _ = resolve_zones_for_domains(
             'azure', {}, ['api.staging.example.com'],
         )
         assert zones == ['staging.example.com']
@@ -268,6 +276,14 @@ class TestResolveZonesForDomains:
                 'azure', {}, ['example.com'],
             )
 
+    def test_empty_fqdns_raises_explicitly(self, monkeypatch):
+        """Defensive contract: a caller that managed to assemble an
+        empty FQDN list has a bug. Surface it rather than silently
+        returning [], which would then write a zone-less azure.ini."""
+        _patched_resolve(monkeypatch, 'azure', ['example.com'])
+        with pytest.raises(ValueError, match='no FQDNs supplied'):
+            resolve_zones_for_domains('azure', {}, [])
+
     def test_cache_short_circuits_repeated_discovery(self, monkeypatch):
         """A cert renewal batch calling resolve repeatedly with the same
         account_config must hit the discovery API at most once."""
@@ -281,3 +297,59 @@ class TestResolveZonesForDomains:
         resolve_zones_for_domains('azure', account, ['b.example.com'], cache=cache)
         resolve_zones_for_domains('azure', account, ['c.example.com'], cache=cache)
         assert stub.call_count == 1
+
+
+# --- resolve_zones_against_explicit_list (RBAC escape hatch) -------------
+
+
+class TestResolveZonesAgainstExplicitList:
+    """The escape hatch operators reach for when their Azure service
+    principal lacks ``Microsoft.Network/dnsZones/read`` on the resource
+    group: declare ``zone_domains`` on the account and CertMate skips
+    the live discovery call entirely."""
+
+    def test_matches_without_calling_any_discovery_hook(self, monkeypatch):
+        """If this test ever silently turns into a network call, the
+        Azure stub registered here will get hit and the count will be
+        non-zero."""
+        stub = _patched_resolve(monkeypatch, 'azure', ['SHOULD_NOT_BE_USED'])
+        zones, per_fqdn = resolve_zones_against_explicit_list(
+            'azure',
+            ['example.com'],
+            ['*.example2.example.com'],
+        )
+        assert zones == ['example.com']
+        assert per_fqdn == [('*.example2.example.com', 'example.com')]
+        assert stub.call_count == 0  # discovery NOT consulted
+
+    def test_san_spanning_two_explicit_zones(self):
+        zones, _ = resolve_zones_against_explicit_list(
+            'azure',
+            ['example.com', 'anotherdomain.org'],
+            ['app.example.com', '*.api.anotherdomain.org'],
+        )
+        assert zones == ['anotherdomain.org', 'example.com']
+
+    def test_unmatched_fqdn_raises_same_actionable_error(self):
+        with pytest.raises(ValueError) as exc:
+            resolve_zones_against_explicit_list(
+                'azure', ['example.com'], ['foo.unrelated.org'],
+            )
+        msg = str(exc.value)
+        assert 'foo.unrelated.org' in msg
+        assert 'example.com' in msg
+
+    def test_empty_or_whitespace_zone_list_raises(self):
+        with pytest.raises(ValueError, match='empty after sanitisation'):
+            resolve_zones_against_explicit_list('azure', [], ['x.example.com'])
+        with pytest.raises(ValueError, match='empty after sanitisation'):
+            resolve_zones_against_explicit_list(
+                'azure', ['  ', '', None], ['x.example.com'],  # type: ignore[list-item]
+            )
+
+    def test_strips_whitespace_in_zone_entries(self):
+        """Hand-edited YAML/JSON often includes stray whitespace."""
+        zones, _ = resolve_zones_against_explicit_list(
+            'azure', ['  example.com  '], ['api.example.com'],
+        )
+        assert zones == ['example.com']
