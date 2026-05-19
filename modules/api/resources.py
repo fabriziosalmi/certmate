@@ -606,6 +606,23 @@ def create_api_resources(api, models, managers):
                         'hint': 'Provide domain name only (e.g., example.com), not the full URL.'
                     }, 400
 
+                # Full structural validation of the primary domain. Until
+                # now only space/URL-prefix were rejected; an unvalidated
+                # ``domain`` flows into ``cert_dir / domain`` for
+                # ``mkdir(parents=True)`` and is persisted into
+                # ``settings.json`` for replay through ``check_renewals``.
+                # SAN entries already go through ``validate_domain`` at the
+                # core layer (modules/core/certificates.py:690); the primary
+                # domain must get the same gate, AT THE WRITE BOUNDARY, so
+                # a poisoned value cannot survive into background renewals.
+                from ..core.utils import validate_domain
+                primary_valid, primary_msg = validate_domain(domain)
+                if not primary_valid:
+                    return {
+                        'error': f'Invalid domain: {primary_msg}',
+                        'hint': 'Use only valid domain characters (letters, digits, hyphens, dots). For wildcards use *.example.com.'
+                    }, 400
+
                 # Validate SAN domains if provided
                 if san_domains:
                     if not isinstance(san_domains, list):
@@ -802,6 +819,9 @@ def create_api_resources(api, models, managers):
         @auth_manager.require_role('viewer')
         def get(self, domain):
             """Check DNS-01 alias CNAME records for an existing certificate."""
+            _, err = _validate_domain_path(domain, file_ops.cert_dir)
+            if err:
+                return {'error': err}, 400
             scope_err = _check_domain_scope(domain, 'dns_alias_check')
             if scope_err:
                 return scope_err
@@ -1376,6 +1396,9 @@ def create_api_resources(api, models, managers):
             try:
                 payload = request.get_json(silent=True) or {}
                 force = bool(payload.get('force', False))
+                _, err = _validate_domain_path(domain, file_ops.cert_dir)
+                if err:
+                    return {'error': err}, 400
                 scope_err = _check_domain_scope(domain, 'renew')
                 if scope_err:
                     return scope_err
