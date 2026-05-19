@@ -223,11 +223,22 @@ def _strip_masked_values(payload):
 # Top-level settings keys whose value is a nested dict that should be
 # deep-merged rather than wholesale-replaced on save. Each of these stores
 # multiple secret-bearing subtrees (per-backend storage credentials, per-CA
-# EAB credentials), so the user editing one field in the UI must not blow
-# away the others or the previously-saved secret for the same field.
+# EAB credentials, per-channel notification credentials), so the user
+# editing one field in the UI must not blow away the others or the
+# previously-saved secret for the same field.
+#
+# Audit finding M3 (May 2026): `notifications` was originally absent
+# from this list. The dedicated notifications POST route in
+# `modules/web/misc_routes.py` wholesale-replaced the subtree, so the
+# masked-sentinel + sibling-preservation logic that PR #215 added for
+# `certificate_storage` / `ca_providers` did not protect SMTP and
+# webhook credentials. Including `notifications` here AND routing the
+# misc_routes POST through `_strip_masked_values` + `_deep_merge_dict`
+# (the same shape as the settings POST path) closes the gap.
 _DEEP_MERGE_SETTINGS_KEYS = frozenset({
     'certificate_storage',
     'ca_providers',
+    'notifications',
 })
 
 
