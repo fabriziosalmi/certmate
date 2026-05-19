@@ -104,6 +104,73 @@ def _is_secret_key(name: str) -> bool:
     return bool(_SECRET_KEY_RE.search(name))
 
 
+# Provider-specific secret fields whose names do NOT match the generic
+# regex but ARE credential material in their nesting context. Keyed by
+# the immediate parent key — masking is applied only when walking into
+# that parent, so a generic ``username`` (e.g. SMTP login email) is
+# NOT inadvertently masked.
+#
+# Audit M2: ``acme-dns`` provider stores its shared secret as a pair
+# of ``username`` (UUID) + ``subdomain`` (corresponding ACME-DNS
+# delegation host). Together they authorise TXT record updates on
+# behalf of the user's domain. Both must be masked.
+_PROVIDER_SPECIFIC_SECRET_FIELDS = {
+    'acme-dns': frozenset({'username', 'subdomain'}),
+}
+
+
+def mask_secrets_in_settings(settings_dict):
+    """Return a deep-copied settings dict with every credential-bearing
+    value replaced by ``SECRET_MASK_SENTINEL``.
+
+    Two passes coexist in the same walk:
+
+    1. Generic regex: any field whose name matches the project's
+       secret-name pattern (``token|secret|password|key|credential``)
+       — excluding the documented non-secret allowlist
+       (``default_key_type`` etc.) — gets masked.
+    2. Provider-specific: when the immediate parent key is one of the
+       providers in ``_PROVIDER_SPECIFIC_SECRET_FIELDS``, any listed
+       field name on that level gets masked even if the regex would
+       not match it. Today this covers ``acme-dns`` ``username`` +
+       ``subdomain``; future providers with similarly named shared-
+       secret fields can extend the registry without re-touching the
+       walker.
+
+    Used by:
+
+    - ``modules/web/settings_routes.py::api_settings_get`` — masked
+      response for ``/api/web/settings`` GET.
+    - ``modules/web/misc_routes.py::api_notifications_config`` —
+      masked response for the notifications subtree (audit H5).
+    - ``modules/core/file_operations.py::create_unified_backup`` —
+      share-safe default for backup ZIPs (audit C1).
+    """
+    def _walk(node, parent_key=None):
+        if isinstance(node, dict):
+            provider_extras = _PROVIDER_SPECIFIC_SECRET_FIELDS.get(parent_key, frozenset())
+            out = {}
+            for key, value in node.items():
+                if isinstance(value, str) and value and (
+                    _is_secret_key(key) or key in provider_extras
+                ):
+                    out[key] = SECRET_MASK_SENTINEL
+                else:
+                    # For list values, propagate the CURRENT dict's
+                    # parent_key down so list items inherit the
+                    # provider context (e.g. ``acme-dns.accounts[*]``
+                    # is still acme-dns-context). For dict values,
+                    # the new parent is the key we are descending
+                    # into.
+                    next_parent = parent_key if isinstance(value, list) else key
+                    out[key] = _walk(value, parent_key=next_parent)
+            return out
+        if isinstance(node, list):
+            return [_walk(item, parent_key=parent_key) for item in node]
+        return node
+    return _walk(settings_dict)
+
+
 def _strip_masked_values(payload):
     """Recursively strip keys whose value equals the masking sentinel — or,
     for secret-named fields, whose value is an empty string.

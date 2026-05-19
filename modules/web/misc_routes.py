@@ -166,7 +166,15 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
 
         if request.method == 'GET':
             try:
-                return jsonify(notifier._get_config())
+                # Audit H5: this endpoint previously returned raw
+                # `notifications` config including plaintext
+                # `smtp_password` + webhook URLs with embedded auth
+                # tokens. Now goes through the central masking helper
+                # so the response shape matches `/api/web/settings`
+                # for the same subtree.
+                from modules.core.settings import mask_secrets_in_settings
+                raw = notifier._get_config() or {}
+                return jsonify(mask_secrets_in_settings(raw))
             except Exception as e:
                 logger.error(f"Failed to read notifications config: {e}")
                 return jsonify({'error': 'Failed to read notifications config'}), 500

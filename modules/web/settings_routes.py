@@ -50,19 +50,14 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
         already needs the masked structure to show form fields).
         """
         try:
+            from modules.core.settings import mask_secrets_in_settings
             settings = settings_manager.load_settings()
-            masked = copy.deepcopy(settings)
-            def _mask_dict(d):
-                if not isinstance(d, dict):
-                    return
-                for k in list(d.keys()):
-                    if k in _NON_SECRET_KEYS:
-                        continue
-                    if _SECRET_KEYS.search(k) and isinstance(d[k], str) and d[k]:
-                        d[k] = '********'
-                    elif isinstance(d[k], dict):
-                        _mask_dict(d[k])
-            _mask_dict(masked)
+            # Centralised masking via modules/core/settings — same helper
+            # the backup-ZIP and notifications GET paths use, so the
+            # contract is single-sourced. Picks up the provider-specific
+            # acme-dns shared-secret fields (username + subdomain) that
+            # the older local walker missed (audit finding M2).
+            masked = mask_secrets_in_settings(settings)
 
             # Recovery helper: if the UI is about to show the wizard,
             # surface a flag so the frontend can suggest restoring
