@@ -279,6 +279,10 @@ def test_email_collision_links_existing_local_user(oidc, settings_manager, auth_
         'sub': 'idp-subject-002',
         'preferred_username': 'alice-from-idp',  # different username
         'email': 'alice@example.com',
+        # email_verified=True is required by the verified-email gate
+        # (default policy). Without it the link is refused — see
+        # test_link_refused_when_email_not_verified for that path.
+        'email_verified': True,
         'groups': ['nobody-knows'],
     }
     username, err = oidc.resolve_or_provision_user(claims)
@@ -295,6 +299,118 @@ def test_email_collision_links_existing_local_user(oidc, settings_manager, auth_
     # Linked
     assert record['oidc_subject'] == 'idp-subject-002'
     assert record['oidc_issuer'] == 'https://idp.example.com'
+
+
+def test_link_refused_when_email_not_verified(oidc, settings_manager, auth_manager):
+    """Account-takeover guard: an IdP that does NOT attest
+    ``email_verified=True`` cannot link onto an existing local user.
+    Default policy (``require_verified_email=True``) refuses the link;
+    the attacker scenario is an IdP with self-service signup where any
+    attacker can register ``admin@target.com`` without proving control."""
+    _enable_oidc(settings_manager)
+    auth_manager.create_user('admin-user', 'StrongPw_123!', role='admin',
+                              email='admin@target.com')
+
+    claims = {
+        'iss': 'https://idp.example.com',
+        'sub': 'attacker-subject-001',
+        'preferred_username': 'mallory',
+        'email': 'admin@target.com',
+        'email_verified': False,
+        'groups': ['anything'],
+    }
+    username, err = oidc.resolve_or_provision_user(claims)
+    assert username is None
+    assert err == 'email_not_verified'
+
+    # The local admin row is untouched: no oidc_subject was written.
+    users = auth_manager._get_users()
+    record = users['admin-user']
+    assert record.get('oidc_subject') is None
+    assert record.get('oidc_issuer') is None
+    # Original password hash and role preserved.
+    assert record['password_hash']
+    assert record['role'] == 'admin'
+
+
+def test_link_refused_when_email_verified_claim_missing(oidc, settings_manager, auth_manager):
+    """A missing claim is NOT the same as ``email_verified=True``. An IdP
+    that simply does not emit the claim falls under the same refusal
+    rule — only an explicit positive attestation links."""
+    _enable_oidc(settings_manager)
+    auth_manager.create_user('admin-user', 'StrongPw_123!', role='admin',
+                              email='admin@target.com')
+
+    claims = {
+        'iss': 'https://idp.example.com',
+        'sub': 'attacker-subject-002',
+        'email': 'admin@target.com',
+        # email_verified is intentionally absent
+        'groups': [],
+    }
+    username, err = oidc.resolve_or_provision_user(claims)
+    assert username is None
+    assert err == 'email_not_verified'
+
+
+def test_link_accepted_when_email_verified_is_string_true(oidc, settings_manager, auth_manager):
+    """Some IdPs serialise ``email_verified`` as the JSON string
+    ``"true"`` rather than a bool — accept that case explicitly."""
+    _enable_oidc(settings_manager)
+    auth_manager.create_user('alice', 'StrongPw_123!', role='operator',
+                              email='alice@example.com')
+
+    claims = {
+        'iss': 'https://idp.example.com',
+        'sub': 'idp-subject-stringy',
+        'email': 'alice@example.com',
+        'email_verified': 'true',  # string, not bool
+        'groups': [],
+    }
+    username, err = oidc.resolve_or_provision_user(claims)
+    assert err is None
+    assert username == 'alice'
+
+
+def test_link_refusal_opt_out_via_require_verified_email_false(oidc, settings_manager, auth_manager):
+    """Operators who trust their IdP can disable the gate. This pins the
+    escape hatch so we can ship it as a documented operator decision."""
+    _enable_oidc(settings_manager, require_verified_email=False)
+    auth_manager.create_user('alice', 'StrongPw_123!', role='operator',
+                              email='alice@example.com')
+
+    claims = {
+        'iss': 'https://idp.example.com',
+        'sub': 'idp-subject-no-verify',
+        'email': 'alice@example.com',
+        # email_verified omitted entirely
+        'groups': [],
+    }
+    username, err = oidc.resolve_or_provision_user(claims)
+    assert err is None
+    assert username == 'alice'
+
+
+def test_jit_for_unverified_email_with_no_existing_user(oidc, settings_manager, auth_manager):
+    """The verified-email gate is scoped to the LINK seam. When no local
+    user has the email, JIT creates a fresh row regardless of the
+    verification status — there's no row to take over so the safety
+    rationale doesn't apply. (If an operator wants stricter behaviour,
+    they can disable ``auto_create_users``.)"""
+    _enable_oidc(settings_manager)
+    # No local user with this email pre-seeded.
+    claims = {
+        'iss': 'https://idp.example.com',
+        'sub': 'jit-subject-001',
+        'preferred_username': 'newcomer',
+        'email': 'newcomer@example.com',
+        # email_verified is False — irrelevant on the JIT path.
+        'email_verified': False,
+        'groups': [],
+    }
+    username, err = oidc.resolve_or_provision_user(claims)
+    assert err is None
+    assert username == 'newcomer'
 
 
 def test_subject_lookup_wins_over_email_match(oidc, settings_manager, auth_manager):

@@ -75,6 +75,14 @@ def _normalize_oidc_config(raw: dict) -> dict:
         cfg['default_role'] = 'viewer'
     cfg.setdefault('auto_create_users', True)
     cfg.setdefault('link_by_email', True)
+    # Refuse to link an IdP identity onto an existing local user unless
+    # the IdP attests that the user controls the email. Defaults to True
+    # because the alternative is an account-takeover vector on any IdP
+    # with self-service signup: an attacker registers
+    # ``admin@target.com`` (unverified), waits for the JIT/link to fire,
+    # and inherits the local admin role. Operators who trust their IdP
+    # to verify email ownership server-side can flip this off.
+    cfg.setdefault('require_verified_email', True)
     cfg.setdefault('post_logout_redirect_uri', '')
     return cfg
 
@@ -373,10 +381,21 @@ class OIDCManager:
           2. ``link_by_email`` enabled AND existing local user with
              matching email → link by writing ``oidc_subject`` +
              ``oidc_issuer`` onto the existing row, preserve their role.
+             Gated on ``require_verified_email`` (default True): an IdP
+             that does NOT attest ``email_verified=True`` for the
+             authenticated subject cannot link onto an existing row.
+             Without this, an attacker who can register
+             ``admin@target.com`` on a self-service IdP would inherit the
+             local admin role on first SSO login.
           3. ``auto_create_users`` enabled → JIT create with the role
              derived from the role_mappings (default_role on no match).
              ``password_hash=''`` so the local login path refuses them.
           4. Otherwise → ``(None, 'no_user')``.
+
+        The whole read-modify-write happens inside
+        ``settings_manager.update(mutator)`` so two concurrent first-time
+        callbacks for distinct subjects cannot race the username
+        uniqueness check or clobber one another's ``users`` row.
         """
         cfg = self._load_config()
         sub = claims.get('sub')
@@ -389,50 +408,95 @@ class OIDCManager:
         username_value = claims.get(username_claim) or claims.get('preferred_username') \
             or claims.get('email') or sub
         email = claims.get(email_claim) or claims.get('email') or ''
+        # OIDC Core §5.1 specifies ``email_verified`` as a boolean. Some
+        # IdPs serialise it as the string "true"/"false"; accept either
+        # but never coerce a missing claim to True.
+        raw_verified = claims.get('email_verified')
+        email_verified = (
+            raw_verified is True
+            or (isinstance(raw_verified, str) and raw_verified.lower() == 'true')
+        )
         role = self._map_role(claims, cfg)
 
-        users = self.auth_manager._get_users()  # noqa: SLF001 — package-private use
+        # Captured outcome — written by the mutator, read after update()
+        # returns so audit logging (which can be slow) happens OUTSIDE
+        # the settings lock.
+        outcome: dict = {'username': None, 'error': None, 'audit': None}
 
-        # 1. Subject match.
-        existing_by_sub = self._find_by_subject(users, sub, iss)
-        if existing_by_sub:
-            username = existing_by_sub
-            users[username]['last_login'] = utc_now().isoformat()
-            self.auth_manager._save_users(users)
-            return username, None
+        def _mutate(settings):
+            users = settings.setdefault('users', {})
 
-        # 2. Email link.
-        if cfg.get('link_by_email') and email:
-            existing_by_email = self._find_by_email(users, email)
-            if existing_by_email:
-                username = existing_by_email
-                users[username]['oidc_subject'] = sub
-                users[username]['oidc_issuer'] = iss
+            # 1. Subject match — always allowed, no verified-email gate
+            #    (the subject identity is the IdP's own attestation).
+            existing_by_sub = self._find_by_subject(users, sub, iss)
+            if existing_by_sub:
+                username = existing_by_sub
                 users[username]['last_login'] = utc_now().isoformat()
-                self.auth_manager._save_users(users)
-                self._audit('oidc_user_linked', username, status='success',
-                            details={'email': email, 'issuer': iss})
-                return username, None
+                outcome['username'] = username
+                return
 
-        # 3. JIT.
-        if not cfg.get('auto_create_users', True):
-            return None, 'provisioning_disabled'
+            # 2. Email link — only fires when an existing local user has
+            #    the same email. The verified-email gate applies ONLY at
+            #    that seam (writing ``oidc_subject`` onto an existing
+            #    row would inherit that row's role). A missing match
+            #    falls through to JIT, where there's no row to take over
+            #    so the verification status is irrelevant for safety.
+            if cfg.get('link_by_email') and email:
+                existing_by_email = self._find_by_email(users, email)
+                if existing_by_email:
+                    if cfg.get('require_verified_email', True) and not email_verified:
+                        outcome['error'] = 'email_not_verified'
+                        outcome['audit'] = (
+                            'oidc_user_link_refused',
+                            existing_by_email,
+                            'failure',
+                            {'email': email, 'issuer': iss,
+                             'reason': 'email_verified claim missing or false'},
+                        )
+                        return
+                    username = existing_by_email
+                    users[username]['oidc_subject'] = sub
+                    users[username]['oidc_issuer'] = iss
+                    users[username]['last_login'] = utc_now().isoformat()
+                    outcome['username'] = username
+                    outcome['audit'] = (
+                        'oidc_user_linked', username, 'success',
+                        {'email': email, 'issuer': iss},
+                    )
+                    return
 
-        username = self._unique_username(users, username_value)
-        users[username] = {
-            'password_hash': '',  # blocks local password login on this row
-            'role': role,
-            'email': email,
-            'created_at': utc_now().isoformat(),
-            'last_login': utc_now().isoformat(),
-            'enabled': True,
-            'oidc_subject': sub,
-            'oidc_issuer': iss,
-        }
-        self.auth_manager._save_users(users)
-        self._audit('oidc_user_provisioned', username, status='success',
-                    details={'email': email, 'issuer': iss, 'role': role})
-        return username, None
+            # 3. JIT.
+            if not cfg.get('auto_create_users', True):
+                outcome['error'] = 'provisioning_disabled'
+                return
+
+            username = self._unique_username(users, username_value)
+            users[username] = {
+                'password_hash': '',  # blocks local password login on this row
+                'role': role,
+                'email': email,
+                'created_at': utc_now().isoformat(),
+                'last_login': utc_now().isoformat(),
+                'enabled': True,
+                'oidc_subject': sub,
+                'oidc_issuer': iss,
+            }
+            outcome['username'] = username
+            outcome['audit'] = (
+                'oidc_user_provisioned', username, 'success',
+                {'email': email, 'issuer': iss, 'role': role},
+            )
+
+        # update() runs the mutator under the settings RLock so two
+        # concurrent first-time callbacks for distinct subjects observe
+        # each other's writes via the freshly-loaded users dict.
+        self.settings_manager.update(_mutate, reason='oidc_resolve_or_provision')
+
+        if outcome['audit']:
+            op, who, status, details = outcome['audit']
+            self._audit(op, who, status=status, details=details)
+
+        return outcome['username'], outcome['error']
 
     def _map_role(self, claims: dict, cfg: dict) -> str:
         """Apply the configured role_mappings against the chosen claim.

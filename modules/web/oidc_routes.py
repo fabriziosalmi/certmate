@@ -52,6 +52,11 @@ def register_oidc_routes(app, managers, auth_manager, oidc_manager,
                          _check_login_rate_limit, _record_login_attempt):
     """Register the /api/auth/oidc/* endpoints on ``app``."""
     audit_logger = managers.get('audit')
+    # ``managers`` may not surface 'settings' in every test fixture; the
+    # OIDC manager carries its own reference to settings_manager so we
+    # use that as the authoritative source. Same instance either way in
+    # production (factory.py wires both).
+    settings_manager = oidc_manager.settings_manager
 
     @app.route('/api/auth/oidc/config', methods=['GET'])
     def api_oidc_config():
@@ -189,6 +194,13 @@ def register_oidc_routes(app, managers, auth_manager, oidc_manager,
         """
         payload = request.json or {}
         before = oidc_manager.get_admin_config()
+        # Read the unmasked on-disk secret BEFORE the update so the audit
+        # log can tell a genuine rotation apart from an admin resubmitting
+        # the same value (which would otherwise produce a false-positive
+        # ``sensitive_changed`` entry — pure SIEM noise).
+        prior_secret_plain = (
+            settings_manager.load_settings().get('oidc', {}).get('client_secret', '')
+        )
         ok, err = oidc_manager.update_config(payload)
         if not ok:
             return jsonify({'error': err or 'invalid OIDC settings'}), 400
@@ -203,12 +215,14 @@ def register_oidc_routes(app, managers, auth_manager, oidc_manager,
                 # ``before`` and ``after`` both come from get_admin_config(),
                 # which masks ``client_secret`` to '********'. A genuine
                 # rotation is therefore invisible to the snapshot diff —
-                # detect it from the raw payload so SIEMs keyed on
-                # ``sensitive_changed`` don't go blind on secret rotations.
+                # detect it from the raw payload AND verify against the
+                # pre-update plaintext so resubmitting the same secret
+                # does not flag a non-rotation as a rotation.
                 raw_secret = (payload.get('client_secret')
                               if isinstance(payload, dict) else None)
                 if (isinstance(raw_secret, str) and raw_secret
-                        and raw_secret != SECRET_MASK_SENTINEL):
+                        and raw_secret != SECRET_MASK_SENTINEL
+                        and raw_secret != prior_secret_plain):
                     if 'client_secret' not in changed:
                         changed.append('client_secret')
                         changed.sort()

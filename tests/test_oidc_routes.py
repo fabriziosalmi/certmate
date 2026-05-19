@@ -360,6 +360,89 @@ def test_settings_post_roundtrip_does_not_log_secret_change(tmp_path):
     assert 'client_secret' not in details.get('sensitive_changed', []), details
 
 
+def test_settings_post_resubmitting_same_plaintext_does_not_audit_rotation(tmp_path):
+    """An admin who pastes the same plaintext secret that's already
+    on-disk (e.g. copy-pasted from a password manager during an
+    unrelated edit) must NOT trigger a rotation audit entry. Pre-fix
+    the audit fired on any non-sentinel value; that produced SIEM
+    noise for every same-value resubmit. Verified against the pre-
+    update plaintext now."""
+    audit = MagicMock()
+    app, settings_manager, *_ = _build_app(
+        tmp_path,
+        oidc_overrides={'client_secret': 'SECRET-UNCHANGED'},
+        audit_logger=audit,
+    )
+    client = app.test_client()
+    body = client.get('/api/auth/oidc/settings').get_json()
+    # Same plaintext as on disk — the UI sees the masked sentinel, but
+    # an admin might paste the literal value during an unrelated edit.
+    body['client_secret'] = 'SECRET-UNCHANGED'
+    r = client.post('/api/auth/oidc/settings', json=body)
+    assert r.status_code == 200, r.get_json()
+
+    # On-disk value unchanged.
+    on_disk = settings_manager.load_settings()['oidc']['client_secret']
+    assert on_disk == 'SECRET-UNCHANGED'
+
+    # Audit must NOT flag this as a rotation.
+    config_calls = [c for c in audit.log_operation.call_args_list
+                    if c.kwargs.get('operation') == 'oidc_config_changed']
+    assert config_calls, 'expected oidc_config_changed audit entry'
+    details = config_calls[-1].kwargs.get('details') or {}
+    assert 'client_secret' not in details.get('sensitive_changed', []), details
+    assert 'client_secret' not in details.get('changed_keys', []), details
+
+
+def test_oidc_jit_race_under_concurrent_callbacks(tmp_path):
+    """Two concurrent first-time OIDC callbacks for DISTINCT subjects
+    must both end up persisted with their own users row. The pre-fix
+    race did ``_get_users()`` outside any lock, picked the same
+    suffixed username via _unique_username, and the last _save_users
+    overwrote the first — silently losing one of the rows.
+
+    Routing the read-mutate-write through ``settings_manager.update``
+    serialises the whole sequence under the settings RLock so each
+    thread observes the other's write before computing uniqueness."""
+    import threading
+
+    app, settings_manager, _auth_manager, oidc_manager = _build_app(
+        tmp_path,
+        oidc_overrides={'client_secret': 'SECRET'},
+    )
+
+    def call(subject):
+        return oidc_manager.resolve_or_provision_user({
+            'iss': 'https://idp.example.com',
+            'sub': subject,
+            'preferred_username': 'shared-name',  # forces collision path
+            'email': f'{subject}@example.com',
+            'email_verified': True,
+        })
+
+    results = {}
+
+    def worker(subject):
+        results[subject] = call(subject)
+
+    threads = [threading.Thread(target=worker, args=(f'subject-{i}',))
+               for i in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    # All 8 succeeded.
+    assert all(err is None for _, err in results.values()), results
+    usernames = {u for u, _ in results.values()}
+    assert len(usernames) == 8, f'expected 8 distinct usernames, got {usernames}'
+
+    # All 8 rows actually landed on disk.
+    users = settings_manager.load_settings().get('users', {})
+    for username in usernames:
+        assert username in users, f'{username} missing from persisted users'
+
+
 # ---------------------------------------------------------------------------
 # Bulk-settings reject-list — confirms 'oidc' can't be smuggled in
 # via the generic POST /api/web/settings endpoint.
