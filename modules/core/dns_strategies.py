@@ -166,26 +166,45 @@ class Route53Strategy(DNSProviderStrategy):
 
 class AzureStrategy(DNSProviderStrategy):
     def create_config_file(self, config_data: Dict[str, Any]) -> Optional[Path]:
-        # ``_zone_domain`` is injected by the caller (see
-        # CertificateManager.create_certificate / renew_certificate) so the
-        # generated azure.ini can include the ``dns_azure_zone1`` mapping
-        # that certbot-dns-azure 2.x requires. Without a zone mapping the
-        # plugin aborts with "At least one zone mapping needs to be
-        # provided" before any DNS challenge can run.
-        zone_domain = str(config_data.get('_zone_domain') or '').strip()
-        if not zone_domain:
-            raise ValueError(
-                "Azure DNS config requires a zone domain. The caller must "
-                "inject '_zone_domain' into dns_config before calling "
-                "AzureStrategy.create_config_file()."
-            )
+        # The caller (CertificateManager.create_certificate /
+        # renew_certificate via _dns_config_for_strategy) injects either:
+        #   * ``_zone_domains`` — list of zones resolved by the per-provider
+        #     discovery hook (the path that unlocks wildcard issuance
+        #     against a parent hosted zone, e.g. ``*.example2.example.com``
+        #     under Azure-hosted ``example.com``); written as multiple
+        #     ``dns_azure_zoneN`` lines so the plugin's longest-match
+        #     selects the right zone per challenge, OR
+        #   * ``_zone_domain`` — single-zone string (legacy shape, kept so
+        #     pre-discovery callers and existing tests keep working).
+        # certbot-dns-azure 2.x aborts with "At least one zone mapping
+        # needs to be provided" if neither is present.
+        zone_domains = config_data.get('_zone_domains')
+        if zone_domains:
+            zones = [str(z).strip() for z in zone_domains if str(z).strip()]
+            if not zones:
+                raise ValueError(
+                    "Azure DNS config received an empty '_zone_domains' "
+                    "list. The discovery hook must return at least one "
+                    "hosted zone covering the cert FQDN(s)."
+                )
+            zone_arg: Any = zones
+        else:
+            single = str(config_data.get('_zone_domain') or '').strip()
+            if not single:
+                raise ValueError(
+                    "Azure DNS config requires a zone domain. The caller "
+                    "must inject '_zone_domains' (list) or '_zone_domain' "
+                    "(str) into dns_config before calling "
+                    "AzureStrategy.create_config_file()."
+                )
+            zone_arg = single
         return create_azure_config(
             config_data.get('subscription_id', ''),
             config_data.get('resource_group', ''),
             config_data.get('tenant_id', ''),
             config_data.get('client_id', ''),
             config_data.get('client_secret', ''),
-            zone_domain,
+            zone_arg,
         )
 
     @property

@@ -199,17 +199,54 @@ class CertificateManager:
             return deployment_status
 
     @staticmethod
-    def _dns_config_for_strategy(dns_provider, dns_config, domain):
+    def _dns_config_for_strategy(dns_provider, dns_config, domain, san_domains=None):
         """Return a strategy-ready copy of dns_config with provider-specific extras.
 
-        Azure DNS is the only provider that needs the certificate's primary
-        domain at config-file-creation time (it goes into the
-        ``dns_azure_zone1`` mapping). Injecting it here keeps that knowledge
-        out of the generic flow without forcing every strategy to accept a
-        domain argument.
+        Azure DNS is currently the only provider whose certbot plugin
+        cannot self-discover the hosted zone for an ACME challenge — it
+        wants explicit ``dns_azure_zoneN`` lines in its ini file. We hand
+        it the list of hosted zones the account actually owns (looked up
+        via :func:`modules.core.dns_zone_discovery.resolve_zones_for_domains`)
+        so the plugin's longest-match selects the right zone per
+        challenge. This is what unlocks nested-subdomain wildcards
+        against a parent hosted zone — e.g. issuing
+        ``*.example2.example.com`` when Azure only hosts ``example.com``.
+
+        For any provider without a discovery hook the legacy single-zone
+        shape is preserved: the cert FQDN apex goes into ``_zone_domain``
+        and the strategy uses it verbatim. Today that branch is unused
+        because Azure is the only entry in the registry, but it keeps
+        the contract stable for any future caller / test that still
+        passes the legacy shape.
         """
         if dns_provider != 'azure':
             return dns_config
+
+        from .dns_zone_discovery import has_zone_discovery, resolve_zones_for_domains
+
+        if has_zone_discovery(dns_provider):
+            fqdns = [domain]
+            if san_domains:
+                for san in san_domains:
+                    if san and san not in fqdns:
+                        fqdns.append(san)
+            zone_domains = resolve_zones_for_domains(
+                dns_provider, dns_config, fqdns,
+            )
+            for fqdn in fqdns:
+                # Mirror the matched zone per FQDN in the log so the
+                # operator can confirm what happened from the run log
+                # without enabling debug. find_covering_zone is cheap.
+                from .utils import find_covering_zone
+                match = find_covering_zone(fqdn, zone_domains)
+                if match:
+                    logger.info(
+                        "Resolved %s DNS zone for %s -> %s",
+                        dns_provider, fqdn, match,
+                    )
+            return {**dns_config, '_zone_domains': zone_domains}
+
+        # Legacy single-zone fallback (no discovery registered).
         zone_domain = (domain or '').strip().removeprefix('*.')
         return {**dns_config, '_zone_domain': zone_domain}
 
@@ -820,8 +857,13 @@ class CertificateManager:
                 )
                 self._configure_dns_alias_arguments(certbot_cmd, credentials_file)
             else:
-                # Create Config File
-                strategy_config = self._dns_config_for_strategy(dns_provider, dns_config, domain)
+                # Create Config File. Pass the SAN list so the discovery
+                # path (Azure today) can resolve every cert FQDN against
+                # the account's hosted zones in one pass.
+                strategy_config = self._dns_config_for_strategy(
+                    dns_provider, dns_config, domain,
+                    san_domains=all_domains[1:] if len(all_domains) > 1 else None,
+                )
                 credentials_file = strategy.create_config_file(strategy_config)
 
                 # Configure Args
@@ -1047,8 +1089,15 @@ class CertificateManager:
                 if dns_config:
                     strategy = DNSStrategyFactory.get_strategy(dns_provider)
                     strategy.prepare_environment(process_env, dns_config)
-                    # Create credentials file for providers that need one
-                    strategy_config = self._dns_config_for_strategy(dns_provider, dns_config, domain)
+                    # Create credentials file for providers that need one.
+                    # Pull SANs from metadata so the discovery hook sees
+                    # the same FQDN set the cert was originally issued with;
+                    # otherwise a wildcard SAN under a parent zone would
+                    # be invisible at renew time.
+                    renew_sans = metadata.get('san_domains') or None
+                    strategy_config = self._dns_config_for_strategy(
+                        dns_provider, dns_config, domain, san_domains=renew_sans,
+                    )
                     credentials_file = strategy.create_config_file(strategy_config)
                     logger.info(f"Prepared DNS environment for renewal of {domain} with {dns_provider}")
                 else:
