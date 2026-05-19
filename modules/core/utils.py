@@ -339,6 +339,76 @@ def validate_key_options(
 
 
 # =============================================
+# CERTBOT STDERR SANITIZER
+# =============================================
+
+# Matches a single line of the form `key = value` where `key` carries a
+# credential-bearing name fragment. certbot-dns-azure and a few other
+# plugins echo the credentials file line-by-line on parse error, so the
+# offending value would otherwise round-trip into a 422 JSON response.
+# Anchored on word-start so substrings like "monkeysecret" don't fire
+# but `dns_azure_sp_client_secret = ...` does.
+_CERTBOT_STDERR_CREDENTIAL_LINE_RE = re.compile(
+    # NB: digits in the character class — provider names like
+    # ``route53`` carry digits, and stripping them from the alphabet
+    # would skip ``dns_route53_access_key_id`` entirely.
+    r'(?im)^\s*([A-Za-z0-9_]*(?:secret|token|password|key|credential|hmac|api_bearer)[A-Za-z0-9_]*)\s*=\s*.+$'
+)
+
+# Matches absolute paths to per-provider credential .ini files
+# (letsencrypt/config/<provider>.ini and friends). The path itself is
+# not a credential, but operator-side troubleshooting hints already
+# point operators at the path via the log, and stripping it from the
+# client-facing error message is consistent with the general policy of
+# not echoing internal paths.
+_CERTBOT_CONFIG_PATH_RE = re.compile(
+    r'(?i)(?:[\w\-./]+/)?letsencrypt/config/[A-Za-z0-9_\-.]+\.ini'
+)
+
+# Hard cap on the sanitized stderr we surface to API clients. Certbot's
+# verbose mode can emit several KB; the client doesn't need the full
+# trace (which is in the application log), and a huge payload is its
+# own DoS shape.
+_CERTBOT_STDERR_MAX_BYTES = 4096
+
+
+def sanitize_certbot_stderr(stderr_text: str) -> str:
+    """Strip credential material from a certbot stderr blob before it
+    is sent to an API client.
+
+    What gets stripped:
+
+    * Lines of the form ``<name>_secret = ...``, ``<name>_token = ...``,
+      ``<name>_password = ...``, ``<name>_key = ...``, ``<name>_credential = ...``,
+      ``<name>_hmac = ...`` and ``api_bearer = ...``. Some certbot plugins
+      (notably ``certbot-dns-azure``) echo the offending config line
+      verbatim when they fail to parse, which round-tripped the secret
+      value into the API response.
+    * Credential file paths (``letsencrypt/config/<provider>.ini``) are
+      replaced with ``<credential file>``. Not secret per se but
+      consistent with not echoing internal paths to API consumers.
+
+    What is preserved:
+
+    * ACME server errors, plugin error narration, DNS verification
+      failures, hint URLs, exit codes — everything an operator needs
+      to figure out why a renewal failed.
+
+    The full unredacted stderr is still written to the application log
+    (``logger.error``) at the call site; this helper only sanitises the
+    copy that flows into the API response.
+    """
+    if not stderr_text:
+        return ''
+    text = str(stderr_text)
+    text = _CERTBOT_STDERR_CREDENTIAL_LINE_RE.sub(lambda m: f'{m.group(1)} = [REDACTED]', text)
+    text = _CERTBOT_CONFIG_PATH_RE.sub('<credential file>', text)
+    if len(text) > _CERTBOT_STDERR_MAX_BYTES:
+        text = text[:_CERTBOT_STDERR_MAX_BYTES] + '\n[…truncated — see application log for full output]'
+    return text
+
+
+# =============================================
 # SECURITY & TOKEN FUNCTIONS
 # =============================================
 
