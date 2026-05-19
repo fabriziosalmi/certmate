@@ -544,8 +544,15 @@ class AuthManager:
             logger.error(f"Error authenticating user: {e}")
             return None
     
-    def create_session(self, username):
-        """Create a new session for authenticated user"""
+    def create_session(self, username, source='local'):
+        """Create a new session for authenticated user.
+
+        ``source`` tags the identity origin (``'local'`` for the username/
+        password form, ``'oidc'`` when the session was minted by the OIDC
+        callback). Role checks are unchanged — this is metadata only —
+        but `api_logout` consults it to decide whether to surface an IdP
+        end-session URL.
+        """
         session_id = secrets.token_urlsafe(32)
         users = self._get_users()
         user = users.get(username, {})
@@ -554,6 +561,7 @@ class AuthManager:
             self._sessions[session_id] = {
                 'user': username,
                 'role': self._normalize_role(user.get('role', 'operator')),
+                'source': source,
                 'created': time.time(),
                 'expires': time.time() + self._session_timeout
             }
@@ -576,7 +584,8 @@ class AuthManager:
 
             return {
                 'username': session_data['user'],
-                'role': self._normalize_role(session_data['role'])
+                'role': self._normalize_role(session_data['role']),
+                'source': session_data.get('source', 'local'),
             }
 
     def invalidate_session(self, session_id):

@@ -1,0 +1,188 @@
+<!-- TAB: OIDC / SSO -->
+        <div x-show="tab === 'oidc'" x-cloak
+             x-data="oidcSettings()" x-init="load()"
+             class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 mt-6">
+
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
+                    <i class="fas fa-id-badge mr-2 text-indigo-500"></i>
+                    Single Sign-On (OIDC)
+                </h3>
+                <span class="text-xs bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300 px-2 py-1 rounded-full">
+                    Identity Provider
+                </span>
+            </div>
+
+            <p class="text-gray-600 dark:text-gray-400 text-sm mb-6">
+                Authenticate users against an external OpenID Connect provider (Keycloak, Authentik, Okta, Google Workspace, ...). Local authentication and API keys keep working alongside SSO. Configure the redirect URI in your provider to
+                <code class="font-mono px-1 py-0.5 rounded bg-gray-100 dark:bg-gray-700" x-text="redirectUriHint"></code>.
+            </p>
+
+            <template x-if="loading">
+                <div class="text-center py-4 text-gray-500 dark:text-gray-400 text-sm">
+                    <i class="fas fa-spinner fa-spin mr-2"></i> Loading SSO configuration...
+                </div>
+            </template>
+
+            <template x-if="!loading">
+                <div class="space-y-6">
+
+                    <!-- Enable toggle + provider name -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <label class="flex items-center space-x-2">
+                            <input type="checkbox" x-model="cfg.enabled"
+                                   class="h-4 w-4 text-primary focus:ring-primary border-gray-300 dark:border-gray-600 rounded">
+                            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Enable OIDC/SSO</span>
+                        </label>
+                        <div>
+                            <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Provider display name</label>
+                            <input type="text" x-model="cfg.provider_name" placeholder="SSO"
+                                   class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-gray-700 dark:text-white">
+                        </div>
+                    </div>
+
+                    <!-- Endpoint + credentials -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Issuer URL</label>
+                            <input type="url" x-model="cfg.issuer_url"
+                                   placeholder="https://idp.example.com/realms/main"
+                                   class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-gray-700 dark:text-white">
+                            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Base URL of the IdP; discovery doc is fetched from <code class="font-mono">{issuer}/.well-known/openid-configuration</code>.</p>
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Client ID</label>
+                            <input type="text" x-model="cfg.client_id"
+                                   class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-gray-700 dark:text-white">
+                        </div>
+                        <div class="md:col-span-2">
+                            <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Client Secret</label>
+                            <input type="password" x-model="cfg.client_secret"
+                                   autocomplete="new-password"
+                                   class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-gray-700 dark:text-white">
+                            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Leave the <code class="font-mono">********</code> placeholder unchanged to keep the existing secret.</p>
+                        </div>
+                    </div>
+
+                    <!-- Redirect override + scopes -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Redirect URI override (optional)</label>
+                            <input type="url" x-model="cfg.redirect_uri_override"
+                                   :placeholder="redirectUriHint"
+                                   class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-gray-700 dark:text-white">
+                            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Set only if your IdP requires an absolute URL that differs from the request host (e.g. behind a CDN).</p>
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Scopes (space- or comma-separated)</label>
+                            <input type="text" x-model="scopesString"
+                                   placeholder="openid email profile groups"
+                                   class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-gray-700 dark:text-white">
+                            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400"><code class="font-mono">openid</code> is required; the rest depend on your IdP.</p>
+                        </div>
+                    </div>
+
+                    <!-- Claim mapping -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Username claim</label>
+                            <input type="text" x-model="cfg.username_claim"
+                                   class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-gray-700 dark:text-white">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Email claim</label>
+                            <input type="text" x-model="cfg.email_claim"
+                                   class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-gray-700 dark:text-white">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Role claim</label>
+                            <input type="text" x-model="cfg.role_claim"
+                                   class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-gray-700 dark:text-white">
+                        </div>
+                    </div>
+
+                    <!-- Role mappings list -->
+                    <div>
+                        <div class="flex items-center justify-between mb-2">
+                            <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                <i class="fas fa-list mr-1"></i> Role mappings
+                                <span class="ml-1 text-gray-400" title="First match wins. The claim value is matched against the role claim (handles lists and scalars).">
+                                    <i class="fas fa-info-circle"></i>
+                                </span>
+                            </h4>
+                            <button type="button" @click="addMapping()"
+                                    class="text-sm text-indigo-600 dark:text-indigo-400 hover:underline">
+                                <i class="fas fa-plus mr-1"></i> Add row
+                            </button>
+                        </div>
+                        <template x-if="!cfg.role_mappings || cfg.role_mappings.length === 0">
+                            <p class="text-xs text-gray-500 dark:text-gray-400 italic">No mappings configured — every user falls through to the default role.</p>
+                        </template>
+                        <div class="space-y-2">
+                            <template x-for="(m, idx) in cfg.role_mappings" :key="idx">
+                                <div class="flex items-center space-x-2">
+                                    <input type="text" x-model="m.claim_value"
+                                           placeholder="e.g. certmate-admins"
+                                           class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-gray-700 dark:text-white">
+                                    <select x-model="m.role"
+                                            title="Role mapped to the claim value above"
+                                            class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-gray-700 dark:text-white">
+                                        <option value="viewer">viewer</option>
+                                        <option value="operator">operator</option>
+                                        <option value="admin">admin</option>
+                                    </select>
+                                    <button type="button" @click="removeMapping(idx)"
+                                            class="p-2 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                                            title="Remove mapping">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- Provisioning options -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Default role</label>
+                            <select x-model="cfg.default_role"
+                                    title="Role assigned when no mapping rule matches"
+                                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-gray-700 dark:text-white">
+                                <option value="viewer">viewer</option>
+                                <option value="operator">operator</option>
+                                <option value="admin">admin</option>
+                            </select>
+                        </div>
+                        <label class="flex items-center space-x-2 mt-6">
+                            <input type="checkbox" x-model="cfg.auto_create_users"
+                                   class="h-4 w-4 text-primary focus:ring-primary border-gray-300 dark:border-gray-600 rounded">
+                            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Auto-create users on first login (JIT)</span>
+                        </label>
+                        <label class="flex items-center space-x-2 mt-6">
+                            <input type="checkbox" x-model="cfg.link_by_email"
+                                   class="h-4 w-4 text-primary focus:ring-primary border-gray-300 dark:border-gray-600 rounded">
+                            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Link to existing local user by email</span>
+                        </label>
+                    </div>
+
+                    <!-- Post-logout redirect -->
+                    <div>
+                        <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Post-logout redirect URI (optional)</label>
+                        <input type="url" x-model="cfg.post_logout_redirect_uri"
+                               placeholder="https://example.com/"
+                               class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-gray-700 dark:text-white">
+                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Where to send the user after the IdP's end-session endpoint. Required by some providers for SLO.</p>
+                    </div>
+
+                    <!-- Save button -->
+                    <div class="flex justify-end pt-2 border-t border-gray-200 dark:border-gray-700">
+                        <button type="button" @click="save()" :disabled="saving"
+                                class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-md disabled:opacity-50">
+                            <template x-if="saving"><i class="fas fa-spinner fa-spin mr-1"></i></template>
+                            <template x-if="!saving"><i class="fas fa-save mr-1"></i></template>
+                            Save SSO settings
+                        </button>
+                    </div>
+                </div>
+            </template>
+        </div>

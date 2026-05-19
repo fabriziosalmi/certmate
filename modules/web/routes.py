@@ -184,6 +184,7 @@ def register_web_routes(app, managers):
     from .cert_routes import register_cert_routes
     from .settings_routes import register_settings_routes
     from .backup_cache_routes import register_backup_cache_routes
+    from .oidc_routes import register_oidc_routes
 
     register_ui_routes(app, managers, require_web_auth, auth_manager)
     register_misc_routes(app, managers, require_web_auth, auth_manager)
@@ -196,3 +197,5 @@ def register_web_routes(app, managers):
                              settings_manager, dns_manager)
     register_backup_cache_routes(app, managers, require_web_auth, auth_manager,
                                  file_ops, settings_manager, cache_manager)
+    register_oidc_routes(app, managers, auth_manager, managers['oidc'],
+                         _check_login_rate_limit, _record_login_attempt)

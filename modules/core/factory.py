@@ -409,6 +409,13 @@ def initialize_managers(container: AppContainer, app):
     # surface the rest of the app uses (2026-05-12 API auth audit, F-2).
     auth_manager.set_audit_logger(audit_logger)
 
+    # OIDC manager — additive identity source. Disabled by default; the
+    # admin opts in via Settings → SSO. Lives alongside AuthManager so
+    # the cookie session it mints is indistinguishable to the
+    # @require_auth / @require_role decorators.
+    from .oidc import OIDCManager
+    oidc_manager = OIDCManager(settings_manager, auth_manager, audit_logger)
+
     rate_limit_config = RateLimitConfig()
     rate_limiter = SimpleRateLimiter(rate_limit_config)
 
@@ -470,6 +477,7 @@ def initialize_managers(container: AppContainer, app):
             audit_logger, notifier, settings_manager
         ),
         'deployer': deploy_manager,
+        'oidc': oidc_manager,
     }
 
 

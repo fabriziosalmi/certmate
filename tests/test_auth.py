@@ -46,10 +46,22 @@ class TestSetupModeBypass:
             assert isinstance(data["certmate_recovery_suggested"], bool)
 
     def test_web_settings_post_works(self, api):
-        """Settings save should work in setup mode (no localhost restriction)."""
+        """Settings save should work in setup mode (no localhost restriction).
+
+        ``SETTINGS_REJECT_KEYS`` (``api_bearer_token``, ``deploy_hooks``,
+        ``users``, ``api_keys``, ``local_auth_enabled``, ``oidc``) each
+        have a dedicated mutation endpoint and are deliberately rejected
+        by the bulk ``POST /api/web/settings`` even on a round-trip
+        echo. The UI never re-POSTs them through this surface, so the
+        test drops them from the payload before re-POSTing — this
+        exercises the contract the test was written for (auth bypass
+        in setup mode), not the unrelated reject-list contract."""
+        from modules.core.settings import SETTINGS_REJECT_KEYS
         r = api.get("/api/web/settings")
         assert r.status_code == 200
         settings = r.json()
+        for k in SETTINGS_REJECT_KEYS:
+            settings.pop(k, None)
         # POST back same settings — should not 403
         r = api.post_json("/api/web/settings", settings)
         assert r.status_code == 200, f"POST settings failed: {r.status_code} {r.text[:200]}"
