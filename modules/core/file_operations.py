@@ -127,40 +127,18 @@ class FileOperations:
             return False
 
     def _mask_settings_secrets(self, settings_dict):
-        """Walk a settings dict and replace credential-bearing values with
-        the canonical mask sentinel.
+        """Delegate to the central ``mask_secrets_in_settings`` helper in
+        ``modules/core/settings``. Kept as an instance method for
+        backwards compatibility (older callers / tests that already
+        monkey-patched this name).
 
-        Uses the same ``_is_secret_key`` predicate as the masked GET path
-        on ``/api/web/settings`` (modules/web/settings_routes.py:55) — any
-        field whose name matches the project's secret regex (excluding
-        the documented non-secret allowlist like ``default_key_type``)
-        becomes ``SECRET_MASK_SENTINEL``. Restore reuses the
-        ``_strip_masked_values`` + deep-merge pipeline from PR #215, so
-        the sentinel signals "preserve the existing on-disk secret" when
-        restoring on top of an existing install. On a fresh restore the
-        sentinel stays as-is and the operator must re-enter credentials
-        (acknowledged trade-off — see the audit notes on the
-        ``create_unified_backup`` ``include_secrets`` flag).
-
-        Returns a deep-copied + masked structure; the caller's
-        ``settings_dict`` is never mutated.
+        The central helper also picks up provider-specific secret
+        fields (acme-dns ``username`` + ``subdomain``) that a name-only
+        regex would have missed. See its docstring for the precise
+        contract.
         """
-        from .settings import _is_secret_key, SECRET_MASK_SENTINEL
-
-        def _walk(node):
-            if isinstance(node, dict):
-                out = {}
-                for key, value in node.items():
-                    if _is_secret_key(key) and isinstance(value, str) and value:
-                        out[key] = SECRET_MASK_SENTINEL
-                    else:
-                        out[key] = _walk(value)
-                return out
-            if isinstance(node, list):
-                return [_walk(item) for item in node]
-            return node
-
-        return _walk(settings_dict)
+        from .settings import mask_secrets_in_settings
+        return mask_secrets_in_settings(settings_dict)
 
     def create_unified_backup(self, settings_data, backup_reason="manual", include_secrets=False):
         """Create a unified backup containing both settings and certificates.
