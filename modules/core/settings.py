@@ -4,6 +4,7 @@ Handles loading/saving settings, migrations, and configuration management
 """
 
 import os
+import re
 import threading
 import logging
 from pathlib import Path
@@ -75,9 +76,37 @@ SETTINGS_REJECT_KEYS = frozenset({
 
 SECRET_MASK_SENTINEL = '********'
 
+# Field-name pattern identifying secret-like keys. Must stay in sync with
+# the masking regex in modules/web/settings_routes.py so a value masked on
+# GET is also recognised on POST. An empty string in one of these fields
+# means "keep the existing on-disk value" — same semantics as the sentinel.
+# This is what protects storage-backend credentials when the user saves
+# settings without re-entering a secret the UI deliberately does not
+# repopulate (see loadStorageBackendSettings in static/js/settings.js).
+_SECRET_KEY_RE = re.compile(
+    r'(token|secret|password|key|credential)',
+    re.IGNORECASE,
+)
+# Keys whose name matches the secret regex but whose value is NOT a secret.
+# Mirrors _NON_SECRET_KEYS in modules/web/settings_routes.py: these carry
+# the global default key-options ('rsa', 2048, 'secp256r1'), not credentials,
+# so empty values must NOT be treated as "preserve".
+_NON_SECRET_KEY_NAMES = frozenset({
+    'default_key_type',
+    'default_key_size',
+    'default_elliptic_curve',
+})
+
+
+def _is_secret_key(name: str) -> bool:
+    if name in _NON_SECRET_KEY_NAMES:
+        return False
+    return bool(_SECRET_KEY_RE.search(name))
+
 
 def _strip_masked_values(payload):
-    """Recursively strip keys whose value equals the masking sentinel.
+    """Recursively strip keys whose value equals the masking sentinel — or,
+    for secret-named fields, whose value is an empty string.
 
     GET /api/web/settings masks secret-named fields with '********' so the
     UI can render the form without leaking the real values. A round-trip
@@ -86,6 +115,13 @@ def _strip_masked_values(payload):
     secret with the literal string '********'. Stripping these placeholders
     pre-validation makes the round-trip a no-op for the masked fields
     while leaving every other key untouched.
+
+    Empty strings get the same treatment for secret-named keys: the storage
+    UI deliberately does not repopulate fields like ``client_secret`` /
+    ``vault_token`` / ``secret_access_key`` when loading settings, so a
+    submit that didn't re-type them arrives with ``''``. Treating that as
+    "preserve existing" is the only interpretation that doesn't silently
+    drop credentials on every settings save.
 
     Operates on dicts of arbitrary depth. Lists and non-dict values are
     returned unchanged. A key whose value is a dict that was originally
@@ -101,6 +137,9 @@ def _strip_masked_values(payload):
     for key, value in payload.items():
         if value == SECRET_MASK_SENTINEL:
             continue
+        if value == '' and _is_secret_key(key):
+            # Blank-on-save for a secret field => preserve existing.
+            continue
         if isinstance(value, dict):
             original_size = len(value)
             cleaned = _strip_masked_values(value)
@@ -112,6 +151,36 @@ def _strip_masked_values(payload):
         else:
             out[key] = value
     return out
+
+
+# Top-level settings keys whose value is a nested dict that should be
+# deep-merged rather than wholesale-replaced on save. Each of these stores
+# multiple secret-bearing subtrees (per-backend storage credentials, per-CA
+# EAB credentials), so the user editing one field in the UI must not blow
+# away the others or the previously-saved secret for the same field.
+_DEEP_MERGE_SETTINGS_KEYS = frozenset({
+    'certificate_storage',
+    'ca_providers',
+})
+
+
+def _deep_merge_dict(base, overlay):
+    """Return a copy of ``base`` with ``overlay`` merged on top, recursing
+    into nested dicts. Lists and scalars in ``overlay`` replace those in
+    ``base``. Used for the storage/ca_providers subtrees where a partial
+    POST (e.g. masked secrets stripped out) must preserve the on-disk
+    values for sibling and child keys."""
+    if not isinstance(base, dict):
+        return overlay
+    if not isinstance(overlay, dict):
+        return overlay
+    merged = dict(base)
+    for k, v in overlay.items():
+        if isinstance(v, dict) and isinstance(merged.get(k), dict):
+            merged[k] = _deep_merge_dict(merged[k], v)
+        else:
+            merged[k] = v
+    return merged
 
 
 def validate_settings_post(payload, current=None):
@@ -314,10 +383,22 @@ class SettingsManager:
         Loads the current on-disk settings, merges *incoming* on top, restores
         any *protected_keys* from the on-disk copy, then saves — all under a
         re-entrant lock so concurrent requests cannot race.
+
+        Keys listed in ``_DEEP_MERGE_SETTINGS_KEYS`` (currently
+        ``certificate_storage`` and ``ca_providers``) are merged recursively
+        with the on-disk value instead of being replaced wholesale. That
+        keeps a partial UI submit — e.g. one where masked/empty secret
+        fields have been stripped — from clobbering the previously-saved
+        credential for the same backend or CA provider.
         """
         with self._lock:
             existing = self.load_settings()
             merged = {**existing, **incoming}
+            for key, value in incoming.items():
+                if (key in _DEEP_MERGE_SETTINGS_KEYS
+                        and isinstance(existing.get(key), dict)
+                        and isinstance(value, dict)):
+                    merged[key] = _deep_merge_dict(existing[key], value)
             for key in protected_keys:
                 if key in existing:
                     merged[key] = existing[key]
