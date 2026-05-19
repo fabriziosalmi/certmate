@@ -117,3 +117,69 @@ class TestAzureCredentialsFileFormat:
 
         assert '*.' not in text
         assert 'dns_azure_zone1 = example.com:' in text
+
+
+class TestAzureCredentialsFileMultiZone:
+    """Pins the multi-zone shape that unlocks nested-subdomain wildcards
+    when Azure DNS only hosts the parent. The zone-discovery layer feeds
+    AzureStrategy a list of every hosted zone that covers at least one
+    cert FQDN; the plugin's longest-prefix matcher picks the right one
+    per challenge at runtime."""
+
+    def _read(self, tmp_path, monkeypatch, **overrides):
+        monkeypatch.chdir(tmp_path)
+        config = {
+            'subscription_id': 'SUB-123',
+            'resource_group': 'rg-prod',
+            'tenant_id': 'TENANT-XYZ',
+            'client_id': 'CLIENT-AAA',
+            'client_secret': 'shhh',
+        }
+        config.update(overrides)
+        creds = AzureStrategy().create_config_file(config)
+        return creds.read_text(encoding='utf-8')
+
+    def test_zone_domains_list_writes_one_zoneN_line_per_entry(
+            self, tmp_path, monkeypatch):
+        """The user's reported scenario: SAN cert spans two hosted zones."""
+        text = self._read(
+            tmp_path, monkeypatch,
+            _zone_domains=['anotherdomain.org', 'example.com'],
+        )
+        assert (
+            'dns_azure_zone1 = anotherdomain.org:'
+            '/subscriptions/SUB-123/resourceGroups/rg-prod'
+            in text
+        )
+        assert (
+            'dns_azure_zone2 = example.com:'
+            '/subscriptions/SUB-123/resourceGroups/rg-prod'
+            in text
+        )
+
+    def test_zone_domains_takes_precedence_over_legacy_zone_domain(
+            self, tmp_path, monkeypatch):
+        """When both shapes are present (mixed caller stack), the new
+        list wins — the discovery layer is the authoritative source."""
+        text = self._read(
+            tmp_path, monkeypatch,
+            _zone_domains=['example.com'],
+            _zone_domain='ignored.example',
+        )
+        assert 'dns_azure_zone1 = example.com:' in text
+        assert 'ignored.example' not in text
+
+    def test_empty_zone_domains_list_raises(self, tmp_path, monkeypatch):
+        """An empty list is a programming error from the discovery layer
+        — fail loud rather than write a zoneless azure.ini that the
+        plugin will then reject with a vaguer error."""
+        monkeypatch.chdir(tmp_path)
+        with pytest.raises(ValueError):
+            AzureStrategy().create_config_file({
+                'subscription_id': 'sub',
+                'resource_group': 'rg',
+                'tenant_id': 'tenant',
+                'client_id': 'client',
+                'client_secret': 'shhh',
+                '_zone_domains': [],
+            })

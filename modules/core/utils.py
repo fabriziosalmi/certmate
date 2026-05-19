@@ -14,7 +14,7 @@ import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 from urllib.parse import urlparse
 
 
@@ -179,6 +179,57 @@ def validate_domain(domain: str) -> Tuple[bool, str]:
              return False, f"Invalid format for domain label: '{label}'."
 
     return True, domain
+
+
+def find_covering_zone(fqdn: str, zones: List[str]) -> Optional[str]:
+    """Return the longest zone in *zones* that covers *fqdn*, or None.
+
+    Used by providers that need an explicit DNS-zone identity at cert
+    issuance time (Azure DNS is the only one today; the certbot plugins
+    for Cloudflare, Route53, Google etc. walk parent labels themselves
+    so CertMate does not pre-resolve a zone for them).
+
+    Semantics:
+
+    * Leading ``*.`` is stripped from the FQDN — the ACME TXT challenge
+      for a wildcard lives under the bare apex, not the wildcard form.
+    * Comparison is case-insensitive and tolerant of trailing dots.
+    * Longest-match wins. For ``api.staging.example.com`` with zones
+      ``staging.example.com`` and ``example.com`` both present, the
+      result is ``staging.example.com`` — the operator's intent is the
+      most specific zone the IdP actually hosts.
+    * **TLD guard**: candidate zones with fewer than two labels (e.g.
+      ``com``, ``tv``) are silently skipped. Discovery layers never
+      surface a bare TLD because providers don't host the root, but the
+      guard is defence-in-depth so a misconfigured zone list cannot
+      lead CertMate to attempt a TLD-wide match. Multi-label public
+      suffixes (``co.uk``, ``com.br``) are NOT special-cased — they
+      pass the gate and are matched structurally like any other
+      ≥2-label zone. An operator who legitimately runs a hosted zone
+      at that level still gets the correct longest match.
+    """
+    if not fqdn or not zones:
+        return None
+    name = fqdn.strip().lower().rstrip('.')
+    if name.startswith('*.'):
+        name = name[2:]
+    if not name:
+        return None
+
+    best: Optional[str] = None
+    best_len = -1
+    for raw in zones:
+        if not raw or not isinstance(raw, str):
+            continue
+        zone = raw.strip().lower().rstrip('.')
+        if not zone or zone.count('.') < 1:
+            # <2 labels — TLD guard
+            continue
+        if name == zone or name.endswith('.' + zone):
+            if len(zone) > best_len:
+                best = zone
+                best_len = len(zone)
+    return best
 
 
 def validate_api_token(token: str) -> Tuple[bool, str]:
@@ -360,7 +411,7 @@ def create_route53_config(access_key_id: str, secret_access_key: str) -> Path:
     content = f"dns_route53_access_key_id = {access_key_id}\ndns_route53_secret_access_key = {secret_access_key}\n"
     return _create_config_file("route53", content)
 
-def create_azure_config(subscription_id: str, resource_group: str, tenant_id: str, client_id: str, client_secret: str, zone_domain: str) -> Path:
+def create_azure_config(subscription_id: str, resource_group: str, tenant_id: str, client_id: str, client_secret: str, zone_domain: Union[str, List[str]]) -> Path:
     """Create Azure DNS credentials file for certbot-dns-azure (terrycain).
 
     The plugin (certbot-dns-azure >= 2.x) expects:
@@ -376,14 +427,39 @@ def create_azure_config(subscription_id: str, resource_group: str, tenant_id: st
 
     See ``certbot_dns_azure/_internal/dns_azure.py:_validate_credentials``
     in v2.5.0 for the validation that drives this format.
+
+    ``zone_domain`` accepts two shapes:
+
+    * **str** — legacy single-zone usage. Writes one ``dns_azure_zone1``
+      line. Kept for callers (and tests) that haven't migrated to the
+      list form.
+    * **list[str]** — one ``dns_azure_zoneN`` per entry, in the order
+      given. The cert-issuance path passes the deduplicated longest-first
+      list returned by ``resolve_zones_for_domains`` so the plugin's
+      longest-prefix match selects the most specific hosted zone per
+      ACME challenge — that's what enables nested-subdomain wildcards
+      against a parent hosted zone (e.g. ``*.example2.example.com``
+      issued under hosted zone ``example.com``).
     """
     zone_resource_id = f"/subscriptions/{subscription_id}/resourceGroups/{resource_group}"
+    if isinstance(zone_domain, str):
+        zone_list = [zone_domain]
+    else:
+        zone_list = [z for z in (zone_domain or []) if z]
+    if not zone_list:
+        raise ValueError(
+            "create_azure_config requires at least one zone (received empty list)"
+        )
+    zone_lines = ''.join(
+        f"dns_azure_zone{idx} = {zone}:{zone_resource_id}\n"
+        for idx, zone in enumerate(zone_list, start=1)
+    )
     content = (
         f"dns_azure_sp_client_id = {client_id}\n"
         f"dns_azure_sp_client_secret = {client_secret}\n"
         f"dns_azure_tenant_id = {tenant_id}\n"
         f"dns_azure_environment = AzurePublicCloud\n"
-        f"dns_azure_zone1 = {zone_domain}:{zone_resource_id}\n"
+        f"{zone_lines}"
     )
     return _create_config_file("azure", content)
 
