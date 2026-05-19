@@ -406,17 +406,56 @@ class TestStorageManagerDispatch:
 
     def test_initialization_is_lazy_and_idempotent(self, tmp_path):
         """get_backend must not hit the disk / cloud on construction —
-        only on first call. And subsequent calls must return the same
-        instance (no re-init)."""
+        only on first call. Subsequent calls must return the same
+        instance as long as the certificate_storage config is unchanged
+        (no needless re-init). When the config changes, get_backend must
+        pick that up without an app restart — see
+        test_get_backend_rebuilds_on_config_change for that contract."""
         sm = self._settings_mgr({'backend': 'local_filesystem',
                                   'cert_dir': str(tmp_path / 'certs')})
         mgr = StorageManager(sm)
         sm.load_settings.assert_not_called()  # not called in __init__
         first = mgr.get_backend()
-        sm.load_settings.assert_called_once()  # only on first get_backend
         second = mgr.get_backend()
-        assert first is second  # same instance
-        sm.load_settings.assert_called_once()  # still only once
+        assert first is second  # same instance when config unchanged
+
+    def test_get_backend_rebuilds_on_config_change(self, tmp_path):
+        """A live settings change to certificate_storage must take effect
+        without a process restart. The user-reported bug was that swapping
+        backends only applied after restarting the app — guarded here."""
+        sm = MagicMock()
+        sm.load_settings.return_value = {
+            'certificate_storage': {
+                'backend': 'local_filesystem',
+                'cert_dir': str(tmp_path / 'certs-a'),
+            }
+        }
+        mgr = StorageManager(sm)
+        first = mgr.get_backend()
+        assert isinstance(first, LocalFileSystemBackend)
+
+        sm.load_settings.return_value = {
+            'certificate_storage': {
+                'backend': 'local_filesystem',
+                'cert_dir': str(tmp_path / 'certs-b'),
+            }
+        }
+        second = mgr.get_backend()
+        assert second is not first  # rebuilt because cert_dir changed
+
+    def test_reload_forces_rebuild_on_next_get(self, tmp_path):
+        """reload() is the explicit hook callers use after persisting a
+        settings update; the next get_backend() must rebuild even if the
+        config dict happens to compare equal (e.g. credential rotation
+        where the storage subtree byte-identical doesn't tell the whole
+        story)."""
+        sm = self._settings_mgr({'backend': 'local_filesystem',
+                                  'cert_dir': str(tmp_path / 'certs')})
+        mgr = StorageManager(sm)
+        first = mgr.get_backend()
+        mgr.reload()
+        second = mgr.get_backend()
+        assert second is not first
 
 
 if __name__ == "__main__":  # pragma: no cover

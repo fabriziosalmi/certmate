@@ -10,6 +10,7 @@ import logging
 import re
 import shutil
 import tempfile
+import threading
 import time
 import zipfile
 from abc import ABC, abstractmethod
@@ -1439,20 +1440,65 @@ class InfisicalBackend(CertificateStorageBackend):
 
 class StorageManager:
     """Manager class for certificate storage backends"""
-    
+
     def __init__(self, settings_manager):
         self.settings_manager = settings_manager
         self._backend = None
         self._initialized = False
-    
+        # Snapshot of the certificate_storage subtree that was used to build
+        # the currently-cached backend. We compare the live settings against
+        # this on every get_backend() so a settings update that changes the
+        # backend (or its config) is picked up without a process restart.
+        self._config_signature = None
+        self._lock = threading.RLock()
+
+    def reload(self):
+        """Force the next get_backend() to re-read settings and rebuild the
+        backend. Call this after persisting a settings change that mutates
+        ``certificate_storage`` so the running process picks up the new
+        backend without a restart."""
+        with self._lock:
+            self._backend = None
+            self._initialized = False
+            self._config_signature = None
+
+    @staticmethod
+    def _signature_for(storage_config):
+        """Stable signature of the storage config subtree. Used to detect
+        out-of-band changes so the backend can be rebuilt lazily."""
+        try:
+            return json.dumps(storage_config or {}, sort_keys=True, default=str)
+        except (TypeError, ValueError):
+            # Last-resort fallback: repr is stable enough for change-detection.
+            return repr(storage_config)
+
     def _initialize_backend(self):
-        """Initialize storage backend based on settings"""
-        if self._initialized:
-            return
-        
+        """Initialize storage backend based on settings.
+
+        Lazy + change-aware: rebuilds the backend when the certificate_storage
+        subtree differs from the snapshot used last time. This is what makes a
+        backend swap from the UI take effect immediately instead of waiting
+        for an app restart."""
         try:
             settings = self.settings_manager.load_settings()
-            storage_config = settings.get('certificate_storage', {})
+        except Exception as e:
+            # If we can't read settings, keep whatever backend we have so
+            # in-flight operations don't crash. The original error already
+            # logged by load_settings carries the context.
+            logger.error("StorageManager could not read settings: %s", e)
+            if self._initialized:
+                return
+            self._backend = LocalFileSystemBackend(Path('certificates'))
+            self._initialized = True
+            self._config_signature = None
+            return
+
+        storage_config = settings.get('certificate_storage', {}) or {}
+        signature = self._signature_for(storage_config)
+        if self._initialized and signature == self._config_signature:
+            return
+
+        try:
             backend_type = storage_config.get('backend', 'local_filesystem')
             
             if backend_type == 'local_filesystem':
@@ -1482,8 +1528,9 @@ class StorageManager:
                 self._backend = LocalFileSystemBackend(cert_dir)
             
             self._initialized = True
+            self._config_signature = signature
             logger.info(f"Storage backend initialized: {self._backend.get_backend_name()}")
-            
+
         except Exception as e:
             logger.error(
                 "Failed to initialize storage backend '%s': %s. "
@@ -1493,11 +1540,15 @@ class StorageManager:
             )
             self._backend = LocalFileSystemBackend(Path('certificates'))
             self._initialized = True
-    
+            # Cache the signature even on the fallback path so a subsequent
+            # call doesn't keep retrying the broken backend on every get.
+            self._config_signature = signature
+
     def get_backend(self) -> CertificateStorageBackend:
         """Get the current storage backend"""
-        self._initialize_backend()
-        return self._backend
+        with self._lock:
+            self._initialize_backend()
+            return self._backend
     
     def store_certificate(self, domain: str, cert_files: Dict[str, bytes], metadata: Dict[str, Any]) -> bool:
         """Store certificate using the configured backend"""
