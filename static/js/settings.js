@@ -1796,6 +1796,7 @@
         var selectedConfig = document.getElementById(selectedConfigId);
         if (selectedConfig) {
             selectedConfig.style.display = 'block';
+            // Re-enable required validation for visible fields
             var requiredFields = selectedConfig.querySelectorAll('[data-was-required="true"]');
             requiredFields.forEach(function (field) {
                 field.setAttribute('required', '');
@@ -2597,7 +2598,7 @@
             if (pwField) {
                 pwField.classList.add('border-red-500', 'input-shake');
                 pwField.focus();
-                setTimeout(function () { pwField.classList.remove('border-red-500', 'input-shake'); }, 3000);
+                setTimeout(function() { pwField.classList.remove('border-red-500', 'input-shake'); }, 3000);
             }
             return;
         }
@@ -2637,7 +2638,7 @@
 
         // Timeout after 15 seconds to prevent infinite loading
         var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-        var timeoutId = controller ? setTimeout(function () { controller.abort(); }, 15000) : null;
+        var timeoutId = controller ? setTimeout(function() { controller.abort(); }, 15000) : null;
 
         fetch('/api/users', {
             headers: {},
