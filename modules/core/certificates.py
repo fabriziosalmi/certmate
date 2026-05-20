@@ -1319,12 +1319,11 @@ class CertificateManager:
                 'inferred': True  # Mark as inferred for debugging
             }
             
-            try:
-                self._save_metadata(domain, metadata)
+            if self._save_metadata(domain, metadata):
                 logger.info(f"Created metadata for {domain} with inferred DNS provider: {dns_provider}")
                 created_count += 1
-            except Exception as e:
-                logger.error(f"Failed to create metadata for {domain}: {e}")
+            else:
+                logger.error(f"Failed to create metadata for {domain}")
         
         logger.info(f"Created metadata files for {created_count} certificates")
         return created_count
