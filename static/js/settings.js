@@ -217,10 +217,10 @@
             if (!settings.email) {
                 var caDisplayName = defaultCA === 'letsencrypt' ? "Let's Encrypt" :
                     defaultCA === 'zerossl' ? 'ZeroSSL' :
-                    defaultCA === 'google' ? 'Google Trust Services' :
-                    defaultCA === 'buypass' ? 'BuyPass Go' :
-                    defaultCA === 'sslcom' ? 'SSL.com' :
-                    defaultCA === 'digicert' ? 'DigiCert' : 'Private CA';
+                        defaultCA === 'google' ? 'Google Trust Services' :
+                            defaultCA === 'buypass' ? 'BuyPass Go' :
+                                defaultCA === 'sslcom' ? 'SSL.com' :
+                                    defaultCA === 'digicert' ? 'DigiCert' : 'Private CA';
                 throw new Error('Email address is required in the ' + caDisplayName + ' configuration section');
             }
 
@@ -1761,20 +1761,28 @@
         var caProviderToConfigId = {
             'letsencrypt': 'letsencrypt-config',
             'zerossl': 'zerossl-config',
-            'google': 'google-config',
+            'google': 'google-ca-config',
             'buypass': 'buypass-config',
             'digicert': 'digicert-config',
             'sslcom': 'sslcom-config',
             'private_ca': 'private-ca-config'
         };
 
+        var caConfigs = [
+            'letsencrypt-config',
+            'zerossl-config',
+            'google-ca-config',
+            'buypass-config',
+            'digicert-config',
+            'sslcom-config',
+            'private-ca-config'
+        ];
+
         // Hide all CA configuration panels and disable their required fields
-        var caConfigs = ['letsencrypt-config', 'zerossl-config', 'google-config', 'buypass-config', 'digicert-config', 'sslcom-config', 'private-ca-config'];
         caConfigs.forEach(function (configId) {
             var element = document.getElementById(configId);
             if (element) {
                 element.style.display = 'none';
-                // Disable required validation for hidden fields
                 var requiredFields = element.querySelectorAll('[required]');
                 requiredFields.forEach(function (field) {
                     field.removeAttribute('required');
@@ -1788,7 +1796,6 @@
         var selectedConfig = document.getElementById(selectedConfigId);
         if (selectedConfig) {
             selectedConfig.style.display = 'block';
-            // Re-enable required validation for visible fields
             var requiredFields = selectedConfig.querySelectorAll('[data-was-required="true"]');
             requiredFields.forEach(function (field) {
                 field.setAttribute('required', '');
@@ -2590,7 +2597,7 @@
             if (pwField) {
                 pwField.classList.add('border-red-500', 'input-shake');
                 pwField.focus();
-                setTimeout(function() { pwField.classList.remove('border-red-500', 'input-shake'); }, 3000);
+                setTimeout(function () { pwField.classList.remove('border-red-500', 'input-shake'); }, 3000);
             }
             return;
         }
@@ -2630,7 +2637,7 @@
 
         // Timeout after 15 seconds to prevent infinite loading
         var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-        var timeoutId = controller ? setTimeout(function() { controller.abort(); }, 15000) : null;
+        var timeoutId = controller ? setTimeout(function () { controller.abort(); }, 15000) : null;
 
         fetch('/api/users', {
             headers: {},
