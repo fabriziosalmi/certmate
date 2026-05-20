@@ -343,36 +343,48 @@ For container orchestration and high availability deployments.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
- name: certmate
+  name: certmate
 spec:
- replicas: 2
- selector:
- matchLabels:
- app: certmate
- template:
- metadata:
- labels:
- app: certmate
- spec:
- containers:
- - name: certmate
- image: certmate:latest
- ports:
- - containerPort: 8000
- env:
- - name: API_BEARER_TOKEN
- valueFrom:
- secretKeyRef:
- name: certmate-secrets
- key: api-token
- volumeMounts:
- - name: certificates
- mountPath: /app/certificates
- volumes:
- - name: certificates
- persistentVolumeClaim:
- claimName: certmate-certificates
+  replicas: 1
+  selector:
+    matchLabels:
+      app: certmate
+  template:
+    metadata:
+      labels:
+        app: certmate
+    spec:
+      containers:
+        - name: certmate
+          image: certmate:latest
+          ports:
+            - containerPort: 8000
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1536Mi
+          env:
+            - name: API_BEARER_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: certmate-secrets
+                  key: api-token
+            - name: CERTMATE_CERT_INFO_CACHE_TTL
+              value: "60"
+          volumeMounts:
+            - name: certificates
+              mountPath: /app/certificates
+      volumes:
+        - name: certificates
+          persistentVolumeClaim:
+            claimName: certmate-certificates
 ```
+
+For production sizing, OOM troubleshooting, and a `kubectl patch` example, see
+[Kubernetes Production Notes](docs/kubernetes.md).
 
 ### System Package Installation
 For system-wide installation on Linux distributions.

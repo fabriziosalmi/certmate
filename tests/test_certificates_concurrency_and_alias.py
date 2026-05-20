@@ -110,6 +110,14 @@ class TestConcurrentIssuanceLock:
         fail later for any reason (DNS provider not configured, etc.) —
         we only assert the lock barrier behaviour."""
         mgr = _make_manager(tmp_path)
+        first_thread_in_downstream = threading.Event()
+
+        def slow_dns_config(*_args, **_kwargs):
+            first_thread_in_downstream.set()
+            time.sleep(0.1)
+            raise ValueError("simulated downstream failure")
+
+        mgr._get_dns_config = slow_dns_config
 
         outcomes: list[str] = []
         outcomes_lock = threading.Lock()
@@ -136,6 +144,7 @@ class TestConcurrentIssuanceLock:
         t1 = threading.Thread(target=attempt)
         t2 = threading.Thread(target=attempt)
         t1.start(); t2.start()
+        assert first_thread_in_downstream.wait(timeout=5), "one thread should enter downstream path"
         t1.join(timeout=10); t2.join(timeout=10)
 
         # Exactly one thread saw the lock barrier. The other made it past

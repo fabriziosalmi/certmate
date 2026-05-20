@@ -687,6 +687,98 @@ class TestTagsMetadataRoundTrip:
 
 
 class TestRetrieveBothMode:
+    def test_retrieve_certificate_info_reads_only_cert_pem_and_metadata(self, vault_config):
+        """Table/list views only need cert.pem + metadata.
+
+        In Azure Key Vault ``both`` mode, the full retrieve path reads every
+        PEM secret and may export the Certificate object. The lightweight info
+        path must avoid private-key/fullchain/chain reads and avoid PFX export.
+        """
+        from modules.core.storage_backends import AzureKeyVaultBackend
+        backend = AzureKeyVaultBackend({**vault_config, "storage_mode": "both"})
+
+        secret_client = MagicMock()
+        _now = datetime.datetime(2026, 5, 1, 12, 0, 0)
+
+        def fake_get_secret(secret_name):
+            if "cert-pem" in secret_name:
+                secret = MagicMock()
+                secret.properties.updated_on = _now
+                secret.value = "CERT-PEM"
+                return secret
+            if "metadata" in secret_name:
+                secret = MagicMock()
+                secret.properties.updated_on = _now
+                secret.value = json.dumps({"domain": "test.example.com", "dns_provider": "azure"})
+                return secret
+            raise AssertionError(f"unexpected heavy secret read: {secret_name}")
+
+        secret_client.get_secret.side_effect = fake_get_secret
+        backend._client = secret_client
+
+        importer = MagicMock()
+        importer.get_certificate_update_time.return_value = None
+        backend._cert_importer = importer
+
+        result = backend.retrieve_certificate_info("test.example.com")
+
+        assert result == (
+            {"cert.pem": b"CERT-PEM"},
+            {"domain": "test.example.com", "dns_provider": "azure"},
+        )
+        requested_names = [call.args[0] for call in secret_client.get_secret.call_args_list]
+        assert len(requested_names) == 2
+        assert any("cert-pem" in name for name in requested_names)
+        assert any("metadata" in name for name in requested_names)
+        importer.export_certificate.assert_not_called()
+
+    def test_retrieve_certificate_info_uses_cert_pem_freshness_not_metadata_freshness(self, vault_config):
+        """A metadata rewrite must not make stale Secrets cert.pem look newer.
+
+        In both mode, certificate freshness is about the certificate bytes. A
+        later metadata secret update must not stop the info path from selecting
+        a newer Certificate API public cert.
+        """
+        from modules.core.storage_backends import AzureKeyVaultBackend
+        backend = AzureKeyVaultBackend({**vault_config, "storage_mode": "both"})
+
+        secret_client = MagicMock()
+        cert_pem_ts = datetime.datetime(2026, 1, 1, 0, 0, 0)
+        metadata_ts = datetime.datetime(2026, 7, 1, 0, 0, 0)
+
+        def fake_get_secret(secret_name):
+            secret = MagicMock()
+            if "cert-pem" in secret_name:
+                secret.properties.updated_on = cert_pem_ts
+                secret.value = "OLD-CERT-PEM"
+                return secret
+            if "metadata" in secret_name:
+                secret.properties.updated_on = metadata_ts
+                secret.value = json.dumps({"domain": "skew.example.com", "version": "metadata-new"})
+                return secret
+            raise AssertionError(f"unexpected heavy secret read: {secret_name}")
+
+        secret_client.get_secret.side_effect = fake_get_secret
+        backend._client = secret_client
+
+        cert_ts = datetime.datetime(2026, 6, 1, 0, 0, 0)
+        importer = MagicMock()
+        importer.get_certificate_update_time.return_value = cert_ts
+        importer.get_certificate_summary.return_value = (
+            {"cert.pem": b"NEW-CERT-PEM"},
+            {"domain": "skew.example.com", "version": "cert-new"},
+            cert_ts,
+        )
+        backend._cert_importer = importer
+
+        result = backend.retrieve_certificate_info("skew.example.com")
+
+        assert result == (
+            {"cert.pem": b"NEW-CERT-PEM"},
+            {"domain": "skew.example.com", "version": "cert-new"},
+        )
+        importer.get_certificate_summary.assert_called_once_with("skew.example.com")
+
     def test_secrets_present_certificate_api_not_touched(self, vault_config, cert_files):
         """When Secrets path returns a populated bundle and no Certificate
         object exists yet, the backend returns the Secrets data without

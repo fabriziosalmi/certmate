@@ -457,6 +457,27 @@ class TestStorageManagerDispatch:
         second = mgr.get_backend()
         assert second is not first
 
+    def test_retrieve_certificate_info_delegates_to_active_backend(self):
+        """CertificateManager receives StorageManager in production.
+
+        The lightweight list/detail path must therefore be exposed by the
+        wrapper; otherwise the Azure backend's optimized cert.pem-only read is
+        unreachable and callers fall back to retrieve_certificate().
+        """
+        mgr = StorageManager(self._settings_mgr({'backend': 'local_filesystem'}))
+        backend = MagicMock()
+        backend.retrieve_certificate_info.return_value = (
+            {'cert.pem': b'CERT'},
+            {'domain': 'example.com'},
+        )
+        mgr.get_backend = MagicMock(return_value=backend)
+
+        result = mgr.retrieve_certificate_info('example.com')
+
+        assert result == ({'cert.pem': b'CERT'}, {'domain': 'example.com'})
+        backend.retrieve_certificate_info.assert_called_once_with('example.com')
+        backend.retrieve_certificate.assert_not_called()
+
 
 if __name__ == "__main__":  # pragma: no cover
     pytest.main([__file__, "-v"])
