@@ -217,10 +217,10 @@
             if (!settings.email) {
                 var caDisplayName = defaultCA === 'letsencrypt' ? "Let's Encrypt" :
                     defaultCA === 'zerossl' ? 'ZeroSSL' :
-                        defaultCA === 'google' ? 'Google Trust Services' :
-                            defaultCA === 'buypass' ? 'BuyPass Go' :
-                                defaultCA === 'sslcom' ? 'SSL.com' :
-                                    defaultCA === 'digicert' ? 'DigiCert' : 'Private CA';
+                    defaultCA === 'google' ? 'Google Trust Services' :
+                    defaultCA === 'buypass' ? 'BuyPass Go' :
+                    defaultCA === 'sslcom' ? 'SSL.com' :
+                    defaultCA === 'digicert' ? 'DigiCert' : 'Private CA';
                 throw new Error('Email address is required in the ' + caDisplayName + ' configuration section');
             }
 
