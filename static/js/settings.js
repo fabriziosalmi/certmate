@@ -51,13 +51,14 @@
 
     function toggleChallengeType() {
         var selected = document.querySelector('input[name="challenge_type"]:checked');
-        var dnsSection = document.getElementById('dns-provider-section');
-        if (!dnsSection) return;
-        if (selected && selected.value === 'http-01') {
-            dnsSection.style.display = 'none';
-        } else {
-            dnsSection.style.display = '';
-        }
+        var isHttp = selected && selected.value === 'http-01';
+        // Hide both the provider picker and the per-provider config panels.
+        // The config panels are siblings of the picker, so hiding the picker
+        // alone left a stale DNS panel visible under HTTP-01 (issue #226).
+        ['dns-provider-section', 'dns-config-section'].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el) el.style.display = isHttp ? 'none' : '';
+        });
     }
 
     // =============================================
@@ -1761,7 +1762,10 @@
         var caProviderToConfigId = {
             'letsencrypt': 'letsencrypt-config',
             'zerossl': 'zerossl-config',
-            'google': 'google-config',
+            // The DNS tab already owns id="google-config" for the Google DNS
+            // provider; the CA panel uses a distinct id so getElementById does
+            // not collide and leave the CA panel hidden (issue #226).
+            'google': 'google-ca-config',
             'buypass': 'buypass-config',
             'digicert': 'digicert-config',
             'sslcom': 'sslcom-config',
@@ -1769,7 +1773,7 @@
         };
 
         // Hide all CA configuration panels and disable their required fields
-        var caConfigs = ['letsencrypt-config', 'zerossl-config', 'google-config', 'buypass-config', 'digicert-config', 'sslcom-config', 'private-ca-config'];
+        var caConfigs = ['letsencrypt-config', 'zerossl-config', 'google-ca-config', 'buypass-config', 'digicert-config', 'sslcom-config', 'private-ca-config'];
         caConfigs.forEach(function (configId) {
             var element = document.getElementById(configId);
             if (element) {
