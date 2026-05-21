@@ -29,7 +29,7 @@
         powerdns:      { label: 'PowerDNS', icon: 'fa-bolt', fields: [{ key: 'api_url', label: 'API URL', type: 'text', placeholder: 'https://powerdns.example.com:8081' }, { key: 'api_key', label: 'API Key', type: 'password' }] },
         rfc2136:       { label: 'RFC2136 (BIND/Knot)', icon: 'fa-network-wired', fields: [{ key: 'nameserver', label: 'Nameserver', type: 'text', placeholder: 'ns.example.com' }, { key: 'tsig_key', label: 'TSIG Key Name', type: 'text', placeholder: 'mykey' }, { key: 'tsig_secret', label: 'TSIG Secret', type: 'password', placeholder: 'Base64-encoded secret' }] },
         dnsmadeeasy:   { label: 'DNS Made Easy', icon: 'fa-globe', fields: [{ key: 'api_key', label: 'API Key', type: 'password' }, { key: 'secret_key', label: 'Secret Key', type: 'password' }] },
-        nsone:         { label: 'NS1', icon: 'fa-circle-nodes', fields: [{ key: 'api_key', label: 'API Key', type: 'password' }] },
+        nsone:         { label: 'NS1', icon: 'fa-network-wired', fields: [{ key: 'api_key', label: 'API Key', type: 'password' }] },
         'he-ddns':     { label: 'Hurricane Electric', icon: 'fa-bolt', fields: [{ key: 'username', label: 'Username', type: 'text' }, { key: 'password', label: 'Password', type: 'password' }] },
         dynudns:       { label: 'Dynu', icon: 'fa-globe', fields: [{ key: 'token', label: 'API Token', type: 'password' }] },
         duckdns:       { label: 'DuckDNS', icon: 'fa-cloud', fields: [{ key: 'api_token', label: 'Account Token', type: 'password', placeholder: 'UUID-format token from your DuckDNS account page' }] }
