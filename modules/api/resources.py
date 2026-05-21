@@ -1328,10 +1328,21 @@ def create_api_resources(api, models, managers):
                         return {'error': f'File {requested_file} not found for domain {domain}'}, 404
 
                     if requested_file == 'privkey.pem' and key_format == 'pkcs1':
+                        # Re-resolve with a constant filename and confirm the
+                        # path stays inside the (already validated) domain dir
+                        # before reading — defense in depth, and keeps the new
+                        # file read off any tainted path component.
+                        key_path = os.path.realpath(cert_dir / 'privkey.pem')
+                        if not key_path.startswith(os.path.realpath(cert_dir) + os.sep):
+                            return {'error': 'Invalid path'}, 400
                         try:
-                            pkcs1_pem = _privkey_to_pkcs1(file_path.read_bytes())
+                            with open(key_path, 'rb') as fh:
+                                pkcs1_pem = _privkey_to_pkcs1(fh.read())
                         except (ValueError, TypeError) as e:
-                            logger.error(f"Failed to convert key to PKCS#1 for {domain}: {e}")
+                            logger.error(
+                                "Failed to convert private key to PKCS#1: %s",
+                                type(e).__name__,
+                            )
                             return {
                                 'error': 'Could not convert the private key to PKCS#1 '
                                          '(the key type may not support it).'
