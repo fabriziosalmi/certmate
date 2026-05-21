@@ -151,6 +151,10 @@ class DeployManager:
         deploy_env['CERTMATE_CERT_PATH'] = str(self.cert_dir / domain / 'cert.pem')
         deploy_env['CERTMATE_KEY_PATH'] = str(self.cert_dir / domain / 'privkey.pem')
         deploy_env['CERTMATE_FULLCHAIN_PATH'] = str(self.cert_dir / domain / 'fullchain.pem')
+        # Intermediate chain on its own — some targets reject a chained cert
+        # (fullchain) and want the leaf and intermediates as separate files
+        # (issue #232).
+        deploy_env['CERTMATE_CHAIN_PATH'] = str(self.cert_dir / domain / 'chain.pem')
         deploy_env['CERTMATE_EVENT'] = event_type
         if dry_run:
             deploy_env['CERTMATE_DRY_RUN'] = '1'

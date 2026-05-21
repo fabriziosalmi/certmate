@@ -50,6 +50,7 @@ class MockShellExecutor(ShellExecutor):
     
     def __init__(self):
         self.commands_executed = []
+        self.envs_executed = []  # env dict passed alongside each command
         self.responses = {}  # Map cmd_substring -> (returncode, stdout, stderr)
         self.response_queue = []  # Queue of responses for sequential calls
         self.call_count = 0
@@ -70,6 +71,7 @@ class MockShellExecutor(ShellExecutor):
     def run(self, cmd: List[str], **kwargs) -> subprocess.CompletedProcess:
         cmd_str = " ".join(cmd)
         self.commands_executed.append(cmd_str)
+        self.envs_executed.append(kwargs.get('env'))
         self.call_count += 1
         logger.info(f"Mock Executing: {cmd_str}")
         
