@@ -232,6 +232,17 @@ def test_callback_redirects_to_login_on_idp_error(tmp_path):
     assert r.headers.get('Location', '').startswith('/login?error=oidc_denied')
 
 
+def test_oidc_error_codes_whitelist_constrains_logged_value():
+    """The callback logs only a value drawn from the constant OAuth/OIDC
+    error-code set; an attacker-controlled ?error= value can't reach the log
+    verbatim and forge entries (CodeQL py/log-injection)."""
+    from modules.web.oidc_routes import _OIDC_ERROR_CODES
+    assert 'access_denied' in _OIDC_ERROR_CODES
+    assert 'server_error' in _OIDC_ERROR_CODES
+    forged = "access_denied\r\nINFO forged-admin-login"
+    assert forged not in _OIDC_ERROR_CODES
+
+
 def test_callback_redirects_when_disabled(tmp_path):
     app, *_ = _build_app(tmp_path)  # oidc not enabled
     client = app.test_client()

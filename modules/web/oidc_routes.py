@@ -48,6 +48,21 @@ def _safe_next(value):
     return value
 
 
+# OAuth 2.0 (RFC 6749 §4.1.2.1) + OIDC Core error codes. The callback only
+# ever logs a value drawn from this constant set, so an attacker-controlled
+# ?error= query param can never reach the log stream and forge entries
+# (CodeQL py/log-injection). The raw value is still captured in the audit
+# trail, which serializes structured JSON.
+_OIDC_ERROR_CODES = frozenset({
+    'invalid_request', 'unauthorized_client', 'access_denied',
+    'unsupported_response_type', 'invalid_scope', 'server_error',
+    'temporarily_unavailable', 'interaction_required', 'login_required',
+    'account_selection_required', 'consent_required', 'invalid_request_uri',
+    'invalid_request_object', 'request_not_supported',
+    'request_uri_not_supported', 'registration_not_supported',
+})
+
+
 def register_oidc_routes(app, managers, auth_manager, oidc_manager,
                          _check_login_rate_limit, _record_login_attempt):
     """Register the /api/auth/oidc/* endpoints on ``app``."""
@@ -122,10 +137,14 @@ def register_oidc_routes(app, managers, auth_manager, oidc_manager,
         # IdP returned an error directly (e.g. user clicked Cancel).
         if request.args.get('error'):
             err = request.args.get('error')
-            logger.info(f"OIDC callback error from IdP: {err}")
+            # Constrain the attacker-controlled ?error= value to a recognized
+            # constant before it reaches any log or audit sink (CodeQL
+            # py/log-injection).
+            safe_err = err if err in _OIDC_ERROR_CODES else 'unrecognized'
+            logger.info(f"OIDC callback error from IdP: {safe_err}")
             _record_login_attempt(client_ip)
             _audit_failure(audit_logger, None, request,
-                           details={'idp_error': err}, error='idp_error')
+                           details={'idp_error': safe_err}, error='idp_error')
             return redirect('/login?error=oidc_denied')
 
         claims, err = oidc_manager.handle_callback(request)

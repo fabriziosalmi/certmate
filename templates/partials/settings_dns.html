@@ -306,6 +306,11 @@
                     </div>
 
                     <!-- DNS Provider Configurations -->
+                    <!-- Wrapped so HTTP-01 can hide the whole block: these
+                         panels are siblings of #dns-provider-section, not
+                         children, so hiding the picker alone left them
+                         visible (issue #226). -->
+                    <div id="dns-config-section">
                     <!-- Cloudflare Configuration -->
                     <div id="cloudflare-config" class="dns-config hidden">
                         <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
@@ -1083,6 +1088,7 @@
                             </div>
                         </div>
                     </div>
+                    </div><!-- /#dns-config-section -->
                     </div><!-- /tab: dns -->
 
                     

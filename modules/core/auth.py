@@ -455,15 +455,34 @@ class AuthManager:
             
             if username not in users:
                 return False, "User not found"
-            
+
+            user = users[username]
+
+            # SSO-managed accounts authenticate against the IdP and carry an
+            # empty password_hash on purpose. Refuse to set a local password so
+            # the row can never silently fall back to password login.
+            if password and user.get('oidc_subject'):
+                return False, "Cannot set a password for an SSO-managed user"
+
+            # Never let the last *active* admin be disabled — that would lock
+            # everyone out of admin-gated endpoints. delete_user carries the
+            # parallel guard for removal.
+            if enabled is False and user.get('role') == 'admin':
+                active_admins = sum(
+                    1 for u in users.values()
+                    if u.get('role') == 'admin' and u.get('enabled', True)
+                )
+                if active_admins <= 1:
+                    return False, "Cannot disable the last active admin user"
+
             if password:
-                users[username]['password_hash'] = self._hash_password(password)
+                user['password_hash'] = self._hash_password(password)
             if role is not None:
-                users[username]['role'] = role
+                user['role'] = role
             if email is not None:
-                users[username]['email'] = email
+                user['email'] = email
             if enabled is not None:
-                users[username]['enabled'] = enabled
+                user['enabled'] = enabled
             
             if self._save_users(users):
                 logger.info(f"User '{username}' updated successfully")
@@ -498,7 +517,13 @@ class AuthManager:
             return False, "An internal error occurred"
     
     def list_users(self):
-        """List all users (without password hashes)"""
+        """List all users (without password hashes).
+
+        ``sso`` flags rows linked to an external IdP (presence of an
+        ``oidc_subject``); the UI uses it to badge the account and hide the
+        local-password reset action. ``oidc_issuer`` is surfaced for display
+        only — never the subject claim.
+        """
         users = self._get_users()
         return {
             username: {
@@ -506,7 +531,9 @@ class AuthManager:
                 'email': data.get('email'),
                 'created_at': data.get('created_at'),
                 'last_login': data.get('last_login'),
-                'enabled': data.get('enabled', True)
+                'enabled': data.get('enabled', True),
+                'sso': bool(data.get('oidc_subject')),
+                'oidc_issuer': data.get('oidc_issuer'),
             }
             for username, data in users.items()
         }

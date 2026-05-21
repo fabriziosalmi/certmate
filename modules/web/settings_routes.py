@@ -246,18 +246,42 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
                 return jsonify({'error': msg}), 404
             return jsonify({'error': msg}), 400
 
-        data = request.json
+        data = request.json or {}
         role = data.get('role')
-        if not role:
-            return jsonify({'error': 'Role required'}), 400
+        password = data.get('password')
+        email = data.get('email')
+        enabled = data.get('enabled')
+
+        # At least one mutable field must be present. The UI sends a single
+        # field per action (role change, password reset, enable/disable).
+        if role is None and password is None and email is None and enabled is None:
+            return jsonify({'error': 'Nothing to update'}), 400
+
+        if enabled is not None and not isinstance(enabled, bool):
+            return jsonify({'error': 'enabled must be a boolean'}), 400
+
+        # Mirror the create-user password policy on resets so a weakened
+        # credential cannot be slipped in through the edit surface.
+        if password is not None:
+            if len(password) > 256:
+                return jsonify({'error': 'Password must be ≤ 256 chars'}), 400
+            import re
+            if (len(password) < 12
+                    or not re.search(r'\d', password)
+                    or not re.search(r'[^A-Za-z0-9]', password)):
+                return jsonify({
+                    'error': 'Password must be at least 12 characters and include a digit and a symbol'
+                }), 400
 
         # Capture the previous role so the audit entry records the transition.
         old_users = auth_manager.list_users() or {}
         old_role = (old_users.get(username) or {}).get('role')
 
-        success, msg = auth_manager.update_user(username, role=role)
+        success, msg = auth_manager.update_user(
+            username, role=role, password=password, email=email, enabled=enabled,
+        )
         if success:
-            if audit_logger and old_role != role:
+            if audit_logger and role is not None and old_role != role:
                 actor = getattr(request, 'current_user', {}) or {}
                 audit_logger.log_user_role_changed(
                     username=username,
