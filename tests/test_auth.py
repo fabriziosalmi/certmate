@@ -118,3 +118,53 @@ class TestUserManagement:
         r = api.get("/api/users")
         data = r.json()
         assert "testuser" not in data.get("users", {})
+
+    def test_disable_and_enable_user_round_trip(self, api):
+        """PUT must honor the `enabled` field — regression guard for the
+        route that used to require `role` and silently drop everything else
+        (issue #229)."""
+        api.post_json("/api/users", {
+            "username": "toggleme",
+            "password": "TogglePass123!",
+            "role": "operator",
+        })
+        try:
+            r = api.put_json("/api/users/toggleme", {"enabled": False})
+            assert r.status_code == 200, f"disable failed: {r.text[:200]}"
+            users = api.get("/api/users").json().get("users", {})
+            assert users["toggleme"]["enabled"] is False
+
+            r = api.put_json("/api/users/toggleme", {"enabled": True})
+            assert r.status_code == 200
+            users = api.get("/api/users").json().get("users", {})
+            assert users["toggleme"]["enabled"] is True
+        finally:
+            api.delete("/api/users/toggleme")
+
+    def test_reset_password_round_trip(self, api):
+        """PUT must honor the `password` field (issue #229)."""
+        api.post_json("/api/users", {
+            "username": "resetme",
+            "password": "InitialPass123!",
+            "role": "operator",
+        })
+        try:
+            r = api.put_json("/api/users/resetme", {"password": "BrandNewPass456!"})
+            assert r.status_code == 200, f"reset failed: {r.text[:200]}"
+            # Weak password is rejected with the same policy as create.
+            r = api.put_json("/api/users/resetme", {"password": "short"})
+            assert r.status_code == 400
+        finally:
+            api.delete("/api/users/resetme")
+
+    def test_update_with_empty_body_is_rejected(self, api):
+        api.post_json("/api/users", {
+            "username": "emptyupdate",
+            "password": "SomePass123!",
+            "role": "operator",
+        })
+        try:
+            r = api.put_json("/api/users/emptyupdate", {})
+            assert r.status_code == 400
+        finally:
+            api.delete("/api/users/emptyupdate")

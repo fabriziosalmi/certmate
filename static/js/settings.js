@@ -2655,6 +2655,14 @@
                     return;
                 }
 
+                // The sole remaining admin must stay reachable: the backend
+                // refuses to delete or disable it, so we also hide those
+                // actions in the UI to avoid offering a button that can only
+                // fail (mirrors issue #229).
+                var adminCount = Object.keys(users).filter(function (u) {
+                    return users[u].role === 'admin';
+                }).length;
+
                 var html = '';
                 Object.keys(users).forEach(function (username) {
                     var userInfo = users[username];
@@ -2662,7 +2670,44 @@
                     var statusColor = userInfo.enabled !== false ? 'text-green-500' : 'text-red-500';
                     var lastLogin = userInfo.last_login ? new Date(userInfo.last_login).toLocaleString() : 'Never';
 
+                    var isSso = userInfo.sso === true;
+                    var isSoleAdmin = userInfo.role === 'admin' && adminCount === 1;
+
                     var emailHtml = userInfo.email ? '<span class="mr-3"><i class="fas fa-envelope mr-1"></i>' + escapeHtml(userInfo.email) + '</span>' : '';
+
+                    // SSO accounts are managed by the external IdP — badge them
+                    // so admins can tell them apart from local credentials.
+                    var ssoBadge = isSso
+                        ? '<span class="text-xs px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300"' +
+                          ' title="Single sign-on account' + (userInfo.oidc_issuer ? ' (' + escapeHtml(userInfo.oidc_issuer) + ')' : '') + '">' +
+                          '<i class="fas fa-id-badge mr-1"></i>SSO</span>'
+                        : '';
+
+                    // Disable/enable toggle — hidden for the sole admin (cannot
+                    // be locked out).
+                    var toggleBtn = isSoleAdmin ? '' :
+                        '<button data-action="toggle-user" data-username="' + escapeHtml(username) + '" data-enable="' + (userInfo.enabled === false) + '"' +
+                        ' class="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"' +
+                        ' title="' + (userInfo.enabled !== false ? 'Disable user' : 'Enable user') + '">' +
+                        '<i class="fas fa-' + (userInfo.enabled !== false ? 'ban' : 'check') + '"></i>' +
+                        '</button>';
+
+                    // Password reset — not applicable to SSO accounts (no local
+                    // password to set).
+                    var resetBtn = isSso ? '' :
+                        '<button data-action="reset-password" data-username="' + escapeHtml(username) + '"' +
+                        ' class="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"' +
+                        ' title="Reset password">' +
+                        '<i class="fas fa-key"></i>' +
+                        '</button>';
+
+                    // Delete — hidden for the sole admin.
+                    var deleteBtn = isSoleAdmin ? '' :
+                        '<button data-action="delete-user" data-username="' + escapeHtml(username) + '"' +
+                        ' class="p-2 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"' +
+                        ' title="Delete user">' +
+                        '<i class="fas fa-trash"></i>' +
+                        '</button>';
 
                     html +=
                         '<div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">' +
@@ -2672,6 +2717,7 @@
                         '<div class="flex items-center space-x-2">' +
                         '<span class="font-medium text-gray-900 dark:text-white">' + escapeHtml(username) + '</span>' +
                         '<span class="text-xs px-2 py-0.5 rounded-full ' + roleColor + '">' + escapeHtml(userInfo.role || '') + '</span>' +
+                        ssoBadge +
                         '<i class="fas fa-circle text-xs ' + statusColor + '" title="' + (userInfo.enabled !== false ? 'Active' : 'Disabled') + '"></i>' +
                         '</div>' +
                         '<div class="text-xs text-gray-500 dark:text-gray-400">' +
@@ -2681,21 +2727,9 @@
                         '</div>' +
                         '</div>' +
                         '<div class="flex items-center space-x-2">' +
-                        '<button data-action="toggle-user" data-username="' + escapeHtml(username) + '" data-enable="' + (userInfo.enabled === false) + '"' +
-                        ' class="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"' +
-                        ' title="' + (userInfo.enabled !== false ? 'Disable user' : 'Enable user') + '">' +
-                        '<i class="fas fa-' + (userInfo.enabled !== false ? 'ban' : 'check') + '"></i>' +
-                        '</button>' +
-                        '<button data-action="reset-password" data-username="' + escapeHtml(username) + '"' +
-                        ' class="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"' +
-                        ' title="Reset password">' +
-                        '<i class="fas fa-key"></i>' +
-                        '</button>' +
-                        '<button data-action="delete-user" data-username="' + escapeHtml(username) + '"' +
-                        ' class="p-2 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"' +
-                        ' title="Delete user">' +
-                        '<i class="fas fa-trash"></i>' +
-                        '</button>' +
+                        toggleBtn +
+                        resetBtn +
+                        deleteBtn +
                         '</div>' +
                         '</div>';
                 });

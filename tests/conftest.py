@@ -140,6 +140,10 @@ def api(docker_container):
             r = self.post(path, json=data, **kw)
             return r
 
+        def put_json(self, path, data, **kw):
+            r = self.put(path, json=data, **kw)
+            return r
+
     return APIClient(base)
 
 

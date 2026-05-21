@@ -444,6 +444,74 @@ class TestUserLifecycle:
         assert ok is False
         assert 'last admin' in msg.lower()
 
+    def test_update_user_toggles_enabled(self, auth_manager_factory):
+        """enabled is honored by update_user so the disable/enable action
+        actually persists (regression guard for the PUT route that used to
+        drop everything but role)."""
+        mgr, _ = auth_manager_factory()
+        mgr.create_user('keeper', 'PwAdmin-1', role='admin')  # last-admin guard
+        mgr.create_user('dora', 'Pw-12345678', role='operator')
+
+        ok, _ = mgr.update_user('dora', enabled=False)
+        assert ok is True
+        # A disabled user can no longer authenticate.
+        assert mgr.authenticate_user('dora', 'Pw-12345678') is None
+
+        ok, _ = mgr.update_user('dora', enabled=True)
+        assert ok is True
+        assert mgr.authenticate_user('dora', 'Pw-12345678') is not None
+
+    def test_cannot_disable_the_last_active_admin(self, auth_manager_factory):
+        """Disabling the only active admin would lock everyone out, so it is
+        refused — the delete path has the parallel guard (issue #229)."""
+        mgr, _ = auth_manager_factory()
+        mgr.create_user('sole-admin', 'PwAdmin-1', role='admin')
+        ok, msg = mgr.update_user('sole-admin', enabled=False)
+        assert ok is False
+        assert 'last active admin' in msg.lower()
+
+    def test_can_disable_admin_when_another_active_admin_exists(self, auth_manager_factory):
+        """With two active admins, either may be disabled."""
+        mgr, _ = auth_manager_factory()
+        mgr.create_user('admin-a', 'PwAdmin-1', role='admin')
+        mgr.create_user('admin-b', 'PwAdmin-2', role='admin')
+        ok, _ = mgr.update_user('admin-a', enabled=False)
+        assert ok is True
+
+    def test_cannot_set_password_for_sso_user(self, auth_manager_factory):
+        """SSO accounts authenticate via the IdP and keep an empty
+        password_hash; setting a local password is refused (issue #229)."""
+        mgr, _ = auth_manager_factory({'users': {
+            'sso-bob': {
+                'password_hash': '', 'role': 'operator', 'email': 'b@x.io',
+                'created_at': 'now', 'last_login': None, 'enabled': True,
+                'oidc_subject': 'sub-1', 'oidc_issuer': 'https://idp.example',
+            },
+        }})
+        ok, msg = mgr.update_user('sso-bob', password='NewPw-987654')
+        assert ok is False
+        assert 'sso' in msg.lower()
+        # Non-password fields on the same row still update fine.
+        ok, _ = mgr.update_user('sso-bob', role='viewer')
+        assert ok is True
+
+    def test_list_users_marks_sso_accounts(self, auth_manager_factory):
+        """list_users flags IdP-linked rows with sso=True and surfaces the
+        issuer (but never the subject) so the UI can badge them."""
+        mgr, _ = auth_manager_factory({'users': {
+            'sso-bob': {
+                'password_hash': '', 'role': 'operator', 'enabled': True,
+                'oidc_subject': 'sub-1', 'oidc_issuer': 'https://idp.example',
+            },
+        }})
+        mgr.create_user('local-alice', 'StrongPw-1', role='admin')
+
+        users = mgr.list_users()
+        assert users['sso-bob']['sso'] is True
+        assert users['sso-bob']['oidc_issuer'] == 'https://idp.example'
+        assert 'oidc_subject' not in users['sso-bob']
+        assert users['local-alice']['sso'] is False
+
 
 # ---------------------------------------------------------------------------
 # Session lifecycle — create / validate / invalidate
