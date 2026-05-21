@@ -68,6 +68,24 @@ def _certificate_fingerprint(cert_bytes):
     return cert.fingerprint(hashes.SHA256()).hex()
 
 
+def _privkey_to_pkcs1(pem_bytes):
+    """Re-serialize a PEM private key into the legacy PKCS#1/SEC1
+    ("TraditionalOpenSSL") form for stacks that don't accept the PKCS#8
+    that certbot writes (issue #233).
+
+    Raises ValueError/TypeError for key types that have no traditional
+    encoding (e.g. Ed25519); the caller maps that to a 422.
+    """
+    from cryptography.hazmat.primitives import serialization
+
+    key = serialization.load_pem_private_key(pem_bytes, password=None)
+    return key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.TraditionalOpenSSL,
+        encryption_algorithm=serialization.NoEncryption(),
+    )
+
+
 def _tls_probe_timeout_seconds():
     """Read CERTMATE_TLS_PROBE_TIMEOUT_SECONDS, clamped to [1, 30]. Default 3s.
 
@@ -1199,6 +1217,10 @@ def create_api_resources(api, models, managers):
             (?include_private=0); anything that exposes the private key
             (privkey.pem, combined.pem, format=json, default ZIP)
             requires operator role.
+
+            ?file=privkey.pem&key_format=pkcs1 serves the key in legacy
+            PKCS#1/SEC1 form for stacks that reject certbot's PKCS#8
+            (issue #233); the default is the on-disk PKCS#8.
             """
             try:
                 scope_err = _check_domain_scope(domain, 'download')
@@ -1218,6 +1240,16 @@ def create_api_resources(api, models, managers):
 
                 if download_format and download_format not in ['json']:
                     return {'error': 'Invalid format requested.'}, 400
+
+                # Optional private-key serialization. Certbot stores PKCS#8
+                # ("BEGIN PRIVATE KEY"); some older stacks need the legacy
+                # PKCS#1 form ("BEGIN RSA PRIVATE KEY"). Convert on download
+                # rather than duplicating key material on disk (issue #233).
+                key_format = request.args.get('key_format')
+                if key_format is not None and key_format not in ('pkcs1', 'pkcs8'):
+                    return {'error': "Invalid key_format; use 'pkcs1' or 'pkcs8'."}, 400
+                if key_format and requested_file != 'privkey.pem':
+                    return {'error': 'key_format only applies to ?file=privkey.pem'}, 400
 
                 def _privkey_denied(file_label):
                     """Emit audit + return 403 for viewer trying to pull privkey."""
@@ -1294,6 +1326,33 @@ def create_api_resources(api, models, managers):
                     file_path = cert_dir / requested_file
                     if not file_path.exists():
                         return {'error': f'File {requested_file} not found for domain {domain}'}, 404
+
+                    if requested_file == 'privkey.pem' and key_format == 'pkcs1':
+                        # Re-resolve with a constant filename and confirm the
+                        # path stays inside the (already validated) domain dir
+                        # before reading — defense in depth, and keeps the new
+                        # file read off any tainted path component.
+                        key_path = os.path.realpath(cert_dir / 'privkey.pem')
+                        if not key_path.startswith(os.path.realpath(cert_dir) + os.sep):
+                            return {'error': 'Invalid path'}, 400
+                        try:
+                            with open(key_path, 'rb') as fh:
+                                pkcs1_pem = _privkey_to_pkcs1(fh.read())
+                        except (ValueError, TypeError) as e:
+                            logger.error(
+                                "Failed to convert private key to PKCS#1: %s",
+                                type(e).__name__,
+                            )
+                            return {
+                                'error': 'Could not convert the private key to PKCS#1 '
+                                         '(the key type may not support it).'
+                            }, 422
+                        return send_file(
+                            io.BytesIO(pkcs1_pem),
+                            as_attachment=True,
+                            download_name=f'{domain}_privkey_pkcs1.pem',
+                            mimetype='application/x-pem-file',
+                        )
 
                     return send_file(
                         file_path,
