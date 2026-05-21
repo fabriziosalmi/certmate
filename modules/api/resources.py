@@ -1070,7 +1070,7 @@ def create_api_resources(api, models, managers):
     # therefore also operator-gated. (2026-05-12 API auth audit
     # follow-up: viewer-can-pull-privkey was an information-disclosure
     # surface that the original endpoint exposed.)
-    _PRIVATE_KEY_FILES = frozenset({'privkey.pem', 'combined.pem'})
+    _PRIVATE_KEY_FILES = frozenset({'privkey.pem', 'combined.pem', 'cert.pfx'})
     _PUBLIC_DOWNLOAD_FILES = frozenset({'cert.pem', 'chain.pem', 'fullchain.pem'})
 
     def _user_has_role(user, min_role):
@@ -1221,6 +1221,10 @@ def create_api_resources(api, models, managers):
             ?file=privkey.pem&key_format=pkcs1 serves the key in legacy
             PKCS#1/SEC1 form for stacks that reject certbot's PKCS#8
             (issue #233); the default is the on-disk PKCS#8.
+
+            ?file=cert.pfx serves the encrypted PKCS#12 bundle when a PFX
+            export password is configured (issue #230); 404 otherwise. It
+            contains the private key, so it requires operator role.
             """
             try:
                 scope_err = _check_domain_scope(domain, 'download')
@@ -1354,11 +1358,15 @@ def create_api_resources(api, models, managers):
                             mimetype='application/x-pem-file',
                         )
 
+                    file_mimetype = (
+                        'application/x-pkcs12' if requested_file.endswith('.pfx')
+                        else 'application/x-pem-file'
+                    )
                     return send_file(
                         file_path,
                         as_attachment=True,
                         download_name=f'{domain}_{requested_file}',
-                        mimetype='application/x-pem-file'
+                        mimetype=file_mimetype
                     )
 
                 # Fallback ZIP. Two flavors:

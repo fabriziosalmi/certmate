@@ -54,6 +54,10 @@ PUBLIC_SETTINGS_WRITABLE_KEYS = frozenset({
     'default_key_type',
     'default_key_size',
     'default_elliptic_curve',
+    # Password used to encrypt the on-disk Windows .pfx export (issue #230).
+    # Empty/unset disables the export. Masked on GET and preserved on POST by
+    # the generic secret machinery (name matches the secret regex).
+    'pfx_password',
 })
 
 # Keys whose mutation via the bulk settings endpoint would create a privilege
@@ -549,6 +553,7 @@ class SettingsManager:
                 'default_key_type': 'rsa',
                 'default_key_size': 2048,
                 'default_elliptic_curve': 'secp256r1',
+                'pfx_password': '',  # Encrypts the on-disk .pfx export; empty = disabled (#230)
                 'dns_providers': {},  # Start with empty DNS providers - only add what's actually configured
                 'certificate_storage': {  # New storage backend configuration
                     'backend': 'local_filesystem',  # Default to local filesystem for backward compatibility
@@ -616,6 +621,7 @@ class SettingsManager:
                 'default_key_type': 'rsa',
                 'default_key_size': 2048,
                 'default_elliptic_curve': 'secp256r1',
+                'pfx_password': '',  # Encrypts the on-disk .pfx export; empty = disabled (#230)
                 'dns_providers': {
                     'cloudflare': {'api_token': ''},
                     'route53': {'access_key_id': '', 'secret_access_key': '', 'region': 'us-east-1'},

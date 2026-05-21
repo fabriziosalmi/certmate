@@ -192,6 +192,59 @@ class CertificateManager:
             logger.warning(f"Failed to save metadata for {domain}: {e}")
             return False
 
+    def _write_pfx(self, domain: str) -> None:
+        """(Re)generate <domain>/cert.pfx from the on-disk PEMs when a PFX
+        export password is configured, else remove any stale bundle.
+
+        Called after each successful issuance/renewal so the .pfx fingerprint
+        tracks the live certificate — Windows automation can poll it to detect
+        a fresh cert (issue #230). Best-effort: it never fails the surrounding
+        certificate operation.
+        """
+        domain_dir = self.cert_dir / domain
+        pfx_path = domain_dir / 'cert.pfx'
+        try:
+            settings = self.settings_manager.load_settings()
+        except Exception:
+            settings = {}
+        password = ''
+        if isinstance(settings, dict):
+            password = (settings.get('pfx_password') or '').strip()
+
+        if not password:
+            # Export disabled: don't leave a bundle encrypted with an old
+            # password lying around.
+            try:
+                pfx_path.unlink()
+            except FileNotFoundError:
+                pass
+            except Exception as e:
+                logger.warning(f"Could not remove stale PFX for {domain}: {e}")
+            return
+
+        cert_file = domain_dir / 'cert.pem'
+        key_file = domain_dir / 'privkey.pem'
+        chain_file = domain_dir / 'chain.pem'
+        if not cert_file.exists() or not key_file.exists():
+            logger.warning(f"Cannot build PFX for {domain}: cert.pem/privkey.pem missing")
+            return
+
+        try:
+            from .storage_backends import _build_pfx
+            chain_bytes = chain_file.read_bytes() if chain_file.exists() else None
+            pfx_bytes = _build_pfx(
+                cert_file.read_bytes(), chain_bytes, key_file.read_bytes(),
+                password=password.encode('utf-8'),
+            )
+            tmp = pfx_path.with_name('cert.pfx.tmp')
+            with open(tmp, 'wb') as f:
+                f.write(pfx_bytes)
+            os.chmod(tmp, 0o600)
+            os.replace(tmp, pfx_path)
+            logger.info(f"Wrote encrypted PKCS#12 bundle for {domain}")
+        except Exception as e:
+            logger.warning(f"Failed to build PFX for {domain}: {e}")
+
     def get_deployment_status_record(self, domain: str) -> dict:
         metadata = self._load_metadata(domain)
         status = metadata.get('deployment_status')
@@ -1010,7 +1063,8 @@ class CertificateManager:
             duration = time.time() - start_time
             logger.info(f"Certificate created successfully for {domain} in {duration:.2f} seconds")
             self._invalidate_certificate_info_cache(domain)
-            
+            self._write_pfx(domain)
+
             return {
                 'success': True,
                 'domain': domain,
@@ -1189,6 +1243,7 @@ class CertificateManager:
                 
                 logger.info(f"Certificate renewed successfully for {domain}")
                 self._invalidate_certificate_info_cache(domain)
+                self._write_pfx(domain)
                 return {
                     'success': True,
                     'domain': domain,
