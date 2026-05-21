@@ -1,3 +1,30 @@
+## v2.8.0 (Features + performance + fixes)
+
+First minor after the v2.7.0 OIDC/SSO release. Bundles the certificate-format
+work requested by operators, an SSO user-management hardening pass, a large
+listing/backup performance fix from the community, and the CA/DNS settings
+panel fixes.
+
+### Features
+
+- **SSO/OIDC user management** ([#229](https://github.com/fabriziosalmi/certmate/issues/229), PR [#234](https://github.com/fabriziosalmi/certmate/pull/234)) — the Users list now badges SSO-managed accounts, hides the password-reset action for them, and refuses a local-password set on an IdP-linked row at the backend. The sole remaining admin can no longer be deleted **or** disabled (the disable guard mirrors the existing delete guard), and the UI hides those actions for that account. Also fixes a pre-existing bug where `PUT /api/users/<username>` dropped `password`/`enabled` (so disable and reset silently failed).
+- **Encrypted Windows `.pfx` export** ([#230](https://github.com/fabriziosalmi/certmate/issues/230), PR [#238](https://github.com/fabriziosalmi/certmate/pull/238)) — set a **PFX Export Password** in *Settings → General* and each certificate is also written as an encrypted `cert.pfx` (PKCS#12) on issuance and renewal. The fingerprint tracks the live cert so Windows automation can poll it; download via `?file=cert.pfx` (operator role) and it is included in backups. Empty password disables the export.
+- **PKCS#1 private-key download** ([#233](https://github.com/fabriziosalmi/certmate/issues/233), PR [#237](https://github.com/fabriziosalmi/certmate/pull/237)) — `GET /api/certificates/<domain>/download?file=privkey.pem&key_format=pkcs1` serves the key in legacy PKCS#1/SEC1 form for stacks that reject certbot's PKCS#8. Converted in-process; no second copy of key material is kept on disk.
+- **Intermediate chain in deploy hooks** ([#232](https://github.com/fabriziosalmi/certmate/issues/232), PR [#236](https://github.com/fabriziosalmi/certmate/pull/236)) — deploy commands now receive `CERTMATE_CHAIN_PATH` (intermediates only) alongside the existing cert/key/fullchain paths, for targets that reject a chained cert.
+
+### Performance
+
+- **Faster certificate listing + lighter backups** (PR [#231](https://github.com/fabriziosalmi/certmate/pull/231), thanks @rocogamer) — per-row certificate parsing moves from an `openssl x509` subprocess + temp file to in-process `cryptography`, with a short-lived cert-info cache; Azure Key Vault gains a lightweight info read that skips the PFX export; routine backups exclude certbot's `logs/`/`work/` scratch while keeping renewal lineage; adds Kubernetes resource guidance.
+
+### Fixes
+
+- **CA/DNS settings panels** ([#226](https://github.com/fabriziosalmi/certmate/issues/226), PR [#235](https://github.com/fabriziosalmi/certmate/pull/235), diagnosis by @balkk1) — the CA "Google Trust Services" panel had a duplicate `id` with the DNS tab, so it never appeared; and choosing HTTP-01 now hides the DNS provider config panels instead of leaving a stale one visible.
+- **OIDC callback log hygiene** (PR [#234](https://github.com/fabriziosalmi/certmate/pull/234)) — the attacker-controlled IdP `error` query param is constrained to a known OAuth/OIDC code set before it reaches any log or audit sink (CodeQL `py/log-injection`).
+
+### Internal
+
+- Storage-migrate endpoint tests seed a valid API token via `generate_secure_token()` so the fixture survives the tightened `validate_api_token` rules (PR [#239](https://github.com/fabriziosalmi/certmate/pull/239)).
+
 ## v2.6.11 (Feature — close #207 enhancement 1: drill-down modal on Recent Executions)
 
 Surfaces every field the backend already records per deploy-hook run. Clicking a row in the **Settings → Deployment → Recent Executions** table now opens a modal showing the full execution: timestamp, hook name + id, domain, event, dry-run flag, success / exit code, duration, error (when present), and the captured `command`, `stdout` and `stderr` streams. Backend was already storing all of these in `data/deploy_history.jsonl` ([`modules/core/deployer.py:165-179`](https://github.com/fabriziosalmi/certmate/blob/main/modules/core/deployer.py#L165-L179)); the UI just wasn't surfacing them. Closes enhancement 1 of issue [#207](https://github.com/fabriziosalmi/certmate/issues/207) raised by @tuxpowered.
