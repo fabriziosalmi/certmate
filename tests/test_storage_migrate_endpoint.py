@@ -39,7 +39,12 @@ def app_client(tmp_path, monkeypatch):
 
     settings_manager = container.managers['settings']
     settings = settings_manager.load_settings()
-    token = 'test-' + 'a' * 48
+    # Must satisfy validate_api_token (no weak patterns like 'test', >=12
+    # unique chars, no repeats) or save_settings strips it and the endpoint
+    # answers 401 instead of exercising the migrate logic. Use the project's
+    # own generator so the seed token is always valid.
+    from modules.core.utils import generate_secure_token
+    token = generate_secure_token()
     settings['api_bearer_token'] = token
     settings['certificate_storage'] = {
         'backend': 'local_filesystem',
