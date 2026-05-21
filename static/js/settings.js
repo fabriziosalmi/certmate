@@ -1761,7 +1761,10 @@
         var caProviderToConfigId = {
             'letsencrypt': 'letsencrypt-config',
             'zerossl': 'zerossl-config',
-            'google': 'google-config',
+            // The DNS tab already owns id="google-config" for the Google DNS
+            // provider; the CA panel uses a distinct id so getElementById does
+            // not collide and leave the CA panel hidden (issue #226).
+            'google': 'google-ca-config',
             'buypass': 'buypass-config',
             'digicert': 'digicert-config',
             'sslcom': 'sslcom-config',
@@ -1769,7 +1772,7 @@
         };
 
         // Hide all CA configuration panels and disable their required fields
-        var caConfigs = ['letsencrypt-config', 'zerossl-config', 'google-config', 'buypass-config', 'digicert-config', 'sslcom-config', 'private-ca-config'];
+        var caConfigs = ['letsencrypt-config', 'zerossl-config', 'google-ca-config', 'buypass-config', 'digicert-config', 'sslcom-config', 'private-ca-config'];
         caConfigs.forEach(function (configId) {
             var element = document.getElementById(configId);
             if (element) {
