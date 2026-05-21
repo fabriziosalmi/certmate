@@ -236,6 +236,31 @@ class TestCAAndChallengeToggles:
         # The DNS-tab Google panel is a distinct element and stays hidden.
         expect(browser_page.locator('#google-config')).to_be_hidden()
 
+    def test_http01_hides_dns_config_panels(self, browser_page):
+        """Choosing HTTP-01 hides both the provider picker and the per-provider
+        config panels. Regression: the panels are siblings of the picker, so a
+        previously selected DNS config lingered under HTTP-01 (#226)."""
+        browser_page.goto(f"{BASE_URL}/settings")
+        browser_page.wait_for_load_state("networkidle")
+
+        # On the DNS tab (default). Select a provider so its config panel shows.
+        browser_page.click('label:has(input[name="dns_provider"][value="cloudflare"])')
+        browser_page.wait_for_timeout(300)
+        expect(browser_page.locator('#cloudflare-config')).to_be_visible(timeout=5000)
+
+        # Switch to HTTP-01 — picker and config panels must both disappear.
+        browser_page.click('label:has(input[name="challenge_type"][value="http-01"])')
+        browser_page.wait_for_timeout(300)
+        expect(browser_page.locator('#dns-provider-section')).to_be_hidden()
+        expect(browser_page.locator('#dns-config-section')).to_be_hidden()
+        expect(browser_page.locator('#cloudflare-config')).to_be_hidden()
+
+        # Switching back to DNS-01 restores them.
+        browser_page.click('label:has(input[name="challenge_type"][value="dns-01"])')
+        browser_page.wait_for_timeout(300)
+        expect(browser_page.locator('#dns-provider-section')).to_be_visible()
+        expect(browser_page.locator('#dns-config-section')).to_be_visible()
+
 
 class TestSettingsCloudflareFlow:
     """Test adding a Cloudflare account via UI."""

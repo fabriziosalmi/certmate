@@ -51,13 +51,14 @@
 
     function toggleChallengeType() {
         var selected = document.querySelector('input[name="challenge_type"]:checked');
-        var dnsSection = document.getElementById('dns-provider-section');
-        if (!dnsSection) return;
-        if (selected && selected.value === 'http-01') {
-            dnsSection.style.display = 'none';
-        } else {
-            dnsSection.style.display = '';
-        }
+        var isHttp = selected && selected.value === 'http-01';
+        // Hide both the provider picker and the per-provider config panels.
+        // The config panels are siblings of the picker, so hiding the picker
+        // alone left a stale DNS panel visible under HTTP-01 (issue #226).
+        ['dns-provider-section', 'dns-config-section'].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el) el.style.display = isHttp ? 'none' : '';
+        });
     }
 
     // =============================================
