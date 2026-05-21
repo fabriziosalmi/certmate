@@ -126,6 +126,16 @@ class TestHookExecution:
         assert len(shell_executor.commands_executed) == 1
         assert 'sh -c env' in shell_executor.commands_executed[0]
 
+        env = shell_executor.envs_executed[0]
+        certs = tmp_path / 'certs' / 'mysite.com'
+        assert env['CERTMATE_DOMAIN'] == 'mysite.com'
+        assert env['CERTMATE_EVENT'] == 'renewed'
+        assert env['CERTMATE_CERT_PATH'] == str(certs / 'cert.pem')
+        assert env['CERTMATE_KEY_PATH'] == str(certs / 'privkey.pem')
+        assert env['CERTMATE_FULLCHAIN_PATH'] == str(certs / 'fullchain.pem')
+        # Intermediate-only chain for targets that reject fullchain (issue #232).
+        assert env['CERTMATE_CHAIN_PATH'] == str(certs / 'chain.pem')
+
     def test_dry_run_flag(self, deploy_manager, shell_executor):
         shell_executor.set_next_result(returncode=0)
         hook = {
