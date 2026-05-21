@@ -19,6 +19,12 @@ logger = logging.getLogger(__name__)
 BACKUP_RETENTION_DAYS = 30  # Keep backups for 30 days
 MAX_BACKUPS_PER_TYPE = 50   # Maximum number of backups to keep per type
 
+# Top-level subdirectories under certificates/<domain>/ that certbot fills
+# with ephemeral scratch and verbose logs. certbot's accounts/ and archive/
+# directories are intentionally retained because renew_certificate() reuses
+# the domain config dir for future renewals after a restore.
+_BACKUP_EXCLUDE_DIRS = frozenset({'logs', 'work'})
+
 
 class FileOperations:
     """Class to handle file operations and backup management"""
@@ -211,10 +217,20 @@ class FileOperations:
                 # second iterdir + is_dir() on the same cert_dir.
                 for domain_dir in domain_dirs:
                     for cert_file in domain_dir.rglob("*"):
-                        if cert_file.is_file():
-                            # Add file to zip with relative path under certificates/
-                            arc_path = f"certificates/{cert_file.relative_to(self.cert_dir)}"
-                            zipf.write(cert_file, arc_path)
+                        if not cert_file.is_file():
+                            continue
+                        # certbot runs with --config-dir/--work-dir/--logs-dir
+                        # all under certificates/<domain>/, so each domain dir
+                        # accumulates logs/ and work/. Those have no restore
+                        # value and can dominate routine backups. Keep
+                        # accounts/ and archive/: certbot renew needs lineage
+                        # state after a backup restore.
+                        rel_parts = cert_file.relative_to(domain_dir).parts
+                        if rel_parts and rel_parts[0] in _BACKUP_EXCLUDE_DIRS:
+                            continue
+                        # Add file to zip with relative path under certificates/
+                        arc_path = f"certificates/{cert_file.relative_to(self.cert_dir)}"
+                        zipf.write(cert_file, arc_path)
 
                 # Add unified metadata
                 zipf.writestr("backup_metadata.json", json.dumps(metadata, indent=2))

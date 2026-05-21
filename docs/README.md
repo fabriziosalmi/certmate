@@ -9,6 +9,7 @@ Welcome to the CertMate documentation. This folder contains comprehensive guides
 ### Getting Started
 - **[Installation Guide](./installation.md)** — Setup, dependencies, production deployment
 - **[Docker Guide](./docker.md)** — Docker builds, multi-platform, Docker Compose
+- **[Kubernetes Notes](./kubernetes.md)** — Production resources, OOM sizing, runtime patching
 
 ### Core Features
 - **[DNS Providers](./dns-providers.md)** — supported providers, multi-account, domain alias
@@ -39,8 +40,9 @@ Welcome to the CertMate documentation. This folder contains comprehensive guides
 ### For Administrators
 
 1. **[Docker Deployment](./docker.md)** — Production Docker setup
-2. **[CA Providers](./ca-providers.md)** — Configure certificate authorities
-3. **[DNS Providers](./dns-providers.md#multi-account-support)** — Enterprise multi-account setup
+2. **[Kubernetes Notes](./kubernetes.md)** — Production pod sizing and operational patching
+3. **[CA Providers](./ca-providers.md)** — Configure certificate authorities
+4. **[DNS Providers](./dns-providers.md#multi-account-support)** — Enterprise multi-account setup
 
 ---
 
@@ -139,6 +141,7 @@ docs/
   README.md            ← You are here
   index.md             ← Client certificates landing page
   installation.md      ← Installation & setup
+  kubernetes.md        ← Kubernetes production notes
   dns-providers.md     ← DNS providers & multi-account
   ca-providers.md      ← Certificate Authority providers
   docker.md            ← Docker build & deployment

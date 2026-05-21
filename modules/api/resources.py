@@ -955,7 +955,8 @@ def create_api_resources(api, models, managers):
                 if new_alias_dns_provider:
                     metadata['alias_dns_provider'] = new_alias_dns_provider
 
-                certificate_manager._atomic_json_write(metadata_file, metadata)
+                if not certificate_manager._save_metadata(domain, metadata):
+                    return {'error': f'Failed to update metadata for domain: {domain}'}, 500
                 logger.info(
                     f"Updated DNS provider for {domain}: "
                     f"{old_provider} → {new_dns_provider or old_provider}"

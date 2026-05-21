@@ -133,5 +133,25 @@ def test_os_error_on_read_does_not_quarantine(tmp_path):
     )
 
 
+def test_create_missing_metadata_does_not_count_failed_save(tmp_path):
+    mgr = _make_manager(tmp_path)
+    mgr.settings_manager.load_settings.return_value = {
+        "email": "admin@example.com",
+        "domains": [],
+    }
+
+    domain = "example.com"
+    domain_dir = tmp_path / domain
+    domain_dir.mkdir()
+    (domain_dir / "cert.pem").write_text("placeholder cert")
+
+    with patch.object(mgr, "_save_metadata", return_value=False) as save_metadata:
+        created_count = mgr.create_missing_metadata()
+
+    assert created_count == 0
+    save_metadata.assert_called_once()
+    assert not (domain_dir / "metadata.json").exists()
+
+
 if __name__ == "__main__":  # pragma: no cover
     pytest.main([__file__, "-v"])

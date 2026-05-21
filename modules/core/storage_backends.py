@@ -144,6 +144,22 @@ class CertificateStorageBackend(ABC):
     def retrieve_certificate(self, domain: str) -> Optional[Tuple[Dict[str, bytes], Dict[str, Any]]]:
         """Retrieve certificate files and metadata for a domain"""
         pass
+
+    def retrieve_certificate_info(self, domain: str) -> Optional[Tuple[Dict[str, bytes], Dict[str, Any]]]:
+        """Retrieve only the certificate material needed by list/info views.
+
+        Backends can override this to avoid fetching private keys or full
+        bundles. The default preserves compatibility by falling back to the
+        full retrieve path.
+        """
+        result = self.retrieve_certificate(domain)
+        if not result:
+            return None
+        cert_files, metadata = result
+        cert_pem = cert_files.get('cert.pem')
+        if not cert_pem:
+            return None
+        return {'cert.pem': cert_pem}, metadata
     
     @abstractmethod
     def list_certificates(self) -> List[str]:
@@ -383,6 +399,32 @@ class _AzureKeyVaultCertificateImporter:
             logger.debug("Could not read tags for Certificate %s: %s", cert_name, e)
             return {}
         return self._tags_to_metadata(dict(getattr(cert.properties, 'tags', None) or {}))
+
+    def get_certificate_summary(self, domain: str) -> Optional[Tuple[Dict[str, bytes], Dict[str, Any], Optional['datetime']]]:
+        """Read public cert + metadata from the Certificate API without PFX export."""
+        from cryptography import x509
+        from cryptography.hazmat.primitives.serialization import Encoding
+
+        cert_name = self._certificate_name(domain)
+        try:
+            cert = self._get_cert_client().get_certificate(cert_name)
+        except Exception as e:
+            logger.debug("Could not read Certificate summary %s: %s", cert_name, e)
+            return None
+
+        cert_bytes = getattr(cert, 'cer', None)
+        if not cert_bytes:
+            return None
+        try:
+            cert_pem = x509.load_der_x509_certificate(cert_bytes).public_bytes(Encoding.PEM)
+        except Exception as e:
+            logger.debug("Could not parse Certificate API public cert for %s: %s", domain, e)
+            return None
+
+        props = getattr(cert, 'properties', None)
+        metadata = self._tags_to_metadata(dict(getattr(props, 'tags', None) or {}))
+        updated_on = getattr(props, 'updated_on', None)
+        return {'cert.pem': cert_pem}, metadata, updated_on
 
     def import_certificate(self, domain: str, cert_files: Dict[str, bytes], metadata: Dict[str, Any]) -> bool:
         """Import the cert+chain+key bundle as a Key Vault Certificate object."""
@@ -702,6 +744,85 @@ class AzureKeyVaultBackend(CertificateStorageBackend):
             logger.debug(f"Metadata not found in Azure Key Vault for {domain}: {e}")
 
         return cert_files, metadata, latest_update
+
+    def _retrieve_info_from_secrets(self, domain: str) -> Optional[Tuple[Dict[str, bytes], Dict[str, Any], 'Optional[datetime]']]:
+        """Read only cert.pem plus metadata from the Secrets surface."""
+        client = self._get_client()
+        secret_name = self._sanitize_secret_name(f"cert-{domain}-cert-pem")
+        try:
+            secret = client.get_secret(secret_name)
+        except Exception as e:
+            logger.debug(f"cert.pem secret not found for {domain}: {e}")
+            return None
+
+        cert_pem = secret.value.encode('utf-8')
+        cert_pem_update = getattr(secret.properties, 'updated_on', None)
+
+        metadata: Dict[str, Any] = {}
+        try:
+            metadata_name = self._sanitize_secret_name(f"cert-{domain}-metadata")
+            metadata_secret = client.get_secret(metadata_name)
+            metadata = json.loads(metadata_secret.value)
+        except Exception as e:
+            logger.debug(f"Metadata not found in Azure Key Vault for {domain}: {e}")
+
+        return {'cert.pem': cert_pem}, metadata, cert_pem_update
+
+    @_with_retry()
+    def retrieve_certificate_info(self, domain: str) -> Optional[Tuple[Dict[str, bytes], Dict[str, Any]]]:
+        """Retrieve only cert.pem and metadata for dashboard/listing paths."""
+        try:
+            if self.storage_mode == AZURE_KV_MODE_SECRETS:
+                result = self._retrieve_info_from_secrets(domain)
+                if result is None:
+                    return None
+                cert_files, metadata, _ = result
+                return cert_files, metadata
+
+            if self.storage_mode == AZURE_KV_MODE_CERTIFICATE:
+                summary = self._get_cert_importer().get_certificate_summary(domain)
+                if summary is None:
+                    return None
+                cert_files, metadata, _ = summary
+                return cert_files, metadata
+
+            secrets_result = self._retrieve_info_from_secrets(domain)
+            cert_update = self._get_cert_importer().get_certificate_update_time(domain)
+
+            if secrets_result is not None and cert_update is None:
+                cert_files, metadata, _ = secrets_result
+                if not metadata:
+                    metadata = self._get_cert_importer().get_metadata_tags(domain)
+                return cert_files, metadata
+
+            if secrets_result is None and cert_update is not None:
+                summary = self._get_cert_importer().get_certificate_summary(domain)
+                if summary is None:
+                    return None
+                cert_files, metadata, _ = summary
+                return cert_files, metadata
+
+            if secrets_result is not None and cert_update is not None:
+                cert_files, metadata, secrets_update = secrets_result
+                if secrets_update is not None and cert_update > secrets_update:
+                    summary = self._get_cert_importer().get_certificate_summary(domain)
+                    if summary is not None:
+                        summary_files, summary_metadata, _ = summary
+                        return summary_files, summary_metadata
+                    logger.warning(
+                        "Azure KV both-mode: Certificate API claims a fresher "
+                        "public cert for %s but summary read failed; falling "
+                        "back to Secrets cert.pem snapshot.",
+                        domain,
+                    )
+                if not metadata:
+                    metadata = self._get_cert_importer().get_metadata_tags(domain)
+                return cert_files, metadata
+
+            return None
+        except Exception as e:
+            logger.error(f"Failed to retrieve certificate info from Azure Key Vault for {domain}: {e}")
+            return None
 
     @_with_retry()
     def retrieve_certificate(self, domain: str) -> Optional[Tuple[Dict[str, bytes], Dict[str, Any]]]:
@@ -1559,6 +1680,11 @@ class StorageManager:
         """Retrieve certificate using the configured backend"""
         backend = self.get_backend()
         return backend.retrieve_certificate(domain)
+
+    def retrieve_certificate_info(self, domain: str) -> Optional[Tuple[Dict[str, bytes], Dict[str, Any]]]:
+        """Retrieve lightweight certificate info using the configured backend."""
+        backend = self.get_backend()
+        return backend.retrieve_certificate_info(domain)
     
     def list_certificates(self) -> List[str]:
         """List certificates using the configured backend"""

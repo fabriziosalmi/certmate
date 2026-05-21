@@ -4,6 +4,7 @@ Handles certificate creation, renewal, and information retrieval
 """
 
 import os
+import copy
 import json
 import shlex
 import subprocess
@@ -18,10 +19,11 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 from datetime import datetime, timedelta
+from cryptography import x509
 from .shell import ShellExecutor
 from .dns_strategies import DNSStrategyFactory, HTTP01Strategy, check_certbot_plugin_installed
 from .constants import CERTIFICATE_FILES, get_domain_name
-from .utils import validate_domain, utc_now, utc_now_iso, validate_key_options
+from .utils import DeploymentStatusCache, validate_domain, utc_now, utc_now_iso, validate_key_options
 
 logger = logging.getLogger(__name__)
 
@@ -72,9 +74,47 @@ class CertificateManager:
         self.storage_manager = storage_manager
         self.ca_manager = ca_manager
         self.shell_executor = shell_executor or ShellExecutor()
+        self._certificate_info_cache = DeploymentStatusCache(default_ttl=self._certificate_info_cache_ttl())
         # Per-domain locks to prevent concurrent create/renew on the same domain
         self._domain_locks: dict[str, threading.Lock] = {}
         self._domain_locks_mutex = threading.Lock()
+
+    @staticmethod
+    def _certificate_info_cache_ttl() -> int:
+        try:
+            return max(0, min(3600, int(os.environ.get('CERTMATE_CERT_INFO_CACHE_TTL', '60'))))
+        except (TypeError, ValueError):
+            return 60
+
+    @staticmethod
+    def _certificate_info_cache_key(domain: str, settings: dict | None) -> str:
+        threshold = 30
+        if isinstance(settings, dict):
+            try:
+                threshold = int(settings.get('renewal_threshold_days', 30))
+            except (TypeError, ValueError):
+                threshold = 30
+        return f"{domain}|renewal_threshold_days={threshold}|date={utc_now().date().isoformat()}"
+
+    def _get_cached_certificate_info(self, domain: str, settings: dict | None = None):
+        cached = self._certificate_info_cache.get(self._certificate_info_cache_key(domain, settings))
+        return copy.deepcopy(cached) if cached is not None else None
+
+    def _set_cached_certificate_info(self, domain: str, info: dict, settings: dict | None = None) -> None:
+        ttl = self._certificate_info_cache_ttl()
+        if ttl > 0:
+            self._certificate_info_cache.set(
+                self._certificate_info_cache_key(domain, settings),
+                copy.deepcopy(info),
+                ttl=ttl,
+            )
+
+    def _invalidate_certificate_info_cache(self, domain: str) -> None:
+        # Cache keys include settings-derived renewal thresholds and current
+        # UTC date, so a domain can have multiple active entries. Metadata
+        # mutations are infrequent; clearing the small certificate-info cache
+        # avoids leaving any domain variants behind.
+        self._certificate_info_cache.clear()
 
     @staticmethod
     def _atomic_binary_copy(src: Path, dest: Path) -> None:
@@ -146,6 +186,7 @@ class CertificateManager:
         metadata_file = self._metadata_path(domain)
         try:
             self._atomic_json_write(metadata_file, metadata)
+            self._invalidate_certificate_info_cache(domain)
             return True
         except Exception as e:
             logger.warning(f"Failed to save metadata for {domain}: {e}")
@@ -447,12 +488,42 @@ class CertificateManager:
         
         # First try to get certificate from storage backend if available
         if self.storage_manager:
+            cache_enabled = settings is None
+            cache_settings = settings
+            if cache_settings is None:
+                try:
+                    cache_settings = self.settings_manager.load_settings()
+                except Exception:
+                    cache_settings = {}
+            if cache_enabled:
+                cached = self._get_cached_certificate_info(domain, cache_settings)
+                if cached is not None:
+                    return cached
             try:
-                storage_result = self.storage_manager.retrieve_certificate(domain)
+                retrieve_info = getattr(self.storage_manager, 'retrieve_certificate_info', None)
+                storage_result = None
+                if callable(retrieve_info):
+                    candidate = retrieve_info(domain)
+                    if candidate is None:
+                        storage_result = None
+                    elif isinstance(candidate, tuple) and len(candidate) == 2:
+                        storage_result = candidate
+                    else:
+                        logger.debug(
+                            "Storage backend returned invalid certificate-info "
+                            "shape for %s; falling back to full retrieve.",
+                            domain,
+                        )
+                        storage_result = self.storage_manager.retrieve_certificate(domain)
+                else:
+                    storage_result = self.storage_manager.retrieve_certificate(domain)
                 if storage_result:
                     cert_files, metadata = storage_result
                     if 'cert.pem' in cert_files:
-                        return self._parse_certificate_info(domain, cert_files['cert.pem'], metadata)
+                        info = self._parse_certificate_info(domain, cert_files['cert.pem'], metadata, settings=cache_settings)
+                        if cache_enabled:
+                            self._set_cached_certificate_info(domain, info, cache_settings)
+                        return info
             except Exception as e:
                 logger.warning(f"Failed to retrieve certificate from storage backend for {domain}: {e}")
         
@@ -494,21 +565,6 @@ class CertificateManager:
             logger.error(f"Failed to read certificate file for {domain}: {e}")
             return self._create_empty_cert_info(domain)
     
-    @staticmethod
-    def _parse_openssl_date(date_str):
-        """Parse openssl date string, trying multiple formats for cross-platform compatibility."""
-        formats = [
-            '%b %d %H:%M:%S %Y %Z',   # Most common: "Jan  1 00:00:00 2026 GMT"
-            '%b  %d %H:%M:%S %Y %Z',  # Double-space variant for single-digit days
-            '%b %d %H:%M:%S %Y',       # Without timezone
-        ]
-        for fmt in formats:
-            try:
-                return datetime.strptime(date_str.strip(), fmt)
-            except ValueError:
-                continue
-        raise ValueError(f"Unable to parse certificate date: {date_str!r}")
-
     def _parse_certificate_info(self, domain, cert_content, metadata=None, settings=None):
         """Parse certificate information from certificate content.
 
@@ -533,57 +589,34 @@ class CertificateManager:
         renewal_threshold_days = settings.get('renewal_threshold_days', 30)
 
         try:
-            # Write cert content to temporary file for openssl processing
-            with tempfile.NamedTemporaryFile(mode='wb', suffix='.pem', delete=False) as temp_cert:
-                temp_cert.write(cert_content)
-                temp_cert_path = temp_cert.name
+            # Parse the certificate in-process with `cryptography` (already a
+            # dependency, used elsewhere in this codebase). The previous
+            # implementation wrote each cert to a temp file and spawned an
+            # `openssl x509 -enddate` subprocess; with many certificates that
+            # meant one process spawn + one temp file per row on every table
+            # load, which dominated listing latency on a CPU-throttled
+            # container.
+            cert = x509.load_pem_x509_certificate(cert_content)
+            # not_valid_after_utc is timezone-aware UTC; drop the tzinfo so the
+            # arithmetic matches utc_now(), which is naive UTC by design.
+            expiry_date = cert.not_valid_after_utc.replace(tzinfo=None)
+            now_utc = utc_now()
+            days_left = (expiry_date - now_utc).days
 
-            try:
-                # Get certificate expiry using openssl — prefer -enddate for simpler parsing
-                result = self.shell_executor.run([
-                    'openssl', 'x509', '-in', temp_cert_path, '-noout', '-enddate'
-                ], capture_output=True, text=True)
-
-                not_after = None
-                if result.returncode == 0:
-                    output = result.stdout.strip()
-                    # Output format: "notAfter=Jan  1 00:00:00 2026 GMT"
-                    if '=' in output:
-                        not_after = output.split('=', 1)[1]
-
-                if not_after:
-                    try:
-                        expiry_date = self._parse_openssl_date(not_after)
-                        now_utc = utc_now()
-                        days_left = (expiry_date - now_utc).days
-
-                        return {
-                            'domain': domain,
-                            'exists': True,
-                            'expiry_date': expiry_date.strftime('%Y-%m-%d %H:%M:%S'),
-                            'days_left': days_left,
-                            'days_until_expiry': days_left,
-                            'needs_renewal': days_left < renewal_threshold_days,
-                            'dns_provider': dns_provider,
-                            'domain_alias': domain_alias,
-                            'alias_dns_provider': alias_dns_provider,
-                            'san_domains': san_domains
-                        }
-                    except ValueError as e:
-                        logger.error(f"Error parsing certificate date for {domain}: {e}")
-                else:
-                    logger.error(f"openssl returned no expiry for {domain}: rc={result.returncode} stderr={result.stderr}")
-            finally:
-                # Clean up temporary file
-                try:
-                    os.unlink(temp_cert_path)
-                except FileNotFoundError:
-                    pass
-                except Exception as cleanup_err:
-                    logger.warning(f"Failed to clean up temp cert file {temp_cert_path}: {cleanup_err}")
-
+            return {
+                'domain': domain,
+                'exists': True,
+                'expiry_date': expiry_date.strftime('%Y-%m-%d %H:%M:%S'),
+                'days_left': days_left,
+                'days_until_expiry': days_left,
+                'needs_renewal': days_left < renewal_threshold_days,
+                'dns_provider': dns_provider,
+                'domain_alias': domain_alias,
+                'alias_dns_provider': alias_dns_provider,
+                'san_domains': san_domains
+            }
         except Exception as e:
-            logger.error(f"Error getting certificate info for {domain}: {e}")
+            logger.error(f"Error parsing certificate for {domain}: {e}")
 
         # Certificate file exists but we couldn't parse the expiry — still mark exists=True
         return {
@@ -971,15 +1004,12 @@ class CertificateManager:
                 except Exception as e:
                     logger.error(f"Error storing certificate in storage backend for {domain}: {e}")
             
-            metadata_file = cert_output_dir / 'metadata.json'
-            try:
-                self._atomic_json_write(metadata_file, metadata)
-                logger.info(f"Saved certificate metadata to {metadata_file}")
-            except Exception as e:
-                logger.warning(f"Failed to save metadata for {domain}: {e}")
+            if self._save_metadata(domain, metadata):
+                logger.info(f"Saved certificate metadata to {self._metadata_path(domain)}")
             
             duration = time.time() - start_time
             logger.info(f"Certificate created successfully for {domain} in {duration:.2f} seconds")
+            self._invalidate_certificate_info_cache(domain)
             
             return {
                 'success': True,
@@ -1152,12 +1182,13 @@ class CertificateManager:
                 if metadata_file.exists():
                     try:
                         metadata['renewed_at'] = datetime.now().isoformat()
-                        self._atomic_json_write(metadata_file, metadata)
+                        self._save_metadata(domain, metadata)
                         logger.info(f"Updated renewal timestamp in metadata for {domain}")
                     except Exception as e:
                         logger.warning(f"Failed to update metadata for {domain}: {e}")
                 
                 logger.info(f"Certificate renewed successfully for {domain}")
+                self._invalidate_certificate_info_cache(domain)
                 return {
                     'success': True,
                     'domain': domain,
@@ -1288,12 +1319,11 @@ class CertificateManager:
                 'inferred': True  # Mark as inferred for debugging
             }
             
-            try:
-                self._atomic_json_write(metadata_file, metadata)
+            if self._save_metadata(domain, metadata):
                 logger.info(f"Created metadata for {domain} with inferred DNS provider: {dns_provider}")
                 created_count += 1
-            except Exception as e:
-                logger.error(f"Failed to create metadata for {domain}: {e}")
+            else:
+                logger.error(f"Failed to create metadata for {domain}")
         
         logger.info(f"Created metadata files for {created_count} certificates")
         return created_count
@@ -1338,6 +1368,7 @@ class CertificateManager:
             if domain_dir.exists():
                 shutil.rmtree(domain_dir)
                 logger.info(f"Certificate deleted for {domain}")
+                self._invalidate_certificate_info_cache(domain)
                 return True
             return False
         finally:
