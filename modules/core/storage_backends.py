@@ -105,17 +105,21 @@ AZURE_KV_VALID_MODES = frozenset({AZURE_KV_MODE_SECRETS, AZURE_KV_MODE_CERTIFICA
 _AZURE_TAG_VALUE_MAX = 256
 
 
-def _build_pfx(cert_pem: bytes, chain_pem: Optional[bytes], privkey_pem: bytes) -> bytes:
+def _build_pfx(cert_pem: bytes, chain_pem: Optional[bytes], privkey_pem: bytes,
+               password: Optional[bytes] = None) -> bytes:
     """Bundle cert + chain + private key into a PKCS12 blob.
 
-    The PFX is unencrypted — Key Vault re-encrypts it at rest on import. If
-    the leaf or key bytes are missing or malformed, ``cryptography`` raises
-    ``ValueError`` directly; we let that propagate so the caller sees a
-    descriptive message.
+    With ``password=None`` the PFX is unencrypted (Key Vault re-encrypts it
+    at rest on import). Pass a non-empty ``password`` (bytes) to encrypt the
+    bundle with ``BestAvailableEncryption`` — required for the on-disk
+    Windows ``.pfx`` export (issue #230). If the leaf or key bytes are
+    missing or malformed, ``cryptography`` raises ``ValueError`` directly; we
+    let that propagate so the caller sees a descriptive message.
     """
     from cryptography.hazmat.primitives.serialization import (
         pkcs12,
         load_pem_private_key,
+        BestAvailableEncryption,
         NoEncryption,
     )
     from cryptography.x509 import load_pem_x509_certificates
@@ -123,12 +127,13 @@ def _build_pfx(cert_pem: bytes, chain_pem: Optional[bytes], privkey_pem: bytes) 
     leaf = load_pem_x509_certificates(cert_pem)[0]
     chain = load_pem_x509_certificates(chain_pem) if chain_pem else []
     key = load_pem_private_key(privkey_pem, password=None)
+    encryption = BestAvailableEncryption(password) if password else NoEncryption()
     return pkcs12.serialize_key_and_certificates(
         name=None,
         key=key,
         cert=leaf,
         cas=chain or None,
-        encryption_algorithm=NoEncryption(),
+        encryption_algorithm=encryption,
     )
 
 

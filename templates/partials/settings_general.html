@@ -46,6 +46,20 @@
                                 </p>
                             </div>
 
+                            <!-- PFX / PKCS#12 export (issue #230) -->
+                            <div>
+                                <label for="pfx_password" class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
+                                    Windows .pfx Export Password
+                                </label>
+                                <input type="password" id="pfx_password" name="pfx_password"
+                                       autocomplete="new-password"
+                                       placeholder="Leave blank to disable / keep current"
+                                       class="w-72 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm">
+                                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                    When set, each certificate is also written as an encrypted <code class="text-xs">cert.pfx</code> (PKCS#12) using this password, downloadable for Windows hosts. Leave blank to disable. Stored like other secrets and never shown again after saving.
+                                </p>
+                            </div>
+
                             <!-- Default Certificate Key Shape -->
                             <div class="border-t border-gray-200 dark:border-gray-600 pt-4">
                                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">

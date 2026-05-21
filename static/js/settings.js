@@ -214,6 +214,16 @@
                 default_elliptic_curve: defaultEllipticCurve
             };
 
+            // PFX export password (#230). Secret field: only send when the
+            // user typed a value — a blank field means "keep existing", which
+            // the backend honours for secret-named keys. Sending the password
+            // empty would be treated the same way, but omitting it keeps the
+            // payload clean.
+            var pfxPasswordField = document.getElementById('pfx_password');
+            if (pfxPasswordField && pfxPasswordField.value) {
+                settings.pfx_password = pfxPasswordField.value;
+            }
+
             // Validate required fields - email comes from the selected CA provider
             if (!settings.email) {
                 var caDisplayName = defaultCA === 'letsencrypt' ? "Let's Encrypt" :
