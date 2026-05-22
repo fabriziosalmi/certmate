@@ -1,3 +1,22 @@
+## v2.8.2 (Security + UX hardening)
+
+A security and UX audit release, bringing rigorous logical hardening and comprehensive audit logging coverage to the backend, along with 60+ UI/UX fixes spanning dark mode, accessibility, and form logic.
+
+### Security & Hardening
+
+- **Enhanced Audit Log Coverage** — Added audit logging to crucial backend operations including DNS account mutations (across both Flask/RESTX routes), storage configuration updates, migrations, and Azure Key Vault backfills.
+- **Path Traversal Protection** — Hardened unified backup downloads with explicit checks denying potential path traversal attempts in request payloads.
+- **UTC Alignment** — Standardized backup pruning and timestamping logic to consistently use UTC timezone across calculations.
+
+### UI & UX Auditing (60+ improvements)
+
+- **Alpine.js Render & Layout Fixes** — Fixed several unclosed HTML tags in Settings templates causing Alpine.js parsing failures; updated obsolete FontAwesome icons (e.g., DNS layout).
+- **Accessibility & ARIA Standards** — Wired focus traps, ARIA landmarks, dialog roles, and focus-restore handlers for all settings and migration modals.
+- **Dark Mode Support** — Cleaned up invisible fields in dark mode across all DNS provider form inputs and improved SMTP text contrast.
+- **Enhanced Form Safeguards** — Added disabled states and loading spinners to diagnostic, test, and notification actions to prevent duplicate clicks and double submissions.
+
+---
+
 ## v2.8.1 (Features + integrations)
 
 A patch release bringing advanced capabilities ported from certmate-ng to the core Python stack, including enhanced log sanitization, zombie certificate scanning, a Model Context Protocol (MCP) server, and simplified one-click diagnostics.
