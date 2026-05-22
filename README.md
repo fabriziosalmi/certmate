@@ -29,6 +29,18 @@
 
 ---
 
+## Ecosystem
+
+CertMate is the open-source core of a small, focused toolset:
+
+- **[certmate-tools](https://github.com/fabriziosalmi/certmate-tools)** — free, privacy-first, client-side TLS / certificate / ACME diagnostics (runs entirely in your browser).
+- **[certmate-agent](https://github.com/fabriziosalmi/certmate-agent)** — conversational assistant: a local LLM mapped 1:1 to CertMate's REST API, with RAG over the docs.
+- **[nis2-public](https://github.com/fabriziosalmi/nis2-public)** — NIS2 continuous posture management & remediation.
+
+**Enterprise / high-scale** — multi-tenant, mTLS, white-label and NIS2-aligned deployments are available through *CertMate-ng* (source-available, BSL 1.1, EU-built). For access or a deployment discussion, email **fabrizio.salmi@gmail.com**.
+
+---
+
 ## Why CertMate?
 
 CertMate solves the complexity of SSL certificate management in modern distributed architectures. Whether you're running a single application or managing certificates across multiple datacenters, CertMate provides:
