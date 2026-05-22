@@ -54,6 +54,7 @@ CertMate solves the complexity of SSL certificate management in modern distribut
 - **Automatic Renewal** - Smart renewal 30 days before expiry
 - **Certificate Validation** - Real-time SSL certificate status checking
 - **Per-Certificate CA Selection** - Choose different CAs for different certificates
+- **Zombie Certificate Scanner** - filesystem scanner to identify and clean up orphan ("zombie") certificates no longer tracked in the active configuration
 
 ### **Multi-DNS Provider Support**
 - **Multi-Account Support** - Manage multiple accounts per provider for enterprise environments
@@ -110,6 +111,7 @@ CertMate solves the complexity of SSL certificate management in modern distribut
 - **Audit Logging** - Complete certificate lifecycle tracking with timeline view
 - **Environment Variables** - Secure credential management
 - **Rate Limit Handling** - Let's Encrypt rate limit awareness
+- **Log Sanitizer** - Automatically redacts sensitive parameters, private keys, and API tokens from application logs
 
 ### **User Interface**
 - **Command Palette** - Cmd+K / Ctrl+K quick search and navigation
@@ -127,6 +129,7 @@ CertMate solves the complexity of SSL certificate management in modern distribut
 - **Deploy Hook API** - Configure and test post-issuance hooks via REST API
 - **Backup API** - Programmatic backup creation and restoration
 - **Swagger & ReDoc** - Interactive API documentation at `/docs/` and `/redoc/`
+- **Model Context Protocol (MCP) Server** - Built-in Node.js MCP server providing tools for agentic AI assistants to manage certificates and run diagnostics
 
 ## Supported DNS Providers
 
@@ -760,6 +763,10 @@ Authorization: Bearer your_token_here
 
 # Check certificate deployment status
 GET /api/certificates/example.com/deployment-status
+Authorization: Bearer your_token_here
+
+# Scan filesystem for orphan ("zombie") certificates no longer tracked by Certbot
+POST /api/certificates/zombies/scan
 Authorization: Bearer your_token_here
 ```
 

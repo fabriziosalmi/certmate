@@ -15,6 +15,7 @@ Welcome to the CertMate documentation. This folder contains comprehensive guides
 - **[DNS Providers](./dns-providers.md)** — supported providers, multi-account, domain alias
 - **[CA Providers](./ca-providers.md)** — Let's Encrypt, DigiCert, Private CA
 - **[Client Certificates](./guide.md)** — Client cert lifecycle, web dashboard, batch ops
+- **[Model Context Protocol (MCP) Server](./mcp.md)** — Standalone Node.js server for AI agent integrations
 
 ### Reference
 - **[API Reference](./api.md)** — Complete REST API documentation
@@ -50,11 +51,14 @@ Welcome to the CertMate documentation. This folder contains comprehensive guides
 
 ### Server Certificates
 - **two dozen+ DNS providers** for Let's Encrypt DNS-01 challenges (see [DNS Providers](./dns-providers.md) for the full list)
-- **Multiple CA providers**: Let's Encrypt, DigiCert ACME, Private CA
+- **Multiple CA providers**: Let's Encrypt, DigiCert, Private CA
 - **Multi-account support** per DNS provider
 - **Pluggable storage backends**: Local, Azure Key Vault, AWS, Vault, Infisical
 - **Auto-renewal** with configurable thresholds
 - **Docker support** with multi-platform builds (ARM64 + AMD64)
+- **Log Sanitizer** — Automatically redacts API tokens, private keys, and sensitive credentials from CertMate logs
+- **Zombie Certificate Scanner** — Multi-threaded filesystem scanner to identify and clean up orphan certificates
+- **Model Context Protocol (MCP) Server** — Standalone Node.js server to integrate with agentic AI assistants
 
 ### Client Certificates
 - **Self-signed CA** with 4096-bit RSA keys
