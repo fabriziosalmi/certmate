@@ -52,7 +52,7 @@ class ZombieScanner:
             requests.head(
                 f"https://{target}",
                 timeout=self.timeout,
-                verify=False,  # nosec B501 lgtm
+                verify=False,  # lgtm [py/disabled-certificate-validation] # nosec
                 headers={"User-Agent": "CertMate-ZombieScanner/1.0"}
             )
             # Any HTTP response means the host is alive
@@ -64,7 +64,7 @@ class ZombieScanner:
                 requests.head(
                     f"http://{target}",
                     timeout=self.timeout,
-                    verify=False,  # nosec B501 lgtm
+                    verify=False,  # lgtm [py/disabled-certificate-validation] # nosec
                     headers={"User-Agent": "CertMate-ZombieScanner/1.0"}
                 )
                 return 'alive'
