@@ -278,14 +278,15 @@ class DeployManager:
                 with os.fdopen(tmp_fd, 'w') as f:
                     f.writelines(tail)
                 os.replace(tmp_path, str(self._history_path))
-            except Exception:
+            except Exception as e:
+                logger.warning("Deploy history truncation failed: %s", e)
                 try:
                     os.unlink(tmp_path)
                 except OSError:
                     pass
                 raise
-        except OSError:
-            pass
+        except OSError as e:
+            logger.warning("Deploy history truncation failed (OS error): %s", e)
 
     def get_history(self, limit=50, domain=None):
         """Read recent deploy history entries, newest first.

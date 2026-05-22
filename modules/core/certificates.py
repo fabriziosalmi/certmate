@@ -205,7 +205,8 @@ class CertificateManager:
         pfx_path = domain_dir / 'cert.pfx'
         try:
             settings = self.settings_manager.load_settings()
-        except Exception:
+        except Exception as e:
+            logger.debug("Failed to load settings for PFX generation: %s", e)
             settings = {}
         password = ''
         if isinstance(settings, dict):
@@ -575,7 +576,8 @@ class CertificateManager:
             if cache_settings is None:
                 try:
                     cache_settings = self.settings_manager.load_settings()
-                except Exception:
+                except Exception as e:
+                    logger.debug("Failed to load settings in get_certificate_info: %s", e)
                     cache_settings = {}
             if cache_enabled:
                 cached = self._get_cached_certificate_info(domain, cache_settings)
@@ -965,7 +967,8 @@ class CertificateManager:
                 try:
                     settings = self.settings_manager.load_settings()
                     propagation_map = settings.get('dns_propagation_seconds', {}) or {}
-                except Exception:
+                except Exception as e:
+                    logger.debug("Failed to load settings in issue_certificate for propagation time: %s", e)
                     propagation_map = {}
 
                 # Default to strategy default if not in settings map
@@ -1067,7 +1070,7 @@ class CertificateManager:
                 'san_domains': all_domains[1:] if len(all_domains) > 1 else [],
                 'dns_provider': dns_provider,
                 'challenge_type': challenge_type,
-                'created_at': datetime.now().isoformat(),
+                'created_at': utc_now_iso(),
                 'email': email,
                 'staging': staging,
                 'account_id': account_id
@@ -1264,7 +1267,7 @@ class CertificateManager:
                 # Update metadata with renewal timestamp
                 if metadata_file.exists():
                     try:
-                        metadata['renewed_at'] = datetime.now().isoformat()
+                        metadata['renewed_at'] = utc_now_iso()
                         self._save_metadata(domain, metadata)
                         logger.info(f"Updated renewal timestamp in metadata for {domain}")
                     except Exception as e:
