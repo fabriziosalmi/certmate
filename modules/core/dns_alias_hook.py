@@ -177,6 +177,26 @@ def _lexicon_config(provider, alias_domain, provider_config):
     return base
 
 
+def _find_azure_zone(provider_config, alias_domain):
+    try:
+        from lexicon.client import Client
+    except Exception as exc:
+        raise DNSAliasError("dns-lexicon is required for this DNS alias provider") from exc
+
+    for zone in _zone_guesses(alias_domain):
+        if zone == 'com' or '.' not in zone:
+            continue
+        try:
+            lexicon_config = _lexicon_config('azure', zone, provider_config)
+            with Client(lexicon_config) as operations:
+                # Call list_records to verify if the zone is valid/exists
+                operations.list_records(rtype='TXT')
+                return zone
+        except Exception:
+            continue
+    raise DNSAliasError(f"Unable to determine Azure DNS zone for alias '{alias_domain}'")
+
+
 def _lexicon_change(config, validation, action):
     provider = config['provider']
     provider_config = _provider_config(config)
@@ -188,7 +208,12 @@ def _lexicon_change(config, validation, action):
     except Exception as exc:
         raise DNSAliasError("dns-lexicon is required for this DNS alias provider") from exc
 
-    lexicon_config = _lexicon_config(provider, alias_domain, provider_config)
+    resolved_zone = config.get('resolved_zone')
+    if not resolved_zone and provider == 'azure':
+        resolved_zone = _find_azure_zone(provider_config, alias_domain)
+
+    lexicon_domain = resolved_zone if resolved_zone else alias_domain
+    lexicon_config = _lexicon_config(provider, lexicon_domain, provider_config)
     with Client(lexicon_config) as operations:
         if action == 'create':
             operations.create_record('TXT', record, validation)

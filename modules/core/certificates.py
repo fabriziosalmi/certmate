@@ -388,16 +388,45 @@ class CertificateManager:
                     f"ACME-DNS domain_alias must match configured subdomain '{configured_alias}'"
                 )
 
+        resolved_zone = None
+        if dns_provider == 'azure':
+            from .dns_zone_discovery import (
+                has_zone_discovery, resolve_zones_for_domains,
+                resolve_zones_against_explicit_list,
+            )
+            if has_zone_discovery(dns_provider):
+                explicit_zones = dns_config.get('zone_domains') if isinstance(dns_config, dict) else None
+                try:
+                    if explicit_zones:
+                        zone_domains, _ = resolve_zones_against_explicit_list(
+                            dns_provider, explicit_zones, [domain_alias]
+                        )
+                    else:
+                        zone_domains, _ = resolve_zones_for_domains(
+                            dns_provider, dns_config, [domain_alias]
+                        )
+                    if zone_domains:
+                        resolved_zone = zone_domains[0]
+                except Exception as exc:
+                    logger.warning(
+                        "DNS alias zone resolution failed for provider '%s' and alias '%s': %s. "
+                        "Fallback resolver in hook will be used.",
+                        dns_provider, domain_alias, exc
+                    )
+
         fd, path = tempfile.mkstemp(prefix='certmate-dns-alias-', suffix='.json')
         config_path = Path(path)
+        payload = {
+            'provider': dns_provider,
+            'domain_alias': domain_alias.strip().rstrip('.'),
+            'propagation_seconds': int(propagation_seconds),
+            'config': dns_config,
+        }
+        if resolved_zone:
+            payload['resolved_zone'] = resolved_zone
         try:
             with os.fdopen(fd, 'w') as f:
-                json.dump({
-                    'provider': dns_provider,
-                    'domain_alias': domain_alias.strip().rstrip('.'),
-                    'propagation_seconds': int(propagation_seconds),
-                    'config': dns_config,
-                }, f)
+                json.dump(payload, f)
             config_path.chmod(0o600)
             return config_path
         except Exception:
