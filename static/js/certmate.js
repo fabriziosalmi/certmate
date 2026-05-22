@@ -548,6 +548,48 @@
         });
     }
 
+    CM.copyDiagnosticsSnapshot = function(buttonEl) {
+        var originalText = buttonEl ? buttonEl.innerHTML : '';
+        if (buttonEl) {
+            buttonEl.disabled = true;
+            buttonEl.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Copying…';
+        }
+        return CM.api('GET', '/api/diagnostics/snapshot')
+            .then(function(data) {
+                var text = JSON.stringify(data, null, 2);
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    return navigator.clipboard.writeText(text).then(function() {
+                        CM.toast('Diagnostic snapshot copied to clipboard!', 'success');
+                    });
+                } else {
+                    // Fallback using temporary textarea
+                    var textarea = document.createElement('textarea');
+                    textarea.value = text;
+                    textarea.style.position = 'fixed';
+                    textarea.style.opacity = '0';
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    try {
+                        document.execCommand('copy');
+                        CM.toast('Diagnostic snapshot copied to clipboard!', 'success');
+                    } catch (err) {
+                        CM.toast('Failed to copy snapshot. Copy it manually from the console.', 'error');
+                        console.log(text);
+                    }
+                    document.body.removeChild(textarea);
+                }
+            })
+            .catch(function(err) {
+                CM.toast('Failed to retrieve diagnostic snapshot: ' + (err.message || err), 'error');
+            })
+            .finally(function() {
+                if (buttonEl) {
+                    buttonEl.disabled = false;
+                    buttonEl.innerHTML = originalText;
+                }
+            });
+    };
+
     // ── Expose globally ──────────────────────────────────────────
     window.CertMate = CM;
 

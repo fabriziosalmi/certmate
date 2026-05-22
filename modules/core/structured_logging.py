@@ -29,6 +29,7 @@ import logging
 import time
 import threading
 import os
+import re
 from datetime import datetime
 from .utils import utc_now
 from typing import Any, Dict, Optional
@@ -53,6 +54,23 @@ class JSONFormatter(logging.Formatter):
         'stack_info', 'exc_info', 'exc_text', 'thread', 'threadName',
         'taskName', 'message'
     }
+
+    # Sensitive keywords to match in field names (case-insensitive)
+    SENSITIVE_FIELD_PATTERNS = {
+        'password', 'token', 'secret', 'api_key', 'api_token', 'private_key',
+        'privkey', 'key_pem', 'encryption_key', 'credentials', 'bearer_token',
+        'auth', 'jwt'
+    }
+
+    # Matches any PEM block structure
+    PEM_RE = re.compile(r'-----BEGIN[^-]+-----.*?-----END[^-]+-----', re.DOTALL)
+
+    # Matches key-value assignments containing sensitive keywords (double-quoted, single-quoted, or bare words)
+    SENSITIVE_KV_RE = re.compile(
+        r'(\b[a-zA-Z0-9_]*(?:' + '|'.join(SENSITIVE_FIELD_PATTERNS) + r')[a-zA-Z0-9_]*\b\s*[:=]\s*)'
+        r'(?:"[^"\\]*(?:\\.[^"\\]*)*"|\'[^\'\\]*(?:\\.[^\'\\]*)*\'|[a-zA-Z0-9_\-\.\+\/\=\*@#\$%\|\^&\(\)\[\]\{\}]+)',
+        re.IGNORECASE
+    )
     
     def __init__(self, include_hostname: bool = True, include_pid: bool = True):
         super().__init__()
@@ -60,6 +78,36 @@ class JSONFormatter(logging.Formatter):
         self.include_pid = include_pid
         self._hostname = os.uname().nodename if include_hostname else None
         self._pid = os.getpid() if include_pid else None
+
+    def _sanitize_string(self, s: str) -> str:
+        """Replace PEM blocks and key-value secrets in unstructured text"""
+        if not isinstance(s, str):
+            return s
+        # Redact PEM blocks
+        s = self.PEM_RE.sub('[PEM REDACTED]', s)
+        # Redact inline key-value secrets
+        s = self.SENSITIVE_KV_RE.sub(r'\1"[REDACTED]"', s)
+        return s
+
+    def sanitize_data(self, data: Any, key_context: Optional[str] = None) -> Any:
+        """Recursively sanitize keys and values in data structures"""
+        if isinstance(data, dict):
+            sanitized = {}
+            for k, v in data.items():
+                k_lower = k.lower()
+                is_sensitive = any(pattern in k_lower for pattern in self.SENSITIVE_FIELD_PATTERNS)
+                if is_sensitive:
+                    sanitized[k] = '[REDACTED]'
+                else:
+                    sanitized[k] = self.sanitize_data(v, key_context=k)
+            return sanitized
+        elif isinstance(data, list):
+            if key_context and any(pattern in key_context.lower() for pattern in self.SENSITIVE_FIELD_PATTERNS):
+                return '[REDACTED]'
+            return [self.sanitize_data(item, key_context) for item in data]
+        elif isinstance(data, str):
+            return self._sanitize_string(data)
+        return data
     
     def format(self, record: logging.LogRecord) -> str:
         """Format log record as JSON"""
@@ -105,7 +153,10 @@ class JSONFormatter(logging.Formatter):
         if record.exc_info:
             log_entry['exception'] = self.formatException(record.exc_info)
         
-        return json.dumps(log_entry, default=str)
+        # Recursively sanitize everything in the log entry
+        sanitized_entry = self.sanitize_data(log_entry)
+        
+        return json.dumps(sanitized_entry, default=str)
 
 
 class StructuredLogger:

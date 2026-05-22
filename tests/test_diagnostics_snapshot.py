@@ -129,6 +129,9 @@ class TestSnapshotShape:
             'scheduler_running', 'certificate_count',
             'dns_provider', 'default_ca', 'challenge_type', 'storage_backend',
             'disk_free_bytes', 'disk_total_bytes', 'recent_audit',
+            'cryptography_version', 'openssl_version', 'certbot_version',
+            'storage_permissions', 'configured_domains_count', 'active_dns_providers',
+            'sso_oidc_enabled', 'backup_count', 'backup_total_size', 'sanitized_logs',
         ):
             assert k in body, f"missing field: {k}"
 
@@ -144,6 +147,91 @@ class TestSnapshotShape:
         assert body['default_ca'] == 'letsencrypt'
         assert body['challenge_type'] == 'dns-01'
         assert body['storage_backend'] == 'local_filesystem'
+
+    def test_new_fields_content(self, managers, tmp_path):
+        # Configure settings mock
+        managers['settings'].load_settings.return_value = {
+            'domains': ['example.com', 'test.com'],
+            'dns_providers': {
+                'cloudflare': {
+                    'accounts': {
+                        'primary': {
+                            'name': 'Primary Cloudflare',
+                            'description': 'Main Cloudflare Account',
+                            'api_token': 'secret_token_123'
+                        }
+                    }
+                }
+            }
+        }
+        
+        # Configure file_ops logs and backups mock
+        log_dir = Path(tmp_path) / 'logs'
+        log_dir.mkdir(parents=True, exist_ok=True)
+        log_file = log_dir / 'certmate.log'
+        log_file.write_text(
+            '{"timestamp": "2026-05-22", "message": "Starting server", "secret": "leaky_secret_value"}\n'
+            'Plain text line with private_key=abc123secret\n'
+            '-----BEGIN PRIVATE KEY-----MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC7-----END PRIVATE KEY-----\n'
+        )
+        
+        managers['file_ops'].logs_dir = log_dir
+        managers['file_ops'].list_backups.return_value = {
+            'unified': [
+                {'filename': 'backup_1.zip', 'metadata': {'size': 1000}},
+                {'filename': 'backup_2.zip', 'metadata': {'size': 2500}}
+            ]
+        }
+        
+        # Configure OIDC manager mock
+        oidc_mock = MagicMock()
+        oidc_mock.is_enabled.return_value = True
+        managers['oidc'] = oidc_mock
+
+        # Configure ShellExecutor mock for certbot version
+        shell_mock = MagicMock()
+        shell_mock.run.return_value = MagicMock(stdout='certbot 2.4.0', stderr='')
+        managers['shell_executor'] = shell_mock
+
+        app = _build_app(managers, data_dir=tmp_path)
+        body = app.test_client().get('/api/diagnostics/snapshot').get_json()
+
+        # Check cryptography and openssl versions exist
+        assert body['cryptography_version'] is not None
+        assert body['openssl_version'] is not None
+        assert body['certbot_version'] == 'certbot 2.4.0'
+
+        # Check storage permissions
+        perms = body['storage_permissions']
+        assert 'cert_dir_readable' in perms
+        assert 'cert_dir_writable' in perms
+        assert 'data_dir_readable' in perms
+        assert 'data_dir_writable' in perms
+
+        # Check configuration summary
+        assert body['configured_domains_count'] == 2
+        assert 'cloudflare' in body['active_dns_providers']
+        assert body['active_dns_providers']['cloudflare'][0]['id'] == 'primary'
+        assert body['active_dns_providers']['cloudflare'][0]['name'] == 'Primary Cloudflare'
+        # Crucial security check: api_token is omitted/redacted from the accounts list!
+        assert 'api_token' not in body['active_dns_providers']['cloudflare'][0]
+        assert body['sso_oidc_enabled'] is True
+
+        # Check backups
+        assert body['backup_count'] == 2
+        assert body['backup_total_size'] == 3500
+
+        # Check sanitized logs
+        logs = body['sanitized_logs']
+        assert len(logs) == 3
+        # JSON parsed line sanitization:
+        assert isinstance(logs[0], dict)
+        assert logs[0]['secret'] == '[REDACTED]'
+        # Plain text line sanitization:
+        assert 'abc123secret' not in logs[1]
+        assert '[REDACTED]' in logs[1]
+        # PEM blocks:
+        assert '[PEM REDACTED]' in logs[2]
 
 
 class TestSnapshotSanitization:

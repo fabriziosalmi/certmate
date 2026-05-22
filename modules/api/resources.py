@@ -269,10 +269,70 @@ def create_api_resources(api, models, managers):
             import platform
             import shutil
             import sys
+            import os
+            import ssl
+            import json
 
             from .. import __version__ as _certmate_version
 
             errors = {}
+
+            # --- System info ---
+            cryptography_version = None
+            try:
+                import cryptography
+                cryptography_version = cryptography.__version__
+            except Exception as e:
+                logger.warning(f"Diagnostic: failed to read cryptography version: {e}")
+                errors['cryptography_version'] = 'unavailable'
+
+            openssl_version = None
+            try:
+                openssl_version = ssl.OPENSSL_VERSION
+            except Exception as e:
+                logger.warning(f"Diagnostic: failed to read OpenSSL version: {e}")
+                errors['openssl_version'] = 'unavailable'
+
+            shell_executor = managers.get('shell_executor') or (certificate_manager and getattr(certificate_manager, 'shell_executor', None))
+            certbot_version = None
+            if shell_executor:
+                try:
+                    res = shell_executor.run(['.venv/bin/certbot', '--version'], timeout=5)
+                    if res and hasattr(res, 'stdout') and isinstance(res.stdout, str):
+                        stdout_str = res.stdout or ''
+                        stderr_str = res.stderr or '' if isinstance(res.stderr, str) else ''
+                        out = stdout_str + stderr_str
+                        if out.strip():
+                            certbot_version = out.strip()
+                except Exception:
+                    pass
+                if not certbot_version:
+                    try:
+                        res = shell_executor.run(['certbot', '--version'], timeout=5)
+                        if res and hasattr(res, 'stdout') and isinstance(res.stdout, str):
+                            stdout_str = res.stdout or ''
+                            stderr_str = res.stderr or '' if isinstance(res.stderr, str) else ''
+                            out = stdout_str + stderr_str
+                            if out.strip():
+                                certbot_version = out.strip()
+                    except Exception:
+                        pass
+            if not certbot_version:
+                errors['certbot_version'] = 'unavailable'
+
+            # --- Storage health ---
+            cert_dir = getattr(certificate_manager, 'cert_dir', None)
+            data_dir = current_app.config.get('DATA_DIR') or '.'
+
+            cert_dir_path = cert_dir if isinstance(cert_dir, (str, Path)) else None
+            data_dir_path = data_dir if isinstance(data_dir, (str, Path)) else None
+
+            storage_permissions = {
+                'cert_dir_readable': os.access(str(cert_dir_path), os.R_OK) if cert_dir_path else False,
+                'cert_dir_writable': os.access(str(cert_dir_path), os.W_OK) if cert_dir_path else False,
+                'data_dir_readable': os.access(str(data_dir_path), os.R_OK) if data_dir_path else False,
+                'data_dir_writable': os.access(str(data_dir_path), os.W_OK) if data_dir_path else False,
+            }
 
             # --- Application / runtime identity ---
             payload = {
@@ -280,6 +340,10 @@ def create_api_resources(api, models, managers):
                 'python_version': sys.version.split()[0],
                 'os_platform': platform.platform(),
                 'container': Path('/.dockerenv').exists(),
+                'cryptography_version': cryptography_version,
+                'openssl_version': openssl_version,
+                'certbot_version': certbot_version,
+                'storage_permissions': storage_permissions,
             }
 
             # --- Background scheduler liveness ---
@@ -299,7 +363,7 @@ def create_api_resources(api, models, managers):
                 payload['certificate_count'] = None
                 errors['certificate_count'] = 'failed_to_enumerate'
 
-            # --- Configuration scalars (names only, never credentials) ---
+            # --- Configuration scalars & summary ---
             try:
                 settings = settings_manager.load_settings() or {}
                 payload['dns_provider'] = settings.get('dns_provider')
@@ -307,14 +371,55 @@ def create_api_resources(api, models, managers):
                 payload['challenge_type'] = settings.get('challenge_type')
                 cert_storage = settings.get('certificate_storage') or {}
                 payload['storage_backend'] = cert_storage.get('backend')
+                payload['configured_domains_count'] = len(settings.get('domains', [])) if isinstance(settings.get('domains'), list) else 0
+
+                # Active DNS providers (by type, with credentials omitted)
+                active_dns_providers = {}
+                dns_providers = settings.get('dns_providers', {})
+                if isinstance(dns_providers, dict):
+                    for provider_name, provider_config in dns_providers.items():
+                        if not provider_config or not isinstance(provider_config, dict):
+                            continue
+                        accounts_list = []
+                        if 'accounts' in provider_config and isinstance(provider_config['accounts'], dict):
+                            for acc_id, acc_config in provider_config['accounts'].items():
+                                if isinstance(acc_config, dict):
+                                    accounts_list.append({
+                                        'id': acc_id,
+                                        'name': acc_config.get('name', acc_id),
+                                        'description': acc_config.get('description', '')
+                                    })
+                        else:
+                            accounts_list.append({
+                                'id': 'default',
+                                'name': provider_config.get('name', 'Default Account'),
+                                'description': provider_config.get('description', 'Legacy single-account config')
+                            })
+                        if accounts_list:
+                            active_dns_providers[provider_name] = accounts_list
+                payload['active_dns_providers'] = active_dns_providers
+
             except Exception as e:
                 logger.warning(f"Diagnostic: failed to read settings scalars: {e}")
                 errors['settings'] = 'failed_to_read'
 
+            # SSO / OIDC status
+            try:
+                oidc_manager = managers.get('oidc')
+                if oidc_manager:
+                    enabled_val = oidc_manager.is_enabled()
+                    payload['sso_oidc_enabled'] = bool(enabled_val) if isinstance(enabled_val, bool) else False
+                else:
+                    payload['sso_oidc_enabled'] = False
+            except Exception as e:
+                logger.warning(f"Diagnostic: failed to query OIDC status: {e}")
+                payload['sso_oidc_enabled'] = False
+                errors['sso_oidc'] = 'failed_to_query'
+
             # --- Free disk on the data partition ---
             try:
-                data_dir = current_app.config.get('DATA_DIR') or '.'
-                usage = shutil.disk_usage(str(data_dir))
+                data_dir_path = current_app.config.get('DATA_DIR') or '.'
+                usage = shutil.disk_usage(str(data_dir_path))
                 payload['disk_free_bytes'] = usage.free
                 payload['disk_total_bytes'] = usage.total
             except Exception as e:
@@ -322,6 +427,53 @@ def create_api_resources(api, models, managers):
                 payload['disk_free_bytes'] = None
                 payload['disk_total_bytes'] = None
                 errors['disk_usage'] = 'permission_or_path_unavailable'
+
+            # --- Backup history ---
+            backup_count = 0
+            backup_total_size = 0
+            file_ops = managers.get('file_ops')
+            if file_ops:
+                try:
+                    backups = file_ops.list_backups()
+                    if isinstance(backups, dict):
+                        unified_list = backups.get('unified', [])
+                        if isinstance(unified_list, list):
+                            backup_count = len(unified_list)
+                            backup_total_size = sum(item.get('metadata', {}).get('size', 0) for item in unified_list if isinstance(item, dict))
+                except Exception as e:
+                    logger.warning(f"Diagnostic: failed to read backup metrics: {e}")
+                    errors['backups'] = 'failed_to_list'
+            payload['backup_count'] = backup_count
+            payload['backup_total_size'] = backup_total_size
+
+            # --- Sanitized Logs (last 50 lines) ---
+            sanitized_logs = []
+            if file_ops and getattr(file_ops, 'logs_dir', None) and isinstance(file_ops.logs_dir, (str, Path)):
+                try:
+                    log_file = file_ops.logs_dir / 'certmate.log'
+                    if log_file.exists() and log_file.is_file():
+                        from collections import deque
+                        with open(log_file, 'r', encoding='utf-8') as f:
+                            last_lines = list(deque(f, maxlen=50))
+                        
+                        from modules.core.structured_logging import JSONFormatter
+                        formatter = JSONFormatter()
+                        
+                        for line in last_lines:
+                            line_str = line.strip()
+                            if not line_str:
+                                continue
+                            try:
+                                parsed = json.loads(line_str)
+                                sanitized_parsed = formatter.sanitize_data(parsed)
+                                sanitized_logs.append(sanitized_parsed)
+                            except Exception:
+                                sanitized_str = formatter.sanitize_data(line_str)
+                                sanitized_logs.append(sanitized_str)
+                except Exception as e:
+                    logger.warning(f"Diagnostic: failed to read sanitized logs: {e}")
+                    errors['sanitized_logs'] = 'failed_to_read'
+            payload['sanitized_logs'] = sanitized_logs
 
             # --- Recent audit (sanitized: identifiers stripped) ---
             # Only timestamp / operation / resource_type / status survive
@@ -332,15 +484,18 @@ def create_api_resources(api, models, managers):
             # which domain from which IP.
             try:
                 raw_entries = audit_logger.get_recent_entries(limit=5) if audit_logger else []
-                payload['recent_audit'] = [
-                    {
-                        'timestamp': (e or {}).get('timestamp'),
-                        'operation': (e or {}).get('operation'),
-                        'resource_type': (e or {}).get('resource_type'),
-                        'status': (e or {}).get('status'),
-                    }
-                    for e in (raw_entries or [])[:5]
-                ]
+                if isinstance(raw_entries, list):
+                    payload['recent_audit'] = [
+                        {
+                            'timestamp': (e or {}).get('timestamp'),
+                            'operation': (e or {}).get('operation'),
+                            'resource_type': (e or {}).get('resource_type'),
+                            'status': (e or {}).get('status'),
+                        }
+                        for e in raw_entries[:5] if isinstance(e, dict)
+                    ]
+                else:
+                    payload['recent_audit'] = []
             except Exception as e:
                 logger.warning(f"Diagnostic: audit log read failed: {e}")
                 payload['recent_audit'] = []
@@ -833,6 +988,53 @@ def create_api_resources(api, models, managers):
                     'error': 'Certificate creation failed unexpectedly',
                     'hint': 'Check application logs for detailed error information.'
                 }, 500
+
+    class ZombieScan(Resource):
+        @api.doc(security='Bearer')
+        @auth_manager.require_role('admin')
+        def post(self):
+            """Scan active certificates for zombie domains."""
+            try:
+                from ..core.zombie import ZombieScanner
+                
+                user = getattr(request, 'current_user', None) or {}
+                scope = user.get('allowed_domains')
+                settings = settings_manager.load_settings()
+                certificates = []
+
+                all_domains = set()
+
+                # Add domains from settings
+                for domain_entry in settings.get('domains', []):
+                    if isinstance(domain_entry, str):
+                        domain = domain_entry
+                    elif isinstance(domain_entry, dict):
+                        domain = domain_entry.get('domain')
+                    else:
+                        continue
+                    if domain:
+                        all_domains.add(domain)
+
+                # Also check for certificates that exist on disk but might not be in settings
+                for cert_dir_path in iter_cert_domain_dirs(certificate_manager.cert_dir):
+                    all_domains.add(cert_dir_path.name)
+
+                # Get certificate info for all domains
+                for domain in all_domains:
+                    if not domain:
+                        continue
+                    if not auth_manager.domain_matches_scope(domain, scope):
+                        continue
+                    cert_info = certificate_manager.get_certificate_info(domain)
+                    if cert_info:
+                        certificates.append(cert_info)
+
+                scanner = ZombieScanner()
+                scan_results = scanner.scan_certificates(certificates)
+                return scan_results, 200
+            except Exception as e:
+                logger.error(f"Error scanning certificates for zombies: {e}")
+                return {'error': 'Failed to perform zombie scan'}, 500
 
     class CheckDNSAlias(Resource):
         @api.doc(security='Bearer')
@@ -2604,6 +2806,7 @@ def create_api_resources(api, models, managers):
         'CacheClear': CacheClear,
         'CertificateList': CertificateList,
         'CreateCertificate': CreateCertificate,
+        'ZombieScan': ZombieScan,
         'CheckDNSAlias': CheckDNSAlias,
         'CertificateDNSAliasCheck': CertificateDNSAliasCheck,
         'CertificateDetail': CertificateDetail,
