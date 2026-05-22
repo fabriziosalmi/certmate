@@ -304,8 +304,8 @@ def create_api_resources(api, models, managers):
                         out = stdout_str + stderr_str
                         if out.strip():
                             certbot_version = out.strip()
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("Failed to run .venv/bin/certbot --version: %s", e)
                 if not certbot_version:
                     try:
                         res = shell_executor.run(['certbot', '--version'], timeout=5)
@@ -315,8 +315,8 @@ def create_api_resources(api, models, managers):
                             out = stdout_str + stderr_str
                             if out.strip():
                                 certbot_version = out.strip()
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.debug("Failed to run certbot --version fallback: %s", e)
             if not certbot_version:
                 errors['certbot_version'] = 'unavailable'
 
@@ -681,6 +681,19 @@ def create_api_resources(api, models, managers):
             """Clear deployment cache"""
             try:
                 cleared_count = cache_manager.clear_cache()
+                if audit_logger:
+                    user = getattr(request, 'current_user', None) or {}
+                    audit_logger.log_operation(
+                        operation='clear',
+                        resource_type='cache',
+                        resource_id='deployment_cache',
+                        status='success',
+                        details={
+                            'cleared_entries': cleared_count
+                        },
+                        user=user.get('username'),
+                        ip_address=request.remote_addr,
+                    )
                 return {
                     'success': True,
                     'message': 'Cache cleared successfully',
@@ -688,6 +701,17 @@ def create_api_resources(api, models, managers):
                 }
             except Exception as e:
                 logger.error(f"Error clearing cache: {e}")
+                if audit_logger:
+                    user = getattr(request, 'current_user', None) or {}
+                    audit_logger.log_operation(
+                        operation='clear',
+                        resource_type='cache',
+                        resource_id='deployment_cache',
+                        status='failure',
+                        user=user.get('username'),
+                        ip_address=request.remote_addr,
+                        error=str(e)
+                    )
                 return {
                     'success': False,
                     'message': 'Failed to clear cache',
@@ -1164,8 +1188,8 @@ def create_api_resources(api, models, managers):
                     try:
                         with open(metadata_file, 'r') as f:
                             metadata = _json.load(f)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.warning("Failed to load metadata.json for domain %s: %s", domain, e)
 
                 old_provider = metadata.get('dns_provider')
                 if new_dns_provider:
@@ -1944,10 +1968,42 @@ def create_api_resources(api, models, managers):
                     return {'error': 'Account name and provider required'}, 400
 
                 if dns_manager.add_account(name, req_provider, config):
+                    if audit_logger:
+                        user = getattr(request, 'current_user', None) or {}
+                        audit_logger.log_operation(
+                            operation='create_account',
+                            resource_type='dns_provider',
+                            resource_id=f"{req_provider}:{name}",
+                            status='success',
+                            user=user.get('username'),
+                            ip_address=request.remote_addr,
+                        )
                     return {'success': True, 'message': 'Account created', 'id': name}, 200
+
+                if audit_logger:
+                    user = getattr(request, 'current_user', None) or {}
+                    audit_logger.log_operation(
+                        operation='create_account',
+                        resource_type='dns_provider',
+                        resource_id=f"{req_provider}:{name}" if req_provider and name else 'unknown',
+                        status='failure',
+                        user=user.get('username'),
+                        ip_address=request.remote_addr,
+                    )
                 return {'error': 'Failed to add account'}, 500
             except Exception as e:
                 logger.error(f"Error adding DNS account: {e}")
+                if audit_logger:
+                    user = getattr(request, 'current_user', None) or {}
+                    audit_logger.log_operation(
+                        operation='create_account',
+                        resource_type='dns_provider',
+                        resource_id=f"{req_provider}:{name}" if 'req_provider' in locals() and 'name' in locals() else 'unknown',
+                        status='failure',
+                        user=user.get('username'),
+                        ip_address=request.remote_addr,
+                        error=str(e)
+                    )
                 return {'error': str(e)}, 500
 
     class DNSAccountDetail(Resource):
@@ -1974,10 +2030,45 @@ def create_api_resources(api, models, managers):
                 if dns_manager.add_account(account_id, provider, merged):
                     if set_as_default:
                         dns_manager.set_default_account(provider, account_id)
+                    if audit_logger:
+                        user = getattr(request, 'current_user', None) or {}
+                        audit_logger.log_operation(
+                            operation='update_account',
+                            resource_type='dns_provider',
+                            resource_id=f"{provider}:{account_id}",
+                            status='success',
+                            details={
+                                'set_as_default': set_as_default
+                            },
+                            user=user.get('username'),
+                            ip_address=request.remote_addr,
+                        )
                     return {'success': True, 'message': 'Account updated'}
+
+                if audit_logger:
+                    user = getattr(request, 'current_user', None) or {}
+                    audit_logger.log_operation(
+                        operation='update_account',
+                        resource_type='dns_provider',
+                        resource_id=f"{provider}:{account_id}",
+                        status='failure',
+                        user=user.get('username'),
+                        ip_address=request.remote_addr,
+                    )
                 return {'error': 'Failed to update account'}, 500
             except Exception as e:
                 logger.error(f"Error updating DNS account: {e}")
+                if audit_logger:
+                    user = getattr(request, 'current_user', None) or {}
+                    audit_logger.log_operation(
+                        operation='update_account',
+                        resource_type='dns_provider',
+                        resource_id=f"{provider}:{account_id}",
+                        status='failure',
+                        user=user.get('username'),
+                        ip_address=request.remote_addr,
+                        error=str(e)
+                    )
                 return {'error': str(e)}, 500
 
         @api.doc(security='Bearer')
@@ -1986,10 +2077,42 @@ def create_api_resources(api, models, managers):
             """Delete a DNS provider account"""
             try:
                 if dns_manager.delete_account(provider, account_id):
+                    if audit_logger:
+                        user = getattr(request, 'current_user', None) or {}
+                        audit_logger.log_operation(
+                            operation='delete_account',
+                            resource_type='dns_provider',
+                            resource_id=f"{provider}:{account_id}",
+                            status='success',
+                            user=user.get('username'),
+                            ip_address=request.remote_addr,
+                        )
                     return {'success': True, 'message': 'Account deleted'}
+
+                if audit_logger:
+                    user = getattr(request, 'current_user', None) or {}
+                    audit_logger.log_operation(
+                        operation='delete_account',
+                        resource_type='dns_provider',
+                        resource_id=f"{provider}:{account_id}",
+                        status='failure',
+                        user=user.get('username'),
+                        ip_address=request.remote_addr,
+                    )
                 return {'error': 'Failed to delete account'}, 500
             except Exception as e:
                 logger.error(f"Error deleting DNS account: {e}")
+                if audit_logger:
+                    user = getattr(request, 'current_user', None) or {}
+                    audit_logger.log_operation(
+                        operation='delete_account',
+                        resource_type='dns_provider',
+                        resource_id=f"{provider}:{account_id}",
+                        status='failure',
+                        user=user.get('username'),
+                        ip_address=request.remote_addr,
+                        error=str(e)
+                    )
                 return {'error': str(e)}, 500
 
     class BackupDownload(Resource):
@@ -2012,7 +2135,35 @@ def create_api_resources(api, models, managers):
 
                 # Security check
                 if not str(backup_path.resolve()).startswith(str(Path(file_ops.backup_dir).resolve())):
+                    if audit_logger:
+                        user = getattr(request, 'current_user', None) or {}
+                        audit_logger.log_operation(
+                            operation='download',
+                            resource_type='backup',
+                            resource_id=filename,
+                            status='denied',
+                            details={
+                                'backup_type': backup_type,
+                                'reason': 'Path traversal attempt'
+                            },
+                            user=user.get('username'),
+                            ip_address=request.remote_addr,
+                        )
                     return {'error': 'Access denied'}, 403
+
+                if audit_logger:
+                    user = getattr(request, 'current_user', None) or {}
+                    audit_logger.log_operation(
+                        operation='download',
+                        resource_type='backup',
+                        resource_id=filename,
+                        status='success',
+                        details={
+                            'backup_type': backup_type
+                        },
+                        user=user.get('username'),
+                        ip_address=request.remote_addr,
+                    )
 
                 return send_file(
                     str(backup_path.resolve()),
@@ -2241,16 +2392,56 @@ def create_api_resources(api, models, managers):
                 success = settings_manager.atomic_update(clean_payload)
 
                 if success:
+                    if audit_logger:
+                        user = getattr(request, 'current_user', None) or {}
+                        audit_logger.log_operation(
+                            operation='update_config',
+                            resource_type='storage_backend',
+                            resource_id=backend_type,
+                            status='success',
+                            details={
+                                'backend_type': backend_type
+                            },
+                            user=user.get('username'),
+                            ip_address=request.remote_addr,
+                        )
                     return {
                         'success': True,
                         'message': f'Storage backend updated to {backend_type}',
                         'backend': backend_type
                     }
                 else:
+                    if audit_logger:
+                        user = getattr(request, 'current_user', None) or {}
+                        audit_logger.log_operation(
+                            operation='update_config',
+                            resource_type='storage_backend',
+                            resource_id=backend_type,
+                            status='failure',
+                            details={
+                                'backend_type': backend_type,
+                                'reason': 'Atomic update failed'
+                            },
+                            user=user.get('username'),
+                            ip_address=request.remote_addr,
+                        )
                     return {'error': 'Failed to save storage configuration'}, 500
 
             except Exception as e:
                 logger.error(f"Error updating storage backend config: {e}")
+                if audit_logger:
+                    user = getattr(request, 'current_user', None) or {}
+                    audit_logger.log_operation(
+                        operation='update_config',
+                        resource_type='storage_backend',
+                        resource_id=backend_type if 'backend_type' in locals() else 'unknown',
+                        status='failure',
+                        details={
+                            'error': str(e)
+                        },
+                        user=user.get('username'),
+                        ip_address=request.remote_addr,
+                    )
                 return {'error': 'Failed to update storage backend configuration'}, 500
 
     class StorageBackendTest(Resource):
@@ -2665,6 +2856,24 @@ def create_api_resources(api, models, managers):
                     total = len(migration_results)
                     failed = total - successful
 
+                    if audit_logger:
+                        user = getattr(request, 'current_user', None) or {}
+                        audit_logger.log_operation(
+                            operation='migrate',
+                            resource_type='storage',
+                            resource_id=f"{source_backend_type}_to_{target_backend_type}",
+                            status='success',
+                            details={
+                                'source_backend': source_backend_type,
+                                'target_backend': target_backend_type,
+                                'total_certificates': total,
+                                'successful': successful,
+                                'failed': failed
+                            },
+                            user=user.get('username'),
+                            ip_address=request.remote_addr,
+                        )
+
                     return {
                         'success': True,
                         'message': f'Migration completed: {successful}/{total} certificates migrated',
@@ -2680,6 +2889,21 @@ def create_api_resources(api, models, managers):
 
                 except Exception as migration_error:
                     logger.error(f"Storage migration failed: {migration_error}")
+                    if audit_logger:
+                        user = getattr(request, 'current_user', None) or {}
+                        audit_logger.log_operation(
+                            operation='migrate',
+                            resource_type='storage',
+                            resource_id=f"{source_backend_type}_to_{target_backend_type}",
+                            status='failure',
+                            details={
+                                'source_backend': source_backend_type,
+                                'target_backend': target_backend_type,
+                            },
+                            user=user.get('username'),
+                            ip_address=request.remote_addr,
+                            error=str(migration_error)
+                        )
                     return {
                         'success': False,
                         'message': f'Migration failed: {migration_error}',
@@ -2767,6 +2991,23 @@ def create_api_resources(api, models, managers):
                 skipped = sum(1 for v in results.values() if v == 'skipped')
                 errors = sum(1 for v in results.values() if v.startswith('error'))
                 remaining = max(0, len(all_domains) - processed)
+                if audit_logger:
+                    user = getattr(request, 'current_user', None) or {}
+                    audit_logger.log_operation(
+                        operation='backfill',
+                        resource_type='storage_azure_keyvault',
+                        resource_id='certificates',
+                        status='success' if errors == 0 else 'failure',
+                        details={
+                            'imported': imported,
+                            'skipped': skipped,
+                            'errors': errors,
+                            'remaining': remaining
+                        },
+                        user=user.get('username'),
+                        ip_address=request.remote_addr,
+                    )
+
                 return {
                     'success': errors == 0,
                     'message': f'Backfill complete: {imported} imported, {skipped} skipped, {errors} errors',
@@ -2779,6 +3020,17 @@ def create_api_resources(api, models, managers):
 
             except Exception as e:
                 logger.error(f"Error during Azure Key Vault Certificate backfill: {e}")
+                if audit_logger:
+                    user = getattr(request, 'current_user', None) or {}
+                    audit_logger.log_operation(
+                        operation='backfill',
+                        resource_type='storage_azure_keyvault',
+                        resource_id='certificates',
+                        status='failure',
+                        user=user.get('username'),
+                        ip_address=request.remote_addr,
+                        error=str(e)
+                    )
                 return {'error': 'Failed to backfill Certificate objects'}, 500
 
     # Register storage backend endpoints

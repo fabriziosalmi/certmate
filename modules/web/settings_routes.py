@@ -318,10 +318,42 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
                 return jsonify({'error': 'Account name and provider required'}), 400
 
             if dns_manager.add_account(name, req_provider, config):
+                if audit_logger:
+                    user = getattr(request, 'current_user', None) or {}
+                    audit_logger.log_operation(
+                        operation='create_account',
+                        resource_type='dns_provider',
+                        resource_id=f"{req_provider}:{name}",
+                        status='success',
+                        user=user.get('username'),
+                        ip_address=request.remote_addr,
+                    )
                 return jsonify({'message': 'Account added', 'id': name})
+
+            if audit_logger:
+                user = getattr(request, 'current_user', None) or {}
+                audit_logger.log_operation(
+                    operation='create_account',
+                    resource_type='dns_provider',
+                    resource_id=f"{req_provider}:{name}" if req_provider and name else 'unknown',
+                    status='failure',
+                    user=user.get('username'),
+                    ip_address=request.remote_addr,
+                )
             return jsonify({'error': 'Failed to add account'}), 500
         except Exception as e:
             logger.error(f"Failed to add DNS account: {e}")
+            if audit_logger:
+                user = getattr(request, 'current_user', None) or {}
+                audit_logger.log_operation(
+                    operation='create_account',
+                    resource_type='dns_provider',
+                    resource_id=f"{req_provider}:{name}" if 'req_provider' in locals() and 'name' in locals() else 'unknown',
+                    status='failure',
+                    user=user.get('username'),
+                    ip_address=request.remote_addr,
+                    error=str(e)
+                )
             return jsonify({'error': 'Failed to add account'}), 500
 
     @app.route('/api/dns/<string:provider>/accounts/<string:account_id>',
@@ -335,7 +367,28 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
         """Route for updating or deleting a DNS provider account"""
         if request.method == 'DELETE':
             if dns_manager.delete_account(provider, account_id):
+                if audit_logger:
+                    user = getattr(request, 'current_user', None) or {}
+                    audit_logger.log_operation(
+                        operation='delete_account',
+                        resource_type='dns_provider',
+                        resource_id=f"{provider}:{account_id}",
+                        status='success',
+                        user=user.get('username'),
+                        ip_address=request.remote_addr,
+                    )
                 return jsonify({'message': 'Account deleted'})
+            
+            if audit_logger:
+                user = getattr(request, 'current_user', None) or {}
+                audit_logger.log_operation(
+                    operation='delete_account',
+                    resource_type='dns_provider',
+                    resource_id=f"{provider}:{account_id}",
+                    status='failure',
+                    user=user.get('username'),
+                    ip_address=request.remote_addr,
+                )
             return jsonify({'error': 'Failure to delete account'}), 500
 
         # PUT: update existing account
@@ -358,10 +411,45 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
             if dns_manager.add_account(account_id, provider, merged):
                 if set_as_default:
                     dns_manager.set_default_account(provider, account_id)
+                if audit_logger:
+                    user = getattr(request, 'current_user', None) or {}
+                    audit_logger.log_operation(
+                        operation='update_account',
+                        resource_type='dns_provider',
+                        resource_id=f"{provider}:{account_id}",
+                        status='success',
+                        details={
+                            'set_as_default': set_as_default
+                        },
+                        user=user.get('username'),
+                        ip_address=request.remote_addr,
+                    )
                 return jsonify({'message': 'Account updated', 'id': account_id})
+            
+            if audit_logger:
+                user = getattr(request, 'current_user', None) or {}
+                audit_logger.log_operation(
+                    operation='update_account',
+                    resource_type='dns_provider',
+                    resource_id=f"{provider}:{account_id}",
+                    status='failure',
+                    user=user.get('username'),
+                    ip_address=request.remote_addr,
+                )
             return jsonify({'error': 'Failed to update account'}), 500
         except Exception as e:
             logger.error(f"Failed to update DNS account: {e}")
+            if audit_logger:
+                user = getattr(request, 'current_user', None) or {}
+                audit_logger.log_operation(
+                    operation='update_account',
+                    resource_type='dns_provider',
+                    resource_id=f"{provider}:{account_id}",
+                    status='failure',
+                    user=user.get('username'),
+                    ip_address=request.remote_addr,
+                    error=str(e)
+                )
             return jsonify({'error': 'Failed to update account'}), 500
 
     # ------------------------------------------------------------------ #

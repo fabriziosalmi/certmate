@@ -51,8 +51,9 @@ import json
 import os
 import stat
 import zipfile
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -316,3 +317,91 @@ class TestRestoreMaskedBackupPreservesOnDiskSecrets:
 
         restored = json.loads(settings_file.read_text(encoding='utf-8'))
         assert restored['certificate_storage']['azure_keyvault']['client_secret'] == 'AZURE-PLAINTEXT-CLIENT-SECRET'
+
+
+class TestBackupUtcRealignment:
+    """Tests to verify UTC alignment in backups and prune logic."""
+
+    def test_backup_creation_uses_utc_time(self, file_ops, sample_settings_with_secrets):
+        fixed_utc_now = datetime(2026, 5, 22, 15, 30, 45, 123456)
+        fixed_iso = fixed_utc_now.isoformat()
+        
+        with patch('modules.core.file_operations.utc_now', return_value=fixed_utc_now), \
+             patch('modules.core.file_operations.utc_now_iso', return_value=fixed_iso):
+            
+            filename = file_ops.create_unified_backup(sample_settings_with_secrets, 'utc_test')
+            
+            # The filename should use the UTC timestamp format %Y%m%d_%H%M%S_%f
+            expected_timestamp = fixed_utc_now.strftime("%Y%m%d_%H%M%S_%f")
+            assert filename.startswith(f"backup_{expected_timestamp}_utc_test")
+            
+            zip_path = file_ops.backup_dir / 'unified' / filename
+            meta = _read_settings_from_zip(zip_path)['metadata']
+            assert meta['timestamp'] == fixed_iso
+
+    def test_backup_pruning_respects_utc_cutoff(self, file_ops):
+        # Setup backup directory
+        unified_dir = file_ops.backup_dir / "unified"
+        unified_dir.mkdir(parents=True, exist_ok=True)
+        
+        fixed_utc_now = datetime(2026, 5, 22, 12, 0, 0)
+        
+        # We will create three backup files:
+        # 1. A recent backup (2 days old) - should be kept
+        # 2. A backup exactly at the cutoff (30 days old) - should be kept
+        # 3. An old backup (31 days old) - should be pruned
+        
+        recent_time = fixed_utc_now - timedelta(days=2)
+        cutoff_time = fixed_utc_now - timedelta(days=30)
+        old_time = fixed_utc_now - timedelta(days=31)
+        
+        # Convert to UNIX timestamps (UTC)
+        recent_ts = recent_time.replace(tzinfo=timezone.utc).timestamp()
+        cutoff_ts = cutoff_time.replace(tzinfo=timezone.utc).timestamp()
+        old_ts = old_time.replace(tzinfo=timezone.utc).timestamp()
+        
+        recent_file = unified_dir / "backup_recent_reason.zip"
+        cutoff_file = unified_dir / "backup_cutoff_reason.zip"
+        old_file = unified_dir / "backup_old_reason.zip"
+        
+        for f in (recent_file, cutoff_file, old_file):
+            f.write_text("dummy zip content")
+            
+        os.utime(recent_file, (recent_ts, recent_ts))
+        os.utime(cutoff_file, (cutoff_ts, cutoff_ts))
+        os.utime(old_file, (old_ts, old_ts))
+        
+        with patch('modules.core.file_operations.utc_now', return_value=fixed_utc_now):
+            file_ops._prune_unified_backups()
+            
+        assert recent_file.exists()
+        assert cutoff_file.exists()
+        assert not old_file.exists()
+
+    def test_backup_pruning_respects_max_count(self, file_ops):
+        unified_dir = file_ops.backup_dir / "unified"
+        unified_dir.mkdir(parents=True, exist_ok=True)
+        
+        fixed_utc_now = datetime(2026, 5, 22, 12, 0, 0)
+        
+        # Create MAX_BACKUPS_PER_TYPE + 5 files, all within retention period.
+        # Ensure we set their mtime in order so we can assert the oldest ones are deleted.
+        created_files = []
+        for i in range(55): # MAX_BACKUPS_PER_TYPE is 50, so 50 + 5 = 55
+            f = unified_dir / f"backup_{i:03d}_reason.zip"
+            f.write_text("dummy zip content")
+            # older file index has older timestamp
+            file_time = fixed_utc_now - timedelta(hours=(55 - i))
+            file_ts = file_time.replace(tzinfo=timezone.utc).timestamp()
+            os.utime(f, (file_ts, file_ts))
+            created_files.append(f)
+            
+        with patch('modules.core.file_operations.utc_now', return_value=fixed_utc_now):
+            file_ops._prune_unified_backups()
+            
+        # The oldest 5 should be unlinked (indices 0 to 4)
+        for i in range(5):
+            assert not created_files[i].exists(), f"File {created_files[i].name} should have been pruned"
+        # The newest 50 should be retained (indices 5 onwards)
+        for i in range(5, 55):
+            assert created_files[i].exists(), f"File {created_files[i].name} should have been kept"

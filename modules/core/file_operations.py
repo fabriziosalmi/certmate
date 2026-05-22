@@ -8,10 +8,12 @@ import json
 import tempfile
 import zipfile
 import shutil
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import fcntl
 import logging
+
+from .utils import utc_now, utc_now_iso
 
 logger = logging.getLogger(__name__)
 
@@ -167,7 +169,7 @@ class FileOperations:
         an `EPERM` first.
         """
         try:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+            timestamp = utc_now().strftime("%Y%m%d_%H%M%S_%f")
             backup_id = f"backup_{timestamp}_{backup_reason}"
             backup_filename = f"{backup_id}.zip"
             backup_path = self.backup_dir / "unified" / backup_filename
@@ -191,7 +193,7 @@ class FileOperations:
 
             metadata = {
                 "backup_id": backup_id,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": utc_now_iso(),
                 "backup_reason": backup_reason,
                 "version": "2.2.0",  # New unified format
                 "type": "unified",
@@ -265,11 +267,11 @@ class FileOperations:
                 key=lambda p: p.stat().st_mtime,
                 reverse=True,
             )
-            cutoff = datetime.now() - timedelta(days=BACKUP_RETENTION_DAYS)
+            cutoff = utc_now() - timedelta(days=BACKUP_RETENTION_DAYS)
             removed = 0
             for idx, path in enumerate(backups):
                 try:
-                    mtime = datetime.fromtimestamp(path.stat().st_mtime)
+                    mtime = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc).replace(tzinfo=None)
                     if idx >= MAX_BACKUPS_PER_TYPE or mtime < cutoff:
                         path.unlink()
                         removed += 1
