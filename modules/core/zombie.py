@@ -47,15 +47,16 @@ class ZombieScanner:
 
         # 2. Active HTTPS probe
         try:
-            # We use verify=False because the certificate might be expired, self-signed, etc.
-            # We only care if the server is alive and listening.
             requests.head(
                 f"https://{target}",
                 timeout=self.timeout,
-                verify=False,  # lgtm [py/disabled-certificate-validation] # nosec
                 headers={"User-Agent": "CertMate-ZombieScanner/1.0"}
             )
             # Any HTTP response means the host is alive
+            return 'alive'
+        except requests.exceptions.SSLError as e:
+            # SSL error means the host responded to the TLS handshake, so it is alive!
+            logger.debug("HTTPS probe returned SSL error for %s (target: %s) - host is alive: %s", domain, target, e)
             return 'alive'
         except requests.RequestException as e:
             logger.debug("HTTPS probe failed for %s (target: %s): %s", domain, target, e)
@@ -64,7 +65,6 @@ class ZombieScanner:
                 requests.head(
                     f"http://{target}",
                     timeout=self.timeout,
-                    verify=False,  # lgtm [py/disabled-certificate-validation] # nosec
                     headers={"User-Agent": "CertMate-ZombieScanner/1.0"}
                 )
                 return 'alive'
