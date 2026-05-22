@@ -153,6 +153,13 @@
 
             testHook: function (hook) {
                 var hookLabel = hook.name || hook.id || 'unnamed';
+                var btn = event && event.target ? event.target.closest('button') : null;
+                var originalHTML;
+                if (btn) {
+                    originalHTML = btn.innerHTML;
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Testing...';
+                }
                 addDebugLog('Testing hook: ' + hookLabel, 'info');
                 CertMate.toast('Testing hook: ' + hookLabel + '...', 'info');
                 fetch('/api/deploy/test/' + hook.id, {
@@ -175,6 +182,12 @@
                     .catch(function (err) {
                         addDebugLog('Test request failed for hook "' + hookLabel + '": ' + (err && err.message || err), 'error');
                         CertMate.toast('Test request failed', 'error');
+                    })
+                    .then(function () {
+                        if (btn) {
+                            btn.disabled = false;
+                            btn.innerHTML = originalHTML;
+                        }
                     });
             },
 

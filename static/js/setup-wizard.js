@@ -61,12 +61,15 @@
         var overlay = document.createElement('div');
         overlay.id = 'setupRecoveryPrompt';
         overlay.className = 'fixed inset-0 z-[110] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4';
+        overlay.setAttribute('role', 'dialog');
+        overlay.setAttribute('aria-modal', 'true');
+        overlay.setAttribute('aria-labelledby', 'recoveryPromptTitle');
         overlay.innerHTML =
             '<div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg p-8 text-center">' +
                 '<div class="w-16 h-16 bg-yellow-100 dark:bg-yellow-900/30 rounded-full flex items-center justify-center mx-auto mb-4">' +
                     '<i class="fas fa-exclamation-triangle text-yellow-600 dark:text-yellow-400 text-2xl"></i>' +
                 '</div>' +
-                '<h2 class="text-xl font-bold text-gray-900 dark:text-white mb-2">Existing Data Detected</h2>' +
+                '<h2 id="recoveryPromptTitle" class="text-xl font-bold text-gray-900 dark:text-white mb-2">Existing Data Detected</h2>' +
                 '<p class="text-sm text-gray-500 dark:text-gray-400 mb-6">' +
                     'CertMate found certificates on this volume but no matching configuration. ' +
                     'This usually happens after a downgrade. You can restore the latest backup to recover your users and domains, or start fresh.' +
@@ -89,6 +92,23 @@
         });
         document.getElementById('recoveryFresh').addEventListener('click', closeRecoveryPrompt);
         document.getElementById('recoveryFresh').addEventListener('click', showWizard);
+
+        // Focus trapping within the recovery prompt
+        overlay.addEventListener('keydown', function(e) {
+            if (e.key !== 'Tab') return;
+            var focusable = overlay.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+            if (!focusable.length) return;
+            var first = focusable[0];
+            var last = focusable[focusable.length - 1];
+            if (e.shiftKey) {
+                if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+            } else {
+                if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+            }
+        });
+
+        // Auto-focus first button
+        setTimeout(function() { document.getElementById('recoveryRestore').focus(); }, 50);
     }
 
     function closeRecoveryPrompt() {
@@ -100,12 +120,15 @@
         var overlay = document.createElement('div');
         overlay.id = 'setupWizard';
         overlay.className = 'fixed inset-0 z-[110] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4';
+        overlay.setAttribute('role', 'dialog');
+        overlay.setAttribute('aria-modal', 'true');
+        overlay.setAttribute('aria-labelledby', 'wizardTitle');
         overlay.innerHTML =
             '<div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">' +
                 '<div class="px-6 py-5 border-b border-gray-200 dark:border-gray-700">' +
                     '<div class="flex items-center justify-between">' +
                         '<div>' +
-                            '<h2 class="text-xl font-bold text-gray-900 dark:text-white">Welcome to CertMate</h2>' +
+                            '<h2 id="wizardTitle" class="text-xl font-bold text-gray-900 dark:text-white">Welcome to CertMate</h2>' +
                             '<p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Let\'s get you set up in a few steps</p>' +
                         '</div>' +
                         '<div class="flex items-center gap-1.5" id="wizardSteps"></div>' +
@@ -115,6 +138,21 @@
                 '<div id="wizardFooter" class="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between"></div>' +
             '</div>';
         document.body.appendChild(overlay);
+
+        // Focus trapping within the wizard overlay
+        overlay.addEventListener('keydown', function(e) {
+            if (e.key !== 'Tab') return;
+            var focusable = overlay.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+            if (!focusable.length) return;
+            var first = focusable[0];
+            var last = focusable[focusable.length - 1];
+            if (e.shiftKey) {
+                if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+            } else {
+                if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+            }
+        });
+
         renderStep();
     }
 
@@ -165,10 +203,21 @@
 
         document.getElementById('wizNext1').addEventListener('click', function() {
             var email = document.getElementById('wizEmail').value.trim();
+            var emailError = document.getElementById('wizEmailError');
             if (!email || email.indexOf('@') === -1) {
                 document.getElementById('wizEmail').classList.add('border-red-500');
+                if (!emailError) {
+                    var errEl = document.createElement('p');
+                    errEl.id = 'wizEmailError';
+                    errEl.className = 'text-xs text-red-500 mt-1';
+                    errEl.textContent = 'Please enter a valid email address';
+                    document.getElementById('wizEmail').parentNode.appendChild(errEl);
+                }
                 return;
             }
+            // Clear error state on success
+            document.getElementById('wizEmail').classList.remove('border-red-500');
+            if (emailError) emailError.remove();
             state.email = email;
             state.step = 2;
             renderStep();

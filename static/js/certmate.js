@@ -574,7 +574,7 @@
                         CM.toast('Diagnostic snapshot copied to clipboard!', 'success');
                     } catch (err) {
                         CM.toast('Failed to copy snapshot. Copy it manually from the console.', 'error');
-                        console.log(text);
+                        console.info('[CertMate] clipboard fallback used — snapshot text available in variable');
                     }
                     document.body.removeChild(textarea);
                 }

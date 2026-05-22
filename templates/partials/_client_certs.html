@@ -55,11 +55,13 @@
     </div>
     <div class="px-6 py-6">
         <!-- Tab Selection -->
-        <div class="flex space-x-4 mb-6 border-b border-gray-200 dark:border-gray-700">
-            <button id="singleTabBtn" class="px-4 py-2 border-b-2 border-primary text-primary font-medium">
+        <div class="flex space-x-4 mb-6 border-b border-gray-200 dark:border-gray-700" role="tablist">
+            <button id="singleTabBtn" role="tab" aria-selected="true" aria-controls="createClientCertForm"
+                    class="px-4 py-2 border-b-2 border-primary text-primary font-medium">
                 <i class="fas fa-user mr-1"></i> Single Certificate
             </button>
-            <button id="batchTabBtn" class="px-4 py-2 border-b-2 border-transparent text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white font-medium">
+            <button id="batchTabBtn" role="tab" aria-selected="false" aria-controls="batchForm"
+                    class="px-4 py-2 border-b-2 border-transparent text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white font-medium">
                 <i class="fas fa-users mr-1"></i> Bulk Upload (CSV)
             </button>
         </div>
@@ -68,15 +70,16 @@
         <form id="createClientCertForm" class="space-y-6">
             <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
                 <div>
-                    <label for="commonName" class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                    <label for="commonName" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                         <i class="fas fa-user mr-2 text-blue-500"></i>Common Name (Required)
                     </label>
                     <input type="text" id="commonName" name="commonName" placeholder="e.g., john.doe@example.com"
                            class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-primary"
-                           required>
+                           required aria-required="true">
+                    <p id="commonNameError" class="hidden text-xs text-red-500 mt-1">Common Name is required</p>
                 </div>
                 <div>
-                    <label for="email" class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                    <label for="email" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                         <i class="fas fa-envelope mr-2 text-blue-500"></i>Email
                     </label>
                     <input type="email" id="email" name="email" placeholder="user@example.com"
@@ -86,14 +89,14 @@
 
             <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
                 <div>
-                    <label for="organization" class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                    <label for="organization" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                         <i class="fas fa-building mr-2 text-blue-500"></i>Organization
                     </label>
                     <input type="text" id="organization" name="organization" value="CertMate" placeholder="Your Organization"
                            class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-primary">
                 </div>
                 <div>
-                    <label for="certUsage" class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                    <label for="certUsage" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                         <i class="fas fa-tag mr-2 text-blue-500"></i>Usage Type
                     </label>
                     <select id="certUsage" name="certUsage"
@@ -108,14 +111,14 @@
 
             <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
                 <div>
-                    <label for="daysValid" class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                    <label for="daysValid" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                         <i class="fas fa-calendar mr-2 text-blue-500"></i>Valid For (Days)
                     </label>
                     <input type="number" id="daysValid" name="daysValid" value="365" min="1" max="3650"
                            class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-primary">
                 </div>
                 <div>
-                    <label for="notes" class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                    <label for="notes" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                         <i class="fas fa-sticky-note mr-2 text-blue-500"></i>Notes
                     </label>
                     <input type="text" id="notes" name="notes" placeholder="Optional notes..."
@@ -146,9 +149,9 @@
             </div>
 
             <div class="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-8 text-center cursor-pointer hover:border-primary transition"
-                 id="dropZone">
+                 id="dropZone" tabindex="0" role="button" aria-label="Upload CSV file">
                 <i class="fas fa-cloud-upload-alt text-4xl text-gray-400 dark:text-gray-500 mb-3"></i>
-                <p class="text-gray-700 dark:text-gray-300 font-semibold mb-1">Drag and drop CSV file here</p>
+                <p class="text-gray-700 dark:text-gray-300 font-medium mb-1">Drag and drop CSV file here</p>
                 <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">or click to select</p>
                 <input type="file" id="csvFile" name="csvFile" accept=".csv" class="hidden">
             </div>
@@ -182,15 +185,16 @@
             </h3>
             <div class="flex flex-wrap items-center gap-2">
                 <input type="text" id="searchInput" placeholder="Search by CN or email..."
+                       aria-label="Search client certificates"
                        class="px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-primary">
-                <select id="filterUsage"
+                <select id="filterUsage" aria-label="Filter by usage type"
                         class="px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-primary">
                     <option value="">All Usage Types</option>
                     <option value="api-mtls">API mTLS</option>
                     <option value="vpn">VPN</option>
                     <option value="user-auth">User Auth</option>
                 </select>
-                <select id="filterStatus"
+                <select id="filterStatus" aria-label="Filter by status"
                         class="px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-primary">
                     <option value="">All Status</option>
                     <option value="active">Active</option>
@@ -221,23 +225,24 @@
 </div>
 
 <!-- Modal for certificate details -->
-<div id="certModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+<div id="certModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+     role="dialog" aria-modal="true" aria-labelledby="certModalTitle">
     <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
         <div class="flex justify-between items-center mb-4">
-            <h3 class="text-lg font-bold text-gray-900 dark:text-white">Certificate Details</h3>
-            <button type="button" onclick="closeCertModal()" class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200" title="Close">
+            <h3 id="certModalTitle" class="text-lg font-bold text-gray-900 dark:text-white">Certificate Details</h3>
+            <button type="button" onclick="closeCertModal()" class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200" aria-label="Close dialog">
                 <i class="fas fa-times"></i>
             </button>
         </div>
         <div id="modalContent" class="space-y-3 text-sm"></div>
         <div class="mt-6 flex space-x-3">
-            <button type="button" onclick="downloadCertFile('crt')" class="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-2 rounded px-3 text-sm font-semibold flex items-center justify-center">
+            <button type="button" onclick="downloadCertFile('crt')" aria-label="Download certificate file" class="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-2 rounded-lg px-3 text-sm font-semibold flex items-center justify-center">
                 <i class="fas fa-download mr-1"></i> .crt
             </button>
-            <button type="button" onclick="downloadCertFile('key')" class="flex-1 bg-red-500 hover:bg-red-600 text-white py-2 rounded px-3 text-sm font-semibold flex items-center justify-center">
+            <button type="button" onclick="downloadCertFile('key')" aria-label="Download private key file" class="flex-1 bg-red-500 hover:bg-red-600 text-white py-2 rounded-lg px-3 text-sm font-semibold flex items-center justify-center">
                 <i class="fas fa-download mr-1"></i> .key
             </button>
-            <button type="button" onclick="downloadCertFile('csr')" class="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 rounded px-3 text-sm font-semibold flex items-center justify-center">
+            <button type="button" onclick="downloadCertFile('csr')" aria-label="Download CSR file" class="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 rounded-lg px-3 text-sm font-semibold flex items-center justify-center">
                 <i class="fas fa-download mr-1"></i> .csr
             </button>
         </div>

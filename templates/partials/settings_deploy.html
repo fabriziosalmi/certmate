@@ -4,7 +4,7 @@
              x-data="deployManager()" x-init="loadConfig()">
 
             <h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center mb-6">
-                <i class="fas fa-rocket mr-2 text-green-500"></i>
+                <i class="fas fa-rocket mr-2 text-primary"></i>
                 Deploy Hooks
             </h3>
 
@@ -71,7 +71,7 @@
                         </span>
                         <i class="fas text-gray-400" :class="showGlobal ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
                     </button>
-                    <div x-show="showGlobal" class="p-4 space-y-3">
+                    <div x-show="showGlobal" x-cloak class="p-4 space-y-3">
                         <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">These hooks run for every domain after certificate issuance or renewal.</p>
                         <template x-for="(hook, idx) in config.global_hooks" :key="hook.id">
                             <div class="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-4 border border-gray-200 dark:border-gray-600">
@@ -132,7 +132,7 @@
                         </span>
                         <i class="fas text-gray-400" :class="showDomain ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
                     </button>
-                    <div x-show="showDomain" class="p-4 space-y-3">
+                    <div x-show="showDomain" x-cloak class="p-4 space-y-3">
                         <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">These hooks only run for the specified domain.</p>
                         <template x-for="domain in Object.keys(config.domain_hooks).sort()" :key="domain">
                             <div class="border border-gray-200 dark:border-gray-600 rounded-lg p-3 mb-2">
@@ -214,7 +214,7 @@
                         </span>
                         <i class="fas text-gray-400" :class="showHistory ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
                     </button>
-                    <div x-show="showHistory" class="p-4">
+                    <div x-show="showHistory" x-cloak class="p-4">
                         <div x-show="history.length === 0" class="text-center text-sm text-gray-500 dark:text-gray-400 py-4">
                             <i class="fas fa-inbox mr-1"></i>No executions yet
                         </div>

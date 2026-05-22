@@ -1,5 +1,5 @@
 <!-- TAB: DNS Providers -->
-                    <div x-show="tab === 'dns'">
+                    <div x-show="tab === 'dns'" x-cloak>
                     <!-- Challenge Type Selection -->
                     <div class="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg mb-4">
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
@@ -11,7 +11,7 @@
                                 <input type="radio" name="challenge_type" value="dns-01" class="sr-only peer" checked>
                                 <div class="px-4 py-2 border-2 border-gray-200 dark:border-gray-600 rounded-lg transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
                                     <div class="flex items-center gap-2">
-                                        <i class="fas fa-dns text-blue-500"></i>
+                                        <i class="fas fa-globe-americas text-blue-500"></i>
                                         <span class="text-sm font-medium dark:text-white">DNS-01</span>
                                     </div>
                                     <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Requires DNS provider credentials. Supports wildcards.</p>
@@ -379,7 +379,7 @@
                                             Access Key ID
                                         </label>
                                         <input type="password" id="route53_access_key_id" name="route53_access_key_id" 
-                                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                               class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                                                placeholder="AKIAIOSFODNN7EXAMPLE"
                                                autocomplete="new-password" 
                                                spellcheck="false"
@@ -390,7 +390,7 @@
                                             Secret Access Key
                                         </label>
                                         <input type="password" id="route53_secret_access_key" name="route53_secret_access_key" 
-                                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                               class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                                                placeholder="Your AWS secret access key"
                                                autocomplete="new-password" 
                                                spellcheck="false"
@@ -401,7 +401,7 @@
                                             Region (Optional)
                                         </label>
                                         <input type="text" id="route53_region" name="route53_region" 
-                                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                               class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                                                placeholder="us-east-1" value="us-east-1">
                                     </div>
                                 </div>
@@ -440,7 +440,7 @@
                                             Subscription ID
                                         </label>
                                         <input type="text" id="azure_subscription_id" name="azure_subscription_id" 
-                                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                               class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                                                placeholder="12345678-1234-1234-1234-123456789012">
                                     </div>
                                     <div>
@@ -448,7 +448,7 @@
                                             Resource Group
                                         </label>
                                         <input type="text" id="azure_resource_group" name="azure_resource_group" 
-                                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                               class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                                                placeholder="my-dns-resource-group">
                                     </div>
                                     <div>
@@ -456,7 +456,7 @@
                                             Tenant ID
                                         </label>
                                         <input type="text" id="azure_tenant_id" name="azure_tenant_id" 
-                                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                               class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                                                placeholder="12345678-1234-1234-1234-123456789012">
                                     </div>
                                     <div>
@@ -464,7 +464,7 @@
                                             Client ID
                                         </label>
                                         <input type="text" id="azure_client_id" name="azure_client_id" 
-                                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                               class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                                                placeholder="12345678-1234-1234-1234-123456789012">
                                     </div>
                                     <div class="md:col-span-2">
@@ -472,7 +472,7 @@
                                             Client Secret
                                         </label>
                                         <input type="password" id="azure_client_secret" name="azure_client_secret" 
-                                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                               class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                                                placeholder="Your Azure client secret"
                                                autocomplete="new-password" 
                                                spellcheck="false"
@@ -514,7 +514,7 @@
                                             Project ID
                                         </label>
                                         <input type="text" id="google_project_id" name="google_project_id" 
-                                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                               class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                                                placeholder="my-gcp-project-123456">
                                     </div>
                                     <div>
@@ -522,7 +522,7 @@
                                             Service Account JSON Key
                                         </label>
                                         <textarea id="google_service_account_key" name="google_service_account_key" rows="4"
-                                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                               class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                                                placeholder='Paste your GCP service account JSON key here'></textarea>
                                     </div>
                                 </div>
@@ -561,7 +561,7 @@
                                             API URL
                                         </label>
                                         <input type="url" id="powerdns_api_url" name="powerdns_api_url" 
-                                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                               class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                                                placeholder="https://powerdns.example.com:8081">
                                     </div>
                                     <div>
@@ -569,7 +569,7 @@
                                             API Key
                                         </label>
                                         <input type="password" id="powerdns_api_key" name="powerdns_api_key" 
-                                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                               class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                                                placeholder="Your PowerDNS API key"
                                                autocomplete="new-password" 
                                                spellcheck="false"
@@ -611,7 +611,7 @@
                                             API Token
                                         </label>
                                         <input type="password" id="digitalocean_api_token" name="digitalocean_api_token" 
-                                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                               class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                                                placeholder="Your DigitalOcean API token"
                                                autocomplete="new-password" 
                                                spellcheck="false"
@@ -675,7 +675,7 @@
                                         API Key
                                     </label>
                                     <input type="password" id="linode_api_key" name="linode_api_key"
-                                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                           class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                                            placeholder="Your Linode API key">
                                 </div>
                             </div>
@@ -698,7 +698,7 @@
                                         Client Token
                                     </label>
                                     <input type="password" id="edgedns_client_token" name="edgedns_client_token"
-                                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                           class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                                            placeholder="akab-XXXXXXXXXXXXXXXX-XXXXXXXXXXXXXXXX">
                                 </div>
                                 <div>
@@ -706,7 +706,7 @@
                                         Client Secret
                                     </label>
                                     <input type="password" id="edgedns_client_secret" name="edgedns_client_secret"
-                                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                           class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                                            placeholder="Your Akamai client secret">
                                 </div>
                                 <div>
@@ -714,7 +714,7 @@
                                         Access Token
                                     </label>
                                     <input type="password" id="edgedns_access_token" name="edgedns_access_token"
-                                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                           class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                                            placeholder="akab-XXXXXXXXXXXXXXXX-XXXXXXXXXXXXXXXX">
                                 </div>
                                 <div>
@@ -722,7 +722,7 @@
                                         API Host
                                     </label>
                                     <input type="text" id="edgedns_host" name="edgedns_host"
-                                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                           class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                                            placeholder="akab-XXXX.luna.akamaiapis.net">
                                 </div>
                             </div>
@@ -748,7 +748,7 @@
                                         API Token
                                     </label>
                                     <input type="password" id="gandi_api_token" name="gandi_api_token" 
-                                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                           class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                                            placeholder="Your Gandi LiveDNS API token">
                                 </div>
                             </div>
@@ -771,7 +771,7 @@
                                         Endpoint
                                     </label>
                                     <select id="ovh_endpoint" name="ovh_endpoint" 
-                                            class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary">
+                                            class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
                                         <option value="">Select endpoint</option>
                                         <option value="ovh-eu">ovh-eu (Europe)</option>
                                         <option value="ovh-us">ovh-us (US)</option>
@@ -787,7 +787,7 @@
                                         Application Key
                                     </label>
                                     <input type="password" id="ovh_application_key" name="ovh_application_key" 
-                                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                           class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                                            placeholder="Your application key">
                                 </div>
                                 <div>
@@ -795,7 +795,7 @@
                                         Application Secret
                                     </label>
                                     <input type="password" id="ovh_application_secret" name="ovh_application_secret" 
-                                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                           class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                                            placeholder="Your application secret">
                                 </div>
                                 <div>
@@ -803,7 +803,7 @@
                                         Consumer Key
                                     </label>
                                     <input type="password" id="ovh_consumer_key" name="ovh_consumer_key" 
-                                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                           class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                                            placeholder="Your consumer key">
                                 </div>
                             </div>
@@ -826,7 +826,7 @@
                                         Username
                                     </label>
                                     <input type="text" id="namecheap_username" name="namecheap_username" 
-                                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                           class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                                            placeholder="Your Namecheap username">
                                 </div>
                                 <div>
@@ -834,7 +834,7 @@
                                         API Key
                                     </label>
                                     <input type="password" id="namecheap_api_key" name="namecheap_api_key" 
-                                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                           class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                                            placeholder="Your Namecheap API key">
                                 </div>
                             </div>
@@ -872,7 +872,7 @@
                                             Nameserver
                                         </label>
                                         <input type="text" id="rfc2136_nameserver" name="rfc2136_nameserver" 
-                                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                               class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                                                placeholder="ns.example.com">
                                     </div>
                                     <div>
@@ -880,7 +880,7 @@
                                             TSIG Key Name
                                         </label>
                                         <input type="text" id="rfc2136_tsig_key" name="rfc2136_tsig_key" 
-                                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                               class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                                                placeholder="mykey">
                                     </div>
                                     <div>
@@ -888,7 +888,7 @@
                                             TSIG Secret
                                         </label>
                                         <input type="password" id="rfc2136_tsig_secret" name="rfc2136_tsig_secret" 
-                                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                               class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                                                placeholder="Base64-encoded secret">
                                     </div>
                                     <div>
@@ -896,7 +896,7 @@
                                             TSIG Algorithm (Optional)
                                         </label>
                                         <select id="rfc2136_tsig_algorithm" name="rfc2136_tsig_algorithm" 
-                                                class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary">
+                                                class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
                                             <option value="">Default (HMAC-MD5)</option>
                                             <option value="HMAC-MD5">HMAC-MD5</option>
                                             <option value="HMAC-SHA1">HMAC-SHA1</option>
@@ -928,7 +928,7 @@
                                     API Token
                                 </label>
                                 <input type="password" id="hetzner_api_token" name="hetzner_api_token" 
-                                       class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                       class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                                        placeholder="Your Hetzner DNS API token">
                             </div>
                             <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
