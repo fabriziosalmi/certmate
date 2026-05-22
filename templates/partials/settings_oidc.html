@@ -178,8 +178,7 @@
                     <div class="flex justify-end pt-2 border-t border-gray-200 dark:border-gray-700">
                         <button type="button" @click="save()" :disabled="saving"
                                 class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-md disabled:opacity-50">
-                            <template x-if="saving"><i class="fas fa-spinner fa-spin mr-1"></i></template>
-                            <template x-if="!saving"><i class="fas fa-save mr-1"></i></template>
+                            <i class="fas mr-1" :class="saving ? 'fa-spinner fa-spin' : 'fa-save'"></i>
                             Save SSO settings
                         </button>
                     </div>

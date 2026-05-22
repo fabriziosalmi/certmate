@@ -477,3 +477,106 @@ def test_acme_dns_alias_rejects_non_matching_subdomain():
             'validation-token',
             'create',
         )
+
+
+def test_create_dns_alias_hook_config_resolves_azure_zone(tmp_path):
+    mgr, shell = _manager(tmp_path, provider='azure')
+
+    # Mock dns_zone_discovery zone resolution
+    with patch('modules.core.dns_zone_discovery.resolve_zones_for_domains') as mock_resolve:
+        mock_resolve.return_value = (['validationdomain.com'], [('acme-validation.validationdomain.com', 'validationdomain.com')])
+
+        hook_config_path = mgr._create_dns_alias_hook_config(
+            'azure',
+            _provider_config('azure'),
+            'acme-validation.validationdomain.com',
+            60
+        )
+
+        assert hook_config_path.exists()
+        with open(hook_config_path, encoding='utf-8') as f:
+            payload = json.load(f)
+
+        assert payload['provider'] == 'azure'
+        assert payload['domain_alias'] == 'acme-validation.validationdomain.com'
+        assert payload['resolved_zone'] == 'validationdomain.com'
+
+        hook_config_path.unlink()
+
+
+def test_lexicon_alias_azure_uses_resolved_zone(monkeypatch):
+    calls = []
+
+    class FakeOperations:
+        def create_record(self, rtype, name, content):
+            calls.append(('create', rtype, name, content))
+
+        def delete_record(self, identifier=None, rtype=None, name=None, content=None):
+            calls.append(('delete', rtype, name, content))
+
+    class FakeClient:
+        def __init__(self, config):
+            calls.append(('config', config['provider_name'], config['domain']))
+
+        def __enter__(self):
+            return FakeOperations()
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    monkeypatch.setitem(__import__('sys').modules, 'lexicon.client', MagicMock(Client=FakeClient))
+
+    hook_config = {
+        'provider': 'azure',
+        'domain_alias': 'acme-validation.validationdomain.com',
+        'resolved_zone': 'validationdomain.com',
+        'config': _provider_config('azure'),
+    }
+
+    dns_alias_hook._lexicon_change(hook_config, 'val-token', 'create')
+
+    # Verify client initialized with the resolved zone, not the full alias domain
+    assert ('config', 'azure', 'validationdomain.com') in calls
+    assert ('create', 'TXT', '_acme-challenge.acme-validation.validationdomain.com', 'val-token') in calls
+
+
+def test_lexicon_alias_azure_fallback_guessing_zone(monkeypatch):
+    calls = []
+
+    class FakeOperations:
+        def list_records(self, rtype=None):
+            # Simulate success when domain is validationdomain.com
+            # Raise exception for other domain guesses
+            pass
+
+        def create_record(self, rtype, name, content):
+            calls.append(('create', rtype, name, content))
+
+    class FakeClient:
+        def __init__(self, config):
+            self.domain = config['domain']
+            calls.append(('config', config['provider_name'], config['domain']))
+            if self.domain != 'validationdomain.com':
+                raise ValueError("Zone not found in Azure")
+
+        def __enter__(self):
+            return FakeOperations()
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    monkeypatch.setitem(__import__('sys').modules, 'lexicon.client', MagicMock(Client=FakeClient))
+
+    hook_config = {
+        'provider': 'azure',
+        'domain_alias': 'acme-validation.validationdomain.com',
+        # resolved_zone is missing
+        'config': _provider_config('azure'),
+    }
+
+    dns_alias_hook._lexicon_change(hook_config, 'val-token', 'create')
+
+    # Verify it tried multiple guesses and eventually called create with 'validationdomain.com'
+    assert ('config', 'azure', 'acme-validation.validationdomain.com') in calls
+    assert ('config', 'azure', 'validationdomain.com') in calls
+    assert ('create', 'TXT', '_acme-challenge.acme-validation.validationdomain.com', 'val-token') in calls
