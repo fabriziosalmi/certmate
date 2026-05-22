@@ -1812,10 +1812,9 @@
     }
 
     // Manually trigger deploy hooks for a domain (issue #109).
-    function runDeployHooks(domain) {
-        if (!window.confirm('Run deploy hooks for ' + domain + ' now?\n\nAll enabled global and domain-specific hooks will execute with CERTMATE_EVENT=manual.')) {
-            return;
-        }
+    async function runDeployHooks(domain) {
+        var confirmed = await CertMate.confirm('Run deploy hooks for ' + domain + ' now?\n\nAll enabled global and domain-specific hooks will execute with CERTMATE_EVENT=manual.', { confirmText: 'Run Hooks', type: 'warning' });
+        if (!confirmed) return;
         var progressInterval = showLoadingModal(
             'Running Deploy Hooks for ' + domain,
             'Executing each enabled hook…'
@@ -1882,12 +1881,11 @@
     }
 
     // Toggle per-cert auto-renew (issue #111).
-    function toggleAutoRenew(domain, currentlyEnabled) {
+    async function toggleAutoRenew(domain, currentlyEnabled) {
         var nextState = !currentlyEnabled;
         var verb = nextState ? 'Enable' : 'Disable';
-        if (!window.confirm(verb + ' automatic renewal for ' + domain + '?')) {
-            return;
-        }
+        var confirmed = await CertMate.confirm(verb + ' automatic renewal for ' + domain + '?', { confirmText: verb, type: 'warning' });
+        if (!confirmed) return;
         fetch('/api/certificates/' + encodeURIComponent(domain) + '/auto-renew', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },

@@ -2,7 +2,7 @@
         <div x-show="tab === 'users'" x-cloak class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 mt-6">
             <div class="flex items-center justify-between mb-4">
                 <h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
-                    <i class="fas fa-users mr-2 text-purple-500"></i>
+                    <i class="fas fa-users mr-2 text-primary"></i>
                     User Management
                 </h3>
                 <span class="text-xs bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 px-2 py-1 rounded-full">
@@ -55,7 +55,8 @@
                     <div>
                         <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Password</label>
                         <input type="password" id="newUserPassword" placeholder="password"
-                               class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-gray-700 dark:text-white">
+                               autocomplete="new-password"
+                               class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-primary focus:border-primary">
                         <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">Min 12 chars, 1 digit, 1 symbol</p>
                     </div>
                     <div>

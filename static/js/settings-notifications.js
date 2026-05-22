@@ -49,6 +49,13 @@
             },
             saveConfig: function () {
                 var self = this;
+                var btn = document.querySelector('[x-ref="saveNotifBtn"], [data-action="save-notifications"]');
+                var originalHTML;
+                if (btn) {
+                    originalHTML = btn.innerHTML;
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Saving...';
+                }
                 fetch('/api/notifications/config', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -57,10 +64,23 @@
                 })
                     .then(function (r) { return r.json(); })
                     .then(function () { CertMate.toast('Notification settings saved', 'success'); })
-                    .catch(function () { CertMate.toast('Failed to save', 'error'); });
+                    .catch(function () { CertMate.toast('Failed to save', 'error'); })
+                    .then(function () {
+                        if (btn) {
+                            btn.disabled = false;
+                            btn.innerHTML = originalHTML;
+                        }
+                    });
             },
             testSmtp: function () {
                 var self = this;
+                var btn = document.querySelector('[x-ref="testSmtpBtn"], [data-action="test-smtp"]');
+                var originalHTML;
+                if (btn) {
+                    originalHTML = btn.innerHTML;
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Testing...';
+                }
                 fetch('/api/notifications/test', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -69,9 +89,22 @@
                 })
                     .then(function (r) { return r.json(); })
                     .then(function (d) { CertMate.toast(d.success ? 'Test email sent!' : ('Email failed: ' + (d.error || 'unknown')), d.success ? 'success' : 'error'); })
-                    .catch(function () { CertMate.toast('Test failed', 'error'); });
+                    .catch(function () { CertMate.toast('Test failed', 'error'); })
+                    .then(function () {
+                        if (btn) {
+                            btn.disabled = false;
+                            btn.innerHTML = originalHTML;
+                        }
+                    });
             },
             sendDigest: function () {
+                var btn = document.querySelector('[x-ref="sendDigestBtn"], [data-action="send-digest"]');
+                var originalHTML;
+                if (btn) {
+                    originalHTML = btn.innerHTML;
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Sending...';
+                }
                 fetch('/api/digest/send', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -82,9 +115,22 @@
                         if (d.success) CertMate.toast('Weekly digest sent!', 'success');
                         else CertMate.toast('Digest: ' + (d.error || d.skipped || 'unknown error'), d.skipped ? 'warning' : 'error');
                     })
-                    .catch(function () { CertMate.toast('Failed to send digest', 'error'); });
+                    .catch(function () { CertMate.toast('Failed to send digest', 'error'); })
+                    .then(function () {
+                        if (btn) {
+                            btn.disabled = false;
+                            btn.innerHTML = originalHTML;
+                        }
+                    });
             },
             testWebhook: function (wh) {
+                var btn = event && event.target ? event.target.closest('button') : null;
+                var originalHTML;
+                if (btn) {
+                    originalHTML = btn.innerHTML;
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Testing...';
+                }
                 fetch('/api/notifications/test', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -93,7 +139,13 @@
                 })
                     .then(function (r) { return r.json(); })
                     .then(function (d) { CertMate.toast(d.success ? 'Webhook test sent!' : ('Webhook failed: ' + (d.error || 'unknown')), d.success ? 'success' : 'error'); })
-                    .catch(function () { CertMate.toast('Test failed', 'error'); });
+                    .catch(function () { CertMate.toast('Test failed', 'error'); })
+                    .then(function () {
+                        if (btn) {
+                            btn.disabled = false;
+                            btn.innerHTML = originalHTML;
+                        }
+                    });
             },
             toggleWebhookEvent: function (wh, evt) {
                 if (!wh.events) wh.events = [];

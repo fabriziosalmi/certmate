@@ -822,8 +822,15 @@
     // Modal management functions
     // =============================================
 
+    // Stores the element that triggered the add-account modal so we can
+    // restore focus on close (B5 accessibility fix).
+    var _addAccountTriggerEl = null;
+
     function showAddAccountModal(provider) {
         addDebugLog('Opening add account modal for ' + provider, 'info');
+
+        // Remember trigger for focus restore on close
+        _addAccountTriggerEl = document.activeElement;
 
         var modal = document.getElementById('addAccountModal');
         // R-2: macro emits `<h3 id="<modalId>-title">` for aria-labelledby
@@ -881,6 +888,18 @@
         // Show modal
         modal.classList.remove('hidden');
         document.body.style.overflow = 'hidden';
+
+        // Auto-focus the first input field
+        setTimeout(function () {
+            var firstInput = modal.querySelector('input, select, textarea');
+            if (firstInput) firstInput.focus();
+        }, 50);
+
+        // Escape key listener to close
+        modal._escHandler = function (e) {
+            if (e.key === 'Escape') closeAddAccountModal();
+        };
+        document.addEventListener('keydown', modal._escHandler);
     }
 
     function closeAddAccountModal() {
@@ -889,14 +908,33 @@
             modal.classList.add('hidden');
             document.body.style.overflow = '';
 
+            // Remove Escape key listener
+            if (modal._escHandler) {
+                document.removeEventListener('keydown', modal._escHandler);
+                modal._escHandler = null;
+            }
+
             // Clear form
             document.getElementById('addAccountForm').reset();
             document.getElementById('modal-provider-fields').innerHTML = '';
         }
+
+        // Restore focus to the element that triggered the modal
+        if (_addAccountTriggerEl && _addAccountTriggerEl.focus) {
+            _addAccountTriggerEl.focus();
+            _addAccountTriggerEl = null;
+        }
     }
+
+    // Stores the element that triggered the edit-account modal so we can
+    // restore focus on close (B5 accessibility fix).
+    var _editAccountTriggerEl = null;
 
     function showEditAccountModal(provider, accountId) {
         addDebugLog('Opening edit account modal for ' + provider + ':' + accountId, 'info');
+
+        // Remember trigger for focus restore on close
+        _editAccountTriggerEl = document.activeElement;
 
         var modal = document.getElementById('editAccountModal');
         var editAccountIdField = document.getElementById('edit-account-id');
@@ -939,6 +977,18 @@
         // Show modal
         modal.classList.remove('hidden');
         document.body.style.overflow = 'hidden';
+
+        // Auto-focus the first input field
+        setTimeout(function () {
+            var firstInput = modal.querySelector('input, select, textarea');
+            if (firstInput) firstInput.focus();
+        }, 50);
+
+        // Escape key listener to close
+        modal._escHandler = function (e) {
+            if (e.key === 'Escape') closeEditAccountModal();
+        };
+        document.addEventListener('keydown', modal._escHandler);
     }
 
     function closeEditAccountModal() {
@@ -947,9 +997,21 @@
             modal.classList.add('hidden');
             document.body.style.overflow = '';
 
+            // Remove Escape key listener
+            if (modal._escHandler) {
+                document.removeEventListener('keydown', modal._escHandler);
+                modal._escHandler = null;
+            }
+
             // Clear form
             document.getElementById('editAccountForm').reset();
             document.getElementById('edit-modal-provider-fields').innerHTML = '';
+        }
+
+        // Restore focus to the element that triggered the modal
+        if (_editAccountTriggerEl && _editAccountTriggerEl.focus) {
+            _editAccountTriggerEl.focus();
+            _editAccountTriggerEl = null;
         }
     }
 
@@ -1927,6 +1989,7 @@
 
         // Show loading state
         var testButton = document.querySelector('button[onclick="testCAProvider()"]');
+        if (!testButton) return;
         var originalText = testButton.innerHTML;
         testButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Testing...';
         testButton.disabled = true;
@@ -2428,14 +2491,17 @@
         var modal = document.createElement('div');
         modal.id = 'storageMigrationModal';
         modal.className = 'fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50';
+        modal.setAttribute('role', 'dialog');
+        modal.setAttribute('aria-modal', 'true');
+        modal.setAttribute('aria-labelledby', 'storageMigrationModal-title');
         modal.innerHTML =
             '<div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white dark:bg-gray-800">' +
             '<div class="mt-3">' +
             '<div class="flex items-center justify-between mb-4">' +
-            '<h3 class="text-lg font-medium text-gray-900 dark:text-white">' +
+            '<h3 id="storageMigrationModal-title" class="text-lg font-medium text-gray-900 dark:text-white">' +
             '<i class="fas fa-exchange-alt mr-2"></i>Certificate Storage Migration' +
             '</h3>' +
-            '<button type="button" onclick="closeStorageMigrationModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">' +
+            '<button type="button" id="storageMigCloseBtn" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">' +
             '<i class="fas fa-times"></i>' +
             '</button>' +
             '</div>' +
@@ -2454,11 +2520,11 @@
             '</div>' +
             '</div>' +
             '<div class="flex justify-end space-x-3">' +
-            '<button type="button" onclick="closeStorageMigrationModal()" ' +
+            '<button type="button" id="storageMigCancelBtn" ' +
             'class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-600 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-md">' +
             'Cancel' +
             '</button>' +
-            '<button type="button" onclick="performStorageMigration()" ' +
+            '<button type="button" id="storageMigStartBtn" ' +
             'class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md">' +
             '<i class="fas fa-play mr-1"></i>Start Migration' +
             '</button>' +
@@ -2466,11 +2532,31 @@
             '</div>' +
             '</div>';
         document.body.appendChild(modal);
+
+        // Wire up event listeners instead of inline onclick
+        document.getElementById('storageMigCloseBtn').addEventListener('click', closeStorageMigrationModal);
+        document.getElementById('storageMigCancelBtn').addEventListener('click', closeStorageMigrationModal);
+        document.getElementById('storageMigStartBtn').addEventListener('click', performStorageMigration);
+
+        // Escape key handler
+        modal._escHandler = function (e) {
+            if (e.key === 'Escape') closeStorageMigrationModal();
+        };
+        document.addEventListener('keydown', modal._escHandler);
+
+        // Backdrop click handler — close when clicking the overlay itself
+        modal.addEventListener('click', function (e) {
+            if (e.target === modal) closeStorageMigrationModal();
+        });
     }
 
     function closeStorageMigrationModal() {
         var modal = document.getElementById('storageMigrationModal');
         if (modal) {
+            if (modal._escHandler) {
+                document.removeEventListener('keydown', modal._escHandler);
+                modal._escHandler = null;
+            }
             modal.remove();
         }
     }
