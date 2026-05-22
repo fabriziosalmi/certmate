@@ -1,3 +1,16 @@
+## v2.8.1 (Features + integrations)
+
+A patch release bringing advanced capabilities ported from certmate-ng to the core Python stack, including enhanced log sanitization, zombie certificate scanning, a Model Context Protocol (MCP) server, and simplified one-click diagnostics.
+
+### Features
+
+- **Log Sanitizer** — Automatically redacts API tokens, private keys, PEM blocks, and sensitive credentials from CertMate logs, preventing accidental leaks in support threads.
+- **Zombie Certificate Scanner** — A new multi-threaded diagnostic scanner that scans the filesystem for orphan certificates ("zombies") that are no longer tracked in the active Certbot configuration, available via the `POST /api/certificates/zombies/scan` admin endpoint.
+- **Diagnostics Snapshot with UI Copy** — Consolidates system info, redacted logs, storage status, and certificate metrics into a single secure snapshot (under admin-only role constraint). Includes a new "Copy Diagnostic Snapshot" button in both the Settings and Help tabs with fallback clipboard writing mechanisms.
+- **CertMate MCP Server** — Standardized Model Context Protocol (MCP) server written in Node.js, allowing agentic AI assistants to securely inspect certificate statuses, renewals, system health, and logs when provided with a valid `CERTMATE_TOKEN`.
+
+---
+
 ## v2.8.0 (Features + performance + fixes)
 
 First minor after the v2.7.0 OIDC/SSO release. Bundles the certificate-format

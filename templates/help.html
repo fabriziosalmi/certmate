@@ -264,7 +264,7 @@ curl -H "Authorization: Bearer $TOKEN" \
                         <li><a href="/health" target="_blank" rel="noopener" class="text-primary hover:underline">/health</a> JSON output</li>
                         <li>Screenshots help — especially for layout glitches</li>
                     </ul>
-                    <div class="mt-4">
+                    <div class="mt-4 flex flex-wrap gap-3">
                         <a href="https://github.com/fabriziosalmi/certmate/issues/new/choose"
                            target="_blank" rel="noopener"
                            class="inline-flex items-center px-4 py-2 bg-gray-900 hover:bg-gray-800 text-white text-sm font-medium rounded-md transition-colors">
@@ -272,6 +272,11 @@ curl -H "Authorization: Bearer $TOKEN" \
                             Open an issue on GitHub
                             <i class="fas fa-external-link-alt ml-2 text-xs" aria-hidden="true"></i>
                         </a>
+                        <button type="button" onclick="CertMate.copyDiagnosticsSnapshot(this)"
+                                class="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-md transition-colors">
+                            <i class="fas fa-clipboard mr-2" aria-hidden="true"></i>
+                            Copy Diagnostic Snapshot
+                        </button>
                     </div>
                 </div>
             </section>
