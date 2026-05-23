@@ -425,7 +425,14 @@ def test_lexicon_alias_create_and_delete_use_target_record(monkeypatch):
 
     class FakeClient:
         def __init__(self, config):
-            calls.append(('config', config['provider_name'], config['domain']))
+            # config is a Lexicon ConfigResolver; resolve through it so the
+            # test exercises the same key namespaces Lexicon itself reads.
+            calls.append((
+                'config',
+                config.resolve('lexicon:provider_name'),
+                config.resolve('lexicon:domain'),
+                config.resolve('lexicon:cloudflare:auth_token'),
+            ))
 
         def __enter__(self):
             return FakeOperations()
@@ -443,6 +450,10 @@ def test_lexicon_alias_create_and_delete_use_target_record(monkeypatch):
     dns_alias_hook._lexicon_change(hook_config, 'validation-token', 'create')
     dns_alias_hook._lexicon_change(hook_config, 'validation-token', 'delete')
 
+    # Provider credentials must resolve under the provider namespace, not be
+    # lost — proves the nested ConfigResolver wiring is correct.
+    assert ('config', 'cloudflare', 'certmate-validation.example.net',
+            _provider_config('cloudflare')['api_token']) in calls
     assert ('create', 'TXT', '_acme-challenge.certmate-validation.example.net', 'validation-token') in calls
     assert ('delete', 'TXT', '_acme-challenge.certmate-validation.example.net', 'validation-token') in calls
 
@@ -497,9 +508,17 @@ def test_lexicon_alias_azure_passes_full_fqdn_for_dnspython_zone_resolution(monk
 
     class FakeClient:
         def __init__(self, config):
+            # config is a Lexicon ConfigResolver. Resolve resolve_zone_name via
+            # the exact key Lexicon's Client reads (lexicon:resolve_zone_name).
+            # The previous flat-dict approach left this key in the provider
+            # namespace, where Lexicon never looked, so it resolved to None and
+            # the dnspython zone lookup never ran. See issue #243.
             calls.append((
-                'config', config['provider_name'], config['domain'],
-                config.get('resolve_zone_name'),
+                'config',
+                config.resolve('lexicon:provider_name'),
+                config.resolve('lexicon:domain'),
+                config.resolve('lexicon:resolve_zone_name'),
+                config.resolve('lexicon:azure:auth_subscription_id'),
             ))
 
         def __enter__(self):
@@ -519,8 +538,10 @@ def test_lexicon_alias_azure_passes_full_fqdn_for_dnspython_zone_resolution(monk
 
     dns_alias_hook._lexicon_change(hook_config, 'val-token', 'create')
 
-    # Full FQDN handed to Lexicon, with dnspython zone resolution enabled.
-    assert ('config', 'azure', alias, True) in calls
+    # Full FQDN handed to Lexicon, with dnspython zone resolution enabled at
+    # the top-level lexicon: namespace, and credentials nested under azure:.
+    assert ('config', 'azure', alias, True,
+            _provider_config('azure')['subscription_id']) in calls
     assert ('create', 'TXT', f'_acme-challenge.{alias}', 'val-token') in calls
 
 
