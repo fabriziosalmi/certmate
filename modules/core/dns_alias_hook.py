@@ -39,6 +39,29 @@ LEXICON_PROVIDER_MAP = {
 }
 
 
+# Keys that Lexicon treats as top-level (``lexicon:<key>``) rather than
+# provider-scoped (``lexicon:<provider>:<key>``). This mirrors the generic
+# parameter list inside Lexicon's LegacyDictConfigSource, plus
+# ``resolve_zone_name`` — a lexicon-level switch that the legacy flat-dict
+# path silently misfiles under the provider namespace, defeating the Azure
+# sub-delegated zone fix. See issue #243.
+LEXICON_TOP_LEVEL_KEYS = frozenset({
+    'domain',
+    'action',
+    'provider_name',
+    'delegated',
+    'identifier',
+    'type',
+    'name',
+    'content',
+    'ttl',
+    'priority',
+    'log_level',
+    'output',
+    'resolve_zone_name',
+})
+
+
 def _provider_config(config):
     return config.get('config') or config
 
@@ -191,6 +214,7 @@ def _lexicon_change(config, validation, action):
 
     try:
         from lexicon.client import Client
+        from lexicon.config import ConfigResolver
     except Exception as exc:
         raise DNSAliasError("dns-lexicon is required for this DNS alias provider") from exc
 
@@ -198,8 +222,19 @@ def _lexicon_change(config, validation, action):
     # the owning zone (via tldextract by default, or dnspython when
     # resolve_zone_name is set — see the azure branch of _lexicon_config) and
     # writes the TXT record relative to it.
+    #
+    # A ConfigResolver with explicitly nested dicts is required rather than a
+    # flat dict handed to Client(): the legacy flat-dict path drops
+    # resolve_zone_name into the provider namespace, where Lexicon never reads
+    # it, so the dnspython zone lookup never runs and Azure sub-delegated zones
+    # still fall back to tldextract. See issue #243.
     lexicon_config = _lexicon_config(provider, alias_domain, provider_config)
-    with Client(lexicon_config) as operations:
+    top_level = {k: v for k, v in lexicon_config.items() if k in LEXICON_TOP_LEVEL_KEYS}
+    provider_options = {k: v for k, v in lexicon_config.items() if k not in LEXICON_TOP_LEVEL_KEYS}
+    resolver = ConfigResolver()
+    resolver.with_dict(top_level)
+    resolver.with_dict({lexicon_config['provider_name']: provider_options})
+    with Client(resolver) as operations:
         if action == 'create':
             operations.create_record('TXT', record, validation)
         else:
