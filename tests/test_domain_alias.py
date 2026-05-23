@@ -479,32 +479,13 @@ def test_acme_dns_alias_rejects_non_matching_subdomain():
         )
 
 
-def test_create_dns_alias_hook_config_resolves_azure_zone(tmp_path):
-    mgr, shell = _manager(tmp_path, provider='azure')
-
-    # Mock dns_zone_discovery zone resolution
-    with patch('modules.core.dns_zone_discovery.resolve_zones_for_domains') as mock_resolve:
-        mock_resolve.return_value = (['validationdomain.com'], [('acme-validation.validationdomain.com', 'validationdomain.com')])
-
-        hook_config_path = mgr._create_dns_alias_hook_config(
-            'azure',
-            _provider_config('azure'),
-            'acme-validation.validationdomain.com',
-            60
-        )
-
-        assert hook_config_path.exists()
-        with open(hook_config_path, encoding='utf-8') as f:
-            payload = json.load(f)
-
-        assert payload['provider'] == 'azure'
-        assert payload['domain_alias'] == 'acme-validation.validationdomain.com'
-        assert payload['resolved_zone'] == 'validationdomain.com'
-
-        hook_config_path.unlink()
-
-
-def test_lexicon_alias_azure_uses_resolved_zone(monkeypatch):
+def test_lexicon_alias_azure_passes_full_fqdn_for_dnspython_zone_resolution(monkeypatch):
+    """Regression for #243: Azure alias mode must hand Lexicon the full alias
+    FQDN together with resolve_zone_name, so Lexicon resolves the real
+    (possibly sub-delegated) hosted zone via dnspython. The previous approach
+    pre-resolved/guessed a zone and passed that instead, which Lexicon's
+    tldextract then collapsed back to the registered domain — breaking
+    issuance against a delegated validation zone."""
     calls = []
 
     class FakeOperations:
@@ -516,7 +497,10 @@ def test_lexicon_alias_azure_uses_resolved_zone(monkeypatch):
 
     class FakeClient:
         def __init__(self, config):
-            calls.append(('config', config['provider_name'], config['domain']))
+            calls.append((
+                'config', config['provider_name'], config['domain'],
+                config.get('resolve_zone_name'),
+            ))
 
         def __enter__(self):
             return FakeOperations()
@@ -526,57 +510,37 @@ def test_lexicon_alias_azure_uses_resolved_zone(monkeypatch):
 
     monkeypatch.setitem(__import__('sys').modules, 'lexicon.client', MagicMock(Client=FakeClient))
 
+    alias = 'domain.com.acme-validation.validationdomain.com'
     hook_config = {
         'provider': 'azure',
-        'domain_alias': 'acme-validation.validationdomain.com',
-        'resolved_zone': 'validationdomain.com',
+        'domain_alias': alias,
         'config': _provider_config('azure'),
     }
 
     dns_alias_hook._lexicon_change(hook_config, 'val-token', 'create')
 
-    # Verify client initialized with the resolved zone, not the full alias domain
-    assert ('config', 'azure', 'validationdomain.com') in calls
-    assert ('create', 'TXT', '_acme-challenge.acme-validation.validationdomain.com', 'val-token') in calls
+    # Full FQDN handed to Lexicon, with dnspython zone resolution enabled.
+    assert ('config', 'azure', alias, True) in calls
+    assert ('create', 'TXT', f'_acme-challenge.{alias}', 'val-token') in calls
 
 
-def test_lexicon_alias_azure_fallback_guessing_zone(monkeypatch):
-    calls = []
-
-    class FakeOperations:
-        def list_records(self, rtype=None):
-            # Simulate success when domain is validationdomain.com
-            # Raise exception for other domain guesses
-            pass
-
-        def create_record(self, rtype, name, content):
-            calls.append(('create', rtype, name, content))
-
-    class FakeClient:
-        def __init__(self, config):
-            self.domain = config['domain']
-            calls.append(('config', config['provider_name'], config['domain']))
-            if self.domain != 'validationdomain.com':
-                raise ValueError("Zone not found in Azure")
-
-        def __enter__(self):
-            return FakeOperations()
-
-        def __exit__(self, exc_type, exc, tb):
-            return False
-
-    monkeypatch.setitem(__import__('sys').modules, 'lexicon.client', MagicMock(Client=FakeClient))
-
-    hook_config = {
-        'provider': 'azure',
-        'domain_alias': 'acme-validation.validationdomain.com',
-        # resolved_zone is missing
-        'config': _provider_config('azure'),
-    }
-
-    dns_alias_hook._lexicon_change(hook_config, 'val-token', 'create')
-
-    # Verify it tried multiple guesses and eventually called create with 'validationdomain.com'
-    assert ('config', 'azure', 'acme-validation.validationdomain.com') in calls
-    assert ('config', 'azure', 'validationdomain.com') in calls
-    assert ('create', 'TXT', '_acme-challenge.acme-validation.validationdomain.com', 'val-token') in calls
+def test_azure_alias_lexicon_config_uses_dnspython_zone_resolution():
+    """Regression for #243: Azure DNS-01 alias mode against a sub-delegated
+    validation zone (e.g. acme-validation.example.net delegated under
+    example.net) must resolve the real hosted zone via dnspython, not
+    Lexicon's default tldextract — which collapses to the registered domain
+    (example.net) that does not exist in the resource group."""
+    cfg = dns_alias_hook._lexicon_config(
+        'azure',
+        'domain.com.acme-validation.example.net',
+        {
+            'subscription_id': 'sub', 'resource_group': 'rg', 'tenant_id': 't',
+            'client_id': 'c', 'client_secret': 'secret',
+        },
+    )
+    # dnspython SOA lookup instead of tldextract guess.
+    assert cfg['resolve_zone_name'] is True
+    # The full alias FQDN is passed; Lexicon resolves the owning zone from it.
+    assert cfg['domain'] == 'domain.com.acme-validation.example.net'
+    assert cfg['provider_name'] == 'azure'
+    assert cfg['auth_subscription_id'] == 'sub'
