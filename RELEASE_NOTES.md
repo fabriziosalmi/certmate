@@ -1,3 +1,11 @@
+## v2.8.3 (Patch — Azure DNS sub-delegated alias zones)
+
+Hotfix for [#243](https://github.com/fabriziosalmi/certmate/issues/243).
+
+### Fixes
+
+- **Azure DNS-01 alias mode against sub-delegated validation zones** — issuance failed with *"Resource group … does not contain the DNS zone"* when the validation zone was a delegated subdomain (e.g. `acme-validation.example.com` under `example.com`). Lexicon resolves the hosted zone with tldextract by default, which collapses any name back to the registered domain, so the delegated zone was never matched. The v2.8.1/v2.8.2 attempt at this could not work for the same reason. CertMate now sets Lexicon's `resolve_zone_name` for Azure, so the real zone is resolved via a dnspython SOA lookup from the full alias FQDN. Thanks to @jensaops for the diagnosis and POC.
+
 ## v2.8.2 (Security + UX hardening)
 
 A security and UX audit release, bringing rigorous logical hardening and comprehensive audit logging coverage to the backend, along with 60+ UI/UX fixes spanning dark mode, accessibility, and form logic.
