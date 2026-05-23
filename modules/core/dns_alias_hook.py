@@ -129,6 +129,12 @@ def _lexicon_config(provider, alias_domain, provider_config):
             'auth_tenant_id': provider_config['tenant_id'],
             'auth_client_id': provider_config['client_id'],
             'auth_client_secret': provider_config['client_secret'],
+            # Resolve the actual hosted zone with dnspython (a live SOA lookup)
+            # instead of Lexicon's default tldextract guess. tldextract always
+            # collapses to the registered domain, so a sub-delegated validation
+            # zone (e.g. acme-validation.example.com) is never matched and
+            # certbot fails with "does not contain the DNS zone". See issue #243.
+            'resolve_zone_name': True,
         })
     elif provider == 'google':
         _require(provider_config, 'project_id', 'service_account_key')
@@ -177,26 +183,6 @@ def _lexicon_config(provider, alias_domain, provider_config):
     return base
 
 
-def _find_azure_zone(provider_config, alias_domain):
-    try:
-        from lexicon.client import Client
-    except Exception as exc:
-        raise DNSAliasError("dns-lexicon is required for this DNS alias provider") from exc
-
-    for zone in _zone_guesses(alias_domain):
-        if zone == 'com' or '.' not in zone:
-            continue
-        try:
-            lexicon_config = _lexicon_config('azure', zone, provider_config)
-            with Client(lexicon_config) as operations:
-                # Call list_records to verify if the zone is valid/exists
-                operations.list_records(rtype='TXT')
-                return zone
-        except Exception:
-            continue
-    raise DNSAliasError(f"Unable to determine Azure DNS zone for alias '{alias_domain}'")
-
-
 def _lexicon_change(config, validation, action):
     provider = config['provider']
     provider_config = _provider_config(config)
@@ -208,12 +194,11 @@ def _lexicon_change(config, validation, action):
     except Exception as exc:
         raise DNSAliasError("dns-lexicon is required for this DNS alias provider") from exc
 
-    resolved_zone = config.get('resolved_zone')
-    if not resolved_zone and provider == 'azure':
-        resolved_zone = _find_azure_zone(provider_config, alias_domain)
-
-    lexicon_domain = resolved_zone if resolved_zone else alias_domain
-    lexicon_config = _lexicon_config(provider, lexicon_domain, provider_config)
+    # The full alias FQDN is handed to Lexicon as the domain; Lexicon resolves
+    # the owning zone (via tldextract by default, or dnspython when
+    # resolve_zone_name is set — see the azure branch of _lexicon_config) and
+    # writes the TXT record relative to it.
+    lexicon_config = _lexicon_config(provider, alias_domain, provider_config)
     with Client(lexicon_config) as operations:
         if action == 'create':
             operations.create_record('TXT', record, validation)
