@@ -1,3 +1,11 @@
+## v2.8.4 (Patch — Azure DNS sub-delegated alias zones, follow-up)
+
+Follow-up hotfix for [#243](https://github.com/fabriziosalmi/certmate/issues/243). The v2.8.3 fix could not take effect.
+
+### Fixes
+
+- **Azure DNS-01 alias mode still failed against sub-delegated validation zones** — v2.8.3 set Lexicon's `resolve_zone_name` in the flat config dict passed to `Client()`, but Lexicon's legacy dict resolver routes any key outside its fixed generic-parameter list into the provider namespace. `resolve_zone_name` landed at `lexicon:azure:resolve_zone_name`, while Lexicon reads it at `lexicon:resolve_zone_name`, so it resolved to `None`, the dnspython SOA lookup never ran, and issuance kept failing with *"does not contain the DNS zone"*. CertMate now builds a Lexicon `ConfigResolver` explicitly — lexicon-level keys at the top level, provider credentials nested under the provider name — so `resolve_zone_name` reaches Lexicon where it is read. This applies to every Lexicon alias provider, not just Azure. Thanks to @jensaops for the precise diagnosis and proof-of-concept.
+
 ## v2.8.3 (Patch — Azure DNS sub-delegated alias zones)
 
 Hotfix for [#243](https://github.com/fabriziosalmi/certmate/issues/243).
