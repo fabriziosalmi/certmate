@@ -113,11 +113,14 @@ A handful of leftovers (`dark:text-gray-400{%`, `dark:text-gray-300'`) are class
 - Health/deployment status colors (green/amber/red/blue) deliberately left as literal status colors — they carry meaning and get a dedicated status-token pass later, not surface tokens.
 - Glass form inputs (`dark:bg-gray-700`/`dark:text-white`), form labels, and hover: variants left for their own treatment (consistent with the pilot).
 
-### Phase 3 — Settings cluster (partial by partial)
-- [ ] `settings.html` + 11 partials, smallest first, finishing with `settings_dns.html`. Migrate associated JS in parallel (settings.js, settings-deploy.js, …).
+### Phase 3 — Settings cluster ✅
+- [x] `settings.html` + 10 partials + `_modal`: 441 pairs collapsed. Alpine `:class` interior pairs tokenized by the codemod (quotes glue only the branch-edge classes); ternary structure verified intact.
+- [x] `settings.js` + `setup-wizard.js`: 49 pairs, `node --check` clean. The other `settings-*.js` carry no color classes.
+- Left as-is (consistent with prior phases): glass inputs (`dark:bg-gray-700` ~99), form labels (`dark:text-gray-300` ~78, deferred), status badges, opacity surfaces, hover: variants, and ternary branch-edge classes.
 
 ### Phase 4 — Remaining pages
-- [ ] activity, help, setup, `_client_certs`, setup-wizard.js, client-certs.js, cmd-palette.js, report-issue.js, shortcuts.js.
+- [x] (setup-wizard.js already done in Phase 3)
+- [ ] activity, help, setup, `_client_certs`, client-certs.js, cmd-palette.js, report-issue.js, shortcuts.js.
 
 ### Phase 5 — Cleanup & lock-in
 - [ ] Move JS hex palettes (toast/chart in `certmate.js:356`) to read from CSS vars / token map.
