@@ -42,6 +42,7 @@ from pathlib import Path
 # surfaced in the ambiguity report for manual review rather than guessed.
 MAPPINGS: list[tuple[str, str, str]] = [
     # ── Surfaces ──────────────────────────────────────────────────────
+    ("bg-surface-light", "dark:bg-surface-dark", "bg-background"),  # page body
     ("bg-white", "dark:bg-gray-800", "bg-surface"),
     ("bg-white", "dark:bg-gray-900", "bg-surface"),
     ("bg-white", "dark:bg-surface-card", "bg-surface"),
@@ -60,6 +61,8 @@ MAPPINGS: list[tuple[str, str, str]] = [
     ("border-gray-200", "dark:border-gray-700", "border-border"),
     ("border-gray-300", "dark:border-gray-600", "border-border"),
     ("border-gray-200", "dark:border-gray-800", "border-border"),
+    ("border-gray-200", "dark:border-gray-600", "border-border"),
+    ("border-gray-300", "dark:border-gray-500", "border-border"),
 ]
 
 # Classes that are deliberately NOT auto-mapped (status colors carry meaning,
