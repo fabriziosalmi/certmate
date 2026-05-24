@@ -60,7 +60,12 @@ commits). Phases group into one or more `vX.Y.Z` release PRs.
 - [x] CI step runs `npm run css:build` and fails if `tailwind.min.css` is stale (`git diff --exit-code`). → `frontend-css` job in `.github/workflows/ci.yml`. The committed bundle was already drifted; rebuilt and committed.
 - [x] Define token layer: CSS vars in `:root` / `.dark` (input.css) + mapping in `tailwind.config.js`, **alongside** the existing palette — no templates touched yet. Tokens: `bg-background`, `bg-surface`, `bg-surface-2`, `text-foreground`, `text-muted`, `border-border` (safelisted).
 - [x] Write the codemod: `scripts/theme_codemod.py` — mapping table of recurring `dark:` pairs → tokens, dry-run report + `--apply`. Ambiguity report below.
-- [ ] Capture light+dark screenshot baseline of all 19 pages. **(remaining Phase 0 item — needs running app + auth)**
+- [x] Screenshot-baseline tooling: `scripts/theme_baseline.py` — builds Docker with a fresh ephemeral data dir, bootstraps a throwaway admin, captures every real UI page in light + dark. Re-run after each phase and diff. **Capture run still pending** (needs `playwright install chromium` + a Docker build locally).
+
+#### Baseline scope (real pages only)
+Captured: `/` (setup, then index), `/login`, `/settings`, `/help`, `/activity`, `/redoc` — 7 pages × light/dark.
+
+> **Finding (out of scope, flagged):** the routes `/certificates` and `/audit` in `modules/web/ui_routes.py:25-41` render `certificates.html` / `audit.html`, which **do not exist** — both 500. Dead routes, excluded from the baseline. Worth a separate fix (remove the routes or restore the templates).
 
 #### Codemod usage
 ```
