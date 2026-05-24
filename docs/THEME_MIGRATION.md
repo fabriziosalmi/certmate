@@ -1,0 +1,88 @@
+# Theme Migration — decoupling light/dark via CSS-variable tokens
+
+Status: **planning** · Owner: Fabrizio · Created: 2026-05-25
+
+## Goal
+
+Today, changing the theme means editing colors across ~19 templates and the
+frontend JS. This migration makes a single block of CSS custom properties the
+source of truth for the whole palette, so retheming (or adding a new theme)
+means editing `:root` / `.dark` in one file — not hundreds of call sites.
+
+## Baseline (measured 2026-05-25)
+
+| Metric | Value |
+|---|---|
+| Color-class references in templates | ~3,197 across 19 files |
+| `dark:` variant pairs in templates | ~1,665 |
+| Color classes in app JS (non-vendored) | ~789 (dashboard.js 372, settings.js 150, setup-wizard.js 131, certmate.js 60, client-certs.js 57, …) |
+| Hardcoded hex in app JS | ~17 (toast/chart palettes); 80 more in `redoc.standalone.js` are **vendored, ignore** |
+| R-3 component classes adopted | `.card` only (12×); `.btn-*`, `.badge-*`, `.form-*` = 0 |
+
+Heaviest files: `partials/settings_dns.html` (635 / 395 dark:), `index.html`
+(311 / 150), `partials/settings_deploy.html`, `partials/settings_ca.html`.
+
+## Process risks to fix first
+
+1. **Built CSS is committed by hand.** `package.json` only has `css:build` /
+   `css:watch`; no CI rebuilds `static/css/tailwind.min.css`. Editing
+   `input.css` without rebuilding silently ships stale CSS. → add CI build +
+   freshness check in Phase 0.
+2. **~3,200 manual edits = guaranteed regressions.** Need a visual baseline
+   (light+dark screenshots of every page) and a semi-automatic codemod for the
+   mechanical `dark:` pairs, not blind find-replace.
+
+## Strategy: CSS custom properties as single source
+
+shadcn-style on Tailwind v3: colors become CSS variables in `:root` / `.dark`,
+exposed to Tailwind as semantic tokens (HSL channel-triplets so the `/opacity`
+utilities keep working). The ~1,665 `dark:` pairs collapse to single classes.
+
+### Proposed token map
+
+| Tailwind token | Replaces (examples) | Use |
+|---|---|---|
+| `bg-background` | `bg-gray-50 dark:bg-surface-dark` | page |
+| `bg-surface` | `bg-white dark:bg-surface-card` | card |
+| `bg-surface-2` | `bg-gray-100 dark:bg-gray-800` | elevated |
+| `text-foreground` | `text-gray-900 dark:text-white` | primary text |
+| `text-muted` | `text-gray-500 dark:text-gray-400` | secondary text |
+| `border-border` | `border-gray-200 dark:border-gray-700` | borders |
+| `bg-primary` / `text-primary` | brand (now var-backed) | brand |
+| `*-success/warning/danger/info` | green=valid, red=expired… | **status, not surfaces** |
+
+## Phases
+
+Each phase = one atomic commit (split partials in Phase 3 into their own
+commits). Phases group into one or more `vX.Y.Z` release PRs.
+
+### Phase 0 — Foundations & guardrails (no visual change)
+- [ ] CI step runs `npm run css:build` and fails if `tailwind.min.css` is stale (`git diff --exit-code`).
+- [ ] Define token layer: CSS vars in `:root` / `.dark` (input.css) + mapping in `tailwind.config.js`, **alongside** the existing palette — no templates touched yet.
+- [ ] Capture light+dark screenshot baseline of all 19 pages.
+- [ ] Write the codemod: mapping table of recurring `dark:` pairs → tokens, with an ambiguity report for manual review.
+
+### Phase 1 — Pilot: shell + primitives
+- [ ] Migrate `base.html` (nav/header/footer) to tokens.
+- [ ] Actually adopt `.btn`, `.card`, `.badge`, `.form-*` (already defined + safelisted) in base.html + one simple page (`login.html`).
+- [ ] Validate light/dark parity against baseline. Proves the mapping before scaling.
+
+### Phase 2 — Dashboard
+- [ ] `index.html` **together with** `static/js/dashboard.js` (372 classes): rows/badges are JS-rendered, migrate as a pair. Health states (green/red) → `success`/`danger` tokens, not surfaces.
+
+### Phase 3 — Settings cluster (partial by partial)
+- [ ] `settings.html` + 11 partials, smallest first, finishing with `settings_dns.html`. Migrate associated JS in parallel (settings.js, settings-deploy.js, …).
+
+### Phase 4 — Remaining pages
+- [ ] activity, help, setup, `_client_certs`, setup-wizard.js, client-certs.js, cmd-palette.js, report-issue.js, shortcuts.js.
+
+### Phase 5 — Cleanup & lock-in
+- [ ] Move JS hex palettes (toast/chart in `certmate.js:356`) to read from CSS vars / token map.
+- [ ] Remove legacy aliases + now-unused scales from `tailwind.config.js`.
+- [ ] CI guardrail: grep that fails on new `dark:bg-gray-*` / hardcoded hex in templates.
+- [ ] Refresh baseline as the final reference.
+
+## Workflow alignment
+- Zero emoji in commits/PRs/release notes.
+- Atomic commits (one per phase, or per partial in Phase 3); one PR per release.
+- Before public push: Docker smoke + real cert issuance against Fab's domain with random subdomains.

@@ -79,3 +79,33 @@ jobs:
       if: matrix.python-version == '3.12'
       run: |
         docker build -t certmate:test .
+
+  # The Tailwind bundle (static/css/tailwind.min.css) is committed to the repo
+  # and served as-is — there is no build step at deploy time. So a stale bundle
+  # ships silently whenever input.css / tailwind.config.js change without a
+  # rebuild. This job rebuilds from source and fails if the committed output
+  # drifts, forcing `npm run css:build` to be part of every CSS-touching PR.
+  frontend-css:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+
+    - name: Set up Node
+      uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af  # v4
+      with:
+        node-version: '20'
+        cache: npm
+
+    - name: Install frontend dependencies
+      run: npm ci
+
+    - name: Rebuild CSS bundle
+      run: npm run css:build
+
+    - name: Fail if committed bundle is stale
+      run: |
+        if ! git diff --exit-code -- static/css/tailwind.min.css; then
+          echo "::error::static/css/tailwind.min.css is out of date. Run 'npm run css:build' and commit the result."
+          exit 1
+        fi
