@@ -38,17 +38,17 @@
         div.className = 'fixed inset-0 z-[100] hidden';
         div.innerHTML =
             '<div class="fixed inset-0 bg-black/50 backdrop-blur-sm" id="cmdPaletteOverlay"></div>' +
-            '<div class="fixed inset-x-4 top-[15vh] sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 sm:w-full sm:max-w-lg bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">' +
-                '<div class="flex items-center px-4 border-b border-gray-200 dark:border-gray-700">' +
+            '<div class="fixed inset-x-4 top-[15vh] sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 sm:w-full sm:max-w-lg bg-surface border-border rounded-xl shadow-2xl border overflow-hidden">' +
+                '<div class="flex items-center px-4 border-b border-border">' +
                     '<i class="fas fa-search text-gray-400 mr-3"></i>' +
                     '<input id="cmdPaletteInput" type="text" placeholder="Search pages, settings, certificates..." ' +
-                           'class="flex-1 py-3 bg-transparent text-gray-900 dark:text-white placeholder-gray-400 outline-none text-sm">' +
-                    '<kbd class="hidden sm:inline-flex items-center px-2 py-0.5 text-xs text-gray-400 bg-gray-100 dark:bg-gray-700 rounded">ESC</kbd>' +
+                           'class="flex-1 py-3 bg-transparent text-foreground placeholder-gray-400 outline-none text-sm">' +
+                    '<kbd class="hidden sm:inline-flex items-center px-2 py-0.5 text-xs text-gray-400 bg-surface-2 rounded">ESC</kbd>' +
                 '</div>' +
                 '<div id="cmdPaletteResults" class="overflow-y-auto py-2"></div>' +
-                '<div class="px-4 py-2 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between text-xs text-gray-400">' +
-                    '<div><kbd class="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded mr-1">&uarr;&darr;</kbd> navigate <kbd class="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded mx-1">&crarr;</kbd> select</div>' +
-                    '<div><kbd class="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded">esc</kbd> close</div>' +
+                '<div class="px-4 py-2 border-t border-border flex items-center justify-between text-xs text-gray-400">' +
+                    '<div><kbd class="px-1.5 py-0.5 bg-surface-2 rounded mr-1">&uarr;&darr;</kbd> navigate <kbd class="px-1.5 py-0.5 bg-surface-2 rounded mx-1">&crarr;</kbd> select</div>' +
+                    '<div><kbd class="px-1.5 py-0.5 bg-surface-2 rounded">esc</kbd> close</div>' +
                 '</div>' +
             '</div>';
         document.body.appendChild(div);
@@ -137,7 +137,7 @@
 
     function renderResults() {
         if (currentResults.length === 0) {
-            resultsEl.innerHTML = '<div class="px-4 py-6 text-center text-sm text-gray-500 dark:text-gray-400"><i class="fas fa-search mr-2"></i>No results found</div>';
+            resultsEl.innerHTML = '<div class="px-4 py-6 text-center text-sm text-muted"><i class="fas fa-search mr-2"></i>No results found</div>';
             return;
         }
 
