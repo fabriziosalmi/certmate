@@ -30,13 +30,13 @@
         <!-- Logo and Title -->
         <div class="text-center mb-8">
             <img src="/static/img/certmate_logo_256.png" alt="CertMate Logo" class="w-20 h-20 mx-auto mb-4">
-            <h1 class="text-3xl font-bold text-gray-900 dark:text-white">CertMate</h1>
-            <p class="text-gray-600 dark:text-gray-400 mt-2">SSL Certificate Manager</p>
+            <h1 class="text-3xl font-bold text-foreground">CertMate</h1>
+            <p class="text-muted mt-2">SSL Certificate Manager</p>
         </div>
 
         <!-- Login Form -->
         <div class="glass-card shadow-elevated rounded-2xl p-8 border border-gray-200/50 dark:border-white/5">
-            <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-6 text-center">Sign In</h2>
+            <h2 class="text-xl font-semibold text-foreground mb-6 text-center">Sign In</h2>
             
             <!-- Error Message -->
             <div id="errorMessage" class="hidden mb-4 p-3 bg-red-100 dark:bg-red-900/30 border border-red-400 dark:border-red-600 text-red-700 dark:text-red-300 rounded-md text-sm">
@@ -50,7 +50,7 @@
                     </label>
                     <input type="text" id="username" name="username" required
                            autocomplete="username"
-                           class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                           class="w-full px-4 py-3 border border-border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                            placeholder="Enter your username">
                 </div>
 
@@ -62,7 +62,7 @@
                     <div class="relative">
                         <input type="password" id="password" name="password" required
                                autocomplete="current-password"
-                               class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                               class="w-full px-4 py-3 border border-border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                                placeholder="Enter your password">
                         <button type="button" id="passwordToggleBtn" onclick="togglePassword()"
                                 aria-label="Show password" aria-pressed="false" aria-controls="password"
@@ -75,7 +75,7 @@
                 <!-- Remember Me -->
                 <div class="flex items-center">
                     <input type="checkbox" id="remember" name="remember"
-                           class="h-4 w-4 text-primary focus:ring-primary border-gray-300 dark:border-gray-600 rounded dark:bg-gray-700">
+                           class="h-4 w-4 text-primary focus:ring-primary border-border rounded dark:bg-gray-700">
                     <label for="remember" class="ml-2 block text-sm text-gray-700 dark:text-gray-300">
                         Remember me
                     </label>
@@ -91,10 +91,10 @@
                      service flow (no email infra assumption), so the
                      canonical path is to ask the admin or use the
                      in-container reset script. -->
-                <p class="text-xs text-gray-500 dark:text-gray-400 text-center mt-2">
+                <p class="text-xs text-muted text-center mt-2">
                     Forgot your password? Contact your CertMate
                     administrator, or run
-                    <code class="font-mono px-1 py-0.5 rounded bg-gray-100 dark:bg-gray-700">scripts/reset_admin_password.py</code>
+                    <code class="font-mono px-1 py-0.5 rounded bg-surface-2">scripts/reset_admin_password.py</code>
                     inside the container.
                 </p>
             </form>
@@ -104,9 +104,9 @@
                  IdP doesn't render a broken button. -->
             <div id="ssoSection" class="hidden mt-6">
                 <div class="relative flex items-center my-4">
-                    <div class="flex-grow border-t border-gray-300 dark:border-gray-600"></div>
-                    <span class="flex-shrink mx-3 text-xs text-gray-500 dark:text-gray-400">or</span>
-                    <div class="flex-grow border-t border-gray-300 dark:border-gray-600"></div>
+                    <div class="flex-grow border-t border-border"></div>
+                    <span class="flex-shrink mx-3 text-xs text-muted">or</span>
+                    <div class="flex-grow border-t border-border"></div>
                 </div>
                 <a id="ssoButton" href="/api/auth/oidc/login"
                    class="w-full inline-flex justify-center items-center py-3 px-4 bg-gray-800 hover:bg-gray-900 dark:bg-gray-700 dark:hover:bg-gray-600 text-white font-semibold rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 dark:focus:ring-offset-gray-800 btn-press transition-all duration-150">
@@ -117,7 +117,7 @@
         </div>
 
         <!-- Footer -->
-        <div class="text-center mt-6 text-sm text-gray-500 dark:text-gray-400">
+        <div class="text-center mt-6 text-sm text-muted">
             <p>Protected by CertMate Local Authentication</p>
         </div>
     </main>
