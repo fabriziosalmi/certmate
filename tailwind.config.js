@@ -18,7 +18,7 @@ module.exports = {
     // safelist once adoption is broad enough for the content scan to find
     // each utility on its own (THEME_MIGRATION.md, final phase).
     'bg-background', 'bg-surface', 'bg-surface-2',
-    'text-foreground', 'text-muted', 'border-border',
+    'text-foreground', 'text-muted', 'border-border', 'divide-border',
   ],
   darkMode: 'class',
   theme: {
