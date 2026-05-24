@@ -2,7 +2,7 @@
 {% block title %}CertMate - Activity{% endblock %}
 {% block content %}
     <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div class="bg-white dark:bg-surface-card shadow-card rounded-xl overflow-hidden">
+        <div class="bg-surface shadow-card rounded-xl overflow-hidden">
             <div class="px-6 py-3 border-b border-gray-100 dark:border-white/5">
                 <div class="flex items-center justify-between">
                     <nav class="flex items-center text-sm" aria-label="Breadcrumb">
@@ -13,14 +13,14 @@
                     <div class="flex items-center gap-2 flex-wrap">
                         <input type="search" id="filterSearch" aria-label="Search activity log"
                                placeholder="Search domain, resource, user…"
-                               class="px-3 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-primary w-44 sm:w-56">
-                        <select id="filterDate" aria-label="Filter by date range" class="px-3 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary">
+                               class="px-3 py-1.5 text-xs border text-foreground border-border rounded-lg bg-white dark:bg-gray-700 placeholder-gray-400 focus:ring-2 focus:ring-primary w-44 sm:w-56">
+                        <select id="filterDate" aria-label="Filter by date range" class="px-3 py-1.5 text-xs border text-foreground border-border rounded-lg bg-white dark:bg-gray-700 focus:ring-2 focus:ring-primary">
                             <option value="">All time</option>
                             <option value="today">Today</option>
                             <option value="7d">Last 7 days</option>
                             <option value="30d">Last 30 days</option>
                         </select>
-                        <select id="filterOp" aria-label="Filter by operation type" class="px-3 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary">
+                        <select id="filterOp" aria-label="Filter by operation type" class="px-3 py-1.5 text-xs border text-foreground border-border rounded-lg bg-white dark:bg-gray-700 focus:ring-2 focus:ring-primary">
                             <option value="">All user activity</option>
                             <option value="create">Created</option>
                             <option value="renew">Renewed</option>
@@ -28,7 +28,7 @@
                             <option value="download">Downloaded</option>
                             <option value="api_request">API requests only</option>
                         </select>
-                        <button type="button" onclick="loadActivity()" class="px-2.5 py-1.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition" title="Refresh" aria-label="Refresh activity log">
+                        <button type="button" onclick="loadActivity()" class="px-2.5 py-1.5 text-xs bg-surface-2 text-muted rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition" title="Refresh" aria-label="Refresh activity log">
                             <i class="fas fa-sync"></i>
                         </button>
                     </div>
@@ -142,7 +142,7 @@
                 '<li role="alert" class="px-6 py-10 text-center">' +
                     '<i class="fas fa-exclamation-circle text-red-400 text-2xl mb-3 block"></i>' +
                     '<div class="text-sm font-medium text-gray-700 dark:text-gray-200">' + escapeHtml(msg) + '</div>' +
-                    '<p class="mt-2 text-xs text-gray-500 dark:text-gray-400">' + hint + '</p>' +
+                    '<p class="mt-2 text-xs text-muted">' + hint + '</p>' +
                 '</li>';
         }
 
@@ -282,7 +282,7 @@
             var list = document.getElementById('activityList');
             list.setAttribute('aria-busy', 'false');
             if (entries.length === 0) {
-                list.innerHTML = '<li role="presentation" class="px-6 py-12 text-center text-gray-500 dark:text-gray-400"><i class="fas fa-inbox text-3xl text-gray-300 dark:text-gray-600 mb-3 block"></i>No activity recorded yet</li>';
+                list.innerHTML = '<li role="presentation" class="px-6 py-12 text-center text-muted"><i class="fas fa-inbox text-3xl text-gray-300 dark:text-gray-600 mb-3 block"></i>No activity recorded yet</li>';
                 return;
             }
 
@@ -331,10 +331,10 @@
                     '</div>' +
                     '<div class="flex-1 min-w-0">' +
                         '<div class="flex items-center gap-2">' +
-                            '<span class="text-sm font-medium text-gray-900 dark:text-white">' + escapeHtml(opLabel(entry)) + '</span>' +
+                            '<span class="text-sm font-medium text-foreground">' + escapeHtml(opLabel(entry)) + '</span>' +
                             (entry.status === 'failure' ? '<span class="px-1.5 py-0.5 text-[10px] font-medium bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded">FAILED</span>' : '') +
                         '</div>' +
-                        '<p class="text-sm text-gray-600 dark:text-gray-300 truncate">' +
+                        '<p class="text-sm text-muted truncate">' +
                             escapeHtml(entry.resource_type) + ': <strong>' + escapeHtml(entry.resource_id) + '</strong>' +
                         '</p>' +
                         (detailStr ? '<p class="text-xs text-gray-400 mt-0.5">' + escapeHtml(detailStr) + '</p>' : '') +
@@ -352,7 +352,7 @@
                 // is valid markup under <ul> but isn't announced as a
                 // feed article.
                 var btnHtml = '<li role="presentation" class="px-6 py-4 text-center border-t border-gray-100 dark:border-gray-700/50">' +
-                    '<button id="loadMoreActivity" type="button" class="inline-flex items-center px-4 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 transition">' +
+                    '<button id="loadMoreActivity" type="button" class="inline-flex items-center px-4 py-1.5 text-xs border border-border rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 transition">' +
                         '<i class="fas fa-plus mr-2"></i>Load more' +
                     '</button>' +
                 '</li>';
