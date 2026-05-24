@@ -97,9 +97,15 @@ After every `--apply`: `npm run css:build`, diff against baseline, review residu
 A handful of leftovers (`dark:text-gray-400{%`, `dark:text-gray-300'`) are class attributes containing Jinja/JS expressions — migrate by hand.
 
 ### Phase 1 — Pilot: shell + primitives
-- [ ] Migrate `base.html` (nav/header/footer) to tokens.
-- [ ] Actually adopt `.btn`, `.card`, `.badge`, `.form-*` (already defined + safelisted) in base.html + one simple page (`login.html`).
-- [ ] Validate light/dark parity against baseline. Proves the mapping before scaling.
+- [x] Migrate `base.html` (nav/header/footer/tab bar) to tokens. 19 pairs collapsed; token values match originals exactly.
+- [x] Migrate `login.html` to tokens. 12 pairs collapsed.
+- [ ] Adopt `.btn` / `.form-*` component classes (deferred — pilot used tokens only; the login inputs differ in sizing from `.form-input`, so component adoption is its own step).
+- [ ] Validate light/dark parity against baseline. **Blocked on the baseline capture run** — pilot was done token-for-token faithfully (values matched), but not yet visually confirmed.
+
+#### Open design decisions (surfaced by the pilot)
+1. **Form-label text** (`text-gray-700 dark:text-gray-300`, ~114 occurrences app-wide). Left unmigrated. Options: (a) fold into `text-foreground` — but light goes 27%→11% L, a *visible* darkening, so not faithful; (b) add a third neutral text token (`--color-label` = gray-700/gray-300). Leaning (b); decide once the baseline lets us compare. Until then the codemod has **no** mapping for this pair (correct — it stays in the ambiguity report).
+2. **Border unification**: `border-gray-300` (inputs) now maps to `border-border` (= gray-200), so input borders lighten one step in light mode. Accepted for the pilot (single border token is the goal); revisit with `--color-input-border` only if review dislikes it.
+3. **Glass inputs / `dark:border-white/5` hairline / hover: variants / status colors**: intentionally NOT tokenized — glass controls have no light counterpart, the white/5 hairline is the canonical `.card` edge, and hover/status need their own variant-token pass (a later phase).
 
 ### Phase 2 — Dashboard
 - [ ] `index.html` **together with** `static/js/dashboard.js` (372 classes): rows/badges are JS-rendered, migrate as a pair. Health states (green/red) → `success`/`danger` tokens, not surfaces.
