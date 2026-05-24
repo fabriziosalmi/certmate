@@ -6,7 +6,7 @@
     <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8"
          x-data="{ tab: (location.hash.slice(1) || 'dns') }"
          x-init="$watch('tab', t => history.replaceState(null, '', '#' + t))">
-        <div class="bg-white dark:bg-surface-card shadow-card rounded-xl">
+        <div class="bg-surface shadow-card rounded-xl">
             <div class="px-6 py-3 border-b border-gray-100 dark:border-white/5 overflow-x-auto">
                 <div class="flex items-center justify-between mb-2">
                     <nav class="flex items-center text-sm" aria-label="Breadcrumb">
@@ -43,9 +43,7 @@
                                 :title="t.label"
                                 :aria-label="t.label"
                                 :aria-selected="tab === t.id ? 'true' : 'false'"
-                                :class="tab === t.id
-                                    ? 'px-3 sm:px-4 py-2 text-sm font-medium rounded-md text-primary bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700'
-                                    : 'px-3 sm:px-4 py-2 text-sm font-medium rounded-md text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700'">
+                                :class="tab === t.id ? 'px-3 sm:px-4 py-2 text-sm font-medium rounded-md text-primary bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700' : 'px-3 sm:px-4 py-2 text-sm font-medium rounded-md text-muted hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700'">
                             <i class="fas" :class="t.icon" aria-hidden="true"></i><span class="hidden sm:inline ml-2" x-text="t.label"></span>
                         </button>
                     </template>
@@ -72,9 +70,9 @@
                     {% include 'partials/settings_oidc.html' %}
 
                     <!-- TAB: Backup & Restore Section -->
-                    <div x-show="tab === 'backup'" x-cloak class="bg-white dark:bg-surface-card rounded-xl shadow-card p-6 mt-6">
+                    <div x-show="tab === 'backup'" x-cloak class="bg-surface rounded-xl shadow-card p-6 mt-6">
             <div class="flex items-center justify-between mb-4">
-                <h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
+                <h3 class="text-lg font-semibold text-foreground flex items-center">
                     <i class="fas fa-database mr-2 text-blue-500"></i>
                     Backup & Restore
                 </h3>
@@ -83,18 +81,18 @@
                 </span>
             </div>
             
-            <p class="text-gray-600 dark:text-gray-400 text-sm mb-6">
+            <p class="text-muted text-sm mb-6">
                 Create backups of your settings and certificates to prevent data loss. Restore from previous backups when needed.
             </p>
 
             <!-- Create Backup Section -->
             <div class="grid md:grid-cols-2 gap-6 mb-6">
                 <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
-                    <h4 class="font-medium text-gray-900 dark:text-white mb-3 flex items-center">
+                    <h4 class="font-medium text-foreground mb-3 flex items-center">
                         <i class="fas fa-plus-circle mr-2 text-green-500"></i>
                         Create Backup
                     </h4>
-                    <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                    <p class="text-sm text-muted mb-4">
                         Create atomic backups that include both settings and certificates to ensure data consistency.
                     </p>
                     <div class="space-y-3">
@@ -112,16 +110,16 @@
                 </div>
 
                 <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
-                    <h4 class="font-medium text-gray-900 dark:text-white mb-3 flex items-center">
+                    <h4 class="font-medium text-foreground mb-3 flex items-center">
                         <i class="fas fa-info-circle mr-2 text-blue-500"></i>
                         Backup Information
                     </h4>
-                    <div class="space-y-2 text-sm text-gray-600 dark:text-gray-400">
+                    <div class="space-y-2 text-sm text-muted">
                         <div class="flex items-start">
                             <i class="fas fa-check text-green-500 mr-2 mt-0.5 text-xs"></i>
                             <span><strong>Unified Backup:</strong> Atomic backup of both settings and certificates ensuring data consistency and preventing configuration mismatches</span>
                         </div>
-                        <div class="flex items-start mt-3 pt-2 border-t border-gray-200 dark:border-gray-600">
+                        <div class="flex items-start mt-3 pt-2 border-t border-border">
                             <i class="fas fa-shield-alt text-yellow-500 mr-2 mt-0.5 text-xs"></i>
                             <span class="text-xs">Backups contain sensitive data. Keep them secure and stored safely.</span>
                         </div>
@@ -130,9 +128,9 @@
             </div>
 
             <!-- Existing Backups Section -->
-            <div class="border-t border-gray-200 dark:border-gray-600 pt-6">
+            <div class="border-t border-border pt-6">
                 <div class="flex items-center justify-between mb-4">
-                    <h4 class="font-medium text-gray-900 dark:text-white flex items-center">
+                    <h4 class="font-medium text-foreground flex items-center">
                         <i class="fas fa-history mr-2 text-orange-500"></i>
                         Existing Backups
                     </h4>
@@ -153,7 +151,7 @@
                             <span class="text-xs bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 px-2 py-1 rounded-full ml-2">Atomic</span>
                         </h5>
                         <div id="unified-backup-list" class="space-y-2 max-h-64 overflow-y-auto">
-                            <div class="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
+                            <div class="text-sm text-muted text-center py-4">
                                 Loading unified backups...
                             </div>
                         </div>
@@ -175,7 +173,7 @@
                     Account Name *
                 </label>
                 <input type="text" id="account-name" name="name" required
-                       class="mt-1 block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                       class="mt-1 block w-full border border-border dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
                        placeholder="e.g., Production, Development, Client-A">
             </div>
 
@@ -184,7 +182,7 @@
                     Description (optional)
                 </label>
                 <input type="text" id="account-description" name="description"
-                       class="mt-1 block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                       class="mt-1 block w-full border border-border dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
                        placeholder="Brief description of this account">
             </div>
 
@@ -201,7 +199,7 @@
 
             <div class="flex justify-end space-x-3 pt-4">
                 <button type="button" data-modal-close
-                        class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">
+                        class="px-4 py-2 border border-border rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">
                     Cancel
                 </button>
                 <button type="button" onclick="saveAccount()"
@@ -222,7 +220,7 @@
                     Account Name *
                 </label>
                 <input type="text" id="edit-account-name" name="name" required
-                       class="mt-1 block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary">
+                       class="mt-1 block w-full border border-border dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary">
             </div>
 
             <div>
@@ -230,7 +228,7 @@
                     Description (optional)
                 </label>
                 <input type="text" id="edit-account-description" name="description"
-                       class="mt-1 block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary">
+                       class="mt-1 block w-full border border-border dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary">
             </div>
 
             <!-- Dynamic fields will be populated here based on provider -->
@@ -246,7 +244,7 @@
 
             <div class="flex justify-end space-x-3 pt-4">
                 <button type="button" data-modal-close
-                        class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">
+                        class="px-4 py-2 border border-border rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">
                     Cancel
                 </button>
                 <button type="button" onclick="saveEditAccount()"
