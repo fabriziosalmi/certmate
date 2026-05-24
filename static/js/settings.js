@@ -1138,7 +1138,7 @@
             html += '</label>';
 
             if (field.type === 'select') {
-                html += '<select id="' + fieldId + '" name="' + field.name + '" class="mt-1 block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary" ' + (field.required ? 'required' : '') + '>';
+                html += '<select id="' + fieldId + '" name="' + field.name + '" class="mt-1 block w-full border border-border dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary" ' + (field.required ? 'required' : '') + '>';
                 if (!field.required) {
                     html += '<option value="">Select ' + field.label.toLowerCase() + '</option>';
                 }
@@ -1148,9 +1148,9 @@
                 });
                 html += '</select>';
             } else if (field.type === 'textarea') {
-                html += '<textarea id="' + fieldId + '" name="' + field.name + '" rows="4" class="mt-1 block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary" placeholder="' + field.placeholder + '" ' + (field.required ? 'required' : '') + '>' + value + '</textarea>';
+                html += '<textarea id="' + fieldId + '" name="' + field.name + '" rows="4" class="mt-1 block w-full border border-border dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary" placeholder="' + field.placeholder + '" ' + (field.required ? 'required' : '') + '>' + value + '</textarea>';
             } else {
-                html += '<input type="' + field.type + '" id="' + fieldId + '" name="' + field.name + '" class="mt-1 block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary" placeholder="' + field.placeholder + '" value="' + value + '" ' + (field.required ? 'required' : '') + '>';
+                html += '<input type="' + field.type + '" id="' + fieldId + '" name="' + field.name + '" class="mt-1 block w-full border border-border dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary" placeholder="' + field.placeholder + '" value="' + value + '" ' + (field.required ? 'required' : '') + '>';
             }
 
             html += '</div>';
@@ -1385,7 +1385,7 @@
                 }
             } else {
                 // Show legacy config for backward compatibility
-                accountsListContainer.innerHTML = '<div class="text-sm text-gray-500 dark:text-gray-400">No accounts configured yet.</div>';
+                accountsListContainer.innerHTML = '<div class="text-sm text-muted">No accounts configured yet.</div>';
                 if (legacyConfigContainer) {
                     legacyConfigContainer.style.display = 'block';
                 }
@@ -1406,14 +1406,14 @@
         var safeId = escapeHtml(account.id);
         var safeProvider = escapeHtml(provider);
 
-        var descHtml = account.description ? '<p class="text-xs text-gray-500 dark:text-gray-400 mt-1">' + safeDesc + '</p>' : '';
+        var descHtml = account.description ? '<p class="text-xs text-muted mt-1">' + safeDesc + '</p>' : '';
         var defaultBadge = isDefault ? '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400"><i class="fas fa-star mr-1"></i>Default</span>' : '';
 
         card.innerHTML =
             '<div class="flex items-center justify-between">' +
             '<div class="flex-1">' +
             '<div class="flex items-center space-x-2">' +
-            '<h5 class="text-sm font-medium text-gray-900 dark:text-white">' + safeName + '</h5>' +
+            '<h5 class="text-sm font-medium text-foreground">' + safeName + '</h5>' +
             defaultBadge +
             '</div>' +
             descHtml +
@@ -1421,7 +1421,7 @@
             '</div>' +
             '<div class="flex items-center space-x-2">' +
             '<button type="button" data-action="edit" data-provider="' + safeProvider + '" data-account-id="' + safeId + '"' +
-            ' class="inline-flex items-center px-2 py-1 border border-gray-300 dark:border-gray-600 shadow-sm text-xs font-medium rounded text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-600 hover:bg-gray-50 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">' +
+            ' class="inline-flex items-center px-2 py-1 border border-border shadow-sm text-xs font-medium rounded text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-600 hover:bg-gray-50 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">' +
             '<i class="fas fa-edit mr-1"></i>' +
             'Edit' +
             '</button>' +
@@ -1577,7 +1577,7 @@
         // Update Unified Backups (only show unified backups)
         if (backups.unified && backups.unified.length === 0) {
             unifiedBackupList.innerHTML =
-                '<div class="p-4 text-center text-gray-500 dark:text-gray-400">' +
+                '<div class="p-4 text-center text-muted">' +
                 '<i class="fas fa-archive mr-2"></i>' +
                 'No backups yet' +
                 '<div class="text-xs mt-1">Create your first backup above!</div>' +
@@ -1596,8 +1596,8 @@
                 unifiedHtml +=
                     '<div class="flex items-center justify-between p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-700">' +
                     '<div class="flex-1 min-w-0">' +
-                    '<div class="text-sm font-medium text-gray-900 dark:text-white truncate">' + safeFilename + '</div>' +
-                    '<div class="text-xs text-gray-500 dark:text-gray-400 mt-1">' + createdDate + '</div>' +
+                    '<div class="text-sm font-medium text-foreground truncate">' + safeFilename + '</div>' +
+                    '<div class="text-xs text-muted mt-1">' + createdDate + '</div>' +
                     '<div class="flex items-center space-x-3 text-xs text-gray-400 dark:text-gray-500 mt-1">' +
                     '<span><i class="fas fa-weight mr-1"></i>' + sizeMB + 'MB</span>' +
                     '<span><i class="fas fa-archive mr-1"></i>' + domains + ' domains</span>' +
@@ -1626,7 +1626,7 @@
 
             if (backups.unified.length > 10) {
                 unifiedHtml +=
-                    '<div class="text-xs text-gray-500 dark:text-gray-400 text-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">' +
+                    '<div class="text-xs text-muted text-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">' +
                     '<i class="fas fa-ellipsis-h mr-1"></i>' +
                     (backups.unified.length - 10) + ' more backups available' +
                     '</div>';
@@ -2495,10 +2495,10 @@
         modal.setAttribute('aria-modal', 'true');
         modal.setAttribute('aria-labelledby', 'storageMigrationModal-title');
         modal.innerHTML =
-            '<div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white dark:bg-gray-800">' +
+            '<div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-surface">' +
             '<div class="mt-3">' +
             '<div class="flex items-center justify-between mb-4">' +
-            '<h3 id="storageMigrationModal-title" class="text-lg font-medium text-gray-900 dark:text-white">' +
+            '<h3 id="storageMigrationModal-title" class="text-lg font-medium text-foreground">' +
             '<i class="fas fa-exchange-alt mr-2"></i>Certificate Storage Migration' +
             '</h3>' +
             '<button type="button" id="storageMigCloseBtn" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">' +
@@ -2506,7 +2506,7 @@
             '</button>' +
             '</div>' +
             '<div class="mb-4">' +
-            '<p class="text-sm text-gray-600 dark:text-gray-400">' +
+            '<p class="text-sm text-muted">' +
             'This will migrate all existing certificates from the current storage backend to the newly configured backend.' +
             '</p>' +
             '<div class="mt-3 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-md">' +
@@ -2726,7 +2726,7 @@
 
     function refreshUserList() {
         var userListDiv = document.getElementById('userList');
-        userListDiv.innerHTML = '<div class="text-center py-4 text-gray-500 dark:text-gray-400 text-sm"><i class="fas fa-spinner fa-spin mr-2"></i> Loading users...</div>';
+        userListDiv.innerHTML = '<div class="text-center py-4 text-muted text-sm"><i class="fas fa-spinner fa-spin mr-2"></i> Loading users...</div>';
 
         // Timeout after 15 seconds to prevent infinite loading
         var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
@@ -2747,7 +2747,7 @@
                 var users = data.users || {};
 
                 if (Object.keys(users).length === 0) {
-                    userListDiv.innerHTML = '<div class="text-center py-4 text-gray-500 dark:text-gray-400 text-sm"><i class="fas fa-users mr-2"></i> No users configured. Add a user above to enable local authentication.</div>';
+                    userListDiv.innerHTML = '<div class="text-center py-4 text-muted text-sm"><i class="fas fa-users mr-2"></i> No users configured. Add a user above to enable local authentication.</div>';
                     return;
                 }
 
@@ -2783,7 +2783,7 @@
                     // be locked out).
                     var toggleBtn = isSoleAdmin ? '' :
                         '<button data-action="toggle-user" data-username="' + escapeHtml(username) + '" data-enable="' + (userInfo.enabled === false) + '"' +
-                        ' class="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"' +
+                        ' class="p-2 text-muted hover:text-gray-700 dark:hover:text-gray-200"' +
                         ' title="' + (userInfo.enabled !== false ? 'Disable user' : 'Enable user') + '">' +
                         '<i class="fas fa-' + (userInfo.enabled !== false ? 'ban' : 'check') + '"></i>' +
                         '</button>';
@@ -2792,7 +2792,7 @@
                     // password to set).
                     var resetBtn = isSso ? '' :
                         '<button data-action="reset-password" data-username="' + escapeHtml(username) + '"' +
-                        ' class="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"' +
+                        ' class="p-2 text-muted hover:text-gray-700 dark:hover:text-gray-200"' +
                         ' title="Reset password">' +
                         '<i class="fas fa-key"></i>' +
                         '</button>';
@@ -2811,12 +2811,12 @@
                         '<i class="fas fa-user-circle text-2xl text-gray-400 dark:text-gray-500"></i>' +
                         '<div>' +
                         '<div class="flex items-center space-x-2">' +
-                        '<span class="font-medium text-gray-900 dark:text-white">' + escapeHtml(username) + '</span>' +
+                        '<span class="font-medium text-foreground">' + escapeHtml(username) + '</span>' +
                         '<span class="text-xs px-2 py-0.5 rounded-full ' + roleColor + '">' + escapeHtml(userInfo.role || '') + '</span>' +
                         ssoBadge +
                         '<i class="fas fa-circle text-xs ' + statusColor + '" title="' + (userInfo.enabled !== false ? 'Active' : 'Disabled') + '"></i>' +
                         '</div>' +
-                        '<div class="text-xs text-gray-500 dark:text-gray-400">' +
+                        '<div class="text-xs text-muted">' +
                         emailHtml +
                         '<span><i class="fas fa-clock mr-1"></i>Last login: ' + escapeHtml(lastLogin) + '</span>' +
                         '</div>' +
