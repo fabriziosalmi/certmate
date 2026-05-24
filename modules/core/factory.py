@@ -341,6 +341,28 @@ def configure_app(container: AppContainer, app, test_config=None):
     app.secret_key = _secret_key_from_env_or_generate(container.data_dir)
     app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
 
+    # 1. Define the base ACME storage path
+    app.config['ACME_CHALLENGES_DIR'] = os.environ.get(
+        'ACME_CHALLENGES_DIR', 
+        os.path.join(container.data_dir, 'acme-challenges')
+    )
+
+    # 2. Define the full physical path required for Let's Encrypt
+    # Result: /app/data/acme-challenges/.well-known/acme-challenge/
+    full_acme_path = os.path.join(
+        app.config['ACME_CHALLENGES_DIR'], 
+        '.well-known', 
+        'acme-challenge'
+    )
+
+    # 3. Create the directories if they don't exist
+    try:
+        os.makedirs(full_acme_path, exist_ok=True)
+    except Exception as e:
+        # It's good practice to log this if your logger is available, 
+        # otherwise Flask might fail later when trying to write to this path
+        print(f"Warning: Could not create ACME directory {full_acme_path}: {e}")
+
     if test_config:
         app.config.update(test_config)
 
