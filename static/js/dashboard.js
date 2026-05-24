@@ -146,7 +146,7 @@
         var rows = [];
         for (var i = 0; i < count; i++) {
             rows.push(
-                '<div class="bg-white dark:bg-surface-card rounded-xl px-3 py-2" aria-hidden="true">' +
+                '<div class="bg-surface rounded-xl px-3 py-2" aria-hidden="true">' +
                     '<div class="skeleton h-3 w-16 mb-1"></div>' +
                     '<div class="skeleton h-6 w-8"></div>' +
                 '</div>'
@@ -173,10 +173,10 @@
             // underneath. Drops vertical footprint by ~40% vs. the
             // previous icon-on-the-left card while keeping all four
             // metrics legible side-by-side on md+ screens.
-            return '<div class="bg-white dark:bg-surface-card overflow-hidden shadow-card rounded-xl hover:shadow-elevated transition-shadow duration-200">' +
+            return '<div class="bg-surface overflow-hidden shadow-card rounded-xl hover:shadow-elevated transition-shadow duration-200">' +
                 '<div class="px-3 py-2">' +
                 '<div class="flex items-center justify-between gap-2">' +
-                '<p class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">' + CertMate.escapeHtml(label) + '</p>' +
+                '<p class="text-xs font-medium text-muted uppercase tracking-wider">' + CertMate.escapeHtml(label) + '</p>' +
                 '<i class="fas ' + iconClass + ' ' + colorClass + ' text-sm flex-shrink-0"></i>' +
                 '</div>' +
                 '<p class="text-lg font-bold ' + colorClass + ' tabular-nums leading-none mt-1"' + (valueId ? ' id="' + valueId + '"' : '') + '>' + value + '</p>' +
@@ -469,13 +469,13 @@
             if (isFiltered) {
                 container.innerHTML = '<tr><td colspan="6">' +
                     '<div class="px-6 py-12 text-center">' +
-                    '<div class="mx-auto max-w-sm border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl p-8">' +
-                    '<div class="mx-auto h-16 w-16 flex items-center justify-center bg-gray-100 dark:bg-gray-700 rounded-full mb-4">' +
+                    '<div class="mx-auto max-w-sm border-2 border-dashed border-border rounded-xl p-8">' +
+                    '<div class="mx-auto h-16 w-16 flex items-center justify-center bg-surface-2 rounded-full mb-4">' +
                     '<i class="fas fa-search text-gray-400 text-2xl"></i>' +
                     '</div>' +
-                    '<h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">No matching certificates</h3>' +
-                    '<p class="text-gray-500 dark:text-gray-400 mb-6">Try adjusting your search criteria or filters.</p>' +
-                    '<button onclick="clearFilters()" class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">' +
+                    '<h3 class="text-lg font-medium text-foreground mb-2">No matching certificates</h3>' +
+                    '<p class="text-muted mb-6">Try adjusting your search criteria or filters.</p>' +
+                    '<button onclick="clearFilters()" class="inline-flex items-center px-4 py-2 border border-border shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">' +
                     '<i class="fas fa-times mr-2"></i>Clear Filters</button>' +
                     '</div>' +
                     '</div>' +
@@ -485,8 +485,8 @@
                     '<div class="px-6 py-8"><div class="mx-auto max-w-lg">' +
                     '<div class="text-center mb-6">' +
                     '<div class="mx-auto h-16 w-16 flex items-center justify-center bg-blue-100 dark:bg-blue-900/30 rounded-full mb-4"><i class="fas fa-rocket text-blue-500 text-2xl"></i></div>' +
-                    '<h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">Welcome to CertMate</h3>' +
-                    '<p class="text-gray-500 dark:text-gray-400">Follow these steps to get started:</p>' +
+                    '<h3 class="text-lg font-medium text-foreground mb-2">Welcome to CertMate</h3>' +
+                    '<p class="text-muted">Follow these steps to get started:</p>' +
                     '</div>' +
                     '<ol class="space-y-3 mb-6 text-sm">' +
                     '<li class="flex items-start"><span class="flex-shrink-0 w-6 h-6 flex items-center justify-center bg-blue-500 text-white rounded-full text-xs font-bold mr-3 mt-0.5">1</span>' +
@@ -534,10 +534,10 @@
 
             if (!cert.exists) {
                 return rowHtml`<tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer" onclick="openCertDetail('${cert.domain}')">
-                    <td class="px-6 py-4 max-w-0"><div class="text-sm font-medium text-gray-900 dark:text-white truncate">${cert.domain}</div></td>
+                    <td class="px-6 py-4 max-w-0"><div class="text-sm font-medium text-foreground truncate">${cert.domain}</div></td>
                     <td class="px-4 py-4 whitespace-nowrap"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-500/10 text-red-700 dark:text-red-400 ring-1 ring-inset ring-red-500/20"><i class="fas fa-times-circle mr-1"></i>Not Found</span></td>
-                    <td class="px-4 py-4 whitespace-nowrap hidden md:table-cell text-sm text-gray-500 dark:text-gray-400">\u2014</td>
-                    <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-gray-500 dark:text-gray-400">${providerLabel || '\u2014'}</td>
+                    <td class="px-4 py-4 whitespace-nowrap hidden md:table-cell text-sm text-muted">\u2014</td>
+                    <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">${providerLabel || '\u2014'}</td>
                     <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell">\u2014</td>
                     <td class="px-4 py-4 whitespace-nowrap text-right">
                         <div class="flex items-center justify-end gap-1">
@@ -593,9 +593,9 @@
                 ? rowRaw(rowHtml`<div class="flex items-center text-xs ${rowRaw(daysClass)}"><i class="fas fa-clock mr-1.5 w-3 shrink-0" aria-hidden="true"></i><span class="truncate">${expiryStr} · ${rowRaw(String(cert.days_until_expiry))} days left</span></div>`)
                 : false;
             var mobileProviderLine = providerLabel
-                ? rowRaw(rowHtml`<div class="flex items-center text-xs text-gray-500 dark:text-gray-400"><i class="fas fa-server mr-1.5 w-3 shrink-0" aria-hidden="true"></i><span class="truncate">${rowRaw(providerLabel)}</span></div>`)
+                ? rowRaw(rowHtml`<div class="flex items-center text-xs text-muted"><i class="fas fa-server mr-1.5 w-3 shrink-0" aria-hidden="true"></i><span class="truncate">${rowRaw(providerLabel)}</span></div>`)
                 : false;
-            var mobileDeploymentLine = rowRaw(rowHtml`<div class="flex items-start text-xs text-gray-500 dark:text-gray-400"><i class="fas fa-rocket mr-1.5 mt-0.5 w-3 shrink-0" aria-hidden="true"></i><div class="flex-1 min-w-0">${rowRaw(deploymentBadgesHtml(cert))}</div></div>`);
+            var mobileDeploymentLine = rowRaw(rowHtml`<div class="flex items-start text-xs text-muted"><i class="fas fa-rocket mr-1.5 mt-0.5 w-3 shrink-0" aria-hidden="true"></i><div class="flex-1 min-w-0">${rowRaw(deploymentBadgesHtml(cert))}</div></div>`);
             var mobileMeta = rowRaw(rowHtml`<div class="md:hidden mt-2 pt-2 border-t border-gray-100 dark:border-gray-700/50 space-y-1">${mobileExpiryLine}${mobileProviderLine}${mobileDeploymentLine}</div>`);
             var lockColor = isExpired ? 'text-red-400' : isExpiringSoon ? 'text-yellow-400' : 'text-green-500';
             return rowHtml`<tr class="${rowRaw(healthClass)} row-enter hover:bg-blue-50/40 dark:hover:bg-blue-900/10 transition-colors duration-150 cursor-pointer" style="animation-delay:${rowRaw(String(sorted.indexOf(cert) * 30))}ms" onclick="openCertDetail('${cert.domain}')">
@@ -603,15 +603,15 @@
                     <div class="flex items-center min-w-0">
                         <i class="fas fa-lock ${rowRaw(lockColor)} mr-2 text-sm shrink-0" aria-hidden="true"></i>
                         <div class="min-w-0">
-                            <div class="text-sm font-medium text-gray-900 dark:text-white truncate">${cert.domain}</div>
+                            <div class="text-sm font-medium text-foreground truncate">${cert.domain}</div>
                             ${aliasHint}
                             ${mobileMeta}
                         </div>
                     </div>
                 </td>
                 <td class="px-4 py-4 whitespace-nowrap"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${rowRaw(statusClass)}"><i class="fas ${rowRaw(statusIcon)} mr-1"></i>${statusText}</span></td>
-                <td class="px-4 py-4 whitespace-nowrap hidden md:table-cell"><div class="text-sm text-gray-900 dark:text-white">${expiryStr}</div><div class="text-xs ${rowRaw(daysClass)}">${cert.days_until_expiry} days</div></td>
-                <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-gray-500 dark:text-gray-400">${rowRaw(providerLabel) || '—'}</td>
+                <td class="px-4 py-4 whitespace-nowrap hidden md:table-cell"><div class="text-sm text-foreground">${expiryStr}</div><div class="text-xs ${rowRaw(daysClass)}">${cert.days_until_expiry} days</div></td>
+                <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">${rowRaw(providerLabel) || '—'}</td>
                 <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell">${rowRaw(deploymentBadgesHtml(cert))}</td>
                 <td class="px-4 py-4 whitespace-nowrap text-right">
                     <div class="flex items-center justify-end gap-1">
@@ -709,7 +709,7 @@
 
         if (!cert.exists) {
             content.innerHTML = '<div class="text-center py-8"><i class="fas fa-exclamation-triangle text-red-400 text-3xl mb-3"></i>' +
-                '<p class="text-gray-500 dark:text-gray-400 mb-6">Certificate not found on disk.</p>' +
+                '<p class="text-muted mb-6">Certificate not found on disk.</p>' +
                 (roleAtLeast('admin')
                     ? '<button type="button" onclick="deleteCertificate(\'' + safeDomain + '\')" class="inline-flex items-center px-4 py-2 border border-red-300 dark:border-red-700 shadow-sm text-sm font-medium rounded-md text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40"><i class="fas fa-trash-alt mr-2"></i>Remove from List</button>'
                     : '<p class="text-xs text-gray-400">Ask an admin to remove this entry.</p>') +
@@ -735,36 +735,36 @@
                 '</div>' +
                 // Details grid
                 '<div class="space-y-3">' +
-                '<h4 class="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wider">Details</h4>' +
+                '<h4 class="text-sm font-semibold text-foreground uppercase tracking-wider">Details</h4>' +
                 '<dl class="space-y-2">' +
-                '<div class="flex justify-between gap-4 py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">Domain</dt><dd class="text-sm font-medium text-right text-gray-900 dark:text-white">' + safeDomain + '</dd></div>' +
-                (sanDomains.length ? '<div class="flex justify-between gap-4 py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">SANs</dt><dd class="text-sm font-medium text-right text-gray-900 dark:text-white">' + sanDomainsHtml + '</dd></div>' : '') +
-                '<div class="flex justify-between gap-4 py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">Expires</dt><dd class="text-sm font-medium text-right text-gray-900 dark:text-white">' + expiryDate.toLocaleDateString(undefined, { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' }) + '</dd></div>' +
-                (providerLabel ? '<div class="flex justify-between gap-4 py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">DNS Provider</dt><dd class="text-sm font-medium text-right text-gray-900 dark:text-white">' + providerLabel + '</dd></div>' : '') +
-                (safeDomainAlias ? '<div class="flex justify-between gap-4 py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">DNS-01 Alias</dt><dd class="text-sm font-medium text-right break-all text-blue-600 dark:text-blue-300">' + safeDomainAlias + '</dd></div>' : '') +
-                (safeDomainAlias && aliasProviderLabel ? '<div class="flex justify-between gap-4 py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">Alias Provider</dt><dd class="text-sm font-medium text-right text-gray-900 dark:text-white">' + aliasProviderLabel + '</dd></div>' : '') +
-                '<div class="flex justify-between gap-4 py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">Auto-Renew</dt><dd class="text-sm font-medium text-right ' + (cert.auto_renew !== false ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400') + '">' + (cert.auto_renew !== false ? 'Enabled' : 'Disabled') + '</dd></div>' +
-                '<div class="flex justify-between gap-4 py-2 border-b dark:border-gray-700"><dt class="text-sm text-gray-500 dark:text-gray-400">Deployment</dt><dd>' + deploymentBadgesHtml(cert) + '</dd></div>' +
+                '<div class="flex justify-between gap-4 py-2 border-b border-border"><dt class="text-sm text-muted">Domain</dt><dd class="text-sm font-medium text-right text-foreground">' + safeDomain + '</dd></div>' +
+                (sanDomains.length ? '<div class="flex justify-between gap-4 py-2 border-b border-border"><dt class="text-sm text-muted">SANs</dt><dd class="text-sm font-medium text-right text-foreground">' + sanDomainsHtml + '</dd></div>' : '') +
+                '<div class="flex justify-between gap-4 py-2 border-b border-border"><dt class="text-sm text-muted">Expires</dt><dd class="text-sm font-medium text-right text-foreground">' + expiryDate.toLocaleDateString(undefined, { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' }) + '</dd></div>' +
+                (providerLabel ? '<div class="flex justify-between gap-4 py-2 border-b border-border"><dt class="text-sm text-muted">DNS Provider</dt><dd class="text-sm font-medium text-right text-foreground">' + providerLabel + '</dd></div>' : '') +
+                (safeDomainAlias ? '<div class="flex justify-between gap-4 py-2 border-b border-border"><dt class="text-sm text-muted">DNS-01 Alias</dt><dd class="text-sm font-medium text-right break-all text-blue-600 dark:text-blue-300">' + safeDomainAlias + '</dd></div>' : '') +
+                (safeDomainAlias && aliasProviderLabel ? '<div class="flex justify-between gap-4 py-2 border-b border-border"><dt class="text-sm text-muted">Alias Provider</dt><dd class="text-sm font-medium text-right text-foreground">' + aliasProviderLabel + '</dd></div>' : '') +
+                '<div class="flex justify-between gap-4 py-2 border-b border-border"><dt class="text-sm text-muted">Auto-Renew</dt><dd class="text-sm font-medium text-right ' + (cert.auto_renew !== false ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400') + '">' + (cert.auto_renew !== false ? 'Enabled' : 'Disabled') + '</dd></div>' +
+                '<div class="flex justify-between gap-4 py-2 border-b border-border"><dt class="text-sm text-muted">Deployment</dt><dd>' + deploymentBadgesHtml(cert) + '</dd></div>' +
                 '</dl>' +
                 '</div>' +
                 // Actions
                 '<div class="space-y-3">' +
-                '<h4 class="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wider">Actions</h4>' +
+                '<h4 class="text-sm font-semibold text-foreground uppercase tracking-wider">Actions</h4>' +
                 '<div class="grid grid-cols-1 gap-2">' +
                 (roleAtLeast('operator')
-                    ? '<button type="button" onclick="renewCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-sync-alt mr-2 text-green-600"></i>Renew Certificate</button>' +
+                    ? '<button type="button" onclick="renewCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-border shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-sync-alt mr-2 text-green-600"></i>Renew Certificate</button>' +
                     '<button type="button" onclick="renewCertificate(\'' + safeDomain + '\', true)" class="w-full inline-flex items-center justify-center px-4 py-2 border border-amber-300 dark:border-amber-700 shadow-sm text-sm font-medium rounded-md text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/40"><i class="fas fa-bolt mr-2"></i>Force Renew Certificate</button>'
                     : '') +
-                '<button type="button" onclick="downloadCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-download mr-2 text-blue-600"></i>Download Certificate</button>' +
+                '<button type="button" onclick="downloadCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-border shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-download mr-2 text-blue-600"></i>Download Certificate</button>' +
                 '<button type="button" onclick="copyCurlCommand(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-blue-300 dark:border-blue-600 shadow-sm text-sm font-medium rounded-md text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50"><i class="fas fa-code mr-2"></i>Show API Command</button>' +
-                '<button type="button" onclick="checkDeploymentStatus(\'' + safeDomain + '\', this, true)" class="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-globe mr-2 text-indigo-600"></i>Check Deployment</button>' +
+                '<button type="button" onclick="checkDeploymentStatus(\'' + safeDomain + '\', this, true)" class="w-full inline-flex items-center justify-center px-4 py-2 border border-border shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-globe mr-2 text-indigo-600"></i>Check Deployment</button>' +
                 (safeDomainAlias ? '<button type="button" onclick="checkDnsAliasForCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-blue-300 dark:border-blue-600 shadow-sm text-sm font-medium rounded-md text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50"><i class="fas fa-search mr-2"></i>Check DNS-01 Alias</button>' : '') +
                 '<div id="cert_dns_alias_check_result" class="hidden"></div>' +
                 (roleAtLeast('admin')
-                    ? '<button type="button" onclick="runDeployHooks(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-rocket mr-2 text-green-600"></i>Run Deploy Hooks Now</button>'
+                    ? '<button type="button" onclick="runDeployHooks(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-border shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-rocket mr-2 text-green-600"></i>Run Deploy Hooks Now</button>'
                     : '') +
                 (roleAtLeast('operator')
-                    ? '<button type="button" onclick="toggleAutoRenew(\'' + safeDomain + '\', ' + (cert.auto_renew !== false ? 'true' : 'false') + ')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas ' + (cert.auto_renew !== false ? 'fa-toggle-on text-purple-600' : 'fa-toggle-off text-amber-600') + ' mr-2"></i>' + (cert.auto_renew !== false ? 'Disable Auto-Renew' : 'Enable Auto-Renew') + '</button>'
+                    ? '<button type="button" onclick="toggleAutoRenew(\'' + safeDomain + '\', ' + (cert.auto_renew !== false ? 'true' : 'false') + ')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-border shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas ' + (cert.auto_renew !== false ? 'fa-toggle-on text-purple-600' : 'fa-toggle-off text-amber-600') + ' mr-2"></i>' + (cert.auto_renew !== false ? 'Disable Auto-Renew' : 'Enable Auto-Renew') + '</button>'
                     : '') +
                 (roleAtLeast('admin')
                     ? '<button type="button" onclick="deleteCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-red-300 dark:border-red-700 shadow-sm text-sm font-medium rounded-md text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40"><i class="fas fa-trash-alt mr-2"></i>Delete Certificate</button>'
@@ -1516,16 +1516,16 @@
             }
             return '<div class="mt-2 text-xs ' + rowClass + '">' +
                 '<div><i class="fas ' + (check.ok ? 'fa-check' : 'fa-times') + ' mr-1"></i>' +
-                '<code class="font-mono bg-gray-100 dark:bg-gray-700 px-1 rounded">' + escapeHtml(check.source) + '</code>' +
+                '<code class="font-mono bg-surface-2 px-1 rounded">' + escapeHtml(check.source) + '</code>' +
                 aliasCopyButtonHtml(check.source) + '</div>' +
-                '<div class="mt-1 ml-5">Expected: <code class="font-mono bg-gray-100 dark:bg-gray-700 px-1 rounded">' + escapeHtml(check.expected_target) + '</code>' +
+                '<div class="mt-1 ml-5">Expected: <code class="font-mono bg-surface-2 px-1 rounded">' + escapeHtml(check.expected_target) + '</code>' +
                 aliasCopyButtonHtml(check.expected_target) + '</div>' +
-                '<div class="mt-1 ml-5">Found: <code class="font-mono bg-gray-100 dark:bg-gray-700 px-1 rounded">' + escapeHtml(found) + '</code></div>' +
+                '<div class="mt-1 ml-5">Found: <code class="font-mono bg-surface-2 px-1 rounded">' + escapeHtml(found) + '</code></div>' +
                 '</div>';
         }).join('');
 
         if (!rows) {
-            rows = '<div class="mt-2 text-xs text-gray-600 dark:text-gray-300">No DNS-01 alias records to check.</div>';
+            rows = '<div class="mt-2 text-xs text-muted">No DNS-01 alias records to check.</div>';
         }
 
         target.className = 'mt-2 rounded-md border p-3 ' + headerClass;
