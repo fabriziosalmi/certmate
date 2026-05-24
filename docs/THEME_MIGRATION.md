@@ -57,10 +57,39 @@ Each phase = one atomic commit (split partials in Phase 3 into their own
 commits). Phases group into one or more `vX.Y.Z` release PRs.
 
 ### Phase 0 — Foundations & guardrails (no visual change)
-- [ ] CI step runs `npm run css:build` and fails if `tailwind.min.css` is stale (`git diff --exit-code`).
-- [ ] Define token layer: CSS vars in `:root` / `.dark` (input.css) + mapping in `tailwind.config.js`, **alongside** the existing palette — no templates touched yet.
-- [ ] Capture light+dark screenshot baseline of all 19 pages.
-- [ ] Write the codemod: mapping table of recurring `dark:` pairs → tokens, with an ambiguity report for manual review.
+- [x] CI step runs `npm run css:build` and fails if `tailwind.min.css` is stale (`git diff --exit-code`). → `frontend-css` job in `.github/workflows/ci.yml`. The committed bundle was already drifted; rebuilt and committed.
+- [x] Define token layer: CSS vars in `:root` / `.dark` (input.css) + mapping in `tailwind.config.js`, **alongside** the existing palette — no templates touched yet. Tokens: `bg-background`, `bg-surface`, `bg-surface-2`, `text-foreground`, `text-muted`, `border-border` (safelisted).
+- [x] Write the codemod: `scripts/theme_codemod.py` — mapping table of recurring `dark:` pairs → tokens, dry-run report + `--apply`. Ambiguity report below.
+- [ ] Capture light+dark screenshot baseline of all 19 pages. **(remaining Phase 0 item — needs running app + auth)**
+
+#### Codemod usage
+```
+python scripts/theme_codemod.py                     # dry-run report, all templates
+python scripts/theme_codemod.py templates/base.html # report, one file
+python scripts/theme_codemod.py --apply templates/base.html
+```
+After every `--apply`: `npm run css:build`, diff against baseline, review residual `dark:` variants.
+
+#### Report snapshot (2026-05-25)
+**607 pairs auto-collapse** out of ~1,665 `dark:` variants:
+
+| Token | Pairs |
+|---|---|
+| `text-muted` | 203 |
+| `border-border` | 169 |
+| `text-foreground` | 141 |
+| `bg-surface` | 77 |
+| `bg-surface-2` | 16 |
+| `bg-background` | 1 |
+
+**557 occurrences / 29 variants are unmapped** — design decisions for the Phase 1 pilot, not auto-guessed:
+
+- `dark:bg-gray-700` (137): pairs with `bg-white` (cards/inputs) **and** `bg-gray-50` — decide surface vs surface-2 per context.
+- `dark:text-white` (120): the ones paired with `text-gray-900` already map to `text-foreground`; the rest are always-white text on colored backgrounds — likely leave as-is.
+- `dark:text-gray-300` (112): mostly `text-gray-700 dark:text-gray-300` = the form-label pattern — decide a dedicated label token vs `text-muted`/`text-foreground`.
+- `dark:border-gray-600` (41), `dark:text-gray-200` (39), opacity-suffixed surfaces (`dark:bg-gray-700/50` etc.), and `dark:border-white/5`.
+
+A handful of leftovers (`dark:text-gray-400{%`, `dark:text-gray-300'`) are class attributes containing Jinja/JS expressions — migrate by hand.
 
 ### Phase 1 — Pilot: shell + primitives
 - [ ] Migrate `base.html` (nav/header/footer) to tokens.
