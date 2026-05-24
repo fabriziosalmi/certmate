@@ -13,6 +13,12 @@ module.exports = {
     'card',
     'badge', 'badge-success', 'badge-warning', 'badge-error', 'badge-info',
     'form-input', 'form-select', 'form-label',
+    // Semantic theme tokens — same rationale: keep them in the bundle so
+    // template call sites can migrate onto them incrementally. Remove the
+    // safelist once adoption is broad enough for the content scan to find
+    // each utility on its own (THEME_MIGRATION.md, final phase).
+    'bg-background', 'bg-surface', 'bg-surface-2',
+    'text-foreground', 'text-muted', 'border-border',
   ],
   darkMode: 'class',
   theme: {
@@ -22,6 +28,15 @@ module.exports = {
         mono: ['JetBrains Mono', 'Menlo', 'Consolas', 'monospace'],
       },
       colors: {
+        // Semantic theme tokens — backed by CSS variables defined in
+        // input.css (:root / .dark). The `<alpha-value>` placeholder lets
+        // the /opacity utilities (e.g. bg-surface/50) keep working. These
+        // are the migration target: `bg-white dark:bg-surface-card` →
+        // `bg-surface`, collapsing the dark: pairs. See THEME_MIGRATION.md.
+        background:  'hsl(var(--color-background) / <alpha-value>)',
+        foreground:  'hsl(var(--color-foreground) / <alpha-value>)',
+        muted:       'hsl(var(--color-muted) / <alpha-value>)',
+        border:      'hsl(var(--color-border) / <alpha-value>)',
         // Legacy aliases (keep for backward compat)
         primary: '#3b82f6',
         secondary: '#1e40af',
@@ -42,8 +57,13 @@ module.exports = {
           900: 'hsl(222, 64%, 20%)',
           950: 'hsl(224, 60%, 12%)',
         },
-        // Layered surface system for dark mode depth
+        // Layered surface system for dark mode depth.
+        // DEFAULT + `2` are var-backed theme tokens (bg-surface,
+        // bg-surface-2); light/dark/card/elevated are the existing fixed
+        // values kept for backward compat until call sites migrate.
         surface: {
+          DEFAULT: 'hsl(var(--color-surface) / <alpha-value>)',
+          2:       'hsl(var(--color-surface-2) / <alpha-value>)',
           light: 'hsl(220, 20%, 97%)',
           dark:  'hsl(222, 32%, 8%)',
           card:  'hsl(222, 24%, 13%)',

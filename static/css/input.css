@@ -33,6 +33,34 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
+
+  /* ── Theme tokens (single source of truth) ──────────────────────
+     Values are bare HSL channels ("H S% L%") with no hsl() wrapper,
+     so Tailwind's color config can interpolate <alpha-value> for the
+     /opacity utilities (see tailwind.config.js). Light theme lives on
+     :root, dark overrides on .dark — flip a theme by editing this
+     block, not the call sites.
+
+     ADDITIVE for now: these tokens are introduced alongside the legacy
+     palette; templates are migrated onto them phase by phase
+     (docs/THEME_MIGRATION.md). The existing primary/success/etc.
+     colors are intentionally left untouched until later phases. */
+  :root {
+    --color-background: 220 20% 97%;   /* page            (surface.light) */
+    --color-surface:      0  0% 100%;  /* card / panel    (was bg-white)  */
+    --color-surface-2:  220 14% 96%;   /* elevated / sunken              */
+    --color-foreground: 222 47% 11%;   /* primary text    (~gray-900)     */
+    --color-muted:      220  9% 46%;   /* secondary text  (~gray-500)     */
+    --color-border:     220 13% 91%;   /* hairlines       (~gray-200)     */
+  }
+  .dark {
+    --color-background: 222 32%  8%;   /* surface.dark */
+    --color-surface:    222 24% 13%;   /* surface.card */
+    --color-surface-2:  222 20% 17%;   /* surface.elevated */
+    --color-foreground:   0  0% 100%;  /* white */
+    --color-muted:      220  9% 65%;   /* ~gray-400 */
+    --color-border:     222 20% 22%;   /* ~white/5 equivalent */
+  }
 }
 
 /* ── Dark mode flash prevention ──────────────────────────────── */
