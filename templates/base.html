@@ -41,7 +41,7 @@
     })();
     </script>
 </head>
-<body class="bg-surface-light dark:bg-surface-dark min-h-screen pb-16 md:pb-0 transition-colors duration-200 font-sans">
+<body class="bg-background min-h-screen pb-16 md:pb-0 transition-colors duration-200 font-sans">
     <!-- Skip-to-content link for keyboard users. Invisible until focused,
          then floats above the nav with a high-contrast pill so the
          destination is obvious. Targets #main-content on the <main>
@@ -51,7 +51,7 @@
         Skip to main content
     </a>
     <!-- Top Navigation -->
-    <nav class="bg-white dark:bg-surface-card shadow-card border-b border-gray-200/60 dark:border-white/5">
+    <nav class="bg-surface shadow-card border-b border-gray-200/60 dark:border-white/5">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between h-14 md:h-16">
                 <div class="flex items-center">
@@ -61,8 +61,8 @@
                         </a>
                     </div>
                     <div class="ml-2 md:ml-3">
-                        <h1 class="text-lg md:text-xl font-semibold text-gray-900 dark:text-white">CertMate</h1>
-                        <p class="text-xs md:text-sm text-gray-500 dark:text-gray-400 hidden sm:block">SSL Certificate Manager</p>
+                        <h1 class="text-lg md:text-xl font-semibold text-foreground">CertMate</h1>
+                        <p class="text-xs md:text-sm text-muted hidden sm:block">SSL Certificate Manager</p>
                     </div>
                 </div>
                 <div class="flex items-center space-x-1 sm:space-x-4">
@@ -84,14 +84,14 @@
                         <i class="fas fa-code mr-1.5 text-[0.85em] leading-none"></i> API Docs
                     </a>
                     <!-- Search (Cmd+K) — desktop variant with visible label + kbd hint -->
-                    <button type="button" onclick="document.dispatchEvent(new KeyboardEvent('keydown',{key:'k',metaKey:true}))" class="hidden sm:inline-flex items-center px-2.5 py-1.5 text-sm text-gray-400 bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition" title="Search (Cmd+K)" aria-label="Open search">
+                    <button type="button" onclick="document.dispatchEvent(new KeyboardEvent('keydown',{key:'k',metaKey:true}))" class="hidden sm:inline-flex items-center px-2.5 py-1.5 text-sm text-gray-400 bg-surface-2 border-border border rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition" title="Search (Cmd+K)" aria-label="Open search">
                         <i class="fas fa-search mr-1.5 text-xs"></i>
                         <span class="text-xs">Search</span>
-                        <kbd class="ml-2 px-1.5 py-0.5 text-[10px] bg-white dark:bg-gray-800 rounded border border-gray-300 dark:border-gray-500">&#8984;K</kbd>
+                        <kbd class="ml-2 px-1.5 py-0.5 text-[10px] bg-surface border-border rounded border">&#8984;K</kbd>
                     </button>
                     <!-- Search — compact icon-only mobile variant. Same keydown dispatch
                          so the existing Cmd+K command palette handler picks it up. -->
-                    <button type="button" onclick="document.dispatchEvent(new KeyboardEvent('keydown',{key:'k',metaKey:true}))" class="sm:hidden px-2 py-2 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700" title="Search" aria-label="Open search">
+                    <button type="button" onclick="document.dispatchEvent(new KeyboardEvent('keydown',{key:'k',metaKey:true}))" class="sm:hidden px-2 py-2 rounded-md text-muted hover:bg-gray-100 dark:hover:bg-gray-700" title="Search" aria-label="Open search">
                         <i class="fas fa-search"></i>
                     </button>
                     <!-- Keyboard shortcuts hint -->
@@ -100,21 +100,21 @@
                     </button>
                     <!-- Notification bell -->
                     <div class="relative">
-                        <button type="button" id="notifBtn" onclick="toggleNotifications()" class="px-2 py-2 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 relative" title="Notifications" aria-label="Open notifications" aria-haspopup="true" aria-expanded="false" aria-controls="notifPanel">
+                        <button type="button" id="notifBtn" onclick="toggleNotifications()" class="px-2 py-2 rounded-md text-muted hover:bg-gray-100 dark:hover:bg-gray-700 relative" title="Notifications" aria-label="Open notifications" aria-haspopup="true" aria-expanded="false" aria-controls="notifPanel">
                             <i class="fas fa-bell"></i>
                             <span id="notifBadge" class="hidden absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold badge-pulse">0</span>
                         </button>
-                        <div id="notifPanel" role="region" aria-label="Notifications" class="hidden absolute right-0 mt-2 w-[calc(100vw-2rem)] max-w-sm md:w-80 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 z-50 max-h-96 overflow-y-auto">
-                            <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-                                <h3 class="text-sm font-semibold text-gray-900 dark:text-white">Notifications</h3>
+                        <div id="notifPanel" role="region" aria-label="Notifications" class="hidden absolute right-0 mt-2 w-[calc(100vw-2rem)] max-w-sm md:w-80 bg-surface border-border rounded-lg shadow-xl border z-50 max-h-96 overflow-y-auto">
+                            <div class="px-4 py-3 border-b border-border">
+                                <h3 class="text-sm font-semibold text-foreground">Notifications</h3>
                             </div>
                             <div id="notifList" class="py-2">
-                                <p class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">No notifications</p>
+                                <p class="px-4 py-3 text-sm text-muted">No notifications</p>
                             </div>
                         </div>
                     </div>
                     <!-- Dark mode toggle -->
-                    <button type="button" id="themeToggle" onclick="toggleTheme()" class="px-2 py-2 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700" title="Toggle theme" aria-label="Toggle dark mode">
+                    <button type="button" id="themeToggle" onclick="toggleTheme()" class="px-2 py-2 rounded-md text-muted hover:bg-gray-100 dark:hover:bg-gray-700" title="Toggle theme" aria-label="Toggle dark mode">
                         <i class="fas fa-moon" id="theme-icon-moon"></i>
                         <i class="fas fa-sun" id="theme-icon-sun"></i>
                     </button>
@@ -133,21 +133,21 @@
     </nav>
 
     <!-- Bottom Tab Bar (mobile only) -->
-    <nav class="fixed bottom-0 left-0 right-0 md:hidden bg-white dark:bg-surface-card border-t border-gray-200 dark:border-white/5 shadow-[0_-2px_10px_rgba(0,0,0,0.1)] z-40 safe-area-bottom" id="bottomTabBar">
+    <nav class="fixed bottom-0 left-0 right-0 md:hidden bg-surface border-t border-gray-200 dark:border-white/5 shadow-[0_-2px_10px_rgba(0,0,0,0.1)] z-40 safe-area-bottom" id="bottomTabBar">
         <div class="flex justify-around h-14">
-            <a href="/" {% if request.path == '/' %}aria-current="page"{% endif %} class="flex flex-col items-center justify-center flex-1 py-1 transition-colors duration-150 {% if request.path == '/' %}text-primary{% else %}text-gray-500 dark:text-gray-400{% endif %}">
+            <a href="/" {% if request.path == '/' %}aria-current="page"{% endif %} class="flex flex-col items-center justify-center flex-1 py-1 transition-colors duration-150 {% if request.path == '/' %}text-primary{% else %}text-muted{% endif %}">
                 <i class="fas fa-certificate text-lg"></i>
                 <span class="text-xs mt-0.5 font-medium">Certs</span>
             </a>
-            <a href="/settings" {% if request.path == '/settings' %}aria-current="page"{% endif %} class="flex flex-col items-center justify-center flex-1 py-1 transition-colors duration-150 {% if request.path == '/settings' %}text-primary{% else %}text-gray-500 dark:text-gray-400{% endif %}">
+            <a href="/settings" {% if request.path == '/settings' %}aria-current="page"{% endif %} class="flex flex-col items-center justify-center flex-1 py-1 transition-colors duration-150 {% if request.path == '/settings' %}text-primary{% else %}text-muted{% endif %}">
                 <i class="fas fa-cog text-lg"></i>
                 <span class="text-xs mt-0.5 font-medium">Settings</span>
             </a>
-            <a href="/help" {% if request.path == '/help' %}aria-current="page"{% endif %} class="flex flex-col items-center justify-center flex-1 py-1 transition-colors duration-150 {% if request.path == '/help' %}text-primary{% else %}text-gray-500 dark:text-gray-400{% endif %}">
+            <a href="/help" {% if request.path == '/help' %}aria-current="page"{% endif %} class="flex flex-col items-center justify-center flex-1 py-1 transition-colors duration-150 {% if request.path == '/help' %}text-primary{% else %}text-muted{% endif %}">
                 <i class="fas fa-question-circle text-lg"></i>
                 <span class="text-xs mt-0.5 font-medium">Help</span>
             </a>
-            <a href="/activity" {% if request.path == '/activity' %}aria-current="page"{% endif %} class="flex flex-col items-center justify-center flex-1 py-1 transition-colors duration-150 {% if request.path == '/activity' %}text-primary{% else %}text-gray-500 dark:text-gray-400{% endif %}">
+            <a href="/activity" {% if request.path == '/activity' %}aria-current="page"{% endif %} class="flex flex-col items-center justify-center flex-1 py-1 transition-colors duration-150 {% if request.path == '/activity' %}text-primary{% else %}text-muted{% endif %}">
                 <i class="fas fa-history text-lg"></i>
                 <span class="text-xs mt-0.5 font-medium">Activity</span>
             </a>
@@ -234,7 +234,7 @@
         var list = document.getElementById('notifList');
         if (warnings.length === 0) {
             badge.classList.add('hidden');
-            list.innerHTML = '<p class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400"><i class="fas fa-check-circle text-green-500 mr-2"></i>All certificates healthy</p>';
+            list.innerHTML = '<p class="px-4 py-3 text-sm text-muted"><i class="fas fa-check-circle text-green-500 mr-2"></i>All certificates healthy</p>';
             return;
         }
         badge.textContent = warnings.length > 9 ? '9+' : warnings.length;
@@ -254,7 +254,7 @@
                 '<div class="flex items-center gap-3">' +
                 '<i class="fas ' + icon + ' ' + color + '"></i>' +
                 '<div class="min-w-0 flex-1">' +
-                '<p class="text-sm font-medium text-gray-900 dark:text-white truncate">' + CertMate.escapeHtml(w.domain) + '</p>' +
+                '<p class="text-sm font-medium text-foreground truncate">' + CertMate.escapeHtml(w.domain) + '</p>' +
                 '<p class="text-xs ' + color + '">' + msg + '</p>' +
                 '</div></div></a>';
         });
