@@ -10,7 +10,7 @@ from functools import wraps
 from pathlib import Path
 from collections import defaultdict
 from time import time
-from flask import request, redirect, url_for
+from flask import request, redirect, url_for, send_from_directory
 
 logger = logging.getLogger(__name__)
 
@@ -199,3 +199,22 @@ def register_web_routes(app, managers):
                                  file_ops, settings_manager, cache_manager)
     register_oidc_routes(app, managers, auth_manager, managers['oidc'],
                          _check_login_rate_limit, _record_login_attempt)
+
+    @app.route('/.well-known/acme-challenge/<path:filename>')
+    def serve_acme_challenge(filename):
+        """
+        Serves ACME challenge files from the physical directory:
+        app/data/acme-challenges/.well-known/acme-challenge/
+        """
+        # Build the physical path: /app/data/acme-challenges/.well-known/acme-challenge/
+        acme_path = os.path.join(
+            app.config['ACME_CHALLENGES_DIR'], 
+            '.well-known', 
+            'acme-challenge'
+        )
+        
+        return send_from_directory(
+            directory=acme_path,
+            path=filename,
+            mimetype='text/plain'
+        )
