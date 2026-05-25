@@ -62,6 +62,27 @@ module.exports = {
           card:  'hsl(222, 24%, 13%)',
           elevated: 'hsl(222, 20%, 17%)',
         },
+
+        // ── Semantic tokens (Sprint 2, §2) ──────────────────────
+        // Map onto the CSS vars defined in input.css. Using the
+        // `rgb(var() / <alpha-value>)` form keeps every opacity
+        // modifier working (bg-accent/10, border-line/60). These
+        // replace the bg-white/dark:bg-… + text-gray-900/dark:… +
+        // border-gray-200/dark:white-… triplets as templates migrate.
+        base:   'rgb(var(--bg-base) / <alpha-value>)',
+        card:   'rgb(var(--bg-card) / <alpha-value>)',
+        inset:  'rgb(var(--bg-inset) / <alpha-value>)',
+        raised: 'rgb(var(--bg-raised) / <alpha-value>)',
+        fg: {
+          DEFAULT: 'rgb(var(--fg) / <alpha-value>)',
+          muted:   'rgb(var(--fg-muted) / <alpha-value>)',
+          subtle:  'rgb(var(--fg-subtle) / <alpha-value>)',
+        },
+        line: {
+          DEFAULT: 'rgb(var(--border) / <alpha-value>)',
+          strong:  'rgb(var(--border-strong) / <alpha-value>)',
+        },
+        accent: 'rgb(var(--accent) / <alpha-value>)',
       },
     },
   },

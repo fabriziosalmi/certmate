@@ -35,12 +35,32 @@
   }
 }
 
-/* ── Motion token (Sprint 1, §5) ─────────────────────────────── */
-/* One premium easing signature shared by every hand-written
-   transition / entrance below. Mirrored in tailwind.config.js as
-   the `ease-premium` utility so inline call sites can opt in too. */
+/* ── Design tokens (Sprint 2, §2) ────────────────────────────── */
+/* Single source of truth for theme colour. Values are RGB *channels*
+   (space-separated, no rgb() wrapper) so the Tailwind utilities that
+   map to them — bg-card, text-fg, border-line… — can still take an
+   opacity modifier via `rgb(var(--x) / <alpha-value>)` (e.g.
+   border-line/60, bg-accent/10). A second theme or a brand recolour
+   means editing only the html.dark block below; the templates never
+   mention a raw colour again as they migrate.
+
+   Surfaces layer base → card → inset (recessed controls) → raised
+   (floating overlays). `accent` is the on-surface accent (links,
+   active nav, focus) and is the one token that lightens on dark for
+   legibility; solid button *fills* stay on `primary` (brand-600). */
 :root {
   --ease-premium: cubic-bezier(0.16, 1, 0.3, 1);
+
+  --bg-base:       246 247 249;  /* surface.light          */
+  --bg-card:       255 255 255;  /* cards, nav             */
+  --bg-inset:      243 244 246;  /* gray-100 — search pill, kbd, chips */
+  --bg-raised:     255 255 255;  /* modals, popovers       */
+  --fg:            17 24 39;     /* gray-900               */
+  --fg-muted:      107 114 128;  /* gray-500               */
+  --fg-subtle:     156 163 175;  /* gray-400               */
+  --border:        229 231 235;  /* gray-200               */
+  --border-strong: 209 213 219;  /* gray-300               */
+  --accent:        26 93 193;    /* brand-600              */
 }
 
 /* ── Dark mode flash prevention ──────────────────────────────── */
@@ -48,6 +68,17 @@
 html.dark {
   background-color: #0b1120 !important;
   color-scheme: dark;
+
+  --bg-base:       14 18 27;     /* surface.dark           */
+  --bg-card:       25 30 41;     /* surface.card           */
+  --bg-inset:      55 65 81;     /* gray-700 — recessed reads lighter on dark */
+  --bg-raised:     35 40 52;     /* surface.elevated       */
+  --fg:            255 255 255;
+  --fg-muted:      156 163 175;  /* gray-400               */
+  --fg-subtle:     107 114 128;  /* gray-500               */
+  --border:        37 41 52;     /* solid equiv. of white/5 over card */
+  --border-strong: 75 85 99;     /* gray-600               */
+  --accent:        77 153 239;   /* brand-400 — lighter for dark surfaces */
 }
 
 /* ── Text selection ──────────────────────────────────────────── */
@@ -387,11 +418,11 @@ button[class*="bg-red-6"]:active {
 
 /* ── Nav active indicator ────────────────────────────────────── */
 .nav-active {
-  @apply text-blue-600 dark:text-blue-400 font-semibold border-b-2 border-blue-500 dark:border-blue-400;
+  @apply text-accent font-semibold border-b-2 border-accent;
 }
 .nav-inactive {
-  @apply text-gray-500 dark:text-gray-400 font-medium border-b-2 border-transparent
-         hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600
+  @apply text-fg-muted font-medium border-b-2 border-transparent
+         hover:text-fg hover:border-line-strong
          transition-colors duration-150;
 }
 
