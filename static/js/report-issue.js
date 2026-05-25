@@ -162,20 +162,20 @@
         overlay.innerHTML = '<div class="absolute inset-0 bg-black/50 backdrop-blur-sm"></div>';
 
         var box = document.createElement('div');
-        box.className = 'relative bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-2xl border border-gray-200 dark:border-gray-700';
+        box.className = 'relative bg-surface rounded-xl shadow-2xl w-full max-w-2xl border border-border';
         var title = 'Report this issue — manual paste';
         box.innerHTML =
-            '<div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">' +
-                '<h3 class="text-lg font-semibold text-gray-900 dark:text-white">' + CM.escapeHtml(title) + '</h3>' +
-                '<p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Your browser blocked the clipboard or new-tab automation. Copy the markdown below and open the issue manually.</p>' +
+            '<div class="px-6 py-4 border-b border-border">' +
+                '<h3 class="text-lg font-semibold text-foreground">' + CM.escapeHtml(title) + '</h3>' +
+                '<p class="text-sm text-muted mt-1">Your browser blocked the clipboard or new-tab automation. Copy the markdown below and open the issue manually.</p>' +
             '</div>' +
             '<div class="px-6 py-4">' +
-                '<textarea readonly class="w-full h-64 p-3 text-xs font-mono bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded text-gray-800 dark:text-gray-200"></textarea>' +
+                '<textarea readonly class="w-full h-64 p-3 text-xs font-mono bg-background border border-gray-300 dark:border-gray-700 rounded text-gray-800 dark:text-gray-200"></textarea>' +
                 '<div class="flex justify-between items-center mt-4">' +
                     '<a target="_blank" rel="noopener" href="' + CM.escapeHtml(issueUrl) + '" class="text-blue-600 dark:text-blue-400 hover:underline text-sm">Open GitHub issue form &nearr;</a>' +
                     '<div class="flex gap-2">' +
                         '<button data-action="copy" class="px-4 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700">Copy markdown</button>' +
-                        '<button data-action="close" class="px-4 py-2 rounded-lg text-sm font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600">Close</button>' +
+                        '<button data-action="close" class="px-4 py-2 rounded-lg text-sm font-medium bg-surface-2 text-label hover:bg-gray-200 dark:hover:bg-gray-600">Close</button>' +
                     '</div>' +
                 '</div>' +
             '</div>';

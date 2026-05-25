@@ -65,12 +65,12 @@
         overlay.setAttribute('aria-modal', 'true');
         overlay.setAttribute('aria-labelledby', 'recoveryPromptTitle');
         overlay.innerHTML =
-            '<div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg p-8 text-center">' +
+            '<div class="bg-surface rounded-2xl shadow-2xl w-full max-w-lg p-8 text-center">' +
                 '<div class="w-16 h-16 bg-yellow-100 dark:bg-yellow-900/30 rounded-full flex items-center justify-center mx-auto mb-4">' +
                     '<i class="fas fa-exclamation-triangle text-yellow-600 dark:text-yellow-400 text-2xl"></i>' +
                 '</div>' +
-                '<h2 id="recoveryPromptTitle" class="text-xl font-bold text-gray-900 dark:text-white mb-2">Existing Data Detected</h2>' +
-                '<p class="text-sm text-gray-500 dark:text-gray-400 mb-6">' +
+                '<h2 id="recoveryPromptTitle" class="text-xl font-bold text-foreground mb-2">Existing Data Detected</h2>' +
+                '<p class="text-sm text-muted mb-6">' +
                     'CertMate found certificates on this volume but no matching configuration. ' +
                     'This usually happens after a downgrade. You can restore the latest backup to recover your users and domains, or start fresh.' +
                 '</p>' +
@@ -78,12 +78,12 @@
                     '<button id="recoveryRestore" class="w-full px-6 py-3 bg-primary hover:bg-secondary text-white font-medium rounded-lg text-sm transition">' +
                         '<i class="fas fa-archive mr-2"></i>Restore from Backup' +
                     '</button>' +
-                    '<button id="recoveryFresh" class="w-full px-6 py-3 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 font-medium rounded-lg text-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition">' +
+                    '<button id="recoveryFresh" class="w-full px-6 py-3 border border-border text-label font-medium rounded-lg text-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition">' +
                         'Start Fresh Setup' +
                     '</button>' +
                 '</div>' +
                 '<p class="mt-4 text-xs text-gray-400">' +
-                    'Need help? Check the logs for <code class="bg-gray-100 dark:bg-gray-700 px-1 rounded">DOWNGRADE DETECTED</code> or run <code class="bg-gray-100 dark:bg-gray-700 px-1 rounded">scripts/reset_admin_password.py</code> inside the container to regain access.' +
+                    'Need help? Check the logs for <code class="bg-surface-2 px-1 rounded">DOWNGRADE DETECTED</code> or run <code class="bg-surface-2 px-1 rounded">scripts/reset_admin_password.py</code> inside the container to regain access.' +
                 '</p>' +
             '</div>';
         document.body.appendChild(overlay);
@@ -124,18 +124,18 @@
         overlay.setAttribute('aria-modal', 'true');
         overlay.setAttribute('aria-labelledby', 'wizardTitle');
         overlay.innerHTML =
-            '<div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">' +
-                '<div class="px-6 py-5 border-b border-gray-200 dark:border-gray-700">' +
+            '<div class="bg-surface rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">' +
+                '<div class="px-6 py-5 border-b border-border">' +
                     '<div class="flex items-center justify-between">' +
                         '<div>' +
-                            '<h2 id="wizardTitle" class="text-xl font-bold text-gray-900 dark:text-white">Welcome to CertMate</h2>' +
-                            '<p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Let\'s get you set up in a few steps</p>' +
+                            '<h2 id="wizardTitle" class="text-xl font-bold text-foreground">Welcome to CertMate</h2>' +
+                            '<p class="text-sm text-muted mt-1">Let\'s get you set up in a few steps</p>' +
                         '</div>' +
                         '<div class="flex items-center gap-1.5" id="wizardSteps"></div>' +
                     '</div>' +
                 '</div>' +
                 '<div id="wizardBody" class="px-6 py-6"></div>' +
-                '<div id="wizardFooter" class="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between"></div>' +
+                '<div id="wizardFooter" class="px-6 py-4 border-t border-border flex items-center justify-between"></div>' +
             '</div>';
         document.body.appendChild(overlay);
 
@@ -172,7 +172,7 @@
                 ? 'w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center text-sm font-bold'
                 : i < state.step
                     ? 'w-8 h-8 rounded-full bg-green-500 text-white flex items-center justify-center text-sm'
-                    : 'w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-600 text-gray-500 dark:text-gray-400 flex items-center justify-center text-sm';
+                    : 'w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-600 text-muted flex items-center justify-center text-sm';
             html += '<div class="' + cls + '">' + (i < state.step ? '<i class="fas fa-check text-xs"></i>' : i) + '</div>';
             if (i < 3) html += '<div class="w-6 h-0.5 ' + (i < state.step ? 'bg-green-500' : 'bg-gray-200 dark:bg-gray-600') + '"></div>';
         }
@@ -186,13 +186,13 @@
                 '<div class="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mx-auto mb-4">' +
                     '<i class="fas fa-envelope text-blue-600 dark:text-blue-400 text-2xl"></i>' +
                 '</div>' +
-                '<h3 class="text-lg font-semibold text-gray-900 dark:text-white">Contact Email</h3>' +
-                '<p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Required by certificate authorities for important notifications</p>' +
+                '<h3 class="text-lg font-semibold text-foreground">Contact Email</h3>' +
+                '<p class="text-sm text-muted mt-1">Required by certificate authorities for important notifications</p>' +
             '</div>' +
             '<div>' +
-                '<label for="wizEmail" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Email Address</label>' +
+                '<label for="wizEmail" class="block text-sm font-medium text-label mb-2">Email Address</label>' +
                 '<input type="email" id="wizEmail" value="' + escapeHtml(state.email) + '" placeholder="admin@example.com" ' +
-                       'class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-primary text-sm" required>' +
+                       'class="w-full px-4 py-3 border text-foreground border-border rounded-lg bg-white dark:bg-gray-700 focus:ring-2 focus:ring-primary focus:border-primary text-sm" required>' +
                 '<p class="mt-2 text-xs text-gray-400"><i class="fas fa-info-circle mr-1"></i>Used by Let\'s Encrypt for expiry warnings and account recovery</p>' +
             '</div>';
 
@@ -237,16 +237,15 @@
                 '<div class="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-4">' +
                     '<i class="fas fa-server text-green-600 dark:text-green-400 text-2xl"></i>' +
                 '</div>' +
-                '<h3 class="text-lg font-semibold text-gray-900 dark:text-white">DNS Provider</h3>' +
-                '<p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Select where your domains are managed</p>' +
+                '<h3 class="text-lg font-semibold text-foreground">DNS Provider</h3>' +
+                '<p class="text-sm text-muted mt-1">Select where your domains are managed</p>' +
             '</div>' +
             '<div class="grid grid-cols-2 sm:grid-cols-3 gap-2" id="providerGrid">';
 
         Object.keys(PROVIDERS).forEach(function(key) {
             var p = PROVIDERS[key];
             var selected = state.provider === key;
-            html += '<button type="button" data-provider="' + key + '" class="wiz-provider flex flex-col items-center p-3 rounded-lg border-2 transition text-sm ' +
-                (selected ? 'border-primary bg-primary/5 text-primary' : 'border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-gray-400') + '">' +
+            html += '<button type="button" data-provider="' + key + '" class="wiz-provider flex flex-col items-center p-3 rounded-lg border-2 transition text-sm ' + (selected ? 'border-primary bg-primary/5 text-primary' : 'border-border text-muted hover:border-gray-400') + '">' +
                 '<i class="fas ' + escapeHtml(p.icon) + ' text-lg mb-1"></i>' +
                 '<span class="text-xs font-medium">' + escapeHtml(p.label) + '</span>' +
             '</button>';
@@ -273,7 +272,7 @@
 
         var footer = document.getElementById('wizardFooter');
         footer.innerHTML =
-            '<button type="button" id="wizBack2" class="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"><i class="fas fa-arrow-left mr-1"></i> Back</button>' +
+            '<button type="button" id="wizBack2" class="px-4 py-2 text-sm text-muted hover:text-gray-900 dark:hover:text-white"><i class="fas fa-arrow-left mr-1"></i> Back</button>' +
             '<button type="button" id="wizNext2" class="px-6 py-2.5 bg-primary hover:bg-secondary text-white font-medium rounded-lg text-sm transition ' + (!state.provider ? 'opacity-50 cursor-not-allowed' : '') + '" ' + (!state.provider ? 'disabled' : '') + '>Save & Finish <i class="fas fa-check ml-1"></i></button>';
 
         document.getElementById('wizBack2').addEventListener('click', function() {
@@ -305,18 +304,18 @@
     function renderCredentialFields(provider) {
         var pDef = PROVIDERS[provider];
         if (!pDef) return '';
-        var html = '<div class="border-t border-gray-200 dark:border-gray-700 pt-4">' +
-            '<h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3"><i class="fas fa-key mr-1.5 text-yellow-500"></i>' + escapeHtml(pDef.label) + ' Credentials</h4>';
+        var html = '<div class="border-t border-border pt-4">' +
+            '<h4 class="text-sm font-medium text-label mb-3"><i class="fas fa-key mr-1.5 text-yellow-500"></i>' + escapeHtml(pDef.label) + ' Credentials</h4>';
 
         pDef.fields.forEach(function(f) {
             var savedVal = state.credentials[f.key] || '';
             if (f.type === 'textarea') {
-                html += '<div><label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">' + escapeHtml(f.label) + '</label>' +
-                    '<textarea id="wiz_' + f.key + '" rows="3" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-primary focus:border-primary" placeholder="' + escapeHtml(f.placeholder || '') + '">' + escapeHtml(savedVal) + '</textarea></div>';
+                html += '<div><label class="block text-xs font-medium text-muted mb-1">' + escapeHtml(f.label) + '</label>' +
+                    '<textarea id="wiz_' + f.key + '" rows="3" class="w-full px-3 py-2 border text-foreground border-border rounded-lg bg-white dark:bg-gray-700 text-sm focus:ring-2 focus:ring-primary focus:border-primary" placeholder="' + escapeHtml(f.placeholder || '') + '">' + escapeHtml(savedVal) + '</textarea></div>';
             } else {
-                html += '<div><label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">' + escapeHtml(f.label) + '</label>' +
+                html += '<div><label class="block text-xs font-medium text-muted mb-1">' + escapeHtml(f.label) + '</label>' +
                     '<input type="' + f.type + '" id="wiz_' + f.key + '" value="' + escapeHtml(savedVal) + '" placeholder="' + escapeHtml(f.placeholder || '') + '" ' +
-                    'class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-primary focus:border-primary"></div>';
+                    'class="w-full px-3 py-2 border text-foreground border-border rounded-lg bg-white dark:bg-gray-700 text-sm focus:ring-2 focus:ring-primary focus:border-primary"></div>';
             }
         });
         html += '</div>';
@@ -372,18 +371,18 @@
                 '<div class="w-20 h-20 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-4">' +
                     '<i class="fas fa-check-circle text-green-500 text-4xl"></i>' +
                 '</div>' +
-                '<h3 class="text-xl font-bold text-gray-900 dark:text-white mb-2">You\'re All Set!</h3>' +
-                '<p class="text-sm text-gray-500 dark:text-gray-400 mb-4">CertMate is configured and ready to manage your certificates.</p>' +
+                '<h3 class="text-xl font-bold text-foreground mb-2">You\'re All Set!</h3>' +
+                '<p class="text-sm text-muted mb-4">CertMate is configured and ready to manage your certificates.</p>' +
                 '<div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 text-left text-sm space-y-2">' +
-                    '<div class="flex items-center"><i class="fas fa-check text-green-500 mr-2 w-4"></i><span class="text-gray-700 dark:text-gray-300">Email: <strong>' + escapeHtml(state.email) + '</strong></span></div>' +
-                    '<div class="flex items-center"><i class="fas fa-check text-green-500 mr-2 w-4"></i><span class="text-gray-700 dark:text-gray-300">DNS Provider: <strong>' + escapeHtml(PROVIDERS[state.provider] ? PROVIDERS[state.provider].label : state.provider) + '</strong></span></div>' +
-                    '<div class="flex items-center"><i class="fas fa-check text-green-500 mr-2 w-4"></i><span class="text-gray-700 dark:text-gray-300">Auto-renewal: <strong>Enabled</strong></span></div>' +
+                    '<div class="flex items-center"><i class="fas fa-check text-green-500 mr-2 w-4"></i><span class="text-label">Email: <strong>' + escapeHtml(state.email) + '</strong></span></div>' +
+                    '<div class="flex items-center"><i class="fas fa-check text-green-500 mr-2 w-4"></i><span class="text-label">DNS Provider: <strong>' + escapeHtml(PROVIDERS[state.provider] ? PROVIDERS[state.provider].label : state.provider) + '</strong></span></div>' +
+                    '<div class="flex items-center"><i class="fas fa-check text-green-500 mr-2 w-4"></i><span class="text-label">Auto-renewal: <strong>Enabled</strong></span></div>' +
                 '</div>' +
             '</div>';
 
         var footer = document.getElementById('wizardFooter');
         footer.innerHTML =
-            '<a href="/settings" class="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">Advanced Settings</a>' +
+            '<a href="/settings" class="text-sm text-muted hover:text-gray-700 dark:hover:text-gray-200">Advanced Settings</a>' +
             '<button type="button" id="wizFinish" class="px-6 py-2.5 bg-primary hover:bg-secondary text-white font-medium rounded-lg text-sm transition"><i class="fas fa-certificate mr-1"></i> Create Your First Certificate</button>';
 
         document.getElementById('wizFinish').addEventListener('click', function() {

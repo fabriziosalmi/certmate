@@ -2,7 +2,7 @@
                     <div x-show="tab === 'general'" x-cloak>
                     <!-- General Certificate Settings Section -->
                     <div class="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
-                        <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                        <h4 class="text-sm font-medium text-label mb-3">
                             <i class="fas fa-cogs mr-1 text-primary"></i>
                             Certificate Management Settings
                         </h4>
@@ -12,86 +12,86 @@
                             <div>
                                 <label class="flex items-center">
                                     <input type="checkbox" id="auto_renew" name="auto_renew" checked
-                                           class="rounded border-gray-300 dark:border-gray-600 text-primary focus:ring-primary focus:ring-offset-0 dark:bg-gray-700">
-                                    <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Enable automatic certificate renewal</span>
+                                           class="rounded border-border text-primary focus:ring-primary focus:ring-offset-0 dark:bg-gray-700">
+                                    <span class="ml-2 text-sm text-label">Enable automatic certificate renewal</span>
                                 </label>
-                                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                <p class="mt-1 text-xs text-muted">
                                     Automatically renew certificates when they approach expiration
                                 </p>
                             </div>
                             
                             <!-- Renewal Threshold Setting -->
                             <div>
-                                <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
+                                <label class="block text-xs font-medium text-muted mb-2">
                                     Certificate Renewal Threshold (days)
                                 </label>
                                 <input type="number" id="renewal_threshold_days" name="renewal_threshold_days" 
                                        min="1" max="90" value="30"
-                                       class="w-32 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm">
-                                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                       class="w-32 px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm">
+                                <p class="mt-1 text-xs text-muted">
                                     Renew certificates when they have this many days left before expiration (default: 30 days)
                                 </p>
                             </div>
 
                             <!-- Cache TTL Setting -->
                             <div>
-                                <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
+                                <label class="block text-xs font-medium text-muted mb-2">
                                     Cache TTL (seconds)
                                 </label>
                                 <input type="number" id="cache_ttl" name="cache_ttl"
                                        min="0" max="86400" value="300"
-                                       class="w-32 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm">
-                                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                       class="w-32 px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm">
+                                <p class="mt-1 text-xs text-muted">
                                     How long to cache DNS responses (default: 300 seconds)
                                 </p>
                             </div>
 
                             <!-- PFX / PKCS#12 export (issue #230) -->
                             <div>
-                                <label for="pfx_password" class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
+                                <label for="pfx_password" class="block text-xs font-medium text-muted mb-2">
                                     Windows .pfx Export Password
                                 </label>
                                 <input type="password" id="pfx_password" name="pfx_password"
                                        autocomplete="new-password"
                                        placeholder="Leave blank to disable / keep current"
-                                       class="w-72 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm">
-                                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                       class="w-72 px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm">
+                                <p class="mt-1 text-xs text-muted">
                                     When set, each certificate is also written as an encrypted <code class="text-xs">cert.pfx</code> (PKCS#12) using this password, downloadable for Windows hosts. Leave blank to disable. Stored like other secrets and never shown again after saving.
                                 </p>
                             </div>
 
                             <!-- Default Certificate Key Shape -->
-                            <div class="border-t border-gray-200 dark:border-gray-600 pt-4">
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            <div class="border-t border-border pt-4">
+                                <label class="block text-sm font-medium text-label mb-2">
                                     <i class="fas fa-key mr-1 text-purple-500"></i>
                                     Default Certificate Key
                                 </label>
-                                <p class="mb-3 text-xs text-gray-500 dark:text-gray-400">
+                                <p class="mb-3 text-xs text-muted">
                                     Applied to any new certificate that does not pick a per-cert override. Renewals always keep the shape of the cert at creation time.
                                 </p>
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                                     <div>
-                                        <label for="default_key_type" class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Key Type</label>
+                                        <label for="default_key_type" class="block text-xs font-medium text-muted mb-1">Key Type</label>
                                         <select id="default_key_type" name="default_key_type"
                                                 onchange="toggleDefaultKeyOptions()"
-                                                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm">
+                                                class="w-full px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm">
                                             <option value="rsa">RSA</option>
                                             <option value="ecdsa">ECDSA</option>
                                         </select>
                                     </div>
                                     <div id="default_key_size_container">
-                                        <label for="default_key_size" class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">RSA Key Size</label>
+                                        <label for="default_key_size" class="block text-xs font-medium text-muted mb-1">RSA Key Size</label>
                                         <select id="default_key_size" name="default_key_size"
-                                                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm">
+                                                class="w-full px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm">
                                             <option value="2048">2048 bits (default)</option>
                                             <option value="3072">3072 bits</option>
                                             <option value="4096">4096 bits</option>
                                         </select>
                                     </div>
                                     <div id="default_elliptic_curve_container" style="display: none;">
-                                        <label for="default_elliptic_curve" class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">ECDSA Curve</label>
+                                        <label for="default_elliptic_curve" class="block text-xs font-medium text-muted mb-1">ECDSA Curve</label>
                                         <select id="default_elliptic_curve" name="default_elliptic_curve"
-                                                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm">
+                                                class="w-full px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm">
                                             <option value="secp256r1">secp256r1 / P-256 (default)</option>
                                             <option value="secp384r1">secp384r1 / P-384</option>
                                         </select>
@@ -103,7 +103,7 @@
 
                     <!-- API Security Settings Section -->
                     <div class="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
-                        <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                        <h4 class="text-sm font-medium text-label mb-3">
                             <i class="fas fa-key mr-1 text-primary"></i>
                             API Security Settings
                         </h4>
@@ -111,15 +111,15 @@
                         <div class="space-y-4">
                             <!-- API Bearer Token Setting -->
                             <div>
-                                <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
+                                <label class="block text-xs font-medium text-muted mb-2">
                                     API Bearer Token
                                 </label>
                                 <div class="flex items-center space-x-2">
                                     <input type="password" id="api_bearer_token" name="api_bearer_token" 
                                            placeholder="Enter a secure token for API authentication"
-                                           class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm">
+                                           class="flex-1 px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm">
                                     <button type="button" onclick="toggleTokenVisibility()" 
-                                            class="px-3 py-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
+                                            class="px-3 py-2 text-muted hover:text-gray-700 dark:hover:text-gray-200">
                                         <i class="fas fa-eye" id="tokenToggleIcon"></i>
                                     </button>
                                     <button type="button" onclick="generateToken()" 
@@ -127,7 +127,7 @@
                                         <i class="fas fa-random mr-1"></i> Generate
                                     </button>
                                 </div>
-                                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                <p class="mt-1 text-xs text-muted">
                                     Token used for API authentication. Required for API access after initial setup.
                                 </p>
                             </div>

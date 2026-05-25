@@ -195,10 +195,10 @@
 
     function createDialogBox(title, bodyHtml) {
         var box = document.createElement('div');
-        box.className = 'relative bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md border border-gray-200 dark:border-gray-700 transform scale-95 opacity-0 transition-all duration-200';
+        box.className = 'relative bg-surface rounded-xl shadow-2xl w-full max-w-md border border-border transform scale-95 opacity-0 transition-all duration-200';
         box.innerHTML =
-            '<div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">' +
-                '<h3 class="text-lg font-semibold text-gray-900 dark:text-white">' + CM.escapeHtml(title) + '</h3>' +
+            '<div class="px-6 py-4 border-b border-border">' +
+                '<h3 class="text-lg font-semibold text-foreground">' + CM.escapeHtml(title) + '</h3>' +
             '</div>' +
             '<div class="px-6 py-4">' + bodyHtml + '</div>';
         return box;
@@ -222,7 +222,7 @@
     }
 
     var BTN_BASE = 'px-4 py-2 rounded-lg text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-gray-800';
-    var BTN_CANCEL = BTN_BASE + ' bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 focus:ring-gray-300';
+    var BTN_CANCEL = BTN_BASE + ' bg-surface-2 text-label hover:bg-gray-200 dark:hover:bg-gray-600 focus:ring-gray-300';
     var BTN_DANGER = BTN_BASE + ' bg-red-600 text-white hover:bg-red-700 focus:ring-red-500';
     var BTN_PRIMARY = BTN_BASE + ' bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500';
 
@@ -234,7 +234,7 @@
         return new Promise(function(resolve) {
             var overlay = createOverlay();
             var bodyHtml =
-                '<p class="text-gray-600 dark:text-gray-300 text-sm">' + CM.escapeHtml(message) + '</p>' +
+                '<p class="text-muted text-sm">' + CM.escapeHtml(message) + '</p>' +
                 '<div class="flex justify-end gap-3 mt-6">' +
                     '<button data-action="cancel" class="' + BTN_CANCEL + '">Cancel</button>' +
                     '<button data-action="confirm" class="' + (danger ? BTN_DANGER : BTN_PRIMARY) + '">' + CM.escapeHtml(options.confirmText || 'Confirm') + '</button>' +
@@ -273,9 +273,9 @@
             var overlay = createOverlay();
             var inputId = 'cm-prompt-' + Date.now();
             var bodyHtml =
-                '<label for="' + inputId + '" class="block text-gray-600 dark:text-gray-300 text-sm mb-3">' + CM.escapeHtml(message) + '</label>' +
+                '<label for="' + inputId + '" class="block text-muted text-sm mb-3">' + CM.escapeHtml(message) + '</label>' +
                 '<input id="' + inputId + '" type="text" value="' + CM.escapeHtml(defaultValue) + '" ' +
-                    'class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">' +
+                    'class="w-full px-3 py-2 border text-foreground border-border rounded-lg bg-white dark:bg-gray-700 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">' +
                 '<div class="flex justify-end gap-3 mt-6">' +
                     '<button data-action="cancel" class="' + BTN_CANCEL + '">Cancel</button>' +
                     '<button data-action="confirm" class="' + BTN_PRIMARY + '">OK</button>' +

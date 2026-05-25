@@ -90,7 +90,7 @@
         var tbody = document.getElementById('certTableBody');
         if (!tbody) return;
         if (certificatesData.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-8 text-center text-gray-500 dark:text-gray-400">No client certificates found</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-8 text-center text-muted">No client certificates found</td></tr>';
             return;
         }
 
@@ -104,11 +104,11 @@
             var safeId = escapeHtml(cert.identifier);
 
             return '<tr class="hover:bg-gray-50 dark:hover:bg-gray-700 transition">' +
-                '<td class="px-6 py-4 text-sm font-medium text-gray-900 dark:text-white">' + safeCN + '</td>' +
-                '<td class="px-6 py-4 text-sm text-gray-600 dark:text-gray-300 hidden md:table-cell">' + safeEmail + '</td>' +
+                '<td class="px-6 py-4 text-sm font-medium text-foreground">' + safeCN + '</td>' +
+                '<td class="px-6 py-4 text-sm text-muted hidden md:table-cell">' + safeEmail + '</td>' +
                 '<td class="px-6 py-4 text-sm hidden lg:table-cell"><span class="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded text-xs font-medium">' + safeUsage + '</span></td>' +
-                '<td class="px-6 py-4 text-sm text-gray-600 dark:text-gray-300 hidden lg:table-cell">' + createdDate.toLocaleDateString() + '</td>' +
-                '<td class="px-6 py-4 text-sm ' + (isExpiringSoon ? 'text-red-600 dark:text-red-400 font-semibold' : 'text-gray-600 dark:text-gray-300') + '">' + expiresDate.toLocaleDateString() + '</td>' +
+                '<td class="px-6 py-4 text-sm text-muted hidden lg:table-cell">' + createdDate.toLocaleDateString() + '</td>' +
+                '<td class="px-6 py-4 text-sm ' + (isExpiringSoon ? 'text-red-600 dark:text-red-400 font-semibold' : 'text-muted') + '">' + expiresDate.toLocaleDateString() + '</td>' +
                 '<td class="px-6 py-4 text-sm">' +
                     (cert.revoked
                         ? '<span class="px-2 py-1 bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 rounded text-xs font-medium">Revoked</span>'
@@ -245,7 +245,7 @@
 
             document.getElementById('headerRow').innerHTML = headers.map(function(h) { return '<th class="px-3 py-2 text-left">' + escapeHtml(h) + '</th>'; }).join('');
             document.getElementById('previewBody').innerHTML = dataRows.map(function(row) {
-                return '<tr class="border-t">' + row.map(function(c) { return '<td class="px-3 py-2 text-gray-700 dark:text-gray-300">' + escapeHtml(c) + '</td>'; }).join('') + '</tr>';
+                return '<tr class="border-t">' + row.map(function(c) { return '<td class="px-3 py-2 text-label">' + escapeHtml(c) + '</td>'; }).join('') + '</tr>';
             }).join('');
             document.getElementById('rowCount').textContent = dataRows.length;
             document.getElementById('csvPreview').classList.remove('hidden');

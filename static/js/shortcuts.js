@@ -43,30 +43,28 @@
         shortcuts.forEach(function(s) {
             var keys = s.key.split(' ');
             var kbds = keys.map(function(k) {
-                return '<kbd class="inline-flex items-center justify-center min-w-[28px] px-2 py-1 text-xs font-mono font-semibold ' +
-                    'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 rounded shadow-sm">' +
+                return '<kbd class="inline-flex items-center justify-center min-w-[28px] px-2 py-1 text-xs font-mono font-semibold ' + 'bg-surface-2 text-gray-700 dark:text-gray-200 border border-border rounded shadow-sm">' +
                     CertMate.escapeHtml(k) + '</kbd>';
             }).join('<span class="mx-1 text-gray-400 text-xs">then</span>');
             cols += '<div class="flex items-center justify-between py-1.5">' +
-                '<span class="text-sm text-gray-700 dark:text-gray-300">' + CertMate.escapeHtml(s.desc) + '</span>' +
+                '<span class="text-sm text-label">' + CertMate.escapeHtml(s.desc) + '</span>' +
                 '<span class="ml-4 flex items-center gap-1">' + kbds + '</span>' +
                 '</div>';
         });
 
         div.innerHTML =
             '<div class="fixed inset-0 bg-black/50 backdrop-blur-sm" id="shortcutOverlayBg"></div>' +
-            '<div class="fixed inset-x-4 top-[12vh] sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 sm:w-full sm:max-w-md ' +
-                'bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">' +
-                '<div class="px-5 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">' +
-                    '<h3 class="text-sm font-semibold text-gray-900 dark:text-white"><i class="fas fa-keyboard mr-2 text-gray-400"></i>Keyboard Shortcuts</h3>' +
+            '<div class="fixed inset-x-4 top-[12vh] sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 sm:w-full sm:max-w-md ' + 'bg-surface rounded-xl shadow-2xl border border-border overflow-hidden">' +
+                '<div class="px-5 py-3 border-b border-border flex items-center justify-between">' +
+                    '<h3 class="text-sm font-semibold text-foreground"><i class="fas fa-keyboard mr-2 text-gray-400"></i>Keyboard Shortcuts</h3>' +
                     '<button type="button" id="shortcutOverlayClose" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200" title="Close">' +
                         '<i class="fas fa-times"></i>' +
                     '</button>' +
                 '</div>' +
                 '<div class="px-5 py-3 divide-y divide-gray-100 dark:divide-gray-700/50">' + cols + '</div>' +
-                '<div class="px-5 py-2 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-400 text-center">' +
-                    'Press <kbd class="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-xs">?</kbd> to toggle &middot; ' +
-                    '<kbd class="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-xs">Esc</kbd> to close' +
+                '<div class="px-5 py-2 border-t border-border text-xs text-gray-400 text-center">' +
+                    'Press <kbd class="px-1.5 py-0.5 bg-surface-2 rounded text-xs">?</kbd> to toggle &middot; ' +
+                    '<kbd class="px-1.5 py-0.5 bg-surface-2 rounded text-xs">Esc</kbd> to close' +
                 '</div>' +
             '</div>';
 

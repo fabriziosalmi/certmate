@@ -27,7 +27,7 @@
                 <input type="search" id="helpSearch"
                        placeholder="Search the help page…"
                        aria-label="Search help content"
-                       class="w-full pl-10 pr-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary">
+                       class="w-full pl-10 pr-3 py-2 text-sm border text-foreground border-border rounded-lg bg-white dark:bg-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary">
                 <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none" aria-hidden="true"></i>
             </div>
         </div>
@@ -43,7 +43,7 @@
             <a href="#multi-account"  class="px-3 py-1.5 rounded-md text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"><i class="fas fa-users text-green-600 mr-1.5" aria-hidden="true"></i>Multi-account</a>
             <a href="#backup-recovery" class="px-3 py-1.5 rounded-md text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"><i class="fas fa-archive text-amber-600 mr-1.5" aria-hidden="true"></i>Backup</a>
             <a href="#troubleshooting" class="px-3 py-1.5 rounded-md text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"><i class="fas fa-tools text-orange-600 mr-1.5" aria-hidden="true"></i>Troubleshooting</a>
-            <a href="#report-issue"   class="px-3 py-1.5 rounded-md text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"><i class="fab fa-github text-gray-700 dark:text-gray-300 mr-1.5" aria-hidden="true"></i>Report an issue</a>
+            <a href="#report-issue"   class="px-3 py-1.5 rounded-md text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"><i class="fab fa-github text-label mr-1.5" aria-hidden="true"></i>Report an issue</a>
             <span class="mx-1 h-5 w-px bg-gray-200 dark:bg-gray-700" aria-hidden="true"></span>
             <a href="#whats-new"      class="px-3 py-1.5 rounded-md text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"><i class="fas fa-star text-yellow-500 mr-1.5" aria-hidden="true"></i>What's new</a>
             <a href="https://github.com/fabriziosalmi/certmate/blob/main/RELEASE_NOTES.md" target="_blank" rel="noopener" class="px-3 py-1.5 rounded-md text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"><i class="fas fa-external-link-alt text-xs text-gray-400 mr-1.5" aria-hidden="true"></i>Full changelog</a>
@@ -54,9 +54,9 @@
         <div class="space-y-4">
 
             <!-- Quick Start -->
-            <section id="quick-start" data-help-section class="bg-white dark:bg-gray-800 shadow rounded-lg">
+            <section id="quick-start" data-help-section class="bg-surface shadow rounded-lg">
                 <div class="px-4 py-4">
-                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">
+                    <h3 class="text-lg font-semibold text-foreground mb-3">
                         <i class="fas fa-rocket text-green-600 mr-2" aria-hidden="true"></i>Quick Start
                     </h3>
                     <ol class="text-sm text-gray-700 dark:text-gray-200 space-y-1.5 list-decimal ml-5">
@@ -65,16 +65,16 @@
                         <li>Enable Local Authentication under <a href="/settings#users" class="text-primary hover:underline">Settings → Users</a> before exposing CertMate to the internet — it ships with auth off so the first run is friction-free.</li>
                         <li>API token lives at <a href="/settings#apikeys" class="text-primary hover:underline">Settings → API Keys</a>. Auto-generated on first start; click <span class="font-medium">Reveal</span> to copy.</li>
                     </ol>
-                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-3">
+                    <p class="text-xs text-muted mt-3">
                         Renewal runs daily and refreshes anything within 30 days of expiry. No cron setup needed.
                     </p>
                 </div>
             </section>
 
             <!-- DNS Providers -->
-            <section id="dns-providers" data-help-section class="bg-white dark:bg-gray-800 shadow rounded-lg">
+            <section id="dns-providers" data-help-section class="bg-surface shadow rounded-lg">
                 <div class="px-4 py-4">
-                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">
+                    <h3 class="text-lg font-semibold text-foreground mb-3">
                         <i class="fas fa-server text-blue-600 mr-2" aria-hidden="true"></i>DNS Providers
                     </h3>
                     <p class="text-sm text-gray-700 dark:text-gray-200 mb-3">
@@ -85,8 +85,8 @@
                     </p>
                     <div class="overflow-x-auto">
                         <table class="text-sm w-full">
-                            <thead class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                <tr class="border-b border-gray-200 dark:border-gray-700">
+                            <thead class="text-xs text-muted uppercase tracking-wider">
+                                <tr class="border-b border-border">
                                     <th class="text-left py-2 pr-4">Provider</th>
                                     <th class="text-left py-2 pr-4">Token type</th>
                                     <th class="text-left py-2">Minimum scope</th>
@@ -103,15 +103,15 @@
                         </table>
                     </div>
                     <p class="text-sm text-gray-700 dark:text-gray-200 mt-3">
-                        The dropdown lists 22 providers in total. The four major ones (Cloudflare, Route 53, DigitalOcean, Azure) plus Let's Encrypt-recommended clients ship in the default image. The rest are available via <code class="text-xs bg-gray-100 dark:bg-gray-700 px-1 rounded">EXTRA_REQUIREMENTS</code> at build time — see the <a href="https://github.com/fabriziosalmi/certmate#dns-providers" target="_blank" rel="noopener" class="text-primary hover:underline">README</a>.
+                        The dropdown lists 22 providers in total. The four major ones (Cloudflare, Route 53, DigitalOcean, Azure) plus Let's Encrypt-recommended clients ship in the default image. The rest are available via <code class="text-xs bg-surface-2 px-1 rounded">EXTRA_REQUIREMENTS</code> at build time — see the <a href="https://github.com/fabriziosalmi/certmate#dns-providers" target="_blank" rel="noopener" class="text-primary hover:underline">README</a>.
                     </p>
                 </div>
             </section>
 
             <!-- CA Providers -->
-            <section id="ca-providers" data-help-section class="bg-white dark:bg-gray-800 shadow rounded-lg">
+            <section id="ca-providers" data-help-section class="bg-surface shadow rounded-lg">
                 <div class="px-4 py-4">
-                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">
+                    <h3 class="text-lg font-semibold text-foreground mb-3">
                         <i class="fas fa-certificate text-purple-600 mr-2" aria-hidden="true"></i>Certificate Authorities
                     </h3>
                     <p class="text-sm text-gray-700 dark:text-gray-200 mb-3">
@@ -128,25 +128,25 @@
                             <span class="font-medium">Private CA</span> — Any ACME-compliant internal CA. Provide the ACME directory URL and, if your CA enforces it, an EAB credential.
                         </li>
                     </ul>
-                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-3">
+                    <p class="text-xs text-muted mt-3">
                         Use the <span class="font-medium">Test CA Connection</span> button in Settings to verify reachability and EAB before issuing a real cert — it counts against rate limits otherwise.
                     </p>
                 </div>
             </section>
 
             <!-- API Usage -->
-            <section id="api-usage" data-help-section class="bg-white dark:bg-gray-800 shadow rounded-lg">
+            <section id="api-usage" data-help-section class="bg-surface shadow rounded-lg">
                 <div class="px-4 py-4">
-                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">
+                    <h3 class="text-lg font-semibold text-foreground mb-3">
                         <i class="fas fa-code text-indigo-600 mr-2" aria-hidden="true"></i>API
                     </h3>
                     <p class="text-sm text-gray-700 dark:text-gray-200 mb-3">
                         Every endpoint requires a bearer token from <a href="/settings#apikeys" class="text-primary hover:underline">Settings → API Keys</a>:
                     </p>
-                    <pre class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100 p-3 rounded text-xs overflow-x-auto border border-gray-200 dark:border-gray-700"><code>Authorization: Bearer YOUR_TOKEN</code></pre>
+                    <pre class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100 p-3 rounded text-xs overflow-x-auto border border-border"><code>Authorization: Bearer YOUR_TOKEN</code></pre>
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
                         <div>
-                            <h4 class="text-sm font-medium text-gray-900 dark:text-white mb-2">Common endpoints</h4>
+                            <h4 class="text-sm font-medium text-foreground mb-2">Common endpoints</h4>
                             <ul class="text-xs text-gray-700 dark:text-gray-200 space-y-1 font-mono">
                                 <li><span class="text-blue-500">GET</span> /api/certificates</li>
                                 <li><span class="text-green-500">POST</span> /api/certificates/create</li>
@@ -158,8 +158,8 @@
                             </ul>
                         </div>
                         <div>
-                            <h4 class="text-sm font-medium text-gray-900 dark:text-white mb-2">curl examples</h4>
-                            <pre class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100 p-3 rounded text-xs overflow-x-auto border border-gray-200 dark:border-gray-700"><code># Create a certificate
+                            <h4 class="text-sm font-medium text-foreground mb-2">curl examples</h4>
+                            <pre class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100 p-3 rounded text-xs overflow-x-auto border border-border"><code># Create a certificate
 curl -X POST http://localhost:8000/api/certificates/create \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
@@ -178,31 +178,31 @@ curl -H "Authorization: Bearer $TOKEN" \
             </section>
 
             <!-- Multi-account -->
-            <section id="multi-account" data-help-section class="bg-white dark:bg-gray-800 shadow rounded-lg">
+            <section id="multi-account" data-help-section class="bg-surface shadow rounded-lg">
                 <div class="px-4 py-4">
-                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">
+                    <h3 class="text-lg font-semibold text-foreground mb-3">
                         <i class="fas fa-users text-green-600 mr-2" aria-hidden="true"></i>Multi-account DNS
                     </h3>
                     <p class="text-sm text-gray-700 dark:text-gray-200 mb-2">
                         Useful when you manage zones under different cloud accounts (e.g. one Cloudflare tenant per customer, or separate Route 53 accounts for prod/staging).
                     </p>
                     <ol class="text-sm text-gray-700 dark:text-gray-200 space-y-1 list-decimal ml-5">
-                        <li>In <a href="/settings" class="text-primary hover:underline">Settings → DNS</a>, click <span class="font-medium">Add Account</span> on the relevant provider. Name it (e.g. <code class="text-xs bg-gray-100 dark:bg-gray-700 px-1 rounded">production</code>) and paste credentials.</li>
+                        <li>In <a href="/settings" class="text-primary hover:underline">Settings → DNS</a>, click <span class="font-medium">Add Account</span> on the relevant provider. Name it (e.g. <code class="text-xs bg-surface-2 px-1 rounded">production</code>) and paste credentials.</li>
                         <li>One account can be marked as default — used when a cert create request doesn't pick one explicitly.</li>
                         <li>When creating a certificate, an account dropdown appears for providers with more than one configured account.</li>
-                        <li>From the API, pass <code class="text-xs bg-gray-100 dark:bg-gray-700 px-1 rounded">account_id</code> alongside <code class="text-xs bg-gray-100 dark:bg-gray-700 px-1 rounded">dns_provider</code>.</li>
+                        <li>From the API, pass <code class="text-xs bg-surface-2 px-1 rounded">account_id</code> alongside <code class="text-xs bg-surface-2 px-1 rounded">dns_provider</code>.</li>
                     </ol>
                 </div>
             </section>
 
             <!-- Backup -->
-            <section id="backup-recovery" data-help-section class="bg-white dark:bg-gray-800 shadow rounded-lg">
+            <section id="backup-recovery" data-help-section class="bg-surface shadow rounded-lg">
                 <div class="px-4 py-4">
-                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">
+                    <h3 class="text-lg font-semibold text-foreground mb-3">
                         <i class="fas fa-archive text-amber-600 mr-2" aria-hidden="true"></i>Backup &amp; Restore
                     </h3>
                     <ul class="text-sm text-gray-700 dark:text-gray-200 space-y-1.5">
-                        <li><span class="font-medium">What's in a backup:</span> <code class="text-xs bg-gray-100 dark:bg-gray-700 px-1 rounded">settings.json</code> (DNS credentials, CA config, domains, users) plus every certificate file (<code class="text-xs">.pem</code>, <code class="text-xs">.key</code>, full chain). One ZIP, atomic.</li>
+                        <li><span class="font-medium">What's in a backup:</span> <code class="text-xs bg-surface-2 px-1 rounded">settings.json</code> (DNS credentials, CA config, domains, users) plus every certificate file (<code class="text-xs">.pem</code>, <code class="text-xs">.key</code>, full chain). One ZIP, atomic.</li>
                         <li><span class="font-medium">Automatic:</span> A snapshot is taken before each configuration change, restore, and before destructive ops.</li>
                         <li><span class="font-medium">Manual:</span> <a href="/settings#backup" class="text-primary hover:underline">Settings → Backup</a> → <span class="font-medium">Create Backup</span>. Download for off-host storage.</li>
                         <li><span class="font-medium">Restore:</span> Upload or pick an existing backup, click Restore. A pre-restore snapshot is taken automatically so you can roll back.</li>
@@ -212,54 +212,54 @@ curl -H "Authorization: Bearer $TOKEN" \
             </section>
 
             <!-- Troubleshooting -->
-            <section id="troubleshooting" data-help-section class="bg-white dark:bg-gray-800 shadow rounded-lg">
+            <section id="troubleshooting" data-help-section class="bg-surface shadow rounded-lg">
                 <div class="px-4 py-4">
-                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">
+                    <h3 class="text-lg font-semibold text-foreground mb-3">
                         <i class="fas fa-tools text-orange-600 mr-2" aria-hidden="true"></i>Troubleshooting
                     </h3>
                     <dl class="text-sm text-gray-700 dark:text-gray-200 space-y-3">
                         <div>
-                            <dt class="font-medium text-gray-900 dark:text-white">DNS provider authentication failed</dt>
-                            <dd class="text-gray-600 dark:text-gray-300 mt-0.5">Token may be wrong, expired, or scoped too narrowly. Re-check it in your provider's console and confirm it can edit DNS records on the target zone. The <span class="font-medium">Test Connection</span> button on each provider card validates without burning a real ACME attempt.</dd>
+                            <dt class="font-medium text-foreground">DNS provider authentication failed</dt>
+                            <dd class="text-muted mt-0.5">Token may be wrong, expired, or scoped too narrowly. Re-check it in your provider's console and confirm it can edit DNS records on the target zone. The <span class="font-medium">Test Connection</span> button on each provider card validates without burning a real ACME attempt.</dd>
                         </div>
                         <div>
-                            <dt class="font-medium text-gray-900 dark:text-white">Certificate creation hangs or times out</dt>
-                            <dd class="text-gray-600 dark:text-gray-300 mt-0.5">Usually slow DNS propagation. Most providers settle within a minute or two, some take up to 10. If a particular provider is reliably slow, raise <code class="text-xs bg-gray-100 dark:bg-gray-700 px-1 rounded">dns_propagation_seconds</code> in Settings.</dd>
+                            <dt class="font-medium text-foreground">Certificate creation hangs or times out</dt>
+                            <dd class="text-muted mt-0.5">Usually slow DNS propagation. Most providers settle within a minute or two, some take up to 10. If a particular provider is reliably slow, raise <code class="text-xs bg-surface-2 px-1 rounded">dns_propagation_seconds</code> in Settings.</dd>
                         </div>
                         <div>
-                            <dt class="font-medium text-gray-900 dark:text-white">Let's Encrypt rate limit hit</dt>
-                            <dd class="text-gray-600 dark:text-gray-300 mt-0.5">50 certs per registered domain per week. The error text from acme is included in the activity log. Switch to the LE staging directory for testing — it has no rate limit and uses a separate trust anchor (browsers won't trust the cert, which is the point).</dd>
+                            <dt class="font-medium text-foreground">Let's Encrypt rate limit hit</dt>
+                            <dd class="text-muted mt-0.5">50 certs per registered domain per week. The error text from acme is included in the activity log. Switch to the LE staging directory for testing — it has no rate limit and uses a separate trust anchor (browsers won't trust the cert, which is the point).</dd>
                         </div>
                         <div>
-                            <dt class="font-medium text-gray-900 dark:text-white">Deployment status keeps showing "unknown"</dt>
-                            <dd class="text-gray-600 dark:text-gray-300 mt-0.5">CertMate probes the cert at the deployment endpoint(s) you configured. If none are set, status stays unknown — that's expected. Configure deployment targets in <a href="/settings#deploy" class="text-primary hover:underline">Settings → Deploy</a> or click <span class="font-medium">Check All</span> from the dashboard.</dd>
+                            <dt class="font-medium text-foreground">Deployment status keeps showing "unknown"</dt>
+                            <dd class="text-muted mt-0.5">CertMate probes the cert at the deployment endpoint(s) you configured. If none are set, status stays unknown — that's expected. Configure deployment targets in <a href="/settings#deploy" class="text-primary hover:underline">Settings → Deploy</a> or click <span class="font-medium">Check All</span> from the dashboard.</dd>
                         </div>
                         <div>
-                            <dt class="font-medium text-gray-900 dark:text-white">UI looks broken / Alpine.js failed to load</dt>
-                            <dd class="text-gray-600 dark:text-gray-300 mt-0.5">A red banner appears at the top of the page when this happens. Usually a strict CSP blocking the Alpine CDN, or an offline container. Try a hard refresh (<kbd class="text-xs bg-gray-100 dark:bg-gray-700 px-1 rounded">Cmd+Shift+R</kbd> / <kbd class="text-xs bg-gray-100 dark:bg-gray-700 px-1 rounded">Ctrl+F5</kbd>) and check the browser console for the blocked URL.</dd>
+                            <dt class="font-medium text-foreground">UI looks broken / Alpine.js failed to load</dt>
+                            <dd class="text-muted mt-0.5">A red banner appears at the top of the page when this happens. Usually a strict CSP blocking the Alpine CDN, or an offline container. Try a hard refresh (<kbd class="text-xs bg-surface-2 px-1 rounded">Cmd+Shift+R</kbd> / <kbd class="text-xs bg-surface-2 px-1 rounded">Ctrl+F5</kbd>) and check the browser console for the blocked URL.</dd>
                         </div>
                     </dl>
-                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-4">
+                    <p class="text-xs text-muted mt-4">
                         Liveness: <a href="/health" target="_blank" rel="noopener" class="text-primary hover:underline">/health</a> returns JSON with scheduler, disk, and cert directory checks — useful as an external probe.
                     </p>
                 </div>
             </section>
 
             <!-- Report an issue -->
-            <section id="report-issue" data-help-section class="bg-white dark:bg-gray-800 shadow rounded-lg">
+            <section id="report-issue" data-help-section class="bg-surface shadow rounded-lg">
                 <div class="px-4 py-4">
-                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">
-                        <i class="fab fa-github text-gray-700 dark:text-gray-300 mr-2" aria-hidden="true"></i>Report an issue
+                    <h3 class="text-lg font-semibold text-foreground mb-3">
+                        <i class="fab fa-github text-label mr-2" aria-hidden="true"></i>Report an issue
                     </h3>
                     <p class="text-sm text-gray-700 dark:text-gray-200 mb-2">
                         When something goes wrong, including the items below makes the fix faster — most reports stall on missing context, not on hard root causes.
                     </p>
                     <ul class="text-sm text-gray-700 dark:text-gray-200 space-y-1 list-disc ml-5">
-                        <li>CertMate version (footer of every page, or <code class="text-xs bg-gray-100 dark:bg-gray-700 px-1 rounded">/health</code>)</li>
+                        <li>CertMate version (footer of every page, or <code class="text-xs bg-surface-2 px-1 rounded">/health</code>)</li>
                         <li>How CertMate is running (Docker tag / Kubernetes / bare gunicorn) and host OS</li>
                         <li>Steps to reproduce, with the domain or operation involved if relevant</li>
                         <li>What you expected vs. what happened</li>
-                        <li>Browser console errors (<kbd class="text-xs bg-gray-100 dark:bg-gray-700 px-1 rounded">F12</kbd> → Console) for UI issues</li>
+                        <li>Browser console errors (<kbd class="text-xs bg-surface-2 px-1 rounded">F12</kbd> → Console) for UI issues</li>
                         <li>Container or gunicorn logs around the failure timestamp (redact tokens before pasting)</li>
                         <li><a href="/health" target="_blank" rel="noopener" class="text-primary hover:underline">/health</a> JSON output</li>
                         <li>Screenshots help — especially for layout glitches</li>
@@ -282,9 +282,9 @@ curl -H "Authorization: Bearer $TOKEN" \
             </section>
 
             <!-- What's new (changelog excerpt) -->
-            <section id="whats-new" data-help-section class="bg-white dark:bg-gray-800 shadow rounded-lg">
+            <section id="whats-new" data-help-section class="bg-surface shadow rounded-lg">
                 <div class="px-4 py-4">
-                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                    <h3 class="text-lg font-semibold text-foreground mb-2">
                         <i class="fas fa-star text-yellow-500 mr-2" aria-hidden="true"></i>What's new
                     </h3>
                     <p class="text-sm text-gray-700 dark:text-gray-200">
@@ -296,10 +296,10 @@ curl -H "Authorization: Bearer $TOKEN" \
             </section>
 
             <!-- No-results placeholder for the in-page search. -->
-            <div id="noHelpResults" class="hidden bg-white dark:bg-gray-800 shadow rounded-lg p-8 text-center" role="status" aria-live="polite">
+            <div id="noHelpResults" class="hidden bg-surface shadow rounded-lg p-8 text-center" role="status" aria-live="polite">
                 <i class="fas fa-search text-3xl text-gray-300 dark:text-gray-600 mb-3 block" aria-hidden="true"></i>
                 <p class="text-sm font-medium text-gray-700 dark:text-gray-200">No help sections match your search.</p>
-                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Try a different term, or clear the search to see the full guide.</p>
+                <p class="mt-1 text-xs text-muted">Try a different term, or clear the search to see the full guide.</p>
             </div>
 
             <!-- Footer: one-line about + link. No marketing copy — the

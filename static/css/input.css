@@ -33,6 +33,37 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
+
+  /* ── Theme tokens (single source of truth) ──────────────────────
+     Values are bare HSL channels ("H S% L%") with no hsl() wrapper,
+     so Tailwind's color config can interpolate <alpha-value> for the
+     /opacity utilities (see tailwind.config.js). Light theme lives on
+     :root, dark overrides on .dark — flip a theme by editing this
+     block, not the call sites.
+
+     ADDITIVE for now: these tokens are introduced alongside the legacy
+     palette; templates are migrated onto them phase by phase
+     (docs/THEME_MIGRATION.md). The existing primary/success/etc.
+     colors are intentionally left untouched until later phases. */
+  :root {
+    --ease-premium: cubic-bezier(0.16, 1, 0.3, 1);  /* shared motion curve */
+    --color-background: 220 20% 97%;   /* page            (surface.light) */
+    --color-surface:      0  0% 100%;  /* card / panel    (was bg-white)  */
+    --color-surface-2:  220 14% 96%;   /* elevated / sunken              */
+    --color-foreground: 222 47% 11%;   /* primary text    (~gray-900)     */
+    --color-muted:      220  9% 46%;   /* secondary text  (~gray-500)     */
+    --color-label:      217 19% 27%;   /* label / mid body (~gray-700)    */
+    --color-border:     220 13% 91%;   /* hairlines       (~gray-200)     */
+  }
+  .dark {
+    --color-background: 222 32%  8%;   /* surface.dark */
+    --color-surface:    222 24% 13%;   /* surface.card */
+    --color-surface-2:  222 20% 17%;   /* surface.elevated */
+    --color-foreground:   0  0% 100%;  /* white */
+    --color-muted:      220  9% 65%;   /* ~gray-400 */
+    --color-label:      216 12% 84%;   /* ~gray-300 */
+    --color-border:     222 20% 22%;   /* ~white/5 equivalent */
+  }
 }
 
 /* ── Dark mode flash prevention ──────────────────────────────── */
@@ -76,13 +107,14 @@ html.dark {
   to   { opacity: 1; transform: translateY(0); }
 }
 .page-enter {
-  animation: pageEnter 250ms ease-out;
+  animation: pageEnter 250ms var(--ease-premium);
 }
 
 /* ── Button press feedback ───────────────────────────────────── */
 @layer components {
   .btn-press {
     @apply transition-all duration-150;
+    transition-timing-function: var(--ease-premium);
   }
   .btn-press:active {
     transform: scale(0.97);
@@ -229,7 +261,7 @@ button[class*="bg-red-6"]:active {
   to   { opacity: 1; transform: translateX(0); }
 }
 .row-enter {
-  animation: rowSlideIn 180ms ease-out backwards;
+  animation: rowSlideIn 180ms var(--ease-premium) backwards;
 }
 
 /* ── Skeleton shimmer ────────────────────────────────────────── */
@@ -327,10 +359,24 @@ button[class*="bg-red-6"]:active {
     0 10px 40px rgba(0,0,0,0.5),
     0 0 0 1px rgba(255,255,255,0.05);
 }
+/* Tier 3 — overlays that float above everything: modals, command
+   palette, the notification popover. Completes the resting (card) →
+   raised (elevated) → overlay ramp so floating surfaces stop reaching
+   for ad-hoc shadow-xl/2xl. */
+.shadow-overlay {
+  box-shadow:
+    0 20px 60px -12px rgba(0,0,0,0.18),
+    0 8px 24px -8px rgba(0,0,0,0.10);
+}
+.dark .shadow-overlay {
+  box-shadow:
+    0 24px 70px -12px rgba(0,0,0,0.65),
+    0 0 0 1px rgba(255,255,255,0.06);
+}
 
 /* ── Detail panel entrance ───────────────────────────────────── */
 .panel-slide {
-  transition: transform 300ms cubic-bezier(0.16, 1, 0.3, 1),
+  transition: transform 300ms var(--ease-premium),
               opacity 200ms ease;
 }
 
@@ -369,4 +415,19 @@ button[class*="bg-red-6"]:active {
   @apply text-gray-500 dark:text-gray-400 font-medium border-b-2 border-transparent
          hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600
          transition-colors duration-150;
+}
+
+/* ── Reduced motion ──────────────────────────────────────────── */
+/* Honour the OS "reduce motion" setting. Collapses every animation
+   and transition to near-zero — including the infinite shimmer /
+   badge-pulse and the page/row entrances — without disabling final
+   state (iteration-count:1 lets one-shot keyframes settle on their
+   end frame). scroll-behavior is reset so anchor jumps are instant. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
