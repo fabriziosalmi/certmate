@@ -21,10 +21,23 @@ module.exports = {
         sans: ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
         mono: ['JetBrains Mono', 'Menlo', 'Consolas', 'monospace'],
       },
+      // Single premium easing curve (ease-out-expo). Mirrors the literal
+      // cubic-bezier already used by .panel-slide so entrances/exits share
+      // one motion signature. Exposes `ease-premium` and `transition`-aware
+      // utilities; the same curve is bound to --ease-premium in input.css
+      // for the hand-written keyframe/transition rules.
+      transitionTimingFunction: {
+        premium: 'cubic-bezier(0.16, 1, 0.3, 1)',
+      },
       colors: {
-        // Legacy aliases (keep for backward compat)
-        primary: '#3b82f6',
-        secondary: '#1e40af',
+        // Accent aliases — now wired to the brand ramp (Sprint 1, §5).
+        // `primary`/`secondary` were flat blues unrelated to the HSL ramp
+        // below; pointing them at brand-600/700 gives every `*-primary`
+        // call site (375 of them) and the `.btn-primary` hover the deeper,
+        // purpose-built blue for free. A per-theme accent (brand-400 on
+        // dark) lands with the semantic CSS-var layer in a later sprint.
+        primary: 'hsl(216, 76%, 43%)',   // brand-600
+        secondary: 'hsl(218, 72%, 35%)', // brand-700
         success: '#22c55e',
         warning: '#f59e0b',
         danger: '#ef4444',
