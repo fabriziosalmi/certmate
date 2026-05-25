@@ -23,10 +23,14 @@ def register_ui_routes(app, managers, require_web_auth, auth_manager):
         return render_template('index.html')
 
     @app.route('/certificates')
-    @auth_manager.require_role('viewer')
     def certificates_page():
-        """Certificates list page"""
-        return render_template('certificates.html')
+        """Certificates list (alias) — unified into the dashboard at `/`.
+
+        `certificates.html` never existed, so this route used to 500. The
+        certificate list lives on the dashboard now; redirect there (the
+        index route enforces auth), mirroring the client-certificates alias.
+        """
+        return redirect(url_for('index'))
 
     @app.route('/settings')
     @auth_manager.require_role('admin')
@@ -35,10 +39,13 @@ def register_ui_routes(app, managers, require_web_auth, auth_manager):
         return render_template('settings.html')
 
     @app.route('/audit')
-    @auth_manager.require_role('admin')
     def audit_page():
-        """Audit logs page"""
-        return render_template('audit.html')
+        """Audit log (alias) — unified into the activity page.
+
+        `audit.html` never existed (route used to 500). The audit/activity
+        log lives at `/activity`; redirect there (which enforces auth).
+        """
+        return redirect(url_for('activity_page'))
 
     @app.route('/help')
     @auth_manager.require_role('viewer')

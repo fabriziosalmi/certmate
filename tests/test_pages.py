@@ -29,6 +29,20 @@ class TestPageLoading:
         assert r.status_code == 302
         assert "/#client" in r.headers.get("Location", "")
 
+    def test_certificates_alias_redirects_to_dashboard(self, api):
+        """/certificates (template never existed → used to 500) now 302s to /."""
+        r = api.get("/certificates", allow_redirects=False)
+        assert r.status_code == 302, f"/certificates → {r.status_code}"
+        # And following it lands on a real page, not a 500.
+        assert api.get("/certificates", allow_redirects=True).status_code == 200
+
+    def test_audit_alias_redirects_to_activity(self, api):
+        """/audit (template never existed → used to 500) now 302s to /activity."""
+        r = api.get("/audit", allow_redirects=False)
+        assert r.status_code == 302, f"/audit → {r.status_code}"
+        assert "/activity" in r.headers.get("Location", "")
+        assert api.get("/audit", allow_redirects=True).status_code == 200
+
 
 class TestWelcomeBanner:
     """Dashboard page should load dashboard JS module and key UI elements."""
