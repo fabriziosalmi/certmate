@@ -32,6 +32,24 @@
     font-variant-numeric: tabular-nums slashed-zero;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    /* Avoid typographic orphans in running text without forcing line
+       breaks — degrades gracefully where text-wrap: pretty is unsupported. */
+    text-wrap: pretty;
+  }
+
+  /* ── Heading refinement ──────────────────────────────────────────
+     Inter's display sizes read tighter and more intentional with a
+     hair of negative tracking; text-wrap: balance evens out multi-line
+     titles so the last line is never a lonely word. Tag-scoped, so it
+     reaches every heading with zero call-site churn. Both properties
+     no-op safely on browsers that don't support them. */
+  h1, h2, h3 {
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+  }
+  h4, h5, h6 {
+    letter-spacing: -0.01em;
+    text-wrap: balance;
   }
 
   /* ── Theme tokens (single source of truth) ──────────────────────
@@ -101,6 +119,20 @@ html.dark {
 /* #12: Branded selection color for data copy/paste UX          */
 ::selection { background: hsla(214, 80%, 52%, 0.3); }
 .dark ::selection { background: hsla(214, 80%, 52%, 0.35); }
+
+/* ── Keyboard focus floor for links ──────────────────────────────
+   Buttons / inputs already carry their own focus rings (and .btn
+   uses focus-visible). Inline links did not — they fell back to the
+   UA's default outline, inconsistent and off-brand. Give anchors and
+   <summary> a single branded focus-visible ring, accent-tokened so it
+   flips with the theme. focus-visible (not :focus) means mouse clicks
+   stay clean; the ring shows only on keyboard navigation. */
+a:focus-visible,
+summary:focus-visible {
+  outline: 2px solid hsl(var(--color-accent));
+  outline-offset: 2px;
+  border-radius: 3px;
+}
 
 /* ── Table readability ───────────────────────────────────────── */
 /* #8:  Impercettible zebra striping for horizontal eye-tracking */
