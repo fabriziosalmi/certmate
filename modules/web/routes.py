@@ -202,19 +202,15 @@ def register_web_routes(app, managers):
 
     @app.route('/.well-known/acme-challenge/<path:filename>')
     def serve_acme_challenge(filename):
+        """Serve HTTP-01 challenge tokens written by certbot.
+
+        Intentionally public (no auth): the ACME server fetches this
+        unauthenticated during validation. The directory is the same one
+        certbot writes to — both resolve via acme_webroot_dir() and it is
+        published on app.config in factory.configure_app. send_from_directory
+        (werkzeug safe_join) blocks path traversal, returning 404 for '..' or
+        absolute paths.
         """
-        Serves ACME challenge files from the physical directory:
-        app/data/acme-challenges/.well-known/acme-challenge/
-        """
-        # Build the physical path: /app/data/acme-challenges/.well-known/acme-challenge/
         acme_path = os.path.join(
-            app.config['ACME_CHALLENGES_DIR'], 
-            '.well-known', 
-            'acme-challenge'
-        )
-        
-        return send_from_directory(
-            directory=acme_path,
-            path=filename,
-            mimetype='text/plain'
-        )
+            app.config['ACME_CHALLENGES_DIR'], '.well-known', 'acme-challenge')
+        return send_from_directory(acme_path, filename, mimetype='text/plain')

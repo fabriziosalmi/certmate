@@ -4,6 +4,7 @@ Implements the Strategy Pattern for DNS provider configuration and management.
 """
 
 import logging
+import os
 import subprocess
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -482,15 +483,28 @@ class GenericMultiProviderStrategy(DNSProviderStrategy):
     def plugin_name(self) -> str:
         return f'dns-{self.provider_name}'
 
+def acme_webroot_dir() -> Path:
+    """Absolute filesystem root for HTTP-01 webroot challenges.
+
+    Single source of truth for the three call sites that must agree or
+    issuance silently fails: the certbot ``--webroot`` argument (where certbot
+    writes the token), the challenge-directory pre-creation in
+    ``CertificateManager``, and the Flask route that serves
+    ``/.well-known/acme-challenge/<token>`` (see ``modules/web/routes.py`` and
+    ``modules/core/factory.py``). Override the location with the
+    ``ACME_CHALLENGES_DIR`` environment variable; the default keeps the
+    historical ``<cwd>/data/acme-challenges`` path.
+    """
+    return Path(os.environ.get('ACME_CHALLENGES_DIR', 'data/acme-challenges')).resolve()
+
+
 class HTTP01Strategy(DNSProviderStrategy):
     """HTTP-01 challenge using certbot --webroot plugin.
 
     No DNS credentials needed. CertMate serves challenge files
     via /.well-known/acme-challenge/<token> and certbot writes
-    them to the webroot directory.
+    them to the webroot directory (see ``acme_webroot_dir``).
     """
-
-    WEBROOT_DIR = 'data/acme-challenges'
 
     @property
     def plugin_name(self) -> str:
@@ -500,8 +514,7 @@ class HTTP01Strategy(DNSProviderStrategy):
         return None  # No credentials needed
 
     def configure_certbot_arguments(self, cmd: list, credentials_file: Optional[Path], domain_alias: Optional[str] = None) -> None:
-        webroot = str(Path(self.WEBROOT_DIR).resolve())
-        cmd.extend(['--webroot', '-w', webroot])
+        cmd.extend(['--webroot', '-w', str(acme_webroot_dir())])
 
     def prepare_environment(self, env: Dict[str, str], config_data: Dict[str, Any]) -> None:
         pass  # No env vars needed

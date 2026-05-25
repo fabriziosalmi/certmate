@@ -21,7 +21,7 @@ from pathlib import Path
 from datetime import datetime, timedelta
 from cryptography import x509
 from .shell import ShellExecutor
-from .dns_strategies import DNSStrategyFactory, HTTP01Strategy, check_certbot_plugin_installed
+from .dns_strategies import DNSStrategyFactory, HTTP01Strategy, acme_webroot_dir, check_certbot_plugin_installed
 from .constants import CERTIFICATE_FILES, get_domain_name
 from .utils import DeploymentStatusCache, validate_domain, utc_now, utc_now_iso, validate_key_options
 
@@ -787,9 +787,9 @@ class CertificateManager:
                 strategy = HTTP01Strategy()
                 dns_config = dns_config or {}
                 dns_provider = dns_provider or 'http-01'
-                # Ensure webroot directory exists
-                webroot = Path(HTTP01Strategy.WEBROOT_DIR)
-                challenge_dir = webroot / '.well-known' / 'acme-challenge'
+                # Ensure webroot directory exists (same path the serving route
+                # reads — see acme_webroot_dir).
+                challenge_dir = acme_webroot_dir() / '.well-known' / 'acme-challenge'
                 challenge_dir.mkdir(parents=True, exist_ok=True)
                 logger.info("Using HTTP-01 challenge (webroot)")
             else:
