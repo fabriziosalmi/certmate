@@ -152,7 +152,7 @@
             }
             var isSelected = i === selectedIndex;
             html += '<div class="cmd-result flex items-center px-4 py-2 cursor-pointer ' +
-                (isSelected ? 'bg-primary/10 text-primary' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50') +
+                (isSelected ? 'bg-primary/10 text-primary' : 'text-label hover:bg-gray-100 dark:hover:bg-gray-700/50') +
                 '" data-index="' + i + '">' +
                 '<i class="fas ' + escapeHtml(item.icon) + ' w-5 text-center mr-3 ' + (isSelected ? 'text-primary' : 'text-gray-400') + '"></i>' +
                 '<div class="flex-1 min-w-0">' +

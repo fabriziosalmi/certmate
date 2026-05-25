@@ -78,7 +78,7 @@
                     '<button id="recoveryRestore" class="w-full px-6 py-3 bg-primary hover:bg-secondary text-white font-medium rounded-lg text-sm transition">' +
                         '<i class="fas fa-archive mr-2"></i>Restore from Backup' +
                     '</button>' +
-                    '<button id="recoveryFresh" class="w-full px-6 py-3 border border-border text-gray-700 dark:text-gray-300 font-medium rounded-lg text-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition">' +
+                    '<button id="recoveryFresh" class="w-full px-6 py-3 border border-border text-label font-medium rounded-lg text-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition">' +
                         'Start Fresh Setup' +
                     '</button>' +
                 '</div>' +
@@ -172,7 +172,7 @@
                 ? 'w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center text-sm font-bold'
                 : i < state.step
                     ? 'w-8 h-8 rounded-full bg-green-500 text-white flex items-center justify-center text-sm'
-                    : 'w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-600 text-gray-500 dark:text-gray-400 flex items-center justify-center text-sm';
+                    : 'w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-600 text-muted flex items-center justify-center text-sm';
             html += '<div class="' + cls + '">' + (i < state.step ? '<i class="fas fa-check text-xs"></i>' : i) + '</div>';
             if (i < 3) html += '<div class="w-6 h-0.5 ' + (i < state.step ? 'bg-green-500' : 'bg-gray-200 dark:bg-gray-600') + '"></div>';
         }
@@ -190,7 +190,7 @@
                 '<p class="text-sm text-muted mt-1">Required by certificate authorities for important notifications</p>' +
             '</div>' +
             '<div>' +
-                '<label for="wizEmail" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Email Address</label>' +
+                '<label for="wizEmail" class="block text-sm font-medium text-label mb-2">Email Address</label>' +
                 '<input type="email" id="wizEmail" value="' + escapeHtml(state.email) + '" placeholder="admin@example.com" ' +
                        'class="w-full px-4 py-3 border text-foreground border-border rounded-lg bg-white dark:bg-gray-700 focus:ring-2 focus:ring-primary focus:border-primary text-sm" required>' +
                 '<p class="mt-2 text-xs text-gray-400"><i class="fas fa-info-circle mr-1"></i>Used by Let\'s Encrypt for expiry warnings and account recovery</p>' +
@@ -245,7 +245,7 @@
         Object.keys(PROVIDERS).forEach(function(key) {
             var p = PROVIDERS[key];
             var selected = state.provider === key;
-            html += '<button type="button" data-provider="' + key + '" class="wiz-provider flex flex-col items-center p-3 rounded-lg border-2 transition text-sm ' + (selected ? 'border-primary bg-primary/5 text-primary' : 'border-gray-200 dark:border-gray-600 text-muted hover:border-gray-400') + '">' +
+            html += '<button type="button" data-provider="' + key + '" class="wiz-provider flex flex-col items-center p-3 rounded-lg border-2 transition text-sm ' + (selected ? 'border-primary bg-primary/5 text-primary' : 'border-border text-muted hover:border-gray-400') + '">' +
                 '<i class="fas ' + escapeHtml(p.icon) + ' text-lg mb-1"></i>' +
                 '<span class="text-xs font-medium">' + escapeHtml(p.label) + '</span>' +
             '</button>';
@@ -305,7 +305,7 @@
         var pDef = PROVIDERS[provider];
         if (!pDef) return '';
         var html = '<div class="border-t border-border pt-4">' +
-            '<h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3"><i class="fas fa-key mr-1.5 text-yellow-500"></i>' + escapeHtml(pDef.label) + ' Credentials</h4>';
+            '<h4 class="text-sm font-medium text-label mb-3"><i class="fas fa-key mr-1.5 text-yellow-500"></i>' + escapeHtml(pDef.label) + ' Credentials</h4>';
 
         pDef.fields.forEach(function(f) {
             var savedVal = state.credentials[f.key] || '';
@@ -374,9 +374,9 @@
                 '<h3 class="text-xl font-bold text-foreground mb-2">You\'re All Set!</h3>' +
                 '<p class="text-sm text-muted mb-4">CertMate is configured and ready to manage your certificates.</p>' +
                 '<div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 text-left text-sm space-y-2">' +
-                    '<div class="flex items-center"><i class="fas fa-check text-green-500 mr-2 w-4"></i><span class="text-gray-700 dark:text-gray-300">Email: <strong>' + escapeHtml(state.email) + '</strong></span></div>' +
-                    '<div class="flex items-center"><i class="fas fa-check text-green-500 mr-2 w-4"></i><span class="text-gray-700 dark:text-gray-300">DNS Provider: <strong>' + escapeHtml(PROVIDERS[state.provider] ? PROVIDERS[state.provider].label : state.provider) + '</strong></span></div>' +
-                    '<div class="flex items-center"><i class="fas fa-check text-green-500 mr-2 w-4"></i><span class="text-gray-700 dark:text-gray-300">Auto-renewal: <strong>Enabled</strong></span></div>' +
+                    '<div class="flex items-center"><i class="fas fa-check text-green-500 mr-2 w-4"></i><span class="text-label">Email: <strong>' + escapeHtml(state.email) + '</strong></span></div>' +
+                    '<div class="flex items-center"><i class="fas fa-check text-green-500 mr-2 w-4"></i><span class="text-label">DNS Provider: <strong>' + escapeHtml(PROVIDERS[state.provider] ? PROVIDERS[state.provider].label : state.provider) + '</strong></span></div>' +
+                    '<div class="flex items-center"><i class="fas fa-check text-green-500 mr-2 w-4"></i><span class="text-label">Auto-renewal: <strong>Enabled</strong></span></div>' +
                 '</div>' +
             '</div>';
 

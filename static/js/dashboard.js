@@ -185,7 +185,7 @@
         }
 
         statsContainer.innerHTML = [
-            statCard('Total', total, 'text-gray-900 dark:text-white', 'fa-certificate text-blue-500 dark:text-blue-400'),
+            statCard('Total', total, 'text-foreground', 'fa-certificate text-blue-500 dark:text-blue-400'),
             statCard('Valid', valid, 'text-green-600 dark:text-green-400', 'fa-check-circle text-green-500 dark:text-green-400', null, valid + ' of ' + total),
             statCard('Expiring', expiring, 'text-yellow-600 dark:text-yellow-400', 'fa-exclamation-triangle text-yellow-500 dark:text-yellow-400'),
             statCard('Deployed', '<span class="text-gray-300 dark:text-gray-600 animate-pulse">...</span>', 'text-indigo-600 dark:text-indigo-400', 'fa-globe text-indigo-500 dark:text-indigo-400', 'deploymentCount')
@@ -393,12 +393,12 @@
                 statusClass = 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400';
                 statusText = 'Unreachable';
             } else {
-                statusClass = 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300';
+                statusClass = 'bg-surface-2 text-muted';
                 statusText = 'Not Checked';
             }
         } else {
             if (result && result.error === 'backend-unavailable') {
-                statusClass = 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300';
+                statusClass = 'bg-surface-2 text-muted';
                 statusIcon = 'fa-exclamation-circle';
                 statusText = 'Unavailable';
             } else if (result && result.deployed && result.certificate_match === true) {
@@ -411,7 +411,7 @@
                 statusClass = 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400';
                 statusText = 'Unreachable';
             } else {
-                statusClass = 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300';
+                statusClass = 'bg-surface-2 text-muted';
                 statusText = 'Unknown';
             }
         }
@@ -475,7 +475,7 @@
                     '</div>' +
                     '<h3 class="text-lg font-medium text-foreground mb-2">No matching certificates</h3>' +
                     '<p class="text-muted mb-6">Try adjusting your search criteria or filters.</p>' +
-                    '<button onclick="clearFilters()" class="inline-flex items-center px-4 py-2 border border-border shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">' +
+                    '<button onclick="clearFilters()" class="inline-flex items-center px-4 py-2 border border-border shadow-sm text-sm font-medium rounded-md text-label bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">' +
                     '<i class="fas fa-times mr-2"></i>Clear Filters</button>' +
                     '</div>' +
                     '</div>' +
@@ -490,11 +490,11 @@
                     '</div>' +
                     '<ol class="space-y-3 mb-6 text-sm">' +
                     '<li class="flex items-start"><span class="flex-shrink-0 w-6 h-6 flex items-center justify-center bg-blue-500 text-white rounded-full text-xs font-bold mr-3 mt-0.5">1</span>' +
-                    '<span class="text-gray-700 dark:text-gray-300"><a href="/settings" class="text-blue-600 dark:text-blue-400 font-medium hover:underline">Go to Settings</a> and configure your DNS provider</span></li>' +
+                    '<span class="text-label"><a href="/settings" class="text-blue-600 dark:text-blue-400 font-medium hover:underline">Go to Settings</a> and configure your DNS provider</span></li>' +
                     '<li class="flex items-start"><span class="flex-shrink-0 w-6 h-6 flex items-center justify-center bg-blue-500 text-white rounded-full text-xs font-bold mr-3 mt-0.5">2</span>' +
-                    '<span class="text-gray-700 dark:text-gray-300">Add a domain above and create your first SSL certificate</span></li>' +
+                    '<span class="text-label">Add a domain above and create your first SSL certificate</span></li>' +
                     '<li class="flex items-start"><span class="flex-shrink-0 w-6 h-6 flex items-center justify-center bg-blue-500 text-white rounded-full text-xs font-bold mr-3 mt-0.5">3</span>' +
-                    '<span class="text-gray-700 dark:text-gray-300">Enable <a href="/settings#users" class="text-blue-600 dark:text-blue-400 font-medium hover:underline">Local Authentication</a> in Settings to secure your instance</span></li>' +
+                    '<span class="text-label">Enable <a href="/settings#users" class="text-blue-600 dark:text-blue-400 font-medium hover:underline">Local Authentication</a> in Settings to secure your instance</span></li>' +
                     '</ol>' +
                     '<div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3 mb-6">' +
                     '<p class="text-xs text-amber-800 dark:text-amber-200"><i class="fas fa-shield-alt mr-1"></i><strong>Security:</strong> Authentication is disabled by default. Enable it before exposing CertMate to the internet.</p>' +
@@ -561,7 +561,7 @@
 
             var expiryDate = new Date(cert.expiry_date);
             var expiryStr = expiryDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-            var daysClass = isExpired ? 'text-red-600 dark:text-red-400' : isExpiringSoon ? 'text-yellow-600 dark:text-yellow-400' : 'text-gray-500 dark:text-gray-400';
+            var daysClass = isExpired ? 'text-red-600 dark:text-red-400' : isExpiringSoon ? 'text-yellow-600 dark:text-yellow-400' : 'text-muted';
 
             // Inline subtle glyph instead of a rounded blue panel — the
             // rounded panel read like an interactive control to users
@@ -752,19 +752,19 @@
                 '<h4 class="text-sm font-semibold text-foreground uppercase tracking-wider">Actions</h4>' +
                 '<div class="grid grid-cols-1 gap-2">' +
                 (roleAtLeast('operator')
-                    ? '<button type="button" onclick="renewCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-border shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-sync-alt mr-2 text-green-600"></i>Renew Certificate</button>' +
+                    ? '<button type="button" onclick="renewCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-border shadow-sm text-sm font-medium rounded-md text-label bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-sync-alt mr-2 text-green-600"></i>Renew Certificate</button>' +
                     '<button type="button" onclick="renewCertificate(\'' + safeDomain + '\', true)" class="w-full inline-flex items-center justify-center px-4 py-2 border border-amber-300 dark:border-amber-700 shadow-sm text-sm font-medium rounded-md text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/40"><i class="fas fa-bolt mr-2"></i>Force Renew Certificate</button>'
                     : '') +
-                '<button type="button" onclick="downloadCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-border shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-download mr-2 text-blue-600"></i>Download Certificate</button>' +
+                '<button type="button" onclick="downloadCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-border shadow-sm text-sm font-medium rounded-md text-label bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-download mr-2 text-blue-600"></i>Download Certificate</button>' +
                 '<button type="button" onclick="copyCurlCommand(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-blue-300 dark:border-blue-600 shadow-sm text-sm font-medium rounded-md text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50"><i class="fas fa-code mr-2"></i>Show API Command</button>' +
-                '<button type="button" onclick="checkDeploymentStatus(\'' + safeDomain + '\', this, true)" class="w-full inline-flex items-center justify-center px-4 py-2 border border-border shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-globe mr-2 text-indigo-600"></i>Check Deployment</button>' +
+                '<button type="button" onclick="checkDeploymentStatus(\'' + safeDomain + '\', this, true)" class="w-full inline-flex items-center justify-center px-4 py-2 border border-border shadow-sm text-sm font-medium rounded-md text-label bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-globe mr-2 text-indigo-600"></i>Check Deployment</button>' +
                 (safeDomainAlias ? '<button type="button" onclick="checkDnsAliasForCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-blue-300 dark:border-blue-600 shadow-sm text-sm font-medium rounded-md text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50"><i class="fas fa-search mr-2"></i>Check DNS-01 Alias</button>' : '') +
                 '<div id="cert_dns_alias_check_result" class="hidden"></div>' +
                 (roleAtLeast('admin')
-                    ? '<button type="button" onclick="runDeployHooks(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-border shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-rocket mr-2 text-green-600"></i>Run Deploy Hooks Now</button>'
+                    ? '<button type="button" onclick="runDeployHooks(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-border shadow-sm text-sm font-medium rounded-md text-label bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-rocket mr-2 text-green-600"></i>Run Deploy Hooks Now</button>'
                     : '') +
                 (roleAtLeast('operator')
-                    ? '<button type="button" onclick="toggleAutoRenew(\'' + safeDomain + '\', ' + (cert.auto_renew !== false ? 'true' : 'false') + ')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-border shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas ' + (cert.auto_renew !== false ? 'fa-toggle-on text-purple-600' : 'fa-toggle-off text-amber-600') + ' mr-2"></i>' + (cert.auto_renew !== false ? 'Disable Auto-Renew' : 'Enable Auto-Renew') + '</button>'
+                    ? '<button type="button" onclick="toggleAutoRenew(\'' + safeDomain + '\', ' + (cert.auto_renew !== false ? 'true' : 'false') + ')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-border shadow-sm text-sm font-medium rounded-md text-label bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas ' + (cert.auto_renew !== false ? 'fa-toggle-on text-purple-600' : 'fa-toggle-off text-amber-600') + ' mr-2"></i>' + (cert.auto_renew !== false ? 'Disable Auto-Renew' : 'Enable Auto-Renew') + '</button>'
                     : '') +
                 (roleAtLeast('admin')
                     ? '<button type="button" onclick="deleteCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-red-300 dark:border-red-700 shadow-sm text-sm font-medium rounded-md text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40"><i class="fas fa-trash-alt mr-2"></i>Delete Certificate</button>'
@@ -1101,7 +1101,7 @@
             });
         }).catch(function () {
             statusElements.forEach(function (statusElement) {
-                statusElement.className = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300';
+                statusElement.className = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-surface-2 text-muted';
                 statusElement.innerHTML = '<i class="fas fa-question-circle mr-1"></i>Error';
             });
         }).finally(function () {

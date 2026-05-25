@@ -601,7 +601,7 @@
                     }
                 } else {
                     statusEl.textContent = 'Not configured';
-                    statusEl.className = 'text-xs text-gray-500 dark:text-gray-400 mt-1';
+                    statusEl.className = 'text-xs text-muted mt-1';
 
                     if (accountsEl) {
                         accountsEl.classList.add('hidden');
@@ -1133,7 +1133,7 @@
             var fieldId = 'modal-' + field.name;
 
             html += '<div class="mb-4">';
-            html += '<label for="' + fieldId + '" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">';
+            html += '<label for="' + fieldId + '" class="block text-sm font-medium text-label mb-1">';
             html += field.label + (field.required ? ' *' : '');
             html += '</label>';
 
@@ -1399,7 +1399,7 @@
 
     function createAccountCard(provider, account, isDefault) {
         var card = document.createElement('div');
-        card.className = 'bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg p-4';
+        card.className = 'bg-white dark:bg-gray-700 border border-border rounded-lg p-4';
 
         var safeName = escapeHtml(account.name);
         var safeDesc = escapeHtml(account.description);
@@ -1421,7 +1421,7 @@
             '</div>' +
             '<div class="flex items-center space-x-2">' +
             '<button type="button" data-action="edit" data-provider="' + safeProvider + '" data-account-id="' + safeId + '"' +
-            ' class="inline-flex items-center px-2 py-1 border border-border shadow-sm text-xs font-medium rounded text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-600 hover:bg-gray-50 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">' +
+            ' class="inline-flex items-center px-2 py-1 border border-border shadow-sm text-xs font-medium rounded text-label bg-white dark:bg-gray-600 hover:bg-gray-50 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">' +
             '<i class="fas fa-edit mr-1"></i>' +
             'Edit' +
             '</button>' +
@@ -2521,7 +2521,7 @@
             '</div>' +
             '<div class="flex justify-end space-x-3">' +
             '<button type="button" id="storageMigCancelBtn" ' +
-            'class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-600 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-md">' +
+            'class="px-4 py-2 text-sm font-medium text-label bg-gray-100 dark:bg-gray-600 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-md">' +
             'Cancel' +
             '</button>' +
             '<button type="button" id="storageMigStartBtn" ' +

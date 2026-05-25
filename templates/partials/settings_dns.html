@@ -2,7 +2,7 @@
                     <div x-show="tab === 'dns'" x-cloak>
                     <!-- Challenge Type Selection -->
                     <div class="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg mb-4">
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                        <label class="block text-sm font-medium text-label mb-3">
                             <i class="fas fa-shield-alt mr-1"></i>
                             ACME Challenge Type
                         </label>
@@ -32,14 +32,14 @@
 
                     <!-- DNS Provider Selection (hidden when HTTP-01) -->
                     <div id="dns-provider-section" class="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3" id="dns-provider-label">
+                        <label class="block text-sm font-medium text-label mb-3" id="dns-provider-label">
                             <i class="fas fa-server mr-1"></i>
                             DNS Providers
                         </label>
                         
                         <!-- Multi-Account Providers -->
                         <div class="mb-6">
-                            <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center">
+                            <h4 class="text-sm font-semibold text-label mb-2 flex items-center">
                                 <i class="fas fa-users mr-2 text-blue-500"></i>
                                 Multi-Account Support
                                 <span class="ml-2 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 px-2 py-0.5 rounded-full">Advanced</span>
@@ -155,10 +155,10 @@
                         
                         <!-- Single-Account Providers -->
                         <div>
-                            <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center">
+                            <h4 class="text-sm font-semibold text-label mb-2 flex items-center">
                                 <i class="fas fa-user mr-2 text-gray-500"></i>
                                 Single Account Providers
-                                <span class="ml-2 text-xs bg-surface-2 text-gray-700 dark:text-gray-300 px-2 py-0.5 rounded-full">Standard</span>
+                                <span class="ml-2 text-xs bg-surface-2 text-label px-2 py-0.5 rounded-full">Standard</span>
                             </h4>
                             <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-2" role="radiogroup" aria-labelledby="dns-provider-label">
                                 <label class="relative">
@@ -333,7 +333,7 @@
                             
                             <!-- Legacy single account fields (hidden when multi-account mode is active) -->
                             <div id="cloudflare-legacy-config">
-                                <label for="cloudflare_api_token" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                <label for="cloudflare_api_token" class="block text-sm font-medium text-label">
                                     API Token
                                 </label>
                                 <div class="mt-1">
@@ -375,7 +375,7 @@
                             <div id="route53-legacy-config">
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
-                                        <label for="route53_access_key_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        <label for="route53_access_key_id" class="block text-sm font-medium text-label">
                                             Access Key ID
                                         </label>
                                         <input type="password" id="route53_access_key_id" name="route53_access_key_id" 
@@ -386,7 +386,7 @@
                                                data-lpignore="true">
                                     </div>
                                     <div>
-                                        <label for="route53_secret_access_key" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        <label for="route53_secret_access_key" class="block text-sm font-medium text-label">
                                             Secret Access Key
                                         </label>
                                         <input type="password" id="route53_secret_access_key" name="route53_secret_access_key" 
@@ -397,7 +397,7 @@
                                                data-lpignore="true">
                                     </div>
                                     <div>
-                                        <label for="route53_region" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        <label for="route53_region" class="block text-sm font-medium text-label">
                                             Region (Optional)
                                         </label>
                                         <input type="text" id="route53_region" name="route53_region" 
@@ -436,7 +436,7 @@
                             <div id="azure-legacy-config">
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
-                                        <label for="azure_subscription_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        <label for="azure_subscription_id" class="block text-sm font-medium text-label">
                                             Subscription ID
                                         </label>
                                         <input type="text" id="azure_subscription_id" name="azure_subscription_id" 
@@ -444,7 +444,7 @@
                                                placeholder="12345678-1234-1234-1234-123456789012">
                                     </div>
                                     <div>
-                                        <label for="azure_resource_group" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        <label for="azure_resource_group" class="block text-sm font-medium text-label">
                                             Resource Group
                                         </label>
                                         <input type="text" id="azure_resource_group" name="azure_resource_group" 
@@ -452,7 +452,7 @@
                                                placeholder="my-dns-resource-group">
                                     </div>
                                     <div>
-                                        <label for="azure_tenant_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        <label for="azure_tenant_id" class="block text-sm font-medium text-label">
                                             Tenant ID
                                         </label>
                                         <input type="text" id="azure_tenant_id" name="azure_tenant_id" 
@@ -460,7 +460,7 @@
                                                placeholder="12345678-1234-1234-1234-123456789012">
                                     </div>
                                     <div>
-                                        <label for="azure_client_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        <label for="azure_client_id" class="block text-sm font-medium text-label">
                                             Client ID
                                         </label>
                                         <input type="text" id="azure_client_id" name="azure_client_id" 
@@ -468,7 +468,7 @@
                                                placeholder="12345678-1234-1234-1234-123456789012">
                                     </div>
                                     <div class="md:col-span-2">
-                                        <label for="azure_client_secret" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        <label for="azure_client_secret" class="block text-sm font-medium text-label">
                                             Client Secret
                                         </label>
                                         <input type="password" id="azure_client_secret" name="azure_client_secret" 
@@ -510,7 +510,7 @@
                             <div id="google-legacy-config">
                                 <div class="space-y-4">
                                     <div>
-                                        <label for="google_project_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        <label for="google_project_id" class="block text-sm font-medium text-label">
                                             Project ID
                                         </label>
                                         <input type="text" id="google_project_id" name="google_project_id" 
@@ -518,7 +518,7 @@
                                                placeholder="my-gcp-project-123456">
                                     </div>
                                     <div>
-                                        <label for="google_service_account_key" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        <label for="google_service_account_key" class="block text-sm font-medium text-label">
                                             Service Account JSON Key
                                         </label>
                                         <textarea id="google_service_account_key" name="google_service_account_key" rows="4"
@@ -557,7 +557,7 @@
                             <div id="powerdns-legacy-config">
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
-                                        <label for="powerdns_api_url" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        <label for="powerdns_api_url" class="block text-sm font-medium text-label">
                                             API URL
                                         </label>
                                         <input type="url" id="powerdns_api_url" name="powerdns_api_url" 
@@ -565,7 +565,7 @@
                                                placeholder="https://powerdns.example.com:8081">
                                     </div>
                                     <div>
-                                        <label for="powerdns_api_key" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        <label for="powerdns_api_key" class="block text-sm font-medium text-label">
                                             API Key
                                         </label>
                                         <input type="password" id="powerdns_api_key" name="powerdns_api_key" 
@@ -607,7 +607,7 @@
                             <div id="digitalocean-legacy-config">
                                 <div class="grid grid-cols-1 gap-4">
                                     <div>
-                                        <label for="digitalocean_api_token" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        <label for="digitalocean_api_token" class="block text-sm font-medium text-label">
                                             API Token
                                         </label>
                                         <input type="password" id="digitalocean_api_token" name="digitalocean_api_token" 
@@ -647,7 +647,7 @@
                             
                             <!-- Legacy single account fields (hidden when multi-account mode is active) -->
                             <div id="vultr-legacy-config">
-                                <label for="vultr_api_key" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                <label for="vultr_api_key" class="block text-sm font-medium text-label">
                                     API Key
                                 </label>
                                 <div class="mt-1">
@@ -671,7 +671,7 @@
                             </h4>
                             <div class="grid grid-cols-1 gap-4">
                                 <div>
-                                    <label for="linode_api_key" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    <label for="linode_api_key" class="block text-sm font-medium text-label">
                                         API Key
                                     </label>
                                     <input type="password" id="linode_api_key" name="linode_api_key"
@@ -694,7 +694,7 @@
                             </h4>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
-                                    <label for="edgedns_client_token" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    <label for="edgedns_client_token" class="block text-sm font-medium text-label">
                                         Client Token
                                     </label>
                                     <input type="password" id="edgedns_client_token" name="edgedns_client_token"
@@ -702,7 +702,7 @@
                                            placeholder="akab-XXXXXXXXXXXXXXXX-XXXXXXXXXXXXXXXX">
                                 </div>
                                 <div>
-                                    <label for="edgedns_client_secret" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    <label for="edgedns_client_secret" class="block text-sm font-medium text-label">
                                         Client Secret
                                     </label>
                                     <input type="password" id="edgedns_client_secret" name="edgedns_client_secret"
@@ -710,7 +710,7 @@
                                            placeholder="Your Akamai client secret">
                                 </div>
                                 <div>
-                                    <label for="edgedns_access_token" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    <label for="edgedns_access_token" class="block text-sm font-medium text-label">
                                         Access Token
                                     </label>
                                     <input type="password" id="edgedns_access_token" name="edgedns_access_token"
@@ -718,7 +718,7 @@
                                            placeholder="akab-XXXXXXXXXXXXXXXX-XXXXXXXXXXXXXXXX">
                                 </div>
                                 <div>
-                                    <label for="edgedns_host" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    <label for="edgedns_host" class="block text-sm font-medium text-label">
                                         API Host
                                     </label>
                                     <input type="text" id="edgedns_host" name="edgedns_host"
@@ -744,7 +744,7 @@
                             </h4>
                             <div class="grid grid-cols-1 gap-4">
                                 <div>
-                                    <label for="gandi_api_token" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    <label for="gandi_api_token" class="block text-sm font-medium text-label">
                                         API Token
                                     </label>
                                     <input type="password" id="gandi_api_token" name="gandi_api_token" 
@@ -767,7 +767,7 @@
                             </h4>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
-                                    <label for="ovh_endpoint" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    <label for="ovh_endpoint" class="block text-sm font-medium text-label">
                                         Endpoint
                                     </label>
                                     <select id="ovh_endpoint" name="ovh_endpoint" 
@@ -783,7 +783,7 @@
                                     </select>
                                 </div>
                                 <div>
-                                    <label for="ovh_application_key" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    <label for="ovh_application_key" class="block text-sm font-medium text-label">
                                         Application Key
                                     </label>
                                     <input type="password" id="ovh_application_key" name="ovh_application_key" 
@@ -791,7 +791,7 @@
                                            placeholder="Your application key">
                                 </div>
                                 <div>
-                                    <label for="ovh_application_secret" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    <label for="ovh_application_secret" class="block text-sm font-medium text-label">
                                         Application Secret
                                     </label>
                                     <input type="password" id="ovh_application_secret" name="ovh_application_secret" 
@@ -799,7 +799,7 @@
                                            placeholder="Your application secret">
                                 </div>
                                 <div>
-                                    <label for="ovh_consumer_key" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    <label for="ovh_consumer_key" class="block text-sm font-medium text-label">
                                         Consumer Key
                                     </label>
                                     <input type="password" id="ovh_consumer_key" name="ovh_consumer_key" 
@@ -822,7 +822,7 @@
                             </h4>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
-                                    <label for="namecheap_username" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    <label for="namecheap_username" class="block text-sm font-medium text-label">
                                         Username
                                     </label>
                                     <input type="text" id="namecheap_username" name="namecheap_username" 
@@ -830,7 +830,7 @@
                                            placeholder="Your Namecheap username">
                                 </div>
                                 <div>
-                                    <label for="namecheap_api_key" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    <label for="namecheap_api_key" class="block text-sm font-medium text-label">
                                         API Key
                                     </label>
                                     <input type="password" id="namecheap_api_key" name="namecheap_api_key" 
@@ -868,7 +868,7 @@
                             <div id="rfc2136-legacy-config">
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
-                                        <label for="rfc2136_nameserver" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        <label for="rfc2136_nameserver" class="block text-sm font-medium text-label">
                                             Nameserver
                                         </label>
                                         <input type="text" id="rfc2136_nameserver" name="rfc2136_nameserver" 
@@ -876,7 +876,7 @@
                                                placeholder="ns.example.com">
                                     </div>
                                     <div>
-                                        <label for="rfc2136_tsig_key" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        <label for="rfc2136_tsig_key" class="block text-sm font-medium text-label">
                                             TSIG Key Name
                                         </label>
                                         <input type="text" id="rfc2136_tsig_key" name="rfc2136_tsig_key" 
@@ -884,7 +884,7 @@
                                                placeholder="mykey">
                                     </div>
                                     <div>
-                                        <label for="rfc2136_tsig_secret" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        <label for="rfc2136_tsig_secret" class="block text-sm font-medium text-label">
                                             TSIG Secret
                                         </label>
                                         <input type="password" id="rfc2136_tsig_secret" name="rfc2136_tsig_secret" 
@@ -892,7 +892,7 @@
                                                placeholder="Base64-encoded secret">
                                     </div>
                                     <div>
-                                        <label for="rfc2136_tsig_algorithm" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        <label for="rfc2136_tsig_algorithm" class="block text-sm font-medium text-label">
                                             TSIG Algorithm (Optional)
                                         </label>
                                         <select id="rfc2136_tsig_algorithm" name="rfc2136_tsig_algorithm" 
@@ -924,7 +924,7 @@
                                 Hetzner DNS Configuration
                             </h4>
                             <div>
-                                <label for="hetzner_api_token" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                <label for="hetzner_api_token" class="block text-sm font-medium text-label">
                                     API Token
                                 </label>
                                 <input type="password" id="hetzner_api_token" name="hetzner_api_token" 
@@ -946,7 +946,7 @@
                             </h4>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
-                                    <label for="porkbun_api_key" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    <label for="porkbun_api_key" class="block text-sm font-medium text-label">
                                         API Key
                                     </label>
                                     <input type="password" id="porkbun_api_key" name="porkbun_api_key" 
@@ -954,7 +954,7 @@
                                            placeholder="Your Porkbun API key">
                                 </div>
                                 <div>
-                                    <label for="porkbun_secret_key" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    <label for="porkbun_secret_key" class="block text-sm font-medium text-label">
                                         Secret Key
                                     </label>
                                     <input type="password" id="porkbun_secret_key" name="porkbun_secret_key" 
@@ -977,7 +977,7 @@
                             </h4>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
-                                    <label for="godaddy_api_key" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    <label for="godaddy_api_key" class="block text-sm font-medium text-label">
                                         API Key
                                     </label>
                                     <input type="password" id="godaddy_api_key" name="godaddy_api_key" 
@@ -985,7 +985,7 @@
                                            placeholder="Your GoDaddy API key">
                                 </div>
                                 <div>
-                                    <label for="godaddy_secret" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    <label for="godaddy_secret" class="block text-sm font-medium text-label">
                                         API Secret
                                     </label>
                                     <input type="password" id="godaddy_secret" name="godaddy_secret" 
@@ -1008,7 +1008,7 @@
                             </h4>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
-                                    <label for="he_ddns_username" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    <label for="he_ddns_username" class="block text-sm font-medium text-label">
                                         Username
                                     </label>
                                     <input type="text" id="he_ddns_username" name="he_ddns_username" 
@@ -1016,7 +1016,7 @@
                                            placeholder="Your Hurricane Electric username">
                                 </div>
                                 <div>
-                                    <label for="he_ddns_password" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    <label for="he_ddns_password" class="block text-sm font-medium text-label">
                                         Password
                                     </label>
                                     <input type="password" id="he_ddns_password" name="he_ddns_password" 
@@ -1038,7 +1038,7 @@
                                 Dynu DNS Configuration
                             </h4>
                             <div>
-                                <label for="dynudns_token" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                <label for="dynudns_token" class="block text-sm font-medium text-label">
                                     API Token
                                 </label>
                                 <input type="password" id="dynudns_token" name="dynudns_token"
@@ -1073,7 +1073,7 @@
                             <!-- Legacy single account fields -->
                             <div id="duckdns-legacy-fields">
                                 <div>
-                                    <label for="duckdns_api_token" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    <label for="duckdns_api_token" class="block text-sm font-medium text-label">
                                         Account Token
                                     </label>
                                     <input type="password" id="duckdns_api_token" name="duckdns_api_token"

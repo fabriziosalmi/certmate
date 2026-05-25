@@ -82,7 +82,7 @@
                     <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
                         <div class="space-y-4">
                             <div>
-                                <label for="domain" class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                                <label for="domain" class="block text-sm font-semibold text-label mb-2">
                                     <i class="fas fa-globe mr-2 text-blue-500"></i>
                                     Primary Domain Name
                                 </label>
@@ -98,7 +98,7 @@
                             
                             <!-- SAN Domains (optional) -->
                             <div>
-                                <label for="san_domains" class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                                <label for="san_domains" class="block text-sm font-semibold text-label mb-2">
                                     <i class="fas fa-plus-circle mr-2 text-indigo-500"></i>
                                     Additional Domains (SAN)
                                     <span class="font-normal text-xs text-muted ml-1">Optional</span>
@@ -114,7 +114,7 @@
                             </div>
                             
                             <div>
-                                <label for="ca_provider_select" class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                                <label for="ca_provider_select" class="block text-sm font-semibold text-label mb-2">
                                     <i class="fas fa-certificate mr-2 text-green-500"></i>
                                     Certificate Authority
                                 </label>
@@ -138,7 +138,7 @@
                         
                         <div class="space-y-4">
                             <div>
-                                <label for="challenge_type_select" class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                                <label for="challenge_type_select" class="block text-sm font-semibold text-label mb-2">
                                     <i class="fas fa-shield-alt mr-2 text-teal-500"></i>
                                     Challenge Type
                                 </label>
@@ -157,7 +157,7 @@
 
                             <div id="dns-provider-container">
                             <div>
-                                <label for="dns_provider_select" class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                                <label for="dns_provider_select" class="block text-sm font-semibold text-label mb-2">
                                     <i class="fas fa-server mr-2 text-purple-500"></i>
                                     DNS Provider
                                 </label>
@@ -194,7 +194,7 @@
                             </div>
                             
                             <div id="account-selection-container" style="display: none;">
-                                <label for="account_select" class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                                <label for="account_select" class="block text-sm font-semibold text-label mb-2">
                                     <i class="fas fa-user mr-2 text-orange-500"></i>
                                     Account
                                 </label>
@@ -214,7 +214,7 @@
                     <!-- Advanced Options (Collapsible) -->
                     <div class="border-t border-border pt-6">
                         <button type="button" onclick="toggleAdvancedOptions()" 
-                                class="flex items-center text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-primary transition-colors duration-200">
+                                class="flex items-center text-sm font-medium text-label hover:text-primary transition-colors duration-200">
                             <i class="fas fa-cog mr-2"></i>
                             Advanced Options
                             <i id="advanced-chevron" class="fas fa-chevron-down ml-2 transform transition-transform duration-200"></i>
@@ -223,7 +223,7 @@
                         <div id="advanced-options" class="hidden mt-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
-                                    <label class="flex items-center text-sm text-gray-700 dark:text-gray-300">
+                                    <label class="flex items-center text-sm text-label">
                                         <input type="checkbox" id="wildcard-cert" class="rounded border-border text-primary focus:ring-primary dark:bg-gray-700">
                                         <span class="ml-2">
                                             <i class="fas fa-asterisk mr-1 text-yellow-500"></i>
@@ -236,7 +236,7 @@
                                 </div>
                                 
                                 <div>
-                                    <label class="flex items-center text-sm text-gray-700 dark:text-gray-300">
+                                    <label class="flex items-center text-sm text-label">
                                         <input type="checkbox" id="staging-cert" class="rounded border-border text-primary focus:ring-primary dark:bg-gray-700">
                                         <span class="ml-2">
                                             <i class="fas fa-flask mr-1 text-orange-500"></i>
@@ -251,7 +251,7 @@
 
                             <!-- DNS-01 Alias Mode -->
                             <div class="mt-4">
-                                <label for="dns_alias_domain" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                <label for="dns_alias_domain" class="block text-sm font-medium text-label mb-1">
                                     <i class="fas fa-random mr-1 text-blue-500"></i>
                                     DNS-01 Alias Domain <span class="text-xs font-normal text-muted">(optional)</span>
                                 </label>
@@ -276,7 +276,7 @@
                             <!-- Certificate key shape -->
                             <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
-                                    <label for="cert_key_type" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                    <label for="cert_key_type" class="block text-sm font-medium text-label mb-1">
                                         <i class="fas fa-key mr-1 text-purple-500"></i>
                                         Key Type <span class="text-xs font-normal text-muted">(optional)</span>
                                     </label>
@@ -292,7 +292,7 @@
                                     </p>
                                 </div>
                                 <div id="cert_key_size_container" style="display: none;">
-                                    <label for="cert_key_size" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                    <label for="cert_key_size" class="block text-sm font-medium text-label mb-1">
                                         RSA Key Size
                                     </label>
                                     <select id="cert_key_size"
@@ -303,7 +303,7 @@
                                     </select>
                                 </div>
                                 <div id="cert_elliptic_curve_container" style="display: none;">
-                                    <label for="cert_elliptic_curve" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                    <label for="cert_elliptic_curve" class="block text-sm font-medium text-label mb-1">
                                         ECDSA Curve
                                     </label>
                                     <select id="cert_elliptic_curve"
@@ -531,7 +531,7 @@
     {% call modal(id="curlModal", title="Automation curl Command", icon="fa-code", size="md") %}
         <div class="space-y-4">
             <div>
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Copy this command:</label>
+                <label class="block text-sm font-medium text-label mb-2">Copy this command:</label>
                 <div class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100 p-3 rounded-md font-mono text-sm">
                     <code id="curlCommandText"></code>
                 </div>

@@ -18,7 +18,7 @@ module.exports = {
     // safelist once adoption is broad enough for the content scan to find
     // each utility on its own (THEME_MIGRATION.md, final phase).
     'bg-background', 'bg-surface', 'bg-surface-2',
-    'text-foreground', 'text-muted', 'border-border', 'divide-border',
+    'text-foreground', 'text-muted', 'text-label', 'border-border', 'divide-border',
   ],
   darkMode: 'class',
   theme: {
@@ -36,13 +36,14 @@ module.exports = {
         background:  'hsl(var(--color-background) / <alpha-value>)',
         foreground:  'hsl(var(--color-foreground) / <alpha-value>)',
         muted:       'hsl(var(--color-muted) / <alpha-value>)',
+        label:       'hsl(var(--color-label) / <alpha-value>)',
         border:      'hsl(var(--color-border) / <alpha-value>)',
-        // Legacy aliases (keep for backward compat)
+        // Brand aliases (used widely: bg-primary/text-primary ~375, gradients
+        // from-secondary). success/warning/danger were removed in the theme
+        // migration — they had zero call sites (status UI uses literal
+        // green/red/amber utilities directly).
         primary: '#3b82f6',
         secondary: '#1e40af',
-        success: '#22c55e',
-        warning: '#f59e0b',
-        danger: '#ef4444',
         // Brand palette — HSL-based, deeper than raw Tailwind
         brand: {
           50:  'hsl(210, 100%, 97%)',

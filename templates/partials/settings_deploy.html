@@ -244,7 +244,7 @@
                                             <td class="py-1.5 pr-3 text-muted font-mono" x-text="entry.domain"></td>
                                             <td class="py-1.5 pr-3">
                                                 <span class="px-1.5 py-0.5 rounded text-[10px] font-medium"
-                                                      :class="entry.event === 'test' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'"
+                                                      :class="entry.event === 'test' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' : 'bg-surface-2 text-label'"
                                                       x-text="entry.event"></span>
                                             </td>
                                             <td class="py-1.5 pr-3">
@@ -301,7 +301,7 @@
                                 <div class="text-[10px] uppercase tracking-wide text-muted">Event</div>
                                 <div class="flex items-center gap-1 flex-wrap">
                                     <span class="px-1.5 py-0.5 rounded text-[10px] font-medium"
-                                          :class="selectedExecution.event === 'test' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'"
+                                          :class="selectedExecution.event === 'test' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' : 'bg-surface-2 text-label'"
                                           x-text="selectedExecution.event"></span>
                                     <span x-show="selectedExecution.dry_run"
                                           class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">

@@ -56,14 +56,14 @@
             renew: { icon: 'fa-sync', color: 'text-blue-500', bg: 'bg-blue-100 dark:bg-blue-900/30' },
             revoke: { icon: 'fa-ban', color: 'text-red-500', bg: 'bg-red-100 dark:bg-red-900/30' },
             download: { icon: 'fa-download', color: 'text-indigo-500', bg: 'bg-indigo-100 dark:bg-indigo-900/30' },
-            api_request: { icon: 'fa-code', color: 'text-gray-500', bg: 'bg-gray-100 dark:bg-gray-700' },
+            api_request: { icon: 'fa-code', color: 'text-gray-500', bg: 'bg-surface-2' },
             batch_create: { icon: 'fa-layer-group', color: 'text-purple-500', bg: 'bg-purple-100 dark:bg-purple-900/30' },
             failure: { icon: 'fa-exclamation-circle', color: 'text-red-500', bg: 'bg-red-100 dark:bg-red-900/30' }
         };
 
         function getOpStyle(entry) {
             if (entry.status === 'failure') return opIcons.failure;
-            return opIcons[entry.operation] || { icon: 'fa-circle', color: 'text-gray-400', bg: 'bg-gray-100 dark:bg-gray-700' };
+            return opIcons[entry.operation] || { icon: 'fa-circle', color: 'text-gray-400', bg: 'bg-surface-2' };
         }
 
         function formatTime(ts) {

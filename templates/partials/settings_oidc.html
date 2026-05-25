@@ -32,7 +32,7 @@
                         <label class="flex items-center space-x-2">
                             <input type="checkbox" x-model="cfg.enabled"
                                    class="h-4 w-4 text-primary focus:ring-primary border-border rounded">
-                            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Enable OIDC/SSO</span>
+                            <span class="text-sm font-medium text-label">Enable OIDC/SSO</span>
                         </label>
                         <div>
                             <label class="block text-xs text-muted mb-1">Provider display name</label>
@@ -104,7 +104,7 @@
                     <!-- Role mappings list -->
                     <div>
                         <div class="flex items-center justify-between mb-2">
-                            <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                            <h4 class="text-sm font-semibold text-label">
                                 <i class="fas fa-list mr-1"></i> Role mappings
                                 <span class="ml-1 text-gray-400" title="First match wins. The claim value is matched against the role claim (handles lists and scalars).">
                                     <i class="fas fa-info-circle"></i>
@@ -156,12 +156,12 @@
                         <label class="flex items-center space-x-2 mt-6">
                             <input type="checkbox" x-model="cfg.auto_create_users"
                                    class="h-4 w-4 text-primary focus:ring-primary border-border rounded">
-                            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Auto-create users on first login (JIT)</span>
+                            <span class="text-sm font-medium text-label">Auto-create users on first login (JIT)</span>
                         </label>
                         <label class="flex items-center space-x-2 mt-6">
                             <input type="checkbox" x-model="cfg.link_by_email"
                                    class="h-4 w-4 text-primary focus:ring-primary border-border rounded">
-                            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Link to existing local user by email</span>
+                            <span class="text-sm font-medium text-label">Link to existing local user by email</span>
                         </label>
                     </div>
 

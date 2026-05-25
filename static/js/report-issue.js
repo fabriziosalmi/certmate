@@ -162,7 +162,7 @@
         overlay.innerHTML = '<div class="absolute inset-0 bg-black/50 backdrop-blur-sm"></div>';
 
         var box = document.createElement('div');
-        box.className = 'relative bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-2xl border border-gray-200 dark:border-gray-700';
+        box.className = 'relative bg-surface rounded-xl shadow-2xl w-full max-w-2xl border border-border';
         var title = 'Report this issue — manual paste';
         box.innerHTML =
             '<div class="px-6 py-4 border-b border-border">' +
@@ -175,7 +175,7 @@
                     '<a target="_blank" rel="noopener" href="' + CM.escapeHtml(issueUrl) + '" class="text-blue-600 dark:text-blue-400 hover:underline text-sm">Open GitHub issue form &nearr;</a>' +
                     '<div class="flex gap-2">' +
                         '<button data-action="copy" class="px-4 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700">Copy markdown</button>' +
-                        '<button data-action="close" class="px-4 py-2 rounded-lg text-sm font-medium bg-surface-2 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600">Close</button>' +
+                        '<button data-action="close" class="px-4 py-2 rounded-lg text-sm font-medium bg-surface-2 text-label hover:bg-gray-200 dark:hover:bg-gray-600">Close</button>' +
                     '</div>' +
                 '</div>' +
             '</div>';

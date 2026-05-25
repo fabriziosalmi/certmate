@@ -51,6 +51,7 @@
     --color-surface-2:  220 14% 96%;   /* elevated / sunken              */
     --color-foreground: 222 47% 11%;   /* primary text    (~gray-900)     */
     --color-muted:      220  9% 46%;   /* secondary text  (~gray-500)     */
+    --color-label:      217 19% 27%;   /* label / mid body (~gray-700)    */
     --color-border:     220 13% 91%;   /* hairlines       (~gray-200)     */
   }
   .dark {
@@ -59,6 +60,7 @@
     --color-surface-2:  222 20% 17%;   /* surface.elevated */
     --color-foreground:   0  0% 100%;  /* white */
     --color-muted:      220  9% 65%;   /* ~gray-400 */
+    --color-label:      216 12% 84%;   /* ~gray-300 */
     --color-border:     222 20% 22%;   /* ~white/5 equivalent */
   }
 }

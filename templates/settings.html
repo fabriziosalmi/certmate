@@ -145,7 +145,7 @@
                 <div class="space-y-6">
                     <!-- Unified Backups (Recommended) -->
                     <div>
-                        <h5 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                        <h5 class="text-sm font-medium text-label mb-3">
                             <i class="fas fa-archive mr-1 text-green-500"></i>
                             Unified Backups (Recommended)
                             <span class="text-xs bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 px-2 py-1 rounded-full ml-2">Atomic</span>
@@ -169,7 +169,7 @@
     {% call modal(id="addAccountModal", title="Add Account", size="sm") %}
         <form id="addAccountForm" class="space-y-4">
             <div>
-                <label for="account-name" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                <label for="account-name" class="block text-sm font-medium text-label">
                     Account Name *
                 </label>
                 <input type="text" id="account-name" name="name" required
@@ -178,7 +178,7 @@
             </div>
 
             <div>
-                <label for="account-description" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                <label for="account-description" class="block text-sm font-medium text-label">
                     Description (optional)
                 </label>
                 <input type="text" id="account-description" name="description"
@@ -192,14 +192,14 @@
             <div class="flex items-center">
                 <input type="checkbox" id="set-as-default" name="set_as_default"
                        class="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded">
-                <label for="set-as-default" class="ml-2 block text-sm text-gray-700 dark:text-gray-300">
+                <label for="set-as-default" class="ml-2 block text-sm text-label">
                     Set as default account
                 </label>
             </div>
 
             <div class="flex justify-end space-x-3 pt-4">
                 <button type="button" data-modal-close
-                        class="px-4 py-2 border border-border rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">
+                        class="px-4 py-2 border border-border rounded-md text-label hover:bg-gray-50 dark:hover:bg-gray-700">
                     Cancel
                 </button>
                 <button type="button" onclick="saveAccount()"
@@ -216,7 +216,7 @@
             <input type="hidden" id="edit-provider-name" name="edit-provider-name">
 
             <div>
-                <label for="edit-account-name" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                <label for="edit-account-name" class="block text-sm font-medium text-label">
                     Account Name *
                 </label>
                 <input type="text" id="edit-account-name" name="name" required
@@ -224,7 +224,7 @@
             </div>
 
             <div>
-                <label for="edit-account-description" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                <label for="edit-account-description" class="block text-sm font-medium text-label">
                     Description (optional)
                 </label>
                 <input type="text" id="edit-account-description" name="description"
@@ -237,14 +237,14 @@
             <div class="flex items-center">
                 <input type="checkbox" id="edit-set-as-default" name="set_as_default"
                        class="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded">
-                <label for="edit-set-as-default" class="ml-2 block text-sm text-gray-700 dark:text-gray-300">
+                <label for="edit-set-as-default" class="ml-2 block text-sm text-label">
                     Set as default account
                 </label>
             </div>
 
             <div class="flex justify-end space-x-3 pt-4">
                 <button type="button" data-modal-close
-                        class="px-4 py-2 border border-border rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">
+                        class="px-4 py-2 border border-border rounded-md text-label hover:bg-gray-50 dark:hover:bg-gray-700">
                     Cancel
                 </button>
                 <button type="button" onclick="saveEditAccount()"
