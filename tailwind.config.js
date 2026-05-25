@@ -48,8 +48,8 @@ module.exports = {
         // from-secondary). success/warning/danger were removed in the theme
         // migration — they had zero call sites (status UI uses literal
         // green/red/amber utilities directly).
-        primary: '#3b82f6',
-        secondary: '#1e40af',
+        primary: 'hsl(216, 76%, 43%)',   // brand-600 — was flat #3b82f6
+        secondary: 'hsl(218, 72%, 35%)', // brand-700 (btn-primary hover)
         // Brand palette — HSL-based, deeper than raw Tailwind
         brand: {
           50:  'hsl(210, 100%, 97%)',
