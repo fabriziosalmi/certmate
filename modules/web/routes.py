@@ -10,7 +10,7 @@ from functools import wraps
 from pathlib import Path
 from collections import defaultdict
 from time import time
-from flask import request, redirect, url_for
+from flask import request, redirect, url_for, send_from_directory
 
 logger = logging.getLogger(__name__)
 
@@ -199,3 +199,18 @@ def register_web_routes(app, managers):
                                  file_ops, settings_manager, cache_manager)
     register_oidc_routes(app, managers, auth_manager, managers['oidc'],
                          _check_login_rate_limit, _record_login_attempt)
+
+    @app.route('/.well-known/acme-challenge/<path:filename>')
+    def serve_acme_challenge(filename):
+        """Serve HTTP-01 challenge tokens written by certbot.
+
+        Intentionally public (no auth): the ACME server fetches this
+        unauthenticated during validation. The directory is the same one
+        certbot writes to — both resolve via acme_webroot_dir() and it is
+        published on app.config in factory.configure_app. send_from_directory
+        (werkzeug safe_join) blocks path traversal, returning 404 for '..' or
+        absolute paths.
+        """
+        acme_path = os.path.join(
+            app.config['ACME_CHALLENGES_DIR'], '.well-known', 'acme-challenge')
+        return send_from_directory(acme_path, filename, mimetype='text/plain')

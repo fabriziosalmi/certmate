@@ -341,6 +341,22 @@ def configure_app(container: AppContainer, app, test_config=None):
     app.secret_key = _secret_key_from_env_or_generate(container.data_dir)
     app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
 
+    # HTTP-01 webroot: certbot writes challenge tokens here and the Flask route
+    # in modules/web/routes.py serves them. Both sides resolve the path through
+    # the same acme_webroot_dir() helper (overridable via ACME_CHALLENGES_DIR)
+    # so they cannot drift; expose it on the app config for the route.
+    from .dns_strategies import acme_webroot_dir
+    app.config['ACME_CHALLENGES_DIR'] = str(acme_webroot_dir())
+    challenge_dir = os.path.join(
+        app.config['ACME_CHALLENGES_DIR'], '.well-known', 'acme-challenge')
+    try:
+        os.makedirs(challenge_dir, exist_ok=True)
+    except OSError as e:
+        # Non-fatal at boot; HTTP-01 issuance would fail later with a clear
+        # error if the directory is genuinely unwritable.
+        logger.warning("Could not create ACME challenge directory %s: %s",
+                       challenge_dir, e)
+
     if test_config:
         app.config.update(test_config)
 
