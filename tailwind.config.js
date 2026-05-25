@@ -38,9 +38,37 @@ module.exports = {
         // dark) lands with the semantic CSS-var layer in a later sprint.
         primary: 'hsl(216, 76%, 43%)',   // brand-600
         secondary: 'hsl(218, 72%, 35%)', // brand-700
-        success: '#22c55e',
-        warning: '#f59e0b',
-        danger: '#ef4444',
+        // State groups (Sprint 4). DEFAULT keeps the legacy flat hex so
+        // bg-success / text-danger etc. are unchanged; the surface/line/
+        // fg/strong keys map to the callout CSS vars for the tokenised
+        // info-box system (bg-info-surface, text-success-strong, …).
+        success: {
+          DEFAULT: '#22c55e',
+          surface: 'rgb(var(--success-surface) / <alpha-value>)',
+          line:    'rgb(var(--success-line) / <alpha-value>)',
+          fg:      'rgb(var(--success-fg) / <alpha-value>)',
+          strong:  'rgb(var(--success-strong) / <alpha-value>)',
+        },
+        warning: {
+          DEFAULT: '#f59e0b',
+          surface: 'rgb(var(--warning-surface) / <alpha-value>)',
+          line:    'rgb(var(--warning-line) / <alpha-value>)',
+          fg:      'rgb(var(--warning-fg) / <alpha-value>)',
+          strong:  'rgb(var(--warning-strong) / <alpha-value>)',
+        },
+        danger: {
+          DEFAULT: '#ef4444',
+          surface: 'rgb(var(--danger-surface) / <alpha-value>)',
+          line:    'rgb(var(--danger-line) / <alpha-value>)',
+          fg:      'rgb(var(--danger-fg) / <alpha-value>)',
+          strong:  'rgb(var(--danger-strong) / <alpha-value>)',
+        },
+        info: {
+          surface: 'rgb(var(--info-surface) / <alpha-value>)',
+          line:    'rgb(var(--info-line) / <alpha-value>)',
+          fg:      'rgb(var(--info-fg) / <alpha-value>)',
+          strong:  'rgb(var(--info-strong) / <alpha-value>)',
+        },
         // Brand palette — HSL-based, deeper than raw Tailwind
         brand: {
           50:  'hsl(210, 100%, 97%)',

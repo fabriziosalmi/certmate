@@ -64,6 +64,14 @@
   --border:         229 231 235;  /* gray-200               */
   --border-strong:  209 213 219;  /* gray-300               */
   --accent:         26 93 193;    /* brand-600              */
+
+  /* State callouts — surface / line / fg (body) / strong (heading).
+     One canonical scale per state, normalising the 50-vs-100 and
+     700-vs-800 drift that the inline classes had. (Sprint 4) */
+  --info-surface:    239 246 255; --info-line:    191 219 254; --info-fg:    29 78 216;  --info-strong:    30 64 175;
+  --success-surface: 240 253 244; --success-line: 187 247 208; --success-fg: 21 128 61;  --success-strong: 22 101 52;
+  --warning-surface: 255 251 235; --warning-line: 253 230 138; --warning-fg: 180 83 9;   --warning-strong: 146 64 14;
+  --danger-surface:  254 242 242; --danger-line:  254 202 202; --danger-fg:  185 28 28;  --danger-strong:  153 27 27;
 }
 
 /* ── Dark mode flash prevention ──────────────────────────────── */
@@ -85,6 +93,13 @@ html.dark {
   --border:         37 41 52;     /* solid equiv. of white/5 over card */
   --border-strong:  75 85 99;     /* gray-600               */
   --accent:         77 153 239;   /* brand-400 — lighter for dark surfaces */
+
+  /* State callouts — dark tints blended over the card surface so they
+     read as tinted panels, not flat fills. (Sprint 4) */
+  --info-surface:    26 36 62;  --info-line:    27 45 101; --info-fg:    147 197 253; --info-strong:    191 219 254;
+  --success-surface: 24 42 42;  --success-line: 24 62 46;  --success-fg: 134 239 172; --success-strong: 187 247 208;
+  --warning-surface: 46 35 35;  --warning-line: 79 45 29;  --warning-fg: 252 211 77;  --warning-strong: 253 230 138;
+  --danger-surface:  47 30 38;  --danger-line:  83 29 35;  --danger-fg:  252 165 165; --danger-strong:  254 202 202;
 }
 
 /* ── Text selection ──────────────────────────────────────────── */

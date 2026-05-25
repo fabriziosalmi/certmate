@@ -22,28 +22,28 @@
 
             <div x-show="config.enabled" class="space-y-6">
                 <!-- Security banner -->
-                <div class="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg text-sm">
+                <div class="p-3 bg-warning-surface border border-warning-line rounded-lg text-sm">
                     <i class="fas fa-shield-alt text-amber-500 mr-1"></i>
-                    <span class="text-amber-800 dark:text-amber-200">Commands run as the CertMate process user. Only admins can manage hooks.</span>
+                    <span class="text-warning-strong">Commands run as the CertMate process user. Only admins can manage hooks.</span>
                 </div>
 
                 <!-- Environment variables reference -->
-                <div class="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg text-sm">
-                    <p class="font-medium text-blue-800 dark:text-blue-200 mb-1"><i class="fas fa-info-circle mr-1"></i>Available Environment Variables</p>
-                    <code class="text-xs text-blue-700 dark:text-blue-300">CERTMATE_DOMAIN</code>,
-                    <code class="text-xs text-blue-700 dark:text-blue-300">CERTMATE_CERT_PATH</code>,
-                    <code class="text-xs text-blue-700 dark:text-blue-300">CERTMATE_KEY_PATH</code>,
-                    <code class="text-xs text-blue-700 dark:text-blue-300">CERTMATE_FULLCHAIN_PATH</code>,
-                    <code class="text-xs text-blue-700 dark:text-blue-300">CERTMATE_CHAIN_PATH</code>,
-                    <code class="text-xs text-blue-700 dark:text-blue-300">CERTMATE_EVENT</code>,
-                    <code class="text-xs text-blue-700 dark:text-blue-300">CERTMATE_DRY_RUN</code>
-                    <span class="text-xs text-blue-700 dark:text-blue-300">(only set during Test runs)</span>
+                <div class="p-3 bg-info-surface border border-info-line rounded-lg text-sm">
+                    <p class="font-medium text-info-strong mb-1"><i class="fas fa-info-circle mr-1"></i>Available Environment Variables</p>
+                    <code class="text-xs text-info-fg">CERTMATE_DOMAIN</code>,
+                    <code class="text-xs text-info-fg">CERTMATE_CERT_PATH</code>,
+                    <code class="text-xs text-info-fg">CERTMATE_KEY_PATH</code>,
+                    <code class="text-xs text-info-fg">CERTMATE_FULLCHAIN_PATH</code>,
+                    <code class="text-xs text-info-fg">CERTMATE_CHAIN_PATH</code>,
+                    <code class="text-xs text-info-fg">CERTMATE_EVENT</code>,
+                    <code class="text-xs text-info-fg">CERTMATE_DRY_RUN</code>
+                    <span class="text-xs text-info-fg">(only set during Test runs)</span>
                 </div>
 
                 <!-- Blocked-patterns reference (issue #102) -->
-                <div class="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg text-sm">
-                    <p class="font-medium text-amber-800 dark:text-amber-200 mb-1"><i class="fas fa-exclamation-triangle mr-1"></i>Blocked Shell Patterns</p>
-                    <p class="text-xs text-amber-700 dark:text-amber-300">
+                <div class="p-3 bg-warning-surface border border-warning-line rounded-lg text-sm">
+                    <p class="font-medium text-warning-strong mb-1"><i class="fas fa-exclamation-triangle mr-1"></i>Blocked Shell Patterns</p>
+                    <p class="text-xs text-warning-fg">
                         For safety, the command field rejects pipes, redirects, command substitution, and chained commands:
                         <code class="text-xs">|</code>,
                         <code class="text-xs">&amp;&amp;</code>,
@@ -85,7 +85,7 @@
                                                class="flex-1 text-sm border border-line-strong bg-field text-fg rounded px-3 py-1.5 focus:ring-2 focus:ring-primary focus:border-primary">
                                     </div>
                                     <div class="flex items-center gap-2 ml-3">
-                                        <button type="button" @click="testHook(hook)" class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-900/50 transition" title="Test hook">
+                                        <button type="button" @click="testHook(hook)" class="text-xs px-2 py-1 bg-info-surface text-info-fg rounded hover:bg-blue-200 dark:hover:bg-blue-900/50 transition" title="Test hook">
                                             <i class="fas fa-play mr-1"></i>Test
                                         </button>
                                         <button type="button" @click="config.global_hooks.splice(idx, 1)" class="text-red-400 hover:text-red-600 transition" title="Remove hook">
@@ -156,7 +156,7 @@
                                                        class="flex-1 text-sm border border-line-strong bg-field text-fg rounded px-3 py-1.5 focus:ring-2 focus:ring-primary focus:border-primary">
                                             </div>
                                             <div class="flex items-center gap-2 ml-3">
-                                                <button type="button" @click="testHook(hook)" class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-900/50 transition" title="Test hook">
+                                                <button type="button" @click="testHook(hook)" class="text-xs px-2 py-1 bg-info-surface text-info-fg rounded hover:bg-blue-200 dark:hover:bg-blue-900/50 transition" title="Test hook">
                                                     <i class="fas fa-play mr-1"></i>Test
                                                 </button>
                                                 <button type="button" @click="config.domain_hooks[domain].splice(idx, 1)" class="text-red-400 hover:text-red-600 transition" title="Remove hook">
@@ -244,12 +244,12 @@
                                             <td class="py-1.5 pr-3 text-fg-body font-mono" x-text="entry.domain"></td>
                                             <td class="py-1.5 pr-3">
                                                 <span class="px-1.5 py-0.5 rounded text-[10px] font-medium"
-                                                      :class="entry.event === 'test' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' : 'bg-inset text-fg-body'"
+                                                      :class="entry.event === 'test' ? 'bg-info-surface text-info-fg' : 'bg-inset text-fg-body'"
                                                       x-text="entry.event"></span>
                                             </td>
                                             <td class="py-1.5 pr-3">
                                                 <span class="px-1.5 py-0.5 rounded text-[10px] font-medium"
-                                                      :class="entry.success ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'"
+                                                      :class="entry.success ? 'bg-success-surface text-success-fg' : 'bg-danger-surface text-danger-fg'"
                                                       x-text="entry.success ? 'OK' : ('Exit ' + (entry.exit_code !== null ? entry.exit_code : 'err'))"></span>
                                             </td>
                                             <td class="py-1.5 text-right text-fg-muted" x-text="entry.duration_ms + 'ms'"></td>
@@ -301,10 +301,10 @@
                                 <div class="text-[10px] uppercase tracking-wide text-fg-muted">Event</div>
                                 <div class="flex items-center gap-1 flex-wrap">
                                     <span class="px-1.5 py-0.5 rounded text-[10px] font-medium"
-                                          :class="selectedExecution.event === 'test' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' : 'bg-inset text-fg-body'"
+                                          :class="selectedExecution.event === 'test' ? 'bg-info-surface text-info-fg' : 'bg-inset text-fg-body'"
                                           x-text="selectedExecution.event"></span>
                                     <span x-show="selectedExecution.dry_run"
-                                          class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">
+                                          class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-warning-surface text-warning-fg">
                                         dry-run
                                     </span>
                                 </div>
@@ -314,7 +314,7 @@
                         <!-- Status + duration -->
                         <div class="flex flex-wrap items-center gap-2">
                             <span class="px-2 py-0.5 rounded text-xs font-medium"
-                                  :class="selectedExecution.success ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'"
+                                  :class="selectedExecution.success ? 'bg-success-surface text-success-fg' : 'bg-danger-surface text-danger-fg'"
                                   x-text="selectedExecution.success ? 'success' : ('exit ' + (selectedExecution.exit_code !== null && selectedExecution.exit_code !== undefined ? selectedExecution.exit_code : 'error'))"></span>
                             <span class="text-xs text-fg-muted" x-text="(selectedExecution.duration_ms || 0) + ' ms'"></span>
                         </div>
@@ -323,7 +323,7 @@
                         <template x-if="selectedExecution.error">
                             <div>
                                 <div class="text-[10px] uppercase tracking-wide text-fg-muted mb-1">Error</div>
-                                <div class="text-xs bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded px-3 py-2 text-red-700 dark:text-red-300 break-words" x-text="selectedExecution.error"></div>
+                                <div class="text-xs bg-danger-surface border border-danger-line rounded px-3 py-2 text-danger-fg break-words" x-text="selectedExecution.error"></div>
                             </div>
                         </template>
 

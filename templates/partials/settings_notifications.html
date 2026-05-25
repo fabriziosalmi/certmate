@@ -40,7 +40,7 @@
                     <button type="button" @click="showSmtp = !showSmtp" class="w-full flex items-center justify-between px-4 py-3 bg-inset/40 hover:bg-inset/50 transition">
                         <span class="font-medium text-fg text-sm"><i class="fas fa-envelope mr-2 text-blue-500"></i>Email (SMTP)</span>
                         <div class="flex items-center gap-2">
-                            <span x-show="config.channels.smtp.enabled" class="px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded text-xs">Active</span>
+                            <span x-show="config.channels.smtp.enabled" class="px-2 py-0.5 bg-success-surface text-success-fg rounded text-xs">Active</span>
                             <i class="fas fa-chevron-down text-gray-400 transition" :class="showSmtp ? 'rotate-180' : ''"></i>
                         </div>
                     </button>
@@ -86,7 +86,7 @@
                     <button type="button" @click="showWebhooks = !showWebhooks" class="w-full flex items-center justify-between px-4 py-3 bg-inset/40 hover:bg-inset/50 transition">
                         <span class="font-medium text-fg text-sm"><i class="fas fa-plug mr-2 text-purple-500"></i>Webhooks</span>
                         <div class="flex items-center gap-2">
-                            <span x-show="config.channels.webhooks.filter(w=>w.enabled).length > 0" class="px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded text-xs" x-text="config.channels.webhooks.filter(w=>w.enabled).length + ' active'"></span>
+                            <span x-show="config.channels.webhooks.filter(w=>w.enabled).length > 0" class="px-2 py-0.5 bg-success-surface text-success-fg rounded text-xs" x-text="config.channels.webhooks.filter(w=>w.enabled).length + ' active'"></span>
                             <i class="fas fa-chevron-down text-gray-400 transition" :class="showWebhooks ? 'rotate-180' : ''"></i>
                         </div>
                     </button>
@@ -161,7 +161,7 @@
                                                 <td class="py-1 pr-2 text-fg-muted whitespace-nowrap" x-text="new Date(d.timestamp).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})"></td>
                                                 <td class="py-1 pr-2 text-fg-body" x-text="d.webhook_name"></td>
                                                 <td class="py-1 pr-2 text-fg-muted" x-text="d.event.replace('certificate_','')"></td>
-                                                <td class="py-1 pr-2"><span :class="d.success ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'" x-text="d.success ? 'HTTP ' + d.status : (d.error || 'failed').substring(0, 40)"></span></td>
+                                                <td class="py-1 pr-2"><span :class="d.success ? 'text-success-fg' : 'text-danger-fg'" x-text="d.success ? 'HTTP ' + d.status : (d.error || 'failed').substring(0, 40)"></span></td>
                                                 <td class="py-1 text-gray-500" x-text="d.attempts"></td>
                                             </tr>
                                         </template>
