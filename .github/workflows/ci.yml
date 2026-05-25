@@ -109,3 +109,11 @@ jobs:
           echo "::error::static/css/tailwind.min.css is out of date. Run 'npm run css:build' and commit the result."
           exit 1
         fi
+
+    # Theme-token regression gate: the migration (docs/THEME_MIGRATION.md)
+    # collapsed every light + dark: color pair onto semantic tokens. This fails
+    # the build if a new raw pair (e.g. bg-white dark:bg-gray-800) is
+    # reintroduced in a template or first-party JS file, keeping the theme
+    # editable from one place.
+    - name: Theme token regression gate
+      run: python3 scripts/theme_codemod.py --check
