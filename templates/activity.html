@@ -13,14 +13,14 @@
                     <div class="flex items-center gap-2 flex-wrap">
                         <input type="search" id="filterSearch" aria-label="Search activity log"
                                placeholder="Search domain, resource, user…"
-                               class="px-3 py-1.5 text-xs border text-foreground border-border rounded-lg bg-white dark:bg-gray-700 placeholder-gray-400 focus:ring-2 focus:ring-primary w-44 sm:w-56">
-                        <select id="filterDate" aria-label="Filter by date range" class="px-3 py-1.5 text-xs border text-foreground border-border rounded-lg bg-white dark:bg-gray-700 focus:ring-2 focus:ring-primary">
+                               class="px-3 py-1.5 text-xs border text-foreground border-border rounded-lg bg-input placeholder-gray-400 focus:ring-2 focus:ring-primary w-44 sm:w-56">
+                        <select id="filterDate" aria-label="Filter by date range" class="px-3 py-1.5 text-xs border text-foreground border-border rounded-lg bg-input focus:ring-2 focus:ring-primary">
                             <option value="">All time</option>
                             <option value="today">Today</option>
                             <option value="7d">Last 7 days</option>
                             <option value="30d">Last 30 days</option>
                         </select>
-                        <select id="filterOp" aria-label="Filter by operation type" class="px-3 py-1.5 text-xs border text-foreground border-border rounded-lg bg-white dark:bg-gray-700 focus:ring-2 focus:ring-primary">
+                        <select id="filterOp" aria-label="Filter by operation type" class="px-3 py-1.5 text-xs border text-foreground border-border rounded-lg bg-input focus:ring-2 focus:ring-primary">
                             <option value="">All user activity</option>
                             <option value="create">Created</option>
                             <option value="renew">Renewed</option>
@@ -352,7 +352,7 @@
                 // is valid markup under <ul> but isn't announced as a
                 // feed article.
                 var btnHtml = '<li role="presentation" class="px-6 py-4 text-center border-t border-gray-100 dark:border-gray-700/50">' +
-                    '<button id="loadMoreActivity" type="button" class="inline-flex items-center px-4 py-1.5 text-xs border border-border rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 transition">' +
+                    '<button id="loadMoreActivity" type="button" class="inline-flex items-center px-4 py-1.5 text-xs border border-border rounded-lg bg-input text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 transition">' +
                         '<i class="fas fa-plus mr-2"></i>Load more' +
                     '</button>' +
                 '</li>';

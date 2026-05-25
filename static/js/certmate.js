@@ -275,7 +275,7 @@
             var bodyHtml =
                 '<label for="' + inputId + '" class="block text-muted text-sm mb-3">' + CM.escapeHtml(message) + '</label>' +
                 '<input id="' + inputId + '" type="text" value="' + CM.escapeHtml(defaultValue) + '" ' +
-                    'class="w-full px-3 py-2 border text-foreground border-border rounded-lg bg-white dark:bg-gray-700 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">' +
+                    'class="w-full px-3 py-2 border text-foreground border-border rounded-lg bg-input text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">' +
                 '<div class="flex justify-end gap-3 mt-6">' +
                     '<button data-action="cancel" class="' + BTN_CANCEL + '">Cancel</button>' +
                     '<button data-action="confirm" class="' + BTN_PRIMARY + '">OK</button>' +

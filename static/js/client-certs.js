@@ -116,9 +116,9 @@
                 '</td>' +
                 '<td class="px-6 py-4 text-sm text-right">' +
                     '<div class="flex items-center justify-end gap-1">' +
-                        '<button type="button" data-cc-action="details" data-id="' + safeId + '" class="p-1.5 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 rounded hover:bg-gray-100 dark:hover:bg-gray-700" title="Details"><i class="fas fa-eye"></i></button>' +
-                        (!cert.revoked ? '<button type="button" data-cc-action="revoke" data-id="' + safeId + '" class="p-1.5 text-gray-400 hover:text-red-600 dark:hover:text-red-400 rounded hover:bg-gray-100 dark:hover:bg-gray-700" title="Revoke"><i class="fas fa-ban"></i></button>' : '') +
-                        '<button type="button" data-cc-action="renew" data-id="' + safeId + '" class="p-1.5 text-gray-400 hover:text-green-600 dark:hover:text-green-400 rounded hover:bg-gray-100 dark:hover:bg-gray-700" title="Renew"><i class="fas fa-sync"></i></button>' +
+                        '<button type="button" data-cc-action="details" data-id="' + safeId + '" class="p-1.5 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 rounded hover:bg-hover" title="Details"><i class="fas fa-eye"></i></button>' +
+                        (!cert.revoked ? '<button type="button" data-cc-action="revoke" data-id="' + safeId + '" class="p-1.5 text-gray-400 hover:text-red-600 dark:hover:text-red-400 rounded hover:bg-hover" title="Revoke"><i class="fas fa-ban"></i></button>' : '') +
+                        '<button type="button" data-cc-action="renew" data-id="' + safeId + '" class="p-1.5 text-gray-400 hover:text-green-600 dark:hover:text-green-400 rounded hover:bg-hover" title="Renew"><i class="fas fa-sync"></i></button>' +
                     '</div>' +
                 '</td>' +
             '</tr>';

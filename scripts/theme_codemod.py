@@ -56,6 +56,18 @@ MAPPINGS: list[tuple[str, str, str]] = [
     ("bg-gray-50", "dark:bg-surface-dark", "bg-background"),
     ("bg-gray-100", "dark:bg-gray-800", "bg-surface-2"),
     ("bg-gray-100", "dark:bg-gray-700", "bg-surface-2"),
+    # Form-field fill (Phase 7): white in light, gray-700 in dark so inputs
+    # read one step lighter than the card they sit on. Exact value match.
+    ("bg-white", "dark:bg-gray-700", "bg-input"),
+    # Recessed fill (Phase 8): gray-50 / gray-700. Exact value match.
+    ("bg-gray-50", "dark:bg-gray-700", "bg-sunken"),
+    # ── Hover state (Phase 8) ─────────────────────────────────────────
+    # Exact-value hover tokens; minority hover shades (gray-50 fills,
+    # gray-600 darks, mid-weight text hovers) are left literal to avoid
+    # value shifts rather than normalised onto the nearest token.
+    ("hover:bg-gray-100", "dark:hover:bg-gray-700", "hover:bg-hover"),
+    ("hover:border-gray-300", "dark:hover:border-gray-500", "hover:border-border-strong"),
+    ("hover:text-gray-900", "dark:hover:text-white", "hover:text-foreground"),
     # ── Text ──────────────────────────────────────────────────────────
     ("text-gray-900", "dark:text-white", "text-foreground"),
     ("text-gray-900", "dark:text-gray-100", "text-foreground"),

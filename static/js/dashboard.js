@@ -372,7 +372,7 @@
         // instead of just "Enable auto-renew" repeated per row (B1 fix).
         return '<button type="button" data-action="toggle-auto-renew" data-domain="' + safeDomain +
             '" data-auto-renew="' + (autoRenewEnabled ? 'true' : 'false') + '" onclick="event.stopPropagation()" ' +
-            'class="p-1.5 ' + color + ' rounded hover:bg-gray-100 dark:hover:bg-gray-700" ' +
+            'class="p-1.5 ' + color + ' rounded hover:bg-hover" ' +
             'title="' + title + '" aria-label="' + title + ' ' + safeDomain + '">' +
             '<i class="fas ' + icon + '" aria-hidden="true"></i></button>';
     }
@@ -475,7 +475,7 @@
                     '</div>' +
                     '<h3 class="text-lg font-medium text-foreground mb-2">No matching certificates</h3>' +
                     '<p class="text-muted mb-6">Try adjusting your search criteria or filters.</p>' +
-                    '<button onclick="clearFilters()" class="inline-flex items-center px-4 py-2 border border-border shadow-sm text-sm font-medium rounded-md text-label bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">' +
+                    '<button onclick="clearFilters()" class="inline-flex items-center px-4 py-2 border border-border shadow-sm text-sm font-medium rounded-md text-label bg-input hover:bg-gray-50 dark:hover:bg-gray-600">' +
                     '<i class="fas fa-times mr-2"></i>Clear Filters</button>' +
                     '</div>' +
                     '</div>' +
@@ -521,7 +521,7 @@
         // API, Auto-renew, Delete" with no domain context, repeated for
         // every row in the table (B1 fix).
         function actionBtn(action, domain, hoverColor, title, icon) {
-            return rowRaw(rowHtml`<button type="button" data-action="${action}" data-domain="${domain}" onclick="event.stopPropagation()" class="p-1.5 text-gray-400 hover:text-${rowRaw(hoverColor)}-600 dark:hover:text-${rowRaw(hoverColor)}-400 rounded hover:bg-gray-100 dark:hover:bg-gray-700" title="${title}" aria-label="${title} ${domain}"><i class="fas ${rowRaw(icon)}" aria-hidden="true"></i></button>`);
+            return rowRaw(rowHtml`<button type="button" data-action="${action}" data-domain="${domain}" onclick="event.stopPropagation()" class="p-1.5 text-gray-400 hover:text-${rowRaw(hoverColor)}-600 dark:hover:text-${rowRaw(hoverColor)}-400 rounded hover:bg-hover" title="${title}" aria-label="${title} ${domain}"><i class="fas ${rowRaw(icon)}" aria-hidden="true"></i></button>`);
         }
 
         container.innerHTML = sorted.map(function (cert) {
@@ -752,19 +752,19 @@
                 '<h4 class="text-sm font-semibold text-foreground uppercase tracking-wider">Actions</h4>' +
                 '<div class="grid grid-cols-1 gap-2">' +
                 (roleAtLeast('operator')
-                    ? '<button type="button" onclick="renewCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-border shadow-sm text-sm font-medium rounded-md text-label bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-sync-alt mr-2 text-green-600"></i>Renew Certificate</button>' +
+                    ? '<button type="button" onclick="renewCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-border shadow-sm text-sm font-medium rounded-md text-label bg-input hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-sync-alt mr-2 text-green-600"></i>Renew Certificate</button>' +
                     '<button type="button" onclick="renewCertificate(\'' + safeDomain + '\', true)" class="w-full inline-flex items-center justify-center px-4 py-2 border border-warning-line shadow-sm text-sm font-medium rounded-md text-warning-fg bg-warning-surface hover:bg-amber-100 dark:hover:bg-amber-900/40"><i class="fas fa-bolt mr-2"></i>Force Renew Certificate</button>'
                     : '') +
-                '<button type="button" onclick="downloadCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-border shadow-sm text-sm font-medium rounded-md text-label bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-download mr-2 text-blue-600"></i>Download Certificate</button>' +
+                '<button type="button" onclick="downloadCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-border shadow-sm text-sm font-medium rounded-md text-label bg-input hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-download mr-2 text-blue-600"></i>Download Certificate</button>' +
                 '<button type="button" onclick="copyCurlCommand(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-info-line shadow-sm text-sm font-medium rounded-md text-info-fg bg-info-surface hover:bg-blue-100 dark:hover:bg-blue-900/50"><i class="fas fa-code mr-2"></i>Show API Command</button>' +
-                '<button type="button" onclick="checkDeploymentStatus(\'' + safeDomain + '\', this, true)" class="w-full inline-flex items-center justify-center px-4 py-2 border border-border shadow-sm text-sm font-medium rounded-md text-label bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-globe mr-2 text-indigo-600"></i>Check Deployment</button>' +
+                '<button type="button" onclick="checkDeploymentStatus(\'' + safeDomain + '\', this, true)" class="w-full inline-flex items-center justify-center px-4 py-2 border border-border shadow-sm text-sm font-medium rounded-md text-label bg-input hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-globe mr-2 text-indigo-600"></i>Check Deployment</button>' +
                 (safeDomainAlias ? '<button type="button" onclick="checkDnsAliasForCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-info-line shadow-sm text-sm font-medium rounded-md text-info-fg bg-info-surface hover:bg-blue-100 dark:hover:bg-blue-900/50"><i class="fas fa-search mr-2"></i>Check DNS-01 Alias</button>' : '') +
                 '<div id="cert_dns_alias_check_result" class="hidden"></div>' +
                 (roleAtLeast('admin')
-                    ? '<button type="button" onclick="runDeployHooks(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-border shadow-sm text-sm font-medium rounded-md text-label bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-rocket mr-2 text-green-600"></i>Run Deploy Hooks Now</button>'
+                    ? '<button type="button" onclick="runDeployHooks(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-border shadow-sm text-sm font-medium rounded-md text-label bg-input hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-rocket mr-2 text-green-600"></i>Run Deploy Hooks Now</button>'
                     : '') +
                 (roleAtLeast('operator')
-                    ? '<button type="button" onclick="toggleAutoRenew(\'' + safeDomain + '\', ' + (cert.auto_renew !== false ? 'true' : 'false') + ')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-border shadow-sm text-sm font-medium rounded-md text-label bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas ' + (cert.auto_renew !== false ? 'fa-toggle-on text-purple-600' : 'fa-toggle-off text-amber-600') + ' mr-2"></i>' + (cert.auto_renew !== false ? 'Disable Auto-Renew' : 'Enable Auto-Renew') + '</button>'
+                    ? '<button type="button" onclick="toggleAutoRenew(\'' + safeDomain + '\', ' + (cert.auto_renew !== false ? 'true' : 'false') + ')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-border shadow-sm text-sm font-medium rounded-md text-label bg-input hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas ' + (cert.auto_renew !== false ? 'fa-toggle-on text-purple-600' : 'fa-toggle-off text-amber-600') + ' mr-2"></i>' + (cert.auto_renew !== false ? 'Disable Auto-Renew' : 'Enable Auto-Renew') + '</button>'
                     : '') +
                 (roleAtLeast('admin')
                     ? '<button type="button" onclick="deleteCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-danger-line shadow-sm text-sm font-medium rounded-md text-danger-fg bg-danger-surface hover:bg-red-100 dark:hover:bg-red-900/40"><i class="fas fa-trash-alt mr-2"></i>Delete Certificate</button>'
