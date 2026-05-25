@@ -73,3 +73,38 @@ Run `replicas: 1` unless all mutable paths (`/app/data`, `/app/certificates`,
 writers and you have validated scheduler/renewal behavior for multiple pods.
 Azure Key Vault can store certificates remotely, but CertMate still keeps local
 settings, metadata, backups, and runtime state.
+
+## Deployment Status Badge Shows "Backend: Unreachable"
+
+*Updated 2026-05-25 (see [#263](https://github.com/fabriziosalmi/certmate/issues/263)).*
+
+The deployment-status badge on the dashboard is an optional health indicator and
+does **not** affect issuance, renewal, or download. CertMate's own process opens
+a plain TLS connection to `<domain>:443` and compares the served certificate's
+fingerprint against the stored one:
+
+- **Deployed** — handshake succeeded and the fingerprint matches.
+- **Wrong Cert** — handshake succeeded but a different certificate is served.
+- **Unreachable** — the pod could not open a TLS connection to the domain at all.
+
+On Kubernetes, **Unreachable for every certificate is expected** whenever the
+CertMate pod cannot dial your public/ingress IP point-to-point. Common causes:
+
+- The domain resolves to a public/ingress IP that is not routable from inside
+  the pod (hairpin/NAT or split-horizon DNS).
+- An egress `NetworkPolicy` blocks outbound 443.
+- TLS is terminated by your ingress controller or an external load balancer, so
+  there is no endpoint CertMate can reach directly.
+- The probe is simply slow and exceeds the default 3-second budget.
+
+If the target is reachable but slow, raise the probe budget:
+
+```yaml
+env:
+  - name: CERTMATE_TLS_PROBE_TIMEOUT_SECONDS
+    value: "10"   # accepts 1–30 seconds; default is 3
+```
+
+Otherwise the badge is safe to ignore in an ingress/Kubernetes topology — the
+certificates are issued and served correctly even when CertMate cannot probe
+them itself.
