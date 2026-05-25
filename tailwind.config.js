@@ -50,6 +50,7 @@ module.exports = {
         input:       'hsl(var(--color-input) / <alpha-value>)',   // form field fill (white / gray-700)
         sunken:      'hsl(var(--color-sunken) / <alpha-value>)',  // recessed fill (gray-50 / gray-700)
         hover:       'hsl(var(--color-hover) / <alpha-value>)',   // interactive hover wash (gray-100 / gray-700)
+        accent:      'hsl(var(--color-accent) / <alpha-value>)',  // on-surface accent, blue-600 -> blue-400 on dark (nav/links)
         // Status callout tokens (Phase 6) — surface/line/fg/strong, var-backed
         // and theme-aware. Re-add success/warning/danger as token GROUPS (the
         // old flat aliases were removed for having zero call sites); the

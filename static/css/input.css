@@ -58,6 +58,7 @@
     --color-sunken:     210 20% 98%;   /* gray-50  — recessed fill        */
     --color-hover:      220 14% 96%;   /* gray-100 — interactive hover    */
     --color-border-strong: 216 12% 84%;/* gray-300 — hover/emphasis border*/
+    --color-accent:     221 83% 53%;   /* blue-600 — on-surface accent (nav/links) */
 
     /* Status callouts — surface / line / fg (body) / strong (heading).
        Phase 6: tokenize the green/red/amber/blue info-boxes that earlier
@@ -79,6 +80,7 @@
     --color-sunken:     217 19% 27%;   /* gray-700 */
     --color-hover:      217 19% 27%;   /* gray-700 */
     --color-border-strong: 220 9% 46%; /* gray-500 */
+    --color-accent:     213 94% 68%;   /* blue-400 — lighter accent on dark */
 
     /* Status callouts — dark tints blended over the card surface. */
     --color-info-surface:    223 41% 17%;  --color-info-line:    225 58% 25%;  --color-info-fg:    212 96% 78%;  --color-info-strong:    213 97% 87%;
@@ -177,11 +179,11 @@ html.dark {
            dark:focus:ring-offset-gray-800;
   }
   .btn-secondary {
-    @apply bg-white dark:bg-gray-700
-           text-gray-700 dark:text-gray-200
-           border-gray-300 dark:border-gray-600
-           hover:bg-gray-50 dark:hover:bg-gray-600
-           focus:ring-gray-300 dark:focus:ring-gray-500;
+    @apply bg-input
+           text-label
+           border-border-strong
+           hover:bg-sunken
+           focus:ring-border-strong;
   }
   .btn-danger {
     @apply bg-red-600 text-white hover:bg-red-700
@@ -192,11 +194,10 @@ html.dark {
      icon in a header). Inherits .btn's focus ring but skips
      the heavy border / coloured background. */
   .btn-ghost {
-    @apply text-gray-400 hover:text-gray-600
-           dark:text-gray-500 dark:hover:text-gray-200
-           bg-transparent hover:bg-gray-100 dark:hover:bg-gray-700
+    @apply text-muted hover:text-foreground
+           bg-transparent hover:bg-hover
            border-transparent
-           focus:ring-gray-300 dark:focus:ring-gray-500;
+           focus:ring-border-strong;
   }
   /* Size overrides — combine with .btn and a variant: */
   .btn-sm { @apply px-3 py-1.5 text-xs; }
@@ -209,8 +210,8 @@ html.dark {
      site for inner padding — kept out of .card so a card with
      a header-band + body can split padding across rows. */
   .card {
-    @apply bg-white dark:bg-surface-card
-           border border-gray-200 dark:border-white/5
+    @apply bg-surface
+           border border-border
            shadow-card rounded-xl;
   }
 
@@ -245,17 +246,17 @@ html.dark {
   .form-input,
   .form-select {
     @apply block w-full
-           border border-gray-300 dark:border-gray-600
-           bg-white dark:bg-gray-700
-           text-gray-900 dark:text-white
-           placeholder-gray-400
+           border border-border-strong
+           bg-input
+           text-foreground
+           placeholder-muted
            rounded-md shadow-sm py-2 px-3
            focus:outline-none focus:ring-primary focus:border-primary
            disabled:opacity-60 disabled:cursor-not-allowed;
   }
   .form-label {
     @apply block text-sm font-medium
-           text-gray-700 dark:text-gray-300;
+           text-label;
   }
 }
 /* Global press feedback for all primary-colored buttons */
@@ -431,11 +432,11 @@ button[class*="bg-red-6"]:active {
 
 /* ── Nav active indicator ────────────────────────────────────── */
 .nav-active {
-  @apply text-blue-600 dark:text-blue-400 font-semibold border-b-2 border-blue-500 dark:border-blue-400;
+  @apply text-accent font-semibold border-b-2 border-accent;
 }
 .nav-inactive {
-  @apply text-gray-500 dark:text-gray-400 font-medium border-b-2 border-transparent
-         hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600
+  @apply text-muted font-medium border-b-2 border-transparent
+         hover:text-foreground hover:border-border-strong
          transition-colors duration-150;
 }
 
