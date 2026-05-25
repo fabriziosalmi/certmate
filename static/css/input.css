@@ -46,6 +46,7 @@
      (docs/THEME_MIGRATION.md). The existing primary/success/etc.
      colors are intentionally left untouched until later phases. */
   :root {
+    --ease-premium: cubic-bezier(0.16, 1, 0.3, 1);  /* shared motion curve */
     --color-background: 220 20% 97%;   /* page            (surface.light) */
     --color-surface:      0  0% 100%;  /* card / panel    (was bg-white)  */
     --color-surface-2:  220 14% 96%;   /* elevated / sunken              */
@@ -106,13 +107,14 @@ html.dark {
   to   { opacity: 1; transform: translateY(0); }
 }
 .page-enter {
-  animation: pageEnter 250ms ease-out;
+  animation: pageEnter 250ms var(--ease-premium);
 }
 
 /* ── Button press feedback ───────────────────────────────────── */
 @layer components {
   .btn-press {
     @apply transition-all duration-150;
+    transition-timing-function: var(--ease-premium);
   }
   .btn-press:active {
     transform: scale(0.97);
@@ -259,7 +261,7 @@ button[class*="bg-red-6"]:active {
   to   { opacity: 1; transform: translateX(0); }
 }
 .row-enter {
-  animation: rowSlideIn 180ms ease-out backwards;
+  animation: rowSlideIn 180ms var(--ease-premium) backwards;
 }
 
 /* ── Skeleton shimmer ────────────────────────────────────────── */
@@ -360,7 +362,7 @@ button[class*="bg-red-6"]:active {
 
 /* ── Detail panel entrance ───────────────────────────────────── */
 .panel-slide {
-  transition: transform 300ms cubic-bezier(0.16, 1, 0.3, 1),
+  transition: transform 300ms var(--ease-premium),
               opacity 200ms ease;
 }
 
@@ -399,4 +401,19 @@ button[class*="bg-red-6"]:active {
   @apply text-gray-500 dark:text-gray-400 font-medium border-b-2 border-transparent
          hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600
          transition-colors duration-150;
+}
+
+/* ── Reduced motion ──────────────────────────────────────────── */
+/* Honour the OS "reduce motion" setting. Collapses every animation
+   and transition to near-zero — including the infinite shimmer /
+   badge-pulse and the page/row entrances — without disabling final
+   state (iteration-count:1 lets one-shot keyframes settle on their
+   end frame). scroll-behavior is reset so anchor jumps are instant. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

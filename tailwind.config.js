@@ -27,6 +27,12 @@ module.exports = {
         sans: ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
         mono: ['JetBrains Mono', 'Menlo', 'Consolas', 'monospace'],
       },
+      // Single premium easing curve (ease-out-expo). Mirrors the literal
+      // cubic-bezier already used by .panel-slide so entrances/exits share
+      // one motion signature; also bound to --ease-premium in input.css.
+      transitionTimingFunction: {
+        premium: 'cubic-bezier(0.16, 1, 0.3, 1)',
+      },
       colors: {
         // Semantic theme tokens — backed by CSS variables defined in
         // input.css (:root / .dark). The `<alpha-value>` placeholder lets
