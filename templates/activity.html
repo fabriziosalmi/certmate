@@ -52,13 +52,13 @@
         var currentLimit = ACTIVITY_INITIAL_LIMIT;
 
         var opIcons = {
-            create: { icon: 'fa-plus-circle', color: 'text-green-500', bg: 'bg-green-100 dark:bg-green-900/30' },
-            renew: { icon: 'fa-sync', color: 'text-blue-500', bg: 'bg-blue-100 dark:bg-blue-900/30' },
-            revoke: { icon: 'fa-ban', color: 'text-red-500', bg: 'bg-red-100 dark:bg-red-900/30' },
+            create: { icon: 'fa-plus-circle', color: 'text-green-500', bg: 'bg-success-surface' },
+            renew: { icon: 'fa-sync', color: 'text-blue-500', bg: 'bg-info-surface' },
+            revoke: { icon: 'fa-ban', color: 'text-red-500', bg: 'bg-danger-surface' },
             download: { icon: 'fa-download', color: 'text-indigo-500', bg: 'bg-indigo-100 dark:bg-indigo-900/30' },
             api_request: { icon: 'fa-code', color: 'text-gray-500', bg: 'bg-surface-2' },
             batch_create: { icon: 'fa-layer-group', color: 'text-purple-500', bg: 'bg-purple-100 dark:bg-purple-900/30' },
-            failure: { icon: 'fa-exclamation-circle', color: 'text-red-500', bg: 'bg-red-100 dark:bg-red-900/30' }
+            failure: { icon: 'fa-exclamation-circle', color: 'text-red-500', bg: 'bg-danger-surface' }
         };
 
         function getOpStyle(entry) {
@@ -332,7 +332,7 @@
                     '<div class="flex-1 min-w-0">' +
                         '<div class="flex items-center gap-2">' +
                             '<span class="text-sm font-medium text-foreground">' + escapeHtml(opLabel(entry)) + '</span>' +
-                            (entry.status === 'failure' ? '<span class="px-1.5 py-0.5 text-[10px] font-medium bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded">FAILED</span>' : '') +
+                            (entry.status === 'failure' ? '<span class="px-1.5 py-0.5 text-[10px] font-medium bg-danger-surface text-danger-fg rounded">FAILED</span>' : '') +
                         '</div>' +
                         '<p class="text-sm text-muted truncate">' +
                             escapeHtml(entry.resource_type) + ': <strong>' + escapeHtml(entry.resource_id) + '</strong>' +

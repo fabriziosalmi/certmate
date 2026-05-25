@@ -66,8 +66,8 @@
         overlay.setAttribute('aria-labelledby', 'recoveryPromptTitle');
         overlay.innerHTML =
             '<div class="bg-surface rounded-2xl shadow-2xl w-full max-w-lg p-8 text-center">' +
-                '<div class="w-16 h-16 bg-yellow-100 dark:bg-yellow-900/30 rounded-full flex items-center justify-center mx-auto mb-4">' +
-                    '<i class="fas fa-exclamation-triangle text-yellow-600 dark:text-yellow-400 text-2xl"></i>' +
+                '<div class="w-16 h-16 bg-warning-surface rounded-full flex items-center justify-center mx-auto mb-4">' +
+                    '<i class="fas fa-exclamation-triangle text-warning-fg text-2xl"></i>' +
                 '</div>' +
                 '<h2 id="recoveryPromptTitle" class="text-xl font-bold text-foreground mb-2">Existing Data Detected</h2>' +
                 '<p class="text-sm text-muted mb-6">' +
@@ -183,8 +183,8 @@
         var body = document.getElementById('wizardBody');
         body.innerHTML =
             '<div class="text-center mb-6">' +
-                '<div class="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mx-auto mb-4">' +
-                    '<i class="fas fa-envelope text-blue-600 dark:text-blue-400 text-2xl"></i>' +
+                '<div class="w-16 h-16 bg-info-surface rounded-full flex items-center justify-center mx-auto mb-4">' +
+                    '<i class="fas fa-envelope text-info-fg text-2xl"></i>' +
                 '</div>' +
                 '<h3 class="text-lg font-semibold text-foreground">Contact Email</h3>' +
                 '<p class="text-sm text-muted mt-1">Required by certificate authorities for important notifications</p>' +
@@ -234,8 +234,8 @@
         var body = document.getElementById('wizardBody');
         var html =
             '<div class="text-center mb-6">' +
-                '<div class="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-4">' +
-                    '<i class="fas fa-server text-green-600 dark:text-green-400 text-2xl"></i>' +
+                '<div class="w-16 h-16 bg-success-surface rounded-full flex items-center justify-center mx-auto mb-4">' +
+                    '<i class="fas fa-server text-success-fg text-2xl"></i>' +
                 '</div>' +
                 '<h3 class="text-lg font-semibold text-foreground">DNS Provider</h3>' +
                 '<p class="text-sm text-muted mt-1">Select where your domains are managed</p>' +
@@ -368,7 +368,7 @@
         var body = document.getElementById('wizardBody');
         body.innerHTML =
             '<div class="text-center">' +
-                '<div class="w-20 h-20 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-4">' +
+                '<div class="w-20 h-20 bg-success-surface rounded-full flex items-center justify-center mx-auto mb-4">' +
                     '<i class="fas fa-check-circle text-green-500 text-4xl"></i>' +
                 '</div>' +
                 '<h3 class="text-xl font-bold text-foreground mb-2">You\'re All Set!</h3>' +

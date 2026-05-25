@@ -106,13 +106,13 @@
             return '<tr class="hover:bg-gray-50 dark:hover:bg-gray-700 transition">' +
                 '<td class="px-6 py-4 text-sm font-medium text-foreground">' + safeCN + '</td>' +
                 '<td class="px-6 py-4 text-sm text-muted hidden md:table-cell">' + safeEmail + '</td>' +
-                '<td class="px-6 py-4 text-sm hidden lg:table-cell"><span class="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded text-xs font-medium">' + safeUsage + '</span></td>' +
+                '<td class="px-6 py-4 text-sm hidden lg:table-cell"><span class="px-2 py-1 bg-info-surface text-info-strong rounded text-xs font-medium">' + safeUsage + '</span></td>' +
                 '<td class="px-6 py-4 text-sm text-muted hidden lg:table-cell">' + createdDate.toLocaleDateString() + '</td>' +
-                '<td class="px-6 py-4 text-sm ' + (isExpiringSoon ? 'text-red-600 dark:text-red-400 font-semibold' : 'text-muted') + '">' + expiresDate.toLocaleDateString() + '</td>' +
+                '<td class="px-6 py-4 text-sm ' + (isExpiringSoon ? 'text-danger-fg font-semibold' : 'text-muted') + '">' + expiresDate.toLocaleDateString() + '</td>' +
                 '<td class="px-6 py-4 text-sm">' +
                     (cert.revoked
-                        ? '<span class="px-2 py-1 bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 rounded text-xs font-medium">Revoked</span>'
-                        : '<span class="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 rounded text-xs font-medium">Active</span>') +
+                        ? '<span class="px-2 py-1 bg-danger-surface text-danger-strong rounded text-xs font-medium">Revoked</span>'
+                        : '<span class="px-2 py-1 bg-success-surface text-success-strong rounded text-xs font-medium">Active</span>') +
                 '</td>' +
                 '<td class="px-6 py-4 text-sm text-right">' +
                     '<div class="flex items-center justify-end gap-1">' +

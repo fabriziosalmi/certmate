@@ -593,7 +593,7 @@
                 var providerData = dnsProviders[provider];
                 if (providerData && providerData.configured) {
                     statusEl.textContent = 'Configured';
-                    statusEl.className = 'text-xs text-green-600 dark:text-green-400 mt-1';
+                    statusEl.className = 'text-xs text-success-fg mt-1';
 
                     if (accountsEl && countEl) {
                         countEl.textContent = providerData.accounts.length;
@@ -1407,7 +1407,7 @@
         var safeProvider = escapeHtml(provider);
 
         var descHtml = account.description ? '<p class="text-xs text-muted mt-1">' + safeDesc + '</p>' : '';
-        var defaultBadge = isDefault ? '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400"><i class="fas fa-star mr-1"></i>Default</span>' : '';
+        var defaultBadge = isDefault ? '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-info-surface text-blue-800 dark:text-blue-400"><i class="fas fa-star mr-1"></i>Default</span>' : '';
 
         card.innerHTML =
             '<div class="flex items-center justify-between">' +
@@ -1594,7 +1594,7 @@
                 var safeFilename = escapeHtml(backup.filename);
                 var safeReason = escapeHtml(reason);
                 unifiedHtml +=
-                    '<div class="flex items-center justify-between p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-700">' +
+                    '<div class="flex items-center justify-between p-3 bg-success-surface rounded-lg border border-success-line">' +
                     '<div class="flex-1 min-w-0">' +
                     '<div class="text-sm font-medium text-foreground truncate">' + safeFilename + '</div>' +
                     '<div class="text-xs text-muted mt-1">' + createdDate + '</div>' +
@@ -1606,17 +1606,17 @@
                     '</div>' +
                     '<div class="flex space-x-1 ml-2">' +
                     '<button data-action="download-backup" data-backup-type="unified" data-filename="' + safeFilename + '"' +
-                    ' class="p-2 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded transition-colors"' +
+                    ' class="p-2 text-info-fg hover:text-blue-800 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded transition-colors"' +
                     ' title="Download backup">' +
                     '<i class="fas fa-download text-sm"></i>' +
                     '</button>' +
                     '<button data-action="restore-backup" data-backup-type="unified" data-filename="' + safeFilename + '"' +
-                    ' class="p-2 text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300 hover:bg-green-50 dark:hover:bg-green-900/30 rounded transition-colors"' +
+                    ' class="p-2 text-success-fg hover:text-green-800 dark:hover:text-green-300 hover:bg-green-50 dark:hover:bg-green-900/30 rounded transition-colors"' +
                     ' title="Restore backup">' +
                     '<i class="fas fa-undo text-sm"></i>' +
                     '</button>' +
                     '<button data-action="delete-backup" data-backup-type="unified" data-filename="' + safeFilename + '"' +
-                    ' class="p-2 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30 rounded transition-colors"' +
+                    ' class="p-2 text-danger-fg hover:text-red-800 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30 rounded transition-colors"' +
                     ' title="Delete backup">' +
                     '<i class="fas fa-trash text-sm"></i>' +
                     '</button>' +
@@ -2509,10 +2509,10 @@
             '<p class="text-sm text-muted">' +
             'This will migrate all existing certificates from the current storage backend to the newly configured backend.' +
             '</p>' +
-            '<div class="mt-3 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-md">' +
+            '<div class="mt-3 p-3 bg-warning-surface border border-warning-line rounded-md">' +
             '<div class="flex">' +
             '<i class="fas fa-exclamation-triangle text-yellow-400 mt-0.5 mr-2"></i>' +
-            '<div class="text-sm text-yellow-800 dark:text-yellow-200">' +
+            '<div class="text-sm text-warning-strong">' +
             '<strong>Important:</strong> This operation will copy certificates to the new backend. ' +
             'Original certificates will remain in the current location until manually removed.' +
             '</div>' +
