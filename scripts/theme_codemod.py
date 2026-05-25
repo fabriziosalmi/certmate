@@ -22,9 +22,15 @@ Default mode is a DRY-RUN report:
 Run `--apply` to rewrite files in place. Intended to be run one phase / one
 file-glob at a time, never all at once:
 
-    python scripts/theme_codemod.py                       # report, all templates
+    python scripts/theme_codemod.py                       # report (templates + first-party JS)
     python scripts/theme_codemod.py templates/base.html   # report, one file
     python scripts/theme_codemod.py --apply templates/base.html
+    python scripts/theme_codemod.py --check               # CI gate: exit 1 if any pair remains
+
+Two passes run per file: a boundary-aware literal pass that collapses adjacent
+`LIGHT DARK` substrings in ANY context (class="...", className='...', JS string
+concatenation, Alpine :class ternaries), and a set-based pass within class="..."
+attributes that also handles non-adjacent pairs and reports the leftover tail.
 
 After --apply, always: rebuild CSS (npm run css:build), diff against the
 visual baseline, review the residual dark: variants the tool left untouched.
@@ -57,6 +63,9 @@ MAPPINGS: list[tuple[str, str, str]] = [
     ("text-gray-500", "dark:text-gray-400", "text-muted"),
     ("text-gray-600", "dark:text-gray-400", "text-muted"),
     ("text-gray-600", "dark:text-gray-300", "text-muted"),
+    # Label / mid-weight body text — its own token so the gray-700 weight is
+    # preserved exactly (foreground would over-darken it). See THEME_MIGRATION.
+    ("text-gray-700", "dark:text-gray-300", "text-label"),
     # ── Borders ───────────────────────────────────────────────────────
     ("border-gray-200", "dark:border-gray-700", "border-border"),
     ("border-gray-300", "dark:border-gray-600", "border-border"),
@@ -78,6 +87,29 @@ CLASS_ATTR_RE = re.compile(r'class="([^"]*)"')
 DARK_COLOR_RE = re.compile(
     r"^dark:(bg|text|border|ring|divide|placeholder|from|to|via)-"
     r"(gray|slate|zinc|neutral|white|black)")
+
+# Boundary-aware patterns for the literal adjacent-pair pass. These catch
+# "LIGHT DARK" as a literal substring in ANY context — class="...",
+# className='...', JS string concatenation, Alpine :class ternaries — which the
+# class-attribute pass alone misses (it only sees double-quoted class attrs).
+# The lookbehind/lookahead stop it matching inside a larger token (e.g.
+# hover:LIGHT) or an opacity-suffixed DARK (dark:...-400/50); \s+ spans the
+# newline+indent used by multi-line class attributes.
+_LITERAL_PAIRS = [
+    (re.compile(r"(?<![\w:/-])" + re.escape(light) + r"\s+"
+                + re.escape(dark) + r"(?![\w/-])"), token)
+    for light, dark, token in MAPPINGS
+]
+
+
+def literal_pass(text: str) -> tuple[str, "Counter"]:
+    """Collapse adjacent LIGHT+DARK pairs anywhere in the raw text."""
+    hits: Counter = Counter()
+    for pat, token in _LITERAL_PAIRS:
+        text, n = pat.subn(token, text)
+        if n:
+            hits[token] += n
+    return text, hits
 
 
 def transform(class_value: str) -> tuple[str, Counter]:
@@ -132,41 +164,73 @@ def process(path: Path, apply: bool) -> tuple[Counter, Counter]:
     file_hits: Counter = Counter()
     leftover: Counter = Counter()
 
+    # Pass 1: literal adjacent pairs, context-independent.
+    work, lit_hits = literal_pass(text)
+    file_hits.update(lit_hits)
+
+    # Pass 2: set-based within class="..." — catches non-adjacent pairs and
+    # reports the leftover dark: tail for review.
     def repl(m: re.Match) -> str:
-        original = m.group(1)
-        new_value, hits = transform(original)
+        new_value, hits = transform(m.group(1))
         file_hits.update(hits)
-        # After the (hypothetical) transform, what dark: variants remain?
         for d in ambiguous_darks(new_value):
             leftover[d] += 1
-        return f'class="{new_value}"' if apply else m.group(0)
+        return f'class="{new_value}"'
 
-    new_text = CLASS_ATTR_RE.sub(repl, text)
-    if apply and new_text != text:
-        path.write_text(new_text, encoding="utf-8")
+    work = CLASS_ATTR_RE.sub(repl, work)
+    if apply and work != text:
+        path.write_text(work, encoding="utf-8")
     return file_hits, leftover
+
+
+_VENDORED = ("alpine.min.js", "redoc.standalone.js")
+
+
+def collect(target: str) -> list[Path]:
+    p = Path(target)
+    if p.is_file():
+        return [p]
+    out: list[Path] = []
+    for ext in ("*.html", "*.js"):
+        for f in p.rglob(ext):
+            if f.name.endswith(".min.js") or f.name in _VENDORED:
+                continue
+            out.append(f)
+    return sorted(out)
 
 
 def main(argv: list[str]) -> int:
     apply = "--apply" in argv
+    check = "--check" in argv
     args = [a for a in argv if not a.startswith("--")]
-    targets = args or ["templates"]
+    # Default scope spans templates + first-party JS so --check is a complete
+    # regression gate, not just an HTML scan.
+    targets = args or ["templates", "static/js"]
 
     files: list[Path] = []
     for t in targets:
-        p = Path(t)
-        files.extend(sorted(p.rglob("*.html")) if p.is_dir() else [p])
+        files.extend(collect(t))
 
     total_hits: Counter = Counter()
     total_leftover: Counter = Counter()
+    # --check is a dry-run gate: never write.
     print(f"{'PAIRS':>6}  FILE")
     print("-" * 60)
     for f in files:
-        hits, leftover = process(f, apply)
+        hits, leftover = process(f, apply and not check)
         total_hits.update(hits)
         total_leftover.update(leftover)
         if sum(hits.values()):
             print(f"{sum(hits.values()):>6}  {f}")
+
+    if check:
+        total = sum(total_hits.values())
+        if total:
+            print(f"\nFAIL: {total} collapsible light+dark pair(s) found — run "
+                  "'python scripts/theme_codemod.py --apply' and commit.")
+            return 1
+        print("\nOK: no collapsible light+dark pairs remain.")
+        return 0
 
     print("\n=== collapsible pairs by token "
           f"({'APPLIED' if apply else 'dry-run'}) ===")
