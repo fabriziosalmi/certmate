@@ -802,6 +802,13 @@
                     { field: 'edgedns_client_secret', config: 'client_secret' },
                     { field: 'edgedns_access_token', config: 'access_token' },
                     { field: 'edgedns_host', config: 'host' }
+                ],
+                'nsone': [
+                    { field: 'nsone_api_key', config: 'api_key' }
+                ],
+                'dnsmadeeasy': [
+                    { field: 'dnsmadeeasy_api_key', config: 'api_key' },
+                    { field: 'dnsmadeeasy_secret_key', config: 'secret_key' }
                 ]
             };
 
@@ -1115,10 +1122,11 @@
                 { name: 'token', label: 'API Token', type: 'password', placeholder: 'Your Dynu API token', required: true }
             ],
             'dnsmadeeasy': [
-                { name: 'api_token', label: 'API Token', type: 'password', placeholder: 'Your DNS Made Easy API token', required: true }
+                { name: 'api_key', label: 'API Key', type: 'password', placeholder: 'Your DNS Made Easy API key', required: true },
+                { name: 'secret_key', label: 'Secret Key', type: 'password', placeholder: 'Your DNS Made Easy secret key', required: true }
             ],
             'nsone': [
-                { name: 'api_token', label: 'API Token', type: 'password', placeholder: 'Your NS1 API token', required: true }
+                { name: 'api_key', label: 'API Key', type: 'password', placeholder: 'Your NS1 API key', required: true }
             ],
             'duckdns': [
                 { name: 'api_token', label: 'Account Token', type: 'password', placeholder: 'UUID-format token from your DuckDNS account page', required: true }
