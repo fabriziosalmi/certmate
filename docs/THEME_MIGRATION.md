@@ -103,7 +103,7 @@ A handful of leftovers (`dark:text-gray-400{%`, `dark:text-gray-300'`) are class
 - [x] Validate light/dark parity. Verified live in Docker (base.html + login.html, both themes) — pilot accepted.
 
 #### Open design decisions (surfaced by the pilot)
-1. **Form-label text** (`text-gray-700 dark:text-gray-300`, ~114 occurrences app-wide). Left unmigrated. Options: (a) fold into `text-foreground` — but light goes 27%→11% L, a *visible* darkening, so not faithful; (b) add a third neutral text token (`--color-label` = gray-700/gray-300). Leaning (b); decide once the baseline lets us compare. Until then the codemod has **no** mapping for this pair (correct — it stays in the ambiguity report).
+1. **Form-label text** (`text-gray-700 dark:text-gray-300`). **RESOLVED in Phase 5 → option (b):** added `--color-label` token at the exact gray-700/gray-300 values (faithful, no visual change) and migrated all 137 occurrences to `text-label`. Folding into `text-foreground` was rejected (would darken light mode 27%→11% L).
 2. **Border unification**: `border-gray-300` (inputs) now maps to `border-border` (= gray-200), so input borders lighten one step in light mode. Accepted for the pilot (single border token is the goal); revisit with `--color-input-border` only if review dislikes it.
 3. **Glass inputs / `dark:border-white/5` hairline / hover: variants / status colors**: intentionally NOT tokenized — glass controls have no light counterpart, the white/5 hairline is the canonical `.card` edge, and hover/status need their own variant-token pass (a later phase).
 
@@ -123,11 +123,20 @@ A handful of leftovers (`dark:text-gray-400{%`, `dark:text-gray-300'`) are class
 - [x] JS: client-certs.js, cmd-palette.js, report-issue.js, shortcuts.js (26 pairs, `node --check` clean). setup-wizard.js was already done in Phase 3.
 - Same carve-outs as before: glass inputs, body/label grays, opacity surfaces, status colors, hover:, and string-concatenation-boundary classes.
 
-### Phase 5 — Cleanup & lock-in
-- [ ] Move JS hex palettes (toast/chart in `certmate.js:356`) to read from CSS vars / token map.
-- [ ] Remove legacy aliases + now-unused scales from `tailwind.config.js`.
-- [ ] CI guardrail: grep that fails on new `dark:bg-gray-*` / hardcoded hex in templates.
-- [ ] Refresh baseline as the final reference.
+### Phase 5 — Cleanup & lock-in ✅
+- [x] Closed the label decision: `text-label` token + 137 sites migrated (see above).
+- [x] Caught the codemod blind spot: it only scanned `class="..."`, missing `className='...'` assignments and JS string concatenation. Added a **boundary-aware literal-pass** (collapses adjacent `LIGHT DARK` substrings in any context) + the `--check` gate. Re-running the full sweep collapsed the remaining JS pairs (confirm/prompt dialog, report-issue + shortcuts modals).
+- [x] Removed unused legacy aliases `success`/`warning`/`danger` from `tailwind.config.js` (0 call sites). Kept `primary` (~375) and `secondary` (gradients).
+- [x] **CI guardrail**: `python3 scripts/theme_codemod.py --check` in the `frontend-css` job — fails the build if any collapsible light+dark pair is reintroduced in a template or first-party JS file.
+- **JS hex left as-is, by design:** the `#60a5fa`/etc. palette in `certmate.js` is the **debug-console logger** on a fixed always-dark surface (`bg-black`); `TOAST_COLORS` are literal status classes. Both are theme-independent status accents — conventionally not part of light/dark theming — so they stay literal rather than becoming theme tokens. A future **status-token pass** (success/warning/danger/info as vars) is the place to unify these if ever wanted.
+- Baseline refresh: optional; not run (capture was deferred — live Docker verification used at each phase instead).
+
+## Status colors — explicit non-goal
+Health/deployment/badge colors (green/amber/red/blue, with their `dark:`
+variants) were deliberately **not** tokenized in any phase. They carry
+semantic meaning and are conventionally theme-invariant. The codemod's
+`_STATUS_RE` excludes them, and `--check` does not flag them. Tokenizing them
+is a separate, optional "status-token pass", out of scope for this migration.
 
 ## Workflow alignment
 - Zero emoji in commits/PRs/release notes.
