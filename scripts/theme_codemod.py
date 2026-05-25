@@ -56,6 +56,9 @@ MAPPINGS: list[tuple[str, str, str]] = [
     ("bg-gray-50", "dark:bg-surface-dark", "bg-background"),
     ("bg-gray-100", "dark:bg-gray-800", "bg-surface-2"),
     ("bg-gray-100", "dark:bg-gray-700", "bg-surface-2"),
+    # Form-field fill (Phase 7): white in light, gray-700 in dark so inputs
+    # read one step lighter than the card they sit on. Exact value match.
+    ("bg-white", "dark:bg-gray-700", "bg-input"),
     # ── Text ──────────────────────────────────────────────────────────
     ("text-gray-900", "dark:text-white", "text-foreground"),
     ("text-gray-900", "dark:text-gray-100", "text-foreground"),

@@ -398,7 +398,7 @@
                     <div class="flex flex-col sm:flex-row items-stretch sm:items-center space-y-2 sm:space-y-0 sm:space-x-2 lg:space-x-3">
                         <div class="relative">
                             <input type="text" id="certificateSearch" placeholder="Search certificates..."
-                                   class="pl-10 pr-8 py-2 border border-border dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-primary focus:border-primary text-sm bg-white shadow-sm transition-shadow duration-200 w-full sm:w-48">
+                                   class="pl-10 pr-8 py-2 border border-border bg-input dark:text-white rounded-lg focus:ring-2 focus:ring-primary focus:border-primary text-sm shadow-sm transition-shadow duration-200 w-full sm:w-48">
                             <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                 <i class="fas fa-search text-gray-400"></i>
                             </div>
@@ -406,7 +406,7 @@
                                 <kbd class="px-1.5 py-0.5 text-[10px] text-gray-400 bg-gray-100 dark:bg-gray-600 rounded border border-border">/</kbd>
                             </div>
                         </div>
-                        <select id="statusFilter" class="border border-border dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white shadow-sm transition-shadow duration-200">
+                        <select id="statusFilter" class="border border-border bg-input dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary shadow-sm transition-shadow duration-200">
                             <option value="all">All Status</option>
                             <option value="valid">Valid</option>
                             <option value="expiring">Expiring Soon</option>
@@ -421,7 +421,7 @@
                             <span class="sm:hidden">Check</span>
                         </button>
                         <button type="button" data-debug-control onclick="toggleDebugConsole()"
-                                class="hidden inline-flex items-center px-3 py-2 border text-muted border-border shadow-sm text-sm font-medium rounded-lg bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors duration-200 whitespace-nowrap"
+                                class="hidden inline-flex items-center px-3 py-2 border text-muted border-border shadow-sm text-sm font-medium rounded-lg bg-input hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors duration-200 whitespace-nowrap"
                                 aria-label="Open deployment-check debug console">
                             <i class="fas fa-terminal mr-1 sm:mr-2"></i>
                             <span class="hidden sm:inline">Debug</span>
@@ -535,7 +535,7 @@
                 <div class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100 p-3 rounded-md font-mono text-sm">
                     <code id="curlCommandText"></code>
                 </div>
-                <button type="button" onclick="copyFromModal()" class="mt-2 inline-flex items-center px-3 py-1 border border-border shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
+                <button type="button" onclick="copyFromModal()" class="mt-2 inline-flex items-center px-3 py-1 border border-border shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 bg-input hover:bg-gray-50 dark:hover:bg-gray-600">
                     <i class="fas fa-copy mr-1"></i>
                     Copy Command
                 </button>

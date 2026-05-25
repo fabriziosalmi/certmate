@@ -1399,7 +1399,7 @@
 
     function createAccountCard(provider, account, isDefault) {
         var card = document.createElement('div');
-        card.className = 'bg-white dark:bg-gray-700 border border-border rounded-lg p-4';
+        card.className = 'bg-input border border-border rounded-lg p-4';
 
         var safeName = escapeHtml(account.name);
         var safeDesc = escapeHtml(account.description);

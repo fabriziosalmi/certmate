@@ -192,7 +192,7 @@
             '<div>' +
                 '<label for="wizEmail" class="block text-sm font-medium text-label mb-2">Email Address</label>' +
                 '<input type="email" id="wizEmail" value="' + escapeHtml(state.email) + '" placeholder="admin@example.com" ' +
-                       'class="w-full px-4 py-3 border text-foreground border-border rounded-lg bg-white dark:bg-gray-700 focus:ring-2 focus:ring-primary focus:border-primary text-sm" required>' +
+                       'class="w-full px-4 py-3 border text-foreground border-border rounded-lg bg-input focus:ring-2 focus:ring-primary focus:border-primary text-sm" required>' +
                 '<p class="mt-2 text-xs text-gray-400"><i class="fas fa-info-circle mr-1"></i>Used by Let\'s Encrypt for expiry warnings and account recovery</p>' +
             '</div>';
 
@@ -311,11 +311,11 @@
             var savedVal = state.credentials[f.key] || '';
             if (f.type === 'textarea') {
                 html += '<div><label class="block text-xs font-medium text-muted mb-1">' + escapeHtml(f.label) + '</label>' +
-                    '<textarea id="wiz_' + f.key + '" rows="3" class="w-full px-3 py-2 border text-foreground border-border rounded-lg bg-white dark:bg-gray-700 text-sm focus:ring-2 focus:ring-primary focus:border-primary" placeholder="' + escapeHtml(f.placeholder || '') + '">' + escapeHtml(savedVal) + '</textarea></div>';
+                    '<textarea id="wiz_' + f.key + '" rows="3" class="w-full px-3 py-2 border text-foreground border-border rounded-lg bg-input text-sm focus:ring-2 focus:ring-primary focus:border-primary" placeholder="' + escapeHtml(f.placeholder || '') + '">' + escapeHtml(savedVal) + '</textarea></div>';
             } else {
                 html += '<div><label class="block text-xs font-medium text-muted mb-1">' + escapeHtml(f.label) + '</label>' +
                     '<input type="' + f.type + '" id="wiz_' + f.key + '" value="' + escapeHtml(savedVal) + '" placeholder="' + escapeHtml(f.placeholder || '') + '" ' +
-                    'class="w-full px-3 py-2 border text-foreground border-border rounded-lg bg-white dark:bg-gray-700 text-sm focus:ring-2 focus:ring-primary focus:border-primary"></div>';
+                    'class="w-full px-3 py-2 border text-foreground border-border rounded-lg bg-input text-sm focus:ring-2 focus:ring-primary focus:border-primary"></div>';
             }
         });
         html += '</div>';

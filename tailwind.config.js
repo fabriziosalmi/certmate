@@ -44,6 +44,7 @@ module.exports = {
         muted:       'hsl(var(--color-muted) / <alpha-value>)',
         label:       'hsl(var(--color-label) / <alpha-value>)',
         border:      'hsl(var(--color-border) / <alpha-value>)',
+        input:       'hsl(var(--color-input) / <alpha-value>)',  // form field fill (white / gray-700)
         // Status callout tokens (Phase 6) — surface/line/fg/strong, var-backed
         // and theme-aware. Re-add success/warning/danger as token GROUPS (the
         // old flat aliases were removed for having zero call sites); the

@@ -50,12 +50,12 @@
                             <span class="text-sm text-label">Enable email notifications</span>
                         </label>
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div><label class="block text-xs text-muted mb-1">SMTP Host</label><input type="text" x-model="config.channels.smtp.host" placeholder="smtp.gmail.com" class="w-full px-3 py-2 text-sm border text-foreground border-border rounded-lg bg-white dark:bg-gray-700"></div>
-                            <div><label class="block text-xs text-muted mb-1">Port</label><input type="number" x-model.number="config.channels.smtp.port" placeholder="587" class="w-full px-3 py-2 text-sm border text-foreground border-border rounded-lg bg-white dark:bg-gray-700"></div>
-                            <div><label class="block text-xs text-muted mb-1">Username</label><input type="text" x-model="config.channels.smtp.username" placeholder="user@example.com" class="w-full px-3 py-2 text-sm border text-foreground border-border rounded-lg bg-white dark:bg-gray-700"></div>
-                            <div><label class="block text-xs text-muted mb-1">Password</label><input type="password" x-model="config.channels.smtp.password" placeholder="App password" class="w-full px-3 py-2 text-sm border text-foreground border-border rounded-lg bg-white dark:bg-gray-700"></div>
-                            <div><label class="block text-xs text-muted mb-1">From Address</label><input type="email" x-model="config.channels.smtp.from_address" placeholder="certmate@example.com" class="w-full px-3 py-2 text-sm border text-foreground border-border rounded-lg bg-white dark:bg-gray-700"></div>
-                            <div><label class="block text-xs text-muted mb-1">To Addresses (comma-separated)</label><input type="text" x-model="smtpToStr" placeholder="admin@example.com" class="w-full px-3 py-2 text-sm border text-foreground border-border rounded-lg bg-white dark:bg-gray-700"></div>
+                            <div><label class="block text-xs text-muted mb-1">SMTP Host</label><input type="text" x-model="config.channels.smtp.host" placeholder="smtp.gmail.com" class="w-full px-3 py-2 text-sm border text-foreground border-border rounded-lg bg-input"></div>
+                            <div><label class="block text-xs text-muted mb-1">Port</label><input type="number" x-model.number="config.channels.smtp.port" placeholder="587" class="w-full px-3 py-2 text-sm border text-foreground border-border rounded-lg bg-input"></div>
+                            <div><label class="block text-xs text-muted mb-1">Username</label><input type="text" x-model="config.channels.smtp.username" placeholder="user@example.com" class="w-full px-3 py-2 text-sm border text-foreground border-border rounded-lg bg-input"></div>
+                            <div><label class="block text-xs text-muted mb-1">Password</label><input type="password" x-model="config.channels.smtp.password" placeholder="App password" class="w-full px-3 py-2 text-sm border text-foreground border-border rounded-lg bg-input"></div>
+                            <div><label class="block text-xs text-muted mb-1">From Address</label><input type="email" x-model="config.channels.smtp.from_address" placeholder="certmate@example.com" class="w-full px-3 py-2 text-sm border text-foreground border-border rounded-lg bg-input"></div>
+                            <div><label class="block text-xs text-muted mb-1">To Addresses (comma-separated)</label><input type="text" x-model="smtpToStr" placeholder="admin@example.com" class="w-full px-3 py-2 text-sm border text-foreground border-border rounded-lg bg-input"></div>
                         </div>
                         <button type="button" @click="testSmtp()" class="text-sm text-info-fg hover:underline"><i class="fas fa-paper-plane mr-1"></i>Send test email</button>
                     </div>
@@ -101,15 +101,15 @@
                                     <button type="button" @click="config.channels.webhooks.splice(idx, 1)" class="text-red-400 hover:text-red-600 text-sm"><i class="fas fa-trash"></i></button>
                                 </div>
                                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                    <div class="sm:col-span-2"><input type="url" x-model="wh.url" placeholder="https://hooks.slack.com/..." class="w-full px-3 py-2 text-sm border text-foreground border-border rounded-lg bg-white dark:bg-gray-700"></div>
+                                    <div class="sm:col-span-2"><input type="url" x-model="wh.url" placeholder="https://hooks.slack.com/..." class="w-full px-3 py-2 text-sm border text-foreground border-border rounded-lg bg-input"></div>
                                     <div>
-                                        <select x-model="wh.type" class="w-full px-3 py-2 text-sm border text-foreground border-border rounded-lg bg-white dark:bg-gray-700">
+                                        <select x-model="wh.type" class="w-full px-3 py-2 text-sm border text-foreground border-border rounded-lg bg-input">
                                             <option value="generic">Generic</option>
                                             <option value="slack">Slack</option>
                                             <option value="discord">Discord</option>
                                         </select>
                                     </div>
-                                    <div><input type="text" x-model="wh.secret" placeholder="HMAC secret (optional)" class="w-full px-3 py-2 text-sm border text-foreground border-border rounded-lg bg-white dark:bg-gray-700"></div>
+                                    <div><input type="text" x-model="wh.secret" placeholder="HMAC secret (optional)" class="w-full px-3 py-2 text-sm border text-foreground border-border rounded-lg bg-input"></div>
                                 </div>
                                 <!-- Per-webhook event filtering -->
                                 <div class="mt-1">
@@ -137,8 +137,8 @@
                                         </div>
                                     </template>
                                     <div class="flex gap-1" x-data="{hk:'',hv:''}">
-                                        <input type="text" x-model="hk" placeholder="Header name" class="w-1/3 px-2 py-1 text-xs border text-foreground border-border rounded bg-white dark:bg-gray-700">
-                                        <input type="text" x-model="hv" placeholder="Value" class="flex-1 px-2 py-1 text-xs border text-foreground border-border rounded bg-white dark:bg-gray-700">
+                                        <input type="text" x-model="hk" placeholder="Header name" class="w-1/3 px-2 py-1 text-xs border text-foreground border-border rounded bg-input">
+                                        <input type="text" x-model="hv" placeholder="Value" class="flex-1 px-2 py-1 text-xs border text-foreground border-border rounded bg-input">
                                         <button type="button" @click="if(hk.trim()){if(!wh.headers)wh.headers={};wh.headers[hk.trim()]=hv;wh.headers=Object.assign({},wh.headers);hk='';hv='';}" class="text-primary text-xs px-1"><i class="fas fa-plus"></i></button>
                                     </div>
                                 </div>
