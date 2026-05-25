@@ -478,6 +478,27 @@ class TestUserLifecycle:
         ok, _ = mgr.update_user('admin-a', enabled=False)
         assert ok is True
 
+    def test_cannot_demote_the_last_active_admin(self, auth_manager_factory):
+        """Demoting the only active admin is the same lockout as disabling or
+        deleting them, so it is refused (issue #255 exposes role change in the
+        UI)."""
+        mgr, _ = auth_manager_factory()
+        mgr.create_user('sole-admin', 'PwAdmin-1', role='admin')
+        ok, msg = mgr.update_user('sole-admin', role='operator')
+        assert ok is False
+        assert 'last active admin' in msg.lower()
+        # The role must not have changed.
+        assert mgr.authenticate_user('sole-admin', 'PwAdmin-1')['role'] == 'admin'
+
+    def test_can_demote_admin_when_another_active_admin_exists(self, auth_manager_factory):
+        """With two active admins, either may be demoted to a lower role."""
+        mgr, _ = auth_manager_factory()
+        mgr.create_user('admin-a', 'PwAdmin-1', role='admin')
+        mgr.create_user('admin-b', 'PwAdmin-2', role='admin')
+        ok, _ = mgr.update_user('admin-a', role='viewer')
+        assert ok is True
+        assert mgr.authenticate_user('admin-a', 'PwAdmin-1')['role'] == 'viewer'
+
     def test_cannot_set_password_for_sso_user(self, auth_manager_factory):
         """SSO accounts authenticate via the IdP and keep an empty
         password_hash; setting a local password is refused (issue #229)."""

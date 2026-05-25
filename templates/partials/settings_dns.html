@@ -1088,6 +1088,90 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- NS1 Configuration -->
+                    <div id="nsone-config" class="dns-config hidden">
+                        <div class="border border-border rounded-lg p-4 bg-input">
+                            <div class="flex items-center justify-between mb-4">
+                                <h4 class="text-lg font-medium text-foreground">
+                                    <i class="fas fa-network-wired mr-2 text-indigo-600"></i>
+                                    NS1 Configuration
+                                </h4>
+                                <button type="button" id="nsone-add-account" onclick="showAddAccountModal('nsone')"
+                                        class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-primary hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                                    <i class="fas fa-plus mr-1"></i>
+                                    Add Account
+                                </button>
+                            </div>
+
+                            <div id="nsone-accounts-list" class="space-y-3 mb-4">
+                                <!-- Accounts will be populated here -->
+                            </div>
+
+                            <!-- Legacy single account fields (hidden when multi-account mode is active) -->
+                            <div id="nsone-legacy-config">
+                                <div>
+                                    <label for="nsone_api_key" class="block text-sm font-medium text-label">
+                                        API Key
+                                    </label>
+                                    <input type="password" id="nsone_api_key" name="nsone_api_key"
+                                           class="mt-1 block w-full border border-border dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                           placeholder="Your NS1 API key">
+                                </div>
+                                <p class="mt-2 text-sm text-muted">
+                                    Create an API key with DNS zone and record management permissions in your
+                                    <a href="https://my.nsone.net/" target="_blank" rel="noopener" class="text-primary hover:underline">NS1 (IBM NS1 Connect)</a> account settings.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- DNS Made Easy Configuration -->
+                    <div id="dnsmadeeasy-config" class="dns-config hidden">
+                        <div class="border border-border rounded-lg p-4 bg-input">
+                            <div class="flex items-center justify-between mb-4">
+                                <h4 class="text-lg font-medium text-foreground">
+                                    <i class="fas fa-cogs mr-2 text-green-600"></i>
+                                    DNS Made Easy Configuration
+                                </h4>
+                                <button type="button" id="dnsmadeeasy-add-account" onclick="showAddAccountModal('dnsmadeeasy')"
+                                        class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-primary hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                                    <i class="fas fa-plus mr-1"></i>
+                                    Add Account
+                                </button>
+                            </div>
+
+                            <div id="dnsmadeeasy-accounts-list" class="space-y-3 mb-4">
+                                <!-- Accounts will be populated here -->
+                            </div>
+
+                            <!-- Legacy single account fields (hidden when multi-account mode is active) -->
+                            <div id="dnsmadeeasy-legacy-config">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label for="dnsmadeeasy_api_key" class="block text-sm font-medium text-label">
+                                            API Key
+                                        </label>
+                                        <input type="password" id="dnsmadeeasy_api_key" name="dnsmadeeasy_api_key"
+                                               class="mt-1 block w-full border border-border dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                               placeholder="Your DNS Made Easy API key">
+                                    </div>
+                                    <div>
+                                        <label for="dnsmadeeasy_secret_key" class="block text-sm font-medium text-label">
+                                            Secret Key
+                                        </label>
+                                        <input type="password" id="dnsmadeeasy_secret_key" name="dnsmadeeasy_secret_key"
+                                               class="mt-1 block w-full border border-border dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                               placeholder="Your DNS Made Easy secret key">
+                                    </div>
+                                </div>
+                                <p class="mt-2 text-sm text-muted">
+                                    Find your API Key and Secret Key in the DNS Made Easy control panel under
+                                    <em>Config → Account Information → API</em>.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
                     </div><!-- /#dns-config-section -->
                     </div><!-- /tab: dns -->
 

@@ -2277,6 +2277,25 @@ sudo chown -R 1000:1000 ./certificates ./data ./logs
 docker inspect certmate | jq '.[0].Mounts'
 ```
 
+#### Deployment Status Shows "Backend: Unreachable"
+
+**Q: All my certificates show "Backend: Unreachable" even though they are issued, served, and downloadable. Is something broken?**
+
+No. The deployment-status badge is an optional health indicator — it does not affect issuance, renewal, or download. CertMate's own process opens a plain TLS connection to `<domain>:443` and compares the served certificate's fingerprint against the stored one. There is nothing to "report back": the badge only answers whether CertMate itself can reach the domain on 443 and see the expected certificate.
+
+- **Deployed** — handshake succeeded and the fingerprint matches.
+- **Wrong Cert** — handshake succeeded but a different certificate is served.
+- **Unreachable** — CertMate could not open a TLS connection to the domain at all.
+
+"Unreachable" for every certificate is common in Kubernetes/ingress setups where the CertMate pod cannot dial the public/ingress IP directly (split-horizon DNS, an egress `NetworkPolicy`, or TLS terminated by an ingress controller / load balancer). If the target is merely slow, raise the probe budget:
+
+```bash
+# Accepts 1–30 seconds; default is 3
+CERTMATE_TLS_PROBE_TIMEOUT_SECONDS=10
+```
+
+Otherwise the badge is safe to ignore. See [docs/kubernetes.md](docs/kubernetes.md#deployment-status-badge-shows-backend-unreachable) for the Kubernetes-specific note. (Reference: [#263](https://github.com/fabriziosalmi/certmate/issues/263).)
+
 #### DNS Provider Specific Issues
 
 **Cloudflare**:
