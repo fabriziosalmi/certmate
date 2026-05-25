@@ -144,6 +144,29 @@ A handful of leftovers (`dark:text-gray-400{%`, `dark:text-gray-300'`) are class
 - Left literal by design: single status accents with no light/dark pair
   (icon `text-*-500`), and standalone dark-only tints (no light counterpart).
 
+### Phase 7 — Form-field surface ✅ (v2.9.1)
+- [x] Add `--color-input` (white / gray-700) → `bg-input`; collapse 40
+  `bg-white dark:bg-gray-700` field pairs. Exact value match.
+
+### Phase 8 — Hover + recessed surfaces ✅ (v2.9.1)
+- [x] Add `--color-hover` (gray-100/700), `border.strong` (gray-300/500) and
+  `--color-sunken` (gray-50/700); collapse 51 hover/recessed pairs. Minority
+  hover shades left literal to keep the pass strictly zero-shift.
+
+### Phase 9 — Component-layer tokenization + accent ✅
+- [x] The R-3 component `@apply` rules (`.card`, `.form-input`/`.form-select`/
+  `.form-label`, `.btn-secondary`, `.btn-ghost`, `.nav-active`, `.nav-inactive`)
+  were a **codemod blind spot** — `--check` scans `class="…"`, not `@apply` —
+  and still carried raw gray/blue classes. Migrated them onto the tokens.
+- [x] Added a theme-aware `accent` token (blue-600 → blue-400 on dark) so
+  `.nav-active` no longer hard-codes blue; this is the on-surface accent #254
+  lacked.
+- Not done (by design): call-site adoption of `.btn`/`.form-*` (the inline
+  call sites are already tokenised; forcing the components would change button
+  sizing for zero decoupling gain). `.btn-danger` (solid action red) and the
+  `.badge-*` status variants stay literal. The `@apply` layer remains outside
+  the `--check` gate — a future codemod enhancement could scan it.
+
 ## Status colors — now tokenized (Phase 6)
 Earlier phases deliberately deferred status colors (green/amber/red/blue with
 their `dark:` variants) as a separate, optional pass — they carry meaning and
