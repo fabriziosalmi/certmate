@@ -806,6 +806,20 @@ class AuthManager:
                         required_role=min_role,
                         endpoint=request.path,
                     )
+                    # A browser navigating to a role-gated HTML page (e.g. an
+                    # operator opening /settings) should land on a styled page
+                    # inside the app chrome — with the nav still present so they
+                    # can move to a tab they can use — instead of a bare JSON
+                    # body they can only escape with the back button (#256).
+                    # /api/ paths and non-HTML clients keep the machine-readable
+                    # 403 so programmatic callers are unaffected.
+                    if self._is_browser_html_request():
+                        from flask import render_template
+                        return render_template(
+                            '403.html',
+                            required_role=min_role,
+                            current_role=user.get('role'),
+                        ), 403
                     return {'error': f'{min_role} privileges required',
                             'code': 'INSUFFICIENT_ROLE'}, 403
 
