@@ -9,7 +9,7 @@
                         <div class="flex gap-4">
                             <label class="relative cursor-pointer">
                                 <input type="radio" name="challenge_type" value="dns-01" class="sr-only peer" checked>
-                                <div class="px-4 py-2 border-2 border-border rounded-lg transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                <div class="px-4 py-2 border-2 border-border rounded-lg transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                     <div class="flex items-center gap-2">
                                         <i class="fas fa-globe-americas text-blue-500"></i>
                                         <span class="text-sm font-medium dark:text-white">DNS-01</span>
@@ -19,7 +19,7 @@
                             </label>
                             <label class="relative cursor-pointer">
                                 <input type="radio" name="challenge_type" value="http-01" class="sr-only peer">
-                                <div class="px-4 py-2 border-2 border-border rounded-lg transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                <div class="px-4 py-2 border-2 border-border rounded-lg transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                     <div class="flex items-center gap-2">
                                         <i class="fas fa-globe text-green-500"></i>
                                         <span class="text-sm font-medium dark:text-white">HTTP-01</span>
@@ -47,7 +47,7 @@
                             <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-7 gap-2 mb-4" role="radiogroup" aria-labelledby="dns-provider-label">
                                 <label class="relative">
                                     <input type="radio" name="dns_provider" value="cloudflare" class="sr-only peer">
-                                    <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                    <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
                                             <i class="fab fa-cloudflare text-lg text-orange-500 mb-1"></i>
                                             <div class="text-xs font-medium dark:text-white">Cloudflare</div>
@@ -62,7 +62,7 @@
                                 </label>
                                 <label class="relative">
                                     <input type="radio" name="dns_provider" value="route53" class="sr-only peer">
-                                    <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                    <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
                                             <i class="fab fa-aws text-lg text-orange-400 mb-1"></i>
                                             <div class="text-xs font-medium dark:text-white">Route53</div>
@@ -77,7 +77,7 @@
                                 </label>
                                 <label class="relative">
                                     <input type="radio" name="dns_provider" value="digitalocean" class="sr-only peer">
-                                    <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                    <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
                                             <i class="fab fa-digital-ocean text-lg text-blue-600 mb-1"></i>
                                             <div class="text-xs font-medium dark:text-white">DigitalOcean</div>
@@ -92,7 +92,7 @@
                                 </label>
                                 <label class="relative">
                                     <input type="radio" name="dns_provider" value="azure" class="sr-only peer">
-                                    <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                    <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
                                             <i class="fab fa-microsoft text-lg text-blue-600 mb-1"></i>
                                             <div class="text-xs font-medium dark:text-white">Azure DNS</div>
@@ -107,7 +107,7 @@
                                 </label>
                                 <label class="relative">
                                     <input type="radio" name="dns_provider" value="google" class="sr-only peer">
-                                    <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                    <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
                                             <i class="fab fa-google text-lg text-blue-500 mb-1"></i>
                                             <div class="text-xs font-medium dark:text-white">Google DNS</div>
@@ -122,7 +122,7 @@
                                 </label>
                                 <label class="relative">
                                     <input type="radio" name="dns_provider" value="powerdns" class="sr-only peer">
-                                    <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                    <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
                                             <i class="fas fa-server text-lg text-muted mb-1"></i>
                                             <div class="text-xs font-medium dark:text-white">PowerDNS</div>
@@ -137,7 +137,7 @@
                                 </label>
                                 <label class="relative">
                                     <input type="radio" name="dns_provider" value="rfc2136" class="sr-only peer">
-                                    <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                    <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
                                             <i class="fas fa-exchange-alt text-lg text-muted mb-1"></i>
                                             <div class="text-xs font-medium dark:text-white">RFC2136</div>
@@ -163,7 +163,7 @@
                             <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-2" role="radiogroup" aria-labelledby="dns-provider-label">
                                 <label class="relative">
                                     <input type="radio" name="dns_provider" value="linode" class="sr-only peer">
-                                    <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                    <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
                                             <i class="fas fa-cloud text-lg text-green-600 mb-1"></i>
                                             <div class="text-xs font-medium dark:text-white">Akamai Connected Cloud (Linode)</div>
@@ -173,7 +173,7 @@
                                 </label>
                                 <label class="relative">
                                     <input type="radio" name="dns_provider" value="edgedns" class="sr-only peer">
-                                    <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                    <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
                                             <i class="fas fa-cloud text-lg text-orange-600 mb-1"></i>
                                             <div class="text-xs font-medium dark:text-white">Akamai Edge DNS</div>
@@ -183,7 +183,7 @@
                                 </label>
                                 <label class="relative">
                                     <input type="radio" name="dns_provider" value="vultr" class="sr-only peer">
-                                    <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                    <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
                                             <i class="fas fa-cloud text-lg text-blue-600 mb-1"></i>
                                             <div class="text-xs font-medium dark:text-white">Vultr</div>
@@ -193,7 +193,7 @@
                                 </label>
                                 <label class="relative">
                                     <input type="radio" name="dns_provider" value="hetzner" class="sr-only peer">
-                                    <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                    <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
                                             <i class="fas fa-server text-lg text-red-600 mb-1"></i>
                                             <div class="text-xs font-medium dark:text-white">Hetzner</div>
@@ -203,7 +203,7 @@
                                 </label>
                                 <label class="relative">
                                     <input type="radio" name="dns_provider" value="gandi" class="sr-only peer">
-                                    <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                    <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
                                             <i class="fas fa-globe text-lg text-orange-600 mb-1"></i>
                                             <div class="text-xs font-medium dark:text-white">Gandi</div>
@@ -213,7 +213,7 @@
                                 </label>
                                 <label class="relative">
                                     <input type="radio" name="dns_provider" value="ovh" class="sr-only peer">
-                                    <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                    <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
                                             <i class="fas fa-server text-lg text-purple-600 mb-1"></i>
                                             <div class="text-xs font-medium dark:text-white">OVH</div>
@@ -223,7 +223,7 @@
                                 </label>
                                 <label class="relative">
                                     <input type="radio" name="dns_provider" value="namecheap" class="sr-only peer">
-                                    <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                    <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
                                             <i class="fas fa-shopping-cart text-lg text-red-600 mb-1"></i>
                                             <div class="text-xs font-medium dark:text-white">Namecheap</div>
@@ -233,7 +233,7 @@
                                 </label>
                                 <label class="relative">
                                     <input type="radio" name="dns_provider" value="porkbun" class="sr-only peer">
-                                    <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                    <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
                                             <i class="fas fa-paw text-lg text-pink-600 mb-1"></i>
                                             <div class="text-xs font-medium dark:text-white">Porkbun</div>
@@ -243,7 +243,7 @@
                                 </label>
                                 <label class="relative">
                                     <input type="radio" name="dns_provider" value="godaddy" class="sr-only peer">
-                                    <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                    <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
                                             <i class="fas fa-globe text-lg text-green-600 mb-1"></i>
                                             <div class="text-xs font-medium dark:text-white">GoDaddy</div>
@@ -253,7 +253,7 @@
                                 </label>
                                 <label class="relative">
                                     <input type="radio" name="dns_provider" value="dnsmadeeasy" class="sr-only peer">
-                                    <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                    <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
                                             <i class="fas fa-cogs text-lg text-green-600 mb-1"></i>
                                             <div class="text-xs font-medium dark:text-white">DNS Made Easy</div>
@@ -263,7 +263,7 @@
                                 </label>
                                 <label class="relative">
                                     <input type="radio" name="dns_provider" value="nsone" class="sr-only peer">
-                                    <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                    <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
                                             <i class="fas fa-network-wired text-lg text-indigo-600 mb-1"></i>
                                             <div class="text-xs font-medium dark:text-white">NS1</div>
@@ -273,7 +273,7 @@
                                 </label>
                                 <label class="relative">
                                     <input type="radio" name="dns_provider" value="he-ddns" class="sr-only peer">
-                                    <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                    <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
                                             <i class="fas fa-bolt text-lg text-yellow-600 mb-1"></i>
                                             <div class="text-xs font-medium dark:text-white">Hurricane Electric</div>
@@ -283,7 +283,7 @@
                                 </label>
                                 <label class="relative">
                                     <input type="radio" name="dns_provider" value="dynudns" class="sr-only peer">
-                                    <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                    <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
                                             <i class="fas fa-sync-alt text-lg text-purple-600 mb-1"></i>
                                             <div class="text-xs font-medium dark:text-white">Dynu</div>
@@ -293,7 +293,7 @@
                                 </label>
                                 <label class="relative">
                                     <input type="radio" name="dns_provider" value="duckdns" class="sr-only peer">
-                                    <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-gray-300 dark:hover:border-gray-500">
+                                    <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
                                             <i class="fas fa-feather text-lg text-yellow-500 mb-1"></i>
                                             <div class="text-xs font-medium dark:text-white">DuckDNS</div>

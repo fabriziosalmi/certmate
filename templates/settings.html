@@ -43,7 +43,7 @@
                                 :title="t.label"
                                 :aria-label="t.label"
                                 :aria-selected="tab === t.id ? 'true' : 'false'"
-                                :class="tab === t.id ? 'px-3 sm:px-4 py-2 text-sm font-medium rounded-md text-primary bg-info-surface border border-info-line' : 'px-3 sm:px-4 py-2 text-sm font-medium rounded-md text-muted hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700'">
+                                :class="tab === t.id ? 'px-3 sm:px-4 py-2 text-sm font-medium rounded-md text-primary bg-info-surface border border-info-line' : 'px-3 sm:px-4 py-2 text-sm font-medium rounded-md text-muted hover:text-foreground hover:bg-hover'">
                             <i class="fas" :class="t.icon" aria-hidden="true"></i><span class="hidden sm:inline ml-2" x-text="t.label"></span>
                         </button>
                     </template>

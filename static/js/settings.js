@@ -1626,7 +1626,7 @@
 
             if (backups.unified.length > 10) {
                 unifiedHtml +=
-                    '<div class="text-xs text-muted text-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">' +
+                    '<div class="text-xs text-muted text-center p-3 bg-sunken rounded-lg">' +
                     '<i class="fas fa-ellipsis-h mr-1"></i>' +
                     (backups.unified.length - 10) + ' more backups available' +
                     '</div>';

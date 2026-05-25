@@ -272,7 +272,7 @@
 
         var footer = document.getElementById('wizardFooter');
         footer.innerHTML =
-            '<button type="button" id="wizBack2" class="px-4 py-2 text-sm text-muted hover:text-gray-900 dark:hover:text-white"><i class="fas fa-arrow-left mr-1"></i> Back</button>' +
+            '<button type="button" id="wizBack2" class="px-4 py-2 text-sm text-muted hover:text-foreground"><i class="fas fa-arrow-left mr-1"></i> Back</button>' +
             '<button type="button" id="wizNext2" class="px-6 py-2.5 bg-primary hover:bg-secondary text-white font-medium rounded-lg text-sm transition ' + (!state.provider ? 'opacity-50 cursor-not-allowed' : '') + '" ' + (!state.provider ? 'disabled' : '') + '>Save & Finish <i class="fas fa-check ml-1"></i></button>';
 
         document.getElementById('wizBack2').addEventListener('click', function() {

@@ -55,6 +55,9 @@
     --color-label:      217 19% 27%;   /* label / mid body (~gray-700)    */
     --color-border:     220 13% 91%;   /* hairlines       (~gray-200)     */
     --color-input:        0  0% 100%;  /* form field fill (was bg-white)  */
+    --color-sunken:     210 20% 98%;   /* gray-50  — recessed fill        */
+    --color-hover:      220 14% 96%;   /* gray-100 — interactive hover    */
+    --color-border-strong: 216 12% 84%;/* gray-300 — hover/emphasis border*/
 
     /* Status callouts — surface / line / fg (body) / strong (heading).
        Phase 6: tokenize the green/red/amber/blue info-boxes that earlier
@@ -73,6 +76,9 @@
     --color-label:      216 12% 84%;   /* ~gray-300 */
     --color-border:     222 20% 22%;   /* ~white/5 equivalent */
     --color-input:      217 19% 27%;   /* gray-700 — inputs read lighter than the card */
+    --color-sunken:     217 19% 27%;   /* gray-700 */
+    --color-hover:      217 19% 27%;   /* gray-700 */
+    --color-border-strong: 220 9% 46%; /* gray-500 */
 
     /* Status callouts — dark tints blended over the card surface. */
     --color-info-surface:    223 41% 17%;  --color-info-line:    225 58% 25%;  --color-info-fg:    212 96% 78%;  --color-info-strong:    213 97% 87%;

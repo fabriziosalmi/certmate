@@ -43,8 +43,13 @@ module.exports = {
         foreground:  'hsl(var(--color-foreground) / <alpha-value>)',
         muted:       'hsl(var(--color-muted) / <alpha-value>)',
         label:       'hsl(var(--color-label) / <alpha-value>)',
-        border:      'hsl(var(--color-border) / <alpha-value>)',
-        input:       'hsl(var(--color-input) / <alpha-value>)',  // form field fill (white / gray-700)
+        border:      {
+          DEFAULT: 'hsl(var(--color-border) / <alpha-value>)',
+          strong:  'hsl(var(--color-border-strong) / <alpha-value>)',  // hover/emphasis border
+        },
+        input:       'hsl(var(--color-input) / <alpha-value>)',   // form field fill (white / gray-700)
+        sunken:      'hsl(var(--color-sunken) / <alpha-value>)',  // recessed fill (gray-50 / gray-700)
+        hover:       'hsl(var(--color-hover) / <alpha-value>)',   // interactive hover wash (gray-100 / gray-700)
         // Status callout tokens (Phase 6) — surface/line/fg/strong, var-backed
         // and theme-aware. Re-add success/warning/danger as token GROUPS (the
         // old flat aliases were removed for having zero call sites); the

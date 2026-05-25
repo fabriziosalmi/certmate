@@ -91,16 +91,16 @@
                     </button>
                     <!-- Search — compact icon-only mobile variant. Same keydown dispatch
                          so the existing Cmd+K command palette handler picks it up. -->
-                    <button type="button" onclick="document.dispatchEvent(new KeyboardEvent('keydown',{key:'k',metaKey:true}))" class="sm:hidden px-2 py-2 rounded-md text-muted hover:bg-gray-100 dark:hover:bg-gray-700" title="Search" aria-label="Open search">
+                    <button type="button" onclick="document.dispatchEvent(new KeyboardEvent('keydown',{key:'k',metaKey:true}))" class="sm:hidden px-2 py-2 rounded-md text-muted hover:bg-hover" title="Search" aria-label="Open search">
                         <i class="fas fa-search"></i>
                     </button>
                     <!-- Keyboard shortcuts hint -->
-                    <button type="button" onclick="document.dispatchEvent(new KeyboardEvent('keydown',{key:'?'}))" class="hidden sm:inline-flex items-center px-2 py-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition" title="Keyboard shortcuts (?)" aria-label="Show keyboard shortcuts">
+                    <button type="button" onclick="document.dispatchEvent(new KeyboardEvent('keydown',{key:'?'}))" class="hidden sm:inline-flex items-center px-2 py-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-hover rounded-lg transition" title="Keyboard shortcuts (?)" aria-label="Show keyboard shortcuts">
                         <i class="fas fa-keyboard text-sm"></i>
                     </button>
                     <!-- Notification bell -->
                     <div class="relative">
-                        <button type="button" id="notifBtn" onclick="toggleNotifications()" class="px-2 py-2 rounded-md text-muted hover:bg-gray-100 dark:hover:bg-gray-700 relative" title="Notifications" aria-label="Open notifications" aria-haspopup="true" aria-expanded="false" aria-controls="notifPanel">
+                        <button type="button" id="notifBtn" onclick="toggleNotifications()" class="px-2 py-2 rounded-md text-muted hover:bg-hover relative" title="Notifications" aria-label="Open notifications" aria-haspopup="true" aria-expanded="false" aria-controls="notifPanel">
                             <i class="fas fa-bell"></i>
                             <span id="notifBadge" class="hidden absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold badge-pulse">0</span>
                         </button>
@@ -114,7 +114,7 @@
                         </div>
                     </div>
                     <!-- Dark mode toggle -->
-                    <button type="button" id="themeToggle" onclick="toggleTheme()" class="px-2 py-2 rounded-md text-muted hover:bg-gray-100 dark:hover:bg-gray-700" title="Toggle theme" aria-label="Toggle dark mode">
+                    <button type="button" id="themeToggle" onclick="toggleTheme()" class="px-2 py-2 rounded-md text-muted hover:bg-hover" title="Toggle theme" aria-label="Toggle dark mode">
                         <i class="fas fa-moon" id="theme-icon-moon"></i>
                         <i class="fas fa-sun" id="theme-icon-sun"></i>
                     </button>
