@@ -167,6 +167,55 @@ A handful of leftovers (`dark:text-gray-400{%`, `dark:text-gray-300'`) are class
   `.badge-*` status variants stay literal. The `@apply` layer remains outside
   the `--check` gate — a future codemod enhancement could scan it.
 
+### Phase 10 — Color-tail decomposition (planned, gradual)
+The decoupling left **565 `dark:` utilities** the codemod can't collapse: they
+have no light sibling to pair with, so `--check` never sees them. Audit
+(2026-05-25) shows they are not one problem but three, with opposite risk
+profiles:
+
+| Bucket | Count | Resolves to | New tokens |
+|---|---|---|---|
+| 1 — Neutrals (white/gray) | 388 (69%) | `foreground / surface / surface-2 / sunken / muted / border` | 0 |
+| 2 — Status (blue/red/amber) | 63 (11%) | `info / success / warning / danger` | 0 |
+| 3 — Rainbow (purple/indigo/orange) | 111 (20%) | **neutral** (decorative, demoted) | 0 |
+
+Key finding: **zero new tokens needed.** The token system already shipped *is*
+the contract; the 565 are everything that escaped it. The fix is enforcement +
+demotion, not new vocabulary. (The rainbow was measured to be decorative
+section-coding — purple = "advanced config", indigo = CA/Enterprise, orange =
+Storage — not status, and inconsistent across files.)
+
+Order, by rising UX risk:
+- **10a — Neutrals (388).** Invisible: `dark:text-white` → `text-foreground`,
+  `dark:bg-gray-700` → `bg-input`/`bg-surface-2`/`bg-sunken` (disambiguated by
+  context — same dark grey, different *light* intent, so human-classified per
+  cluster, not blind sed). Extend `theme_codemod.py` with a solo-dark→token
+  pass. Risk ~0, clears ~70%.
+- **10b — Status (63).** Map the blue/red/amber callouts onto the existing
+  info/success/warning/danger groups. Normalises 50-vs-100 drift. Low risk.
+- **10c — Rainbow (111).** The product decision (see contract below).
+  Decorative section hues collapse to neutral. Visible change, done last,
+  block-by-block with before/after screenshot QA. Decided: **contract α**
+  (color = meaning).
+
+## Color contract (the standard the 565 escaped)
+Decided 2026-05-25. Four rules; the tokens already shipped are the only palette.
+
+1. **Color is earned, never decorative.** A hue appears only if it carries
+   *status* (info/success/warning/danger) or *brand* (accent: links, active
+   nav, primary, focus). Everything else is neutral
+   (background/surface/surface-2/sunken/border/foreground/muted/label).
+2. **Identity comes from structure, not color.** Sections are distinguished by
+   spacing, headings, icons, dividers — not a fill hue.
+3. **One emphasis primitive.** Config/advanced blocks use a single neutral
+   inset panel (`bg-sunken border-border rounded-md`); an optional brand
+   left-border marks "active/important". No per-section palette.
+4. **Icons tint only with brand or status.** No purple/indigo/orange icon tints.
+
+Enforcement: the `--check` gate gains a rule that fails CI on raw
+`purple|indigo|orange` (and any non-token color) under `templates/` — a
+contract with a compiler behind it, so it can't rot back into the raver tunnel.
+
 ## Status colors — now tokenized (Phase 6)
 Earlier phases deliberately deferred status colors (green/amber/red/blue with
 their `dark:` variants) as a separate, optional pass — they carry meaning and
