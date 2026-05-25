@@ -118,9 +118,10 @@ A handful of leftovers (`dark:text-gray-400{%`, `dark:text-gray-300'`) are class
 - [x] `settings.js` + `setup-wizard.js`: 49 pairs, `node --check` clean. The other `settings-*.js` carry no color classes.
 - Left as-is (consistent with prior phases): glass inputs (`dark:bg-gray-700` ~99), form labels (`dark:text-gray-300` ~78, deferred), status badges, opacity surfaces, hover: variants, and ternary branch-edge classes.
 
-### Phase 4 — Remaining pages
-- [x] (setup-wizard.js already done in Phase 3)
-- [ ] activity, help, setup, `_client_certs`, client-certs.js, cmd-palette.js, report-issue.js, shortcuts.js.
+### Phase 4 — Remaining pages ✅
+- [x] Templates: activity, help, setup, `_client_certs` (123 pairs; no Alpine ternaries here).
+- [x] JS: client-certs.js, cmd-palette.js, report-issue.js, shortcuts.js (26 pairs, `node --check` clean). setup-wizard.js was already done in Phase 3.
+- Same carve-outs as before: glass inputs, body/label grays, opacity surfaces, status colors, hover:, and string-concatenation-boundary classes.
 
 ### Phase 5 — Cleanup & lock-in
 - [ ] Move JS hex palettes (toast/chart in `certmate.js:356`) to read from CSS vars / token map.
