@@ -475,10 +475,21 @@ class AuthManager:
                 if active_admins <= 1:
                     return False, "Cannot disable the last active admin user"
 
+            # Demoting the last active admin out of the admin role is the same
+            # lockout in a different shape, so it carries the same guard as the
+            # disable/delete paths above.
+            if role is not None and user.get('role') == 'admin' and self._normalize_role(role) != 'admin':
+                active_admins = sum(
+                    1 for u in users.values()
+                    if u.get('role') == 'admin' and u.get('enabled', True)
+                )
+                if active_admins <= 1:
+                    return False, "Cannot change the role of the last active admin user"
+
             if password:
                 user['password_hash'] = self._hash_password(password)
             if role is not None:
-                user['role'] = role
+                user['role'] = self._normalize_role(role)
             if email is not None:
                 user['email'] = email
             if enabled is not None:
