@@ -359,6 +359,20 @@ button[class*="bg-red-6"]:active {
     0 10px 40px rgba(0,0,0,0.5),
     0 0 0 1px rgba(255,255,255,0.05);
 }
+/* Tier 3 — overlays that float above everything: modals, command
+   palette, the notification popover. Completes the resting (card) →
+   raised (elevated) → overlay ramp so floating surfaces stop reaching
+   for ad-hoc shadow-xl/2xl. */
+.shadow-overlay {
+  box-shadow:
+    0 20px 60px -12px rgba(0,0,0,0.18),
+    0 8px 24px -8px rgba(0,0,0,0.10);
+}
+.dark .shadow-overlay {
+  box-shadow:
+    0 24px 70px -12px rgba(0,0,0,0.65),
+    0 0 0 1px rgba(255,255,255,0.06);
+}
 
 /* ── Detail panel entrance ───────────────────────────────────── */
 .panel-slide {
