@@ -172,7 +172,7 @@
             '<div class="px-6 py-4">' +
                 '<textarea readonly class="w-full h-64 p-3 text-xs font-mono bg-background border border-gray-300 dark:border-gray-700 rounded text-gray-800 dark:text-gray-200"></textarea>' +
                 '<div class="flex justify-between items-center mt-4">' +
-                    '<a target="_blank" rel="noopener" href="' + CM.escapeHtml(issueUrl) + '" class="text-blue-600 dark:text-blue-400 hover:underline text-sm">Open GitHub issue form &nearr;</a>' +
+                    '<a target="_blank" rel="noopener" href="' + CM.escapeHtml(issueUrl) + '" class="text-info-fg hover:underline text-sm">Open GitHub issue form &nearr;</a>' +
                     '<div class="flex gap-2">' +
                         '<button data-action="copy" class="px-4 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700">Copy markdown</button>' +
                         '<button data-action="close" class="px-4 py-2 rounded-lg text-sm font-medium bg-surface-2 text-label hover:bg-gray-200 dark:hover:bg-gray-600">Close</button>' +

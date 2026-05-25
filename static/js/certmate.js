@@ -66,10 +66,10 @@
     };
 
     var TOAST_COLORS = {
-        success: 'bg-green-50 dark:bg-green-900/40 border-green-300 dark:border-green-700 text-green-800 dark:text-green-200',
-        error: 'bg-red-50 dark:bg-red-900/40 border-red-300 dark:border-red-700 text-red-800 dark:text-red-200',
-        warning: 'bg-yellow-50 dark:bg-yellow-900/40 border-yellow-300 dark:border-yellow-700 text-yellow-800 dark:text-yellow-200',
-        info: 'bg-blue-50 dark:bg-blue-900/40 border-blue-300 dark:border-blue-700 text-blue-800 dark:text-blue-200'
+        success: 'bg-success-surface border-success-line text-success-strong',
+        error: 'bg-danger-surface border-danger-line text-danger-strong',
+        warning: 'bg-warning-surface border-warning-line text-warning-strong',
+        info: 'bg-info-surface border-info-line text-info-strong'
     };
 
     CM.toast = function(message, type, duration, options) {

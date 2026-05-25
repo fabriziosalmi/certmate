@@ -74,6 +74,43 @@ MAPPINGS: list[tuple[str, str, str]] = [
     ("border-gray-300", "dark:border-gray-500", "border-border"),
 ]
 
+
+# ── Status callouts (Phase 6) ──────────────────────────────────────
+# Generated hue x shade -> status-token pairs. The hue picks the state;
+# the LIGHT shade picks the role (50/100 = surface, 200-400 = line,
+# 600/700 = body fg, 800/900 = heading strong). Surface intensities and
+# dark-alpha variants (/10../50) all normalise to one surface token,
+# folding the 50-vs-100 / 700-vs-800 drift the inline callouts carried.
+def _expand_status() -> list[tuple[str, str, str]]:
+    hue_state = {
+        "blue": "info",
+        "green": "success", "emerald": "success",
+        "yellow": "warning", "amber": "warning",
+        "red": "danger", "rose": "danger",
+    }
+    out: list[tuple[str, str, str]] = []
+    for hue, st in hue_state.items():
+        for light in ("50", "100"):
+            for alpha in ("", "/10", "/20", "/30", "/40", "/50"):
+                out.append((f"bg-{hue}-{light}", f"dark:bg-{hue}-900{alpha}",
+                            f"bg-{st}-surface"))
+        for light in ("200", "300", "400"):
+            for dark in ("600", "700", "800"):
+                out.append((f"border-{hue}-{light}", f"dark:border-{hue}-{dark}",
+                            f"border-{st}-line"))
+        for light in ("600", "700"):
+            for dark in ("300", "400"):
+                out.append((f"text-{hue}-{light}", f"dark:text-{hue}-{dark}",
+                            f"text-{st}-fg"))
+        for light in ("800", "900"):
+            for dark in ("100", "200", "300"):
+                out.append((f"text-{hue}-{light}", f"dark:text-{hue}-{dark}",
+                            f"text-{st}-strong"))
+    return out
+
+
+MAPPINGS += _expand_status()
+
 # Classes that are deliberately NOT auto-mapped (status colors carry meaning,
 # variant-prefixed colors like hover:/focus: need their own pairs). They are
 # excluded from the "ambiguous" tally so the report stays focused on the plain

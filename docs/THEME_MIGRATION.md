@@ -1,6 +1,6 @@
 # Theme Migration — decoupling light/dark via CSS-variable tokens
 
-Status: **planning** · Owner: Fabrizio · Created: 2026-05-25
+Status: **shipped** (Phases 0–5 in v2.9.0; Phase 6 status-token pass follows) · Owner: Fabrizio · Created: 2026-05-25
 
 ## Goal
 
@@ -131,12 +131,27 @@ A handful of leftovers (`dark:text-gray-400{%`, `dark:text-gray-300'`) are class
 - **JS hex left as-is, by design:** the `#60a5fa`/etc. palette in `certmate.js` is the **debug-console logger** on a fixed always-dark surface (`bg-black`); `TOAST_COLORS` are literal status classes. Both are theme-independent status accents — conventionally not part of light/dark theming — so they stay literal rather than becoming theme tokens. A future **status-token pass** (success/warning/danger/info as vars) is the place to unify these if ever wanted.
 - Baseline refresh: optional; not run (capture was deferred — live Docker verification used at each phase instead).
 
-## Status colors — explicit non-goal
-Health/deployment/badge colors (green/amber/red/blue, with their `dark:`
-variants) were deliberately **not** tokenized in any phase. They carry
-semantic meaning and are conventionally theme-invariant. The codemod's
-`_STATUS_RE` excludes them, and `--check` does not flag them. Tokenizing them
-is a separate, optional "status-token pass", out of scope for this migration.
+### Phase 6 — Status-token pass ✅
+- [x] Re-added `success`/`warning`/`danger` (+ new `info`) as **token groups**
+  (`surface`/`line`/`fg`/`strong`), var-backed in `:root`/`.dark` (HSL,
+  faithful to the inline values, dark surfaces blended over the card).
+- [x] Extended the codemod with a generated hue×shade table (`_expand_status`)
+  that folds the green/red/amber/blue info-box pairs onto the tokens —
+  normalising the 50-vs-100 / 700-vs-800 drift the inline callouts carried.
+  **300 pairs collapsed** across templates + first-party JS.
+- [x] `--check` now also guards status pairs (they live in `MAPPINGS`), so a
+  reintroduced light+dark status pair fails CI like any other.
+- Left literal by design: single status accents with no light/dark pair
+  (icon `text-*-500`), and standalone dark-only tints (no light counterpart).
+
+## Status colors — now tokenized (Phase 6)
+Earlier phases deliberately deferred status colors (green/amber/red/blue with
+their `dark:` variants) as a separate, optional pass — they carry meaning and
+are conventionally theme-invariant. **Phase 6 did that pass:** the paired
+info-box surfaces/borders/text now use `bg-success-surface`,
+`text-danger-strong`, etc. Single status *accents* (icon `text-*-500`, no dark
+pair) stay literal — those are theme-independent and not part of light/dark
+theming.
 
 ## Workflow alignment
 - Zero emoji in commits/PRs/release notes.

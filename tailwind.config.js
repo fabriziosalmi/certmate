@@ -44,10 +44,16 @@ module.exports = {
         muted:       'hsl(var(--color-muted) / <alpha-value>)',
         label:       'hsl(var(--color-label) / <alpha-value>)',
         border:      'hsl(var(--color-border) / <alpha-value>)',
+        // Status callout tokens (Phase 6) — surface/line/fg/strong, var-backed
+        // and theme-aware. Re-add success/warning/danger as token GROUPS (the
+        // old flat aliases were removed for having zero call sites); the
+        // green/red/amber/blue info-boxes now collapse onto these.
+        info:    { surface: 'hsl(var(--color-info-surface) / <alpha-value>)',    line: 'hsl(var(--color-info-line) / <alpha-value>)',    fg: 'hsl(var(--color-info-fg) / <alpha-value>)',    strong: 'hsl(var(--color-info-strong) / <alpha-value>)' },
+        success: { surface: 'hsl(var(--color-success-surface) / <alpha-value>)', line: 'hsl(var(--color-success-line) / <alpha-value>)', fg: 'hsl(var(--color-success-fg) / <alpha-value>)', strong: 'hsl(var(--color-success-strong) / <alpha-value>)' },
+        warning: { surface: 'hsl(var(--color-warning-surface) / <alpha-value>)', line: 'hsl(var(--color-warning-line) / <alpha-value>)', fg: 'hsl(var(--color-warning-fg) / <alpha-value>)', strong: 'hsl(var(--color-warning-strong) / <alpha-value>)' },
+        danger:  { surface: 'hsl(var(--color-danger-surface) / <alpha-value>)',  line: 'hsl(var(--color-danger-line) / <alpha-value>)',  fg: 'hsl(var(--color-danger-fg) / <alpha-value>)',  strong: 'hsl(var(--color-danger-strong) / <alpha-value>)' },
         // Brand aliases (used widely: bg-primary/text-primary ~375, gradients
-        // from-secondary). success/warning/danger were removed in the theme
-        // migration — they had zero call sites (status UI uses literal
-        // green/red/amber utilities directly).
+        // from-secondary).
         primary: 'hsl(216, 76%, 43%)',   // brand-600 — was flat #3b82f6
         secondary: 'hsl(218, 72%, 35%)', // brand-700 (btn-primary hover)
         // Brand palette — HSL-based, deeper than raw Tailwind
