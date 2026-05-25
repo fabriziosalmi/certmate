@@ -2769,6 +2769,23 @@
                     var isSso = userInfo.sso === true;
                     var isSoleAdmin = userInfo.role === 'admin' && adminCount === 1;
 
+                    // Role control. The sole admin renders a static badge — the
+                    // backend refuses to demote them (lockout guard), so we don't
+                    // offer a select that can only fail. Everyone else gets an
+                    // inline dropdown that PUTs the new role (issue #255).
+                    var roleControl;
+                    if (isSoleAdmin) {
+                        roleControl = '<span class="text-xs px-2 py-0.5 rounded-full ' + roleColor + '">' + escapeHtml(userInfo.role || '') + '</span>';
+                    } else {
+                        var roleOptions = ['admin', 'operator', 'viewer'].map(function (r) {
+                            return '<option value="' + r + '"' + (userInfo.role === r ? ' selected' : '') + '>' + r + '</option>';
+                        }).join('');
+                        roleControl =
+                            '<select data-action="change-role" data-username="' + escapeHtml(username) + '" data-current="' + escapeHtml(userInfo.role || '') + '"' +
+                            ' class="text-xs px-2 py-0.5 rounded-full border-0 cursor-pointer ' + roleColor + ' focus:ring-2 focus:ring-blue-500 outline-none"' +
+                            ' title="Change role">' + roleOptions + '</select>';
+                    }
+
                     var emailHtml = userInfo.email ? '<span class="mr-3"><i class="fas fa-envelope mr-1"></i>' + escapeHtml(userInfo.email) + '</span>' : '';
 
                     // SSO accounts are managed by the external IdP — badge them
@@ -2812,7 +2829,7 @@
                         '<div>' +
                         '<div class="flex items-center space-x-2">' +
                         '<span class="font-medium text-foreground">' + escapeHtml(username) + '</span>' +
-                        '<span class="text-xs px-2 py-0.5 rounded-full ' + roleColor + '">' + escapeHtml(userInfo.role || '') + '</span>' +
+                        roleControl +
                         ssoBadge +
                         '<i class="fas fa-circle text-xs ' + statusColor + '" title="' + (userInfo.enabled !== false ? 'Active' : 'Disabled') + '"></i>' +
                         '</div>' +
@@ -2843,6 +2860,14 @@
                         }
                     });
                 });
+
+                // Role dropdowns fire 'change', not 'click', so they bind
+                // separately from the icon buttons above.
+                userListDiv.querySelectorAll('select[data-action="change-role"]').forEach(function (sel) {
+                    sel.addEventListener('change', function () {
+                        changeUserRole(sel.dataset.username, sel.value, sel.dataset.current, sel);
+                    });
+                });
             })
             .catch(function (error) {
                 if (timeoutId) clearTimeout(timeoutId);
@@ -2852,6 +2877,43 @@
                     : 'Failed to load users. Click Refresh to retry.';
                 userListDiv.innerHTML = '<div class="text-center py-4 text-red-500 text-sm"><i class="fas fa-exclamation-triangle mr-2"></i> ' + msg + '</div>';
             });
+    }
+
+    function changeUserRole(username, newRole, currentRole, selectEl) {
+        if (newRole === currentRole) return;
+
+        CertMate.confirm(
+            'Change role of \'' + escapeHtml(username) + '\' from ' + escapeHtml(currentRole) + ' to ' + escapeHtml(newRole) + '?',
+            'Change Role',
+            { danger: false, confirmText: 'Change Role' }
+        ).then(function (confirmed) {
+            if (!confirmed) {
+                if (selectEl) selectEl.value = currentRole; // revert the dropdown
+                return;
+            }
+
+            fetch('/api/users/' + username, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ role: newRole })
+            })
+                .then(function (response) {
+                    return response.json().then(function (data) {
+                        if (response.ok) {
+                            showMessage('Role for \'' + username + '\' changed to ' + newRole, 'success');
+                            refreshUserList();
+                        } else {
+                            showMessage(data.error || 'Failed to change role', 'error');
+                            if (selectEl) selectEl.value = currentRole;
+                        }
+                    });
+                })
+                .catch(function (error) {
+                    console.error('Error changing user role:', error);
+                    showMessage('Failed to change role', 'error');
+                    if (selectEl) selectEl.value = currentRole;
+                });
+        });
     }
 
     function toggleUserStatus(username, enable) {
