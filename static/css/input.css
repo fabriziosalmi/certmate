@@ -120,6 +120,20 @@ html.dark {
 ::selection { background: hsla(214, 80%, 52%, 0.3); }
 .dark ::selection { background: hsla(214, 80%, 52%, 0.35); }
 
+/* ── Keyboard focus floor for links ──────────────────────────────
+   Buttons / inputs already carry their own focus rings (and .btn
+   uses focus-visible). Inline links did not — they fell back to the
+   UA's default outline, inconsistent and off-brand. Give anchors and
+   <summary> a single branded focus-visible ring, accent-tokened so it
+   flips with the theme. focus-visible (not :focus) means mouse clicks
+   stay clean; the ring shows only on keyboard navigation. */
+a:focus-visible,
+summary:focus-visible {
+  outline: 2px solid hsl(var(--color-accent));
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
 /* ── Table readability ───────────────────────────────────────── */
 /* #8:  Impercettible zebra striping for horizontal eye-tracking */
 /* #22: Focus-within highlight for keyboard navigation          */
