@@ -36,10 +36,10 @@
          aria-modal="true"
          {%- if title %} aria-labelledby="{{ id }}-title"{% endif %}
          class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-        <div data-modal-panel class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full {{ size_class }} max-h-[90vh] flex flex-col overflow-hidden">
+        <div data-modal-panel class="bg-card rounded-xl shadow-2xl w-full {{ size_class }} max-h-[90vh] flex flex-col overflow-hidden">
             {%- if title %}
-            <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
-                <h3 id="{{ id }}-title" class="text-lg font-medium text-gray-900 dark:text-white flex items-center">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-line flex-shrink-0">
+                <h3 id="{{ id }}-title" class="text-lg font-medium text-fg flex items-center">
                     {%- if icon %}<i class="fas {{ icon }} mr-2"></i>{% endif -%}
                     {{ title }}
                 </h3>

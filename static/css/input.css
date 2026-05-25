@@ -51,16 +51,19 @@
 :root {
   --ease-premium: cubic-bezier(0.16, 1, 0.3, 1);
 
-  --bg-base:       246 247 249;  /* surface.light          */
-  --bg-card:       255 255 255;  /* cards, nav             */
-  --bg-inset:      243 244 246;  /* gray-100 — search pill, kbd, chips */
-  --bg-raised:     255 255 255;  /* modals, popovers       */
-  --fg:            17 24 39;     /* gray-900               */
-  --fg-muted:      107 114 128;  /* gray-500               */
-  --fg-subtle:     156 163 175;  /* gray-400               */
-  --border:        229 231 235;  /* gray-200               */
-  --border-strong: 209 213 219;  /* gray-300               */
-  --accent:        26 93 193;    /* brand-600              */
+  --bg-base:        246 247 249;  /* surface.light          */
+  --bg-card:        255 255 255;  /* cards, nav, panels     */
+  --bg-inset:       243 244 246;  /* gray-100 — chips, subtle fills, hovers */
+  --bg-inset-hover: 229 231 235;  /* gray-200 — rising-contrast hover */
+  --bg-field:       255 255 255;  /* form inputs/selects    */
+  --bg-raised:      255 255 255;  /* modals, popovers       */
+  --fg:             17 24 39;     /* gray-900 — headings/emphasis */
+  --fg-body:        55 65 81;     /* gray-700 — body, labels */
+  --fg-muted:       107 114 128;  /* gray-500               */
+  --fg-subtle:      156 163 175;  /* gray-400               */
+  --border:         229 231 235;  /* gray-200               */
+  --border-strong:  209 213 219;  /* gray-300               */
+  --accent:         26 93 193;    /* brand-600              */
 }
 
 /* ── Dark mode flash prevention ──────────────────────────────── */
@@ -69,16 +72,19 @@ html.dark {
   background-color: #0b1120 !important;
   color-scheme: dark;
 
-  --bg-base:       14 18 27;     /* surface.dark           */
-  --bg-card:       25 30 41;     /* surface.card           */
-  --bg-inset:      55 65 81;     /* gray-700 — recessed reads lighter on dark */
-  --bg-raised:     35 40 52;     /* surface.elevated       */
-  --fg:            255 255 255;
-  --fg-muted:      156 163 175;  /* gray-400               */
-  --fg-subtle:     107 114 128;  /* gray-500               */
-  --border:        37 41 52;     /* solid equiv. of white/5 over card */
-  --border-strong: 75 85 99;     /* gray-600               */
-  --accent:        77 153 239;   /* brand-400 — lighter for dark surfaces */
+  --bg-base:        14 18 27;     /* surface.dark           */
+  --bg-card:        25 30 41;     /* surface.card           */
+  --bg-inset:       55 65 81;     /* gray-700 — recessed reads lighter on dark */
+  --bg-inset-hover: 75 85 99;     /* gray-600               */
+  --bg-field:       55 65 81;     /* gray-700               */
+  --bg-raised:      35 40 52;     /* surface.elevated       */
+  --fg:             255 255 255;
+  --fg-body:        209 213 219;  /* gray-300               */
+  --fg-muted:       156 163 175;  /* gray-400               */
+  --fg-subtle:      107 114 128;  /* gray-500               */
+  --border:         37 41 52;     /* solid equiv. of white/5 over card */
+  --border-strong:  75 85 99;     /* gray-600               */
+  --accent:         77 153 239;   /* brand-400 — lighter for dark surfaces */
 }
 
 /* ── Text selection ──────────────────────────────────────────── */
@@ -231,17 +237,17 @@ html.dark {
   .form-input,
   .form-select {
     @apply block w-full
-           border border-gray-300 dark:border-gray-600
-           bg-white dark:bg-gray-700
-           text-gray-900 dark:text-white
-           placeholder-gray-400
+           border border-line-strong
+           bg-field
+           text-fg
+           placeholder-fg-subtle
            rounded-md shadow-sm py-2 px-3
-           focus:outline-none focus:ring-primary focus:border-primary
+           focus:outline-none focus:ring-accent focus:border-accent
            disabled:opacity-60 disabled:cursor-not-allowed;
   }
   .form-label {
     @apply block text-sm font-medium
-           text-gray-700 dark:text-gray-300;
+           text-fg-body;
   }
 }
 /* Global press feedback for all primary-colored buttons */

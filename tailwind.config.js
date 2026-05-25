@@ -69,12 +69,15 @@ module.exports = {
         // modifier working (bg-accent/10, border-line/60). These
         // replace the bg-white/dark:bg-… + text-gray-900/dark:… +
         // border-gray-200/dark:white-… triplets as templates migrate.
-        base:   'rgb(var(--bg-base) / <alpha-value>)',
-        card:   'rgb(var(--bg-card) / <alpha-value>)',
-        inset:  'rgb(var(--bg-inset) / <alpha-value>)',
-        raised: 'rgb(var(--bg-raised) / <alpha-value>)',
+        base:    'rgb(var(--bg-base) / <alpha-value>)',
+        card:    'rgb(var(--bg-card) / <alpha-value>)',
+        inset:   'rgb(var(--bg-inset) / <alpha-value>)',
+        'inset-hover': 'rgb(var(--bg-inset-hover) / <alpha-value>)',
+        field:   'rgb(var(--bg-field) / <alpha-value>)',
+        raised:  'rgb(var(--bg-raised) / <alpha-value>)',
         fg: {
           DEFAULT: 'rgb(var(--fg) / <alpha-value>)',
+          body:    'rgb(var(--fg-body) / <alpha-value>)',
           muted:   'rgb(var(--fg-muted) / <alpha-value>)',
           subtle:  'rgb(var(--fg-subtle) / <alpha-value>)',
         },
