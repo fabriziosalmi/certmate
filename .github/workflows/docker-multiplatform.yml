@@ -31,7 +31,7 @@ permissions: read-all
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
     
     steps:
     - name: Checkout repository
@@ -129,7 +129,7 @@ jobs:
       run: echo ${{ steps.build.outputs.digest }}
       
   security-scan:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
     needs: build
     if: github.event_name != 'pull_request'
     # Job-level permission override: the workflow default is read-all

@@ -15,7 +15,7 @@ permissions: read-all
 jobs:
   analyze:
     name: Analyze ${{ matrix.language }}
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
     permissions:
       # Required to upload results to the Security tab.
       security-events: write
