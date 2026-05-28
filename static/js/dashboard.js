@@ -51,7 +51,11 @@
         var modal = document.getElementById('loadingModal');
         document.getElementById('loadingTitle').textContent = title;
         document.getElementById('loadingMessage').textContent = message;
-        document.getElementById('progressBar').style.width = '0%';
+        // Indeterminate progress: we have no real percentage to report, so we
+        // show a steady partial bar instead of faking a random climb to 90%.
+        // Activity is conveyed by the modal's spinner; hideLoadingModal()
+        // completes the bar to 100% on real completion.
+        document.getElementById('progressBar').style.width = '40%';
         // Toggle `hidden` and the flex centering utilities together — the
         // static markup keeps only `hidden` so we never ship `hidden flex`
         // at the same time (display utilities conflicting; works today
@@ -59,15 +63,9 @@
         modal.classList.remove('hidden');
         modal.classList.add('flex', 'items-center', 'justify-center');
 
-        // Simulate progress for better UX
-        var progress = 0;
-        var progressInterval = setInterval(function () {
-            progress += Math.random() * 15;
-            if (progress > 90) progress = 90; // Don't complete until actual completion
-            document.getElementById('progressBar').style.width = progress + '%';
-        }, 1000);
-
-        return progressInterval;
+        // No fake progress interval — return null. hideLoadingModal() tolerates
+        // a null arg (it already guards `if (progressInterval)`).
+        return null;
     }
 
     // Hide loading modal and complete progress
@@ -524,7 +522,7 @@
             return rowRaw(rowHtml`<button type="button" data-action="${action}" data-domain="${domain}" onclick="event.stopPropagation()" class="p-1.5 text-gray-400 hover:text-${rowRaw(hoverColor)}-600 dark:hover:text-${rowRaw(hoverColor)}-400 rounded hover:bg-hover" title="${title}" aria-label="${title} ${domain}"><i class="fas ${rowRaw(icon)}" aria-hidden="true"></i></button>`);
         }
 
-        container.innerHTML = sorted.map(function (cert) {
+        container.innerHTML = sorted.map(function (cert, i) {
             // providerDisplayName(...) already calls escapeHtml internally —
             // when interpolating into the rowHtml template we wrap it with
             // rowRaw() to opt out of re-escaping. cert.domain and
@@ -598,7 +596,7 @@
             var mobileDeploymentLine = rowRaw(rowHtml`<div class="flex items-start text-xs text-muted"><i class="fas fa-rocket mr-1.5 mt-0.5 w-3 shrink-0" aria-hidden="true"></i><div class="flex-1 min-w-0">${rowRaw(deploymentBadgesHtml(cert))}</div></div>`);
             var mobileMeta = rowRaw(rowHtml`<div class="md:hidden mt-2 pt-2 border-t border-gray-100 dark:border-gray-700/50 space-y-1">${mobileExpiryLine}${mobileProviderLine}${mobileDeploymentLine}</div>`);
             var lockColor = isExpired ? 'text-red-400' : isExpiringSoon ? 'text-yellow-400' : 'text-green-500';
-            return rowHtml`<tr class="${rowRaw(healthClass)} row-enter hover:bg-blue-50/40 dark:hover:bg-blue-900/10 transition-colors duration-150 cursor-pointer" style="animation-delay:${rowRaw(String(sorted.indexOf(cert) * 30))}ms" onclick="openCertDetail('${cert.domain}')">
+            return rowHtml`<tr class="${rowRaw(healthClass)} row-enter hover:bg-blue-50/40 dark:hover:bg-blue-900/10 transition-colors duration-150 cursor-pointer" style="animation-delay:${rowRaw(String(i * 30))}ms" onclick="openCertDetail('${cert.domain}')">
                 <td class="px-6 py-4 max-w-0">
                     <div class="flex items-center min-w-0">
                         <i class="fas fa-lock ${rowRaw(lockColor)} mr-2 text-sm shrink-0" aria-hidden="true"></i>
@@ -643,16 +641,9 @@
             });
         });
 
-        // Trigger deployment checks for uncached certs
-        setTimeout(function () {
-            if (Array.isArray(certificates)) {
-                certificates.filter(function (c) { return c.exists; }).forEach(function (c) {
-                    if (!deploymentCache.get(c.domain)) {
-                        checkDeploymentStatus(c.domain);
-                    }
-                });
-            }
-        }, 100);
+        // Automatic deployment checks are triggered once, from loadCertificates(),
+        // via runDeploymentChecks() — batched and deduped. We intentionally do NOT
+        // fire a second (unbatched) pass here.
     }
 
     // Certificate detail slide-out panel
@@ -926,7 +917,71 @@
         addDebugLog('Statistics updated: ' + deployedCount + ' certificates actively deployed', 'success');
     }
 
-    // Check deployment status for all certificates
+    // Run deployment-status checks for a list of certs in small batches (3 at a
+    // time) so we never open more than that many parallel requests at once
+    // (browsers cap ~6 connections/host on HTTP/1.1). Pauses 500ms between
+    // batches and calls updateDeploymentStats() once everything settles. Cached
+    // certs are still skipped inside checkDeploymentStatus(). Returns a Promise
+    // that resolves when all batches are done.
+    //
+    // options.onProgress(completed, total) — optional, called after each cert
+    // settles (resolve OR reject), used by the manual "Check all" button to
+    // render live progress.
+    function runDeploymentChecks(certs, options) {
+        options = options || {};
+        var onProgress = options.onProgress;
+
+        if (!Array.isArray(certs) || certs.length === 0) {
+            return Promise.resolve();
+        }
+
+        var completed = 0;
+        var total = certs.length;
+
+        function reportProgress() {
+            completed++;
+            if (onProgress) {
+                onProgress(completed, total);
+            }
+        }
+
+        // Check certificates in batches to avoid overwhelming the server.
+        var batchSize = 3;
+        var batches = [];
+        for (var i = 0; i < certs.length; i += batchSize) {
+            batches.push(certs.slice(i, i + batchSize));
+        }
+
+        var batchIndex = 0;
+        return new Promise(function (resolve) {
+            function processBatch() {
+                if (batchIndex >= batches.length) {
+                    updateDeploymentStats();
+                    resolve();
+                    return;
+                }
+
+                var batch = batches[batchIndex];
+                var batchPromises = batch.map(function (cert) {
+                    return checkDeploymentStatus(cert.domain).then(reportProgress, reportProgress);
+                });
+
+                Promise.all(batchPromises).then(function () {
+                    batchIndex++;
+                    if (batchIndex < batches.length) {
+                        setTimeout(processBatch, 500);
+                    } else {
+                        // last batch settled; recurse once to hit the terminal (stats + resolve) branch
+                        processBatch();
+                    }
+                });
+            }
+
+            processBatch();
+        });
+    }
+
+    // Check deployment status for all certificates (manual "Check all" button)
     function checkAllDeploymentStatuses() {
         var button = event.target;
         var originalText = button.innerHTML;
@@ -947,54 +1002,16 @@
             return;
         }
 
-        // Update button to show progress
-        var completed = 0;
-        var total = certificatesToCheck.length;
-
-        function updateProgress() {
-            var percentage = Math.round((completed / total) * 100);
-            button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Checking... ' + completed + '/' + total + ' (' + percentage + '%)';
-        }
-
-        // Check certificates in batches to avoid overwhelming the server
-        var batchSize = 3;
-        var batches = [];
-        for (var i = 0; i < certificatesToCheck.length; i += batchSize) {
-            batches.push(certificatesToCheck.slice(i, i + batchSize));
-        }
-
-        var batchIndex = 0;
-        function processBatch() {
-            if (batchIndex >= batches.length) {
-                updateDeploymentStats();
-                showMessage('Deployment status updated for ' + total + ' certificates', 'success');
-                button.innerHTML = originalText;
-                button.disabled = false;
-                return;
+        runDeploymentChecks(certificatesToCheck, {
+            onProgress: function (completed, totalCount) {
+                var percentage = Math.round((completed / totalCount) * 100);
+                button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Checking... ' + completed + '/' + totalCount + ' (' + percentage + '%)';
             }
-
-            var batch = batches[batchIndex];
-            var batchPromises = batch.map(function (cert) {
-                return checkDeploymentStatus(cert.domain).then(function () {
-                    completed++;
-                    updateProgress();
-                }).catch(function () {
-                    completed++;
-                    updateProgress();
-                });
-            });
-
-            Promise.all(batchPromises).then(function () {
-                batchIndex++;
-                if (batchIndex < batches.length) {
-                    setTimeout(processBatch, 500);
-                } else {
-                    processBatch();
-                }
-            });
-        }
-
-        processBatch();
+        }).then(function () {
+            showMessage('Deployment status updated for ' + certificatesToCheck.length + ' certificates', 'success');
+            button.innerHTML = originalText;
+            button.disabled = false;
+        });
     }
 
     // Check deployment status for a specific domain
@@ -1201,17 +1218,16 @@
             updateStats(certificates);
             displayCertificates(certificates);
 
-            // Check deployment status for all certificates after a short delay
+            // Check deployment status for all certificates after a short delay.
+            // Single source of automatic checks — batched/deduped via
+            // runDeploymentChecks() (no progress callback here).
             addDebugLog('Scheduling automatic deployment status checks...', 'info');
 
             setTimeout(function () {
-                addDebugLog('Starting automatic deployment status checks for all certificates', 'info');
-
                 var existingCerts = certificates.filter(function (cert) { return cert.exists; });
                 if (existingCerts.length > 0) {
-                    var promises = existingCerts.map(function (cert) { return checkDeploymentStatus(cert.domain); });
-                    Promise.all(promises).then(function () {
-                        updateDeploymentStats();
+                    addDebugLog('Starting automatic deployment status checks for all certificates', 'info');
+                    runDeploymentChecks(existingCerts).then(function () {
                         addDebugLog('Automatic deployment check completed for ' + existingCerts.length + ' certificates', 'success');
                     });
                 } else {
@@ -1238,36 +1254,49 @@
         });
     }
 
-    // Listen for cache settings updates from settings page
+    // Listen for cache settings updates from the settings page. The settings
+    // page writes to localStorage; the browser `storage` event fires in OTHER
+    // tabs than the writer, which is exactly the cross-tab signalling intent
+    // here (no polling needed).
     function setupCacheSettingsListener() {
+        // Track the last-seen values so we only react to genuine changes.
         var lastUpdate = localStorage.getItem('cache-settings-updated');
         var lastClearSignal = localStorage.getItem('clear-deployment-cache');
 
-        setInterval(function () {
-            // Check for settings updates
-            var currentUpdate = localStorage.getItem('cache-settings-updated');
-            if (currentUpdate && currentUpdate !== lastUpdate) {
+        function handleSettingsUpdate(value) {
+            if (value && value !== lastUpdate) {
                 deploymentCache.loadSettings();
                 addDebugLog('Cache settings updated from settings page', 'info');
-                lastUpdate = currentUpdate;
+                lastUpdate = value;
             }
+        }
 
-            // Check for cache clear signals
-            var currentClearSignal = localStorage.getItem('clear-deployment-cache');
-            if (currentClearSignal && currentClearSignal !== lastClearSignal) {
+        function handleClearSignal(value) {
+            if (value && value !== lastClearSignal) {
                 deploymentCache.clear();
                 addDebugLog('Deployment cache cleared by admin request', 'warn');
-                // Re-check all certificates
+                // Re-check all certificates (batched via runDeploymentChecks).
                 setTimeout(function () {
                     if (Array.isArray(allCertificates) && allCertificates.length > 0) {
-                        addDebugLog('Re-checking all certificates after cache clear...', 'info');
                         var existingCerts = allCertificates.filter(function (cert) { return cert.exists; });
-                        existingCerts.forEach(function (cert) { checkDeploymentStatus(cert.domain); });
+                        if (existingCerts.length > 0) {
+                            addDebugLog('Re-checking all certificates after cache clear...', 'info');
+                            runDeploymentChecks(existingCerts);
+                        }
                     }
                 }, 1000);
-                lastClearSignal = currentClearSignal;
+                lastClearSignal = value;
             }
-        }, 2000);
+        }
+
+        // React to writes from other tabs (the settings page).
+        window.addEventListener('storage', function (e) {
+            if (e.key === 'cache-settings-updated') {
+                handleSettingsUpdate(e.newValue);
+            } else if (e.key === 'clear-deployment-cache') {
+                handleClearSignal(e.newValue);
+            }
+        });
     }
 
     // Multi-account support functions
