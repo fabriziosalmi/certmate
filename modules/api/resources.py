@@ -353,10 +353,13 @@ def create_api_resources(api, models, managers):
             )
 
             # --- Certificate inventory cardinality ---
+            # Count on-disk cert stores the same way the rest of the codebase
+            # discovers them. CertificateManager has no list_certificates()
+            # method (that lives on storage backends), so the old call always
+            # raised and reported a null count.
             try:
-                certs = certificate_manager.list_certificates()
-                payload['certificate_count'] = (
-                    len(certs) if isinstance(certs, list) else None
+                payload['certificate_count'] = sum(
+                    1 for _ in iter_cert_domain_dirs(certificate_manager.cert_dir)
                 )
             except Exception as e:
                 logger.warning(f"Diagnostic: failed to count certificates: {e}")
