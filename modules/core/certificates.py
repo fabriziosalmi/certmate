@@ -747,7 +747,16 @@ class CertificateManager:
         ca_extra_env = {}
 
         try:
-            # Return conflict if cert already exists (use renew to refresh it)
+            # Settings are loaded lazily and at most once: several branches
+            # below need settings (CA default, challenge type, DNS provider,
+            # key shape, propagation time) but a fully-specified HTTP-01 caller
+            # needs none, so we keep the load conditional and reuse the result.
+            settings = None
+
+            # Return conflict if cert already exists (use renew to refresh it).
+            # This existence check runs *under* the per-domain lock acquired
+            # above so two concurrent creates for the same domain can't both
+            # pass the check and race to issue duplicate certificates.
             existing_cert = self.cert_dir / domain / 'cert.pem'
             if existing_cert.exists():
                 raise FileExistsError(f"Certificate for {domain} already exists. Use renew to refresh it.")
@@ -762,7 +771,8 @@ class CertificateManager:
             
             # Get CA provider configuration
             if not ca_provider:
-                settings = self.settings_manager.load_settings()
+                if settings is None:
+                    settings = self.settings_manager.load_settings()
                 ca_provider = settings.get('default_ca', 'letsencrypt')
             
             logger.info(f"Using CA provider: {ca_provider}")
@@ -779,7 +789,8 @@ class CertificateManager:
             
             # Resolve challenge type from settings if not provided
             if not challenge_type:
-                settings = self.settings_manager.load_settings()
+                if settings is None:
+                    settings = self.settings_manager.load_settings()
                 challenge_type = settings.get('challenge_type', 'dns-01')
 
             # HTTP-01 path: skip DNS config entirely
@@ -796,7 +807,8 @@ class CertificateManager:
                 # DNS-01 path: get DNS configuration
                 if not dns_config:
                     if not dns_provider:
-                        settings = self.settings_manager.load_settings()
+                        if settings is None:
+                            settings = self.settings_manager.load_settings()
                         dns_provider = self.settings_manager.get_domain_dns_provider(domain, settings)
 
                     if not dns_provider:
@@ -867,7 +879,8 @@ class CertificateManager:
             # API endpoint validates earlier, but renew_certificate also
             # routes through this method and can pass values from disk).
             if key_type is None and key_size is None and elliptic_curve is None:
-                settings = self.settings_manager.load_settings()
+                if settings is None:
+                    settings = self.settings_manager.load_settings()
                 key_type = settings.get('default_key_type')
                 if key_type == 'rsa':
                     key_size = settings.get('default_key_size')
@@ -944,7 +957,8 @@ class CertificateManager:
             propagation_time = None
             if challenge_type != 'http-01':
                 try:
-                    settings = self.settings_manager.load_settings()
+                    if settings is None:
+                        settings = self.settings_manager.load_settings()
                     propagation_map = settings.get('dns_propagation_seconds', {}) or {}
                 except Exception as e:
                     logger.debug("Failed to load settings in issue_certificate for propagation time: %s", e)
@@ -1038,10 +1052,18 @@ class CertificateManager:
                     src_file = live_dir / cert_file
                     dst_file = cert_output_dir / cert_file
                     if src_file.exists():
-                        shutil.copy(os.path.realpath(src_file), dst_file)
+                        # Single content read: copy bytes once and reuse them
+                        # for cert_files instead of re-opening the destination.
+                        src_real = os.path.realpath(src_file)
+                        data = Path(src_real).read_bytes()
+                        dst_file.write_bytes(data)
+                        # Preserve the source mode bits. shutil.copy did this
+                        # implicitly; without it privkey.pem (often 0600) would
+                        # be created under the umask (e.g. 0644), exposing the
+                        # private key — a security regression.
+                        shutil.copymode(src_real, dst_file)
                         logger.info(f"Copied {cert_file} to {dst_file}")
-                        with open(dst_file, 'rb') as f:
-                            cert_files[cert_file] = f.read()
+                        cert_files[cert_file] = data
             
             # Save metadata
             metadata = {
