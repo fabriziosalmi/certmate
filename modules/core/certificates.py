@@ -64,6 +64,14 @@ DNS_ALIAS_REQUIRED_FIELDS = {
 }
 
 
+class DomainOperationInProgress(RuntimeError):
+    """Raised when a create/renew can't acquire the per-domain lock within the
+    timeout because another operation for the same domain is in progress."""
+    def __init__(self, domain):
+        self.domain = domain
+        super().__init__(f"A certificate operation for {domain} is already in progress")
+
+
 class CertificateManager:
     """Class to handle certificate operations"""
     
@@ -85,6 +93,15 @@ class CertificateManager:
             return max(0, min(3600, int(os.environ.get('CERTMATE_CERT_INFO_CACHE_TTL', '60'))))
         except (TypeError, ValueError):
             return 60
+
+    @staticmethod
+    def _domain_lock_timeout() -> float:
+        """Seconds to wait for the per-domain lock before reporting the domain
+        busy. Override via CERTMATE_DOMAIN_LOCK_TIMEOUT (clamped 0-60)."""
+        try:
+            return max(0.0, min(60.0, float(os.environ.get('CERTMATE_DOMAIN_LOCK_TIMEOUT', '5'))))
+        except (TypeError, ValueError):
+            return 5.0
 
     @staticmethod
     def _certificate_info_cache_key(domain: str, settings: dict | None) -> str:
@@ -734,8 +751,8 @@ class CertificateManager:
         """
         # Acquire per-domain lock to prevent concurrent create/renew operations
         domain_lock = self._get_domain_lock(domain)
-        if not domain_lock.acquire(blocking=False):
-            raise RuntimeError(f"A certificate operation for {domain} is already in progress")
+        if not domain_lock.acquire(timeout=self._domain_lock_timeout()):
+            raise DomainOperationInProgress(domain)
 
         # Track timing for metrics
         start_time = time.time()
@@ -1111,8 +1128,8 @@ class CertificateManager:
     def renew_certificate(self, domain, force=False):
         """Renew a certificate"""
         domain_lock = self._get_domain_lock(domain)
-        if not domain_lock.acquire(blocking=False):
-            raise RuntimeError(f"A certificate operation for {domain} is already in progress")
+        if not domain_lock.acquire(timeout=self._domain_lock_timeout()):
+            raise DomainOperationInProgress(domain)
         alias_hook_config = None
         credentials_file = None
         try:

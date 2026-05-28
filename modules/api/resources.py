@@ -20,6 +20,7 @@ from ..core.metrics import get_metrics_summary, is_prometheus_available
 from ..core.constants import CERTIFICATE_FILES, iter_cert_domain_dirs
 from ..core.auth import ROLE_HIERARCHY
 from ..core.utils import utc_now_iso
+from ..core.certificates import DomainOperationInProgress
 
 _DOMAIN_RE = re.compile(r'^(\*\.)?([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$')
 
@@ -992,6 +993,8 @@ def create_api_resources(api, models, managers):
                     'error': error_msg,
                     'hint': hint
                 }, 400
+            except DomainOperationInProgress as e:
+                return {'error': str(e), 'code': 'DOMAIN_OPERATION_IN_PROGRESS'}, 409
             except RuntimeError as e:
                 # Certbot execution errors
                 error_msg = str(e)
@@ -1755,6 +1758,9 @@ def create_api_resources(api, models, managers):
                     'duration': result.get('duration')
                 }, 200
 
+            except DomainOperationInProgress as e:
+                # Domain busy is not a failure; do not publish a failure event.
+                return {'error': str(e), 'code': 'DOMAIN_OPERATION_IN_PROGRESS'}, 409
             except Exception as e:
                 logger.error(f"Certificate renewal failed for {domain}: {str(e)}")
                 event_bus = current_app.config.get('EVENT_BUS')
