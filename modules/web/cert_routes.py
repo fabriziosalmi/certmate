@@ -4,6 +4,8 @@ import tempfile
 import os
 from flask import request, jsonify, send_file, after_this_request
 
+from ..core.certificates import DomainOperationInProgress
+
 
 logger = logging.getLogger(__name__)
 
@@ -130,6 +132,8 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
             return jsonify(result)
         except (ValueError, FileExistsError) as e:
             return jsonify({'error': str(e)}), 400
+        except DomainOperationInProgress as e:
+            return jsonify({'error': str(e), 'code': 'DOMAIN_OPERATION_IN_PROGRESS'}), 409
         except RuntimeError as e:
             logger.error(f"Certificate creation failed: {e}")
             return jsonify({'error': str(e)}), 422
@@ -308,6 +312,8 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
             return jsonify({'message': result.get('message', 'Certificate renewed successfully')})
         except FileNotFoundError as e:
             return jsonify({'error': str(e)}), 404
+        except DomainOperationInProgress as e:
+            return jsonify({'error': str(e), 'code': 'DOMAIN_OPERATION_IN_PROGRESS'}), 409
         except RuntimeError as e:
             logger.error(f"Certificate renewal failed: {e}")
             return jsonify({'error': str(e)}), 422

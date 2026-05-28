@@ -3,10 +3,12 @@ Targeted coverage for two specific gaps in modules/core/certificates.py:
 
 1. Concurrent issuance locking (line 561): create_certificate guards against
    two simultaneous create/renew calls for the same domain by acquiring a
-   per-domain threading.Lock in non-blocking mode and raising RuntimeError
-   if it's already held. Without this guard, two concurrent issuances would
-   race over the same data/certs/<domain>/ directory and trigger Let's
-   Encrypt rate-limit denials.
+   per-domain threading.Lock with a bounded timeout (CERTMATE_DOMAIN_LOCK_TIMEOUT,
+   default 5s) and raising DomainOperationInProgress if it can't acquire it in
+   time. Without this guard, two concurrent issuances would race over the same
+   data/certs/<domain>/ directory and trigger Let's Encrypt rate-limit denials.
+   The tests below pin the timeout to 0 so the acquire returns immediately and
+   the barrier behaviour stays fast and deterministic.
 
 2. check_dns_alias_records DNS failure paths: when the upstream DoH
    resolver (Cloudflare) is unreachable, returns a 5xx, or returns the
@@ -82,11 +84,13 @@ class TestConcurrentIssuanceLock:
         second = mgr._get_domain_lock("example.com")
         assert first is second
 
-    def test_second_create_attempt_raises_runtime_error(self, tmp_path):
+    def test_second_create_attempt_raises_runtime_error(self, tmp_path, monkeypatch):
         """The contract create_certificate enforces: if another thread is
-        already issuing for this domain, raise RuntimeError immediately
-        instead of queueing (which could pile up requests during a slow
-        ACME exchange and trigger LE rate limits)."""
+        already issuing for this domain and the lock can't be acquired within
+        the timeout, raise (a RuntimeError subclass) instead of queueing
+        forever (which could pile up requests during a slow ACME exchange and
+        trigger LE rate limits). Pin timeout to 0 so the acquire fails fast."""
+        monkeypatch.setenv("CERTMATE_DOMAIN_LOCK_TIMEOUT", "0")
         mgr = _make_manager(tmp_path)
 
         # Pre-hold the lock from the test thread to simulate an in-flight
@@ -103,12 +107,15 @@ class TestConcurrentIssuanceLock:
         finally:
             held.release()
 
-    def test_concurrent_create_attempts_only_one_proceeds(self, tmp_path):
+    def test_concurrent_create_attempts_only_one_proceeds(self, tmp_path, monkeypatch):
         """End-to-end multi-thread check: spawn two threads both trying to
         issue for the same domain. Exactly ONE must get past the lock
-        guard; the other must raise RuntimeError. The 'lucky' thread can
-        fail later for any reason (DNS provider not configured, etc.) —
-        we only assert the lock barrier behaviour."""
+        guard; the other must raise (DomainOperationInProgress). The 'lucky'
+        thread can fail later for any reason (DNS provider not configured,
+        etc.) — we only assert the lock barrier behaviour. Pin the timeout to
+        0 so the loser is rejected immediately rather than waiting for the
+        winner to release."""
+        monkeypatch.setenv("CERTMATE_DOMAIN_LOCK_TIMEOUT", "0")
         mgr = _make_manager(tmp_path)
         first_thread_in_downstream = threading.Event()
 
