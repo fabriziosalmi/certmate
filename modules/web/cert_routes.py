@@ -40,27 +40,6 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
             'code': 'DOMAIN_OUT_OF_SCOPE',
         }), 403
 
-    @app.route('/api/certificates', methods=['GET'])
-    @app.route('/api/web/certificates', methods=['GET'])
-    @auth_manager.require_role('viewer')
-    def list_certificates_web():
-        """List all certificates via web — filtered by API-key scope."""
-        try:
-            user = getattr(request, 'current_user', None) or {}
-            scope = user.get('allowed_domains')
-            certs = certificate_manager.list_certificates()
-            if scope is not None and isinstance(certs, list):
-                certs = [
-                    c for c in certs
-                    if isinstance(c, dict) and auth_manager.domain_matches_scope(
-                        c.get('domain', ''), scope
-                    )
-                ]
-            return jsonify(certs)
-        except Exception as e:
-            logger.error(f"Failed to list certificates: {e}")
-            return jsonify({'error': 'Failed to list certificates'}), 500
-
     @app.route('/api/certificates/create', methods=['POST'])
     @app.route('/api/web/certificates/create', methods=['POST'])
     @auth_manager.require_role('operator')
