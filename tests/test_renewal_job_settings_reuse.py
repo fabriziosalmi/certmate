@@ -69,8 +69,8 @@ def test_check_renewals_reads_settings_once_for_many_domains(tmp_path):
 
     real_get_cert_info = mgr.get_certificate_info
 
-    def spy_get_cert_info(domain, settings=None):
-        seen_kwargs.append({'domain': domain, 'settings': settings})
+    def spy_get_cert_info(domain, settings=None, use_cache=True):
+        seen_kwargs.append({'domain': domain, 'settings': settings, 'use_cache': use_cache})
         # Return a cert_info dict that does NOT need renewal so renew is not called.
         return {'domain': domain, 'exists': True, 'needs_renewal': False}
 
@@ -83,12 +83,18 @@ def test_check_renewals_reads_settings_once_for_many_domains(tmp_path):
         f"of domains. Got {counter[0]} reads for 50 domains."
     )
 
-    # And the settings dict was actually threaded through every per-domain call.
+    # And the settings dict was actually threaded through every per-domain call,
+    # with use_cache=False (the renewal loop visits each domain once, so the
+    # cross-request cert-info cache is pure deepcopy overhead there).
     assert len(seen_kwargs) == 50
     for kw in seen_kwargs:
         assert kw['settings'] is not None, (
             f"get_certificate_info was called without settings= for "
             f"{kw['domain']}; the renewal job is still triggering N+1 reads"
+        )
+        assert kw['use_cache'] is False, (
+            f"check_renewals must pass use_cache=False for {kw['domain']}; "
+            f"the one-pass renewal loop should not populate the cert-info cache"
         )
 
 

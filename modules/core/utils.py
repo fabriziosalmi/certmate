@@ -739,7 +739,15 @@ class DeploymentStatusCache:
             cleared_count = len(self._cache)
             self._cache.clear()
         return cleared_count
-    
+
+    def clear_prefix(self, prefix: str) -> int:
+        """Remove every entry whose key starts with ``prefix``, returning the count removed."""
+        with self._lock:
+            matching_keys = [k for k in self._cache if k.startswith(prefix)]
+            for key in matching_keys:
+                del self._cache[key]
+        return len(matching_keys)
+
     def _clean_expired(self) -> None:
         """Internal method to remove all expired entries. Assumes lock is already held."""
         current_time = time.time()
