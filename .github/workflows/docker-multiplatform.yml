@@ -141,12 +141,48 @@ jobs:
       contents: read
 
     steps:
+    - name: Ensure Trivy is installed
+      # aquasecurity/trivy-action internally invokes setup-trivy, which
+      # on this self-hosted runner reports "Cache restored successfully"
+      # but does not leave a working binary on PATH — the next
+      # entrypoint.sh step fails with `trivy: command not found`
+      # (exit 127, run 26595913239). Install the versioned release
+      # tarball directly into a user-writable PATH entry and tell
+      # trivy-action to skip its own setup. Pin matches the version
+      # setup-trivy was trying to cache.
+      run: |
+        set -euo pipefail
+        if command -v trivy >/dev/null 2>&1; then
+          echo "trivy already on PATH: $(command -v trivy)"
+          exit 0
+        fi
+        TRIVY_VERSION=0.70.0
+        case "$(uname -m)" in
+          x86_64) BIN_ARCH=64bit ;;
+          aarch64|arm64) BIN_ARCH=ARM64 ;;
+          *) echo "Unsupported arch: $(uname -m)" >&2; exit 1 ;;
+        esac
+        tmp=$(mktemp -d)
+        trap 'rm -rf "$tmp"' EXIT
+        curl -fsSL \
+          "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-${BIN_ARCH}.tar.gz" \
+          -o "$tmp/trivy.tgz"
+        tar -xzf "$tmp/trivy.tgz" -C "$tmp" trivy
+        install -d "$HOME/.local/bin"
+        install -m 0755 "$tmp/trivy" "$HOME/.local/bin/trivy"
+        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+        echo "Installed trivy ${TRIVY_VERSION} at $HOME/.local/bin/trivy"
+
     - name: Run Trivy vulnerability scanner
       # Pinned to v0.36.0 (was @master — never pin to a mutable branch
       # in CI; upstream HEAD changes silently bring new behaviour or
       # become an attack surface if compromised).
       uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
       with:
+        # Use the trivy installed by the previous step. setup-trivy's
+        # cache hit on this self-hosted runner was reporting success
+        # without producing a usable binary.
+        skip-setup-trivy: true
         image-ref: ${{ env.REGISTRY }}/${{ secrets.DOCKERHUB_USER }}/${{ env.IMAGE_NAME }}:latest
         format: 'sarif'
         output: 'trivy-results.sarif'
