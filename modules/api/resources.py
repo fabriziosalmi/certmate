@@ -1134,6 +1134,43 @@ def create_api_resources(api, models, managers):
 
     class CertificateDetail(Resource):
         @api.doc(security='Bearer')
+        @auth_manager.require_role('viewer')
+        def get(self, domain):
+            """Get certificate info for a single domain.
+
+            Scoped API keys may only fetch domains within their
+            allowed_domains. CertMate stores one active certificate per
+            domain; expired certs are returned so callers can detect
+            expiry via days_left / needs_renewal. Returns 404 when no
+            certificate directory exists for the domain.
+            """
+            scope_err = _check_domain_scope(domain, 'get')
+            if scope_err:
+                return scope_err
+            cert_dir, err = _validate_domain_path(domain, file_ops.cert_dir)
+            if err:
+                return {'error': err}, 400
+            if not cert_dir or not cert_dir.exists():
+                return {'error': f'Certificate not found for domain: {domain}'}, 404
+            try:
+                cert_info = certificate_manager.get_certificate_info(domain)
+                if not cert_info:
+                    return {'error': f'Certificate not found for domain: {domain}'}, 404
+                # Mirror CertificateList.get's per-domain auto_renew enrichment so
+                # the single-domain response shape matches the list response.
+                settings = settings_manager.load_settings()
+                auto_renew = True
+                for entry in settings.get('domains', []):
+                    if isinstance(entry, dict) and entry.get('domain') == domain:
+                        auto_renew = bool(entry.get('auto_renew', True))
+                        break
+                cert_info['auto_renew'] = auto_renew
+                return cert_info
+            except Exception as e:
+                logger.error(f"Error fetching certificate for {domain}: {e}")
+                return {'error': 'Failed to fetch certificate'}, 500
+
+        @api.doc(security='Bearer')
         @auth_manager.require_role('operator')
         def patch(self, domain):
             """Update DNS provider for an existing certificate (issue #129).
