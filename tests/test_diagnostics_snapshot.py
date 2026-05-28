@@ -69,17 +69,39 @@ def _audit_entries(*operations):
     ]
 
 
+def _make_cert_store(root):
+    """Populate ``root`` with a realistic cert storage layout: three valid
+    domain dirs (each with a ``cert.pem``) plus decoys that
+    ``iter_cert_domain_dirs`` must skip (a hidden dir, ``lost+found``, and a
+    domain dir with no ``cert.pem``). Returns the expected valid count (3)."""
+    root = Path(root)
+    for domain in ('a.com', 'b.com', 'c.com'):
+        d = root / domain
+        d.mkdir(parents=True, exist_ok=True)
+        (d / 'cert.pem').write_text('cert')
+    # Decoys that must NOT be counted:
+    hidden = root / '.cache'
+    hidden.mkdir(parents=True, exist_ok=True)
+    (hidden / 'cert.pem').write_text('cert')
+    lost = root / 'lost+found'
+    lost.mkdir(parents=True, exist_ok=True)
+    (lost / 'cert.pem').write_text('cert')
+    (root / 'empty').mkdir(parents=True, exist_ok=True)  # no cert.pem
+    return 3
+
+
 @pytest.fixture
 def managers(tmp_path):
     """Standard managers wired up enough to exercise the resource."""
     auth_manager = MagicMock()
     auth_manager.require_role = MagicMock(side_effect=_passthrough_decorator)
 
+    # Real on-disk cert store so certificate_count is computed via
+    # iter_cert_domain_dirs(cert_dir) against an actual Path.
+    _make_cert_store(tmp_path)
+
     cert_manager = MagicMock()
     cert_manager.cert_dir = Path(tmp_path)
-    cert_manager.list_certificates.return_value = [
-        {'domain': 'a.com'}, {'domain': 'b.com'}, {'domain': 'c.com'}
-    ]
 
     audit_logger = MagicMock()
     audit_logger.get_recent_entries.return_value = _audit_entries(
@@ -135,10 +157,25 @@ class TestSnapshotShape:
         ):
             assert k in body, f"missing field: {k}"
 
-    def test_certificate_count_matches_manager(self, managers, tmp_path):
+    def test_certificate_count_matches_on_disk_stores(self, managers, tmp_path):
+        # The fixture seeds three valid cert dirs (a/b/c.com) plus decoys
+        # (.cache, lost+found, empty/) that iter_cert_domain_dirs filters out.
         app = _build_app(managers, data_dir=tmp_path)
         body = app.test_client().get('/api/diagnostics/snapshot').get_json()
         assert body['certificate_count'] == 3
+        # The fix means this is a real count, not a permanent failure.
+        assert 'certificate_count' not in body.get('errors', {})
+
+    def test_certificate_count_excludes_fs_artifacts(self, managers, tmp_path):
+        # Pin the iter_cert_domain_dirs filtering: a fresh root with only the
+        # three valid dirs plus the same decoys must still count exactly 3.
+        cert_root = tmp_path / 'certs'
+        expected = _make_cert_store(cert_root)
+        managers['certificates'].cert_dir = cert_root
+        app = _build_app(managers, data_dir=tmp_path)
+        body = app.test_client().get('/api/diagnostics/snapshot').get_json()
+        assert body['certificate_count'] == expected == 3
+        assert 'certificate_count' not in body.get('errors', {})
 
     def test_settings_scalars_propagated(self, managers, tmp_path):
         app = _build_app(managers, data_dir=tmp_path)
@@ -312,7 +349,11 @@ class TestSnapshotPartialFailure:
     than 500ing the whole call."""
 
     def test_certificate_count_failure(self, managers, tmp_path):
-        managers['certificates'].list_certificates.side_effect = RuntimeError('disk gone')
+        # An unreadable/broken cert_dir must degrade gracefully rather than
+        # 500 the whole snapshot. Use a cert_dir whose traversal raises.
+        broken = MagicMock()
+        broken.exists.side_effect = RuntimeError('disk gone')
+        managers['certificates'].cert_dir = broken
         app = _build_app(managers, data_dir=tmp_path)
         body = app.test_client().get('/api/diagnostics/snapshot').get_json()
         assert body['certificate_count'] is None
