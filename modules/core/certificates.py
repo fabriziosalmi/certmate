@@ -1276,12 +1276,25 @@ class CertificateManager:
                 src_dir = domain_dir / 'live' / domain
                 dest_dir = domain_dir
                 
+                cert_files = {}
                 for file_name in CERTIFICATE_FILES:
                     src_file = src_dir / file_name
                     dest_file = dest_dir / file_name
                     if src_file.exists():
                         self._atomic_binary_copy(src_file, dest_file)
+                        with open(dest_file, 'rb') as f:
+                            cert_files[file_name] = f.read()
                 
+                if self.storage_manager:
+                    try:
+                        storage_success = self.storage_manager.store_certificate(domain, cert_files, metadata)
+                        if storage_success:
+                            logger.info(f"Certificate stored in {self.storage_manager.get_backend_name()} backend for {domain}")
+                        else:
+                            logger.warning(f"Failed to store certificate in {self.storage_manager.get_backend_name()} backend for {domain}")
+                    except Exception as e:
+                        logger.error(f"Error storing certificate in storage backend for {domain}: {e}")
+
                 # Update metadata with renewal timestamp
                 if metadata_file.exists():
                     try:
