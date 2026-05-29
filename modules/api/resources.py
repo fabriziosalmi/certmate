@@ -178,6 +178,27 @@ def create_api_resources(api, models, managers):
         certificate_manager, settings_manager, auth_manager,
         audit_logger=audit_logger,
     )
+    # Optional async issuance executor (single-instance, in-process). Absent in
+    # minimal-managers unit tests, in which case create/renew stay synchronous.
+    cert_executor = managers.get('cert_executor')
+
+    _ASYNC_TRUTHY = (True, 1, '1', 'true', 'yes', 'on')
+
+    def _wants_async(payload):
+        """True when the caller opted into async issuance via the ``async``
+        body flag or the ``?async=`` query param."""
+        if isinstance(payload, dict) and payload.get('async') in _ASYNC_TRUTHY:
+            return True
+        return request.args.get('async', '').strip().lower() in ('1', 'true', 'yes', 'on')
+
+    def _job_accepted(job_id, operation, domain):
+        return {
+            'job_id': job_id,
+            'status': 'queued',
+            'operation': operation,
+            'domain': domain,
+            'status_url': f'/api/certificates/jobs/{job_id}',
+        }
 
     def _check_domain_scope(domain, operation):
         """Reject the request if the caller's API-key allowed_domains does
@@ -810,6 +831,31 @@ def create_api_resources(api, models, managers):
                     }, 400
 
                 user = getattr(request, 'current_user', None) or {}
+
+                # Async opt-in: validate + authorize synchronously (immediate
+                # 4xx on bad input/scope/config), then defer the blocking
+                # certbot issuance to the executor and return 202 + job id.
+                if _wants_async(data) and cert_executor is not None:
+                    prepared = cert_service.prepare_create(
+                        domain=domain,
+                        san_domains=san_domains,
+                        dns_provider=data.get('dns_provider'),
+                        account_id=data.get('account_id'),
+                        ca_provider=data.get('ca_provider'),
+                        challenge_type=data.get('challenge_type'),
+                        domain_alias=data.get('domain_alias'),
+                        key_type=data.get('key_type'),
+                        key_size=data.get('key_size'),
+                        elliptic_curve=data.get('elliptic_curve'),
+                        user=user,
+                        ip_address=request.remote_addr,
+                    )
+                    job_id = cert_executor.submit(
+                        'create', domain,
+                        lambda: cert_service.issue_create(prepared),
+                    )
+                    return _job_accepted(job_id, 'create', domain), 202
+
                 result = cert_service.create(
                     domain=domain,
                     san_domains=san_domains,
@@ -1643,6 +1689,17 @@ def create_api_resources(api, models, managers):
                 if err:
                     return {'error': err}, 400
                 user = getattr(request, 'current_user', None) or {}
+
+                if _wants_async(payload) and cert_executor is not None:
+                    prepared = cert_service.prepare_renew(
+                        domain=domain, user=user, ip_address=request.remote_addr,
+                    )
+                    job_id = cert_executor.submit(
+                        'renew', domain,
+                        lambda: cert_service.issue_renew(prepared, force=force),
+                    )
+                    return _job_accepted(job_id, 'renew', domain), 202
+
                 result = cert_service.renew(
                     domain=domain, force=force,
                     user=user, ip_address=request.remote_addr,
@@ -1670,6 +1727,23 @@ def create_api_resources(api, models, managers):
                 if event_bus:
                     event_bus.publish('certificate_failed', {'domain': domain, 'error': str(e)})
                 return {'error': 'Certificate renewal failed'}, 500
+
+    class CertificateJob(Resource):
+        @api.doc(security='Bearer')
+        @auth_manager.require_role('operator')
+        def get(self, job_id):
+            """Poll the status of an async create/renew job."""
+            if cert_executor is None:
+                return {'error': 'Async issuance is not enabled'}, 404
+            job = cert_executor.get(job_id)
+            if job is None:
+                return {'error': 'Job not found'}, 404
+            # The caller must be in scope for the job's domain — a scoped key
+            # cannot poll a job for a domain it could not have created.
+            scope_err = _check_domain_scope(job.get('domain'), 'job_status')
+            if scope_err:
+                return scope_err
+            return job, 200
 
     class CertificateAutoRenew(Resource):
         @api.doc(security='Bearer')
@@ -2976,6 +3050,7 @@ def create_api_resources(api, models, managers):
         'DownloadCertificate': DownloadCertificate,
         'DownloadCertificateFile': DownloadCertificateFile,
         'RenewCertificate': RenewCertificate,
+        'CertificateJob': CertificateJob,
         'CertificateAutoRenew': CertificateAutoRenew,
         'CertificateRunDeploy': CertificateRunDeploy,
         'BackupList': BackupList,
