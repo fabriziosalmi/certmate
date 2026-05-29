@@ -79,6 +79,28 @@ class CertificateService:
         result dict. Raises ``ValueError`` (bad input / missing config),
         :class:`DomainOutOfScope` (403), ``DomainOperationInProgress`` (409) or
         ``RuntimeError`` (certbot failure).
+
+        Equivalent to ``issue_create(prepare_create(...))``. The two phases are
+        exposed separately so async callers can run the cheap ``prepare_create``
+        synchronously (for an immediate 4xx on bad input) and defer the
+        blocking ``issue_create`` (certbot) to a background job.
+        """
+        return self.issue_create(self.prepare_create(
+            domain=domain, san_domains=san_domains, dns_provider=dns_provider,
+            account_id=account_id, ca_provider=ca_provider,
+            challenge_type=challenge_type, domain_alias=domain_alias,
+            key_type=key_type, key_size=key_size, elliptic_curve=elliptic_curve,
+            user=user, ip_address=ip_address,
+        ))
+
+    def prepare_create(self, *, domain, san_domains=None, dns_provider=None,
+                        account_id=None, ca_provider=None, challenge_type=None,
+                        domain_alias=None, key_type=None, key_size=None,
+                        elliptic_curve=None, user=None, ip_address=None):
+        """Validate, authorize and resolve a create request WITHOUT side
+        effects, returning the resolved kwargs for :meth:`issue_create`. Raises
+        ``ValueError`` / :class:`DomainOutOfScope`. Cheap (no certbot, no disk
+        write) so it is safe to run inline before deferring issuance.
         """
         domain = (domain or '').strip()
         san_domains = san_domains or []
@@ -128,25 +150,48 @@ class CertificateService:
             if not dns_provider:
                 raise ValueError('No DNS provider specified')
 
+        return {
+            'domain': domain,
+            'email': email,
+            'dns_provider': dns_provider,
+            'account_id': account_id,
+            'ca_provider': ca_provider,
+            'domain_alias': domain_alias,
+            'san_domains': san_domains,
+            'challenge_type': challenge_type,
+            'key_type': key_type,
+            'key_size': key_size,
+            'elliptic_curve': elliptic_curve,
+            # Fallback used only to label the persisted domain entry.
+            '_settings_dns_provider': settings.get('dns_provider'),
+        }
+
+    def issue_create(self, prepared):
+        """Perform the certbot issuance + settings persistence for a prepared
+        create request. This is the blocking, deferrable half. Raises
+        ``DomainOperationInProgress`` (409), ``RuntimeError`` or
+        ``FileExistsError``.
+        """
+        domain = prepared['domain']
         result = self._certs.create_certificate(
             domain=domain,
-            email=email,
-            dns_provider=dns_provider,
-            account_id=account_id,
-            ca_provider=ca_provider,
-            domain_alias=domain_alias,
-            san_domains=san_domains,
-            challenge_type=challenge_type,
-            key_type=key_type,
-            key_size=key_size,
-            elliptic_curve=elliptic_curve,
+            email=prepared['email'],
+            dns_provider=prepared['dns_provider'],
+            account_id=prepared['account_id'],
+            ca_provider=prepared['ca_provider'],
+            domain_alias=prepared['domain_alias'],
+            san_domains=prepared['san_domains'],
+            challenge_type=prepared['challenge_type'],
+            key_type=prepared['key_type'],
+            key_size=prepared['key_size'],
+            elliptic_curve=prepared['elliptic_curve'],
         )
 
         # Append the new domain under the settings manager's lock so two
         # parallel creates for different domains cannot race and drop an entry.
-        resolved_dns_provider = dns_provider or settings.get('dns_provider')
+        resolved_dns_provider = prepared['dns_provider'] or prepared['_settings_dns_provider']
         self._settings.update(
-            _make_add_domain(domain, resolved_dns_provider, account_id),
+            _make_add_domain(domain, resolved_dns_provider, prepared['account_id']),
             'certificate_created',
         )
         logger.info("Ensured domain %s is in settings after certificate creation", domain)
@@ -158,9 +203,28 @@ class CertificateService:
         responsibility (it owns ``cert_dir`` resolution); here we enforce scope
         and delegate. Raises :class:`DomainOutOfScope` (403),
         ``DomainOperationInProgress`` (409) or ``RuntimeError``.
+
+        Equivalent to ``issue_renew(prepare_renew(...), force=force)``; split so
+        async callers can authorize synchronously and defer the certbot call.
+        """
+        return self.issue_renew(
+            self.prepare_renew(domain=domain, user=user, ip_address=ip_address),
+            force=force,
+        )
+
+    def prepare_renew(self, *, domain, user=None, ip_address=None):
+        """Authorize a renew request (scope check) with no side effects.
+        Raises :class:`DomainOutOfScope`. Returns the resolved kwargs for
+        :meth:`issue_renew`.
         """
         self._enforce_scope(domain, 'renew', user, ip_address)
-        return self._certs.renew_certificate(domain, force=force)
+        return {'domain': domain}
+
+    def issue_renew(self, prepared, *, force=False):
+        """Run the (blocking, deferrable) certbot renewal for a prepared renew
+        request. Raises ``DomainOperationInProgress`` (409) or ``RuntimeError``.
+        """
+        return self._certs.renew_certificate(prepared['domain'], force=force)
 
 
 def _make_add_domain(domain, dns_provider, account_id):
