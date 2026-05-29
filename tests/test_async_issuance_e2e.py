@@ -16,6 +16,7 @@ import time
 import uuid
 
 import pytest
+import requests
 
 pytestmark = [pytest.mark.e2e, pytest.mark.slow]
 
@@ -39,7 +40,13 @@ def _poll_job(api, status_url, timeout=240):
     deadline = time.time() + timeout
     last = None
     while time.time() < deadline:
-        r = api.get(status_url)
+        try:
+            r = api.get(status_url)
+        except requests.exceptions.ConnectionError:
+            # Backstop for the keep-alive race (the session adapter also
+            # retries): a stale pooled connection raises here; reconnect.
+            time.sleep(1)
+            continue
         assert r.status_code == 200, f"{r.status_code} {r.text[:200]}"
         last = r.json()
         if last["status"] in ("succeeded", "failed"):
