@@ -469,11 +469,18 @@ def initialize_managers(container: AppContainer, app):
     # reference to the container.
     app.config['DATA_DIR'] = str(container.data_dir)
 
+    from .cert_service import CertificateService
+    cert_service = CertificateService(
+        certificate_manager, settings_manager, auth_manager,
+        audit_logger=audit_logger,
+    )
+
     container.managers = {
         'file_ops': file_ops,
         'settings': settings_manager,
         'auth': auth_manager,
         'certificates': certificate_manager,
+        'cert_service': cert_service,
         'client_certificates': client_cert_manager,
         'dns': dns_manager,
         'cache': cache_manager,
