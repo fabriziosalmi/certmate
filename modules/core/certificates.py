@@ -1481,6 +1481,15 @@ class CertificateManager:
                         with open(dest_file, 'rb') as f:
                             cert_files[file_name] = f.read()
                 
+                # Update metadata with renewal timestamp
+                if metadata_file.exists():
+                    try:
+                        metadata['renewed_at'] = utc_now_iso()
+                        self._save_metadata(domain, metadata)
+                        logger.info(f"Updated renewal timestamp in metadata for {domain}")
+                    except Exception as e:
+                        logger.warning(f"Failed to update metadata for {domain}: {e}")
+                
                 if self.storage_manager:
                     try:
                         storage_success = self.storage_manager.store_certificate(domain, cert_files, metadata)
@@ -1490,15 +1499,6 @@ class CertificateManager:
                             logger.warning(f"Failed to store certificate in {self.storage_manager.get_backend_name()} backend for {domain}")
                     except Exception as e:
                         logger.error(f"Error storing certificate in storage backend for {domain}: {e}")
-
-                # Update metadata with renewal timestamp
-                if metadata_file.exists():
-                    try:
-                        metadata['renewed_at'] = utc_now_iso()
-                        self._save_metadata(domain, metadata)
-                        logger.info(f"Updated renewal timestamp in metadata for {domain}")
-                    except Exception as e:
-                        logger.warning(f"Failed to update metadata for {domain}: {e}")
                 
                 logger.info(f"Certificate renewed successfully for {domain}")
                 self._invalidate_certificate_info_cache(domain)
