@@ -36,6 +36,12 @@ class AuthManager:
         self._session_lock = threading.Lock()  # Thread-safe session access
         self._hmac_key = None  # Set by set_hmac_key() after app init
         self._audit_logger = None  # Set by set_audit_logger() after AuditLogger constructed
+        # Debounce API-key last_used_at persistence. Rewriting the whole
+        # settings.json under the global lock on EVERY authenticated API
+        # request was a hot-path write amplifier; track the last persist time
+        # per key and skip the write within the configured interval.
+        self._last_used_persist_ts = {}
+        self._last_used_lock = threading.Lock()
         import os
         _timeout_hours = int(os.getenv('SESSION_TIMEOUT_HOURS', '8'))
         self._session_timeout = max(1, _timeout_hours) * 60 * 60
@@ -366,6 +372,29 @@ class AuthManager:
             logger.error(f"Error revoking API key: {e}")
             return False, "An internal error occurred"
 
+    @staticmethod
+    def _last_used_persist_interval() -> float:
+        """Minimum seconds between persisting an API key's last_used_at.
+        0 persists on every request (the original behaviour). Default 60."""
+        import os
+        try:
+            return max(0.0, float(os.environ.get('CERTMATE_LAST_USED_PERSIST_SECONDS', '60')))
+        except (TypeError, ValueError):
+            return 60.0
+
+    def _should_persist_last_used(self, key_id: str) -> bool:
+        """True at most once per interval per key (debounce). Records the
+        persist time when it returns True."""
+        interval = self._last_used_persist_interval()
+        if interval <= 0:
+            return True
+        mono = time.monotonic()
+        with self._last_used_lock:
+            if mono - self._last_used_persist_ts.get(key_id, 0.0) >= interval:
+                self._last_used_persist_ts[key_id] = mono
+                return True
+        return False
+
     def authenticate_api_token(self, token):
         """Authenticate a bearer token against legacy token and scoped keys.
 
@@ -400,16 +429,21 @@ class AuthManager:
                     # in-memory api_keys snapshot. Best-effort: failure
                     # must NOT block authentication.
                     matched_id = key_id
-                    def _touch(s):
-                        keys = s.get('api_keys') or {}
-                        target = keys.get(matched_id)
-                        if target is not None:
-                            target['last_used_at'] = now
-                            s['api_keys'] = keys
-                    try:
-                        self.settings_manager.update(_touch, None)
-                    except Exception:
-                        pass  # Non-critical, don't fail auth on last_used update
+                    # Debounce: persist last_used_at at most once per
+                    # CERTMATE_LAST_USED_PERSIST_SECONDS per key instead of on
+                    # every authenticated request (each write rewrote the whole
+                    # settings.json under the global lock).
+                    if self._should_persist_last_used(matched_id):
+                        def _touch(s):
+                            keys = s.get('api_keys') or {}
+                            target = keys.get(matched_id)
+                            if target is not None:
+                                target['last_used_at'] = now
+                                s['api_keys'] = keys
+                        try:
+                            self.settings_manager.update(_touch, None)
+                        except Exception:
+                            pass  # Non-critical, don't fail auth on last_used update
                     return {
                         'username': 'api_key:' + key_data.get('name', key_id),
                         'role': self._normalize_role(key_data.get('role', 'viewer')),
