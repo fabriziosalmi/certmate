@@ -127,11 +127,14 @@ class CertificateManager:
             )
 
     def _invalidate_certificate_info_cache(self, domain: str) -> None:
-        # Cache keys include settings-derived renewal thresholds and current
-        # UTC date, so a domain can have multiple active entries. Metadata
-        # mutations are infrequent; clearing the small certificate-info cache
-        # avoids leaving any domain variants behind.
-        self._certificate_info_cache.clear()
+        # Cache keys are "{domain}|renewal_threshold_days=...|date=...", so a
+        # single domain can have multiple active entries (different thresholds
+        # / UTC dates). Clear only this domain's variants via the "{domain}|"
+        # prefix — the literal pipe separator guarantees we never wipe an
+        # unrelated domain that merely shares a string prefix (e.g.
+        # "example.com" vs "example.com.evil"). A single-domain mutation must
+        # not invalidate every other domain's cached info.
+        self._certificate_info_cache.clear_prefix(f"{domain}|")
 
     @staticmethod
     def _atomic_binary_copy(src: Path, dest: Path) -> None:
@@ -550,7 +553,7 @@ class CertificateManager:
 
 
 
-    def get_certificate_info(self, domain, settings=None):
+    def get_certificate_info(self, domain, settings=None, use_cache=True):
         """Get certificate information for a domain.
 
         ``settings`` is an optional pre-loaded settings dict. Callers
@@ -561,13 +564,21 @@ class CertificateManager:
         request context the request-scoped cache does not apply, so
         without this parameter the renewal job hit disk once per
         domain for the same settings.json.
+
+        ``use_cache`` controls the cross-request ``_certificate_info_cache``
+        (storage-backend path only) independently of ``settings``. It is
+        ON by default so listing endpoints keep the 60s cert-info cache
+        even when they thread their already-loaded ``settings`` through.
+        Bulk one-pass callers that visit each domain exactly once per run
+        (e.g. check_renewals) should pass ``use_cache=False`` to skip the
+        pointless deepcopy-on-set — they never get a read hit anyway.
         """
         if not domain:
             return None
-        
+
         # First try to get certificate from storage backend if available
         if self.storage_manager:
-            cache_enabled = settings is None
+            cache_enabled = use_cache
             cache_settings = settings
             if cache_settings is None:
                 try:
@@ -1365,7 +1376,10 @@ class CertificateManager:
                 # cannot help with — this is a background job, no flask.g)
                 # is avoided. For a 1000-domain renewal job that's 1000
                 # redundant settings.json reads collapsed to one.
-                cert_info = self.get_certificate_info(domain, settings=settings)
+                # use_cache=False: this loop visits each domain exactly once
+                # per run, so populating _certificate_info_cache would only
+                # add a deepcopy-on-set with no possible read hit.
+                cert_info = self.get_certificate_info(domain, settings=settings, use_cache=False)
 
                 if cert_info and cert_info.get('needs_renewal'):
                     logger.info(f"Renewing certificate for {domain}")

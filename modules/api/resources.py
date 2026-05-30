@@ -804,7 +804,12 @@ def create_api_resources(api, models, managers):
                         continue
                     if not auth_manager.domain_matches_scope(domain, scope):
                         continue
-                    cert_info = certificate_manager.get_certificate_info(domain)
+                    # Reuse the once-loaded settings dict so each per-domain
+                    # call skips its own settings deepcopy (load_settings is
+                    # already request-cached on flask.g). use_cache stays at
+                    # its default True so the storage-backend cert-info cache
+                    # is still consulted/populated during listing.
+                    cert_info = certificate_manager.get_certificate_info(domain, settings=settings)
                     if cert_info:
                         cert_info['auto_renew'] = auto_renew_by_domain.get(domain, True)
                         certificates.append(cert_info)
@@ -961,7 +966,12 @@ def create_api_resources(api, models, managers):
                         continue
                     if not auth_manager.domain_matches_scope(domain, scope):
                         continue
-                    cert_info = certificate_manager.get_certificate_info(domain)
+                    # Reuse the once-loaded settings dict so each per-domain
+                    # call skips its own settings deepcopy (load_settings is
+                    # already request-cached on flask.g). use_cache stays at
+                    # its default True so the storage-backend cert-info cache
+                    # is still consulted/populated during the scan.
+                    cert_info = certificate_manager.get_certificate_info(domain, settings=settings)
                     if cert_info:
                         certificates.append(cert_info)
 
