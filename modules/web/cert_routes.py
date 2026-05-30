@@ -50,15 +50,18 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
                 ip_address=request.remote_addr,
             )
             return jsonify(result)
-        except DomainOutOfScope as e:
-            return jsonify({'error': str(e), 'code': 'DOMAIN_OUT_OF_SCOPE'}), 403
+        except DomainOutOfScope:
+            return jsonify({'error': 'API key not authorized for this domain', 'code': 'DOMAIN_OUT_OF_SCOPE'}), 403
         except (ValueError, FileExistsError) as e:
-            return jsonify({'error': str(e)}), 400
-        except DomainOperationInProgress as e:
-            return jsonify({'error': str(e), 'code': 'DOMAIN_OPERATION_IN_PROGRESS'}), 409
+            # Log the specific reason; return a generic message so the caught
+            # exception text never reaches the client (CodeQL py/stack-trace-exposure).
+            logger.info("Certificate creation rejected: %s", e)
+            return jsonify({'error': 'Invalid certificate request'}), 400
+        except DomainOperationInProgress:
+            return jsonify({'error': 'A certificate operation is already in progress for this domain', 'code': 'DOMAIN_OPERATION_IN_PROGRESS'}), 409
         except RuntimeError as e:
             logger.error(f"Certificate creation failed: {e}")
-            return jsonify({'error': str(e)}), 422
+            return jsonify({'error': 'Certificate creation failed'}), 422
         except Exception as e:
             logger.error(f"Failed to create certificate: {e}")
             return jsonify({'error': 'Failed to create certificate'}), 500
@@ -233,15 +236,16 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
                 user=user, ip_address=request.remote_addr,
             )
             return jsonify({'message': result.get('message', 'Certificate renewed successfully')})
-        except DomainOutOfScope as e:
-            return jsonify({'error': str(e), 'code': 'DOMAIN_OUT_OF_SCOPE'}), 403
+        except DomainOutOfScope:
+            return jsonify({'error': 'API key not authorized for this domain', 'code': 'DOMAIN_OUT_OF_SCOPE'}), 403
         except FileNotFoundError as e:
-            return jsonify({'error': str(e)}), 404
-        except DomainOperationInProgress as e:
-            return jsonify({'error': str(e), 'code': 'DOMAIN_OPERATION_IN_PROGRESS'}), 409
+            logger.info("Certificate renewal target not found: %s", e)
+            return jsonify({'error': 'Certificate not found'}), 404
+        except DomainOperationInProgress:
+            return jsonify({'error': 'A certificate operation is already in progress for this domain', 'code': 'DOMAIN_OPERATION_IN_PROGRESS'}), 409
         except RuntimeError as e:
             logger.error(f"Certificate renewal failed: {e}")
-            return jsonify({'error': str(e)}), 422
+            return jsonify({'error': 'Certificate renewal failed'}), 422
         except Exception as e:
             logger.error(f"Certificate renewal failed via web: {str(e)}")
             return jsonify({'error': 'Certificate renewal failed'}), 500
