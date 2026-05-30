@@ -12,6 +12,16 @@ on:
 # token, not the GITHUB_TOKEN), so no job needs write here.
 permissions: read-all
 
+# One CI run per ref at a time. The e2e suite (tests/conftest.py) starts a
+# container with a FIXED name (certmate-test-suite) and port (18888) and runs
+# `docker rm -f` on startup, so two CI runs on the same self-hosted host cycle
+# each other's container mid-run and intermittently fail HTTP e2e tests (seen on
+# the v2.11.2 bump overlapping the #278 merge run). Serializing per-ref removes
+# the clobber; a newer push supersedes an older in-flight run on the same branch.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: [self-hosted, Linux, X64]
