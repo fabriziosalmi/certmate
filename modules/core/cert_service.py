@@ -22,6 +22,15 @@ from .utils import validate_domain, validate_key_options
 logger = logging.getLogger(__name__)
 
 
+def _scrub_log(value):
+    """Strip CR/LF from a value before it goes into a log line, so a crafted
+    domain / username / scope cannot forge or inject log entries
+    (CodeQL py/log-injection)."""
+    if value is None:
+        return value
+    return str(value).replace('\r', '').replace('\n', '')
+
+
 class DomainOutOfScope(PermissionError):
     """Raised when a scoped API key's ``allowed_domains`` does not cover the
     requested domain. Adapters map this to HTTP 403 with the machine code
@@ -57,7 +66,8 @@ class CertificateService:
             return
         logger.warning(
             "Scope denial: user=%s op=%s domain=%s scope=%s",
-            user.get('username'), operation, domain, user.get('allowed_domains'),
+            _scrub_log(user.get('username')), operation,
+            _scrub_log(domain), _scrub_log(user.get('allowed_domains')),
         )
         if self._audit:
             self._audit.log_authz_denied(
@@ -194,7 +204,7 @@ class CertificateService:
             _make_add_domain(domain, resolved_dns_provider, prepared['account_id']),
             'certificate_created',
         )
-        logger.info("Ensured domain %s is in settings after certificate creation", domain)
+        logger.info("Ensured domain %s is in settings after certificate creation", _scrub_log(domain))
         return result
 
     def renew(self, *, domain, force=False, user=None, ip_address=None):
