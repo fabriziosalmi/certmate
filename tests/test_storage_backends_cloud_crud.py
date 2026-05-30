@@ -14,12 +14,14 @@ Each backend builds its SDK client lazily in ``_get_client()`` and caches it on
     failure contract (client errors map to False / None / []).
 """
 import time
+import types
 from unittest.mock import MagicMock
 
 import pytest
 
 from modules.core.storage_backends import (
     AWSSecretsManagerBackend,
+    AzureKeyVaultBackend,
     HashiCorpVaultBackend,
     InfisicalBackend,
 )
@@ -285,3 +287,77 @@ class TestInfisicalCrud:
 
     def test_get_backend_name(self):
         assert _infisical().get_backend_name() == 'infisical'
+
+
+# ---------------------------------------------------------------------------
+# Azure Key Vault (storage_mode="secrets")
+# ---------------------------------------------------------------------------
+
+class _FakeAzureSecretClient:
+    """In-memory stand-in for azure.keyvault.secrets.SecretClient."""
+
+    def __init__(self):
+        self.store = {}  # sanitized secret name -> value
+
+    def set_secret(self, name, value):
+        self.store[name] = value
+        return types.SimpleNamespace(name=name, value=value)
+
+    def get_secret(self, name):
+        if name not in self.store:
+            raise KeyError(name)  # SDK raises ResourceNotFoundError; backend catches Exception
+        return types.SimpleNamespace(
+            value=self.store[name],
+            properties=types.SimpleNamespace(updated_on=None),
+        )
+
+    def list_properties_of_secrets(self):
+        return [types.SimpleNamespace(name=n) for n in self.store]
+
+    def begin_delete_secret(self, name):
+        self.store.pop(name, None)
+        return types.SimpleNamespace()  # long-running-op poller; backend ignores it
+
+
+def _azure():
+    backend = AzureKeyVaultBackend({
+        'vault_url': 'https://kv.vault.azure.net/',
+        'client_id': 'cid', 'client_secret': 'csecret', 'tenant_id': 'tid',
+    })  # storage_mode defaults to "secrets"
+    backend._client = _FakeAzureSecretClient()  # bypass lazy azure SDK init
+    return backend
+
+
+class TestAzureKeyVaultCrud:
+    def test_store_then_retrieve_round_trip(self):
+        b = _azure()
+        assert b.store_certificate('example.com', SAMPLE_FILES, SAMPLE_META) is True
+        files, meta = b.retrieve_certificate('example.com')
+        assert files == SAMPLE_FILES
+        assert meta == SAMPLE_META
+
+    def test_list_reads_domain_from_metadata(self):
+        b = _azure()
+        b.store_certificate('a.example.com', SAMPLE_FILES, {'domain': 'a.example.com'})
+        b.store_certificate('b.example.com', SAMPLE_FILES, {'domain': 'b.example.com'})
+        assert b.list_certificates() == ['a.example.com', 'b.example.com']
+
+    def test_delete_then_retrieve_returns_none(self):
+        b = _azure()
+        b.store_certificate('example.com', SAMPLE_FILES, SAMPLE_META)
+        assert b.delete_certificate('example.com') is True
+        assert b.retrieve_certificate('example.com') is None
+
+    def test_retrieve_missing_returns_none(self):
+        assert _azure().retrieve_certificate('nope.example.com') is None
+
+    def test_store_maps_client_error_to_false(self):
+        b = _azure()
+        b._client.set_secret = MagicMock(side_effect=RuntimeError('vault unreachable'))
+        assert b.store_certificate('example.com', SAMPLE_FILES, SAMPLE_META) is False
+
+    def test_invalid_domain_rejected(self):
+        assert _azure().store_certificate('../evil', SAMPLE_FILES, SAMPLE_META) is False
+
+    def test_get_backend_name(self):
+        assert _azure().get_backend_name() == 'azure_keyvault'
