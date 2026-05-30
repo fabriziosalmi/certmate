@@ -107,6 +107,18 @@ def api(docker_container):
         def __init__(self, base_url):
             self.base_url = base_url
             self.session = requests.Session()
+            # gunicorn closes idle keep-alive connections after ~2s; a pooled
+            # connection can therefore be stale on the next call (e.g. a job
+            # poll loop that sleeps ~2s between requests), surfacing as a
+            # RemoteDisconnected ConnectionError on connection reuse. Retry
+            # idempotent requests transparently so the suite isn't flaky on
+            # this HTTP keep-alive race (it is not a server fault).
+            from requests.adapters import HTTPAdapter
+            from urllib3.util.retry import Retry
+            _retry = Retry(total=5, connect=5, read=5, backoff_factor=0.3)
+            _adapter = HTTPAdapter(max_retries=_retry)
+            self.session.mount("http://", _adapter)
+            self.session.mount("https://", _adapter)
             self.session.headers["Content-Type"] = "application/json"
             # The CSRF middleware (v2.3.8+) requires Origin/Referer on
             # cookie-authenticated state-changing requests. Real browsers

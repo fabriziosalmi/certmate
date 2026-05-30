@@ -469,11 +469,21 @@ def initialize_managers(container: AppContainer, app):
     # reference to the container.
     app.config['DATA_DIR'] = str(container.data_dir)
 
+    from .cert_service import CertificateService
+    cert_service = CertificateService(
+        certificate_manager, settings_manager, auth_manager,
+        audit_logger=audit_logger,
+    )
+    from .cert_jobs import IssuanceExecutor
+    cert_executor = IssuanceExecutor(app, event_bus=event_bus)
+
     container.managers = {
         'file_ops': file_ops,
         'settings': settings_manager,
         'auth': auth_manager,
         'certificates': certificate_manager,
+        'cert_service': cert_service,
+        'cert_executor': cert_executor,
         'client_certificates': client_cert_manager,
         'dns': dns_manager,
         'cache': cache_manager,
@@ -677,6 +687,7 @@ def setup_api(container: AppContainer, app):
     ns_certificates.add_resource(api_resources['DownloadCertificate'], '/<string:domain>/download')
     ns_certificates.add_resource(api_resources['DownloadCertificateFile'], '/<string:domain>/download/<string:file_type>')
     ns_certificates.add_resource(api_resources['RenewCertificate'], '/<string:domain>/renew')
+    ns_certificates.add_resource(api_resources['CertificateJob'], '/jobs/<string:job_id>')
     ns_certificates.add_resource(api_resources['CertificateAutoRenew'], '/<string:domain>/auto-renew')
     ns_certificates.add_resource(api_resources['CertificateRunDeploy'], '/<string:domain>/deploy')
     ns_backups.add_resource(api_resources['BackupList'], '')
@@ -862,6 +873,18 @@ def setup_rate_limiting(app, container: AppContainer):
             return None
 
         client_ip = flask_request.remote_addr or '0.0.0.0'  # nosec B104
+        # Rate-limit bucket: prefer a per-API-key bucket so many clients behind
+        # one NAT/proxy IP don't share a single limit (false positives), and an
+        # abusive key is throttled independently of its source IP. The bearer
+        # token is hashed so it is never used as a cleartext bucket key.
+        # Cookie/session and anonymous requests fall back to the IP bucket.
+        auth_header = flask_request.headers.get('Authorization', '')
+        if auth_header.startswith('Bearer '):
+            import hashlib
+            token = auth_header[7:].strip()
+            identifier = 'key:' + hashlib.sha256(token.encode()).hexdigest()[:32]
+        else:
+            identifier = 'ip:' + client_ip
         endpoint = 'default'
         if 'certificates' in path and 'create' in path:
             endpoint = 'certificate_create'
@@ -878,7 +901,7 @@ def setup_rate_limiting(app, container: AppContainer):
         elif 'crl' in path:
             endpoint = 'crl_download'
 
-        if not rate_limiter.is_allowed(client_ip, endpoint):
+        if not rate_limiter.is_allowed(identifier, endpoint):
             return flask_jsonify({
                 'error': 'Rate limit exceeded',
                 'message': 'Too many requests.',

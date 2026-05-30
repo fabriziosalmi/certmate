@@ -21,6 +21,7 @@ from ..core.constants import CERTIFICATE_FILES, iter_cert_domain_dirs
 from ..core.auth import ROLE_HIERARCHY
 from ..core.utils import utc_now_iso
 from ..core.certificates import DomainOperationInProgress
+from ..core.cert_service import CertificateService, DomainOutOfScope
 
 _DOMAIN_RE = re.compile(r'^(\*\.)?([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$')
 
@@ -169,6 +170,35 @@ def create_api_resources(api, models, managers):
     dns_manager = managers['dns']
     deploy_manager = managers.get('deployer')
     audit_logger = managers.get('audit')
+    # Shared create/renew orchestration. Production wires a single instance via
+    # the container (factory.py); the ``or`` fallback builds one from the
+    # manager set so tests that call create_api_resources with a minimal
+    # managers dict (no 'cert_service'/'events') keep working.
+    cert_service = managers.get('cert_service') or CertificateService(
+        certificate_manager, settings_manager, auth_manager,
+        audit_logger=audit_logger,
+    )
+    # Optional async issuance executor (single-instance, in-process). Absent in
+    # minimal-managers unit tests, in which case create/renew stay synchronous.
+    cert_executor = managers.get('cert_executor')
+
+    _ASYNC_TRUTHY = (True, 1, '1', 'true', 'yes', 'on')
+
+    def _wants_async(payload):
+        """True when the caller opted into async issuance via the ``async``
+        body flag or the ``?async=`` query param."""
+        if isinstance(payload, dict) and payload.get('async') in _ASYNC_TRUTHY:
+            return True
+        return request.args.get('async', '').strip().lower() in ('1', 'true', 'yes', 'on')
+
+    def _job_accepted(job_id, operation, domain):
+        return {
+            'job_id': job_id,
+            'status': 'queued',
+            'operation': operation,
+            'domain': domain,
+            'status_url': f'/api/certificates/jobs/{job_id}',
+        }
 
     def _check_domain_scope(domain, operation):
         """Reject the request if the caller's API-key allowed_domains does
@@ -774,7 +804,12 @@ def create_api_resources(api, models, managers):
                         continue
                     if not auth_manager.domain_matches_scope(domain, scope):
                         continue
-                    cert_info = certificate_manager.get_certificate_info(domain)
+                    # Reuse the once-loaded settings dict so each per-domain
+                    # call skips its own settings deepcopy (load_settings is
+                    # already request-cached on flask.g). use_cache stays at
+                    # its default True so the storage-backend cert-info cache
+                    # is still consulted/populated during listing.
+                    cert_info = certificate_manager.get_certificate_info(domain, settings=settings)
                     if cert_info:
                         cert_info['auto_renew'] = auto_renew_by_domain.get(domain, True)
                         certificates.append(cert_info)
@@ -791,181 +826,55 @@ def create_api_resources(api, models, managers):
         def post(self):
             """Create a new certificate"""
             try:
-                data = api.payload
+                data = api.payload or {}
                 domain = (data.get('domain') or '').strip()
-                san_domains = data.get('san_domains', [])  # Optional SAN domains
-                dns_provider = data.get('dns_provider')
-                account_id = data.get('account_id')
-                ca_provider = data.get('ca_provider')
-                challenge_type = data.get('challenge_type')  # Optional: 'dns-01' or 'http-01'
-                domain_alias = data.get('domain_alias')  # Optional domain alias
-                if domain_alias:
-                    from ..core.utils import validate_domain
-                    alias_valid, alias_msg = validate_domain(domain_alias)
-                    if not alias_valid:
-                        return {'error': f'Invalid domain_alias: {alias_msg}'}, 400
-
-                # Per-cert key shape overrides are read here (so the request
-                # parsing all happens in one place) but validated AFTER the
-                # domain scope check below — that way an out-of-scope caller
-                # gets the scope 403 instead of probing the key-options
-                # validator for field-specific messages on a domain they
-                # cannot see.
-                key_type = data.get('key_type')
-                key_size = data.get('key_size')
-                elliptic_curve = data.get('elliptic_curve')
-
-                # Validate domain
+                san_domains = data.get('san_domains', [])
                 if not domain:
                     return {
                         'error': 'Domain is required',
                         'hint': 'Please provide a valid domain name (e.g., example.com or *.example.com for wildcard)'
                     }, 400
 
-                # Basic domain validation
-                if ' ' in domain:
-                    return {
-                        'error': 'Invalid domain format',
-                        'hint': 'Enter only ONE primary domain. Use san_domains array for additional domains.'
-                    }, 400
+                user = getattr(request, 'current_user', None) or {}
 
-                # Check for common domain format issues
-                if domain.startswith('http://') or domain.startswith('https://'):
-                    return {
-                        'error': 'Invalid domain format',
-                        'hint': 'Provide domain name only (e.g., example.com), not the full URL.'
-                    }, 400
-
-                # Full structural validation of the primary domain. Until
-                # now only space/URL-prefix were rejected; an unvalidated
-                # ``domain`` flows into ``cert_dir / domain`` for
-                # ``mkdir(parents=True)`` and is persisted into
-                # ``settings.json`` for replay through ``check_renewals``.
-                # SAN entries already go through ``validate_domain`` at the
-                # core layer (modules/core/certificates.py:690); the primary
-                # domain must get the same gate, AT THE WRITE BOUNDARY, so
-                # a poisoned value cannot survive into background renewals.
-                from ..core.utils import validate_domain
-                primary_valid, primary_msg = validate_domain(domain)
-                if not primary_valid:
-                    return {
-                        'error': f'Invalid domain: {primary_msg}',
-                        'hint': 'Use only valid domain characters (letters, digits, hyphens, dots). For wildcards use *.example.com.'
-                    }, 400
-
-                # Validate SAN domains if provided
-                if san_domains:
-                    if not isinstance(san_domains, list):
-                        return {
-                            'error': 'Invalid san_domains format',
-                            'hint': 'san_domains must be an array of domain strings.'
-                        }, 400
-
-                    # Validate each SAN domain
-                    for san in san_domains:
-                        san = san.strip() if isinstance(san, str) else ''
-                        if san and (san.startswith('http://') or san.startswith('https://')):
-                            return {
-                                'error': f'Invalid SAN domain format: {san}',
-                                'hint': 'SAN domains should be domain names only, not URLs.'
-                            }, 400
-
-                # Scope check: the requested domain AND every SAN must be
-                # within the API key's allowed_domains. Reject the entire
-                # creation if any one is out of scope — partial creates
-                # would leak data across tenants.
-                scope_err = _check_domain_scope(domain, 'create')
-                if scope_err:
-                    return scope_err
-                for san in (san_domains or []):
-                    san_clean = san.strip() if isinstance(san, str) else ''
-                    if san_clean:
-                        scope_err = _check_domain_scope(san_clean, 'create_san')
-                        if scope_err:
-                            return scope_err
-
-                # Key options validation runs AFTER the scope checks above so
-                # the field-specific error messages never reach a caller who
-                # could not see the target domain in the first place.
-                if key_type is not None or key_size is not None or elliptic_curve is not None:
-                    from ..core.utils import validate_key_options
-                    ok, key_err = validate_key_options(key_type, key_size, elliptic_curve)
-                    if not ok:
-                        return {'error': key_err}, 400
-
-                settings = settings_manager.load_settings()
-                email = settings.get('email')
-
-                if not email:
-                    return {
-                        'error': 'Email not configured',
-                        'hint': 'Configure email in settings first. Required for CA notifications.'
-                    }, 400
-
-                # Resolve CA provider from settings if not provided
-                if not ca_provider:
-                    ca_provider = settings.get('default_ca', 'letsencrypt')
-
-                # Resolve challenge type from settings if not provided
-                if not challenge_type:
-                    challenge_type = settings.get('challenge_type', 'dns-01')
-
-                # DNS provider validation (skip for HTTP-01)
-                if challenge_type != 'http-01':
-                    if not dns_provider:
-                        dns_provider = settings.get('dns_provider')
-
-                    if not dns_provider:
-                        return {
-                            'error': 'No DNS provider specified',
-                            'hint': 'Specify a provider or set a default in settings.'
-                        }, 400
-
-                # Create certificate with SAN domains
-                result = certificate_manager.create_certificate(
-                    domain=domain,
-                    email=email,
-                    dns_provider=dns_provider,
-                    account_id=account_id,
-                    ca_provider=ca_provider,
-                    domain_alias=domain_alias,
-                    san_domains=san_domains,
-                    challenge_type=challenge_type,
-                    key_type=key_type,
-                    key_size=key_size,
-                    elliptic_curve=elliptic_curve,
-                )
-
-                # Append the new domain to settings under the manager's
-                # lock so two parallel cert creations for different domains
-                # cannot race and silently drop one of the entries.
-                _resolved_dns_provider = dns_provider or settings.get('dns_provider')
-
-                def _add_domain(s):
-                    domains_list = s.get('domains', []) or []
-                    already_present = any(
-                        (d == domain if isinstance(d, str) else d.get('domain') == domain)
-                        for d in domains_list
+                # Async opt-in: validate + authorize synchronously (immediate
+                # 4xx on bad input/scope/config), then defer the blocking
+                # certbot issuance to the executor and return 202 + job id.
+                if _wants_async(data) and cert_executor is not None:
+                    prepared = cert_service.prepare_create(
+                        domain=domain,
+                        san_domains=san_domains,
+                        dns_provider=data.get('dns_provider'),
+                        account_id=data.get('account_id'),
+                        ca_provider=data.get('ca_provider'),
+                        challenge_type=data.get('challenge_type'),
+                        domain_alias=data.get('domain_alias'),
+                        key_type=data.get('key_type'),
+                        key_size=data.get('key_size'),
+                        elliptic_curve=data.get('elliptic_curve'),
+                        user=user,
+                        ip_address=request.remote_addr,
                     )
-                    if already_present:
-                        return
-                    entry = {
-                        'domain': domain,
-                        'dns_provider': _resolved_dns_provider,
-                        'dns_account_id': account_id,
-                    }
-                    # Per-cert key overrides are NOT persisted into the
-                    # domain entry: nothing downstream reads them. Renewals
-                    # preserve the original shape because certbot writes
-                    # --key-type/--rsa-key-size/--elliptic-curve into its
-                    # own renewal/<domain>.conf at create time, and the
-                    # renewal job invokes certbot without overriding any
-                    # of those flags — certbot reuses what it persisted.
-                    domains_list.append(entry)
-                    s['domains'] = domains_list
+                    job_id = cert_executor.submit(
+                        'create', domain,
+                        lambda: cert_service.issue_create(prepared),
+                    )
+                    return _job_accepted(job_id, 'create', domain), 202
 
-                settings_manager.update(_add_domain, "certificate_created")
-                logger.info(f"Ensured domain {domain} is in settings after certificate creation")
+                result = cert_service.create(
+                    domain=domain,
+                    san_domains=san_domains,
+                    dns_provider=data.get('dns_provider'),
+                    account_id=data.get('account_id'),
+                    ca_provider=data.get('ca_provider'),
+                    challenge_type=data.get('challenge_type'),
+                    domain_alias=data.get('domain_alias'),
+                    key_type=data.get('key_type'),
+                    key_size=data.get('key_size'),
+                    elliptic_curve=data.get('elliptic_curve'),
+                    user=user,
+                    ip_address=request.remote_addr,
+                )
 
                 event_bus = current_app.config.get('EVENT_BUS')
                 if event_bus:
@@ -984,8 +893,10 @@ def create_api_resources(api, models, managers):
                     'duration': result.get('duration')
                 }, 201
 
+            except DomainOutOfScope as e:
+                return {'error': str(e), 'code': 'DOMAIN_OUT_OF_SCOPE'}, 403
             except ValueError as e:
-                # Validation errors from certificate_manager
+                # Validation / configuration errors raised by the service.
                 error_msg = str(e)
                 hint = None
                 if 'not configured' in error_msg.lower():
@@ -1055,7 +966,12 @@ def create_api_resources(api, models, managers):
                         continue
                     if not auth_manager.domain_matches_scope(domain, scope):
                         continue
-                    cert_info = certificate_manager.get_certificate_info(domain)
+                    # Reuse the once-loaded settings dict so each per-domain
+                    # call skips its own settings deepcopy (load_settings is
+                    # already request-cached on flask.g). use_cache stays at
+                    # its default True so the storage-backend cert-info cache
+                    # is still consulted/populated during the scan.
+                    cert_info = certificate_manager.get_certificate_info(domain, settings=settings)
                     if cert_info:
                         certificates.append(cert_info)
 
@@ -1782,10 +1698,22 @@ def create_api_resources(api, models, managers):
                 _, err = _validate_domain_path(domain, file_ops.cert_dir)
                 if err:
                     return {'error': err}, 400
-                scope_err = _check_domain_scope(domain, 'renew')
-                if scope_err:
-                    return scope_err
-                result = certificate_manager.renew_certificate(domain, force=force)
+                user = getattr(request, 'current_user', None) or {}
+
+                if _wants_async(payload) and cert_executor is not None:
+                    prepared = cert_service.prepare_renew(
+                        domain=domain, user=user, ip_address=request.remote_addr,
+                    )
+                    job_id = cert_executor.submit(
+                        'renew', domain,
+                        lambda: cert_service.issue_renew(prepared, force=force),
+                    )
+                    return _job_accepted(job_id, 'renew', domain), 202
+
+                result = cert_service.renew(
+                    domain=domain, force=force,
+                    user=user, ip_address=request.remote_addr,
+                )
 
                 event_bus = current_app.config.get('EVENT_BUS')
                 if event_bus:
@@ -1798,6 +1726,8 @@ def create_api_resources(api, models, managers):
                     'duration': result.get('duration')
                 }, 200
 
+            except DomainOutOfScope as e:
+                return {'error': str(e), 'code': 'DOMAIN_OUT_OF_SCOPE'}, 403
             except DomainOperationInProgress as e:
                 # Domain busy is not a failure; do not publish a failure event.
                 return {'error': str(e), 'code': 'DOMAIN_OPERATION_IN_PROGRESS'}, 409
@@ -1807,6 +1737,23 @@ def create_api_resources(api, models, managers):
                 if event_bus:
                     event_bus.publish('certificate_failed', {'domain': domain, 'error': str(e)})
                 return {'error': 'Certificate renewal failed'}, 500
+
+    class CertificateJob(Resource):
+        @api.doc(security='Bearer')
+        @auth_manager.require_role('operator')
+        def get(self, job_id):
+            """Poll the status of an async create/renew job."""
+            if cert_executor is None:
+                return {'error': 'Async issuance is not enabled'}, 404
+            job = cert_executor.get(job_id)
+            if job is None:
+                return {'error': 'Job not found'}, 404
+            # The caller must be in scope for the job's domain — a scoped key
+            # cannot poll a job for a domain it could not have created.
+            scope_err = _check_domain_scope(job.get('domain'), 'job_status')
+            if scope_err:
+                return scope_err
+            return job, 200
 
     class CertificateAutoRenew(Resource):
         @api.doc(security='Bearer')
@@ -3113,6 +3060,7 @@ def create_api_resources(api, models, managers):
         'DownloadCertificate': DownloadCertificate,
         'DownloadCertificateFile': DownloadCertificateFile,
         'RenewCertificate': RenewCertificate,
+        'CertificateJob': CertificateJob,
         'CertificateAutoRenew': CertificateAutoRenew,
         'CertificateRunDeploy': CertificateRunDeploy,
         'BackupList': BackupList,
