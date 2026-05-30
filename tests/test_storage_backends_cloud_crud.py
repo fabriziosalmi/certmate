@@ -21,6 +21,7 @@ import pytest
 from modules.core.storage_backends import (
     AWSSecretsManagerBackend,
     HashiCorpVaultBackend,
+    InfisicalBackend,
 )
 
 pytestmark = [pytest.mark.unit]
@@ -206,3 +207,81 @@ class TestHashiCorpVaultCrud:
 
     def test_get_backend_name(self):
         assert _vault().get_backend_name() == 'hashicorp_vault'
+
+
+# ---------------------------------------------------------------------------
+# Infisical
+# ---------------------------------------------------------------------------
+
+class _InfisicalSecret:
+    def __init__(self, name, value):
+        self.secret_name = name
+        self.secret_value = value
+
+
+class _FakeInfisicalClient:
+    def __init__(self):
+        self.store = {}  # secret_name -> secret_value
+
+    def update_secret(self, secret_name, secret_value, project_id=None, environment=None):
+        if secret_name not in self.store:
+            raise KeyError(secret_name)  # drives the create_secret upsert fallback
+        self.store[secret_name] = secret_value
+
+    def create_secret(self, secret_name, secret_value, project_id=None, environment=None):
+        self.store[secret_name] = secret_value
+
+    def get_secret(self, secret_name, project_id=None, environment=None):
+        if secret_name not in self.store:
+            raise KeyError(secret_name)
+        return _InfisicalSecret(secret_name, self.store[secret_name])
+
+    def list_secrets(self, project_id=None, environment=None):
+        return [_InfisicalSecret(n, v) for n, v in self.store.items()]
+
+    def delete_secret(self, secret_name, project_id=None, environment=None):
+        self.store.pop(secret_name, None)
+
+
+def _infisical():
+    backend = InfisicalBackend({
+        'client_id': 'cid', 'client_secret': 'csecret', 'project_id': 'proj',
+    })
+    backend._client = _FakeInfisicalClient()  # bypass lazy infisical SDK init
+    return backend
+
+
+class TestInfisicalCrud:
+    def test_store_then_retrieve_round_trip(self):
+        b = _infisical()
+        assert b.store_certificate('example.com', SAMPLE_FILES, SAMPLE_META) is True
+        files, meta = b.retrieve_certificate('example.com')
+        assert files == SAMPLE_FILES
+        assert meta == SAMPLE_META
+
+    def test_list_reads_domain_from_metadata(self):
+        b = _infisical()
+        b.store_certificate('a.example.com', SAMPLE_FILES, {'domain': 'a.example.com'})
+        b.store_certificate('b.example.com', SAMPLE_FILES, {'domain': 'b.example.com'})
+        assert b.list_certificates() == ['a.example.com', 'b.example.com']
+
+    def test_delete_then_retrieve_returns_none(self):
+        b = _infisical()
+        b.store_certificate('example.com', SAMPLE_FILES, SAMPLE_META)
+        assert b.delete_certificate('example.com') is True
+        assert b.retrieve_certificate('example.com') is None
+
+    def test_retrieve_missing_returns_none(self):
+        assert _infisical().retrieve_certificate('nope.example.com') is None
+
+    def test_store_maps_client_error_to_false(self):
+        b = _infisical()
+        b._client.update_secret = MagicMock(side_effect=KeyError('x'))
+        b._client.create_secret = MagicMock(side_effect=RuntimeError('infisical down'))
+        assert b.store_certificate('example.com', SAMPLE_FILES, SAMPLE_META) is False
+
+    def test_invalid_domain_rejected(self):
+        assert _infisical().store_certificate('../evil', SAMPLE_FILES, SAMPLE_META) is False
+
+    def test_get_backend_name(self):
+        assert _infisical().get_backend_name() == 'infisical'
