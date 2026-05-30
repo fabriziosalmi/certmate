@@ -82,3 +82,14 @@ def test_sibling_create_route_still_resolves(app):
     adapter = app.url_map.bind('localhost')
     endpoint, _ = adapter.match('/api/web/certificates/create', method='POST')
     assert endpoint == 'create_certificate_web'
+
+
+def test_api_create_served_by_restx(app):
+    """POST /api/certificates/create resolves to the RESTX CreateCertificate
+    resource. The web blueprint used to also bind this exact path (shadowed,
+    since RESTX registers first); that dead binding was removed when both
+    create handlers were folded onto the shared CertificateService, so RESTX
+    is now the unambiguous owner."""
+    adapter = app.url_map.bind('localhost')
+    endpoint, _ = adapter.match('/api/certificates/create', method='POST')
+    assert endpoint == 'certificates_create_certificate'
