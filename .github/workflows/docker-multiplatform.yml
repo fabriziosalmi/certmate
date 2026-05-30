@@ -32,19 +32,24 @@ permissions: read-all
 jobs:
   build:
     runs-on: [self-hosted, Linux, X64]
-    # Install the buildx CLI plugin into a per-run docker config dir instead of
-    # the host-shared ~/.docker/cli-plugins. Every runner instance on this host
-    # runs as the same user and shares ~/.docker, so two concurrent runs (the
-    # main-branch push and the tag push from one `git push origin main vX.Y.Z`)
-    # raced: one executed docker-buildx while the other overwrote it -> ETXTBSY
-    # "text file is busy". A unique DOCKER_CONFIG removes the shared target so
-    # builds never collide — no serialization needed.
-    env:
-      DOCKER_CONFIG: ${{ runner.temp }}/.docker-${{ github.run_id }}-${{ github.run_attempt }}
     
     steps:
     - name: Checkout repository
       uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+
+    - name: Isolate docker config dir (per-run)
+      # Install the buildx CLI plugin into a per-run docker config dir instead
+      # of the host-shared ~/.docker/cli-plugins. Every runner instance on this
+      # host runs as the same user and shares ~/.docker, so two concurrent runs
+      # (the main-branch push and the tag push from one `git push origin main
+      # vX.Y.Z`) raced: one executed docker-buildx while the other overwrote it
+      # -> ETXTBSY "text file is busy". A unique DOCKER_CONFIG removes the shared
+      # target so builds never collide. (runner.* is only available inside steps,
+      # not in job-level env, so this is a step rather than `env:`.)
+      run: |
+        cfg="${RUNNER_TEMP}/.docker-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+        mkdir -p "$cfg"
+        echo "DOCKER_CONFIG=$cfg" >> "$GITHUB_ENV"
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f  # v3
