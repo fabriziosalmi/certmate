@@ -19,6 +19,14 @@ on:
         default: true
         type: boolean
 
+# Serialize tag builds to prevent buildx plugin directory race on self-hosted runner.
+# When v2.11.0 and v2.11.1 are pushed in quick succession, they would race for the
+# shared ~/.docker/buildx/ cache, causing "docker: unknown command: docker buildx".
+# This concurrency group ensures only one build per ref (branch or tag) runs at once.
+concurrency:
+  group: docker-build-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   REGISTRY: docker.io
   IMAGE_NAME: certmate
