@@ -469,11 +469,21 @@ def initialize_managers(container: AppContainer, app):
     # reference to the container.
     app.config['DATA_DIR'] = str(container.data_dir)
 
+    from .cert_service import CertificateService
+    cert_service = CertificateService(
+        certificate_manager, settings_manager, auth_manager,
+        audit_logger=audit_logger,
+    )
+    from .cert_jobs import IssuanceExecutor
+    cert_executor = IssuanceExecutor(app, event_bus=event_bus)
+
     container.managers = {
         'file_ops': file_ops,
         'settings': settings_manager,
         'auth': auth_manager,
         'certificates': certificate_manager,
+        'cert_service': cert_service,
+        'cert_executor': cert_executor,
         'client_certificates': client_cert_manager,
         'dns': dns_manager,
         'cache': cache_manager,
@@ -677,6 +687,7 @@ def setup_api(container: AppContainer, app):
     ns_certificates.add_resource(api_resources['DownloadCertificate'], '/<string:domain>/download')
     ns_certificates.add_resource(api_resources['DownloadCertificateFile'], '/<string:domain>/download/<string:file_type>')
     ns_certificates.add_resource(api_resources['RenewCertificate'], '/<string:domain>/renew')
+    ns_certificates.add_resource(api_resources['CertificateJob'], '/jobs/<string:job_id>')
     ns_certificates.add_resource(api_resources['CertificateAutoRenew'], '/<string:domain>/auto-renew')
     ns_certificates.add_resource(api_resources['CertificateRunDeploy'], '/<string:domain>/deploy')
     ns_backups.add_resource(api_resources['BackupList'], '')

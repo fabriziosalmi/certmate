@@ -14,7 +14,7 @@ permissions: read-all
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
     strategy:
       matrix:
         # 3.12 matches the production Dockerfile. Python 3.14 is temporarily
@@ -86,7 +86,7 @@ jobs:
   # rebuild. This job rebuilds from source and fails if the committed output
   # drifts, forcing `npm run css:build` to be part of every CSS-touching PR.
   frontend-css:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
     steps:
     - name: Checkout code
       uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4

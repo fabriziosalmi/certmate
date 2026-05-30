@@ -4,6 +4,9 @@ import tempfile
 import os
 from flask import request, jsonify, send_file, after_this_request
 
+from ..core.certificates import DomainOperationInProgress
+from ..core.cert_service import CertificateService, DomainOutOfScope
+
 
 logger = logging.getLogger(__name__)
 
@@ -13,55 +16,17 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
                          settings_manager, dns_manager, CERTIFICATE_FILES):
     """Register certificate-related routes"""
     audit_logger = managers.get('audit')
+    # Shared create/renew orchestration; production wires a single instance via
+    # the container, the fallback keeps standalone route tests working.
+    cert_service = managers.get('cert_service') or CertificateService(
+        certificate_manager, settings_manager, auth_manager,
+        audit_logger=audit_logger,
+    )
 
-    def _scope_denied(domain, operation):
-        """Emit audit + return Flask JSON 403 if the current user's API key
-        is not scoped to *domain*. Returns None when access is granted.
-        """
-        user = getattr(request, 'current_user', None) or {}
-        if auth_manager.user_can_access_domain(user, domain):
-            return None
-        logger.warning(
-            "Scope denial (web): user=%s op=%s domain=%s scope=%s",
-            user.get('username'), operation, domain,
-            user.get('allowed_domains'),
-        )
-        if audit_logger:
-            audit_logger.log_authz_denied(
-                operation=operation,
-                resource_type='certificate',
-                resource_id=domain,
-                reason='domain outside scoped key allowed_domains',
-                user=user.get('username'),
-                ip_address=request.remote_addr,
-            )
-        return jsonify({
-            'error': f'API key not authorized for domain {domain}',
-            'code': 'DOMAIN_OUT_OF_SCOPE',
-        }), 403
-
-    @app.route('/api/certificates', methods=['GET'])
-    @app.route('/api/web/certificates', methods=['GET'])
-    @auth_manager.require_role('viewer')
-    def list_certificates_web():
-        """List all certificates via web — filtered by API-key scope."""
-        try:
-            user = getattr(request, 'current_user', None) or {}
-            scope = user.get('allowed_domains')
-            certs = certificate_manager.list_certificates()
-            if scope is not None and isinstance(certs, list):
-                certs = [
-                    c for c in certs
-                    if isinstance(c, dict) and auth_manager.domain_matches_scope(
-                        c.get('domain', ''), scope
-                    )
-                ]
-            return jsonify(certs)
-        except Exception as e:
-            logger.error(f"Failed to list certificates: {e}")
-            return jsonify({'error': 'Failed to list certificates'}), 500
-
-    @app.route('/api/certificates/create', methods=['POST'])
+    # NOTE: only the /api/web/... path is registered here. The bare
+    # /api/certificates/create is owned by the flask-restx CreateCertificate
+    # resource (registered first in setup_api, so it always won the duplicate
+    # rule anyway); binding it here too was dead, shadowed code.
     @app.route('/api/web/certificates/create', methods=['POST'])
     @auth_manager.require_role('operator')
     def create_certificate_web():
@@ -69,91 +34,34 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
         try:
             data = request.json or {}
             domain = (data.get('domain') or '').strip()
-            san_domains = data.get('san_domains', [])
-            dns_provider = data.get('dns_provider')
-            account_id = data.get('account_id')
-            ca_provider = data.get('ca_provider')
-            challenge_type = data.get('challenge_type')
-            domain_alias = data.get('domain_alias')
-
             if not domain:
                 return jsonify({'error': 'Domain is required'}), 400
 
-            # Full structural validation at the write boundary. Without
-            # this gate a poisoned ``domain`` ("../poisoned") flows into
-            # ``cert_dir / domain`` for ``mkdir(parents=True)`` and gets
-            # persisted into ``settings.json`` for replay through
-            # ``check_renewals``. Same fix shape applied to the API
-            # variant in modules/api/resources.py::CreateCertificate.post.
-            from ..core.utils import validate_domain
-            primary_valid, primary_msg = validate_domain(domain)
-            if not primary_valid:
-                return jsonify({'error': f'Invalid domain: {primary_msg}'}), 400
-
-            # Scope check: primary domain + every SAN must be in scope.
-            denial = _scope_denied(domain, 'create')
-            if denial:
-                return denial
-            for san in (san_domains or []):
-                san_clean = san.strip() if isinstance(san, str) else ''
-                if san_clean:
-                    denial = _scope_denied(san_clean, 'create_san')
-                    if denial:
-                        return denial
-
-            settings = settings_manager.load_settings()
-            email = settings.get('email')
-            if not email:
-                return jsonify({'error': 'Email not configured. Set it in Settings first.'}), 400
-
-            if not ca_provider:
-                ca_provider = settings.get('default_ca', 'letsencrypt')
-            if not challenge_type:
-                challenge_type = settings.get('challenge_type', 'dns-01')
-            if challenge_type != 'http-01' and not dns_provider:
-                dns_provider = settings.get('dns_provider')
-                if not dns_provider:
-                    return jsonify({'error': 'No DNS provider specified'}), 400
-
-            result = certificate_manager.create_certificate(
+            user = getattr(request, 'current_user', None) or {}
+            result = cert_service.create(
                 domain=domain,
-                email=email,
-                dns_provider=dns_provider,
-                account_id=account_id,
-                ca_provider=ca_provider,
-                domain_alias=domain_alias,
-                san_domains=san_domains,
-                challenge_type=challenge_type,
+                san_domains=data.get('san_domains', []),
+                dns_provider=data.get('dns_provider'),
+                account_id=data.get('account_id'),
+                ca_provider=data.get('ca_provider'),
+                challenge_type=data.get('challenge_type'),
+                domain_alias=data.get('domain_alias'),
+                user=user,
+                ip_address=request.remote_addr,
             )
-
-            # Append the new domain under the settings manager's lock so
-            # two parallel cert creations cannot drop one of the entries.
-            _resolved_dns_provider = dns_provider or settings.get('dns_provider')
-
-            def _add_domain(s):
-                domains_list = s.get('domains', []) or []
-                already_present = any(
-                    (d == domain if isinstance(d, str) else d.get('domain') == domain)
-                    for d in domains_list
-                )
-                if already_present:
-                    return
-                domains_list.append({
-                    'domain': domain,
-                    'dns_provider': _resolved_dns_provider,
-                    'dns_account_id': account_id,
-                })
-                s['domains'] = domains_list
-
-            settings_manager.update(_add_domain, "certificate_created_web")
-            logger.info(f"Ensured domain {domain} is in settings after certificate creation")
-
             return jsonify(result)
+        except DomainOutOfScope:
+            return jsonify({'error': 'API key not authorized for this domain', 'code': 'DOMAIN_OUT_OF_SCOPE'}), 403
         except (ValueError, FileExistsError) as e:
-            return jsonify({'error': str(e)}), 400
+            # Log the specific reason; return a generic message so the caught
+            # exception text never reaches the client (CodeQL py/stack-trace-exposure).
+            logger.info("Certificate creation rejected: %s", e)
+            return jsonify({'error': 'Invalid certificate request'}), 400
+        except DomainOperationInProgress:
+            return jsonify({'error': 'A certificate operation is already in progress for this domain', 'code': 'DOMAIN_OPERATION_IN_PROGRESS'}), 409
         except RuntimeError as e:
             logger.error(f"Certificate creation failed: {e}")
-            return jsonify({'error': str(e)}), 422
+            return jsonify({'error': 'Certificate creation failed'}), 422
         except Exception as e:
             logger.error(f"Failed to create certificate: {e}")
             return jsonify({'error': 'Failed to create certificate'}), 500
@@ -315,9 +223,6 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
     def renew_certificate_web(domain):
         """Renew certificate via web"""
         try:
-            denial = _scope_denied(domain, 'renew')
-            if denial:
-                return denial
             cert_dir, error = _sanitize_domain(domain, file_ops.cert_dir)
             if error:
                 return jsonify({'error': error}), 400
@@ -325,13 +230,22 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
             # Use the directory name (domain) for renewal
             domain_name = cert_dir.name
             force = bool((request.get_json(silent=True) or {}).get('force', False))
-            result = certificate_manager.renew_certificate(domain_name, force=force)
+            user = getattr(request, 'current_user', None) or {}
+            result = cert_service.renew(
+                domain=domain_name, force=force,
+                user=user, ip_address=request.remote_addr,
+            )
             return jsonify({'message': result.get('message', 'Certificate renewed successfully')})
+        except DomainOutOfScope:
+            return jsonify({'error': 'API key not authorized for this domain', 'code': 'DOMAIN_OUT_OF_SCOPE'}), 403
         except FileNotFoundError as e:
-            return jsonify({'error': str(e)}), 404
+            logger.info("Certificate renewal target not found: %s", e)
+            return jsonify({'error': 'Certificate not found'}), 404
+        except DomainOperationInProgress:
+            return jsonify({'error': 'A certificate operation is already in progress for this domain', 'code': 'DOMAIN_OPERATION_IN_PROGRESS'}), 409
         except RuntimeError as e:
             logger.error(f"Certificate renewal failed: {e}")
-            return jsonify({'error': str(e)}), 422
+            return jsonify({'error': 'Certificate renewal failed'}), 422
         except Exception as e:
             logger.error(f"Certificate renewal failed via web: {str(e)}")
             return jsonify({'error': 'Certificate renewal failed'}), 500

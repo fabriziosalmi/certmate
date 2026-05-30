@@ -64,6 +64,14 @@ DNS_ALIAS_REQUIRED_FIELDS = {
 }
 
 
+class DomainOperationInProgress(RuntimeError):
+    """Raised when a create/renew can't acquire the per-domain lock within the
+    timeout because another operation for the same domain is in progress."""
+    def __init__(self, domain):
+        self.domain = domain
+        super().__init__(f"A certificate operation for {domain} is already in progress")
+
+
 class CertificateManager:
     """Class to handle certificate operations"""
     
@@ -85,6 +93,15 @@ class CertificateManager:
             return max(0, min(3600, int(os.environ.get('CERTMATE_CERT_INFO_CACHE_TTL', '60'))))
         except (TypeError, ValueError):
             return 60
+
+    @staticmethod
+    def _domain_lock_timeout() -> float:
+        """Seconds to wait for the per-domain lock before reporting the domain
+        busy. Override via CERTMATE_DOMAIN_LOCK_TIMEOUT (clamped 0-60)."""
+        try:
+            return max(0.0, min(60.0, float(os.environ.get('CERTMATE_DOMAIN_LOCK_TIMEOUT', '5'))))
+        except (TypeError, ValueError):
+            return 5.0
 
     @staticmethod
     def _certificate_info_cache_key(domain: str, settings: dict | None) -> str:
@@ -745,8 +762,8 @@ class CertificateManager:
         """
         # Acquire per-domain lock to prevent concurrent create/renew operations
         domain_lock = self._get_domain_lock(domain)
-        if not domain_lock.acquire(blocking=False):
-            raise RuntimeError(f"A certificate operation for {domain} is already in progress")
+        if not domain_lock.acquire(timeout=self._domain_lock_timeout()):
+            raise DomainOperationInProgress(domain)
 
         # Track timing for metrics
         start_time = time.time()
@@ -758,7 +775,16 @@ class CertificateManager:
         ca_extra_env = {}
 
         try:
-            # Return conflict if cert already exists (use renew to refresh it)
+            # Settings are loaded lazily and at most once: several branches
+            # below need settings (CA default, challenge type, DNS provider,
+            # key shape, propagation time) but a fully-specified HTTP-01 caller
+            # needs none, so we keep the load conditional and reuse the result.
+            settings = None
+
+            # Return conflict if cert already exists (use renew to refresh it).
+            # This existence check runs *under* the per-domain lock acquired
+            # above so two concurrent creates for the same domain can't both
+            # pass the check and race to issue duplicate certificates.
             existing_cert = self.cert_dir / domain / 'cert.pem'
             if existing_cert.exists():
                 raise FileExistsError(f"Certificate for {domain} already exists. Use renew to refresh it.")
@@ -773,7 +799,8 @@ class CertificateManager:
             
             # Get CA provider configuration
             if not ca_provider:
-                settings = self.settings_manager.load_settings()
+                if settings is None:
+                    settings = self.settings_manager.load_settings()
                 ca_provider = settings.get('default_ca', 'letsencrypt')
             
             logger.info(f"Using CA provider: {ca_provider}")
@@ -790,7 +817,8 @@ class CertificateManager:
             
             # Resolve challenge type from settings if not provided
             if not challenge_type:
-                settings = self.settings_manager.load_settings()
+                if settings is None:
+                    settings = self.settings_manager.load_settings()
                 challenge_type = settings.get('challenge_type', 'dns-01')
 
             # HTTP-01 path: skip DNS config entirely
@@ -807,7 +835,8 @@ class CertificateManager:
                 # DNS-01 path: get DNS configuration
                 if not dns_config:
                     if not dns_provider:
-                        settings = self.settings_manager.load_settings()
+                        if settings is None:
+                            settings = self.settings_manager.load_settings()
                         dns_provider = self.settings_manager.get_domain_dns_provider(domain, settings)
 
                     if not dns_provider:
@@ -878,7 +907,8 @@ class CertificateManager:
             # API endpoint validates earlier, but renew_certificate also
             # routes through this method and can pass values from disk).
             if key_type is None and key_size is None and elliptic_curve is None:
-                settings = self.settings_manager.load_settings()
+                if settings is None:
+                    settings = self.settings_manager.load_settings()
                 key_type = settings.get('default_key_type')
                 if key_type == 'rsa':
                     key_size = settings.get('default_key_size')
@@ -955,7 +985,8 @@ class CertificateManager:
             propagation_time = None
             if challenge_type != 'http-01':
                 try:
-                    settings = self.settings_manager.load_settings()
+                    if settings is None:
+                        settings = self.settings_manager.load_settings()
                     propagation_map = settings.get('dns_propagation_seconds', {}) or {}
                 except Exception as e:
                     logger.debug("Failed to load settings in issue_certificate for propagation time: %s", e)
@@ -1049,10 +1080,18 @@ class CertificateManager:
                     src_file = live_dir / cert_file
                     dst_file = cert_output_dir / cert_file
                     if src_file.exists():
-                        shutil.copy(os.path.realpath(src_file), dst_file)
+                        # Single content read: copy bytes once and reuse them
+                        # for cert_files instead of re-opening the destination.
+                        src_real = os.path.realpath(src_file)
+                        data = Path(src_real).read_bytes()
+                        dst_file.write_bytes(data)
+                        # Preserve the source mode bits. shutil.copy did this
+                        # implicitly; without it privkey.pem (often 0600) would
+                        # be created under the umask (e.g. 0644), exposing the
+                        # private key — a security regression.
+                        shutil.copymode(src_real, dst_file)
                         logger.info(f"Copied {cert_file} to {dst_file}")
-                        with open(dst_file, 'rb') as f:
-                            cert_files[cert_file] = f.read()
+                        cert_files[cert_file] = data
             
             # Save metadata
             metadata = {
@@ -1122,8 +1161,8 @@ class CertificateManager:
     def renew_certificate(self, domain, force=False):
         """Renew a certificate"""
         domain_lock = self._get_domain_lock(domain)
-        if not domain_lock.acquire(blocking=False):
-            raise RuntimeError(f"A certificate operation for {domain} is already in progress")
+        if not domain_lock.acquire(timeout=self._domain_lock_timeout()):
+            raise DomainOperationInProgress(domain)
         alias_hook_config = None
         credentials_file = None
         try:
