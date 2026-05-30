@@ -866,7 +866,7 @@ class AuthManager:
 
         Always emits a structured warning on the application logger so the
         signal is present even when no AuditLogger is wired. When one IS
-        wired (the production path), also writes a tamper-evident audit
+        wired (the production path), also writes a structured audit
         entry via log_authz_denied so the denial sits in the same log
         admins already scan.
         """
