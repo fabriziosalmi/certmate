@@ -42,7 +42,7 @@ def managers(tmp_path):
 
     cert_manager = MagicMock()
     cert_manager.cert_dir = Path(tmp_path)
-    cert_manager.get_certificate_info = MagicMock(side_effect=lambda domain: {
+    cert_manager.get_certificate_info = MagicMock(side_effect=lambda domain, settings=None, use_cache=True: {
         'domain': domain,
         'san_domains': ['www.' + domain] if domain == 'example.com' else []
     })
@@ -131,7 +131,7 @@ def test_zombie_scan_api_endpoint(managers, tmp_path):
         (tmp_path / 'fs-only.com' / 'cert.pem').touch()
 
         # Update get_certificate_info mock to handle fs-only.com
-        managers['certificates'].get_certificate_info.side_effect = lambda domain: {
+        managers['certificates'].get_certificate_info.side_effect = lambda domain, settings=None, use_cache=True: {
             'domain': domain,
             'san_domains': []
         }

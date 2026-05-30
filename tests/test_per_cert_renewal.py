@@ -77,7 +77,7 @@ def test_check_renewals_skips_disabled_domain(cert_manager, monkeypatch):
     monkeypatch.setattr(
         cert_manager,
         'get_certificate_info',
-        lambda domain, settings=None: {
+        lambda domain, settings=None, use_cache=True: {
             'domain': domain,
             'exists': True,
             'needs_renewal': True,
@@ -106,7 +106,7 @@ def test_check_renewals_legacy_string_entries_default_to_enabled(cert_manager, m
     monkeypatch.setattr(
         cert_manager,
         'get_certificate_info',
-        lambda domain, settings=None: {'domain': domain, 'exists': True, 'needs_renewal': True},
+        lambda domain, settings=None, use_cache=True: {'domain': domain, 'exists': True, 'needs_renewal': True},
     )
     renewed = []
     monkeypatch.setattr(
