@@ -19,14 +19,6 @@ on:
         default: true
         type: boolean
 
-# Serialize tag builds to prevent buildx plugin directory race on self-hosted runner.
-# When v2.11.0 and v2.11.1 are pushed in quick succession, they would race for the
-# shared ~/.docker/buildx/ cache, causing "docker: unknown command: docker buildx".
-# This concurrency group ensures only one build per ref (branch or tag) runs at once.
-concurrency:
-  group: docker-build-${{ github.ref }}
-  cancel-in-progress: false
-
 env:
   REGISTRY: docker.io
   IMAGE_NAME: certmate
@@ -40,6 +32,15 @@ permissions: read-all
 jobs:
   build:
     runs-on: [self-hosted, Linux, X64]
+    # Install the buildx CLI plugin into a per-run docker config dir instead of
+    # the host-shared ~/.docker/cli-plugins. Every runner instance on this host
+    # runs as the same user and shares ~/.docker, so two concurrent runs (the
+    # main-branch push and the tag push from one `git push origin main vX.Y.Z`)
+    # raced: one executed docker-buildx while the other overwrote it -> ETXTBSY
+    # "text file is busy". A unique DOCKER_CONFIG removes the shared target so
+    # builds never collide — no serialization needed.
+    env:
+      DOCKER_CONFIG: ${{ runner.temp }}/.docker-${{ github.run_id }}-${{ github.run_attempt }}
     
     steps:
     - name: Checkout repository
