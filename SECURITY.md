@@ -81,6 +81,28 @@ Out of scope:
 - Issues that require physical access or local root on the host running
   CertMate.
 
+## Security model notes
+
+### Deploy hooks are an admin-controlled execution surface
+
+Deploy hooks run operator-configured shell commands on the CertMate host after a
+successful issuance or renewal (to reload nginx/HAProxy, copy the certificate
+into place, run custom scripts). This is **intentional**: a user with the
+**admin** role can configure commands that CertMate then executes, so admin
+access is equivalent to shell access on the host.
+
+Hook commands are validated to reject shell metacharacters and references to
+CertMate's own infrastructure secrets (`settings.json`, `api_bearer_token`,
+`client_secret`, `vault_token`, `.env`). That validation is defence-in-depth
+against accidental footguns — it is **not** a sandbox and is not intended to
+contain a malicious admin. The issued certificate's own private key
+(`privkey.pem`) is deliberately **not** blocked, because installing it is the
+normal job of a deploy hook.
+
+Treat the admin role as highly privileged: grant it only to trusted operators,
+and prefer scoped, non-admin API keys for automation that only needs to create
+or download certificates.
+
 ## Coordinated disclosure
 
 We coordinate disclosure with the reporter. For high or critical severity:

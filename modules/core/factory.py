@@ -873,6 +873,18 @@ def setup_rate_limiting(app, container: AppContainer):
             return None
 
         client_ip = flask_request.remote_addr or '0.0.0.0'  # nosec B104
+        # Rate-limit bucket: prefer a per-API-key bucket so many clients behind
+        # one NAT/proxy IP don't share a single limit (false positives), and an
+        # abusive key is throttled independently of its source IP. The bearer
+        # token is hashed so it is never used as a cleartext bucket key.
+        # Cookie/session and anonymous requests fall back to the IP bucket.
+        auth_header = flask_request.headers.get('Authorization', '')
+        if auth_header.startswith('Bearer '):
+            import hashlib
+            token = auth_header[7:].strip()
+            identifier = 'key:' + hashlib.sha256(token.encode()).hexdigest()[:32]
+        else:
+            identifier = 'ip:' + client_ip
         endpoint = 'default'
         if 'certificates' in path and 'create' in path:
             endpoint = 'certificate_create'
@@ -889,7 +901,7 @@ def setup_rate_limiting(app, container: AppContainer):
         elif 'crl' in path:
             endpoint = 'crl_download'
 
-        if not rate_limiter.is_allowed(client_ip, endpoint):
+        if not rate_limiter.is_allowed(identifier, endpoint):
             return flask_jsonify({
                 'error': 'Rate limit exceeded',
                 'message': 'Too many requests.',
