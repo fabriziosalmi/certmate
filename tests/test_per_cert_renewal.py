@@ -15,6 +15,7 @@ from types import SimpleNamespace
 import pytest
 
 from modules.core.certificates import CertificateManager
+from modules.core.constants import CERTIFICATE_FILES
 from modules.core.file_operations import FileOperations
 from modules.core.settings import SettingsManager
 
@@ -193,3 +194,62 @@ def test_set_auto_renew_upgrades_legacy_string_entry(cert_manager):
         if isinstance(d, dict) and d.get('domain') == 'legacy.example.com'
     )
     assert entry['auto_renew'] is False
+
+
+# ---------------------------------------------------------------------------
+# #278: renewed certificates must be pushed to the external storage backend
+# (regression guard for luksiol's fix — before it, renew copied files to disk
+# but never called storage_manager.store_certificate, so a configured backend
+# such as Vault / OpenBao / AWS SM / Azure KV kept the pre-renewal cert).
+# ---------------------------------------------------------------------------
+
+def test_renew_pushes_renewed_cert_to_storage_backend(cert_manager):
+    """A successful renewal uploads the renewed files to the storage backend."""
+    domain = "store.example.com"
+    domain_dir = cert_manager.cert_dir / domain
+    live_dir = domain_dir / "live" / domain
+    live_dir.mkdir(parents=True)
+    (domain_dir / "cert.pem").write_text("old cert")  # existing cert lets renew proceed
+    # The renewed files certbot would have written into live/<domain>/.
+    for name in CERTIFICATE_FILES:
+        (live_dir / name).write_bytes(f"renewed-{name}".encode())
+
+    cert_manager.shell_executor.run = MagicMock(
+        return_value=SimpleNamespace(returncode=0, stdout="", stderr="")
+    )
+    cert_manager._write_pfx = MagicMock()  # isolate from the openssl PFX step
+
+    storage = MagicMock()
+    storage.store_certificate.return_value = True
+    storage.get_backend_name.return_value = "vault"
+    cert_manager.storage_manager = storage
+
+    result = cert_manager.renew_certificate(domain)
+
+    assert result["success"] is True
+    storage.store_certificate.assert_called_once()
+    pushed_domain, pushed_files, pushed_meta = storage.store_certificate.call_args.args
+    assert pushed_domain == domain
+    # Every renewed file is in the payload, carrying the freshly renewed bytes.
+    assert set(pushed_files) == set(CERTIFICATE_FILES)
+    assert pushed_files["cert.pem"] == b"renewed-cert.pem"
+    assert pushed_files["privkey.pem"] == b"renewed-privkey.pem"
+    assert isinstance(pushed_meta, dict)
+
+
+def test_renew_without_storage_backend_succeeds(cert_manager):
+    """With no storage backend configured the push is skipped and renewal still
+    succeeds — the upload is best-effort, guarded by `if self.storage_manager`."""
+    domain = "nostore.example.com"
+    domain_dir = cert_manager.cert_dir / domain
+    (domain_dir / "live" / domain).mkdir(parents=True)
+    (domain_dir / "cert.pem").write_text("old cert")
+
+    cert_manager.shell_executor.run = MagicMock(
+        return_value=SimpleNamespace(returncode=0, stdout="", stderr="")
+    )
+    cert_manager._write_pfx = MagicMock()
+
+    assert cert_manager.storage_manager is None
+    result = cert_manager.renew_certificate(domain)
+    assert result["success"] is True
