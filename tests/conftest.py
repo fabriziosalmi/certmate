@@ -45,12 +45,12 @@ def _docker(*args, check=True, capture=True):
     )
 
 
-def _wait_healthy(timeout=60):
+def _wait_healthy(timeout=60, base_url=BASE_URL):
     """Wait until the container health endpoint responds 200."""
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:
-            r = requests.get(f"{BASE_URL}/health", timeout=10)
+            r = requests.get(f"{base_url}/health", timeout=10)
             if r.status_code == 200:
                 return True
         except requests.RequestException:
@@ -64,7 +64,22 @@ def _wait_healthy(timeout=60):
 # ---------------------------------------------------------------------------
 @pytest.fixture(scope="session")
 def docker_container():
-    """Build image, start container, yield BASE_URL, then tear down."""
+    """Yield the base URL of a running CertMate instance.
+
+    Default: build the image, start a container, tear it down at session
+    end. With CERTMATE_E2E_BASE_URL set, target an already-running
+    instance instead (no Docker required — e.g. a sandbox that cannot
+    pull base images, or a developer's `python app.py` session) and skip
+    all container lifecycle management.
+    """
+    external = os.environ.get("CERTMATE_E2E_BASE_URL")
+    if external:
+        external = external.rstrip("/")
+        _wait_healthy(base_url=external)
+        print(f"\n[tests] Using externally managed instance at {external}")
+        yield external
+        return
+
     # Build (unless told to skip)
     if os.environ.get("CERTMATE_SKIP_BUILD") != "1":
         print(f"\n[tests] Building Docker image {IMAGE_NAME} ...")

@@ -37,6 +37,22 @@
 
     var state = { step: 1, email: '', provider: '', credentials: {} };
 
+    // "Skip wizard" must stick: without persistence the modal re-appeared on
+    // every dashboard load until setup was completed. Stored per browser in
+    // localStorage rather than flipping setup_completed server-side, because
+    // setup genuinely is NOT completed (recovery/downgrade detection rely on
+    // that flag staying truthful). Completing the wizard still clears the
+    // nag for every browser via setup_completed=true.
+    var SKIP_KEY = 'certmate_wizard_skipped';
+
+    function wizardSkipped() {
+        try { return window.localStorage.getItem(SKIP_KEY) === '1'; } catch (e) { return false; }
+    }
+
+    function rememberSkip() {
+        try { window.localStorage.setItem(SKIP_KEY, '1'); } catch (e) { /* storage unavailable (private mode) — skip lasts for this page only */ }
+    }
+
     function checkSetup() {
         var t = new Date().getTime();
         fetch('/api/web/settings?t=' + t, { credentials: 'same-origin', cache: 'no-store' })
@@ -44,7 +60,7 @@
             .then(function(data) {
                 if (data && data.certmate_recovery_suggested) {
                     showRecoveryPrompt();
-                } else if (data && data.setup_completed === false) {
+                } else if (data && data.setup_completed === false && !wizardSkipped()) {
                     showWizard();
                 }
             })
@@ -223,7 +239,10 @@
             renderStep();
         });
 
-        document.getElementById('wizSkip').addEventListener('click', closeWizard);
+        document.getElementById('wizSkip').addEventListener('click', function() {
+            rememberSkip();
+            closeWizard();
+        });
         document.getElementById('wizEmail').addEventListener('keydown', function(e) {
             if (e.key === 'Enter') document.getElementById('wizNext1').click();
         });

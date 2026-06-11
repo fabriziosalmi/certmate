@@ -32,7 +32,9 @@ def _validate_backup_filename(filename):
         return 'Filename is required'
     if '..' in filename or '/' in filename or '\\' in filename or '\x00' in filename:
         return 'Invalid filename'
-    if not filename.endswith('.zip'):
+    # .zip = cleartext backup, .zip.enc = encrypted-at-rest backup
+    # (CERTMATE_BACKUP_PASSPHRASE).
+    if not (filename.endswith('.zip') or filename.endswith('.zip.enc')):
         return 'Invalid backup file format'
     return None
 

@@ -97,6 +97,46 @@ class TestGetAvailableProviders:
 
 
 # ---------------------------------------------------------------------------
+# test_provider — offline credential-shape validation backing the
+# /api/web/certificates/test-provider endpoint (which 500'd with
+# AttributeError before this method existed).
+# ---------------------------------------------------------------------------
+
+
+class TestTestProvider:
+    def test_unsupported_provider_rejected(self, manager_factory):
+        mgr, _ = manager_factory({})
+        ok, msg = mgr.test_provider('not-a-provider', {'api_token': 'x'})
+        assert ok is False
+        assert 'Unsupported' in msg
+
+    def test_phantom_desec_is_rejected(self, manager_factory):
+        """Regression pin: 'desec' used to be advertised despite having no
+        strategy/validation wiring anywhere else in the stack."""
+        mgr, _ = manager_factory({})
+        ok, _ = mgr.test_provider('desec', {'api_token': 'x'})
+        assert ok is False
+
+    def test_missing_required_fields_reported(self, manager_factory):
+        mgr, _ = manager_factory({})
+        ok, msg = mgr.test_provider('route53', {'access_key_id': 'AKID'})
+        assert ok is False
+        assert 'secret_access_key' in msg
+
+    def test_valid_config_passes(self, manager_factory):
+        mgr, _ = manager_factory({})
+        ok, msg = mgr.test_provider('cloudflare', {'api_token': 'tok'})
+        assert ok is True
+        assert 'offline' in msg
+
+    def test_non_dict_config_treated_as_empty(self, manager_factory):
+        mgr, _ = manager_factory({})
+        ok, msg = mgr.test_provider('cloudflare', None)
+        assert ok is False
+        assert 'api_token' in msg
+
+
+# ---------------------------------------------------------------------------
 # get_dns_provider_account_config
 # ---------------------------------------------------------------------------
 

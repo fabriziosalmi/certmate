@@ -91,3 +91,29 @@ def test_no_supported_providers_orphaned_from_factory():
     )
 
 
+def test_dns_manager_advertised_providers_match_factory():
+    """DNSManager.SUPPORTED_PROVIDERS feeds /api/web/certificates/dns-providers.
+    Every advertised provider must be issuable (registered in the factory)
+    and every issuable provider must be advertised. Pinned by the phantom
+    'desec' entry: it was advertised by the endpoint but had no strategy,
+    no credential schema and was rejected by save_settings."""
+    from modules.core.dns_providers import DNSManager
+
+    factory = _factory_dns_providers()
+    advertised = set(DNSManager.SUPPORTED_PROVIDERS)
+
+    phantom = advertised - factory
+    assert not phantom, (
+        f"DNSManager.SUPPORTED_PROVIDERS advertises providers with no "
+        f"strategy in DNSStrategyFactory: {sorted(phantom)}. The UI/API "
+        f"would offer a provider whose issuance can only fail."
+    )
+
+    hidden = factory - advertised
+    assert not hidden, (
+        f"Providers issuable via DNSStrategyFactory but missing from "
+        f"DNSManager.SUPPORTED_PROVIDERS (invisible to the providers "
+        f"endpoint): {sorted(hidden)}"
+    )
+
+

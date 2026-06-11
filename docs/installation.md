@@ -151,6 +151,15 @@ SECRET_KEY_FILE=/run/secrets/secret_key
 # proxy" section under Production Deployment for details.
 BEHIND_PROXY=true
 
+# Backup encryption at rest (optional, recommended).
+# When set, unified backups are written as encrypted .zip.enc files
+# (PBKDF2-SHA256 key derivation + Fernet/AES) instead of cleartext .zip.
+# Backups embed every certificate private key, so without this an
+# exfiltrated backup file is a full key compromise. The same passphrase
+# must be present to restore. Deliberately env-only: a passphrase stored
+# in settings.json would itself end up inside plaintext backups.
+CERTMATE_BACKUP_PASSPHRASE=choose-a-long-random-passphrase
+
 # DNS Providers (choose one or multiple)
 CLOUDFLARE_TOKEN=your_cloudflare_token
 AWS_ACCESS_KEY_ID=your_aws_access_key

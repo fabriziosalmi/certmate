@@ -495,14 +495,25 @@ class SettingsManager:
     def _try_restore_from_backup(self):
         """Attempt to restore settings from the most recent unified backup."""
         try:
-            import zipfile, json
+            import io, zipfile, json
+            from .file_operations import (
+                _BACKUP_ENC_SUFFIX, _backup_passphrase, _decrypt_backup_payload,
+            )
             backup_dir = self.file_ops.backup_dir / "unified"
             if not backup_dir.exists():
                 return None
-            backups = sorted(backup_dir.glob("backup_*.zip"), key=lambda p: p.stat().st_mtime, reverse=True)
+            backups = sorted(backup_dir.glob("backup_*.zip*"), key=lambda p: p.stat().st_mtime, reverse=True)
             for backup_path in backups[:5]:  # try the 5 most recent
                 try:
-                    with zipfile.ZipFile(backup_path, 'r') as zf:
+                    if backup_path.name.endswith(_BACKUP_ENC_SUFFIX):
+                        passphrase = _backup_passphrase()
+                        if not passphrase:
+                            logger.debug(f"Skipping encrypted backup {backup_path.name}: no passphrase set")
+                            continue
+                        zip_source = io.BytesIO(_decrypt_backup_payload(backup_path.read_bytes(), passphrase))
+                    else:
+                        zip_source = backup_path
+                    with zipfile.ZipFile(zip_source, 'r') as zf:
                         if "settings.json" not in zf.namelist():
                             continue
                         raw = json.loads(zf.read("settings.json").decode('utf-8'))

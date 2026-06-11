@@ -1,3 +1,24 @@
+## v2.11.3 (Patch — reliability audit fixes)
+
+Fixes from a findings-verification pass over DNS provider wiring, storage retry behaviour, notification delivery and backup security.
+
+### Fixes
+
+- **Unified backup restore silently skipped every certificate file** — an off-by-one in the `certificates/` prefix strip (`[12:]` instead of 13 chars) left a leading `/` on every entry path, which the ZIP-slip guard then rejected. Restores have been settings-only since v2.7.0; certificates now actually restore. Found by the new backup roundtrip tests.
+- **Phantom `desec` DNS provider removed; provider list unified** — `desec` was advertised by `GET /api/web/certificates/dns-providers` but had no issuance strategy, no credential schema and was rejected by settings validation. `DNSManager.SUPPORTED_PROVIDERS` now matches the canonical 25-provider set used by the strategy factory and settings validation (previously it listed only 13), and the sync is pinned by a wiring-consistency test.
+- **`POST /api/web/certificates/test-provider` always returned HTTP 500** — it called a `DNSManager.test_provider` method that was never implemented (`AttributeError`). Now performs an offline credential-shape validation against the provider's required fields.
+- **Storage backend retries never actually retried** — `@_with_retry()` decorated methods that swallowed their own exceptions, so the decorator never saw a transient error (Azure Key Vault, AWS Secrets Manager, HashiCorp Vault), and Infisical had no retry wiring at all. The catch now lives outside the retry boundary; transient errors (429/5xx/timeouts) get up to 3 attempts on all four cloud backends, with Azure retrying per surface in `both` mode.
+- **SMTP notifications now retry and are logged** — email sends get the same 3-attempt exponential backoff as webhooks (static config errors are not retried) and land in the delivery log (`/api/webhooks/deliveries`) alongside webhook deliveries.
+
+### Security
+
+- **Backup encryption at rest (opt-in)** — set `CERTMATE_BACKUP_PASSPHRASE` and unified backups are written as `.zip.enc` (PBKDF2-SHA256, 600k iterations → Fernet) instead of cleartext zips that embed every certificate private key. Listing reads metadata from a cleartext header (no KDF cost); restore — including the corrupt-settings auto-recovery path — transparently handles both formats. Without the variable, behaviour is unchanged.
+
+### Testing
+
+- New suites: storage retry contract, backup encryption roundtrip, DNSManager↔factory wiring pin, SMTP retry/delivery-log coverage.
+- `tests/conftest.py` accepts `CERTMATE_E2E_BASE_URL` to run the e2e suite against an already-running instance when Docker isn't available.
+
 ## v2.8.4 (Patch — Azure DNS sub-delegated alias zones, follow-up)
 
 Follow-up hotfix for [#243](https://github.com/fabriziosalmi/certmate/issues/243). The v2.8.3 fix could not take effect.

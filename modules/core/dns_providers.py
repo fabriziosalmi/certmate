@@ -5,20 +5,29 @@ Handles DNS provider configuration, account management, and provider-specific op
 
 import logging
 
+from .utils import _DNS_PROVIDER_CREDENTIALS
+
 logger = logging.getLogger(__name__)
 
 
 class DNSManager:
     """Class to handle DNS provider management"""
-    
+
     def __init__(self, settings_manager):
         self.settings_manager = settings_manager
 
-    # Canonical list of supported DNS providers
+    # Canonical list of supported DNS providers. Must stay in sync with
+    # DNSStrategyFactory (dns_strategies.py), _DNS_PROVIDER_CREDENTIALS
+    # (utils.py) and the supported_providers set in settings.save_settings —
+    # pinned by tests/test_provider_wiring_consistency.py. Listing a provider
+    # here that has no strategy/validation wiring advertises a provider the
+    # rest of the stack rejects (this is how the phantom 'desec' entry broke).
     SUPPORTED_PROVIDERS = [
         'cloudflare', 'route53', 'azure', 'google', 'digitalocean',
         'namecheap', 'godaddy', 'linode', 'ovh', 'hetzner',
-        'rfc2136', 'powerdns', 'desec',
+        'hetzner-cloud', 'rfc2136', 'powerdns', 'edgedns', 'gandi',
+        'arvancloud', 'infomaniak', 'acme-dns', 'duckdns', 'vultr',
+        'dnsmadeeasy', 'nsone', 'porkbun', 'he-ddns', 'dynudns',
     ]
 
     def get_available_providers(self):
@@ -347,6 +356,37 @@ class DNSManager:
     def delete_account(self, provider, account_id, settings=None):
         """Alias for delete_dns_account with consistent naming"""
         return self.delete_dns_account(provider, account_id, settings)
+
+    def test_provider(self, provider, config):
+        """Validate a DNS provider configuration payload.
+
+        Performs an offline credential-shape check against the provider's
+        required fields (no live DNS API call). This is the method behind
+        POST /api/web/certificates/test-provider, which previously raised
+        AttributeError (HTTP 500) because it was never implemented.
+
+        Returns:
+            tuple: (success: bool, message: str)
+        """
+        try:
+            if provider not in self.SUPPORTED_PROVIDERS:
+                return False, f"Unsupported DNS provider: {provider}"
+
+            required = _DNS_PROVIDER_CREDENTIALS.get(provider, [])
+            config = config if isinstance(config, dict) else {}
+            missing = [field for field in required if not config.get(field)]
+            if missing:
+                return False, (
+                    f"Missing required credential field(s) for {provider}: "
+                    f"{', '.join(missing)}"
+                )
+            return True, (
+                f"Configuration for {provider} has all required fields "
+                f"(offline validation only; no live DNS API call performed)"
+            )
+        except Exception as e:
+            logger.error(f"Error testing DNS provider {provider}: {e}")
+            return False, "Provider test failed"
 
     def set_default_account(self, provider, account_id, settings=None):
         """Set the default account for a DNS provider (atomic).

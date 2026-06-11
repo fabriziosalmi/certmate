@@ -3,6 +3,8 @@ File operations module for CertMate
 Handles file I/O, backup management, and safe file operations
 """
 
+import base64
+import io
 import os
 import json
 import tempfile
@@ -26,6 +28,86 @@ MAX_BACKUPS_PER_TYPE = 50   # Maximum number of backups to keep per type
 # directories are intentionally retained because renew_certificate() reuses
 # the domain config dir for future renewals after a restore.
 _BACKUP_EXCLUDE_DIRS = frozenset({'logs', 'work'})
+
+# --- Backup encryption at rest --------------------------------------------
+# Unified backups embed every certificate private key (privkey.pem). With
+# CERTMATE_BACKUP_PASSPHRASE set, the whole zip is encrypted (Fernet:
+# AES-128-CBC + HMAC-SHA256) with a key derived from the passphrase via
+# PBKDF2-SHA256. The passphrase deliberately comes from the environment and
+# NOT from settings.json — a passphrase stored in settings would itself be
+# included in plaintext-mode backups, defeating the purpose.
+#
+# File layout of a `.zip.enc` backup (three newline-separated sections):
+#   CERTMATE-BACKUP-ENC v1
+#   {"kdf": ..., "iterations": ..., "salt": ..., "metadata": {...}}
+#   <fernet token>
+# The cleartext header carries only the non-secret backup metadata (id,
+# timestamp, domain names) so list_backups() stays cheap — no KDF run per
+# file per listing.
+BACKUP_PASSPHRASE_ENV = 'CERTMATE_BACKUP_PASSPHRASE'
+_BACKUP_ENC_MAGIC = b'CERTMATE-BACKUP-ENC v1'
+_BACKUP_ENC_SUFFIX = '.zip.enc'
+_BACKUP_ENC_KDF_ITERATIONS = 600_000  # OWASP 2023 floor for PBKDF2-SHA256
+
+
+def _backup_passphrase():
+    return os.environ.get(BACKUP_PASSPHRASE_ENV, '')
+
+
+def _derive_backup_key(passphrase: str, salt: bytes, iterations: int) -> bytes:
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+
+    kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=salt,
+                     iterations=iterations)
+    return base64.urlsafe_b64encode(kdf.derive(passphrase.encode('utf-8')))
+
+
+def _encrypt_backup_payload(zip_bytes: bytes, passphrase: str, metadata: dict) -> bytes:
+    from cryptography.fernet import Fernet
+    import secrets as _secrets
+
+    salt = _secrets.token_bytes(16)
+    key = _derive_backup_key(passphrase, salt, _BACKUP_ENC_KDF_ITERATIONS)
+    header = {
+        'kdf': 'pbkdf2-sha256',
+        'iterations': _BACKUP_ENC_KDF_ITERATIONS,
+        'salt': base64.b64encode(salt).decode('ascii'),
+        'metadata': metadata,
+    }
+    return b'\n'.join([
+        _BACKUP_ENC_MAGIC,
+        json.dumps(header, separators=(',', ':')).encode('utf-8'),
+        Fernet(key).encrypt(zip_bytes),
+    ])
+
+
+def _parse_encrypted_backup(raw: bytes):
+    """Split an encrypted backup file into (header_dict, fernet_token).
+    Raises ValueError on any format problem."""
+    magic, _, rest = raw.partition(b'\n')
+    if magic != _BACKUP_ENC_MAGIC:
+        raise ValueError('not a CertMate encrypted backup')
+    header_line, _, token = rest.partition(b'\n')
+    header = json.loads(header_line.decode('utf-8'))
+    if not token:
+        raise ValueError('encrypted backup is truncated')
+    return header, token
+
+
+def _decrypt_backup_payload(raw: bytes, passphrase: str) -> bytes:
+    """Decrypt an encrypted backup file body back to zip bytes.
+    Raises ValueError on bad format or wrong passphrase."""
+    from cryptography.fernet import Fernet, InvalidToken
+
+    header, token = _parse_encrypted_backup(raw)
+    salt = base64.b64decode(header['salt'])
+    iterations = int(header.get('iterations', _BACKUP_ENC_KDF_ITERATIONS))
+    key = _derive_backup_key(passphrase, salt, iterations)
+    try:
+        return Fernet(key).decrypt(token)
+    except InvalidToken:
+        raise ValueError('wrong passphrase or corrupted backup')
 
 
 class FileOperations:
@@ -171,7 +253,8 @@ class FileOperations:
         try:
             timestamp = utc_now().strftime("%Y%m%d_%H%M%S_%f")
             backup_id = f"backup_{timestamp}_{backup_reason}"
-            backup_filename = f"{backup_id}.zip"
+            passphrase = _backup_passphrase()
+            backup_filename = f"{backup_id}{_BACKUP_ENC_SUFFIX if passphrase else '.zip'}"
             backup_path = self.backup_dir / "unified" / backup_filename
 
             # Ensure backup directory exists
@@ -204,10 +287,14 @@ class FileOperations:
                 # operator inspecting an old archive can see whether it's
                 # a share-safe (masked) snapshot or a full-restore one.
                 "secrets_masked": not include_secrets,
+                "encrypted": bool(passphrase),
             }
 
-            # Create ZIP file with both settings and certificates
-            with zipfile.ZipFile(backup_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            # Create the ZIP in memory (backups are settings + a handful of
+            # PEM files — small) so the encrypted path never spills a
+            # plaintext zip to disk, not even transiently.
+            zip_buffer = io.BytesIO()
+            with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zipf:
                 # Add settings data
                 settings_backup = {
                     "metadata": metadata,
@@ -237,17 +324,24 @@ class FileOperations:
                 # Add unified metadata
                 zipf.writestr("backup_metadata.json", json.dumps(metadata, indent=2))
 
-            # Lock the file down. Default umask leaves the zip world-
-            # readable on most distros; the contents are a JSON blob of
-            # operator-facing material (private keys live in the cert
-            # subtree but still). 0600 = certmate-user only.
+            payload = zip_buffer.getvalue()
+            if passphrase:
+                payload = _encrypt_backup_payload(payload, passphrase, metadata)
+
+            # Write with 0600 from the first byte. Default umask leaves the
+            # file world-readable on most distros; the contents include every
+            # certificate private key. 0600 = certmate-user only.
+            fd = os.open(str(backup_path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, 'wb') as fh:
+                fh.write(payload)
             try:
                 os.chmod(backup_path, 0o600)
             except OSError as perm_err:
                 logger.warning(f"Could not tighten permissions on {backup_path}: {perm_err}")
 
             mode_tag = 'plaintext' if include_secrets else 'masked'
-            logger.info(f"Unified backup created: {backup_filename} (contains {len(domains)} domains; secrets={mode_tag})")
+            enc_tag = 'encrypted' if passphrase else 'cleartext'
+            logger.info(f"Unified backup created: {backup_filename} (contains {len(domains)} domains; secrets={mode_tag}; at-rest={enc_tag})")
             self._prune_unified_backups()
             return backup_filename
 
@@ -262,8 +356,10 @@ class FileOperations:
             backup_dir = self.backup_dir / "unified"
             if not backup_dir.exists():
                 return
+            # backup_*.zip* matches both cleartext (.zip) and encrypted
+            # (.zip.enc) backups so retention applies across the mix.
             backups = sorted(
-                backup_dir.glob("backup_*.zip"),
+                backup_dir.glob("backup_*.zip*"),
                 key=lambda p: p.stat().st_mtime,
                 reverse=True,
             )
@@ -296,22 +392,31 @@ class FileOperations:
             # List unified backups (only format)
             unified_backup_dir = self.backup_dir / "unified"
             if unified_backup_dir.exists():
-                for backup_file in unified_backup_dir.glob("backup_*.zip"):
+                for backup_file in sorted(unified_backup_dir.glob("backup_*.zip*")):
                     try:
                         stat = backup_file.stat()
                         metadata = {"size": stat.st_size, "created": datetime.fromtimestamp(stat.st_mtime).isoformat()}
-                        
+
                         # Try to read unified backup metadata
                         try:
-                            with zipfile.ZipFile(backup_file, 'r') as zipf:
-                                if "backup_metadata.json" in zipf.namelist():
-                                    metadata_content = zipf.read("backup_metadata.json")
-                                    zip_metadata = json.loads(metadata_content.decode('utf-8'))
-                                    metadata.update(zip_metadata)
-                                    metadata["type"] = "unified"
+                            if backup_file.name.endswith(_BACKUP_ENC_SUFFIX):
+                                # Encrypted backup: metadata lives in the
+                                # cleartext header, no passphrase needed.
+                                header, _ = _parse_encrypted_backup(backup_file.read_bytes())
+                                if isinstance(header.get('metadata'), dict):
+                                    metadata.update(header['metadata'])
+                                metadata["type"] = "unified"
+                                metadata["encrypted"] = True
+                            else:
+                                with zipfile.ZipFile(backup_file, 'r') as zipf:
+                                    if "backup_metadata.json" in zipf.namelist():
+                                        metadata_content = zipf.read("backup_metadata.json")
+                                        zip_metadata = json.loads(metadata_content.decode('utf-8'))
+                                        metadata.update(zip_metadata)
+                                        metadata["type"] = "unified"
                         except Exception as e:
                             logger.debug(f"Could not read ZIP metadata from {backup_file}: {e}")
-                            
+
                         backups["unified"].append({
                             "filename": backup_file.name,
                             "metadata": metadata
@@ -389,6 +494,7 @@ class FileOperations:
            in place and the response log surfaces a warning so the
            operator knows to re-enter credentials.
         """
+        temp_zip_path = None
         try:
             logger.info(f"Starting unified backup restore from: {backup_file_path}")
             backup_path = Path(backup_file_path)
@@ -396,6 +502,28 @@ class FileOperations:
             if not backup_path.exists():
                 logger.error(f"Backup file not found: {backup_path}")
                 return False
+
+            if backup_path.name.endswith(_BACKUP_ENC_SUFFIX):
+                passphrase = _backup_passphrase()
+                if not passphrase:
+                    # Env var name spelled as a literal: interpolating the
+                    # *_PASSPHRASE_* constant trips CodeQL's clear-text-logging
+                    # name heuristic even though only the name is logged.
+                    logger.error(
+                        f"Cannot restore encrypted backup {backup_path.name}: "
+                        "CERTMATE_BACKUP_PASSPHRASE is not set"
+                    )
+                    return False
+                try:
+                    zip_bytes = _decrypt_backup_payload(backup_path.read_bytes(), passphrase)
+                except (ValueError, KeyError, json.JSONDecodeError) as dec_err:
+                    logger.error(f"Failed to decrypt backup {backup_path.name}: {dec_err}")
+                    return False
+                tmp_fd, temp_zip_path = tempfile.mkstemp(suffix='.zip')
+                with os.fdopen(tmp_fd, 'wb') as tmp_fh:
+                    tmp_fh.write(zip_bytes)
+                backup_path = Path(temp_zip_path)
+                logger.info("Encrypted backup decrypted for restore")
 
             # Ensure directories exist
             self.cert_dir.mkdir(parents=True, exist_ok=True)
@@ -485,8 +613,13 @@ class FileOperations:
                 cert_dir_resolved = self.cert_dir.resolve()
                 for file_info in zipf.infolist():
                     if file_info.filename.startswith("certificates/") and file_info.filename != "certificates/":
-                        # Remove "certificates/" prefix from the path
-                        relative_path = file_info.filename[12:]  # len("certificates/") = 12
+                        # Remove "certificates/" prefix from the path.
+                        # NB: an off-by-one here ([12:] — "certificates/" is
+                        # 13 chars) used to leave a leading '/', which the
+                        # ZIP-slip guard below rejected: every certificate
+                        # file was silently skipped and restores were
+                        # settings-only.
+                        relative_path = file_info.filename[len("certificates/"):]
 
                         # ZIP Slip protection: reject entries with path traversal
                         if '..' in relative_path or relative_path.startswith('/'):
@@ -550,5 +683,11 @@ class FileOperations:
         except Exception as e:
             logger.error(f"Error restoring unified backup: {e}")
             return False
+        finally:
+            if temp_zip_path:
+                try:
+                    os.unlink(temp_zip_path)
+                except OSError:
+                    pass
 
 
