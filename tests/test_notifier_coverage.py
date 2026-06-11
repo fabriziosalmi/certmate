@@ -340,6 +340,77 @@ class TestWebhookRetry:
         assert send_mock.call_count == 3  # max_retries default
 
 
+class TestSmtpRetry:
+    """SMTP must follow the same retry/backoff + delivery-log contract as
+    webhooks (P-03: it previously had neither)."""
+
+    def _smtp_settings(self):
+        return {
+            'notifications': {
+                'enabled': True,
+                'channels': {
+                    'smtp': {'enabled': True, 'host': 'smtp.example.com',
+                             'to_addresses': ['ops@example.com']},
+                }
+            }
+        }
+
+    def test_retries_on_failure_until_success(self, tmp_path, monkeypatch):
+        notifier = _mk_notifier(tmp_path, self._smtp_settings())
+        monkeypatch.setattr('time.sleep', lambda *_a, **_k: None)
+        send_mock = MagicMock(side_effect=[
+            {'error': 'connect refused'},
+            {'success': True},
+        ])
+        with patch.object(notifier, '_send_email', send_mock):
+            result = notifier.notify('certificate_created', 'T', 'M')
+        assert result['smtp'] == {'success': True}
+        assert send_mock.call_count == 2
+
+    def test_returns_last_error_after_max_retries(self, tmp_path, monkeypatch):
+        notifier = _mk_notifier(tmp_path, self._smtp_settings())
+        monkeypatch.setattr('time.sleep', lambda *_a, **_k: None)
+        send_mock = MagicMock(return_value={'error': 'always-fails'})
+        with patch.object(notifier, '_send_email', send_mock):
+            result = notifier.notify('certificate_created', 'T', 'M')
+        assert result['smtp'] == {'error': 'always-fails'}
+        assert send_mock.call_count == 3
+
+    def test_config_error_is_not_retried(self, tmp_path, monkeypatch):
+        """'SMTP not fully configured' is static — retrying just burns 3s."""
+        notifier = _mk_notifier(tmp_path, self._smtp_settings())
+        monkeypatch.setattr('time.sleep', lambda *_a, **_k: None)
+        send_mock = MagicMock(return_value={'error': 'SMTP not fully configured'})
+        with patch.object(notifier, '_send_email', send_mock):
+            notifier.notify('certificate_created', 'T', 'M')
+        assert send_mock.call_count == 1
+
+    def test_smtp_failures_land_in_delivery_log(self, tmp_path, monkeypatch):
+        notifier = _mk_notifier(tmp_path, self._smtp_settings())
+        monkeypatch.setattr('time.sleep', lambda *_a, **_k: None)
+        send_mock = MagicMock(return_value={'error': 'boom'})
+        with patch.object(notifier, '_send_email', send_mock):
+            notifier.notify('certificate_created', 'T', 'M')
+        deliveries = notifier.get_deliveries()
+        assert len(deliveries) == 1
+        entry = deliveries[0]
+        assert entry['webhook_name'] == 'smtp'
+        assert entry['webhook_type'] == 'smtp'
+        assert entry['event'] == 'certificate_created'
+        assert entry['success'] is False
+        assert entry['attempts'] == 3
+        assert entry['error'] == 'boom'
+
+    def test_smtp_success_logged_with_single_attempt(self, tmp_path, monkeypatch):
+        notifier = _mk_notifier(tmp_path, self._smtp_settings())
+        monkeypatch.setattr('time.sleep', lambda *_a, **_k: None)
+        with patch.object(notifier, '_send_email', return_value={'success': True}):
+            notifier.notify('certificate_created', 'T', 'M')
+        entry = notifier.get_deliveries()[0]
+        assert entry['success'] is True
+        assert entry['attempts'] == 1
+
+
 # ---------------------------------------------------------------------------
 # Delivery log: write + read + truncation cap
 # ---------------------------------------------------------------------------

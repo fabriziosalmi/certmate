@@ -62,7 +62,7 @@ class Notifier:
         # SMTP email
         smtp_cfg = channels.get('smtp', {})
         if smtp_cfg.get('enabled', False):
-            results['smtp'] = self._send_email(smtp_cfg, title, message, details)
+            results['smtp'] = self._send_email_with_retry(smtp_cfg, event, title, message, details)
 
         # Webhooks (generic, Slack, Discord)
         for wh in channels.get('webhooks', []):
@@ -136,6 +136,35 @@ class Notifier:
         except Exception as e:
             logger.error(f"Email notification failed: {e}")
             return {'error': str(e)}
+
+    def _send_email_with_retry(self, cfg: dict, event: str, title: str,
+                               message: str, details: Optional[dict] = None,
+                               max_retries: int = 3) -> dict:
+        """Send SMTP email with the same retry/backoff and delivery-log
+        contract as webhooks. Configuration errors are not retried —
+        only actual send failures (DNS, connect, auth-flap, 4xx greylisting)
+        get the 1s/2s backoff."""
+        start_ms = int(time.time() * 1000)
+        result = {}
+        attempts = 0
+        for attempt in range(max_retries):
+            attempts = attempt + 1
+            result = self._send_email(cfg, title, message, details)
+            if result.get('success'):
+                break
+            if result.get('error') == 'SMTP not fully configured':
+                break  # static config problem — retrying cannot help
+            if attempt < max_retries - 1:
+                delay = 2 ** attempt  # 1s, 2s
+                time.sleep(delay)
+                logger.debug(f"SMTP retry {attempt + 2}/{max_retries}")
+
+        duration_ms = int(time.time() * 1000) - start_ms
+        self._log_delivery(
+            {'name': 'smtp', 'type': 'smtp', 'url': cfg.get('host', '')},
+            event, result, attempts, duration_ms,
+        )
+        return result
 
     def _send_webhook_with_retry(self, cfg: dict, event: str, title: str,
                                 message: str, details: Optional[dict] = None,
