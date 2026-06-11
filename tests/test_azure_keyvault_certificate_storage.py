@@ -632,6 +632,8 @@ class TestTagsMetadataRoundTrip:
             "email": "ops@example.com",
             "staging": True,
             "account_id": "primary",
+            "ca_provider": "letsencrypt_staging",
+            "ca_account_id": "default",
         }
         tags = _AzureKeyVaultCertificateImporter._build_tags(original)
         rebuilt = _AzureKeyVaultCertificateImporter._tags_to_metadata(tags)
@@ -639,6 +641,10 @@ class TestTagsMetadataRoundTrip:
         assert rebuilt["dns_provider"] == "cloudflare"
         assert rebuilt["staging"] is True
         assert rebuilt["san_domains"] == ["a.example.com", "b.example.com"]
+        # ca_provider must survive the tag round-trip (#279) — without the
+        # allow-list entry it is silently dropped on rehydrate.
+        assert rebuilt["ca_provider"] == "letsencrypt_staging"
+        assert rebuilt["ca_account_id"] == "default"
 
     def test_staging_none_is_omitted_not_falsified(self):
         from modules.core.storage_backends import _AzureKeyVaultCertificateImporter

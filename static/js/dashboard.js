@@ -1360,6 +1360,9 @@
                 case 'letsencrypt':
                     infoText = '<i class="fas fa-leaf mr-1 text-green-500"></i> Free certificates with 90-day validity and automatic renewal';
                     break;
+                case 'letsencrypt_staging':
+                    infoText = '<i class="fas fa-flask mr-1 text-yellow-500"></i> Staging environment for testing - certificates are NOT trusted by browsers, but rate limits are generous';
+                    break;
                 case 'zerossl':
                     infoText = '<i class="fas fa-certificate mr-1 text-yellow-500"></i> Free certificates with 90-day validity via ZeroSSL (requires EAB)';
                     break;

@@ -15,8 +15,20 @@ CertMate supports multiple Certificate Authority providers, allowing you to choo
 - **Best For**: Development, small businesses, personal projects
 
 **Configuration:**
-- **Environment**: Production or Staging
 - **Email**: Required for certificate notifications
+
+### Let's Encrypt (Staging)
+
+- **Type**: Test certificates from the Let's Encrypt staging environment
+- **Certificate Types**: Domain Validation (DV) — NOT trusted by browsers
+- **Wildcard Support**: Yes
+- **EAB Required**: No
+- **Best For**: Validating DNS, deployment and renewal setup without consuming production rate limits
+
+Staging is a separate Certificate Authority entry (since v2.12.0), not a per-certificate
+flag: select it as the CA when creating a certificate, or set it as the default CA while
+testing. The email falls back to the Let's Encrypt account email when left empty.
+Converting a staging certificate to production requires a reissue with the production CA.
 
 ### DigiCert ACME
 
@@ -172,7 +184,8 @@ You can optionally provide the root CA certificate in CertMate for trust chain v
 ## Troubleshooting
 
 ### Let's Encrypt
-- **Staging URL accessible**: Verify internet connectivity
+- **Untrusted certificate after issuance**: Check whether the certificate was issued by the staging CA — select the production "Let's Encrypt" entry and reissue
+- **Rate limited**: Switch to the "Let's Encrypt (Staging)" CA entry while testing
 - **Email valid**: Ensure email format is correct
 
 ### DigiCert

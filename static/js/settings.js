@@ -169,6 +169,11 @@
             var email = '';
             if (defaultCA === 'letsencrypt') {
                 email = (caProviders.letsencrypt && caProviders.letsencrypt.email) || '';
+            } else if (defaultCA === 'letsencrypt_staging') {
+                // Staging shares the LE account shape; fall back to the
+                // production LE email when its own field is empty.
+                email = (caProviders.letsencrypt_staging && caProviders.letsencrypt_staging.email) ||
+                    (caProviders.letsencrypt && caProviders.letsencrypt.email) || '';
             } else if (defaultCA === 'zerossl') {
                 email = (caProviders.zerossl && caProviders.zerossl.email) || '';
             } else if (defaultCA === 'google') {
@@ -229,12 +234,14 @@
             // Validate required fields - email comes from the selected CA provider
             if (!settings.email) {
                 var caDisplayName = defaultCA === 'letsencrypt' ? "Let's Encrypt" :
+                    defaultCA === 'letsencrypt_staging' ? "Let's Encrypt (Staging)" :
                     defaultCA === 'zerossl' ? 'ZeroSSL' :
                     defaultCA === 'google' ? 'Google Trust Services' :
                     defaultCA === 'buypass' ? 'BuyPass Go' :
                     defaultCA === 'actalis' ? 'Actalis' :
                     defaultCA === 'sslcom' ? 'SSL.com' :
-                    defaultCA === 'digicert' ? 'DigiCert' : 'Private CA';
+                    defaultCA === 'digicert' ? 'DigiCert' :
+                    defaultCA === 'private_ca' ? 'Private CA' : defaultCA;
                 throw new Error('Email address is required in the ' + caDisplayName + ' configuration section');
             }
 
@@ -1886,6 +1893,7 @@
         // Map CA provider values to config IDs
         var caProviderToConfigId = {
             'letsencrypt': 'letsencrypt-config',
+            'letsencrypt_staging': 'letsencrypt-staging-config',
             'zerossl': 'zerossl-config',
             // The DNS tab already owns id="google-config" for the Google DNS
             // provider; the CA panel uses a distinct id so getElementById does
@@ -1899,7 +1907,7 @@
         };
 
         // Hide all CA configuration panels and disable their required fields
-        var caConfigs = ['letsencrypt-config', 'zerossl-config', 'google-ca-config', 'buypass-config', 'actalis-config', 'digicert-config', 'sslcom-config', 'private-ca-config'];
+        var caConfigs = ['letsencrypt-config', 'letsencrypt-staging-config', 'zerossl-config', 'google-ca-config', 'buypass-config', 'actalis-config', 'digicert-config', 'sslcom-config', 'private-ca-config'];
         caConfigs.forEach(function (configId) {
             var element = document.getElementById(configId);
             if (element) {
@@ -1931,6 +1939,9 @@
             switch (caProvider) {
                 case 'letsencrypt':
                     hintElement.textContent = 'Enter your email address and test Let\'s Encrypt connection';
+                    break;
+                case 'letsencrypt_staging':
+                    hintElement.textContent = 'Staging issues untrusted test certificates. Email falls back to the Let\'s Encrypt one when left empty';
                     break;
                 case 'zerossl':
                     hintElement.textContent = 'Enter EAB credentials and email, then test ZeroSSL connection';
@@ -1974,8 +1985,18 @@
                 missingFields.push('Email');
             }
             config = {
-                environment: document.getElementById('letsencrypt-environment').value,
                 email: leEmail
+            };
+        } else if (caProvider === 'letsencrypt_staging') {
+            // Mirror the backend aliasing: staging falls back to the
+            // Let's Encrypt account email when its own field is empty.
+            var lsEmail = document.getElementById('letsencrypt-staging-email').value ||
+                document.getElementById('letsencrypt-email').value;
+            if (!lsEmail.trim()) {
+                missingFields.push('Email');
+            }
+            config = {
+                email: lsEmail
             };
         } else if (caProvider === 'zerossl') {
             var zsEabKid = document.getElementById('zerossl-eab-kid').value;
@@ -2326,17 +2347,28 @@
     function loadCAProviderSettings(settings) {
         // Set default CA provider
         var defaultCA = settings.default_ca || 'letsencrypt';
-        document.getElementById('default-ca').value = defaultCA;
+        var defaultCASelect = document.getElementById('default-ca');
+        defaultCASelect.value = defaultCA;
+        if (defaultCASelect.value !== defaultCA) {
+            // Unknown CA key (e.g. cached old JS against a newer backend):
+            // append it as a raw option so the stored selection stays
+            // visible instead of the select silently flipping to another CA.
+            // (A save still requires an email source for the key, so the
+            // validation below blocks it rather than posting blind.)
+            var unknownOption = document.createElement('option');
+            unknownOption.value = defaultCA;
+            unknownOption.textContent = defaultCA;
+            defaultCASelect.appendChild(unknownOption);
+            defaultCASelect.value = defaultCA;
+        }
         toggleCAProviderConfig();
 
         // Load CA provider configurations
         var caProviders = settings.ca_providers || {};
 
-        // Load Let's Encrypt settings
+        // Load Let's Encrypt settings (the legacy 'environment' field is
+        // migrated away server-side; see #279)
         var letsencryptConfig = caProviders.letsencrypt || {};
-        if (letsencryptConfig.environment) {
-            document.getElementById('letsencrypt-environment').value = letsencryptConfig.environment;
-        }
         if (letsencryptConfig.email) {
             document.getElementById('letsencrypt-email').value = letsencryptConfig.email;
         }
@@ -2357,6 +2389,12 @@
         }
         if (googleConfig.email) {
             document.getElementById('google-email').value = googleConfig.email;
+        }
+
+        // Load Let's Encrypt (Staging) settings
+        var letsencryptStagingConfig = caProviders.letsencrypt_staging || {};
+        if (letsencryptStagingConfig.email) {
+            document.getElementById('letsencrypt-staging-email').value = letsencryptStagingConfig.email;
         }
 
         // Load BuyPass settings
@@ -2478,11 +2516,15 @@
     function collectCAProviderSettings() {
         var caProviders = {};
 
-        // Let's Encrypt configuration
-        // Let's Encrypt configuration
+        // Let's Encrypt configuration. The legacy 'environment' field is
+        // gone (#279): staging is the letsencrypt_staging CA entry.
         caProviders.letsencrypt = {
-            environment: document.getElementById('letsencrypt-environment').value || 'production',
             email: document.getElementById('letsencrypt-email').value || ''
+        };
+
+        // Let's Encrypt (Staging) configuration
+        caProviders.letsencrypt_staging = {
+            email: document.getElementById('letsencrypt-staging-email').value || ''
         };
 
         // ZeroSSL configuration

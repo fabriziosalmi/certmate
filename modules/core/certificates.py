@@ -802,18 +802,40 @@ class CertificateManager:
                 if settings is None:
                     settings = self.settings_manager.load_settings()
                 ca_provider = settings.get('default_ca', 'letsencrypt')
-            
+
+            # Back-compat (#279): the legacy per-cert staging boolean maps
+            # onto the dedicated staging CA entry, and the boolean is derived
+            # from the entry from here on. Keeping both views coherent means
+            # the no-ca_manager fallback below (which only knows --staging)
+            # and metadata stay correct whichever way the caller asked.
+            if staging and ca_provider == 'letsencrypt':
+                ca_provider = 'letsencrypt_staging'
+            staging = staging or ca_provider == 'letsencrypt_staging'
+
             logger.info(f"Using CA provider: {ca_provider}")
-            
+
             # Get CA account configuration if CA manager is available
             ca_account_config = None
+            used_ca_account_id = None
             if self.ca_manager:
                 try:
                     ca_account_config, used_ca_account_id = self.ca_manager.get_ca_config(ca_provider, ca_account_id)
                     logger.info(f"Using CA account: {used_ca_account_id}")
                 except Exception as e:
-                    logger.warning(f"Could not get CA config, using default Let's Encrypt: {e}")
-                    ca_provider = 'letsencrypt'
+                    if ca_provider in ('letsencrypt', 'letsencrypt_staging'):
+                        # Let's Encrypt needs no per-account credentials; with
+                        # no saved CA config the plain-certbot branch below
+                        # handles it (staging via --staging). Do NOT reset the
+                        # provider — that would silently flip a staging
+                        # request to production issuance.
+                        logger.info(f"No saved CA config for {ca_provider}; using certbot defaults: {e}")
+                    else:
+                        # Preserve the caller's staging intent across the
+                        # fallback: resetting to production letsencrypt here
+                        # would turn a test request into trusted production
+                        # issuance (and burn real rate limits).
+                        ca_provider = 'letsencrypt_staging' if staging else 'letsencrypt'
+                        logger.warning(f"Could not get CA config, falling back to {ca_provider}: {e}")
             
             # Resolve challenge type from settings if not provided
             if not challenge_type:
@@ -1093,7 +1115,10 @@ class CertificateManager:
                         logger.info(f"Copied {cert_file} to {dst_file}")
                         cert_files[cert_file] = data
             
-            # Save metadata
+            # Save metadata. 'staging' is kept alongside the new
+            # 'ca_provider' key for backward compatibility: external storage
+            # backends (Azure KV tags) and pre-#279 readers still understand
+            # it, and it is now always derivable from the provider.
             metadata = {
                 'domain': domain,
                 'san_domains': all_domains[1:] if len(all_domains) > 1 else [],
@@ -1102,7 +1127,9 @@ class CertificateManager:
                 'created_at': utc_now_iso(),
                 'email': email,
                 'staging': staging,
-                'account_id': account_id
+                'account_id': account_id,
+                'ca_provider': ca_provider,
+                'ca_account_id': used_ca_account_id
             }
             if domain_alias:
                 metadata['domain_alias'] = domain_alias
@@ -1131,7 +1158,8 @@ class CertificateManager:
                 'domain': domain,
                 'dns_provider': dns_provider,
                 'duration': duration,
-                'staging': staging
+                'staging': staging,
+                'ca_provider': ca_provider
             }
             
         except subprocess.TimeoutExpired:
@@ -1440,13 +1468,26 @@ class CertificateManager:
             
             # Infer DNS provider based on domain patterns and current settings
             dns_provider = self._infer_dns_provider(domain, settings)
-            
+
+            # The issuer CN is inspectable on disk, so staging does not have
+            # to be assumed: Let's Encrypt staging issuers carry "(STAGING)"
+            # (current) or "Fake LE" (historical) markers.
+            staging = False
+            try:
+                from cryptography import x509
+                cert = x509.load_pem_x509_certificate(cert_file.read_bytes())
+                issuer = cert.issuer.rfc4514_string().lower()
+                staging = 'staging' in issuer or 'fake le' in issuer
+            except Exception as e:
+                logger.debug(f"Could not inspect issuer for {domain}, assuming production: {e}")
+
             metadata = {
                 'domain': domain,
                 'dns_provider': dns_provider,
                 'created_at': 'unknown',  # We don't know the exact creation time
                 'email': settings.get('email', 'unknown'),
-                'staging': False,  # Assume production certificates
+                'staging': staging,
+                'ca_provider': 'letsencrypt_staging' if staging else None,
                 'account_id': None,
                 'inferred': True  # Mark as inferred for debugging
             }
