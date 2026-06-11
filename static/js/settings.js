@@ -2346,17 +2346,26 @@
     function loadCAProviderSettings(settings) {
         // Set default CA provider
         var defaultCA = settings.default_ca || 'letsencrypt';
-        document.getElementById('default-ca').value = defaultCA;
+        var defaultCASelect = document.getElementById('default-ca');
+        defaultCASelect.value = defaultCA;
+        if (defaultCASelect.value !== defaultCA) {
+            // Unknown CA key (e.g. cached old JS against a newer backend):
+            // append it as a raw option so a settings save round-trips the
+            // stored value instead of silently flipping the default CA.
+            var unknownOption = document.createElement('option');
+            unknownOption.value = defaultCA;
+            unknownOption.textContent = defaultCA;
+            defaultCASelect.appendChild(unknownOption);
+            defaultCASelect.value = defaultCA;
+        }
         toggleCAProviderConfig();
 
         // Load CA provider configurations
         var caProviders = settings.ca_providers || {};
 
-        // Load Let's Encrypt settings
+        // Load Let's Encrypt settings (the legacy 'environment' field is
+        // migrated away server-side; see #279)
         var letsencryptConfig = caProviders.letsencrypt || {};
-        if (letsencryptConfig.environment) {
-            document.getElementById('letsencrypt-environment').value = letsencryptConfig.environment;
-        }
         if (letsencryptConfig.email) {
             document.getElementById('letsencrypt-email').value = letsencryptConfig.email;
         }
@@ -2504,10 +2513,9 @@
     function collectCAProviderSettings() {
         var caProviders = {};
 
-        // Let's Encrypt configuration
-        // Let's Encrypt configuration
+        // Let's Encrypt configuration. The legacy 'environment' field is
+        // gone (#279): staging is the letsencrypt_staging CA entry.
         caProviders.letsencrypt = {
-            environment: document.getElementById('letsencrypt-environment').value || 'production',
             email: document.getElementById('letsencrypt-email').value || ''
         };
 

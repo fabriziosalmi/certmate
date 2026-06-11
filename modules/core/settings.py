@@ -1282,6 +1282,26 @@ class SettingsManager:
                 settings['domains'] = new_domains
                 migrated = True
 
+        # Migration 4 (#279): the letsencrypt 'environment' field is retired —
+        # staging is now the letsencrypt_staging CA entry. The field never
+        # affected issuance (certificates were always production), so it is
+        # dropped without flipping default_ca; users who want staging select
+        # the new entry explicitly. This must stay idempotent and permanent:
+        # a stale settings tab POSTing the old payload shape or a pre-#279
+        # backup restore can reintroduce the field at any time.
+        ca_providers = settings.get('ca_providers')
+        if isinstance(ca_providers, dict):
+            le_config = ca_providers.get('letsencrypt')
+            if isinstance(le_config, dict):
+                if le_config.pop('environment', None) is not None:
+                    logger.info("Migrating settings: dropping retired letsencrypt 'environment' field (#279)")
+                    migrated = True
+                accounts = le_config.get('accounts')
+                if isinstance(accounts, dict):
+                    for account in accounts.values():
+                        if isinstance(account, dict) and account.pop('environment', None) is not None:
+                            migrated = True
+
         # Migration 3: Ensure metadata exists for existing certificates
         if migrated:
             self._ensure_certificate_metadata()
