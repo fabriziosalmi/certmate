@@ -34,14 +34,21 @@ TEST_EMAIL = os.environ.get("CERTMATE_TEST_EMAIL", "test@gpfree.org")
 
 
 def _docker(*args, check=True, capture=True):
-    """Run a docker command."""
+    """Run a docker command.
+
+    The timeout must absorb a cold-cache image build while the
+    multiplatform release workflows hammer the same self-hosted docker
+    daemon — the v2.12.0 main-branch CI run failed exactly that way
+    (the test-image build timed out at 300s next to two concurrent
+    buildx runs for main and the release tag).
+    """
     cmd = ["docker", *args]
     return subprocess.run(
         cmd,
         check=check,
         capture_output=capture,
         text=True,
-        timeout=300,
+        timeout=int(os.environ.get("CERTMATE_TEST_DOCKER_TIMEOUT", "900")),
     )
 
 
