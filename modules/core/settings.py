@@ -1304,15 +1304,27 @@ class SettingsManager:
 
         # Migration 3: Ensure metadata exists for existing certificates
         if migrated:
-            self._ensure_certificate_metadata()
+            # Pass the in-memory dict: the migrated settings are not on disk
+            # yet (load_settings saves them after this returns), so a nested
+            # load_settings() here would re-read the dirty file, re-fire the
+            # migration and recurse without bound — a RecursionError storm
+            # with hundreds of redundant saves whose '_migration' backups
+            # evict every pre-upgrade restore point from retention.
+            self._ensure_certificate_metadata(settings)
 
         return settings, migrated
 
-    def _ensure_certificate_metadata(self):
-        """Ensure all existing certificates have metadata.json files"""
+    def _ensure_certificate_metadata(self, settings=None):
+        """Ensure all existing certificates have metadata.json files.
+
+        ``settings`` lets migration-time callers supply the in-memory dict;
+        calling load_settings() from inside the migration path re-enters the
+        still-unmigrated file and recurses (see _migrate_settings_format).
+        """
         try:
             cert_dir = self.file_ops.cert_dir
-            settings = self.load_settings()
+            if settings is None:
+                settings = self.load_settings()
 
             # iter_cert_domain_dirs already requires a cert.pem, so we never
             # try to write metadata into lost+found or other non-cert dirs.

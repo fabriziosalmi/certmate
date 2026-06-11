@@ -14,6 +14,7 @@ at any time.
 """
 
 import json
+from unittest.mock import patch
 
 import pytest
 
@@ -96,6 +97,44 @@ def test_absent_ca_providers_subtree_is_untouched(settings_manager):
     _seed(settings_manager, {'email': 'a@b.it', 'domains': []})
     settings = settings_manager.load_settings()
     assert 'environment' not in json.dumps(settings.get('ca_providers', {}))
+
+
+def test_migration_does_not_reenter_load_settings(settings_manager):
+    """Regression (adversarial review): any migration setting migrated=True
+    triggers _ensure_certificate_metadata, which used to call load_settings()
+    before the cleaned settings were persisted — re-firing the migration in
+    an unbounded recursion. The RecursionError was swallowed and the state
+    self-healed, but the unwind performed ~250 redundant saves whose
+    '_migration' backups evicted every pre-upgrade restore point from the
+    50-file retention window. The helper now receives the in-memory dict."""
+    _seed(settings_manager, {
+        'email': 'a@b.it',
+        'ca_providers': {'letsencrypt': {'environment': 'production'}},
+    })
+    depth = {'current': 0, 'max': 0}
+    original = SettingsManager.load_settings
+
+    def tracking(self, *args, **kwargs):
+        depth['current'] += 1
+        depth['max'] = max(depth['max'], depth['current'])
+        try:
+            return original(self, *args, **kwargs)
+        finally:
+            depth['current'] -= 1
+
+    with patch.object(SettingsManager, 'load_settings', tracking):
+        settings = settings_manager.load_settings()
+
+    assert 'environment' not in settings['ca_providers']['letsencrypt']
+    assert depth['max'] <= 2, (
+        f"load_settings re-entered {depth['max']} deep during migration"
+    )
+    backups = list(
+        (settings_manager.file_ops.backup_dir / 'unified').glob('backup_*.zip*')
+    )
+    assert len(backups) <= 2, (
+        f"migration created {len(backups)} backup archives - the storm is back"
+    )
 
 
 def test_stale_post_payload_is_remigrated(settings_manager):
