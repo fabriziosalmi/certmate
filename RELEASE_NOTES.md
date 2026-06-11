@@ -1,3 +1,26 @@
+## v2.12.0 (Feature — staging as a Certificate Authority)
+
+Closes [#279](https://github.com/fabriziosalmi/certmate/issues/279): the "use staging environment" option is gone; Let's Encrypt staging is now a first-class CA entry, consistent with how every other authority is selected.
+
+### Features
+
+- **"Let's Encrypt (Staging)" CA entry** — selectable per-certificate and as the default CA, pinned to the staging directory, with its own settings panel. The account email falls back to the Let's Encrypt one when left empty (same aliasing applies at issuance time). Certificate metadata now records `ca_provider`/`ca_account_id` (projected through Azure Key Vault tags), with the legacy `staging` boolean kept alongside for backward compatibility.
+
+### Behavior changes
+
+- **The per-certificate "Use staging environment" checkbox is removed** — it had no wiring: no web or API create path ever carried it, so nothing that worked before stops working.
+- **The letsencrypt "Environment" settings field is removed and migrated away** — this field was never consulted at issuance time: users who selected "Staging (Testing)" were issued PRODUCTION certificates all along. The migration drops the field without flipping the default CA, so effective issuance behavior is preserved; anyone who wants staging selects the new entry explicitly. The migration is idempotent and permanent (a stale settings tab or pre-2.12.0 backup restore reintroducing the field gets cleaned on next load).
+- **A staging request can no longer be silently downgraded to production** — the CA-config failure path used to reset any provider to production Let's Encrypt; for the Let's Encrypt family it now falls through to plain certbot, which handles staging via `--staging`.
+- The legacy `staging=true` parameter on the internal create path still works and maps onto the staging CA entry.
+
+### Renewals
+
+Renewals are CA-stable by construction — certbot replays the ACME endpoint from its own renewal conf and CertMate never recomputes it (now pinned by test). Existing staging certificates keep renewing against staging; converting one to production requires a reissue.
+
+### Testing
+
+- New suites: staging-as-CA invariant pins (directory pin, boolean mapping, no-silent-production-flip, renewal endpoint invariant) and settings-migration coverage. The CA wiring-consistency suite pins the new entry across every selection surface.
+
 ## v2.11.4 (Feature — Actalis CA provider)
 
 Adds Actalis as a first-class Certificate Authority — a European (Italian) alternative to Let's Encrypt ([#287](https://github.com/fabriziosalmi/certmate/issues/287)) — and fixes the EAB credential wiring that silently broke every EAB CA configured from the web UI.
