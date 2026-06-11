@@ -897,6 +897,14 @@ def create_api_resources(api, models, managers):
 
             except DomainOutOfScope as e:
                 return {'error': str(e), 'code': 'DOMAIN_OUT_OF_SCOPE'}, 403
+            except FileExistsError as e:
+                # Previously fell through to the generic 500. The certificate
+                # already exists: 409 with a pointer to the reissue endpoint.
+                return {
+                    'error': str(e),
+                    'code': 'CERTIFICATE_ALREADY_EXISTS',
+                    'hint': 'Use renew to refresh it, or POST /api/certificates/<domain>/reissue to change its configuration.'
+                }, 409
             except ValueError as e:
                 # Validation / configuration errors raised by the service.
                 error_msg = str(e)
@@ -1136,6 +1144,22 @@ def create_api_resources(api, models, managers):
                     return {
                         'error': f"DNS provider '{new_dns_provider}' account "
                                  f"'{new_account_id or 'default'}' is not configured",
+                        'hint': 'Configure the DNS provider credentials in Settings first.'
+                    }, 400
+
+            # alias_dns_provider was previously accepted unvalidated; an
+            # unconfigured value only surfaced at renew time as a baffling
+            # failure. Validate it the same way as dns_provider.
+            if new_alias_dns_provider:
+                settings = settings_manager.load_settings()
+                alias_config, _ = dns_manager.get_dns_provider_account_config(
+                    new_alias_dns_provider,
+                    new_account_id,
+                    settings,
+                )
+                if not alias_config:
+                    return {
+                        'error': f"Alias DNS provider '{new_alias_dns_provider}' is not configured",
                         'hint': 'Configure the DNS provider credentials in Settings first.'
                     }, 400
 
@@ -1739,6 +1763,97 @@ def create_api_resources(api, models, managers):
                 if event_bus:
                     event_bus.publish('certificate_failed', {'domain': domain, 'error': str(e)})
                 return {'error': 'Certificate renewal failed'}, 500
+
+    class CertificateReissue(Resource):
+        @api.doc(security='Bearer')
+        @api.expect(models['reissue_cert_model'])
+        @auth_manager.require_role('operator')
+        def post(self, domain):
+            """Edit a certificate's configuration and reissue it in place (#267).
+
+            Omitted fields keep the values the certificate was issued with
+            (read from its metadata), so extending or dropping SANs never
+            requires re-entering DNS/alias/CA configuration. The old
+            certificate keeps being served until certbot succeeds.
+            """
+            try:
+                data = api.payload or {}
+                _, err = _validate_domain_path(domain, file_ops.cert_dir)
+                if err:
+                    return {'error': err}, 400
+                user = getattr(request, 'current_user', None) or {}
+
+                kwargs = dict(
+                    domain=domain,
+                    san_domains=data.get('san_domains'),
+                    dns_provider=data.get('dns_provider'),
+                    account_id=data.get('account_id'),
+                    ca_provider=data.get('ca_provider'),
+                    challenge_type=data.get('challenge_type'),
+                    domain_alias=data.get('domain_alias'),
+                    key_type=data.get('key_type'),
+                    key_size=data.get('key_size'),
+                    elliptic_curve=data.get('elliptic_curve'),
+                    user=user,
+                    ip_address=request.remote_addr,
+                )
+
+                if _wants_async(data) and cert_executor is not None:
+                    prepared = cert_service.prepare_reissue(**kwargs)
+                    job_id = cert_executor.submit(
+                        'reissue', domain,
+                        lambda: cert_service.issue_reissue(prepared),
+                    )
+                    return _job_accepted(job_id, 'reissue', domain), 202
+
+                result = cert_service.issue_reissue(
+                    cert_service.prepare_reissue(**kwargs)
+                )
+
+                event_bus = current_app.config.get('EVENT_BUS')
+                if event_bus:
+                    # A reissue refreshes the domain's certificate: consumers
+                    # (deploy hooks, notifications) react as for a renewal.
+                    event_bus.publish('certificate_renewed', {'domain': domain})
+
+                return {
+                    'message': f'Certificate reissued successfully for {domain}',
+                    'domain': domain,
+                    'dns_provider': result.get('dns_provider'),
+                    'ca_provider': result.get('ca_provider'),
+                    'duration': result.get('duration')
+                }, 200
+
+            except FileNotFoundError as e:
+                return {'error': str(e), 'code': 'CERTIFICATE_NOT_FOUND'}, 404
+            except DomainOutOfScope as e:
+                return {'error': str(e), 'code': 'DOMAIN_OUT_OF_SCOPE'}, 403
+            except ValueError as e:
+                return {'error': str(e)}, 400
+            except DomainOperationInProgress as e:
+                # Domain busy is not a failure; no failure event.
+                return {'error': str(e), 'code': 'DOMAIN_OPERATION_IN_PROGRESS'}, 409
+            except RuntimeError as e:
+                error_msg = str(e)
+                hint = 'Check DNS provider credentials and ensure DNS records can be created.'
+                if 'rate limit' in error_msg.lower():
+                    hint = "You've hit the certificate authority's rate limit. Wait before trying again."
+                event_bus = current_app.config.get('EVENT_BUS')
+                if event_bus:
+                    event_bus.publish('certificate_failed', {'domain': domain, 'error': error_msg})
+                return {
+                    'error': f'Certificate reissue failed: {error_msg}',
+                    'hint': hint + ' The previous certificate is still in place.'
+                }, 422
+            except Exception as e:
+                logger.error(f"Certificate reissue failed for {domain}: {str(e)}")
+                event_bus = current_app.config.get('EVENT_BUS')
+                if event_bus:
+                    event_bus.publish('certificate_failed', {'domain': domain, 'error': str(e)})
+                return {
+                    'error': 'Certificate reissue failed unexpectedly',
+                    'hint': 'Check application logs. The previous certificate is still in place.'
+                }, 500
 
     class CertificateJob(Resource):
         @api.doc(security='Bearer')
@@ -3108,6 +3223,7 @@ def create_api_resources(api, models, managers):
         'DownloadCertificate': DownloadCertificate,
         'DownloadCertificateFile': DownloadCertificateFile,
         'RenewCertificate': RenewCertificate,
+        'CertificateReissue': CertificateReissue,
         'CertificateJob': CertificateJob,
         'CertificateAutoRenew': CertificateAutoRenew,
         'CertificateRunDeploy': CertificateRunDeploy,

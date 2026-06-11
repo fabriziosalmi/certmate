@@ -156,6 +156,9 @@ def create_api_models(api):
         'domain_alias': fields.String(description='DNS alias target used for DNS-01 validation'),
         'alias_dns_provider': fields.String(description='DNS provider used to manage the alias target'),
         'san_domains': fields.List(fields.String, description='Subject Alternative Names included in the certificate'),
+        'ca_provider': fields.String(description='CA provider the certificate was issued with (from metadata; null for older certificates)'),
+        'challenge_type': fields.String(description='Challenge type used at issuance (from metadata)'),
+        'account_id': fields.String(description='DNS provider account used at issuance (from metadata)'),
         'total_issued': fields.Integer(description='Total certificates issued'),
         'total_active': fields.Integer(description='Total active certificates'),
         'total_revoked': fields.Integer(description='Total revoked certificates'),
@@ -230,6 +233,30 @@ def create_api_models(api):
             description="ECDSA curve — required when key_type='ecdsa'.",
             enum=['secp256r1', 'secp384r1']
         )
+    })
+
+    reissue_cert_model = api.model('ReissueCertificate', {
+        'san_domains': fields.List(
+            fields.String,
+            description='Replacement SAN set. Omit to keep the current SANs; '
+                        'pass [] to drop every SAN. The set replaces the '
+                        "lineage's domains (expand and shrink)."),
+        'dns_provider': fields.String(description='Omit to keep the value the certificate was issued with'),
+        'account_id': fields.String(description='Omit to keep the value the certificate was issued with'),
+        'ca_provider': fields.String(description='Omit to keep the value the certificate was issued with'),
+        'challenge_type': fields.String(description='Omit to keep the value the certificate was issued with'),
+        'domain_alias': fields.String(description='Omit to keep the current alias; pass "" to clear it'),
+        'key_type': fields.String(
+            description='Omit to keep the existing key shape (no key flags are '
+                        'sent and certbot preserves the lineage key). Set to '
+                        'deliberately re-key.',
+            enum=['rsa', 'ecdsa']
+        ),
+        'key_size': fields.Integer(description="RSA key size — required when key_type='rsa'.",
+                                   enum=[2048, 3072, 4096]),
+        'elliptic_curve': fields.String(description="ECDSA curve — required when key_type='ecdsa'.",
+                                        enum=['secp256r1', 'secp384r1']),
+        'async': fields.Boolean(description='Defer issuance to a background job (202 + job id)')
     })
 
     # Cache models
@@ -421,6 +448,7 @@ def create_api_models(api):
         'deployment_status_model': deployment_status_model,
         'certificate_model': certificate_model,
         'create_cert_model': create_cert_model,
+        'reissue_cert_model': reissue_cert_model,
         'cache_entry_model': cache_entry_model,
         'backup_metadata_model': backup_metadata_model,
         'backup_list_model': backup_list_model,

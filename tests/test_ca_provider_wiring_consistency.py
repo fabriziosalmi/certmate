@@ -35,13 +35,19 @@ def _read(rel_path):
 
 
 def _models_enum():
-    """Extract the ca_provider enum literal from the create-cert model."""
+    """Extract the ca_provider enum literal from the create-cert model.
+
+    Anchored on the create model's exact description: other models also
+    carry a ca_provider field (certificate_model surfaces it without an
+    enum), and an unanchored non-greedy match would slide across them
+    onto an unrelated enum.
+    """
     src = _read('modules/api/models.py')
     match = re.search(
-        r"'ca_provider': fields\.String\(.*?enum=\[(.*?)\]",
+        r"'ca_provider': fields\.String\(description='CA provider \(optional\)',\s*enum=\[(.*?)\]",
         src, re.S,
     )
-    assert match, 'ca_provider enum not found in modules/api/models.py'
+    assert match, 'create-cert ca_provider enum not found in modules/api/models.py'
     return set(re.findall(r"'([\w-]+)'", match.group(1)))
 
 
