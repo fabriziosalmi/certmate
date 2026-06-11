@@ -1,3 +1,28 @@
+## v2.13.0 (Feature — edit & reissue certificates)
+
+Closes [#267](https://github.com/fabriziosalmi/certmate/issues/267): extend or drop a certificate's SAN entries — and change its DNS/alias/CA configuration — without delete + recreate.
+
+### Features
+
+- **`POST /api/certificates/<domain>/reissue`** — edits a certificate's configuration and reissues it in place over the existing certbot lineage (`--cert-name` + `--renew-with-new-domains`: the new domain set replaces the old, expand and shrink in one step, reusing the ACME account). Omitted fields keep the values the certificate was issued with, read from its metadata — DNS provider, account, alias, CA and challenge type never need re-entering. Explicit semantics: `san_domains` omitted keeps the current set, `[]` drops every SAN; `domain_alias: ""` clears the alias. Sync and async (202 + job poll), operator role, scope enforced on the final SAN set including inherited entries.
+- **Edit & Reissue in the dashboard** — new action in the certificate detail panel opens the create form prefilled from the certificate's data (wildcard checkbox reverse-mapped out of the SAN list, primary domain readonly — it is the certificate's identity). Dropping SANs raises a danger confirmation listing the removed names.
+- Certificate listings now surface `ca_provider`, `challenge_type` and `account_id` from metadata (null for certificates issued before these were recorded).
+
+### Safety properties
+
+- **The old certificate keeps being served until certbot succeeds** — a failed reissue leaves files, metadata and storage untouched (pinned by test).
+- **Key shape is preserved** — metadata does not record the key shape, so the reissue path sends no key flags and certbot keeps the lineage key; passing an explicit key option is a deliberate re-key. Without this rule a reissue would silently re-key certificates to the global defaults.
+- Renewals after a reissue pick up the new domain set automatically (certbot replays its updated renewal conf).
+
+### Fixes
+
+- The create endpoint's "certificate already exists" error now answers HTTP 409 with a pointer to the reissue endpoint instead of falling through to a generic 500.
+- `PATCH /api/certificates/<domain>` now validates `alias_dns_provider` instead of accepting it blind (an unconfigured value used to surface only at renew time).
+
+### Notes
+
+- Changing the **primary** domain remains delete + recreate: the primary is the certificate's identity (certbot lineage name, directory, settings key, API path). Promoting a SAN to primary is a rename, not an edit.
+
 ## v2.12.1 (Feature — custom-script DNS provider)
 
 Closes [#286](https://github.com/fabriziosalmi/certmate/issues/286): a Cert Warden-style `custom-script` DNS provider that drives admin-supplied hook scripts through certbot's core `--manual` mode. Any DNS provider without a certbot plugin — Oracle Cloud ([#285](https://github.com/fabriziosalmi/certmate/issues/285)), in-house DNS, appliance APIs — becomes usable with two shell scripts and zero plugin installs.

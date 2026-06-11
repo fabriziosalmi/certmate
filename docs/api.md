@@ -221,7 +221,47 @@ curl http://localhost:5000/api/client-certs/cert-001 \
 
 ---
 
-#### 4. Download Certificate Files
+#### 4. Reissue Certificate (edit configuration)
+
+**Endpoint**: `POST /certificates/<domain>/reissue`
+
+Edit a certificate's configuration and reissue it in place — extend or drop
+SAN entries without delete + recreate. Omitted fields keep the values the
+certificate was issued with (read from its metadata), so DNS/alias/CA
+configuration never needs re-entering. The current certificate keeps being
+served until the reissue succeeds. The key shape is preserved unless
+explicitly changed (no key flags are sent and certbot keeps the lineage key).
+
+**Request Body** (all fields optional):
+```json
+{
+  "san_domains": ["www.example.com", "api.example.com"],
+  "domain_alias": "",
+  "async": true
+}
+```
+
+- `san_domains`: replacement SAN set — omit to keep, `[]` to drop every SAN
+- `domain_alias`: omit to keep, `""` to clear
+- `dns_provider`, `account_id`, `ca_provider`, `challenge_type`: omit to keep
+- `key_type`/`key_size`/`elliptic_curve`: omit to keep the existing key shape
+- `async`: defer issuance to a background job (202 + job id, poll `GET /certificates/jobs/<job_id>`)
+
+**Response** (200 OK, or 202 Accepted with `async`): message, domain, dns_provider, ca_provider, duration.
+
+**Errors**: 404 when no certificate exists for the domain (use create), 403 scope, 400 validation, 409 operation in progress, 422 certbot failure (the previous certificate is still in place).
+
+**Example**:
+```bash
+curl -X POST http://localhost:5000/api/certificates/example.com/reissue \
+ -H "Authorization: Bearer TOKEN" \
+ -H "Content-Type: application/json" \
+ -d '{"san_domains": ["www.example.com", "api.example.com"]}'
+```
+
+---
+
+#### 5. Download Certificate Files
 
 **Endpoint**: `GET /client-certs/<identifier>/download/<type>`
 
@@ -255,7 +295,7 @@ curl http://localhost:5000/api/client-certs/cert-001/download/csr \
 
 ---
 
-#### 5. Revoke Certificate
+#### 6. Revoke Certificate
 
 **Endpoint**: `POST /client-certs/<identifier>/revoke`
 
@@ -289,7 +329,7 @@ curl -X POST http://localhost:5000/api/client-certs/cert-001/revoke \
 
 ---
 
-#### 6. Renew Certificate
+#### 7. Renew Certificate
 
 **Endpoint**: `POST /client-certs/<identifier>/renew`
 
@@ -315,7 +355,7 @@ curl -X POST http://localhost:5000/api/client-certs/cert-001/renew \
 
 ---
 
-#### 7. Get Statistics
+#### 8. Get Statistics
 
 **Endpoint**: `GET /client-certs/stats`
 
@@ -346,7 +386,7 @@ curl http://localhost:5000/api/client-certs/stats \
 
 ---
 
-#### 8. Batch Import Certificates
+#### 9. Batch Import Certificates
 
 **Endpoint**: `POST /client-certs/batch`
 
@@ -403,7 +443,7 @@ curl -X POST http://localhost:5000/api/client-certs/batch \
 
 ### OCSP & CRL
 
-#### 9. OCSP Status Query
+#### 10. OCSP Status Query
 
 **Endpoint**: `GET /ocsp/status/<serial_number>`
 
@@ -429,7 +469,7 @@ curl http://localhost:5000/api/ocsp/status/12345678 \
 
 ---
 
-#### 10. CRL Distribution
+#### 11. CRL Distribution
 
 **Endpoint**: `GET /crl/download/<format_type>`
 
@@ -475,7 +515,7 @@ curl http://localhost:5000/api/crl/download/info \
 
 ---
 
-#### 11. Download Domain Certificate Files
+#### 12. Download Domain Certificate Files
 
 **Endpoint**: `GET /certificates/<domain>/download`
 
