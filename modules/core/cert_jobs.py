@@ -28,7 +28,14 @@ _TERMINAL = ('succeeded', 'failed')
 # Success event per issuance kind, mirroring the synchronous routes. Renewal
 # failures (other than "busy") emit certificate_failed like the sync API renew
 # route; create failures emit nothing, also matching the sync create route.
-_SUCCESS_EVENT = {'create': 'certificate_created', 'renew': 'certificate_renewed'}
+# Reissue (#267) emits certificate_renewed: the domain's certificate was
+# refreshed, and consumers (deploy hooks, notifications) must react exactly
+# as they do for a renewal.
+_SUCCESS_EVENT = {
+    'create': 'certificate_created',
+    'renew': 'certificate_renewed',
+    'reissue': 'certificate_renewed',
+}
 
 
 def _clamp_env_int(name, default, lo, hi):
@@ -123,7 +130,7 @@ class IssuanceExecutor:
             logger.error("Async %s job %s failed for %s: %s", kind, job_id, domain, e)
             # Mirror the sync renew route: a real renewal failure emits
             # certificate_failed, but "domain busy" does not (busy != failure).
-            if kind == 'renew' and not busy:
+            if kind in ('renew', 'reissue') and not busy:
                 self._publish('certificate_failed', {'domain': domain, 'error': str(e)})
             self._set(job_id, status='failed', finished_at=utc_now_iso(),
                       error=str(e),

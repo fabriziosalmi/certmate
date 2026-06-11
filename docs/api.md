@@ -521,6 +521,46 @@ curl "http://localhost:5000/api/certificates/example.com/download?format=json" \
 
 ---
 
+#### 12. Reissue Domain Certificate (edit configuration)
+
+**Endpoint**: `POST /certificates/<domain>/reissue`
+
+Edit a certificate's configuration and reissue it in place — extend or drop
+SAN entries without delete + recreate. Omitted fields keep the values the
+certificate was issued with (read from its metadata), so DNS/alias/CA
+configuration never needs re-entering. The current certificate keeps being
+served until the reissue succeeds. The key shape is preserved unless
+explicitly changed (no key flags are sent and certbot keeps the lineage key).
+
+**Request Body** (all fields optional):
+```json
+{
+  "san_domains": ["www.example.com", "api.example.com"],
+  "domain_alias": "",
+  "async": true
+}
+```
+
+- `san_domains`: replacement SAN set — omit to keep, `[]` to drop every SAN
+- `domain_alias`: omit to keep, `""` to clear
+- `dns_provider`, `account_id`, `ca_provider`, `challenge_type`: omit to keep
+- `key_type`/`key_size`/`elliptic_curve`: omit to keep the existing key shape
+- `async`: defer issuance to a background job (202 + job id, poll `GET /certificates/jobs/<job_id>`)
+
+**Response** (200 OK, or 202 Accepted with `async`): message, domain, dns_provider, ca_provider, duration.
+
+**Errors**: 404 when no certificate exists for the domain (use create), 403 scope, 400 validation, 409 operation in progress, 422 certbot failure (the previous certificate is still in place).
+
+**Example**:
+```bash
+curl -X POST http://localhost:5000/api/certificates/example.com/reissue \
+ -H "Authorization: Bearer TOKEN" \
+ -H "Content-Type: application/json" \
+ -d '{"san_domains": ["www.example.com", "api.example.com"]}'
+```
+
+---
+
 ## Error Handling
 
 ### Error Response Format

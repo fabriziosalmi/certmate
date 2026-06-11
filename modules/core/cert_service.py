@@ -207,6 +207,144 @@ class CertificateService:
         logger.info("Ensured domain %s is in settings after certificate creation", _scrub_log(domain))
         return result
 
+    def prepare_reissue(self, *, domain, san_domains=None, dns_provider=None,
+                        account_id=None, ca_provider=None, challenge_type=None,
+                        domain_alias=None, alias_dns_provider=None,
+                        key_type=None, key_size=None,
+                        elliptic_curve=None, user=None, ip_address=None):
+        """Validate and resolve an edit-and-reissue request (#267) without
+        side effects, returning kwargs for :meth:`issue_reissue`.
+
+        Field semantics: ``None`` means "keep the current value from the
+        certificate's metadata" (so DNS-alias users never re-enter config);
+        an explicit value overrides; for ``domain_alias`` an empty string
+        clears the alias. ``san_domains=None`` keeps the current SAN set,
+        ``[]`` drops every SAN. Key options are intentionally NOT inherited:
+        metadata does not record the key shape, and omitting the flags makes
+        certbot keep the lineage's existing key (an explicit option here is
+        a deliberate re-key).
+
+        Raises ``FileNotFoundError`` when no certificate exists for *domain*
+        (a reissue edits something; creation is the create endpoint's job),
+        ``ValueError`` on bad input, :class:`DomainOutOfScope` on scope.
+        """
+        domain = (domain or '').strip()
+        ok, msg = validate_domain(domain)
+        if not ok:
+            raise ValueError(f'Invalid domain: {msg}')
+
+        cert_file = self._certs.cert_dir / domain / 'cert.pem'
+        if not cert_file.exists():
+            raise FileNotFoundError(
+                f'No certificate found for {domain}. Use create instead.'
+            )
+
+        metadata = self._certs._load_metadata(domain)
+
+        if san_domains is None:
+            san_domains = metadata.get('san_domains') or []
+        if not isinstance(san_domains, list):
+            raise ValueError('Invalid san_domains format')
+        if dns_provider is None:
+            dns_provider = metadata.get('dns_provider')
+        if account_id is None:
+            account_id = metadata.get('account_id')
+        if ca_provider is None:
+            ca_provider = metadata.get('ca_provider')
+        if challenge_type is None:
+            challenge_type = metadata.get('challenge_type')
+        if domain_alias is None:
+            domain_alias = metadata.get('domain_alias')
+        elif domain_alias == '':
+            domain_alias = None
+        if alias_dns_provider is None:
+            # The alias zone may live with a different provider than the
+            # primary (set via PATCH, issue #129); the reissue must keep
+            # running the alias hook with that account.
+            alias_dns_provider = metadata.get('alias_dns_provider')
+        if not domain_alias:
+            alias_dns_provider = None
+
+        if domain_alias:
+            ok, msg = validate_domain(domain_alias)
+            if not ok:
+                raise ValueError(f'Invalid domain_alias: {msg}')
+
+        # Scope covers the primary and the FINAL SAN set (kept + added):
+        # a scoped key must not be able to keep another tenant's SAN alive
+        # through inheritance any more than it could add it explicitly.
+        self._enforce_scope(domain, 'reissue', user, ip_address)
+        for san in san_domains:
+            san_clean = san.strip() if isinstance(san, str) else ''
+            if san_clean:
+                self._enforce_scope(san_clean, 'reissue_san', user, ip_address)
+
+        if key_type is not None or key_size is not None or elliptic_curve is not None:
+            ok, key_err = validate_key_options(key_type, key_size, elliptic_curve)
+            if not ok:
+                raise ValueError(key_err)
+
+        settings = self._settings.load_settings()
+        email = settings.get('email')
+        if not email:
+            raise ValueError('Email not configured')
+        if not ca_provider:
+            ca_provider = settings.get('default_ca', 'letsencrypt')
+        if not challenge_type:
+            challenge_type = settings.get('challenge_type', 'dns-01')
+        if challenge_type != 'http-01' and not dns_provider:
+            dns_provider = settings.get('dns_provider')
+            if not dns_provider:
+                raise ValueError('No DNS provider specified')
+
+        return {
+            'domain': domain,
+            'email': email,
+            'dns_provider': dns_provider,
+            'account_id': account_id,
+            'ca_provider': ca_provider,
+            'domain_alias': domain_alias,
+            'alias_dns_provider': alias_dns_provider,
+            'san_domains': san_domains,
+            'challenge_type': challenge_type,
+            'key_type': key_type,
+            'key_size': key_size,
+            'elliptic_curve': elliptic_curve,
+            '_settings_dns_provider': settings.get('dns_provider'),
+        }
+
+    def issue_reissue(self, prepared):
+        """Blocking half of edit-and-reissue: certbot re-runs over the
+        existing lineage (``replace=True``) and the commit pipeline rewrites
+        files/metadata/storage. The old certificate keeps being served until
+        certbot succeeds. Raises ``DomainOperationInProgress`` (409) or
+        ``RuntimeError`` (certbot failure).
+        """
+        domain = prepared['domain']
+        result = self._certs.create_certificate(
+            domain=domain,
+            email=prepared['email'],
+            dns_provider=prepared['dns_provider'],
+            account_id=prepared['account_id'],
+            ca_provider=prepared['ca_provider'],
+            domain_alias=prepared['domain_alias'],
+            alias_dns_provider=prepared['alias_dns_provider'],
+            san_domains=prepared['san_domains'],
+            challenge_type=prepared['challenge_type'],
+            key_type=prepared['key_type'],
+            key_size=prepared['key_size'],
+            elliptic_curve=prepared['elliptic_curve'],
+            replace=True,
+        )
+
+        # Idempotent: repairs the settings entry if it ever went missing.
+        resolved_dns_provider = prepared['dns_provider'] or prepared['_settings_dns_provider']
+        self._settings.update(
+            _make_add_domain(domain, resolved_dns_provider, prepared['account_id']),
+            'certificate_reissued',
+        )
+        return result
+
     def renew(self, *, domain, force=False, user=None, ip_address=None):
         """Scope-check then renew an existing certificate, returning the
         manager's result dict. Path/sanitisation of *domain* is the adapter's

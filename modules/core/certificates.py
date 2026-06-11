@@ -670,6 +670,12 @@ class CertificateManager:
         domain_alias = metadata.get('domain_alias')
         alias_dns_provider = metadata.get('alias_dns_provider')
         san_domains = metadata.get('san_domains') or []
+        # Issuance config surfaced for the Edit & Reissue prefill (#267):
+        # without these the edit form would silently reset a non-default CA
+        # or challenge type back to the global defaults.
+        ca_provider = metadata.get('ca_provider')
+        challenge_type = metadata.get('challenge_type')
+        account_id = metadata.get('account_id')
         if settings is None:
             settings = self.settings_manager.load_settings()
         if not dns_provider:
@@ -704,7 +710,10 @@ class CertificateManager:
                 'dns_provider': dns_provider,
                 'domain_alias': domain_alias,
                 'alias_dns_provider': alias_dns_provider,
-                'san_domains': san_domains
+                'san_domains': san_domains,
+                'ca_provider': ca_provider,
+                'challenge_type': challenge_type,
+                'account_id': account_id
             }
         except Exception as e:
             logger.error(f"Error parsing certificate for {domain}: {e}")
@@ -720,7 +729,10 @@ class CertificateManager:
             'dns_provider': dns_provider,
             'domain_alias': domain_alias,
             'alias_dns_provider': alias_dns_provider,
-            'san_domains': san_domains
+            'san_domains': san_domains,
+            'ca_provider': ca_provider,
+            'challenge_type': challenge_type,
+            'account_id': account_id
         }
 
     def _create_empty_cert_info(self, domain):
@@ -738,7 +750,7 @@ class CertificateManager:
             'dns_provider': dns_provider
         }
 
-    def create_certificate(self, domain, email, dns_provider=None, dns_config=None, account_id=None, staging=False, ca_provider=None, ca_account_id=None, domain_alias=None, san_domains=None, challenge_type=None, key_type=None, key_size=None, elliptic_curve=None):
+    def create_certificate(self, domain, email, dns_provider=None, dns_config=None, account_id=None, staging=False, ca_provider=None, ca_account_id=None, domain_alias=None, alias_dns_provider=None, san_domains=None, challenge_type=None, key_type=None, key_size=None, elliptic_curve=None, replace=False):
         """Create SSL certificate using configurable CA with DNS challenge
 
         Args:
@@ -751,6 +763,11 @@ class CertificateManager:
             ca_provider: Certificate Authority provider (letsencrypt, digicert, private_ca)
             ca_account_id: Specific CA account ID to use
             domain_alias: Optional domain alias for DNS validation (e.g., '_acme-challenge.validation.example.org')
+            alias_dns_provider: Provider managing the ALIAS zone when it
+                differs from dns_provider (set via PATCH, issue #129, and
+                honoured by renewals). The alias challenge hook runs with
+                this provider's account; metadata records it so future
+                renewals keep using it.
             san_domains: Optional list of additional domains for Subject Alternative Names (SAN)
             key_type: Optional 'rsa' or 'ecdsa'. If all three key kwargs are
                 None the global ``default_key_*`` from settings are applied,
@@ -759,6 +776,17 @@ class CertificateManager:
                 per-domain.
             key_size: RSA key size in bits (only valid with key_type='rsa').
             elliptic_curve: ECDSA curve (only valid with key_type='ecdsa').
+            replace: Reissue over the existing certbot lineage (#267). The
+                same ``--cert-name`` with a different ``-d`` set makes
+                certbot replace the lineage's domain set (expand AND
+                shrink); ``--renew-with-new-domains`` is added so the
+                domain-change confirmation never depends on prompt
+                defaults. The old certificate keeps being served until
+                certbot succeeds. With ``replace`` the global key-shape
+                defaults are NOT applied when no key option is passed:
+                emitting them would silently re-key the lineage, while
+                omitting the flags makes certbot keep the existing key
+                type.
         """
         # Acquire per-domain lock to prevent concurrent create/renew operations
         domain_lock = self._get_domain_lock(domain)
@@ -781,15 +809,16 @@ class CertificateManager:
             # needs none, so we keep the load conditional and reuse the result.
             settings = None
 
-            # Return conflict if cert already exists (use renew to refresh it).
+            # Return conflict if cert already exists (use renew to refresh it,
+            # or replace=True to reissue with a changed domain set — #267).
             # This existence check runs *under* the per-domain lock acquired
             # above so two concurrent creates for the same domain can't both
             # pass the check and race to issue duplicate certificates.
             existing_cert = self.cert_dir / domain / 'cert.pem'
-            if existing_cert.exists():
+            if existing_cert.exists() and not replace:
                 raise FileExistsError(f"Certificate for {domain} already exists. Use renew to refresh it.")
 
-            logger.info(f"Starting certificate creation for domain: {domain}")
+            logger.info(f"Starting certificate {'reissue' if replace else 'creation'} for domain: {domain}")
             
             # ... (Validation and CA setup remains the same until DNS config)
             
@@ -876,7 +905,7 @@ class CertificateManager:
                 # Get Strategy
                 strategy = DNSStrategyFactory.get_strategy(dns_provider)
 
-                if domain_alias and dns_provider not in DNS_ALIAS_SUPPORTED_PROVIDERS:
+                if domain_alias and (alias_dns_provider or dns_provider) not in DNS_ALIAS_SUPPORTED_PROVIDERS:
                     raise RuntimeError(
                         "DNS alias mode does not support this DNS provider yet. "
                         "Use a supported account that controls the alias zone, "
@@ -930,7 +959,12 @@ class CertificateManager:
             # so the cert is never built with an inconsistent shape (the
             # API endpoint validates earlier, but renew_certificate also
             # routes through this method and can pass values from disk).
-            if key_type is None and key_size is None and elliptic_curve is None:
+            # On reissue (#267) the defaults are deliberately NOT applied:
+            # metadata does not record the lineage's key shape, so forwarding
+            # settings defaults as explicit flags would silently re-key the
+            # certificate. With no key flags certbot keeps the existing key
+            # type; an explicit key option on reissue is an intentional re-key.
+            if not replace and key_type is None and key_size is None and elliptic_curve is None:
                 if settings is None:
                     settings = self.settings_manager.load_settings()
                 key_type = settings.get('default_key_type')
@@ -1000,6 +1034,20 @@ class CertificateManager:
                 elif key_type == 'ecdsa' and elliptic_curve:
                     certbot_cmd.extend(['--key-type', 'ecdsa', '--elliptic-curve', elliptic_curve])
 
+            if replace:
+                # Reissue over the existing lineage: a different -d set with
+                # the same --cert-name replaces the lineage's domains (expand
+                # and shrink). --renew-with-new-domains makes that
+                # confirmation deterministic. --force-renewal is load-bearing
+                # for the UNCHANGED-set case (config-only edits: CA switch,
+                # provider change, alias clear, same-type re-key): without it
+                # certbot hits _handle_identical_cert_request outside the
+                # renewal window, takes the keep-existing default, and exits 0
+                # WITHOUT issuing — and CertMate would then rewrite metadata
+                # with configuration that was never applied. A reissue must
+                # always issue.
+                certbot_cmd.extend(['--renew-with-new-domains', '--force-renewal'])
+
             # Build per-request environment (avoid race conditions with os.environ)
             process_env = os.environ.copy()
             process_env.update(ca_extra_env)
@@ -1032,19 +1080,30 @@ class CertificateManager:
                 if dns_provider == 'custom-script':
                     process_env.setdefault('CERTMATE_DNS_PROPAGATION_SECONDS', str(propagation_time))
 
+            alias_hook_provider = alias_dns_provider or dns_provider
             use_dns_alias_hook = (
                 challenge_type != 'http-01'
                 and domain_alias
-                and dns_provider in DNS_ALIAS_SUPPORTED_PROVIDERS
+                and alias_hook_provider in DNS_ALIAS_SUPPORTED_PROVIDERS
             )
 
             if use_dns_alias_hook:
+                # The TXT records land on the ALIAS zone, so the hook must run
+                # with the account that controls that zone — which renewals
+                # already honour via metadata alias_dns_provider (issue #129).
+                alias_hook_config = dns_config
+                if alias_hook_provider != dns_provider:
+                    alias_hook_config, _ = self._get_dns_config(alias_hook_provider, account_id)
+                    if not alias_hook_config:
+                        raise ValueError(
+                            f"Alias DNS provider '{alias_hook_provider}' is not configured"
+                        )
                 logger.info(
                     f"DNS alias '{domain_alias}' requested for {domain}; "
-                    f"using {dns_provider} manual hook to create TXT records on the alias zone."
+                    f"using {alias_hook_provider} manual hook to create TXT records on the alias zone."
                 )
                 credentials_file = self._create_dns_alias_hook_config(
-                    dns_provider, dns_config, domain_alias, propagation_time or strategy.default_propagation_seconds
+                    alias_hook_provider, alias_hook_config, domain_alias, propagation_time or strategy.default_propagation_seconds
                 )
                 self._configure_dns_alias_arguments(certbot_cmd, credentials_file)
             else:
@@ -1142,7 +1201,7 @@ class CertificateManager:
             }
             if domain_alias:
                 metadata['domain_alias'] = domain_alias
-                metadata['alias_dns_provider'] = dns_provider
+                metadata['alias_dns_provider'] = alias_dns_provider or dns_provider
             
             if self.storage_manager:
                 try:
