@@ -8,22 +8,10 @@ from modules.core.constants import iter_cert_domain_dirs
 
 logger = logging.getLogger(__name__)
 
-# Compiled once at import time, reused on every settings GET.
-# The 'key' fragment matches any field name containing "key" —
-# including the cryptographic-shape defaults whose values
-# ('rsa', '2048', 'secp256r1', ...) are NOT secrets. Those go on
-# the explicit allowlist below so the masking pass leaves them
-# alone: a masked dropdown would have no matching <option> and
-# would render empty in the Settings UI.
-_SECRET_KEYS = re.compile(
-    r'(token|secret|password|key|credential|hmac)',
-    re.IGNORECASE,
-)
-_NON_SECRET_KEYS = frozenset({
-    'default_key_type',
-    'default_key_size',
-    'default_elliptic_curve',
-})
+# Secret-name masking is single-sourced in modules/core/settings.py
+# (_SECRET_KEY_RE + mask_secrets_in_settings); the GET handler below
+# imports it. A local duplicate of that regex used to live here but had
+# been dead code since the handlers switched to the shared helper.
 
 
 def register_settings_routes(app, managers, require_web_auth, auth_manager,
