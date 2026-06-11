@@ -670,6 +670,12 @@ class CertificateManager:
         domain_alias = metadata.get('domain_alias')
         alias_dns_provider = metadata.get('alias_dns_provider')
         san_domains = metadata.get('san_domains') or []
+        # Issuance config surfaced for the Edit & Reissue prefill (#267):
+        # without these the edit form would silently reset a non-default CA
+        # or challenge type back to the global defaults.
+        ca_provider = metadata.get('ca_provider')
+        challenge_type = metadata.get('challenge_type')
+        account_id = metadata.get('account_id')
         if settings is None:
             settings = self.settings_manager.load_settings()
         if not dns_provider:
@@ -704,7 +710,10 @@ class CertificateManager:
                 'dns_provider': dns_provider,
                 'domain_alias': domain_alias,
                 'alias_dns_provider': alias_dns_provider,
-                'san_domains': san_domains
+                'san_domains': san_domains,
+                'ca_provider': ca_provider,
+                'challenge_type': challenge_type,
+                'account_id': account_id
             }
         except Exception as e:
             logger.error(f"Error parsing certificate for {domain}: {e}")
@@ -720,7 +729,10 @@ class CertificateManager:
             'dns_provider': dns_provider,
             'domain_alias': domain_alias,
             'alias_dns_provider': alias_dns_provider,
-            'san_domains': san_domains
+            'san_domains': san_domains,
+            'ca_provider': ca_provider,
+            'challenge_type': challenge_type,
+            'account_id': account_id
         }
 
     def _create_empty_cert_info(self, domain):
@@ -738,7 +750,7 @@ class CertificateManager:
             'dns_provider': dns_provider
         }
 
-    def create_certificate(self, domain, email, dns_provider=None, dns_config=None, account_id=None, staging=False, ca_provider=None, ca_account_id=None, domain_alias=None, san_domains=None, challenge_type=None, key_type=None, key_size=None, elliptic_curve=None):
+    def create_certificate(self, domain, email, dns_provider=None, dns_config=None, account_id=None, staging=False, ca_provider=None, ca_account_id=None, domain_alias=None, san_domains=None, challenge_type=None, key_type=None, key_size=None, elliptic_curve=None, replace=False):
         """Create SSL certificate using configurable CA with DNS challenge
 
         Args:
@@ -759,6 +771,17 @@ class CertificateManager:
                 per-domain.
             key_size: RSA key size in bits (only valid with key_type='rsa').
             elliptic_curve: ECDSA curve (only valid with key_type='ecdsa').
+            replace: Reissue over the existing certbot lineage (#267). The
+                same ``--cert-name`` with a different ``-d`` set makes
+                certbot replace the lineage's domain set (expand AND
+                shrink); ``--renew-with-new-domains`` is added so the
+                domain-change confirmation never depends on prompt
+                defaults. The old certificate keeps being served until
+                certbot succeeds. With ``replace`` the global key-shape
+                defaults are NOT applied when no key option is passed:
+                emitting them would silently re-key the lineage, while
+                omitting the flags makes certbot keep the existing key
+                type.
         """
         # Acquire per-domain lock to prevent concurrent create/renew operations
         domain_lock = self._get_domain_lock(domain)
@@ -781,15 +804,16 @@ class CertificateManager:
             # needs none, so we keep the load conditional and reuse the result.
             settings = None
 
-            # Return conflict if cert already exists (use renew to refresh it).
+            # Return conflict if cert already exists (use renew to refresh it,
+            # or replace=True to reissue with a changed domain set — #267).
             # This existence check runs *under* the per-domain lock acquired
             # above so two concurrent creates for the same domain can't both
             # pass the check and race to issue duplicate certificates.
             existing_cert = self.cert_dir / domain / 'cert.pem'
-            if existing_cert.exists():
+            if existing_cert.exists() and not replace:
                 raise FileExistsError(f"Certificate for {domain} already exists. Use renew to refresh it.")
 
-            logger.info(f"Starting certificate creation for domain: {domain}")
+            logger.info(f"Starting certificate {'reissue' if replace else 'creation'} for domain: {domain}")
             
             # ... (Validation and CA setup remains the same until DNS config)
             
@@ -930,7 +954,12 @@ class CertificateManager:
             # so the cert is never built with an inconsistent shape (the
             # API endpoint validates earlier, but renew_certificate also
             # routes through this method and can pass values from disk).
-            if key_type is None and key_size is None and elliptic_curve is None:
+            # On reissue (#267) the defaults are deliberately NOT applied:
+            # metadata does not record the lineage's key shape, so forwarding
+            # settings defaults as explicit flags would silently re-key the
+            # certificate. With no key flags certbot keeps the existing key
+            # type; an explicit key option on reissue is an intentional re-key.
+            if not replace and key_type is None and key_size is None and elliptic_curve is None:
                 if settings is None:
                     settings = self.settings_manager.load_settings()
                 key_type = settings.get('default_key_type')
@@ -999,6 +1028,13 @@ class CertificateManager:
                     certbot_cmd.extend(['--key-type', 'rsa', '--rsa-key-size', str(key_size)])
                 elif key_type == 'ecdsa' and elliptic_curve:
                     certbot_cmd.extend(['--key-type', 'ecdsa', '--elliptic-curve', elliptic_curve])
+
+            if replace:
+                # Reissue over the existing lineage: a different -d set with
+                # the same --cert-name replaces the lineage's domains (expand
+                # and shrink). The flag makes the confirmation deterministic
+                # instead of relying on the non-interactive prompt default.
+                certbot_cmd.append('--renew-with-new-domains')
 
             # Build per-request environment (avoid race conditions with os.environ)
             process_env = os.environ.copy()
