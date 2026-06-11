@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 # alone: a masked dropdown would have no matching <option> and
 # would render empty in the Settings UI.
 _SECRET_KEYS = re.compile(
-    r'(token|secret|password|key|credential)',
+    r'(token|secret|password|key|credential|hmac)',
     re.IGNORECASE,
 )
 _NON_SECRET_KEYS = frozenset({

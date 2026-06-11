@@ -160,16 +160,21 @@ class CAManager:
         return self.ca_providers[ca_provider]['requires_eab']
     
     def get_eab_credentials(self, ca_provider: str, account_config: Dict[str, Any]) -> Tuple[str, str]:
-        """Get External Account Binding credentials for CA provider"""
+        """Get External Account Binding credentials for CA provider.
+
+        Accepts both field spellings: ``eab_key_id``/``eab_hmac_key``
+        (canonical, manual settings.json) and ``eab_kid``/``eab_hmac``
+        (what the settings UI saves via collectCAProviderSettings).
+        """
         if not self.requires_eab(ca_provider):
             return None, None
-        
-        eab_key_id = account_config.get('eab_key_id', '')
-        eab_hmac_key = account_config.get('eab_hmac_key', '')
-        
+
+        eab_key_id = account_config.get('eab_key_id') or account_config.get('eab_kid', '')
+        eab_hmac_key = account_config.get('eab_hmac_key') or account_config.get('eab_hmac', '')
+
         if not eab_key_id or not eab_hmac_key:
             raise ValueError(f"EAB credentials not configured for CA provider '{ca_provider}'")
-        
+
         return eab_key_id, eab_hmac_key
     
     def create_ca_trust_bundle(self, ca_provider: str, account_config: Dict[str, Any] = None) -> Optional[str]:
@@ -279,8 +284,10 @@ class CAManager:
         ca_info = self.ca_providers[ca_provider]
         
         # Check required fields based on CA provider
-        if ca_provider in ['digicert', 'zerossl', 'google', 'sslcom']:
-            if not config.get('eab_key_id') or not config.get('eab_hmac_key'):
+        if ca_info['requires_eab']:
+            has_kid = config.get('eab_key_id') or config.get('eab_kid')
+            has_hmac = config.get('eab_hmac_key') or config.get('eab_hmac')
+            if not has_kid or not has_hmac:
                 return False, f"{ca_info['name']} requires EAB Key ID and HMAC Key"
         
         elif ca_provider == 'private_ca':
@@ -309,8 +316,10 @@ class CAManager:
         }
         
         # Add provider-specific display info
-        if ca_provider in ['digicert', 'zerossl', 'google', 'sslcom']:
-            display_info['eab_configured'] = bool(config.get('eab_key_id'))
+        if self.requires_eab(ca_provider):
+            display_info['eab_configured'] = bool(
+                config.get('eab_key_id') or config.get('eab_kid')
+            )
         elif ca_provider == 'private_ca':
             display_info['acme_url'] = config.get('acme_url', '')
             display_info['ca_cert_configured'] = bool(config.get('ca_cert'))
