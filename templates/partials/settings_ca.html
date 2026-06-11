@@ -20,6 +20,7 @@
                                     <option value="zerossl">ZeroSSL</option>
                                     <option value="google">Google Trust Services</option>
                                     <option value="buypass">BuyPass Go</option>
+                                    <option value="actalis">Actalis</option>
                                     <option value="digicert">DigiCert ACME</option>
                                     <option value="sslcom">SSL.com</option>
                                     <option value="private_ca">Private CA</option>
@@ -149,6 +150,43 @@
                                 </p>
                             </div>
 
+                            <!-- Actalis Configuration -->
+                            <div id="actalis-config" class="border border-info-line rounded-lg p-4 bg-info-surface" style="display: none;">
+                                <h4 class="text-sm font-semibold text-info-strong mb-2 flex items-center">
+                                    <i class="fas fa-certificate mr-2 text-blue-600"></i>
+                                    Actalis Configuration
+                                    <span class="ml-2 text-xs bg-info-surface text-info-strong px-2 py-0.5 rounded-full">Free</span>
+                                </h4>
+                                <div class="space-y-3">
+                                    <div>
+                                        <label class="block text-xs text-info-strong mb-1">External Account Binding (EAB) Key ID</label>
+                                        <input type="text" id="actalis-eab-kid"
+                                               class="w-full px-2 py-1 text-sm border border-info-line rounded bg-surface text-foreground"
+                                               placeholder="Your EAB Key ID from Actalis">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-info-strong mb-1">External Account Binding (EAB) HMAC Key</label>
+                                        <input type="password" id="actalis-eab-hmac"
+                                               class="w-full px-2 py-1 text-sm border border-info-line rounded bg-surface text-foreground"
+                                               placeholder="Your EAB HMAC Key from Actalis"
+                                               autocomplete="new-password"
+                                               spellcheck="false"
+                                               data-lpignore="true">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-info-strong mb-1">Email (for notifications)</label>
+                                        <input type="email" id="actalis-email"
+                                               class="w-full px-2 py-1 text-sm border border-info-line rounded bg-surface text-foreground"
+                                               placeholder="admin@example.com">
+                                    </div>
+                                </div>
+                                <p class="text-xs text-info-fg mt-2">
+                                    Actalis is a European (Italian) CA offering free 90-day DV certificates via ACME.
+                                    Generate EAB credentials in your Actalis customer area under Manage with ACME, then ACME Credentials.
+                                    The free plan covers single-domain certificates only (no wildcard, no SAN).
+                                </p>
+                            </div>
+
                             <!-- DigiCert Configuration -->
                             <div id="digicert-config" class="border border-info-line rounded-lg p-4 bg-info-surface" style="display: none;">
                                 <h4 class="text-sm font-semibold text-info-strong mb-2 flex items-center">
@@ -235,6 +273,18 @@
                                 </h4>
                                 <div class="space-y-3">
                                     <div>
+                                        <label class="block text-xs text-purple-800 dark:text-purple-200 mb-1" for="private-ca-preset">
+                                            Known ACME CA (preset) - Optional
+                                            <i class="fas fa-info-circle ml-1 cursor-help" title="Pre-fills the directory URL for public ACME CAs that work through the Private CA entry"></i>
+                                        </label>
+                                        <select id="private-ca-preset" onchange="applyPrivateCaPreset()"
+                                                class="w-full px-2 py-1 text-sm border border-purple-300 dark:border-purple-600 rounded bg-surface text-foreground">
+                                            <option value="">Custom / self-hosted (default)</option>
+                                            <option value="actalis">Actalis (EU public CA, EAB required)</option>
+                                        </select>
+                                        <p id="private-ca-preset-hint" class="text-xs text-purple-600 dark:text-purple-400 mt-1"></p>
+                                    </div>
+                                    <div>
                                         <label class="block text-xs text-purple-800 dark:text-purple-200 mb-1">
                                             ACME Directory URL
                                             <span class="text-red-500">*</span>
@@ -248,7 +298,8 @@
                                             <strong>Common examples:</strong><br>
                                             • step-ca: https://step-ca.internal.com:9000/acme/directory<br>
                                             • Smallstep: https://ca.example.com/acme/directory<br>
-                                            • Boulder: https://boulder.local:4001/acme/directory
+                                            • Boulder: https://boulder.local:4001/acme/directory<br>
+                                            • Actalis (public CA): use the preset above
                                         </p>
                                     </div>
                                     <div>

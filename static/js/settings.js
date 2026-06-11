@@ -175,6 +175,8 @@
                 email = (caProviders.google && caProviders.google.email) || '';
             } else if (defaultCA === 'buypass') {
                 email = (caProviders.buypass && caProviders.buypass.email) || '';
+            } else if (defaultCA === 'actalis') {
+                email = (caProviders.actalis && caProviders.actalis.email) || '';
             } else if (defaultCA === 'sslcom') {
                 email = (caProviders.sslcom && caProviders.sslcom.email) || '';
             } else if (defaultCA === 'digicert') {
@@ -230,6 +232,7 @@
                     defaultCA === 'zerossl' ? 'ZeroSSL' :
                     defaultCA === 'google' ? 'Google Trust Services' :
                     defaultCA === 'buypass' ? 'BuyPass Go' :
+                    defaultCA === 'actalis' ? 'Actalis' :
                     defaultCA === 'sslcom' ? 'SSL.com' :
                     defaultCA === 'digicert' ? 'DigiCert' : 'Private CA';
                 throw new Error('Email address is required in the ' + caDisplayName + ' configuration section');
@@ -1835,6 +1838,48 @@
     // CA PROVIDER MANAGEMENT FUNCTIONS
     // =============================================
 
+    // Public ACME CAs usable through the generic Private CA entry.
+    // Adding a new one (e.g. another European CA exposing ACME) is a
+    // single entry here plus an <option> in settings_ca.html.
+    var PRIVATE_CA_PRESETS = {
+        'actalis': {
+            acme_url: 'https://acme-api.actalis.com/acme/directory',
+            hint: 'Actalis enforces External Account Binding: fill in the EAB Key ID and HMAC Key from your Actalis customer area (Manage with ACME). Leave the CA Certificate empty - Actalis roots are publicly trusted. Tip: Actalis also has a dedicated entry in the CA dropdown above.'
+        }
+    };
+
+    function applyPrivateCaPreset() {
+        var select = document.getElementById('private-ca-preset');
+        if (!select) return;
+        var preset = PRIVATE_CA_PRESETS[select.value];
+        var urlField = document.getElementById('private-ca-acme-url');
+        if (preset && urlField) {
+            urlField.value = preset.acme_url;
+        }
+        var hintElement = document.getElementById('private-ca-preset-hint');
+        if (hintElement) {
+            hintElement.textContent = preset ? preset.hint : '';
+        }
+    }
+
+    // Reflect a saved directory URL back onto the preset select so the
+    // form reopens showing "Actalis" instead of a bare URL.
+    function syncPrivateCaPresetFromUrl(acmeUrl) {
+        var select = document.getElementById('private-ca-preset');
+        if (!select) return;
+        var matched = '';
+        Object.keys(PRIVATE_CA_PRESETS).forEach(function (key) {
+            if (PRIVATE_CA_PRESETS[key].acme_url === acmeUrl) {
+                matched = key;
+            }
+        });
+        select.value = matched;
+        var hintElement = document.getElementById('private-ca-preset-hint');
+        if (hintElement) {
+            hintElement.textContent = matched ? PRIVATE_CA_PRESETS[matched].hint : '';
+        }
+    }
+
     function toggleCAProviderConfig() {
         var caProvider = document.getElementById('default-ca').value;
 
@@ -1847,13 +1892,14 @@
             // not collide and leave the CA panel hidden (issue #226).
             'google': 'google-ca-config',
             'buypass': 'buypass-config',
+            'actalis': 'actalis-config',
             'digicert': 'digicert-config',
             'sslcom': 'sslcom-config',
             'private_ca': 'private-ca-config'
         };
 
         // Hide all CA configuration panels and disable their required fields
-        var caConfigs = ['letsencrypt-config', 'zerossl-config', 'google-ca-config', 'buypass-config', 'digicert-config', 'sslcom-config', 'private-ca-config'];
+        var caConfigs = ['letsencrypt-config', 'zerossl-config', 'google-ca-config', 'buypass-config', 'actalis-config', 'digicert-config', 'sslcom-config', 'private-ca-config'];
         caConfigs.forEach(function (configId) {
             var element = document.getElementById(configId);
             if (element) {
@@ -1894,6 +1940,9 @@
                     break;
                 case 'buypass':
                     hintElement.textContent = 'Enter your email address and test BuyPass Go connection';
+                    break;
+                case 'actalis':
+                    hintElement.textContent = 'Enter EAB credentials and email, then test Actalis connection';
                     break;
                 case 'digicert':
                     hintElement.textContent = 'Enter ACME URL, EAB credentials, and email, then test DigiCert connection';
@@ -1948,6 +1997,14 @@
             var bpEmail = document.getElementById('buypass-email').value;
             if (!bpEmail.trim()) missingFields.push('Email');
             config = { email: bpEmail };
+        } else if (caProvider === 'actalis') {
+            var acEabKid = document.getElementById('actalis-eab-kid').value;
+            var acEabHmac = document.getElementById('actalis-eab-hmac').value;
+            var acEmail = document.getElementById('actalis-email').value;
+            if (!acEabKid.trim()) missingFields.push('EAB Key ID');
+            if (!acEabHmac.trim()) missingFields.push('EAB HMAC Key');
+            if (!acEmail.trim()) missingFields.push('Email');
+            config = { eab_kid: acEabKid, eab_hmac: acEabHmac, email: acEmail };
         } else if (caProvider === 'sslcom') {
             var sEabKid = document.getElementById('sslcom-eab-kid').value;
             var sEabHmac = document.getElementById('sslcom-eab-hmac').value;
@@ -2308,6 +2365,16 @@
             document.getElementById('buypass-email').value = buypassConfig.email;
         }
 
+        // Load Actalis settings
+        // Don't populate HMAC key for security reasons - user needs to re-enter
+        var actalisConfig = caProviders.actalis || {};
+        if (actalisConfig.eab_kid) {
+            document.getElementById('actalis-eab-kid').value = actalisConfig.eab_kid;
+        }
+        if (actalisConfig.email) {
+            document.getElementById('actalis-email').value = actalisConfig.email;
+        }
+
         // Load DigiCert settings
         var digicertConfig = caProviders.digicert || {};
         if (digicertConfig.acme_url) {
@@ -2335,6 +2402,7 @@
         if (privateCaConfig.acme_url) {
             document.getElementById('private-ca-acme-url').value = privateCaConfig.acme_url;
         }
+        syncPrivateCaPresetFromUrl(privateCaConfig.acme_url || '');
         if (privateCaConfig.ca_cert) {
             document.getElementById('private-ca-cert').value = privateCaConfig.ca_cert;
         }
@@ -2434,6 +2502,13 @@
         // BuyPass Go configuration
         caProviders.buypass = {
             email: document.getElementById('buypass-email').value || ''
+        };
+
+        // Actalis configuration
+        caProviders.actalis = {
+            eab_kid: document.getElementById('actalis-eab-kid').value || '',
+            eab_hmac: document.getElementById('actalis-eab-hmac').value || '',
+            email: document.getElementById('actalis-email').value || ''
         };
 
         // DigiCert configuration
@@ -3089,6 +3164,7 @@
     window.saveEditAccount = saveEditAccount;
     window.deleteAccount = deleteAccount;
     window.toggleCAProviderConfig = toggleCAProviderConfig;
+    window.applyPrivateCaPreset = applyPrivateCaPreset;
     window.testCAProvider = testCAProvider;
     window.toggleTokenVisibility = toggleTokenVisibility;
     window.generateToken = generateToken;

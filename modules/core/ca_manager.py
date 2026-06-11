@@ -82,6 +82,19 @@ class CAManager:
                 'supports_wildcard': True,
                 'certificate_types': ['DV', 'OV', 'EV'],
                 'description': 'Enterprise SSL certificates from SSL.com'
+            },
+            'actalis': {
+                'name': 'Actalis',
+                'production_url': 'https://acme-api.actalis.com/acme/directory',
+                # Actalis does not publish a staging/test ACME endpoint.
+                'staging_url': 'https://acme-api.actalis.com/acme/directory',
+                'requires_eab': True,
+                # ACME plans are DV only; wildcard is explicitly not
+                # offered via ACME (guide.actalis.com FAQ). The free plan
+                # is limited to single-domain 90-day certificates.
+                'supports_wildcard': False,
+                'certificate_types': ['DV'],
+                'description': 'European CA (Italy) with free 90-day DV certificates via ACME'
             }
         }
     
@@ -159,17 +172,48 @@ class CAManager:
             return False
         return self.ca_providers[ca_provider]['requires_eab']
     
-    def get_eab_credentials(self, ca_provider: str, account_config: Dict[str, Any]) -> Tuple[str, str]:
-        """Get External Account Binding credentials for CA provider"""
-        if not self.requires_eab(ca_provider):
+    def get_eab_credentials(self, ca_provider: str, account_config: Dict[str, Any]) -> Tuple[Optional[str], Optional[str]]:
+        """Get External Account Binding credentials for CA provider.
+
+        Accepts both field spellings: ``eab_key_id``/``eab_hmac_key``
+        (canonical, manual settings.json) and ``eab_kid``/``eab_hmac``
+        (what the settings UI saves via collectCAProviderSettings).
+
+        The UI spelling wins when both pairs are present: the settings
+        form is the only surface that rotates credentials, while the
+        canonical pair can only come from a past hand-edit the UI never
+        displays — preferring it would make a UI rotation a silent
+        no-op. An empty UI value falls back to the canonical one.
+
+        For ``private_ca`` EAB is optional: the generic Private CA entry
+        can point at any ACME directory — including public CAs that
+        enforce account binding (e.g. Actalis used without its dedicated
+        entry) — so credentials are returned when present and (None,
+        None) when absent. Public CAs with ``requires_eab: False`` never
+        emit EAB even if stray fields exist in the saved config, since
+        an unexpected externalAccountBinding can fail registration.
+        """
+        if not self.requires_eab(ca_provider) and ca_provider != 'private_ca':
             return None, None
-        
-        eab_key_id = account_config.get('eab_key_id', '')
-        eab_hmac_key = account_config.get('eab_hmac_key', '')
-        
+
+        account_config = account_config or {}
+        eab_key_id = account_config.get('eab_kid') or account_config.get('eab_key_id', '')
+        eab_hmac_key = account_config.get('eab_hmac') or account_config.get('eab_hmac_key', '')
+
         if not eab_key_id or not eab_hmac_key:
-            raise ValueError(f"EAB credentials not configured for CA provider '{ca_provider}'")
-        
+            if self.requires_eab(ca_provider):
+                raise ValueError(f"EAB credentials not configured for CA provider '{ca_provider}'")
+            if eab_key_id or eab_hmac_key:
+                # Exactly one half of the pair — proceeding without EAB is
+                # the only option, but silently dropping a half-configured
+                # binding makes the eventual registration failure baffling.
+                logger.warning(
+                    f"Incomplete EAB credentials for CA provider '{ca_provider}' "
+                    f"(only {'Key ID' if eab_key_id else 'HMAC key'} is set); "
+                    f"proceeding without EAB"
+                )
+            return None, None
+
         return eab_key_id, eab_hmac_key
     
     def create_ca_trust_bundle(self, ca_provider: str, account_config: Dict[str, Any] = None) -> Optional[str]:
@@ -254,14 +298,14 @@ class CAManager:
                 '--logs-dir', str(cert_output_dir / 'logs')
             ])
 
-        # Add EAB credentials if required
-        if self.requires_eab(ca_provider):
-            eab_key_id, eab_hmac_key = self.get_eab_credentials(ca_provider, account_config)
-            if eab_key_id and eab_hmac_key:
-                certbot_cmd.extend([
-                    '--eab-kid', eab_key_id,
-                    '--eab-hmac-key', eab_hmac_key
-                ])
+        # Add EAB credentials if required — or optionally configured for
+        # a private CA whose ACME server enforces account binding.
+        eab_key_id, eab_hmac_key = self.get_eab_credentials(ca_provider, account_config)
+        if eab_key_id and eab_hmac_key:
+            certbot_cmd.extend([
+                '--eab-kid', eab_key_id,
+                '--eab-hmac-key', eab_hmac_key
+            ])
 
         # Add CA bundle for private CAs (pass via extra_env, not os.environ)
         if ca_provider == 'private_ca':
@@ -279,8 +323,10 @@ class CAManager:
         ca_info = self.ca_providers[ca_provider]
         
         # Check required fields based on CA provider
-        if ca_provider in ['digicert', 'zerossl', 'google', 'sslcom']:
-            if not config.get('eab_key_id') or not config.get('eab_hmac_key'):
+        if ca_info['requires_eab']:
+            has_kid = config.get('eab_key_id') or config.get('eab_kid')
+            has_hmac = config.get('eab_hmac_key') or config.get('eab_hmac')
+            if not has_kid or not has_hmac:
                 return False, f"{ca_info['name']} requires EAB Key ID and HMAC Key"
         
         elif ca_provider == 'private_ca':
@@ -309,11 +355,16 @@ class CAManager:
         }
         
         # Add provider-specific display info
-        if ca_provider in ['digicert', 'zerossl', 'google', 'sslcom']:
-            display_info['eab_configured'] = bool(config.get('eab_key_id'))
+        if self.requires_eab(ca_provider):
+            display_info['eab_configured'] = bool(
+                config.get('eab_key_id') or config.get('eab_kid')
+            )
         elif ca_provider == 'private_ca':
             display_info['acme_url'] = config.get('acme_url', '')
             display_info['ca_cert_configured'] = bool(config.get('ca_cert'))
+            display_info['eab_configured'] = bool(
+                config.get('eab_key_id') or config.get('eab_kid')
+            )
         
         return display_info
 

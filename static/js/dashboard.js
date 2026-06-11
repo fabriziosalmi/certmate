@@ -1369,6 +1369,9 @@
                 case 'buypass':
                     infoText = '<i class="fas fa-lock mr-1 text-green-500"></i> Free certificates with 180-day validity from BuyPass Go';
                     break;
+                case 'actalis':
+                    infoText = '<i class="fas fa-certificate mr-1 text-blue-500"></i> Free 90-day DV certificates from Actalis, European CA (requires EAB, single domain only)';
+                    break;
                 case 'digicert':
                     infoText = '<i class="fas fa-shield-alt mr-1 text-blue-500"></i> Enterprise certificates (requires EAB credentials configured in Settings)';
                     break;

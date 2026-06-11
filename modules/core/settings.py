@@ -92,7 +92,7 @@ SECRET_MASK_SENTINEL = '********'
 # settings without re-entering a secret the UI deliberately does not
 # repopulate (see loadStorageBackendSettings in static/js/settings.js).
 _SECRET_KEY_RE = re.compile(
-    r'(token|secret|password|key|credential)',
+    r'(token|secret|password|key|credential|hmac)',
     re.IGNORECASE,
 )
 # Keys whose name matches the secret regex but whose value is NOT a secret.
@@ -134,7 +134,7 @@ def mask_secrets_in_settings(settings_dict):
     Two passes coexist in the same walk:
 
     1. Generic regex: any field whose name matches the project's
-       secret-name pattern (``token|secret|password|key|credential``)
+       secret-name pattern (``token|secret|password|key|credential|hmac``)
        — excluding the documented non-secret allowlist
        (``default_key_type`` etc.) — gets masked.
     2. Provider-specific: when the immediate parent key is one of the

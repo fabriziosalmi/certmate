@@ -1,3 +1,23 @@
+## v2.11.4 (Feature — Actalis CA provider)
+
+Adds Actalis as a first-class Certificate Authority — a European (Italian) alternative to Let's Encrypt ([#287](https://github.com/fabriziosalmi/certmate/issues/287)) — and fixes the EAB credential wiring that silently broke every EAB CA configured from the web UI.
+
+### Features
+
+- **Actalis CA provider** — free 90-day DV certificates over standard ACME with External Account Binding. Wired across CAManager (official directory `https://acme-api.actalis.com/acme/directory`), the create-certificate API enum, the settings UI (config panel + connection test), the per-certificate CA dropdown and the docs. The free plan is single-domain only (no wildcard, no SAN); EAB credentials come from the Actalis customer area under Manage with ACME, ACME Credentials.
+
+### Fixes
+
+- **EAB credentials saved from the settings UI never reached certbot** — the UI stores `eab_kid`/`eab_hmac` while CAManager read only `eab_key_id`/`eab_hmac_key`, so issuance with ZeroSSL, Google Trust Services, DigiCert or SSL.com configured via the web UI failed with "EAB credentials not configured". Both spellings are now accepted everywhere EAB is read.
+- **EAB HMAC keys were returned unmasked and clobbered on save** — `eab_hmac` did not match the secret-name pattern, so `GET /api/web/settings` returned it in cleartext and any settings save that didn't re-type it overwrote the stored value with `''`. `hmac` joined the secret-name pattern (`_SECRET_KEY_RE` in `modules/core/settings.py`, the single source for masking and blank-on-save preservation); a dead duplicate of that regex in `modules/web/settings_routes.py` was removed.
+- **Test CA Connection worked for only 3 of 7 CAs** — `POST /api/settings/test-ca-provider` answered "Invalid CA provider type" for ZeroSSL, Google Trust Services, BuyPass Go and SSL.com. Fixed-directory EAB CAs now share one validation branch (accepting both EAB field spellings) and BuyPass validates email-only.
+- **Create-certificate API enum listed 3 of 8 providers** — `ca_provider` now documents the full supported set.
+- **Private CA EAB credentials were collected but never passed to certbot** — the optional EAB fields in the Private CA panel were saved and validated, but the issuance command only emitted `--eab-kid`/`--eab-hmac-key` for providers with `requires_eab: true`, which `private_ca` is not. EAB now reaches certbot whenever configured, so any EAB-enforcing ACME CA (Actalis included) also works through the generic Private CA entry. Public CAs that don't use EAB (Let's Encrypt, BuyPass) still never emit stray EAB fields.
+
+### Testing
+
+- New suites: CAManager EAB regression tests, e2e coverage of the test-ca-provider endpoint, and a CA provider wiring-consistency pin (sibling of the v2.11.3 DNS one) that breaks whenever a new CA misses any selection surface.
+
 ## v2.11.3 (Patch — reliability audit fixes)
 
 Fixes from a findings-verification pass over DNS provider wiring, storage retry behaviour, notification delivery and backup security.
