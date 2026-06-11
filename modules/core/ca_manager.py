@@ -179,6 +179,12 @@ class CAManager:
         (canonical, manual settings.json) and ``eab_kid``/``eab_hmac``
         (what the settings UI saves via collectCAProviderSettings).
 
+        The UI spelling wins when both pairs are present: the settings
+        form is the only surface that rotates credentials, while the
+        canonical pair can only come from a past hand-edit the UI never
+        displays — preferring it would make a UI rotation a silent
+        no-op. An empty UI value falls back to the canonical one.
+
         For ``private_ca`` EAB is optional: the generic Private CA entry
         can point at any ACME directory — including public CAs that
         enforce account binding (e.g. Actalis used without its dedicated
@@ -191,12 +197,21 @@ class CAManager:
             return None, None
 
         account_config = account_config or {}
-        eab_key_id = account_config.get('eab_key_id') or account_config.get('eab_kid', '')
-        eab_hmac_key = account_config.get('eab_hmac_key') or account_config.get('eab_hmac', '')
+        eab_key_id = account_config.get('eab_kid') or account_config.get('eab_key_id', '')
+        eab_hmac_key = account_config.get('eab_hmac') or account_config.get('eab_hmac_key', '')
 
         if not eab_key_id or not eab_hmac_key:
             if self.requires_eab(ca_provider):
                 raise ValueError(f"EAB credentials not configured for CA provider '{ca_provider}'")
+            if eab_key_id or eab_hmac_key:
+                # Exactly one half of the pair — proceeding without EAB is
+                # the only option, but silently dropping a half-configured
+                # binding makes the eventual registration failure baffling.
+                logger.warning(
+                    f"Incomplete EAB credentials for CA provider '{ca_provider}' "
+                    f"(only {'Key ID' if eab_key_id else 'HMAC key'} is set); "
+                    f"proceeding without EAB"
+                )
             return None, None
 
         return eab_key_id, eab_hmac_key

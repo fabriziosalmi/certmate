@@ -55,6 +55,36 @@ def test_get_eab_credentials_ui_spelling(ca_manager):
     assert (kid, hmac) == ('kid-from-ui', 'hmac-from-ui')
 
 
+def test_get_eab_credentials_ui_spelling_wins_over_stale_canonical(ca_manager):
+    # The settings form is the only surface that rotates credentials;
+    # a leftover hand-edited canonical pair must not shadow it forever.
+    kid, hmac = ca_manager.get_eab_credentials('zerossl', {
+        'eab_key_id': 'kid-stale', 'eab_hmac_key': 'hmac-stale',
+        'eab_kid': 'kid-rotated', 'eab_hmac': 'hmac-rotated',
+    })
+    assert (kid, hmac) == ('kid-rotated', 'hmac-rotated')
+
+
+def test_get_eab_credentials_empty_ui_value_falls_back_to_canonical(ca_manager):
+    # Every UI save writes eab_kid (possibly '') for every provider;
+    # an empty UI value must not mask a working canonical pair.
+    kid, hmac = ca_manager.get_eab_credentials('zerossl', {
+        'eab_kid': '', 'eab_key_id': 'kid-canonical',
+        'eab_hmac_key': 'hmac-canonical',
+    })
+    assert (kid, hmac) == ('kid-canonical', 'hmac-canonical')
+
+
+def test_private_ca_partial_eab_warns_and_omits(ca_manager, caplog):
+    import logging
+    with caplog.at_level(logging.WARNING, logger='modules.core.ca_manager'):
+        kid, hmac = ca_manager.get_eab_credentials('private_ca', {
+            'eab_kid': 'only-half-of-the-pair',
+        })
+    assert (kid, hmac) == (None, None)
+    assert any('Incomplete EAB credentials' in r.message for r in caplog.records)
+
+
 def test_get_eab_credentials_missing_raises(ca_manager):
     with pytest.raises(ValueError, match='EAB credentials not configured'):
         ca_manager.get_eab_credentials('zerossl', {'email': 'a@b.it'})
