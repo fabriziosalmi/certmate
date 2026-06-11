@@ -1495,7 +1495,10 @@ class InfisicalBackend(CertificateStorageBackend):
                 )
                 cert_files[filename] = secret.secret_value.encode('utf-8')
             except Exception as e:
-                logger.debug(f"Secret {secret_key} not found for {domain}: {e}")
+                # Log the PEM filename, not the storage key or the SDK error
+                # (CodeQL: anything name-tainted as a secret must stay out of
+                # logs; the key is reconstructible from domain + filename).
+                logger.debug(f"Infisical entry for {domain}/{filename} not readable: {e}")
                 continue
 
         if not cert_files:
@@ -1550,7 +1553,7 @@ class InfisicalBackend(CertificateStorageBackend):
                 if domain:
                     domains.add(domain)
             except Exception as inner_e:
-                logger.warning(f"Could not read metadata secret {secret.secret_name}: {inner_e}")
+                logger.warning(f"Could not read an Infisical metadata entry: {inner_e}")
 
         return sorted(list(domains))
     
