@@ -209,7 +209,8 @@ class CertificateService:
 
     def prepare_reissue(self, *, domain, san_domains=None, dns_provider=None,
                         account_id=None, ca_provider=None, challenge_type=None,
-                        domain_alias=None, key_type=None, key_size=None,
+                        domain_alias=None, alias_dns_provider=None,
+                        key_type=None, key_size=None,
                         elliptic_curve=None, user=None, ip_address=None):
         """Validate and resolve an edit-and-reissue request (#267) without
         side effects, returning kwargs for :meth:`issue_reissue`.
@@ -256,6 +257,13 @@ class CertificateService:
             domain_alias = metadata.get('domain_alias')
         elif domain_alias == '':
             domain_alias = None
+        if alias_dns_provider is None:
+            # The alias zone may live with a different provider than the
+            # primary (set via PATCH, issue #129); the reissue must keep
+            # running the alias hook with that account.
+            alias_dns_provider = metadata.get('alias_dns_provider')
+        if not domain_alias:
+            alias_dns_provider = None
 
         if domain_alias:
             ok, msg = validate_domain(domain_alias)
@@ -296,6 +304,7 @@ class CertificateService:
             'account_id': account_id,
             'ca_provider': ca_provider,
             'domain_alias': domain_alias,
+            'alias_dns_provider': alias_dns_provider,
             'san_domains': san_domains,
             'challenge_type': challenge_type,
             'key_type': key_type,
@@ -319,6 +328,7 @@ class CertificateService:
             account_id=prepared['account_id'],
             ca_provider=prepared['ca_provider'],
             domain_alias=prepared['domain_alias'],
+            alias_dns_provider=prepared['alias_dns_provider'],
             san_domains=prepared['san_domains'],
             challenge_type=prepared['challenge_type'],
             key_type=prepared['key_type'],

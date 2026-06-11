@@ -1676,8 +1676,14 @@
 
         // Reverse-map the wildcard checkbox out of the SAN list — the
         // create submit handler encodes it client-side as '*.'+primary.
+        // Compare case-insensitively: DNS names are, and API-created certs
+        // can carry mixed-case SANs in metadata.
         var sans = (cert.san_domains || []).slice();
-        var wildcardIndex = sans.indexOf('*.' + domain);
+        var wildcardName = ('*.' + domain).toLowerCase();
+        var wildcardIndex = -1;
+        sans.forEach(function (s, i) {
+            if (String(s).toLowerCase() === wildcardName) wildcardIndex = i;
+        });
         document.getElementById('wildcard-cert').checked = wildcardIndex !== -1;
         if (wildcardIndex !== -1) sans.splice(wildcardIndex, 1);
         document.getElementById('san_domains').value = sans.join(', ');
@@ -1697,6 +1703,15 @@
         if (cert.account_id) {
             var accountSelect = document.getElementById('account_select');
             if (accountSelect) accountSelect.value = cert.account_id;
+        }
+
+        // The wildcard checkbox and alias field live inside the collapsed
+        // Advanced Options panel: expand it whenever the prefill put a value
+        // there, so what the user sees is what gets submitted.
+        var advancedPanel = document.getElementById('advanced-options');
+        if (advancedPanel && advancedPanel.classList.contains('hidden') &&
+                (wildcardIndex !== -1 || cert.domain_alias)) {
+            toggleAdvancedOptions();
         }
 
         setReissueFormMode(true, domain);
@@ -1807,7 +1822,12 @@
         if (editingDomain) {
             var currentCert = allCertificates.find(function (c) { return c.domain === editingDomain; });
             var currentSans = (currentCert && currentCert.san_domains) || [];
-            var removedSans = currentSans.filter(function (s) { return sanDomains.indexOf(s) === -1; });
+            // Case-insensitive set difference: DNS names are, and a false
+            // "will REMOVE" warning on a case-only mismatch is misleading.
+            var newSanSet = sanDomains.map(function (s) { return String(s).toLowerCase(); });
+            var removedSans = currentSans.filter(function (s) {
+                return newSanSet.indexOf(String(s).toLowerCase()) === -1;
+            });
             if (removedSans.length > 0) {
                 var dropConfirmed = await CertMate.confirm(
                     'Reissuing ' + editingDomain + ' will REMOVE these names from the certificate:\n\n' +

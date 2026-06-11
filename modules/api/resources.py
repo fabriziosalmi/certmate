@@ -1791,6 +1791,7 @@ def create_api_resources(api, models, managers):
                     ca_provider=data.get('ca_provider'),
                     challenge_type=data.get('challenge_type'),
                     domain_alias=data.get('domain_alias'),
+                    alias_dns_provider=data.get('alias_dns_provider'),
                     key_type=data.get('key_type'),
                     key_size=data.get('key_size'),
                     elliptic_curve=data.get('elliptic_curve'),

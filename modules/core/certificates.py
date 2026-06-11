@@ -750,7 +750,7 @@ class CertificateManager:
             'dns_provider': dns_provider
         }
 
-    def create_certificate(self, domain, email, dns_provider=None, dns_config=None, account_id=None, staging=False, ca_provider=None, ca_account_id=None, domain_alias=None, san_domains=None, challenge_type=None, key_type=None, key_size=None, elliptic_curve=None, replace=False):
+    def create_certificate(self, domain, email, dns_provider=None, dns_config=None, account_id=None, staging=False, ca_provider=None, ca_account_id=None, domain_alias=None, alias_dns_provider=None, san_domains=None, challenge_type=None, key_type=None, key_size=None, elliptic_curve=None, replace=False):
         """Create SSL certificate using configurable CA with DNS challenge
 
         Args:
@@ -763,6 +763,11 @@ class CertificateManager:
             ca_provider: Certificate Authority provider (letsencrypt, digicert, private_ca)
             ca_account_id: Specific CA account ID to use
             domain_alias: Optional domain alias for DNS validation (e.g., '_acme-challenge.validation.example.org')
+            alias_dns_provider: Provider managing the ALIAS zone when it
+                differs from dns_provider (set via PATCH, issue #129, and
+                honoured by renewals). The alias challenge hook runs with
+                this provider's account; metadata records it so future
+                renewals keep using it.
             san_domains: Optional list of additional domains for Subject Alternative Names (SAN)
             key_type: Optional 'rsa' or 'ecdsa'. If all three key kwargs are
                 None the global ``default_key_*`` from settings are applied,
@@ -900,7 +905,7 @@ class CertificateManager:
                 # Get Strategy
                 strategy = DNSStrategyFactory.get_strategy(dns_provider)
 
-                if domain_alias and dns_provider not in DNS_ALIAS_SUPPORTED_PROVIDERS:
+                if domain_alias and (alias_dns_provider or dns_provider) not in DNS_ALIAS_SUPPORTED_PROVIDERS:
                     raise RuntimeError(
                         "DNS alias mode does not support this DNS provider yet. "
                         "Use a supported account that controls the alias zone, "
@@ -1032,9 +1037,16 @@ class CertificateManager:
             if replace:
                 # Reissue over the existing lineage: a different -d set with
                 # the same --cert-name replaces the lineage's domains (expand
-                # and shrink). The flag makes the confirmation deterministic
-                # instead of relying on the non-interactive prompt default.
-                certbot_cmd.append('--renew-with-new-domains')
+                # and shrink). --renew-with-new-domains makes that
+                # confirmation deterministic. --force-renewal is load-bearing
+                # for the UNCHANGED-set case (config-only edits: CA switch,
+                # provider change, alias clear, same-type re-key): without it
+                # certbot hits _handle_identical_cert_request outside the
+                # renewal window, takes the keep-existing default, and exits 0
+                # WITHOUT issuing — and CertMate would then rewrite metadata
+                # with configuration that was never applied. A reissue must
+                # always issue.
+                certbot_cmd.extend(['--renew-with-new-domains', '--force-renewal'])
 
             # Build per-request environment (avoid race conditions with os.environ)
             process_env = os.environ.copy()
@@ -1068,19 +1080,30 @@ class CertificateManager:
                 if dns_provider == 'custom-script':
                     process_env.setdefault('CERTMATE_DNS_PROPAGATION_SECONDS', str(propagation_time))
 
+            alias_hook_provider = alias_dns_provider or dns_provider
             use_dns_alias_hook = (
                 challenge_type != 'http-01'
                 and domain_alias
-                and dns_provider in DNS_ALIAS_SUPPORTED_PROVIDERS
+                and alias_hook_provider in DNS_ALIAS_SUPPORTED_PROVIDERS
             )
 
             if use_dns_alias_hook:
+                # The TXT records land on the ALIAS zone, so the hook must run
+                # with the account that controls that zone — which renewals
+                # already honour via metadata alias_dns_provider (issue #129).
+                alias_hook_config = dns_config
+                if alias_hook_provider != dns_provider:
+                    alias_hook_config, _ = self._get_dns_config(alias_hook_provider, account_id)
+                    if not alias_hook_config:
+                        raise ValueError(
+                            f"Alias DNS provider '{alias_hook_provider}' is not configured"
+                        )
                 logger.info(
                     f"DNS alias '{domain_alias}' requested for {domain}; "
-                    f"using {dns_provider} manual hook to create TXT records on the alias zone."
+                    f"using {alias_hook_provider} manual hook to create TXT records on the alias zone."
                 )
                 credentials_file = self._create_dns_alias_hook_config(
-                    dns_provider, dns_config, domain_alias, propagation_time or strategy.default_propagation_seconds
+                    alias_hook_provider, alias_hook_config, domain_alias, propagation_time or strategy.default_propagation_seconds
                 )
                 self._configure_dns_alias_arguments(certbot_cmd, credentials_file)
             else:
@@ -1178,7 +1201,7 @@ class CertificateManager:
             }
             if domain_alias:
                 metadata['domain_alias'] = domain_alias
-                metadata['alias_dns_provider'] = dns_provider
+                metadata['alias_dns_provider'] = alias_dns_provider or dns_provider
             
             if self.storage_manager:
                 try:

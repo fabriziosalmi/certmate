@@ -4,13 +4,14 @@ Closes [#267](https://github.com/fabriziosalmi/certmate/issues/267): extend or d
 
 ### Features
 
-- **`POST /api/certificates/<domain>/reissue`** — edits a certificate's configuration and reissues it in place over the existing certbot lineage (`--cert-name` + `--renew-with-new-domains`: the new domain set replaces the old, expand and shrink in one step, reusing the ACME account). Omitted fields keep the values the certificate was issued with, read from its metadata — DNS provider, account, alias, CA and challenge type never need re-entering. Explicit semantics: `san_domains` omitted keeps the current set, `[]` drops every SAN; `domain_alias: ""` clears the alias. Sync and async (202 + job poll), operator role, scope enforced on the final SAN set including inherited entries.
+- **`POST /api/certificates/<domain>/reissue`** — edits a certificate's configuration and reissues it in place over the existing certbot lineage (`--cert-name` + `--renew-with-new-domains`: the new domain set replaces the old, expand and shrink in one step, reusing the ACME account). Omitted fields keep the values the certificate was issued with, read from its metadata — DNS provider, account, alias (including a distinct alias DNS provider, issue #129), CA and challenge type never need re-entering. Explicit semantics: `san_domains` omitted keeps the current set, `[]` drops every SAN; `domain_alias: ""` clears the alias. Sync and async (202 + job poll), operator role, scope enforced on the final SAN set including inherited entries.
 - **Edit & Reissue in the dashboard** — new action in the certificate detail panel opens the create form prefilled from the certificate's data (wildcard checkbox reverse-mapped out of the SAN list, primary domain readonly — it is the certificate's identity). Dropping SANs raises a danger confirmation listing the removed names.
 - Certificate listings now surface `ca_provider`, `challenge_type` and `account_id` from metadata (null for certificates issued before these were recorded).
 
 ### Safety properties
 
-- **The old certificate keeps being served until certbot succeeds** — a failed reissue leaves files, metadata and storage untouched (pinned by test).
+- **A reissue always issues** — `--force-renewal` is part of the reissue invocation: without it, a config-only edit (CA switch, provider change, same-type re-key) with an unchanged domain set would hit certbot's identical-certificate prompt outside the renewal window and silently no-op while reporting success. Found by adversarial review against the pinned certbot source.
+- **The old certificate keeps being served until certbot succeeds** — a failed reissue leaves files, metadata and storage untouched (all three pinned by test).
 - **Key shape is preserved** — metadata does not record the key shape, so the reissue path sends no key flags and certbot keeps the lineage key; passing an explicit key option is a deliberate re-key. Without this rule a reissue would silently re-key certificates to the global defaults.
 - Renewals after a reissue pick up the new domain set automatically (certbot replays its updated renewal conf).
 

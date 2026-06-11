@@ -127,10 +127,30 @@ def test_replace_bypasses_guard_and_pins_lineage_update_flags(tmp_path):
     assert result['success'] is True
     cmd = shell.commands_executed[0].split()
     assert '--renew-with-new-domains' in cmd
+    assert '--force-renewal' in cmd
     assert cmd[cmd.index('--cert-name') + 1] == DOMAIN
     # Full replacement -d set: primary + both SANs.
     d_values = [cmd[i + 1] for i, part in enumerate(cmd) if part == '-d']
     assert d_values == [DOMAIN, 'api.example.duckdns.org', 'new.example.duckdns.org']
+
+
+def test_unchanged_set_reissue_still_forces_issuance(tmp_path):
+    """Adversarial-review critical: with an UNCHANGED -d set certbot ignores
+    --renew-with-new-domains, hits the identical-cert prompt and exits 0
+    WITHOUT issuing outside the renewal window — and the pipeline would then
+    rewrite metadata that was never applied. --force-renewal is what makes a
+    config-only reissue (CA switch, provider change, same-type re-key)
+    actually issue."""
+    _seed_existing_cert(tmp_path)
+    shell = _fake_issuance(MockShellExecutor(), tmp_path, DOMAIN)
+    shell.set_next_result(returncode=0)
+    mgr = _manager(tmp_path, shell)
+
+    # Same SAN set as the seeded metadata: a pure config-only reissue.
+    _create(mgr, replace=True, san_domains=['api.example.duckdns.org'])
+
+    cmd = shell.commands_executed[0].split()
+    assert '--force-renewal' in cmd
 
 
 # ---------------------------------------------------------------------------
@@ -288,12 +308,105 @@ def test_prepare_reissue_empty_string_clears_alias(tmp_path):
 
 
 def test_prepare_reissue_scope_covers_inherited_sans(tmp_path):
-    # A scoped key must not keep another tenant's SAN alive through
-    # inheritance: the FINAL set is scope-checked, kept SANs included.
+    """A scoped key must not keep another tenant's SAN alive through
+    inheritance: the FINAL set is scope-checked, kept SANs included.
+
+    The mock allows the PRIMARY and denies only the inherited SAN — a
+    blanket deny would pass on the primary check alone and the test
+    would still pass with the SAN scope loop deleted (mutation-verified
+    by the adversarial review)."""
     _seed_existing_cert(tmp_path)
-    service, _ = _service(tmp_path, scope_ok=False)
-    with pytest.raises(DomainOutOfScope):
+    service, _ = _service(tmp_path)
+    service._auth.user_can_access_domain.side_effect = (
+        lambda user, d: d == DOMAIN
+    )
+    with pytest.raises(DomainOutOfScope) as exc:
         service.prepare_reissue(domain=DOMAIN)
+    assert 'api.example.duckdns.org' in str(exc.value)
+
+
+def test_prepare_reissue_inherits_alias_dns_provider(tmp_path):
+    """The alias zone may live with a DIFFERENT provider than the primary
+    (set via PATCH, issue #129; renewals honour it). The reissue must
+    inherit it and run the alias hook with that account, or it would
+    attempt the challenge with the wrong provider."""
+    _seed_existing_cert(tmp_path, metadata={
+        'domain': DOMAIN,
+        'san_domains': [],
+        'dns_provider': 'duckdns',
+        'domain_alias': 'validation.example.net',
+        'alias_dns_provider': 'cloudflare',
+    })
+    service, _ = _service(tmp_path)
+
+    prepared = service.prepare_reissue(domain=DOMAIN)
+    assert prepared['alias_dns_provider'] == 'cloudflare'
+
+    # Clearing the alias also clears the alias provider.
+    cleared = service.prepare_reissue(domain=DOMAIN, domain_alias='')
+    assert cleared['domain_alias'] is None
+    assert cleared['alias_dns_provider'] is None
+
+
+def test_reissue_alias_hook_runs_with_alias_provider(tmp_path):
+    _seed_existing_cert(tmp_path, metadata={
+        'domain': DOMAIN,
+        'san_domains': [],
+        'dns_provider': 'cloudflare',
+        'domain_alias': 'validation.example.net',
+        'alias_dns_provider': 'route53',
+    })
+    shell = _fake_issuance(MockShellExecutor(), tmp_path, DOMAIN)
+    shell.set_next_result(returncode=0)
+    mgr = _manager(tmp_path, shell)
+
+    def per_provider_config(provider, account_id=None, settings=None):
+        return ({'provider': provider}, 'default')
+
+    mgr.dns_manager.get_dns_provider_account_config.side_effect = per_provider_config
+
+    captured = {}
+
+    def capture_hook(provider, config, alias, propagation):
+        captured['provider'] = provider
+        captured['config'] = config
+        return None  # no credentials file to clean up
+
+    with patch.object(CertificateManager, '_create_dns_alias_hook_config',
+                      side_effect=capture_hook), \
+         patch('modules.core.certificates.check_certbot_plugin_installed',
+               return_value=True), \
+         patch.object(CertificateManager, '_write_pfx', return_value=None):
+        mgr.create_certificate(
+            domain=DOMAIN, email='a@b.it', dns_provider='cloudflare',
+            domain_alias='validation.example.net',
+            alias_dns_provider='route53', replace=True,
+        )
+
+    assert captured['provider'] == 'route53'
+    assert captured['config'] == {'provider': 'route53'}
+    metadata = json.loads((tmp_path / DOMAIN / 'metadata.json').read_text())
+    assert metadata['alias_dns_provider'] == 'route53'
+
+
+def test_failed_reissue_never_touches_storage_backend(tmp_path):
+    """The release notes claim storage is untouched on failure; pin it
+    instead of relying on code order alone."""
+    _seed_existing_cert(tmp_path)
+    shell = MockShellExecutor()
+    shell.set_next_result(returncode=1, stderr='boom')
+    mgr = _manager(tmp_path, shell)
+    mgr.storage_manager = MagicMock()
+
+    with pytest.raises(RuntimeError), \
+         patch('modules.core.certificates.check_certbot_plugin_installed',
+               return_value=True), \
+         patch.object(CertificateManager, '_write_pfx', return_value=None):
+        mgr.create_certificate(
+            domain=DOMAIN, email='a@b.it', dns_provider='duckdns', replace=True,
+        )
+
+    mgr.storage_manager.store_certificate.assert_not_called()
 
 
 def test_issue_reissue_end_to_end_replaces(tmp_path):

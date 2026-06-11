@@ -246,6 +246,7 @@ def create_api_models(api):
         'ca_provider': fields.String(description='Omit to keep the value the certificate was issued with'),
         'challenge_type': fields.String(description='Omit to keep the value the certificate was issued with'),
         'domain_alias': fields.String(description='Omit to keep the current alias; pass "" to clear it'),
+        'alias_dns_provider': fields.String(description='Provider managing the alias zone when it differs from dns_provider. Omit to keep the issued value'),
         'key_type': fields.String(
             description='Omit to keep the existing key shape (no key flags are '
                         'sent and certbot preserves the lineage key). Set to '
