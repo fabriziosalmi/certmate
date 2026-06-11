@@ -29,6 +29,18 @@ class CAManager:
                 'certificate_types': ['DV'],
                 'description': 'Free, automated SSL certificates'
             },
+            # Staging modelled as its own CA entry (#279) instead of a
+            # per-certificate boolean: it behaves like a different authority
+            # in every way that matters (directory, trust, rate limits).
+            'letsencrypt_staging': {
+                'name': 'Let\'s Encrypt (Staging)',
+                'production_url': 'https://acme-staging-v02.api.letsencrypt.org/directory',
+                'staging_url': 'https://acme-staging-v02.api.letsencrypt.org/directory',
+                'requires_eab': False,
+                'supports_wildcard': True,
+                'certificate_types': ['DV'],
+                'description': 'Let\'s Encrypt staging environment - untrusted test certificates with generous rate limits'
+            },
             'digicert': {
                 'name': 'DigiCert',
                 'production_url': 'https://acme.digicert.com/v2/DV',
@@ -108,9 +120,17 @@ class CAManager:
         
         # Get CA provider configuration
         ca_providers = settings.get('ca_providers', {})
+        if (ca_provider == 'letsencrypt_staging'
+                and ca_provider not in ca_providers
+                and 'letsencrypt' in ca_providers):
+            # Staging shares the Let's Encrypt account shape (just an email,
+            # no credentials) — inherit it so selecting the staging CA works
+            # without re-entering settings. An explicit letsencrypt_staging
+            # entry still takes precedence.
+            ca_provider = 'letsencrypt'
         if ca_provider not in ca_providers:
             raise ValueError(f"CA provider '{ca_provider}' not configured")
-        
+
         provider_config = ca_providers[ca_provider]
         
         # Handle multi-account support
@@ -368,9 +388,3 @@ class CAManager:
         
         return display_info
 
-    def _get_letsencrypt_directory_url(self, environment: str = 'production') -> str:
-        """Get Let's Encrypt directory URL for the specified environment"""
-        if environment == 'staging':
-            return self.ca_providers['letsencrypt']['staging_url']
-        else:
-            return self.ca_providers['letsencrypt']['production_url']

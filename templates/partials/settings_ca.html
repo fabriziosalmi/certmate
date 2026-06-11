@@ -17,6 +17,7 @@
                                         class="w-full px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm"
                                         onchange="toggleCAProviderConfig()">
                                     <option value="letsencrypt">Let's Encrypt (Default)</option>
+                                    <option value="letsencrypt_staging">Let's Encrypt (Staging)</option>
                                     <option value="zerossl">ZeroSSL</option>
                                     <option value="google">Google Trust Services</option>
                                     <option value="buypass">BuyPass Go</option>
@@ -57,6 +58,28 @@
                                 </div>
                                 <p class="text-xs text-success-fg mt-2">
                                     Let's Encrypt provides free SSL certificates with automated renewal.
+                                </p>
+                            </div>
+
+                            <!-- Let's Encrypt (Staging) Configuration -->
+                            <div id="letsencrypt-staging-config" class="border border-warning-line rounded-lg p-4 bg-warning-surface" style="display: none;">
+                                <h4 class="text-sm font-semibold text-warning-strong mb-2 flex items-center">
+                                    <i class="fas fa-flask mr-2 text-yellow-600"></i>
+                                    Let's Encrypt (Staging) Configuration
+                                    <span class="ml-2 text-xs bg-warning-surface text-warning-strong px-2 py-0.5 rounded-full">Testing</span>
+                                </h4>
+                                <div class="space-y-3">
+                                    <div>
+                                        <label class="block text-xs text-warning-strong mb-1">Email (for notifications)</label>
+                                        <input type="email" id="letsencrypt-staging-email"
+                                               class="w-full px-2 py-1 text-sm border border-warning-line rounded bg-surface text-foreground"
+                                               placeholder="admin@example.com">
+                                    </div>
+                                </div>
+                                <p class="text-xs text-warning-fg mt-2">
+                                    The staging environment issues certificates that are NOT trusted by browsers.
+                                    Use it to validate DNS and deployment setup without consuming production rate limits.
+                                    If the email is left empty, the Let's Encrypt account email is used.
                                 </p>
                             </div>
 

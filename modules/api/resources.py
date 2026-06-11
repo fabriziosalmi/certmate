@@ -2529,9 +2529,9 @@ def create_api_resources(api, models, managers):
 
                 # Test connection based on CA provider type
                 try:
-                    if ca_provider == 'letsencrypt':
-                        # Test Let's Encrypt connection
-                        environment = config.get('environment', 'production')
+                    if ca_provider in ('letsencrypt', 'letsencrypt_staging'):
+                        # Email-only validation; the directory is pinned per
+                        # entry in CAManager (staging is its own CA since #279).
                         email = config.get('email', '')
 
                         if not email:
@@ -2541,14 +2541,12 @@ def create_api_resources(api, models, managers):
                                 'ca_provider': ca_provider
                             }
 
-                        # Test by getting the directory URL
-                        directory_url = ca_manager._get_letsencrypt_directory_url(environment)
-
+                        provider_name = ca_manager.ca_providers[ca_provider]['name']
                         return {
                             'success': True,
-                            'message': f'Let\'s Encrypt {environment} endpoint is accessible',
+                            'message': f'{provider_name} configuration appears valid',
                             'ca_provider': ca_provider,
-                            'directory_url': directory_url
+                            'directory_url': ca_manager.ca_providers[ca_provider]['production_url']
                         }
 
                     elif ca_provider == 'digicert':
