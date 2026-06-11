@@ -1,3 +1,18 @@
+## v2.12.1 (Feature — custom-script DNS provider)
+
+Closes [#286](https://github.com/fabriziosalmi/certmate/issues/286): a Cert Warden-style `custom-script` DNS provider that drives admin-supplied hook scripts through certbot's core `--manual` mode. Any DNS provider without a certbot plugin — Oracle Cloud ([#285](https://github.com/fabriziosalmi/certmate/issues/285)), in-house DNS, appliance APIs — becomes usable with two shell scripts and zero plugin installs.
+
+### Features
+
+- **`custom-script` DNS provider** — configure an auth hook (required) and a cleanup hook (optional); certbot invokes them with the standard `CERTBOT_DOMAIN`/`CERTBOT_VALIDATION` environment. The auth hook creates the `_acme-challenge` TXT record and waits for propagation (an optional per-account `propagation_seconds` is exported as `CERTMATE_DNS_PROPAGATION_SECONDS`). Multi-account support, settings UI panel and per-certificate selection included; renewals replay the hook paths from certbot's renewal conf.
+- **Trust model = deploy hooks** — scripts are admin-configured and validated at issuance and by Test Provider: absolute path, existing, executable, not world-writable (group-writable logs a warning). A broken path fails loudly before certbot ever runs.
+- The Test Provider button performs a real filesystem validation for this provider (scripts are not executed).
+
+### Notes
+
+- `--manual` is certbot core: the plugin-installed preflight is skipped and no entry is added to requirements-extended.
+- docs/dns-providers.md gains a worked OCI example.
+
 ## v2.12.0 (Feature — staging as a Certificate Authority)
 
 Closes [#279](https://github.com/fabriziosalmi/certmate/issues/279): the "use staging environment" option is gone; Let's Encrypt staging is now a first-class CA entry, consistent with how every other authority is selected.

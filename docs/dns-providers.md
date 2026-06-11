@@ -33,6 +33,7 @@ CertMate supports a wide range of DNS providers for Let's Encrypt DNS-01 challen
 | **Hurricane Electric** | `certbot-dns-he-ddns` | Username, Password | Free DNS |
 | **Dynu** | `certbot-dns-dynudns` | API Token | Dynamic DNS |
 | **DuckDNS** | `certbot-dns-duckdns` | Account Token | Free DDNS (no domain required) |
+| **Custom Script** | none (certbot core `--manual`) | Auth hook script path (+ optional cleanup hook) | Bring your own |
 
 ---
 
@@ -372,6 +373,60 @@ Wildcards such as `*.mybox.duckdns.org` are supported via the same token.
 Because DuckDNS only stores one TXT record per domain at a time, a single
 certbot run per DuckDNS subdomain is required — SAN certificates that span
 multiple DuckDNS subdomains are not supported.
+
+### Custom Script (bring your own provider)
+
+For DNS providers without a certbot plugin — Oracle Cloud (OCI), in-house DNS,
+appliance APIs — point CertMate at your own scripts and it drives them through
+certbot's core `--manual` mode. No plugin installation required.
+
+```json
+{
+  "dns_provider": "custom-script",
+  "dns_providers": {
+    "custom-script": {
+      "auth_hook": "/usr/local/bin/certmate-dns-auth.sh",
+      "cleanup_hook": "/usr/local/bin/certmate-dns-cleanup.sh"
+    }
+  }
+}
+```
+
+certbot invokes the auth hook once per domain with the standard
+[manual-hook environment](https://eff-certbot.readthedocs.io/en/stable/using.html#hooks):
+`CERTBOT_DOMAIN` (the domain being validated) and `CERTBOT_VALIDATION`
+(the TXT value). The script must create the
+`_acme-challenge.$CERTBOT_DOMAIN` TXT record **and wait until it has
+propagated** — certbot validates immediately after the hook returns.
+The optional cleanup hook runs after validation to remove the record.
+
+Worked example for OCI DNS (covers [#285](https://github.com/fabriziosalmi/certmate/issues/285)):
+
+```bash
+#!/bin/sh
+# /usr/local/bin/certmate-dns-auth.sh
+set -eu
+ZONE="example.com"
+oci dns record rrset update --force \
+  --zone-name-or-id "$ZONE" \
+  --domain "_acme-challenge.${CERTBOT_DOMAIN}" \
+  --rtype TXT \
+  --items "[{\"domain\": \"_acme-challenge.${CERTBOT_DOMAIN}\", \"rdata\": \"${CERTBOT_VALIDATION}\", \"rtype\": \"TXT\", \"ttl\": 60}]"
+sleep "${CERTMATE_DNS_PROPAGATION_SECONDS:-60}"
+```
+
+Requirements and trust model:
+
+- Paths must be **absolute**, the files must exist, be **executable**, and
+  must not be world-writable (validated at issuance and by Test Provider)
+- Scripts run with CertMate's privileges — same trust model as deploy
+  hooks: only admins can configure them, treat them as part of your
+  deployment
+- An optional `propagation_seconds` field in the account config is
+  exported to the scripts as `CERTMATE_DNS_PROPAGATION_SECONDS`
+- Renewals replay the hook paths from certbot's renewal configuration:
+  keep the scripts at a stable path (if you move them, reissue)
+- Wildcard certificates work (the hook receives each validation record)
 
 ---
 
