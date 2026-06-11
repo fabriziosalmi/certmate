@@ -322,7 +322,7 @@ def test_prepare_reissue_scope_covers_inherited_sans(tmp_path):
     )
     with pytest.raises(DomainOutOfScope) as exc:
         service.prepare_reissue(domain=DOMAIN)
-    assert 'api.example.duckdns.org' in str(exc.value)
+    assert exc.value.domain == 'api.example.duckdns.org'
 
 
 def test_prepare_reissue_inherits_alias_dns_provider(tmp_path):

@@ -1847,7 +1847,11 @@ def create_api_resources(api, models, managers):
                     'hint': hint + ' The previous certificate is still in place.'
                 }, 422
             except Exception as e:
-                logger.error(f"Certificate reissue failed for {domain}: {str(e)}")
+                # Scrub CR/LF before logging: domain comes from the URL path
+                # and a crafted value could forge log entries (CodeQL
+                # py/log-injection; same treatment as cert_service._scrub_log).
+                safe_domain = str(domain).replace('\r', '').replace('\n', '')
+                logger.error(f"Certificate reissue failed for {safe_domain}: {str(e)}")
                 event_bus = current_app.config.get('EVENT_BUS')
                 if event_bus:
                     event_bus.publish('certificate_failed', {'domain': domain, 'error': str(e)})
