@@ -171,6 +171,22 @@ def test_test_endpoint_handles_every_provider():
         )
 
 
+def test_actalis_provider_metadata_pinned():
+    """Pin the Actalis facts that issuance correctness depends on.
+
+    The other tests here derive expectations from the ca_providers dict
+    itself, so an accidental edit of the entry (flipping requires_eab,
+    typoing the directory URL) would self-consistently pass. These values
+    come from the official Actalis ACME documentation and a registration
+    without EAB — or against a wrong directory — fails outright.
+    """
+    actalis = CAManager(settings_manager=None).ca_providers['actalis']
+    assert actalis['production_url'] == 'https://acme-api.actalis.com/acme/directory'
+    assert actalis['requires_eab'] is True
+    assert actalis['supports_wildcard'] is False
+    assert actalis['certificate_types'] == ['DV']
+
+
 def test_eab_validation_consistent_with_provider_flags():
     manager = CAManager(settings_manager=None)
     for provider, info in manager.ca_providers.items():
