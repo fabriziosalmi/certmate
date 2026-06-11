@@ -830,9 +830,12 @@ class CertificateManager:
                         # request to production issuance.
                         logger.info(f"No saved CA config for {ca_provider}; using certbot defaults: {e}")
                     else:
-                        logger.warning(f"Could not get CA config, using default Let's Encrypt: {e}")
-                        ca_provider = 'letsencrypt'
-                        staging = False
+                        # Preserve the caller's staging intent across the
+                        # fallback: resetting to production letsencrypt here
+                        # would turn a test request into trusted production
+                        # issuance (and burn real rate limits).
+                        ca_provider = 'letsencrypt_staging' if staging else 'letsencrypt'
+                        logger.warning(f"Could not get CA config, falling back to {ca_provider}: {e}")
             
             # Resolve challenge type from settings if not provided
             if not challenge_type:

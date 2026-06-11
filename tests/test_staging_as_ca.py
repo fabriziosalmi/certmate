@@ -199,6 +199,26 @@ def test_unconfigured_staging_ca_is_not_flipped_to_production(tmp_path):
     assert '--server' not in cmd
 
 
+def test_fallback_preserves_staging_for_unconfigured_other_ca(tmp_path):
+    """Regression (adversarial review): a legacy staging=True request with an
+    unconfigured non-LE provider used to be reset to production letsencrypt
+    by the fallback — issuing a trusted production cert (and burning real
+    rate limits) where a test was intended."""
+    domain = 'app.example.duckdns.org'
+    shell = _fake_issuance(MockShellExecutor(), tmp_path, domain)
+    shell.set_next_result(returncode=0)
+    ca_manager = _ca_manager({'ca_providers': {}})
+    mgr = _cert_manager(tmp_path, shell, ca_manager=ca_manager)
+
+    result = _create(mgr, domain, ca_provider='zerossl', staging=True)
+
+    assert result['success'] is True
+    assert result['ca_provider'] == 'letsencrypt_staging'
+    cmd = shell.commands_executed[0].split()
+    assert '--staging' in cmd
+    assert '--server' not in cmd
+
+
 def test_configured_staging_ca_issues_against_staging_server(tmp_path):
     domain = 'app.example.duckdns.org'
     shell = _fake_issuance(MockShellExecutor(), tmp_path, domain)

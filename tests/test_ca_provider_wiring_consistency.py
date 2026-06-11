@@ -63,7 +63,7 @@ def test_models_enum_matches_ca_manager():
 def test_settings_select_offers_every_provider():
     html = _read('templates/partials/settings_ca.html')
     # Scope to the default-ca select: the file also contains the
-    # letsencrypt environment dropdown and the private-ca preset select.
+    # private-ca preset select, whose options are not CA provider keys.
     match = re.search(r'<select id="default-ca".*?</select>', html, re.S)
     assert match, 'default-ca select not found in settings_ca.html'
     offered = set(re.findall(r'<option value="([\w-]+)"', match.group(0)))
