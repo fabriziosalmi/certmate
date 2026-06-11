@@ -82,6 +82,19 @@ class CAManager:
                 'supports_wildcard': True,
                 'certificate_types': ['DV', 'OV', 'EV'],
                 'description': 'Enterprise SSL certificates from SSL.com'
+            },
+            'actalis': {
+                'name': 'Actalis',
+                'production_url': 'https://acme-api.actalis.com/acme/directory',
+                # Actalis does not publish a staging/test ACME endpoint.
+                'staging_url': 'https://acme-api.actalis.com/acme/directory',
+                'requires_eab': True,
+                # ACME plans are DV only; wildcard is explicitly not
+                # offered via ACME (guide.actalis.com FAQ). The free plan
+                # is limited to single-domain 90-day certificates.
+                'supports_wildcard': False,
+                'certificate_types': ['DV'],
+                'description': 'European CA (Italy) with free 90-day DV certificates via ACME'
             }
         }
     

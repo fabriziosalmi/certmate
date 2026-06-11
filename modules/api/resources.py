@@ -2594,6 +2594,53 @@ def create_api_resources(api, models, managers):
                             'acme_url': acme_url
                         }
 
+                    elif ca_provider in ('zerossl', 'google', 'sslcom', 'actalis'):
+                        # Fixed-directory EAB CAs share one shape: the ACME
+                        # URL is pinned in CAManager, so the test validates
+                        # EAB credentials + email. Accept both field
+                        # spellings (the settings form posts eab_kid/eab_hmac
+                        # for DigiCert but eab_key_id/eab_hmac_key here).
+                        provider_name = ca_manager.ca_providers[ca_provider]['name']
+                        eab_kid = config.get('eab_kid') or config.get('eab_key_id', '')
+                        eab_hmac = config.get('eab_hmac') or config.get('eab_hmac_key', '')
+                        email = config.get('email', '')
+
+                        if not eab_kid or not eab_hmac:
+                            return {
+                                'success': False,
+                                'message': f'EAB credentials (Key ID and HMAC Key) are required for {provider_name}',
+                                'ca_provider': ca_provider
+                            }
+
+                        if not email:
+                            return {
+                                'success': False,
+                                'message': f'Email is required for {provider_name}',
+                                'ca_provider': ca_provider
+                            }
+
+                        return {
+                            'success': True,
+                            'message': f'{provider_name} configuration appears valid',
+                            'ca_provider': ca_provider,
+                            'acme_url': ca_manager.ca_providers[ca_provider]['production_url']
+                        }
+
+                    elif ca_provider == 'buypass':
+                        email = config.get('email', '')
+                        if not email:
+                            return {
+                                'success': False,
+                                'message': 'Email is required for BuyPass Go',
+                                'ca_provider': ca_provider
+                            }
+                        return {
+                            'success': True,
+                            'message': 'BuyPass Go configuration appears valid',
+                            'ca_provider': ca_provider,
+                            'acme_url': ca_manager.ca_providers[ca_provider]['production_url']
+                        }
+
                     elif ca_provider == 'private_ca':
                         # Test Private CA connection
                         acme_url = config.get('acme_url', '')

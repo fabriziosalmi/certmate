@@ -175,6 +175,8 @@
                 email = (caProviders.google && caProviders.google.email) || '';
             } else if (defaultCA === 'buypass') {
                 email = (caProviders.buypass && caProviders.buypass.email) || '';
+            } else if (defaultCA === 'actalis') {
+                email = (caProviders.actalis && caProviders.actalis.email) || '';
             } else if (defaultCA === 'sslcom') {
                 email = (caProviders.sslcom && caProviders.sslcom.email) || '';
             } else if (defaultCA === 'digicert') {
@@ -230,6 +232,7 @@
                     defaultCA === 'zerossl' ? 'ZeroSSL' :
                     defaultCA === 'google' ? 'Google Trust Services' :
                     defaultCA === 'buypass' ? 'BuyPass Go' :
+                    defaultCA === 'actalis' ? 'Actalis' :
                     defaultCA === 'sslcom' ? 'SSL.com' :
                     defaultCA === 'digicert' ? 'DigiCert' : 'Private CA';
                 throw new Error('Email address is required in the ' + caDisplayName + ' configuration section');
@@ -1847,13 +1850,14 @@
             // not collide and leave the CA panel hidden (issue #226).
             'google': 'google-ca-config',
             'buypass': 'buypass-config',
+            'actalis': 'actalis-config',
             'digicert': 'digicert-config',
             'sslcom': 'sslcom-config',
             'private_ca': 'private-ca-config'
         };
 
         // Hide all CA configuration panels and disable their required fields
-        var caConfigs = ['letsencrypt-config', 'zerossl-config', 'google-ca-config', 'buypass-config', 'digicert-config', 'sslcom-config', 'private-ca-config'];
+        var caConfigs = ['letsencrypt-config', 'zerossl-config', 'google-ca-config', 'buypass-config', 'actalis-config', 'digicert-config', 'sslcom-config', 'private-ca-config'];
         caConfigs.forEach(function (configId) {
             var element = document.getElementById(configId);
             if (element) {
@@ -1894,6 +1898,9 @@
                     break;
                 case 'buypass':
                     hintElement.textContent = 'Enter your email address and test BuyPass Go connection';
+                    break;
+                case 'actalis':
+                    hintElement.textContent = 'Enter EAB credentials and email, then test Actalis connection';
                     break;
                 case 'digicert':
                     hintElement.textContent = 'Enter ACME URL, EAB credentials, and email, then test DigiCert connection';
@@ -1948,6 +1955,14 @@
             var bpEmail = document.getElementById('buypass-email').value;
             if (!bpEmail.trim()) missingFields.push('Email');
             config = { email: bpEmail };
+        } else if (caProvider === 'actalis') {
+            var acEabKid = document.getElementById('actalis-eab-kid').value;
+            var acEabHmac = document.getElementById('actalis-eab-hmac').value;
+            var acEmail = document.getElementById('actalis-email').value;
+            if (!acEabKid.trim()) missingFields.push('EAB Key ID');
+            if (!acEabHmac.trim()) missingFields.push('EAB HMAC Key');
+            if (!acEmail.trim()) missingFields.push('Email');
+            config = { eab_kid: acEabKid, eab_hmac: acEabHmac, email: acEmail };
         } else if (caProvider === 'sslcom') {
             var sEabKid = document.getElementById('sslcom-eab-kid').value;
             var sEabHmac = document.getElementById('sslcom-eab-hmac').value;
@@ -2308,6 +2323,16 @@
             document.getElementById('buypass-email').value = buypassConfig.email;
         }
 
+        // Load Actalis settings
+        // Don't populate HMAC key for security reasons - user needs to re-enter
+        var actalisConfig = caProviders.actalis || {};
+        if (actalisConfig.eab_kid) {
+            document.getElementById('actalis-eab-kid').value = actalisConfig.eab_kid;
+        }
+        if (actalisConfig.email) {
+            document.getElementById('actalis-email').value = actalisConfig.email;
+        }
+
         // Load DigiCert settings
         var digicertConfig = caProviders.digicert || {};
         if (digicertConfig.acme_url) {
@@ -2434,6 +2459,13 @@
         // BuyPass Go configuration
         caProviders.buypass = {
             email: document.getElementById('buypass-email').value || ''
+        };
+
+        // Actalis configuration
+        caProviders.actalis = {
+            eab_kid: document.getElementById('actalis-eab-kid').value || '',
+            eab_hmac: document.getElementById('actalis-eab-hmac').value || '',
+            email: document.getElementById('actalis-email').value || ''
         };
 
         // DigiCert configuration

@@ -20,6 +20,7 @@
                                     <option value="zerossl">ZeroSSL</option>
                                     <option value="google">Google Trust Services</option>
                                     <option value="buypass">BuyPass Go</option>
+                                    <option value="actalis">Actalis</option>
                                     <option value="digicert">DigiCert ACME</option>
                                     <option value="sslcom">SSL.com</option>
                                     <option value="private_ca">Private CA</option>
@@ -146,6 +147,43 @@
                                 </div>
                                 <p class="text-xs text-success-fg mt-2">
                                     BuyPass Go provides free SSL certificates with a 180-day validity. Wildcard domains are not supported.
+                                </p>
+                            </div>
+
+                            <!-- Actalis Configuration -->
+                            <div id="actalis-config" class="border border-info-line rounded-lg p-4 bg-info-surface" style="display: none;">
+                                <h4 class="text-sm font-semibold text-info-strong mb-2 flex items-center">
+                                    <i class="fas fa-certificate mr-2 text-blue-600"></i>
+                                    Actalis Configuration
+                                    <span class="ml-2 text-xs bg-info-surface text-info-strong px-2 py-0.5 rounded-full">Free</span>
+                                </h4>
+                                <div class="space-y-3">
+                                    <div>
+                                        <label class="block text-xs text-info-strong mb-1">External Account Binding (EAB) Key ID</label>
+                                        <input type="text" id="actalis-eab-kid"
+                                               class="w-full px-2 py-1 text-sm border border-info-line rounded bg-surface text-foreground"
+                                               placeholder="Your EAB Key ID from Actalis">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-info-strong mb-1">External Account Binding (EAB) HMAC Key</label>
+                                        <input type="password" id="actalis-eab-hmac"
+                                               class="w-full px-2 py-1 text-sm border border-info-line rounded bg-surface text-foreground"
+                                               placeholder="Your EAB HMAC Key from Actalis"
+                                               autocomplete="new-password"
+                                               spellcheck="false"
+                                               data-lpignore="true">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-info-strong mb-1">Email (for notifications)</label>
+                                        <input type="email" id="actalis-email"
+                                               class="w-full px-2 py-1 text-sm border border-info-line rounded bg-surface text-foreground"
+                                               placeholder="admin@example.com">
+                                    </div>
+                                </div>
+                                <p class="text-xs text-info-fg mt-2">
+                                    Actalis is a European (Italian) CA offering free 90-day DV certificates via ACME.
+                                    Generate EAB credentials in your Actalis customer area under Manage with ACME, then ACME Credentials.
+                                    The free plan covers single-domain certificates only (no wildcard, no SAN).
                                 </p>
                             </div>
 
