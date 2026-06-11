@@ -240,7 +240,8 @@
                     defaultCA === 'buypass' ? 'BuyPass Go' :
                     defaultCA === 'actalis' ? 'Actalis' :
                     defaultCA === 'sslcom' ? 'SSL.com' :
-                    defaultCA === 'digicert' ? 'DigiCert' : 'Private CA';
+                    defaultCA === 'digicert' ? 'DigiCert' :
+                    defaultCA === 'private_ca' ? 'Private CA' : defaultCA;
                 throw new Error('Email address is required in the ' + caDisplayName + ' configuration section');
             }
 
@@ -2350,8 +2351,10 @@
         defaultCASelect.value = defaultCA;
         if (defaultCASelect.value !== defaultCA) {
             // Unknown CA key (e.g. cached old JS against a newer backend):
-            // append it as a raw option so a settings save round-trips the
-            // stored value instead of silently flipping the default CA.
+            // append it as a raw option so the stored selection stays
+            // visible instead of the select silently flipping to another CA.
+            // (A save still requires an email source for the key, so the
+            // validation below blocks it rather than posting blind.)
             var unknownOption = document.createElement('option');
             unknownOption.value = defaultCA;
             unknownOption.textContent = defaultCA;

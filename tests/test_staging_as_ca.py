@@ -122,6 +122,19 @@ def test_get_ca_config_explicit_staging_entry_wins():
     assert config == {'email': 'staging@b.it'}
 
 
+def test_get_ca_config_empty_staging_entry_still_aliases():
+    # The settings UI materializes letsencrypt_staging as {email: ''} on
+    # every save; an empty entry must not defeat the inheritance.
+    manager = _ca_manager({
+        'ca_providers': {
+            'letsencrypt': {'email': 'le@b.it'},
+            'letsencrypt_staging': {'email': ''},
+        },
+    })
+    config, _ = manager.get_ca_config('letsencrypt_staging')
+    assert config == {'email': 'le@b.it'}
+
+
 def test_get_ca_config_staging_unconfigured_raises():
     # The create path catches this and falls through to the plain-certbot
     # branch, which covers staging via --staging.

@@ -120,14 +120,17 @@ class CAManager:
         
         # Get CA provider configuration
         ca_providers = settings.get('ca_providers', {})
-        if (ca_provider == 'letsencrypt_staging'
-                and ca_provider not in ca_providers
-                and 'letsencrypt' in ca_providers):
+        if ca_provider == 'letsencrypt_staging' and 'letsencrypt' in ca_providers:
             # Staging shares the Let's Encrypt account shape (just an email,
             # no credentials) — inherit it so selecting the staging CA works
-            # without re-entering settings. An explicit letsencrypt_staging
-            # entry still takes precedence.
-            ca_provider = 'letsencrypt'
+            # without re-entering settings. A populated letsencrypt_staging
+            # entry takes precedence, but the settings UI materializes the
+            # entry as {email: ''} on every save, so an EMPTY entry must
+            # alias too or the inheritance is dead for UI-managed installs.
+            staging_config = ca_providers.get('letsencrypt_staging')
+            if not staging_config or not (
+                    staging_config.get('email') or staging_config.get('accounts')):
+                ca_provider = 'letsencrypt'
         if ca_provider not in ca_providers:
             raise ValueError(f"CA provider '{ca_provider}' not configured")
 
