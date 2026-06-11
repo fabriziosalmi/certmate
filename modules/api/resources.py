@@ -2552,10 +2552,11 @@ def create_api_resources(api, models, managers):
                         }
 
                     elif ca_provider == 'digicert':
-                        # Test DigiCert ACME connection
+                        # Test DigiCert ACME connection. Accept both EAB
+                        # field spellings, like the generic branch below.
                         acme_url = config.get('acme_url', '')
-                        eab_kid = config.get('eab_kid', '')
-                        eab_hmac = config.get('eab_hmac', '')
+                        eab_kid = config.get('eab_kid') or config.get('eab_key_id', '')
+                        eab_hmac = config.get('eab_hmac') or config.get('eab_hmac_key', '')
                         email = config.get('email', '')
 
                         if not acme_url:

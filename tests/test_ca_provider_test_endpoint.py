@@ -56,6 +56,21 @@ class TestCAProviderTestEndpoint:
         assert r.status_code == 200
         assert r.json()["success"] is True
 
+    def test_digicert_accepts_canonical_field_spelling(self, api):
+        # The DigiCert branch historically read only eab_kid/eab_hmac;
+        # the canonical settings.json spelling must work too.
+        r = api.post_json("/api/settings/test-ca-provider", {
+            "ca_provider": "digicert",
+            "config": {
+                "acme_url": "https://acme.digicert.com/v2/acme/directory",
+                "eab_key_id": "kid-canonical-spelling",
+                "eab_hmac_key": "hmac-canonical-spelling-long-enough-to-pass",
+                "email": "admin@example.com",
+            },
+        })
+        assert r.status_code == 200
+        assert r.json()["success"] is True
+
     def test_buypass_email_only(self, api):
         r = api.post_json("/api/settings/test-ca-provider", {
             "ca_provider": "buypass",

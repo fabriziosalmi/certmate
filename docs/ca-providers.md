@@ -108,7 +108,7 @@ curl -X POST http://localhost:8000/api/certificates/create \
   }'
 
 # Test CA connection
-curl -X POST http://localhost:8000/api/test-ca-provider \
+curl -X POST http://localhost:8000/api/settings/test-ca-provider \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
