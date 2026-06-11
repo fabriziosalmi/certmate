@@ -28,6 +28,7 @@ class DNSManager:
         'hetzner-cloud', 'rfc2136', 'powerdns', 'edgedns', 'gandi',
         'arvancloud', 'infomaniak', 'acme-dns', 'duckdns', 'vultr',
         'dnsmadeeasy', 'nsone', 'porkbun', 'he-ddns', 'dynudns',
+        'custom-script',
     ]
 
     def get_available_providers(self):
@@ -380,6 +381,25 @@ class DNSManager:
                     f"Missing required credential field(s) for {provider}: "
                     f"{', '.join(missing)}"
                 )
+
+            if provider == 'custom-script':
+                # The hook scripts live on this host, so the test can do a
+                # real filesystem validation instead of a shape-only check
+                # (same rules the issuance path enforces).
+                from .dns_strategies import CustomScriptStrategy
+                try:
+                    CustomScriptStrategy._validated_hook_path(
+                        config.get('auth_hook'), 'auth hook')
+                    if config.get('cleanup_hook'):
+                        CustomScriptStrategy._validated_hook_path(
+                            config.get('cleanup_hook'), 'cleanup hook')
+                except ValueError as e:
+                    return False, str(e)
+                return True, (
+                    "Hook scripts exist and are executable "
+                    "(scripts were not run; no live DNS change performed)"
+                )
+
             return True, (
                 f"Configuration for {provider} has all required fields "
                 f"(offline validation only; no live DNS API call performed)"

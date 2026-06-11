@@ -177,7 +177,7 @@ def create_api_models(api):
                 'digitalocean', 'linode', 'gandi', 'ovh', 'namecheap',
                 'vultr', 'dnsmadeeasy', 'nsone', 'rfc2136', 'hetzner',
                 'porkbun', 'godaddy', 'he-ddns', 'dynudns', 'arvancloud',
-                'acme-dns', 'duckdns', 'edgedns'
+                'acme-dns', 'duckdns', 'edgedns', 'custom-script'
             ]
         ),
         'dns_providers': fields.Nested(dns_providers_model, description='DNS provider configurations'),
@@ -206,7 +206,7 @@ def create_api_models(api):
                 'digitalocean', 'linode', 'gandi', 'ovh', 'namecheap',
                 'vultr', 'dnsmadeeasy', 'nsone', 'rfc2136', 'hetzner',
                 'porkbun', 'godaddy', 'he-ddns', 'dynudns', 'arvancloud',
-                'acme-dns', 'duckdns', 'edgedns'
+                'acme-dns', 'duckdns', 'edgedns', 'custom-script'
             ]
         ),
         'account_id': fields.String(description='DNS provider account ID'),

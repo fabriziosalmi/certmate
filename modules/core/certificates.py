@@ -885,8 +885,10 @@ class CertificateManager:
 
                 # Alias mode uses CertMate's manual DNS hook instead of the
                 # provider certbot authenticator, so the plugin is only needed
-                # for the normal non-alias DNS-01 flow.
-                if not domain_alias:
+                # for the normal non-alias DNS-01 flow. 'manual' is a certbot
+                # core feature (custom-script provider), never an installable
+                # plugin — skip the preflight for it.
+                if not domain_alias and strategy.plugin_name != 'manual':
                     plugin = strategy.plugin_name
                     if not check_certbot_plugin_installed(plugin):
                         pkg = f"certbot-{plugin}"

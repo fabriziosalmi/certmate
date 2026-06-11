@@ -69,7 +69,10 @@ _DNS_PROVIDER_CREDENTIALS = {
     'godaddy': ['api_key', 'secret'],
     'he-ddns': ['username', 'password'],
     'dynudns': ['token'],
-    'edgedns': ['client_token', 'client_secret', 'access_token', 'host']
+    'edgedns': ['client_token', 'client_secret', 'access_token', 'host'],
+    # Admin-supplied hook scripts (#286): the auth hook is the only hard
+    # requirement; the cleanup hook is optional.
+    'custom-script': ['auth_hook']
 }
 
 # A mapping of multi-provider names to their certbot plugin .ini filename.
