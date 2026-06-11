@@ -273,6 +273,18 @@
                                 </h4>
                                 <div class="space-y-3">
                                     <div>
+                                        <label class="block text-xs text-purple-800 dark:text-purple-200 mb-1" for="private-ca-preset">
+                                            Known ACME CA (preset) - Optional
+                                            <i class="fas fa-info-circle ml-1 cursor-help" title="Pre-fills the directory URL for public ACME CAs that work through the Private CA entry"></i>
+                                        </label>
+                                        <select id="private-ca-preset" onchange="applyPrivateCaPreset()"
+                                                class="w-full px-2 py-1 text-sm border border-purple-300 dark:border-purple-600 rounded bg-surface text-foreground">
+                                            <option value="">Custom / self-hosted (default)</option>
+                                            <option value="actalis">Actalis (EU public CA, EAB required)</option>
+                                        </select>
+                                        <p id="private-ca-preset-hint" class="text-xs text-purple-600 dark:text-purple-400 mt-1"></p>
+                                    </div>
+                                    <div>
                                         <label class="block text-xs text-purple-800 dark:text-purple-200 mb-1">
                                             ACME Directory URL
                                             <span class="text-red-500">*</span>
@@ -286,7 +298,8 @@
                                             <strong>Common examples:</strong><br>
                                             • step-ca: https://step-ca.internal.com:9000/acme/directory<br>
                                             • Smallstep: https://ca.example.com/acme/directory<br>
-                                            • Boulder: https://boulder.local:4001/acme/directory
+                                            • Boulder: https://boulder.local:4001/acme/directory<br>
+                                            • Actalis (public CA): use the preset above
                                         </p>
                                     </div>
                                     <div>

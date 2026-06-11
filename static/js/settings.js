@@ -1838,6 +1838,48 @@
     // CA PROVIDER MANAGEMENT FUNCTIONS
     // =============================================
 
+    // Public ACME CAs usable through the generic Private CA entry.
+    // Adding a new one (e.g. another European CA exposing ACME) is a
+    // single entry here plus an <option> in settings_ca.html.
+    var PRIVATE_CA_PRESETS = {
+        'actalis': {
+            acme_url: 'https://acme-api.actalis.com/acme/directory',
+            hint: 'Actalis enforces External Account Binding: fill in the EAB Key ID and HMAC Key from your Actalis customer area (Manage with ACME). Leave the CA Certificate empty - Actalis roots are publicly trusted. Tip: Actalis also has a dedicated entry in the CA dropdown above.'
+        }
+    };
+
+    function applyPrivateCaPreset() {
+        var select = document.getElementById('private-ca-preset');
+        if (!select) return;
+        var preset = PRIVATE_CA_PRESETS[select.value];
+        var urlField = document.getElementById('private-ca-acme-url');
+        if (preset && urlField) {
+            urlField.value = preset.acme_url;
+        }
+        var hintElement = document.getElementById('private-ca-preset-hint');
+        if (hintElement) {
+            hintElement.textContent = preset ? preset.hint : '';
+        }
+    }
+
+    // Reflect a saved directory URL back onto the preset select so the
+    // form reopens showing "Actalis" instead of a bare URL.
+    function syncPrivateCaPresetFromUrl(acmeUrl) {
+        var select = document.getElementById('private-ca-preset');
+        if (!select) return;
+        var matched = '';
+        Object.keys(PRIVATE_CA_PRESETS).forEach(function (key) {
+            if (PRIVATE_CA_PRESETS[key].acme_url === acmeUrl) {
+                matched = key;
+            }
+        });
+        select.value = matched;
+        var hintElement = document.getElementById('private-ca-preset-hint');
+        if (hintElement) {
+            hintElement.textContent = matched ? PRIVATE_CA_PRESETS[matched].hint : '';
+        }
+    }
+
     function toggleCAProviderConfig() {
         var caProvider = document.getElementById('default-ca').value;
 
@@ -2360,6 +2402,7 @@
         if (privateCaConfig.acme_url) {
             document.getElementById('private-ca-acme-url').value = privateCaConfig.acme_url;
         }
+        syncPrivateCaPresetFromUrl(privateCaConfig.acme_url || '');
         if (privateCaConfig.ca_cert) {
             document.getElementById('private-ca-cert').value = privateCaConfig.ca_cert;
         }
@@ -3121,6 +3164,7 @@
     window.saveEditAccount = saveEditAccount;
     window.deleteAccount = deleteAccount;
     window.toggleCAProviderConfig = toggleCAProviderConfig;
+    window.applyPrivateCaPreset = applyPrivateCaPreset;
     window.testCAProvider = testCAProvider;
     window.toggleTokenVisibility = toggleTokenVisibility;
     window.generateToken = generateToken;
