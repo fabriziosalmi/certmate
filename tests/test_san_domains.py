@@ -157,13 +157,16 @@ class TestRoute53PropagationFlag:
         assert self.cloudflare.supports_propagation_seconds_flag is True
 
     def test_all_non_route53_strategies_support_flag(self):
-        """Every strategy except Route53 should support the propagation flag."""
+        """Pin which strategies omit the propagation flag: Route53 (the
+        plugin removed it and polls internally) and custom-script
+        (certbot --manual has no propagation flag; the auth hook waits)."""
         from modules.core.dns_strategies import DNSStrategyFactory
+        no_flag = {'route53', 'custom-script'}
         for name, strategy_cls in DNSStrategyFactory._strategies.items():
             strategy = strategy_cls()
-            if name == 'route53':
+            if name in no_flag:
                 assert strategy.supports_propagation_seconds_flag is False, \
-                    f"Route53 should NOT support propagation-seconds flag"
+                    f"{name} should NOT support propagation-seconds flag"
             else:
                 assert strategy.supports_propagation_seconds_flag is True, \
                     f"{name} should support propagation-seconds flag"

@@ -386,7 +386,8 @@
             'dynudns': ['dynudns_token'],
             'duckdns': ['duckdns_api_token'],
             'dnsmadeeasy': ['dnsmadeeasy_api_key', 'dnsmadeeasy_secret_key'],
-            'nsone': ['nsone_api_key']
+            'nsone': ['nsone_api_key'],
+            'custom-script': ['custom-script_auth_hook', 'custom-script_cleanup_hook']
         };
 
         return fieldMappings[provider] || [];
@@ -591,7 +592,8 @@
             'cloudflare', 'route53', 'azure', 'google', 'powerdns',
             'digitalocean', 'linode', 'edgedns', 'gandi', 'ovh', 'namecheap',
             'vultr', 'dnsmadeeasy', 'nsone', 'rfc2136', 'hetzner',
-            'porkbun', 'godaddy', 'he-ddns', 'dynudns', 'duckdns'
+            'porkbun', 'godaddy', 'he-ddns', 'dynudns', 'duckdns',
+            'custom-script'
         ];
 
         providers.forEach(function (provider) {
@@ -885,7 +887,8 @@
             'dynudns': 'Dynu',
             'dnsmadeeasy': 'DNS Made Easy',
             'nsone': 'NS1',
-            'duckdns': 'DuckDNS'
+            'duckdns': 'DuckDNS',
+            'custom-script': 'Custom Script'
         };
         modalTitle.textContent = 'Add ' + (providerNames[provider] || provider) + ' Account';
 
@@ -1140,6 +1143,10 @@
             ],
             'duckdns': [
                 { name: 'api_token', label: 'Account Token', type: 'password', placeholder: 'UUID-format token from your DuckDNS account page', required: true }
+            ],
+            'custom-script': [
+                { name: 'auth_hook', label: 'Auth Hook Script Path', type: 'text', placeholder: '/usr/local/bin/certmate-dns-auth.sh', required: true },
+                { name: 'cleanup_hook', label: 'Cleanup Hook Script Path (optional)', type: 'text', placeholder: '/usr/local/bin/certmate-dns-cleanup.sh', required: false }
             ]
         };
 

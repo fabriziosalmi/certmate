@@ -5,6 +5,7 @@ Implements the Strategy Pattern for DNS provider configuration and management.
 
 import logging
 import os
+import shlex
 import subprocess
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -475,13 +476,132 @@ class DuckDNSStrategy(DNSProviderStrategy):
 class GenericMultiProviderStrategy(DNSProviderStrategy):
     def __init__(self, provider_name: str):
         self.provider_name = provider_name
-        
+
     def create_config_file(self, config_data: Dict[str, Any]) -> Optional[Path]:
         return create_multi_provider_config(self.provider_name, config_data)
 
     @property
     def plugin_name(self) -> str:
         return f'dns-{self.provider_name}'
+
+
+class CustomScriptStrategy(DNSProviderStrategy):
+    """Admin-supplied DNS hook scripts via certbot --manual (#286).
+
+    Covers any DNS provider without a certbot plugin (OCI, in-house DNS,
+    appliance APIs, ...): the admin points CertMate at an auth script and
+    an optional cleanup script, and certbot invokes them with
+    CERTBOT_DOMAIN / CERTBOT_VALIDATION in the environment exactly as
+    documented for --manual-auth-hook. The auth script is responsible for
+    creating the _acme-challenge TXT record AND waiting until it has
+    propagated — certbot does not sleep between hook and validation.
+
+    Trust model: same as deploy hooks — the script paths are configured by
+    an authenticated admin and execute with CertMate's privileges. The
+    paths are validated at issuance time (absolute, existing, executable,
+    not world-writable) so a typo or a tampered-permissions file fails
+    loudly instead of producing a baffling certbot error. certbot executes
+    manual hooks THROUGH THE SHELL (subprocess shell=True) and validates
+    them by splitting on whitespace, so paths containing whitespace or any
+    shell metacharacter are rejected outright — they cannot work even
+    quoted, and rejecting them here beats certbot's cryptic
+    HookCommandNotFound on a truncated token.
+
+    Renewals work because certbot persists manual_auth_hook /
+    manual_cleanup_hook in its per-domain renewal conf: the scripts are
+    stable admin paths, not temp files, so the replay just works. If the
+    admin moves a script after issuance, the conf still points at the old
+    path — reissue (or edit the renewal conf) after relocating scripts.
+    """
+
+    def __init__(self):
+        self._auth_hook: Optional[str] = None
+        self._cleanup_hook: Optional[str] = None
+
+    @staticmethod
+    def _validated_hook_path(path_value: Optional[str], label: str) -> Optional[str]:
+        if not path_value or not str(path_value).strip():
+            return None
+        path = Path(str(path_value).strip())
+        if not path.is_absolute():
+            raise ValueError(f"custom-script {label} must be an absolute path: {path}")
+        if not path.is_file():
+            raise ValueError(f"custom-script {label} does not exist: {path}")
+        if not os.access(path, os.X_OK):
+            raise ValueError(f"custom-script {label} is not executable: {path}")
+        if shlex.quote(str(path)) != str(path):
+            # certbot executes manual hooks through the shell AND its hook
+            # validation splits the command on whitespace, so a path with
+            # spaces or shell metacharacters cannot work even when quoted.
+            # Failing here gives a clear message instead of certbot's
+            # HookCommandNotFound on a truncated token.
+            raise ValueError(
+                f"custom-script {label} path contains whitespace or shell "
+                f"metacharacters, which certbot's shell-based hook execution "
+                f"cannot handle: {path}. Use a path containing only letters, "
+                f"digits, '/', '.', '_' and '-'."
+            )
+        mode = path.stat().st_mode
+        if mode & 0o002:
+            raise ValueError(
+                f"custom-script {label} is world-writable ({oct(mode & 0o777)}): {path}. "
+                f"Refusing to execute a script anyone on the host can modify."
+            )
+        if mode & 0o020:
+            logger.warning(
+                f"custom-script {label} {path} is group-writable "
+                f"({oct(mode & 0o777)}); consider chmod 755 or stricter."
+            )
+        return str(path)
+
+    def create_config_file(self, config_data: Dict[str, Any]) -> Optional[Path]:
+        # The "credentials" are the hook paths themselves; validate them and
+        # keep them on the instance for configure_certbot_arguments. No temp
+        # credentials file is needed.
+        self._auth_hook = self._validated_hook_path(config_data.get('auth_hook'), 'auth hook')
+        if not self._auth_hook:
+            raise ValueError(
+                "custom-script DNS provider requires an 'auth_hook' script path"
+            )
+        self._cleanup_hook = self._validated_hook_path(config_data.get('cleanup_hook'), 'cleanup hook')
+        return None
+
+    @property
+    def plugin_name(self) -> str:
+        # 'manual' is a certbot core feature, not an installable plugin —
+        # the plugin-installed preflight skips it (see certificates.py).
+        return 'manual'
+
+    @property
+    def supports_propagation_seconds_flag(self) -> bool:
+        # --manual has no propagation flag; waiting is the auth hook's job.
+        return False
+
+    def configure_certbot_arguments(self, cmd: list, credentials_file: Optional[Path], domain_alias: Optional[str] = None) -> None:
+        if not self._auth_hook:
+            raise ValueError(
+                "CustomScriptStrategy.configure_certbot_arguments called "
+                "before create_config_file validated the hook paths"
+            )
+        # The validated paths are shell-safe by construction (validation
+        # rejects anything shlex.quote would alter), so raw emission is
+        # safe for certbot's shell-based hook execution AND survives its
+        # whitespace-splitting hook validation, which a quoted spaced path
+        # would not.
+        cmd.extend([
+            '--manual',
+            '--preferred-challenges', 'dns',
+            '--manual-auth-hook', self._auth_hook,
+        ])
+        if self._cleanup_hook:
+            cmd.extend(['--manual-cleanup-hook', self._cleanup_hook])
+
+    def prepare_environment(self, env: Dict[str, str], config_data: Dict[str, Any]) -> None:
+        # Optional hint for scripts that prefer a configurable sleep over
+        # polling their DNS API: surfaces the account-level setting.
+        propagation = config_data.get('propagation_seconds')
+        if propagation:
+            env['CERTMATE_DNS_PROPAGATION_SECONDS'] = str(propagation)
 
 def acme_webroot_dir() -> Path:
     """Absolute filesystem root for HTTP-01 webroot challenges.
@@ -543,6 +663,7 @@ class DNSStrategyFactory:
         'infomaniak': InfomaniakStrategy,
         'acme-dns': AcmeDNSStrategy,
         'duckdns': DuckDNSStrategy,
+        'custom-script': CustomScriptStrategy,
         'http-01': HTTP01Strategy,
     }
     
