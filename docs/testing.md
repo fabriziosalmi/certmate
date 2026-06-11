@@ -100,6 +100,26 @@ pytest -m dns
 pytest -m e2e
 ```
 
+### E2E without Docker
+
+By default the e2e fixtures build the Docker image and manage a container
+for the whole session. When Docker isn't available (CI sandboxes,
+restricted networks), point the suite at an already-running instance:
+
+```bash
+# Terminal 1: run CertMate however you like
+gunicorn --bind 127.0.0.1:18888 --workers 1 --threads 8 app:app
+
+# Terminal 2: target it (skips all Docker lifecycle management)
+CERTMATE_E2E_BASE_URL=http://localhost:18888 pytest -m "e2e and not ui"
+```
+
+The real-issuance tests additionally need `CLOUDFLARE_API_TOKEN` and a
+`CERTMATE_TEST_DOMAIN` you control, and burn real Let's Encrypt
+certificates — they skip automatically when the token is absent. The
+target instance must start from a clean data directory: e2e tests assume
+first-boot state, so reuse across runs causes auth-dependent failures.
+
 ---
 
 ## API Endpoint Testing
