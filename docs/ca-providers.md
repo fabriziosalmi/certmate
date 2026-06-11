@@ -66,6 +66,14 @@ CertMate supports multiple Certificate Authority providers, allowing you to choo
 - [Pebble](https://github.com/letsencrypt/pebble)
 - Other ACME-compatible private CAs
 
+**Using a public ACME CA through Private CA:**
+
+The Private CA entry is also the generic escape hatch for any ACME CA without a dedicated CertMate entry: point it at the CA's directory URL and, if the CA enforces account binding, fill in the optional EAB Key ID and HMAC Key. For example, Actalis works both through its dedicated entry (recommended) and as a Private CA with:
+
+- **ACME Directory URL**: `https://acme-api.actalis.com/acme/directory`
+- **EAB Key ID / HMAC Key**: from the Actalis customer area
+- **CA Certificate**: leave empty (publicly trusted roots)
+
 ---
 
 ## Configuration

@@ -73,6 +73,52 @@ def test_build_certbot_command_emits_eab_flags_from_ui_config(ca_manager):
     assert '--eab-hmac-key' in cmd and cmd[cmd.index('--eab-hmac-key') + 1] == 'ui-hmac'
 
 
+def test_private_ca_optional_eab_reaches_certbot(ca_manager):
+    # The Private CA panel offers optional EAB fields ("if required by
+    # your CA") — e.g. a public EAB-enforcing CA like Actalis configured
+    # through the generic entry. Those credentials were collected and
+    # saved but never emitted, because the EAB block only ran for
+    # providers with requires_eab=True.
+    cmd, _env = ca_manager.build_certbot_command(
+        domain='example.com',
+        email='admin@example.com',
+        ca_provider='private_ca',
+        dns_provider='cloudflare',
+        dns_config={},
+        account_config={
+            'acme_url': 'https://acme-api.actalis.com/acme/directory',
+            'eab_kid': 'pc-kid',
+            'eab_hmac': 'pc-hmac',
+        },
+    )
+    assert '--eab-kid' in cmd and cmd[cmd.index('--eab-kid') + 1] == 'pc-kid'
+    assert '--eab-hmac-key' in cmd and cmd[cmd.index('--eab-hmac-key') + 1] == 'pc-hmac'
+    assert '--server' in cmd
+    assert cmd[cmd.index('--server') + 1] == 'https://acme-api.actalis.com/acme/directory'
+
+
+def test_private_ca_without_eab_omits_flags(ca_manager):
+    cmd, _env = ca_manager.build_certbot_command(
+        domain='example.com',
+        email='admin@example.com',
+        ca_provider='private_ca',
+        dns_provider='cloudflare',
+        dns_config={},
+        account_config={'acme_url': 'https://step-ca.internal:9000/acme/directory'},
+    )
+    assert '--eab-kid' not in cmd
+    assert '--eab-hmac-key' not in cmd
+
+
+def test_non_eab_public_ca_ignores_stray_eab_fields(ca_manager):
+    # Let's Encrypt must never receive externalAccountBinding, even if
+    # leftover EAB fields linger in the saved provider config.
+    kid, hmac = ca_manager.get_eab_credentials('letsencrypt', {
+        'eab_kid': 'stray', 'eab_hmac': 'stray',
+    })
+    assert (kid, hmac) == (None, None)
+
+
 def test_validate_ca_configuration_accepts_ui_spelling(ca_manager):
     ok, msg = ca_manager.validate_ca_configuration('zerossl', {
         'eab_kid': 'ui-kid', 'eab_hmac': 'ui-hmac',

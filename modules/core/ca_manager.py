@@ -172,21 +172,32 @@ class CAManager:
             return False
         return self.ca_providers[ca_provider]['requires_eab']
     
-    def get_eab_credentials(self, ca_provider: str, account_config: Dict[str, Any]) -> Tuple[str, str]:
+    def get_eab_credentials(self, ca_provider: str, account_config: Dict[str, Any]) -> Tuple[Optional[str], Optional[str]]:
         """Get External Account Binding credentials for CA provider.
 
         Accepts both field spellings: ``eab_key_id``/``eab_hmac_key``
         (canonical, manual settings.json) and ``eab_kid``/``eab_hmac``
         (what the settings UI saves via collectCAProviderSettings).
+
+        For ``private_ca`` EAB is optional: the generic Private CA entry
+        can point at any ACME directory — including public CAs that
+        enforce account binding (e.g. Actalis used without its dedicated
+        entry) — so credentials are returned when present and (None,
+        None) when absent. Public CAs with ``requires_eab: False`` never
+        emit EAB even if stray fields exist in the saved config, since
+        an unexpected externalAccountBinding can fail registration.
         """
-        if not self.requires_eab(ca_provider):
+        if not self.requires_eab(ca_provider) and ca_provider != 'private_ca':
             return None, None
 
+        account_config = account_config or {}
         eab_key_id = account_config.get('eab_key_id') or account_config.get('eab_kid', '')
         eab_hmac_key = account_config.get('eab_hmac_key') or account_config.get('eab_hmac', '')
 
         if not eab_key_id or not eab_hmac_key:
-            raise ValueError(f"EAB credentials not configured for CA provider '{ca_provider}'")
+            if self.requires_eab(ca_provider):
+                raise ValueError(f"EAB credentials not configured for CA provider '{ca_provider}'")
+            return None, None
 
         return eab_key_id, eab_hmac_key
     
@@ -272,14 +283,14 @@ class CAManager:
                 '--logs-dir', str(cert_output_dir / 'logs')
             ])
 
-        # Add EAB credentials if required
-        if self.requires_eab(ca_provider):
-            eab_key_id, eab_hmac_key = self.get_eab_credentials(ca_provider, account_config)
-            if eab_key_id and eab_hmac_key:
-                certbot_cmd.extend([
-                    '--eab-kid', eab_key_id,
-                    '--eab-hmac-key', eab_hmac_key
-                ])
+        # Add EAB credentials if required — or optionally configured for
+        # a private CA whose ACME server enforces account binding.
+        eab_key_id, eab_hmac_key = self.get_eab_credentials(ca_provider, account_config)
+        if eab_key_id and eab_hmac_key:
+            certbot_cmd.extend([
+                '--eab-kid', eab_key_id,
+                '--eab-hmac-key', eab_hmac_key
+            ])
 
         # Add CA bundle for private CAs (pass via extra_env, not os.environ)
         if ca_provider == 'private_ca':
@@ -336,6 +347,9 @@ class CAManager:
         elif ca_provider == 'private_ca':
             display_info['acme_url'] = config.get('acme_url', '')
             display_info['ca_cert_configured'] = bool(config.get('ca_cert'))
+            display_info['eab_configured'] = bool(
+                config.get('eab_key_id') or config.get('eab_kid')
+            )
         
         return display_info
 
