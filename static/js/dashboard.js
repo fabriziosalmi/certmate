@@ -744,7 +744,8 @@
                 '<div class="grid grid-cols-1 gap-2">' +
                 (roleAtLeast('operator')
                     ? '<button type="button" onclick="renewCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-border shadow-sm text-sm font-medium rounded-md text-label bg-input hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-sync-alt mr-2 text-green-600"></i>Renew Certificate</button>' +
-                    '<button type="button" onclick="renewCertificate(\'' + safeDomain + '\', true)" class="w-full inline-flex items-center justify-center px-4 py-2 border border-warning-line shadow-sm text-sm font-medium rounded-md text-warning-fg bg-warning-surface hover:bg-amber-100 dark:hover:bg-amber-900/40"><i class="fas fa-bolt mr-2"></i>Force Renew Certificate</button>'
+                    '<button type="button" onclick="renewCertificate(\'' + safeDomain + '\', true)" class="w-full inline-flex items-center justify-center px-4 py-2 border border-warning-line shadow-sm text-sm font-medium rounded-md text-warning-fg bg-warning-surface hover:bg-amber-100 dark:hover:bg-amber-900/40"><i class="fas fa-bolt mr-2"></i>Force Renew Certificate</button>' +
+                    '<button type="button" onclick="startEditReissue(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-info-line shadow-sm text-sm font-medium rounded-md text-info-fg bg-info-surface hover:bg-blue-100 dark:hover:bg-blue-900/50"><i class="fas fa-pen mr-2"></i>Edit &amp; Reissue</button>'
                     : '') +
                 '<button type="button" onclick="downloadCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-border shadow-sm text-sm font-medium rounded-md text-label bg-input hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-download mr-2 text-blue-600"></i>Download Certificate</button>' +
                 '<button type="button" onclick="copyCurlCommand(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-info-line shadow-sm text-sm font-medium rounded-md text-info-fg bg-info-surface hover:bg-blue-100 dark:hover:bg-blue-900/50"><i class="fas fa-code mr-2"></i>Show API Command</button>' +
@@ -1648,9 +1649,108 @@
         if (curveEl) curveEl.style.display = (keyType === 'ecdsa') ? '' : 'none';
     }
 
+    // =============================================
+    // Edit & Reissue (#267): reuse the create form in an edit mode that
+    // POSTs to /api/certificates/<domain>/reissue instead of /create.
+    // Omitted fields keep the issued values server-side; the form is
+    // prefilled so what the user sees is what gets submitted.
+    // =============================================
+    var reissueEditingDomain = null;
+
+    function startEditReissue(domain) {
+        var cert = allCertificates.find(function (c) { return c.domain === domain; });
+        if (!cert) {
+            showMessage('Certificate data is not loaded yet. Refresh and try again.', 'error');
+            return;
+        }
+        reissueEditingDomain = domain;
+        closeCertDetail();
+        openCreateCertForm();
+
+        var domainField = document.getElementById('domain');
+        domainField.value = domain;
+        // The primary domain is the certificate's identity (certbot
+        // --cert-name, directory, API path): changing it is a
+        // delete+recreate, not an edit.
+        domainField.readOnly = true;
+
+        // Reverse-map the wildcard checkbox out of the SAN list — the
+        // create submit handler encodes it client-side as '*.'+primary.
+        var sans = (cert.san_domains || []).slice();
+        var wildcardIndex = sans.indexOf('*.' + domain);
+        document.getElementById('wildcard-cert').checked = wildcardIndex !== -1;
+        if (wildcardIndex !== -1) sans.splice(wildcardIndex, 1);
+        document.getElementById('san_domains').value = sans.join(', ');
+
+        if (cert.challenge_type) document.getElementById('challenge_type_select').value = cert.challenge_type;
+        if (cert.dns_provider) document.getElementById('dns_provider_select').value = cert.dns_provider;
+        if (cert.ca_provider) document.getElementById('ca_provider_select').value = cert.ca_provider;
+        var aliasField = document.getElementById('dns_alias_domain');
+        if (aliasField) aliasField.value = cert.domain_alias || '';
+
+        // Sync dependent widgets, then the account dropdown (its options
+        // are rebuilt by updateAccountSelection).
+        toggleDnsProviderVisibility();
+        updateCAProviderInfo();
+        updateDnsAliasHelp();
+        if (typeof updateAccountSelection === 'function') updateAccountSelection();
+        if (cert.account_id) {
+            var accountSelect = document.getElementById('account_select');
+            if (accountSelect) accountSelect.value = cert.account_id;
+        }
+
+        setReissueFormMode(true, domain);
+    }
+
+    function setReissueFormMode(editing, domain) {
+        var form = document.getElementById('createCertForm');
+        if (!form) return;
+        var submitBtn = form.querySelector('button[type="submit"]');
+        var banner = document.getElementById('reissue-edit-banner');
+        if (editing) {
+            if (!banner) {
+                banner = document.createElement('div');
+                banner.id = 'reissue-edit-banner';
+                banner.className = 'mb-4 p-3 rounded-md bg-warning-surface border border-warning-line text-sm text-warning-fg flex items-center justify-between gap-4';
+                form.insertBefore(banner, form.firstChild);
+            }
+            banner.innerHTML = '<span><i class="fas fa-pen mr-2"></i>Editing <strong>' + escapeHtml(domain) + '</strong>: submitting reissues the certificate in place. The current certificate keeps serving until the reissue succeeds; the key shape is preserved unless explicitly changed.</span>' +
+                '<button type="button" onclick="cancelEditReissue()" class="shrink-0 px-3 py-1 border border-warning-line rounded-md text-xs font-medium hover:bg-amber-100 dark:hover:bg-amber-900/40">Cancel edit</button>';
+            if (submitBtn) {
+                if (!submitBtn.dataset.createHtml) {
+                    submitBtn.dataset.createHtml = submitBtn.innerHTML;
+                }
+                submitBtn.innerHTML = '<i class="fas fa-sync-alt mr-2"></i>Reissue Certificate';
+            }
+        } else {
+            if (banner) banner.remove();
+            if (submitBtn && submitBtn.dataset.createHtml) {
+                submitBtn.innerHTML = submitBtn.dataset.createHtml;
+            }
+        }
+    }
+
+    function cancelEditReissue() {
+        reissueEditingDomain = null;
+        var domainField = document.getElementById('domain');
+        domainField.readOnly = false;
+        domainField.value = '';
+        document.getElementById('san_domains').value = '';
+        document.getElementById('wildcard-cert').checked = false;
+        document.getElementById('challenge_type_select').value = '';
+        document.getElementById('dns_provider_select').value = '';
+        document.getElementById('account_select').value = '';
+        document.getElementById('ca_provider_select').value = '';
+        var aliasField = document.getElementById('dns_alias_domain');
+        if (aliasField) { aliasField.value = ''; }
+        updateDnsAliasHelp();
+        toggleDnsProviderVisibility();
+        setReissueFormMode(false);
+    }
+
     // Create certificate
     var isCreatingCert = false;
-    document.getElementById('createCertForm').addEventListener('submit', function (e) {
+    document.getElementById('createCertForm').addEventListener('submit', async function (e) {
         e.preventDefault();
 
         // QW-12: gate against duplicate submits. A real-cert issue path can
@@ -1701,6 +1801,25 @@
             ? domain + ' (+ ' + sanDomains.length + ' SAN' + (sanDomains.length > 1 ? 's' : '') + ')'
             : domain;
 
+        // Edit mode (#267): dropping SANs is destructive for clients using
+        // those names — enumerate them in a danger confirm before reissuing.
+        var editingDomain = reissueEditingDomain;
+        if (editingDomain) {
+            var currentCert = allCertificates.find(function (c) { return c.domain === editingDomain; });
+            var currentSans = (currentCert && currentCert.san_domains) || [];
+            var removedSans = currentSans.filter(function (s) { return sanDomains.indexOf(s) === -1; });
+            if (removedSans.length > 0) {
+                var dropConfirmed = await CertMate.confirm(
+                    'Reissuing ' + editingDomain + ' will REMOVE these names from the certificate:\n\n' +
+                    removedSans.join('\n') +
+                    '\n\nClients using the removed names will fail TLS validation once the new certificate is deployed. Continue?',
+                    'Reissue Certificate',
+                    { confirmText: 'Reissue' }
+                );
+                if (!dropConfirmed) return;
+            }
+        }
+
         // Lock the form for the duration of the request. Disabling every
         // field also blocks Enter-to-submit from inside the inputs, which
         // is the other path a user can re-trigger the POST. The original
@@ -1722,13 +1841,24 @@
         }
 
         var progressInterval = showLoadingModal(
-            'Creating Certificate for ' + domainsDisplay,
+            (editingDomain ? 'Reissuing Certificate for ' : 'Creating Certificate for ') + domainsDisplay,
             'Validating domain ownership and generating certificate...'
         );
 
-        var requestBody = { domain: domain };
-        if (sanDomains.length > 0) {
+        var requestBody = editingDomain ? {} : { domain: domain };
+        if (editingDomain) {
+            // The reissue payload is an explicit replacement set: [] drops
+            // every SAN, and an empty alias field clears the alias (the
+            // form was prefilled, so what the user sees is the intent).
             requestBody.san_domains = sanDomains;
+            requestBody.domain_alias = dnsAliasDomain || '';
+        } else {
+            if (sanDomains.length > 0) {
+                requestBody.san_domains = sanDomains;
+            }
+            if (dnsAliasDomain) {
+                requestBody.domain_alias = dnsAliasDomain;
+            }
         }
         if (challengeType) {
             requestBody.challenge_type = challengeType;
@@ -1741,9 +1871,6 @@
         }
         if (caProvider) {
             requestBody.ca_provider = caProvider;
-        }
-        if (dnsAliasDomain) {
-            requestBody.domain_alias = dnsAliasDomain;
         }
 
         // Optional key-shape override. Only sent when the operator picked a
@@ -1758,25 +1885,33 @@
             requestBody.elliptic_curve = document.getElementById('cert_elliptic_curve').value;
         }
 
-        fetch('/api/certificates/create', {
+        var submitEndpoint = editingDomain
+            ? '/api/certificates/' + encodeURIComponent(editingDomain) + '/reissue'
+            : '/api/certificates/create';
+
+        fetch(submitEndpoint, {
             method: 'POST',
             headers: API_HEADERS,
             body: JSON.stringify(requestBody)
         }).then(function (response) {
             return response.json().then(function (result) {
                 if (response.ok && result.success !== false) {
-                    showMessage('Certificate created successfully for ' + domainsDisplay + '!');
-                    document.getElementById('domain').value = '';
-                    document.getElementById('san_domains').value = '';
-                    document.getElementById('wildcard-cert').checked = false;
-                    document.getElementById('challenge_type_select').value = '';
-                    document.getElementById('dns_provider_select').value = '';
-                    document.getElementById('account_select').value = '';
-                    document.getElementById('ca_provider_select').value = '';
-                    var aliasField = document.getElementById('dns_alias_domain');
-                    if (aliasField) { aliasField.value = ''; }
-                    updateDnsAliasHelp();
-                    toggleDnsProviderVisibility();
+                    showMessage('Certificate ' + (editingDomain ? 'reissued' : 'created') + ' successfully for ' + domainsDisplay + '!');
+                    if (editingDomain) {
+                        cancelEditReissue();
+                    } else {
+                        document.getElementById('domain').value = '';
+                        document.getElementById('san_domains').value = '';
+                        document.getElementById('wildcard-cert').checked = false;
+                        document.getElementById('challenge_type_select').value = '';
+                        document.getElementById('dns_provider_select').value = '';
+                        document.getElementById('account_select').value = '';
+                        document.getElementById('ca_provider_select').value = '';
+                        var aliasField = document.getElementById('dns_alias_domain');
+                        if (aliasField) { aliasField.value = ''; }
+                        updateDnsAliasHelp();
+                        toggleDnsProviderVisibility();
+                    }
                     updateAccountSelection();
                     loadCertificates();
                 } else {
@@ -1786,7 +1921,7 @@
                     }
                     showMessage(errorMsg, 'error', {
                         errorContext: {
-                            endpoint: 'POST /api/certificates/create',
+                            endpoint: 'POST ' + submitEndpoint,
                             status: response.status,
                             code: result.code,
                             message: result.error || result.message,
@@ -1797,9 +1932,9 @@
             });
         }).catch(function (error) {
             console.error('Error creating certificate:', error);
-            showMessage('Failed to create certificate. Please check your network connection and try again.', 'error', {
+            showMessage('Failed to ' + (editingDomain ? 'reissue' : 'create') + ' certificate. Please check your network connection and try again.', 'error', {
                 errorContext: {
-                    endpoint: 'POST /api/certificates/create',
+                    endpoint: 'POST ' + submitEndpoint,
                     status: 0,
                     code: 'NETWORK_ERROR',
                     message: (error && error.message) || 'network error'
@@ -2224,6 +2359,8 @@
     // Expose functions needed by HTML onclick handlers and SSE
     window.loadCertificates = loadCertificates;
     window.openCertDetail = openCertDetail;
+    window.startEditReissue = startEditReissue;
+    window.cancelEditReissue = cancelEditReissue;
     window.closeCertDetail = closeCertDetail;
     window.renewCertificate = renewCertificate;
     window.toggleAutoRenew = toggleAutoRenew;
