@@ -343,6 +343,7 @@ class _AzureKeyVaultCertificateImporter:
     # contaminate the metadata returned to the rest of CertMate.
     _STRING_METADATA_KEYS = (
         'domain', 'dns_provider', 'challenge_type', 'email', 'account_id', 'created_at',
+        'ca_provider', 'ca_account_id',
     )
     _CSV_TRUNCATION_MARKER = '...'
 
