@@ -111,6 +111,39 @@ def test_non_executable_script_rejected(tmp_path):
         CustomScriptStrategy().create_config_file({'auth_hook': str(script)})
 
 
+def test_path_with_whitespace_rejected(tmp_path):
+    # certbot validates hooks by splitting on whitespace and executes them
+    # through the shell: a spaced path cannot work even quoted, so it must
+    # fail here with a clear message instead of inside certbot.
+    spaced_dir = tmp_path / 'my scripts'
+    spaced_dir.mkdir()
+    script = spaced_dir / 'hook.sh'
+    script.write_text('#!/bin/sh\nexit 0\n')
+    script.chmod(0o755)
+    with pytest.raises(ValueError, match='whitespace or shell metacharacters'):
+        CustomScriptStrategy().create_config_file({'auth_hook': str(script)})
+
+
+def test_path_with_shell_metacharacter_rejected(tmp_path):
+    meta_dir = tmp_path / 'a$b'
+    meta_dir.mkdir()
+    script = meta_dir / 'hook.sh'
+    script.write_text('#!/bin/sh\nexit 0\n')
+    script.chmod(0o755)
+    with pytest.raises(ValueError, match='whitespace or shell metacharacters'):
+        CustomScriptStrategy().create_config_file({'auth_hook': str(script)})
+
+
+def test_provider_test_rejects_whitespace_only_auth_hook():
+    # Truthy-but-blank input must not green-light a config that issuance
+    # rejects.
+    ok, message = _dns_manager().test_provider('custom-script', {
+        'auth_hook': '   ',
+    })
+    assert not ok
+    assert 'auth_hook' in message
+
+
 def test_world_writable_script_rejected(tmp_path):
     script = tmp_path / 'hook.sh'
     script.write_text('#!/bin/sh\nexit 0\n')

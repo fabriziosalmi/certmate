@@ -1025,6 +1025,13 @@ class CertificateManager:
                 # Ensure propagation time is within reasonable bounds (1 second to 1 hour)
                 propagation_time = max(1, min(3600, propagation_time))
 
+                # --manual has no propagation flag: surface the configured
+                # per-provider value to custom-script hooks via env instead.
+                # An account-level propagation_seconds (exported earlier by
+                # prepare_environment) wins over the global setting.
+                if dns_provider == 'custom-script':
+                    process_env.setdefault('CERTMATE_DNS_PROPAGATION_SECONDS', str(propagation_time))
+
             use_dns_alias_hook = (
                 challenge_type != 'http-01'
                 and domain_alias
@@ -1303,6 +1310,17 @@ class CertificateManager:
                         dns_provider, dns_config, domain, san_domains=renew_sans,
                     )
                     credentials_file = strategy.create_config_file(strategy_config)
+                    if dns_provider == 'custom-script':
+                        # Mirror the create path: expose the propagation
+                        # setting to the hooks certbot replays at renewal.
+                        propagation_map = settings.get('dns_propagation_seconds', {}) or {}
+                        try:
+                            renew_propagation = int(propagation_map.get(dns_provider, strategy.default_propagation_seconds))
+                        except (ValueError, TypeError):
+                            renew_propagation = strategy.default_propagation_seconds
+                        process_env.setdefault(
+                            'CERTMATE_DNS_PROPAGATION_SECONDS',
+                            str(max(1, min(3600, renew_propagation))))
                     logger.info(f"Prepared DNS environment for renewal of {domain} with {dns_provider}")
                 else:
                     logger.warning(

@@ -388,8 +388,15 @@ class DNSManager:
                 # (same rules the issuance path enforces).
                 from .dns_strategies import CustomScriptStrategy
                 try:
-                    CustomScriptStrategy._validated_hook_path(
+                    auth = CustomScriptStrategy._validated_hook_path(
                         config.get('auth_hook'), 'auth hook')
+                    if not auth:
+                        # Blank/whitespace-only path: mirror issuance, which
+                        # rejects it in create_config_file.
+                        return False, (
+                            "custom-script DNS provider requires an "
+                            "'auth_hook' script path"
+                        )
                     if config.get('cleanup_hook'):
                         CustomScriptStrategy._validated_hook_path(
                             config.get('cleanup_hook'), 'cleanup hook')

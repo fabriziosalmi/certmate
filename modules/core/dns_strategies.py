@@ -5,6 +5,7 @@ Implements the Strategy Pattern for DNS provider configuration and management.
 
 import logging
 import os
+import shlex
 import subprocess
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -499,9 +500,12 @@ class CustomScriptStrategy(DNSProviderStrategy):
     an authenticated admin and execute with CertMate's privileges. The
     paths are validated at issuance time (absolute, existing, executable,
     not world-writable) so a typo or a tampered-permissions file fails
-    loudly instead of producing a baffling certbot error. The paths are
-    passed as single argv elements (no shell), so no shell-metacharacter
-    sanitisation applies.
+    loudly instead of producing a baffling certbot error. certbot executes
+    manual hooks THROUGH THE SHELL (subprocess shell=True) and validates
+    them by splitting on whitespace, so paths containing whitespace or any
+    shell metacharacter are rejected outright — they cannot work even
+    quoted, and rejecting them here beats certbot's cryptic
+    HookCommandNotFound on a truncated token.
 
     Renewals work because certbot persists manual_auth_hook /
     manual_cleanup_hook in its per-domain renewal conf: the scripts are
@@ -525,6 +529,18 @@ class CustomScriptStrategy(DNSProviderStrategy):
             raise ValueError(f"custom-script {label} does not exist: {path}")
         if not os.access(path, os.X_OK):
             raise ValueError(f"custom-script {label} is not executable: {path}")
+        if shlex.quote(str(path)) != str(path):
+            # certbot executes manual hooks through the shell AND its hook
+            # validation splits the command on whitespace, so a path with
+            # spaces or shell metacharacters cannot work even when quoted.
+            # Failing here gives a clear message instead of certbot's
+            # HookCommandNotFound on a truncated token.
+            raise ValueError(
+                f"custom-script {label} path contains whitespace or shell "
+                f"metacharacters, which certbot's shell-based hook execution "
+                f"cannot handle: {path}. Use a path containing only letters, "
+                f"digits, '/', '.', '_' and '-'."
+            )
         mode = path.stat().st_mode
         if mode & 0o002:
             raise ValueError(
@@ -567,6 +583,11 @@ class CustomScriptStrategy(DNSProviderStrategy):
                 "CustomScriptStrategy.configure_certbot_arguments called "
                 "before create_config_file validated the hook paths"
             )
+        # The validated paths are shell-safe by construction (validation
+        # rejects anything shlex.quote would alter), so raw emission is
+        # safe for certbot's shell-based hook execution AND survives its
+        # whitespace-splitting hook validation, which a quoted spaced path
+        # would not.
         cmd.extend([
             '--manual',
             '--preferred-challenges', 'dns',
