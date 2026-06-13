@@ -41,6 +41,11 @@ PUBLIC_SETTINGS_WRITABLE_KEYS = frozenset({
     'certificate_storage',
     'notifications',
     'setup_completed',
+    # Per-install "stop nagging me with the first-run wizard" flag. Distinct
+    # from setup_completed, which must stay truthful for recovery/downgrade
+    # detection: a user can dismiss the wizard without having completed setup
+    # through it. Boolean, no side effects.
+    'wizard_dismissed',
     'cloudflare_token',         # legacy single-provider token
     'ca_providers',             # CA provider configuration
     'default_ca',               # selected CA provider
@@ -555,6 +560,7 @@ class SettingsManager:
                 'renewal_threshold_days': 30,  # Configurable certificate expiry threshold (days)
                 'api_bearer_token': _bearer_token_from_env_or_generate(),
                 'setup_completed': False,  # Track if initial setup is done
+                'wizard_dismissed': False,  # First-run wizard dismissed by the user (durable across browsers)
                 'dns_provider': 'cloudflare',
                 'challenge_type': 'dns-01',  # 'dns-01' or 'http-01'
                 # Default certificate key shape applied to any cert that does

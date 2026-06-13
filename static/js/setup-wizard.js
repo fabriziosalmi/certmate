@@ -53,6 +53,30 @@
         try { window.localStorage.setItem(SKIP_KEY, '1'); } catch (e) { /* storage unavailable (private mode) — skip lasts for this page only */ }
     }
 
+    function persistDismissal() {
+        // Durable, cross-browser "stop showing the wizard". The localStorage
+        // skip above only covers THIS browser, so the modal re-appeared on
+        // another device/profile or after storage was cleared — the reported
+        // bug. Persist a dedicated server-side flag instead of flipping
+        // setup_completed (which must stay truthful for recovery/downgrade
+        // detection). Best-effort: the browser auto-sends Origin, satisfying
+        // the CSRF guard; a failure still leaves the per-browser skip in place.
+        try {
+            fetch('/api/web/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({ wizard_dismissed: true })
+            }).catch(function() {});
+        } catch (e) { /* fetch unavailable — localStorage skip still applies */ }
+    }
+
+    function dismissWizard() {
+        rememberSkip();
+        persistDismissal();
+        closeWizard();
+    }
+
     function checkSetup() {
         var t = new Date().getTime();
         fetch('/api/web/settings?t=' + t, { credentials: 'same-origin', cache: 'no-store' })
@@ -60,7 +84,7 @@
             .then(function(data) {
                 if (data && data.certmate_recovery_suggested) {
                     showRecoveryPrompt();
-                } else if (data && data.setup_completed === false && !wizardSkipped()) {
+                } else if (data && data.setup_completed === false && !data.wizard_dismissed && !wizardSkipped()) {
                     showWizard();
                 }
             })
@@ -147,7 +171,10 @@
                             '<h2 id="wizardTitle" class="text-xl font-bold text-foreground">Welcome to CertMate</h2>' +
                             '<p class="text-sm text-muted mt-1">Let\'s get you set up in a few steps</p>' +
                         '</div>' +
-                        '<div class="flex items-center gap-1.5" id="wizardSteps"></div>' +
+                        '<div class="flex items-center gap-3">' +
+                            '<div class="flex items-center gap-1.5" id="wizardSteps"></div>' +
+                            '<button type="button" id="wizClose" aria-label="Dismiss setup wizard" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-2xl leading-none px-1">&times;</button>' +
+                        '</div>' +
                     '</div>' +
                 '</div>' +
                 '<div id="wizardBody" class="px-6 py-6"></div>' +
@@ -155,8 +182,19 @@
             '</div>';
         document.body.appendChild(overlay);
 
-        // Focus trapping within the wizard overlay
+        // Dismissing the wizard (the X, Esc, or a click on the dimmed
+        // backdrop) persists across browsers via dismissWizard so it stops
+        // nagging — this is the universal exit, available on every step
+        // (step 1's "Skip" is no longer the only way out).
+        var wizClose = document.getElementById('wizClose');
+        if (wizClose) wizClose.addEventListener('click', dismissWizard);
+        overlay.addEventListener('click', function(e) {
+            if (e.target === overlay) dismissWizard();  // backdrop only, not the card
+        });
+
+        // Esc dismisses; Tab is trapped within the overlay.
         overlay.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') { e.preventDefault(); dismissWizard(); return; }
             if (e.key !== 'Tab') return;
             var focusable = overlay.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
             if (!focusable.length) return;
@@ -239,10 +277,7 @@
             renderStep();
         });
 
-        document.getElementById('wizSkip').addEventListener('click', function() {
-            rememberSkip();
-            closeWizard();
-        });
+        document.getElementById('wizSkip').addEventListener('click', dismissWizard);
         document.getElementById('wizEmail').addEventListener('keydown', function(e) {
             if (e.key === 'Enter') document.getElementById('wizNext1').click();
         });
