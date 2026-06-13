@@ -109,6 +109,36 @@ def test_near_expiry_flags_needs_renewal(cert_manager):
     cert_manager.shell_executor.run.assert_not_called()
 
 
+def test_renewal_boundary_is_inclusive(cert_manager):
+    """A cert with exactly renewal_threshold_days left MUST renew.
+
+    Regression for the off-by-one at certificates.py: `days_left <
+    renewal_threshold_days` skipped the boundary, so a cert sitting at
+    exactly 30 days (the default threshold) would not renew until it
+    dropped to 29 — a silent one-day delay. The +12h offset makes the
+    truncating `.days` land on exactly 30 regardless of sub-second skew.
+    """
+    not_after = datetime.now(timezone.utc) + timedelta(days=30, hours=12)
+    _write_cert(cert_manager, "boundary.example.com", _make_cert_pem(not_after))
+
+    info = cert_manager.get_certificate_info("boundary.example.com")
+
+    assert info["days_left"] == 30  # exactly the default threshold
+    assert info["needs_renewal"] is True
+
+
+def test_just_above_threshold_does_not_renew(cert_manager):
+    """One day past the threshold must NOT renew — guards against the fix
+    over-correcting into premature renewal."""
+    not_after = datetime.now(timezone.utc) + timedelta(days=31, hours=12)
+    _write_cert(cert_manager, "above.example.com", _make_cert_pem(not_after))
+
+    info = cert_manager.get_certificate_info("above.example.com")
+
+    assert info["days_left"] == 31
+    assert info["needs_renewal"] is False
+
+
 def test_unparseable_cert_marks_exists_without_crashing(cert_manager):
     _write_cert(cert_manager, "garbage.example.com", b"not a real certificate")
 

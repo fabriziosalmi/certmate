@@ -706,7 +706,10 @@ class CertificateManager:
                 'expiry_date': expiry_date.strftime('%Y-%m-%d %H:%M:%S'),
                 'days_left': days_left,
                 'days_until_expiry': days_left,
-                'needs_renewal': days_left < renewal_threshold_days,
+                # Inclusive boundary: a cert with exactly renewal_threshold_days
+                # left must renew. Using `<` skipped the boundary, delaying
+                # renewal by a day; digest.py and metrics.py already use `<=`.
+                'needs_renewal': days_left <= renewal_threshold_days,
                 'dns_provider': dns_provider,
                 'domain_alias': domain_alias,
                 'alias_dns_provider': alias_dns_provider,
