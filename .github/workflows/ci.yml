@@ -12,18 +12,28 @@ on:
 # token, not the GITHUB_TOKEN), so no job needs write here.
 permissions: read-all
 
-# One CI run per ref at a time. The e2e suite (tests/conftest.py) starts a
-# container with a FIXED name (certmate-test-suite) and port (18888) and runs
-# `docker rm -f` on startup, so two CI runs on the same self-hosted host cycle
-# each other's container mid-run and intermittently fail HTTP e2e tests (seen on
-# the v2.11.2 bump overlapping the #278 merge run). Serializing per-ref removes
-# the clobber; a newer push supersedes an older in-flight run on the same branch.
+# Per-ref: a newer push to a branch supersedes that branch's own older
+# in-flight run. This does NOT cover the shared-container clobber across
+# DIFFERENT refs (two open PRs) — that is handled by a host-global group on
+# the `test` job below.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   test:
+    # Host-global serialization. The e2e suite (tests/conftest.py) binds a
+    # FIXED-name container (certmate-test-suite) and port (18888) on the
+    # self-hosted host and `docker rm -f`s it on startup, so two test jobs from
+    # DIFFERENT refs/PRs running at once cycle each other's container mid-run
+    # and the HTTP e2e tests fail with connection-refused (observed when two
+    # PRs were opened together). The per-ref group above cannot see across
+    # refs; this single host-wide group makes every test job — regardless of
+    # branch — queue and run one at a time. cancel-in-progress:false so a
+    # waiting PR's tests are queued, never dropped.
+    concurrency:
+      group: certmate-selfhosted-test-container
+      cancel-in-progress: false
     runs-on: [self-hosted, Linux, X64]
     strategy:
       matrix:
