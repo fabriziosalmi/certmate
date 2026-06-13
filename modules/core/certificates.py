@@ -1475,17 +1475,31 @@ class CertificateManager:
             domain_lock.release()
 
     def check_renewals(self):
-        """Check and renew certificates that are about to expire"""
+        """Check and renew certificates that are about to expire.
+
+        Returns a summary dict (checked / renewed / failed / skipped_disabled
+        / skipped_invalid) so the outcome is observable rather than silent.
+        A malformed domain entry used to be skipped with no signal (or only a
+        debug-level one), so a typo in settings.json could quietly exclude a
+        domain from renewal forever; every skip and failure is now counted
+        and logged.
+        """
         settings = self.settings_manager.load_settings()
-            
+
         if not settings.get('auto_renew', True):
-            return
-        
+            logger.info("Automatic renewal is globally disabled; skipping renewal check")
+            return {'checked': 0, 'renewed': 0, 'failed': 0,
+                    'skipped_disabled': 0, 'skipped_invalid': 0,
+                    'auto_renew_disabled': True}
+
         # Migrate settings format if needed
         settings = self.settings_manager.migrate_domains_format(settings)
-        
+
         logger.info("Checking for certificates that need renewal")
-        
+
+        summary = {'checked': 0, 'renewed': 0, 'failed': 0,
+                   'skipped_disabled': 0, 'skipped_invalid': 0}
+
         for domain_entry in settings.get('domains', []):
             try:
                 # Handle both old and new domain formats
@@ -1496,10 +1510,13 @@ class CertificateManager:
                     domain = domain_entry.get('domain')
                     per_cert_auto_renew = domain_entry.get('auto_renew', True)
                 else:
-                    logger.warning(f"Invalid domain entry format: {domain_entry}")
+                    logger.warning(f"Skipping malformed domain entry (not str/dict): {domain_entry!r}")
+                    summary['skipped_invalid'] += 1
                     continue
 
                 if not domain:
+                    logger.warning(f"Skipping domain entry with no domain name: {domain_entry!r}")
+                    summary['skipped_invalid'] += 1
                     continue
 
                 # Per-certificate opt-out: skip when auto_renew is explicitly
@@ -1507,6 +1524,7 @@ class CertificateManager:
                 # checked above; this is the per-cert override (issue #111).
                 if not per_cert_auto_renew:
                     logger.info(f"Skipping renewal for {domain}: auto_renew disabled for this certificate")
+                    summary['skipped_disabled'] += 1
                     continue
 
                 # Pass the once-loaded settings into get_certificate_info so
@@ -1517,18 +1535,38 @@ class CertificateManager:
                 # use_cache=False: this loop visits each domain exactly once
                 # per run, so populating _certificate_info_cache would only
                 # add a deepcopy-on-set with no possible read hit.
+                summary['checked'] += 1
                 cert_info = self.get_certificate_info(domain, settings=settings, use_cache=False)
 
                 if cert_info and cert_info.get('needs_renewal'):
                     logger.info(f"Renewing certificate for {domain}")
                     try:
                         self.renew_certificate(domain)
+                        summary['renewed'] += 1
                         logger.info(f"Successfully renewed certificate for {domain}")
                     except Exception as e:
+                        summary['failed'] += 1
                         logger.error(f"Failed to renew certificate for {domain}: {e}")
-                        
+
             except Exception as e:
+                summary['failed'] += 1
                 logger.error(f"Error checking renewal for domain entry {domain_entry}: {e}")
+
+        if summary['skipped_invalid']:
+            logger.warning(
+                "Renewal check skipped %d malformed domain entr%s — fix "
+                "settings.json so these domains are not silently excluded "
+                "from renewal",
+                summary['skipped_invalid'],
+                'y' if summary['skipped_invalid'] == 1 else 'ies',
+            )
+        logger.info(
+            "Renewal check complete: %d checked, %d renewed, %d failed, "
+            "%d disabled, %d invalid",
+            summary['checked'], summary['renewed'], summary['failed'],
+            summary['skipped_disabled'], summary['skipped_invalid'],
+        )
+        return summary
 
     def create_certificate_legacy(self, domain, email, cloudflare_token):
         """Legacy function for backward compatibility"""
