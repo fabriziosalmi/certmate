@@ -104,13 +104,25 @@ class CertificateManager:
             return 5.0
 
     @staticmethod
+    def _coerce_renewal_threshold_days(settings: dict | None, default: int = 30) -> int:
+        """Return a usable renewal threshold in days from settings.
+
+        A non-int, zero, or negative ``renewal_threshold_days`` (a typo via
+        the API, a hand-edited settings.json, or a stringified JSON number)
+        would otherwise make ``days_left <= threshold`` permanently False —
+        silently disabling renewal — or raise TypeError in the renewal
+        worker. Clamp to a sane [1, 365] window so the renewal decision is
+        always well-defined; fall back to *default* on anything uncoercible.
+        """
+        raw = settings.get('renewal_threshold_days', default) if isinstance(settings, dict) else default
+        try:
+            return max(1, min(365, int(raw)))
+        except (TypeError, ValueError):
+            return default
+
+    @staticmethod
     def _certificate_info_cache_key(domain: str, settings: dict | None) -> str:
-        threshold = 30
-        if isinstance(settings, dict):
-            try:
-                threshold = int(settings.get('renewal_threshold_days', 30))
-            except (TypeError, ValueError):
-                threshold = 30
+        threshold = CertificateManager._coerce_renewal_threshold_days(settings)
         return f"{domain}|renewal_threshold_days={threshold}|date={utc_now().date().isoformat()}"
 
     def _get_cached_certificate_info(self, domain: str, settings: dict | None = None):
@@ -682,8 +694,11 @@ class CertificateManager:
             # Fall back to current settings
             dns_provider = self.settings_manager.get_domain_dns_provider(domain, settings)
 
-        # Get configurable renewal threshold (default 30 days for backward compatibility)
-        renewal_threshold_days = settings.get('renewal_threshold_days', 30)
+        # Get configurable renewal threshold (default 30 days for backward
+        # compatibility). Coerced/clamped so a malformed persisted value
+        # (0, negative, or a string) can never silently disable renewal or
+        # raise TypeError in the comparison below.
+        renewal_threshold_days = self._coerce_renewal_threshold_days(settings)
 
         try:
             # Parse the certificate in-process with `cryptography` (already a
@@ -706,14 +721,21 @@ class CertificateManager:
                 'expiry_date': expiry_date.strftime('%Y-%m-%d %H:%M:%S'),
                 'days_left': days_left,
                 'days_until_expiry': days_left,
-                'needs_renewal': days_left < renewal_threshold_days,
+                # Inclusive boundary: a cert with exactly renewal_threshold_days
+                # left must renew. Using `<` skipped the boundary, delaying
+                # renewal by a day; digest.py and metrics.py already use `<=`.
+                'needs_renewal': days_left <= renewal_threshold_days,
                 'dns_provider': dns_provider,
                 'domain_alias': domain_alias,
                 'alias_dns_provider': alias_dns_provider,
                 'san_domains': san_domains,
                 'ca_provider': ca_provider,
                 'challenge_type': challenge_type,
-                'account_id': account_id
+                'account_id': account_id,
+                # Surfaced so a failed external-storage save (DR copy missing
+                # or stale) is visible on GET, not just buried in the logs.
+                # None when the last issuance stored cleanly.
+                'storage_warning': metadata.get('storage_warning'),
             }
         except Exception as e:
             logger.error(f"Error parsing certificate for {domain}: {e}")
@@ -732,7 +754,8 @@ class CertificateManager:
             'san_domains': san_domains,
             'ca_provider': ca_provider,
             'challenge_type': challenge_type,
-            'account_id': account_id
+            'account_id': account_id,
+            'storage_warning': metadata.get('storage_warning'),
         }
 
     def _create_empty_cert_info(self, domain):
@@ -1203,25 +1226,49 @@ class CertificateManager:
                 metadata['domain_alias'] = domain_alias
                 metadata['alias_dns_provider'] = alias_dns_provider or dns_provider
             
+            # External storage is the disaster-recovery copy: if the local
+            # cert_dir is on ephemeral storage and is lost, the cert is only
+            # recoverable from the configured backend. A failed store used to
+            # be a log line only — the API still returned success=True, so the
+            # operator had no signal their backup never landed. Capture a
+            # generic warning (no raw exception text — it can carry backend
+            # credentials/URLs) and surface it on the result and in metadata.
+            storage_warning = None
             if self.storage_manager:
+                try:
+                    backend_name = self.storage_manager.get_backend_name()
+                except Exception:
+                    backend_name = 'external'
                 try:
                     storage_success = self.storage_manager.store_certificate(domain, cert_files, metadata)
                     if storage_success:
-                        logger.info(f"Certificate stored in {self.storage_manager.get_backend_name()} backend for {domain}")
+                        logger.info(f"Certificate stored in {backend_name} backend for {domain}")
                     else:
-                        logger.warning(f"Failed to store certificate in {self.storage_manager.get_backend_name()} backend for {domain}")
+                        storage_warning = (
+                            f"Certificate issued but NOT saved to the {backend_name} storage "
+                            f"backend — the external copy is missing or stale. Check the backend "
+                            f"credentials and connectivity."
+                        )
+                        logger.warning(f"Failed to store certificate in {backend_name} backend for {domain}")
                 except Exception as e:
+                    storage_warning = (
+                        f"Certificate issued but saving it to the {backend_name} storage backend "
+                        f"failed — the external copy is missing or stale. See server logs for details."
+                    )
                     logger.error(f"Error storing certificate in storage backend for {domain}: {e}")
-            
+
+            if storage_warning:
+                metadata['storage_warning'] = storage_warning
+
             if self._save_metadata(domain, metadata):
                 logger.info(f"Saved certificate metadata to {self._metadata_path(domain)}")
-            
+
             duration = time.time() - start_time
             logger.info(f"Certificate created successfully for {domain} in {duration:.2f} seconds")
             self._invalidate_certificate_info_cache(domain)
             self._write_pfx(domain)
 
-            return {
+            result = {
                 'success': True,
                 'domain': domain,
                 'dns_provider': dns_provider,
@@ -1229,6 +1276,9 @@ class CertificateManager:
                 'staging': staging,
                 'ca_provider': ca_provider
             }
+            if storage_warning:
+                result['storage_warning'] = storage_warning
+            return result
             
         except subprocess.TimeoutExpired:
             logger.error(f"Certificate creation timeout for {domain}")
@@ -1457,17 +1507,31 @@ class CertificateManager:
             domain_lock.release()
 
     def check_renewals(self):
-        """Check and renew certificates that are about to expire"""
+        """Check and renew certificates that are about to expire.
+
+        Returns a summary dict (checked / renewed / failed / skipped_disabled
+        / skipped_invalid) so the outcome is observable rather than silent.
+        A malformed domain entry used to be skipped with no signal (or only a
+        debug-level one), so a typo in settings.json could quietly exclude a
+        domain from renewal forever; every skip and failure is now counted
+        and logged.
+        """
         settings = self.settings_manager.load_settings()
-            
+
         if not settings.get('auto_renew', True):
-            return
-        
+            logger.info("Automatic renewal is globally disabled; skipping renewal check")
+            return {'checked': 0, 'renewed': 0, 'failed': 0,
+                    'skipped_disabled': 0, 'skipped_invalid': 0,
+                    'auto_renew_disabled': True}
+
         # Migrate settings format if needed
         settings = self.settings_manager.migrate_domains_format(settings)
-        
+
         logger.info("Checking for certificates that need renewal")
-        
+
+        summary = {'checked': 0, 'renewed': 0, 'failed': 0,
+                   'skipped_disabled': 0, 'skipped_invalid': 0}
+
         for domain_entry in settings.get('domains', []):
             try:
                 # Handle both old and new domain formats
@@ -1478,10 +1542,13 @@ class CertificateManager:
                     domain = domain_entry.get('domain')
                     per_cert_auto_renew = domain_entry.get('auto_renew', True)
                 else:
-                    logger.warning(f"Invalid domain entry format: {domain_entry}")
+                    logger.warning(f"Skipping malformed domain entry (not str/dict): {domain_entry!r}")
+                    summary['skipped_invalid'] += 1
                     continue
 
                 if not domain:
+                    logger.warning(f"Skipping domain entry with no domain name: {domain_entry!r}")
+                    summary['skipped_invalid'] += 1
                     continue
 
                 # Per-certificate opt-out: skip when auto_renew is explicitly
@@ -1489,6 +1556,7 @@ class CertificateManager:
                 # checked above; this is the per-cert override (issue #111).
                 if not per_cert_auto_renew:
                     logger.info(f"Skipping renewal for {domain}: auto_renew disabled for this certificate")
+                    summary['skipped_disabled'] += 1
                     continue
 
                 # Pass the once-loaded settings into get_certificate_info so
@@ -1499,18 +1567,38 @@ class CertificateManager:
                 # use_cache=False: this loop visits each domain exactly once
                 # per run, so populating _certificate_info_cache would only
                 # add a deepcopy-on-set with no possible read hit.
+                summary['checked'] += 1
                 cert_info = self.get_certificate_info(domain, settings=settings, use_cache=False)
 
                 if cert_info and cert_info.get('needs_renewal'):
                     logger.info(f"Renewing certificate for {domain}")
                     try:
                         self.renew_certificate(domain)
+                        summary['renewed'] += 1
                         logger.info(f"Successfully renewed certificate for {domain}")
                     except Exception as e:
+                        summary['failed'] += 1
                         logger.error(f"Failed to renew certificate for {domain}: {e}")
-                        
+
             except Exception as e:
+                summary['failed'] += 1
                 logger.error(f"Error checking renewal for domain entry {domain_entry}: {e}")
+
+        if summary['skipped_invalid']:
+            logger.warning(
+                "Renewal check skipped %d malformed domain entr%s — fix "
+                "settings.json so these domains are not silently excluded "
+                "from renewal",
+                summary['skipped_invalid'],
+                'y' if summary['skipped_invalid'] == 1 else 'ies',
+            )
+        logger.info(
+            "Renewal check complete: %d checked, %d renewed, %d failed, "
+            "%d disabled, %d invalid",
+            summary['checked'], summary['renewed'], summary['failed'],
+            summary['skipped_disabled'], summary['skipped_invalid'],
+        )
+        return summary
 
     def create_certificate_legacy(self, domain, email, cloudflare_token):
         """Legacy function for backward compatibility"""

@@ -104,6 +104,33 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
             'checks': checks
         })
 
+    @app.route('/health/ready')
+    def readiness_check():
+        """Readiness probe for orchestrators (Kubernetes readiness, compose
+        healthcheck, deploy gates).
+
+        Distinct from /health on purpose: /health is *liveness* and stays
+        200 whenever Flask serves requests, so a load balancer keeps routing
+        traffic to a process that is otherwise fine. But if APScheduler — the
+        only thing that runs automatic renewals on this single-instance
+        build — failed to start, the instance is serving yet quietly never
+        renewing anything. That used to be invisible to every probe because
+        /health returned 200. This endpoint returns 503 in exactly that case
+        so the failure becomes loud: a deploy gate fails, a readiness probe
+        flips the pod out of rotation, an alert fires.
+        """
+        scheduler = managers.get('scheduler')
+        scheduler_status = managers.get('scheduler_status') or {}
+        running = bool(scheduler and getattr(scheduler, 'running', False))
+        ready = running and scheduler_status.get('state') != 'failed'
+        body = {
+            'ready': ready,
+            'scheduler': 'running' if running else (scheduler_status.get('state') or 'not_running'),
+        }
+        if not ready and scheduler_status.get('error'):
+            body['scheduler_error'] = scheduler_status.get('error')
+        return jsonify(body), (200 if ready else 503)
+
     @app.route('/api/events/stream')
     def events_stream():
         """SSE: stream certificate lifecycle events to authenticated browsers.

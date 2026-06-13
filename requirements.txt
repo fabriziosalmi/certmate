@@ -73,4 +73,8 @@ prometheus_client==0.21.0
 
 # Testing
 requests_mock==1.12.1
-SQLAlchemy>=2.0.0
+# APScheduler's SQLAlchemyJobStore backs the persistent renewal schedule.
+# Cap below 3.0.0: a major SQLAlchemy bump can break create_engine / the
+# jobstore and would silently stop automatic renewals on an unattended
+# `pip install -U`. Raise the ceiling only after testing against 3.x.
+SQLAlchemy>=2.0.0,<3.0.0

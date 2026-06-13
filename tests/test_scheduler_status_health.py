@@ -115,5 +115,58 @@ def test_health_falls_back_to_not_running_when_status_unset():
     assert body['checks']['scheduler'] == 'not_running'
 
 
+def test_readiness_returns_503_when_scheduler_failed():
+    """A broken renewal engine must FAIL readiness so orchestrators react.
+
+    /health stays 200 (liveness), but /health/ready returns 503 so a
+    Kubernetes readiness probe / deploy gate catches a scheduler that
+    exploded on startup — the bug being that automatic renewal silently
+    never runs while every health check passes."""
+    managers = {
+        'scheduler': None,
+        'scheduler_status': {
+            'state': 'failed',
+            'error': 'sqlite3.OperationalError: unable to open database file',
+            'timestamp': '2026-05-16T12:00:00Z',
+        },
+    }
+    app = _build_app(managers)
+    client = app.test_client()
+
+    # Liveness unaffected.
+    assert client.get('/health').status_code == 200
+
+    resp = client.get('/health/ready')
+    assert resp.status_code == 503
+    body = resp.get_json()
+    assert body['ready'] is False
+    assert body['scheduler'] == 'failed'
+    assert body['scheduler_error'] == (
+        'sqlite3.OperationalError: unable to open database file'
+    )
+
+
+def test_readiness_returns_200_when_scheduler_running():
+    mock_scheduler = MagicMock()
+    mock_scheduler.running = True
+    managers = {
+        'scheduler': mock_scheduler,
+        'scheduler_status': {'state': 'running', 'error': None, 'timestamp': 't'},
+    }
+    resp = _build_app(managers).test_client().get('/health/ready')
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body['ready'] is True
+    assert body['scheduler'] == 'running'
+    assert 'scheduler_error' not in body
+
+
+def test_readiness_returns_503_when_status_absent():
+    """No recorded status (scheduler never set up) is also not-ready."""
+    resp = _build_app({'scheduler': None}).test_client().get('/health/ready')
+    assert resp.status_code == 503
+    assert resp.get_json()['ready'] is False
+
+
 if __name__ == "__main__":  # pragma: no cover
     pytest.main([__file__, "-v"])
