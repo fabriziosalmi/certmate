@@ -318,6 +318,21 @@ def validate_settings_post(payload, current=None):
             filtered[key] = value
         else:
             unknown.append(key)
+
+    # Reject a malformed renewal threshold at the door rather than letting
+    # it persist and silently break renewal. A 0/negative/non-numeric value
+    # would make `days_left <= threshold` permanently False (no cert ever
+    # renews) — the worst possible failure for a cert manager. Only a
+    # genuinely changed value reaches here (no-op echoes were dropped above).
+    if 'renewal_threshold_days' in filtered:
+        try:
+            coerced = int(filtered['renewal_threshold_days'])
+        except (TypeError, ValueError):
+            raise ValueError("renewal_threshold_days must be an integer between 1 and 365")
+        if not 1 <= coerced <= 365:
+            raise ValueError("renewal_threshold_days must be between 1 and 365")
+        filtered['renewal_threshold_days'] = coerced
+
     return filtered, rejected, unknown
 
 

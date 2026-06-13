@@ -104,13 +104,25 @@ class CertificateManager:
             return 5.0
 
     @staticmethod
+    def _coerce_renewal_threshold_days(settings: dict | None, default: int = 30) -> int:
+        """Return a usable renewal threshold in days from settings.
+
+        A non-int, zero, or negative ``renewal_threshold_days`` (a typo via
+        the API, a hand-edited settings.json, or a stringified JSON number)
+        would otherwise make ``days_left <= threshold`` permanently False —
+        silently disabling renewal — or raise TypeError in the renewal
+        worker. Clamp to a sane [1, 365] window so the renewal decision is
+        always well-defined; fall back to *default* on anything uncoercible.
+        """
+        raw = settings.get('renewal_threshold_days', default) if isinstance(settings, dict) else default
+        try:
+            return max(1, min(365, int(raw)))
+        except (TypeError, ValueError):
+            return default
+
+    @staticmethod
     def _certificate_info_cache_key(domain: str, settings: dict | None) -> str:
-        threshold = 30
-        if isinstance(settings, dict):
-            try:
-                threshold = int(settings.get('renewal_threshold_days', 30))
-            except (TypeError, ValueError):
-                threshold = 30
+        threshold = CertificateManager._coerce_renewal_threshold_days(settings)
         return f"{domain}|renewal_threshold_days={threshold}|date={utc_now().date().isoformat()}"
 
     def _get_cached_certificate_info(self, domain: str, settings: dict | None = None):
@@ -682,8 +694,11 @@ class CertificateManager:
             # Fall back to current settings
             dns_provider = self.settings_manager.get_domain_dns_provider(domain, settings)
 
-        # Get configurable renewal threshold (default 30 days for backward compatibility)
-        renewal_threshold_days = settings.get('renewal_threshold_days', 30)
+        # Get configurable renewal threshold (default 30 days for backward
+        # compatibility). Coerced/clamped so a malformed persisted value
+        # (0, negative, or a string) can never silently disable renewal or
+        # raise TypeError in the comparison below.
+        renewal_threshold_days = self._coerce_renewal_threshold_days(settings)
 
         try:
             # Parse the certificate in-process with `cryptography` (already a
