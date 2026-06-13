@@ -731,7 +731,11 @@ class CertificateManager:
                 'san_domains': san_domains,
                 'ca_provider': ca_provider,
                 'challenge_type': challenge_type,
-                'account_id': account_id
+                'account_id': account_id,
+                # Surfaced so a failed external-storage save (DR copy missing
+                # or stale) is visible on GET, not just buried in the logs.
+                # None when the last issuance stored cleanly.
+                'storage_warning': metadata.get('storage_warning'),
             }
         except Exception as e:
             logger.error(f"Error parsing certificate for {domain}: {e}")
@@ -750,7 +754,8 @@ class CertificateManager:
             'san_domains': san_domains,
             'ca_provider': ca_provider,
             'challenge_type': challenge_type,
-            'account_id': account_id
+            'account_id': account_id,
+            'storage_warning': metadata.get('storage_warning'),
         }
 
     def _create_empty_cert_info(self, domain):
@@ -1221,25 +1226,49 @@ class CertificateManager:
                 metadata['domain_alias'] = domain_alias
                 metadata['alias_dns_provider'] = alias_dns_provider or dns_provider
             
+            # External storage is the disaster-recovery copy: if the local
+            # cert_dir is on ephemeral storage and is lost, the cert is only
+            # recoverable from the configured backend. A failed store used to
+            # be a log line only — the API still returned success=True, so the
+            # operator had no signal their backup never landed. Capture a
+            # generic warning (no raw exception text — it can carry backend
+            # credentials/URLs) and surface it on the result and in metadata.
+            storage_warning = None
             if self.storage_manager:
+                try:
+                    backend_name = self.storage_manager.get_backend_name()
+                except Exception:
+                    backend_name = 'external'
                 try:
                     storage_success = self.storage_manager.store_certificate(domain, cert_files, metadata)
                     if storage_success:
-                        logger.info(f"Certificate stored in {self.storage_manager.get_backend_name()} backend for {domain}")
+                        logger.info(f"Certificate stored in {backend_name} backend for {domain}")
                     else:
-                        logger.warning(f"Failed to store certificate in {self.storage_manager.get_backend_name()} backend for {domain}")
+                        storage_warning = (
+                            f"Certificate issued but NOT saved to the {backend_name} storage "
+                            f"backend — the external copy is missing or stale. Check the backend "
+                            f"credentials and connectivity."
+                        )
+                        logger.warning(f"Failed to store certificate in {backend_name} backend for {domain}")
                 except Exception as e:
+                    storage_warning = (
+                        f"Certificate issued but saving it to the {backend_name} storage backend "
+                        f"failed — the external copy is missing or stale. See server logs for details."
+                    )
                     logger.error(f"Error storing certificate in storage backend for {domain}: {e}")
-            
+
+            if storage_warning:
+                metadata['storage_warning'] = storage_warning
+
             if self._save_metadata(domain, metadata):
                 logger.info(f"Saved certificate metadata to {self._metadata_path(domain)}")
-            
+
             duration = time.time() - start_time
             logger.info(f"Certificate created successfully for {domain} in {duration:.2f} seconds")
             self._invalidate_certificate_info_cache(domain)
             self._write_pfx(domain)
 
-            return {
+            result = {
                 'success': True,
                 'domain': domain,
                 'dns_provider': dns_provider,
@@ -1247,6 +1276,9 @@ class CertificateManager:
                 'staging': staging,
                 'ca_provider': ca_provider
             }
+            if storage_warning:
+                result['storage_warning'] = storage_warning
+            return result
             
         except subprocess.TimeoutExpired:
             logger.error(f"Certificate creation timeout for {domain}")
