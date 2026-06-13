@@ -619,7 +619,7 @@ def setup_scheduler(container: AppContainer):
         }
         container.managers['scheduler_status'] = container.scheduler_status
     except Exception as e:
-        logger.error(f"Scheduler setup failed — automatic certificate renewal will NOT run: {e}")
+        logger.critical(f"Scheduler setup failed — automatic certificate renewal will NOT run: {e}")
         import warnings
         warnings.warn(
             f"CertMate scheduler failed to start: {e}. "
