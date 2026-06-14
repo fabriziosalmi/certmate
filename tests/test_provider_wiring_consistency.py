@@ -175,6 +175,38 @@ def test_dns_alias_required_fields_match_credential_schema():
     )
 
 
+def _api_model_field_enum(model_name, field_name='dns_provider'):
+    """Build the flask-restx models on a throwaway Api and read a field enum.
+
+    Reads the ACTUAL enum on the registered model so the test pins the real
+    API contract (it would also catch someone re-hardcoding a drifting literal,
+    not just the derivation)."""
+    from flask import Flask
+    from flask_restx import Api
+    from modules.api.models import create_api_models
+
+    api = Api(Flask(__name__))
+    create_api_models(api)
+    return set(api.models[model_name][field_name].enum)
+
+
+def test_api_models_dns_provider_enum_matches_supported():
+    """The dns_provider enum advertised by the API models (Swagger / request
+    contract) must equal the canonical provider set. It previously hand-listed
+    24 of 26, silently omitting hetzner-cloud and infomaniak."""
+    from modules.core.dns_providers import DNSManager
+    supported = set(DNSManager.SUPPORTED_PROVIDERS)
+    for model_name in ('Settings', 'CreateCertificate'):
+        enum = _api_model_field_enum(model_name)
+        missing = supported - enum
+        extra = enum - supported
+        assert not (missing or extra), (
+            f"modules/api/models.py {model_name}.dns_provider enum drifted from "
+            f"DNSManager.SUPPORTED_PROVIDERS: missing={sorted(missing)} "
+            f"extra={sorted(extra)}"
+        )
+
+
 def test_every_alias_provider_is_dispatchable():
     """Every alias provider must be dispatchable at change-time: it either has
     a Lexicon adapter name or is one of the native adapters. A provider in the

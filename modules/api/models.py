@@ -167,6 +167,15 @@ def create_api_models(api):
         'oldest_active_issuance': fields.String(description='Oldest active issuance timestamp')
     })
 
+    # Single source of truth: the dns_provider enum is derived from the
+    # canonical advertised provider list (DNSManager.SUPPORTED_PROVIDERS) so it
+    # cannot drift. The previous hand-maintained literal listed 24 of the 26
+    # providers, silently omitting hetzner-cloud and infomaniak from the API
+    # contract / Swagger. Pinned by
+    # test_api_models_dns_provider_enum_matches_supported.
+    from modules.core.dns_providers import DNSManager
+    dns_provider_enum = list(DNSManager.SUPPORTED_PROVIDERS)
+
     settings_model = api.model('Settings', {
         'cloudflare_token': MaskedString(description='Cloudflare API token (deprecated, use dns_providers)'),
         'domains': fields.List(fields.Raw, description='List of domains (can be strings or objects)'),
@@ -175,13 +184,7 @@ def create_api_models(api):
         'api_bearer_token': MaskedString(description='API bearer token for authentication'),
         'dns_provider': fields.String(
             description='Active DNS provider',
-            enum=[
-                'cloudflare', 'route53', 'azure', 'google', 'powerdns',
-                'digitalocean', 'linode', 'gandi', 'ovh', 'namecheap',
-                'vultr', 'dnsmadeeasy', 'nsone', 'rfc2136', 'hetzner',
-                'porkbun', 'godaddy', 'he-ddns', 'dynudns', 'arvancloud',
-                'acme-dns', 'duckdns', 'edgedns', 'custom-script'
-            ]
+            enum=dns_provider_enum
         ),
         'dns_providers': fields.Nested(dns_providers_model, description='DNS provider configurations'),
         'default_key_type': fields.String(
@@ -204,13 +207,7 @@ def create_api_models(api):
                                    description='Additional SANs (e.g., ["*.example.com"])'),
         'dns_provider': fields.String(
             description='DNS provider to use (optional, uses default from settings)',
-            enum=[
-                'cloudflare', 'route53', 'azure', 'google', 'powerdns',
-                'digitalocean', 'linode', 'gandi', 'ovh', 'namecheap',
-                'vultr', 'dnsmadeeasy', 'nsone', 'rfc2136', 'hetzner',
-                'porkbun', 'godaddy', 'he-ddns', 'dynudns', 'arvancloud',
-                'acme-dns', 'duckdns', 'edgedns', 'custom-script'
-            ]
+            enum=dns_provider_enum
         ),
         'account_id': fields.String(description='DNS provider account ID'),
         'ca_provider': fields.String(description='CA provider (optional)',
