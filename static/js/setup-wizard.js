@@ -32,6 +32,10 @@
         nsone:         { label: 'NS1', icon: 'fa-network-wired', fields: [{ key: 'api_key', label: 'API Key', type: 'password' }] },
         'he-ddns':     { label: 'Hurricane Electric', icon: 'fa-bolt', fields: [{ key: 'username', label: 'Username', type: 'text' }, { key: 'password', label: 'Password', type: 'password' }] },
         dynudns:       { label: 'Dynu', icon: 'fa-globe', fields: [{ key: 'token', label: 'API Token', type: 'password' }] },
+        arvancloud:    { label: 'ArvanCloud', icon: 'fa-cloud', fields: [{ key: 'api_key', label: 'API Key', type: 'password' }] },
+        infomaniak:    { label: 'Infomaniak', icon: 'fa-cloud', fields: [{ key: 'api_token', label: 'API Token', type: 'password' }] },
+        'acme-dns':    { label: 'ACME-DNS', icon: 'fa-network-wired', fields: [{ key: 'api_url', label: 'API URL', type: 'text' }, { key: 'username', label: 'Username', type: 'text' }, { key: 'password', label: 'Password', type: 'password' }, { key: 'subdomain', label: 'Subdomain', type: 'text' }] },
+        'hetzner-cloud': { label: 'Hetzner Cloud', icon: 'fa-server', fields: [{ key: 'api_token', label: 'API Token', type: 'password' }] },
         duckdns:       { label: 'DuckDNS', icon: 'fa-cloud', fields: [{ key: 'api_token', label: 'Account Token', type: 'password', placeholder: 'UUID-format token from your DuckDNS account page' }] }
     };
 

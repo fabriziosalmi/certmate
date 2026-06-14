@@ -202,6 +202,46 @@
                                     </div>
                                 </label>
                                 <label class="relative">
+                                    <input type="radio" name="dns_provider" value="hetzner-cloud" class="sr-only peer">
+                                    <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
+                                        <div class="text-center">
+                                            <i class="fas fa-server text-lg text-red-600 mb-1"></i>
+                                            <div class="text-xs font-medium dark:text-white">Hetzner Cloud</div>
+                                            <div class="text-xs text-muted mt-1" id="hetzner-cloud-status">Not configured</div>
+                                        </div>
+                                    </div>
+                                </label>
+                                <label class="relative">
+                                    <input type="radio" name="dns_provider" value="arvancloud" class="sr-only peer">
+                                    <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
+                                        <div class="text-center">
+                                            <i class="fas fa-cloud text-lg text-blue-600 mb-1"></i>
+                                            <div class="text-xs font-medium dark:text-white">ArvanCloud</div>
+                                            <div class="text-xs text-muted mt-1" id="arvancloud-status">Not configured</div>
+                                        </div>
+                                    </div>
+                                </label>
+                                <label class="relative">
+                                    <input type="radio" name="dns_provider" value="infomaniak" class="sr-only peer">
+                                    <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
+                                        <div class="text-center">
+                                            <i class="fas fa-cloud text-lg text-purple-600 mb-1"></i>
+                                            <div class="text-xs font-medium dark:text-white">Infomaniak</div>
+                                            <div class="text-xs text-muted mt-1" id="infomaniak-status">Not configured</div>
+                                        </div>
+                                    </div>
+                                </label>
+                                <label class="relative">
+                                    <input type="radio" name="dns_provider" value="acme-dns" class="sr-only peer">
+                                    <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
+                                        <div class="text-center">
+                                            <i class="fas fa-network-wired text-lg text-green-600 mb-1"></i>
+                                            <div class="text-xs font-medium dark:text-white">ACME-DNS</div>
+                                            <div class="text-xs text-muted mt-1" id="acme-dns-status">Not configured</div>
+                                        </div>
+                                    </div>
+                                </label>
+                                <label class="relative">
                                     <input type="radio" name="dns_provider" value="gandi" class="sr-only peer">
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
@@ -691,6 +731,122 @@
                             </div>
                             <p class="mt-2 text-sm text-muted">
                                 Create a personal access token from your Akamai Connected Cloud (Linode) account with read/write access to DNS records. For Akamai Edge DNS (enterprise), select the dedicated <em>Akamai Edge DNS</em> provider instead.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Hetzner Cloud Configuration -->
+                    <div id="hetzner-cloud-config" class="dns-config hidden">
+                        <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
+                            <h4 class="text-lg font-medium text-foreground mb-4">
+                                <i class="fas fa-server mr-2 text-red-600"></i>
+                                Hetzner Cloud DNS Configuration
+                            </h4>
+                            <div class="grid grid-cols-1 gap-4">
+                                <div>
+                                    <label for="hetzner-cloud_api_token" class="block text-sm font-medium text-label">
+                                        API Token
+                                    </label>
+                                    <input type="password" id="hetzner-cloud_api_token" name="hetzner-cloud_api_token"
+                                           class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                                           placeholder="Your Hetzner Cloud DNS API token">
+                                </div>
+                            </div>
+                            <p class="mt-2 text-sm text-muted">
+                                Uses the certbot-dns-hetzner-cloud plugin. Create an API token in the Hetzner Cloud console with DNS permissions. Choose the plain <em>Hetzner</em> provider instead if you use Hetzner DNS rather than Hetzner Cloud.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- ArvanCloud Configuration -->
+                    <div id="arvancloud-config" class="dns-config hidden">
+                        <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
+                            <h4 class="text-lg font-medium text-foreground mb-4">
+                                <i class="fas fa-cloud mr-2 text-blue-600"></i>
+                                ArvanCloud DNS Configuration
+                            </h4>
+                            <div class="grid grid-cols-1 gap-4">
+                                <div>
+                                    <label for="arvancloud_api_key" class="block text-sm font-medium text-label">
+                                        API Key
+                                    </label>
+                                    <input type="password" id="arvancloud_api_key" name="arvancloud_api_key"
+                                           class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                                           placeholder="Your ArvanCloud API key">
+                                </div>
+                            </div>
+                            <p class="mt-2 text-sm text-muted">
+                                Create an API key in your ArvanCloud panel with DNS management permissions.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Infomaniak Configuration -->
+                    <div id="infomaniak-config" class="dns-config hidden">
+                        <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
+                            <h4 class="text-lg font-medium text-foreground mb-4">
+                                <i class="fas fa-cloud mr-2 text-purple-600"></i>
+                                Infomaniak DNS Configuration
+                            </h4>
+                            <div class="grid grid-cols-1 gap-4">
+                                <div>
+                                    <label for="infomaniak_api_token" class="block text-sm font-medium text-label">
+                                        API Token
+                                    </label>
+                                    <input type="password" id="infomaniak_api_token" name="infomaniak_api_token"
+                                           class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                                           placeholder="Your Infomaniak API token">
+                                </div>
+                            </div>
+                            <p class="mt-2 text-sm text-muted">
+                                Create an API token in your Infomaniak account with the Domain scope.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- ACME-DNS Configuration -->
+                    <div id="acme-dns-config" class="dns-config hidden">
+                        <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
+                            <h4 class="text-lg font-medium text-foreground mb-4">
+                                <i class="fas fa-network-wired mr-2 text-green-600"></i>
+                                ACME-DNS Configuration
+                            </h4>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label for="acme-dns_api_url" class="block text-sm font-medium text-label">
+                                        API URL
+                                    </label>
+                                    <input type="text" id="acme-dns_api_url" name="acme-dns_api_url"
+                                           class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                                           placeholder="https://auth.acme-dns.io">
+                                </div>
+                                <div>
+                                    <label for="acme-dns_subdomain" class="block text-sm font-medium text-label">
+                                        Subdomain
+                                    </label>
+                                    <input type="text" id="acme-dns_subdomain" name="acme-dns_subdomain"
+                                           class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                                           placeholder="The ACME-DNS subdomain">
+                                </div>
+                                <div>
+                                    <label for="acme-dns_username" class="block text-sm font-medium text-label">
+                                        Username
+                                    </label>
+                                    <input type="text" id="acme-dns_username" name="acme-dns_username"
+                                           class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                                           placeholder="The ACME-DNS username">
+                                </div>
+                                <div>
+                                    <label for="acme-dns_password" class="block text-sm font-medium text-label">
+                                        Password
+                                    </label>
+                                    <input type="password" id="acme-dns_password" name="acme-dns_password"
+                                           class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                                           placeholder="The ACME-DNS password">
+                                </div>
+                            </div>
+                            <p class="mt-2 text-sm text-muted">
+                                Register an ACME-DNS account first, then enter the returned credentials so certbot can answer the CNAME-delegated challenge.
                             </p>
                         </div>
                     </div>

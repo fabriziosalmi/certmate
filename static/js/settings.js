@@ -387,6 +387,10 @@
             'duckdns': ['duckdns_api_token'],
             'dnsmadeeasy': ['dnsmadeeasy_api_key', 'dnsmadeeasy_secret_key'],
             'nsone': ['nsone_api_key'],
+            'arvancloud': ['arvancloud_api_key'],
+            'infomaniak': ['infomaniak_api_token'],
+            'acme-dns': ['acme-dns_api_url', 'acme-dns_username', 'acme-dns_password', 'acme-dns_subdomain'],
+            'hetzner-cloud': ['hetzner-cloud_api_token'],
             'custom-script': ['custom-script_auth_hook', 'custom-script_cleanup_hook']
         };
 
@@ -593,6 +597,7 @@
             'digitalocean', 'linode', 'edgedns', 'gandi', 'ovh', 'namecheap',
             'vultr', 'dnsmadeeasy', 'nsone', 'rfc2136', 'hetzner',
             'porkbun', 'godaddy', 'he-ddns', 'dynudns', 'duckdns',
+            'arvancloud', 'infomaniak', 'acme-dns', 'hetzner-cloud',
             'custom-script'
         ];
 
@@ -1140,6 +1145,9 @@
             ],
             'nsone': [
                 { name: 'api_key', label: 'API Key', type: 'password', placeholder: 'Your NS1 API key', required: true }
+            ],
+            'vultr': [
+                { name: 'api_key', label: 'API Key', type: 'password', placeholder: 'Your Vultr API key', required: true }
             ],
             'duckdns': [
                 { name: 'api_token', label: 'Account Token', type: 'password', placeholder: 'UUID-format token from your DuckDNS account page', required: true }
