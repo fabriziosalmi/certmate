@@ -182,6 +182,10 @@ class AuthManager:
           an exact domain ("example.com") matched case-insensitively, or a
           wildcard "*.example.com" that matches any single-level subdomain
           ("foo.example.com" ✓, "a.b.example.com" ✓, "example.com" ✗).
+        - A wildcard *request* ("*.example.com") is authorized only by an
+          identical wildcard scope entry; an apex scope ("example.com") does
+          NOT cover it, because the wildcard cert is strictly broader (valid
+          for every subdomain).
         """
         if allowed_domains is None:
             return True
@@ -189,7 +193,16 @@ class AuthManager:
             return False
         if not isinstance(domain, str) or not domain:
             return False
-        d = domain.strip().lower().lstrip('*.')
+        d = domain.strip().lower()
+        # A wildcard REQUEST ("*.example.com") is a distinct, broader resource
+        # than the apex: the issued cert is valid for every subdomain. It must
+        # therefore be authorized only by an identical wildcard scope entry —
+        # an apex scope of "example.com" does NOT imply it. (The previous
+        # `lstrip('*.')` stripped a character SET, collapsing "*.example.com"
+        # to "example.com", so an apex-scoped key could mint the wildcard
+        # cert — a scope-boundary privilege escalation.)
+        if d.startswith('*.'):
+            return any(pattern.strip().lower() == d for pattern in allowed_domains)
         for pattern in allowed_domains:
             p = pattern.strip().lower()
             if p.startswith('*.'):

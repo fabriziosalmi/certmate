@@ -246,17 +246,23 @@ class TestDomainMatchesScope:
         assert AuthManager.domain_matches_scope(None, ['example.com']) is False
         assert AuthManager.domain_matches_scope(42, ['example.com']) is False
 
-    def test_input_wildcard_against_exact_scope_falls_through_apex(self):
-        """The matcher strips '*.' from the requested domain, so a request
-        for '*.example.com' becomes 'example.com' for matching purposes.
-        Against an exact scope of 'example.com', that matches; against a
-        wildcard scope of '*.example.com', it does NOT (the strict-
-        subdomain rule), which is the same gotcha the apex-vs-wildcard
-        test pins for forward inputs. Both cases are honest behaviour;
-        future refactors must keep them consistent."""
+    def test_wildcard_request_requires_identical_wildcard_scope(self):
+        """A wildcard cert request ('*.example.com') is broader than the apex
+        — the issued cert is valid for every subdomain — so it must be
+        authorized only by an identical wildcard scope entry, never by an
+        apex-only scope.
+
+        Regression: the matcher used to do ``lstrip('*.')`` on the request,
+        collapsing '*.example.com' to 'example.com', so an apex-scoped key
+        ('example.com') could mint the wildcard cert (scope escalation) while
+        a correctly wildcard-scoped key was *denied* its own wildcard."""
         from modules.core.auth import AuthManager
-        assert AuthManager.domain_matches_scope('*.example.com', ['example.com']) is True
-        assert AuthManager.domain_matches_scope('*.example.com', ['*.example.com']) is False
+        # apex-only scope must NOT authorize the broader wildcard cert
+        assert AuthManager.domain_matches_scope('*.example.com', ['example.com']) is False
+        # the matching wildcard scope authorizes its own wildcard request
+        assert AuthManager.domain_matches_scope('*.example.com', ['*.example.com']) is True
+        # an unrelated wildcard scope does not authorize it either
+        assert AuthManager.domain_matches_scope('*.example.com', ['*.other.com']) is False
 
 
 # ---------------------------------------------------------------------------
@@ -295,6 +301,17 @@ class TestUserCanAccessDomain:
         mgr, _ = auth_manager_factory()
         user = {'username': 'locked', 'allowed_domains': []}
         assert mgr.user_can_access_domain(user, 'anything.com') is False
+
+    def test_apex_scope_cannot_mint_wildcard_cert(self, auth_manager_factory):
+        """End-to-end scope-escalation regression: a key scoped to the apex
+        'example.com' must NOT be able to create/renew the wildcard
+        '*.example.com', whose certificate covers every subdomain. A key
+        scoped to the wildcard itself still can."""
+        mgr, _ = auth_manager_factory()
+        apex_user = {'username': 'apex', 'allowed_domains': ['example.com']}
+        assert mgr.user_can_access_domain(apex_user, '*.example.com') is False
+        wild_user = {'username': 'wild', 'allowed_domains': ['*.example.com']}
+        assert mgr.user_can_access_domain(wild_user, '*.example.com') is True
 
 
 # ---------------------------------------------------------------------------
