@@ -101,15 +101,33 @@
                                     <button type="button" @click="config.channels.webhooks.splice(idx, 1)" class="text-red-400 hover:text-red-600 text-sm"><i class="fas fa-trash"></i></button>
                                 </div>
                                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                    <div class="sm:col-span-2"><input type="url" x-model="wh.url" placeholder="https://hooks.slack.com/..." class="w-full px-3 py-2 text-sm border text-foreground border-border rounded-lg bg-input"></div>
+                                    <div class="sm:col-span-2" x-show="wh.type !== 'telegram'"><input type="url" x-model="wh.url" :placeholder="wh.type === 'ntfy' ? 'https://ntfy.sh/your-topic' : (wh.type === 'gotify' ? 'https://gotify.example.com' : 'https://hooks.slack.com/...')" class="w-full px-3 py-2 text-sm border text-foreground border-border rounded-lg bg-input"></div>
                                     <div>
                                         <select x-model="wh.type" class="w-full px-3 py-2 text-sm border text-foreground border-border rounded-lg bg-input">
                                             <option value="generic">Generic</option>
                                             <option value="slack">Slack</option>
                                             <option value="discord">Discord</option>
+                                            <option value="telegram">Telegram</option>
+                                            <option value="ntfy">ntfy</option>
+                                            <option value="gotify">Gotify</option>
                                         </select>
                                     </div>
-                                    <div><input type="text" x-model="wh.secret" placeholder="HMAC secret (optional)" class="w-full px-3 py-2 text-sm border text-foreground border-border rounded-lg bg-input"></div>
+                                    <div x-show="wh.type === 'generic'"><input type="text" x-model="wh.secret" placeholder="HMAC secret (optional)" class="w-full px-3 py-2 text-sm border text-foreground border-border rounded-lg bg-input"></div>
+                                </div>
+                                <!-- Telegram: token is in the URL path, chat_id in the body -->
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2" x-show="wh.type === 'telegram'">
+                                    <div><input type="password" x-model="wh.token" placeholder="Bot token" class="w-full px-3 py-2 text-sm border text-foreground border-border rounded-lg bg-input"></div>
+                                    <div><input type="text" x-model="wh.chat_id" placeholder="Chat ID" class="w-full px-3 py-2 text-sm border text-foreground border-border rounded-lg bg-input"></div>
+                                </div>
+                                <!-- ntfy: priority header + optional access token -->
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2" x-show="wh.type === 'ntfy'">
+                                    <div><input type="text" x-model="wh.priority" placeholder="Priority (default/high/urgent)" class="w-full px-3 py-2 text-sm border text-foreground border-border rounded-lg bg-input"></div>
+                                    <div><input type="password" x-model="wh.token" placeholder="Access token (optional)" class="w-full px-3 py-2 text-sm border text-foreground border-border rounded-lg bg-input"></div>
+                                </div>
+                                <!-- Gotify: app token + numeric priority -->
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2" x-show="wh.type === 'gotify'">
+                                    <div><input type="password" x-model="wh.token" placeholder="App token" class="w-full px-3 py-2 text-sm border text-foreground border-border rounded-lg bg-input"></div>
+                                    <div><input type="number" x-model.number="wh.priority" placeholder="Priority (0-10)" class="w-full px-3 py-2 text-sm border text-foreground border-border rounded-lg bg-input"></div>
                                 </div>
                                 <!-- Per-webhook event filtering -->
                                 <div class="mt-1">
