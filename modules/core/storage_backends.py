@@ -1613,6 +1613,136 @@ class InfisicalBackend(CertificateStorageBackend):
         return "infisical"
 
 
+class S3CompatibleBackend(CertificateStorageBackend):
+    """S3-compatible object-storage backend.
+
+    One backend for every S3-compatible provider via a configurable
+    ``endpoint_url`` — covers EU-sovereign object storage (Hetzner, Contabo,
+    OVHcloud, Scaleway, Exoscale, Wasabi) and self-hosted MinIO/Ceph, with no
+    new dependency (boto3 is already core). Each domain is stored as a single
+    JSON object ``<prefix>/<domain>.json`` holding the cert files + metadata,
+    mirroring the AWS Secrets Manager blob shape.
+    """
+
+    def __init__(self, config: Dict[str, str]):
+        self.endpoint_url = (config.get('endpoint_url') or '').strip()
+        self.bucket = (config.get('bucket') or '').strip()
+        self.access_key_id = (config.get('access_key_id') or '').strip()
+        self.secret_access_key = (config.get('secret_access_key') or '').strip()
+        self.region = (config.get('region') or 'us-east-1').strip()
+        # Key namespace inside the bucket; trailing slashes normalised away.
+        self.prefix = (config.get('prefix') or 'certmate/certificates').strip().strip('/')
+        if not all([self.endpoint_url, self.bucket, self.access_key_id, self.secret_access_key]):
+            raise ValueError(
+                "S3-compatible backend requires endpoint_url, bucket, "
+                "access_key_id and secret_access_key")
+        self._client = None
+        logger.info("S3CompatibleBackend initialized for endpoint %s bucket %s",
+                    self.endpoint_url, self.bucket)
+
+    def _get_client(self):
+        if self._client is None:
+            try:
+                import boto3
+                self._client = boto3.client(
+                    's3',
+                    endpoint_url=self.endpoint_url,
+                    aws_access_key_id=self.access_key_id,
+                    aws_secret_access_key=self.secret_access_key,
+                    region_name=self.region,
+                )
+            except ImportError:
+                raise ImportError("S3-compatible backend requires 'boto3' package")
+        return self._client
+
+    def _key(self, domain: str) -> str:
+        return f"{self.prefix}/{domain}.json"
+
+    def store_certificate(self, domain: str, cert_files: Dict[str, bytes], metadata: Dict[str, Any]) -> bool:
+        try:
+            return self._store_certificate_attempt(domain, cert_files, metadata)
+        except Exception as e:
+            logger.error(f"Failed to store certificate in S3 for {domain}: {e}")
+            return False
+
+    @_with_retry()
+    def _store_certificate_attempt(self, domain: str, cert_files: Dict[str, bytes], metadata: Dict[str, Any]) -> bool:
+        _validate_storage_domain(domain)
+        client = self._get_client()
+        secret_data = {
+            'files': {k: v.decode('utf-8', errors='replace') for k, v in cert_files.items()},
+            'metadata': metadata,
+        }
+        client.put_object(
+            Bucket=self.bucket,
+            Key=self._key(domain),
+            Body=json.dumps(secret_data).encode('utf-8'),
+            ContentType='application/json',
+        )
+        logger.info(f"Certificate stored successfully in S3 for {domain}")
+        return True
+
+    def retrieve_certificate(self, domain: str) -> Optional[Tuple[Dict[str, bytes], Dict[str, Any]]]:
+        try:
+            return self._retrieve_certificate_attempt(domain)
+        except Exception as e:
+            logger.error(f"Failed to retrieve certificate from S3 for {domain}: {e}")
+            return None
+
+    @_with_retry()
+    def _retrieve_certificate_attempt(self, domain: str) -> Optional[Tuple[Dict[str, bytes], Dict[str, Any]]]:
+        client = self._get_client()
+        try:
+            response = client.get_object(Bucket=self.bucket, Key=self._key(domain))
+        except client.exceptions.NoSuchKey:
+            return None
+        secret_data = json.loads(response['Body'].read().decode('utf-8'))
+        cert_files = {k: v.encode('utf-8') for k, v in secret_data.get('files', {}).items()}
+        metadata = secret_data.get('metadata', {})
+        return cert_files, metadata
+
+    def list_certificates(self) -> List[str]:
+        try:
+            return self._list_certificates_attempt()
+        except Exception as e:
+            logger.error(f"Failed to list certificates from S3: {e}")
+            return []
+
+    @_with_retry()
+    def _list_certificates_attempt(self) -> List[str]:
+        client = self._get_client()
+        domains = []
+        prefix = f"{self.prefix}/"
+        paginator = client.get_paginator('list_objects_v2')
+        for page in paginator.paginate(Bucket=self.bucket, Prefix=prefix):
+            for obj in page.get('Contents', []) or []:
+                key = obj['Key']
+                if key.startswith(prefix) and key.endswith('.json'):
+                    domains.append(key[len(prefix):-len('.json')])
+        return sorted(domains)
+
+    def delete_certificate(self, domain: str) -> bool:
+        try:
+            client = self._get_client()
+            client.delete_object(Bucket=self.bucket, Key=self._key(domain))
+            logger.info(f"Certificate deleted from S3 for {domain}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to delete certificate from S3 for {domain}: {e}")
+            return False
+
+    def certificate_exists(self, domain: str) -> bool:
+        try:
+            client = self._get_client()
+            client.head_object(Bucket=self.bucket, Key=self._key(domain))
+            return True
+        except Exception:
+            return False
+
+    def get_backend_name(self) -> str:
+        return "s3_compatible"
+
+
 class StorageManager:
     """Manager class for certificate storage backends"""
 
@@ -1696,7 +1826,11 @@ class StorageManager:
             elif backend_type == 'infisical':
                 config = storage_config.get('infisical', {})
                 self._backend = InfisicalBackend(config)
-                
+
+            elif backend_type == 's3_compatible':
+                config = storage_config.get('s3_compatible', {})
+                self._backend = S3CompatibleBackend(config)
+
             else:
                 logger.warning(f"Unknown storage backend: {backend_type}, falling back to local filesystem")
                 cert_dir = Path('certificates')
