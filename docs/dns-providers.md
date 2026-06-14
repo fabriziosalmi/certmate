@@ -33,6 +33,8 @@ CertMate supports a wide range of DNS providers for Let's Encrypt DNS-01 challen
 | **Hurricane Electric** | `certbot-dns-he-ddns` | Username, Password | Free DNS |
 | **Dynu** | `certbot-dns-dynudns` | API Token | Dynamic DNS |
 | **DuckDNS** | `certbot-dns-duckdns` | Account Token | Free DDNS (no domain required) |
+| **deSEC** | `certbot-dns-desec` | API Token | Free, EU (DE), DNSSEC — delegate NS to `ns1.desec.io` / `ns2.desec.org` |
+| **Scaleway** | `certbot-dns-scaleway` | API Secret Key | EU (FR) sovereign cloud — community plugin (alpha), install separately: `pip install certbot-dns-scaleway` |
 | **Custom Script** | none (certbot core `--manual`) | Auth hook script path (+ optional cleanup hook) | Bring your own |
 
 ---
