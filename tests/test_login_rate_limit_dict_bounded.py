@@ -9,17 +9,23 @@ never removed even after the window passes and the list trims to [].
 A botnet rotating through unique source IPs would grow the dict without
 bound.
 
-The fix adds `_sweep_empty_buckets()` that drops dict entries whose list
-is empty, triggered opportunistically from `_check_login_rate_limit`
-when either dict crosses its soft cap (default 10K). Non-empty buckets
-(active rate-limit windows) are kept.
+`_sweep_empty_buckets()` runs opportunistically from
+`_check_login_rate_limit` when either dict crosses its soft cap (default
+10K). It trims every bucket to its active window, drops the now-empty
+ones, and — as a hard backstop against within-window flooding — evicts the
+oldest buckets if the dict still exceeds 2x cap. An empty-only sweep was
+NOT enough: a rotated key is recorded once as a non-empty ``[ts]`` and
+never revisited, so it was never reclaimed and the dict grew unbounded.
 
-This test simulates botnet-style IP rotation past the cap and asserts:
+These tests assert:
 - the dict does NOT keep growing unboundedly
-- active rate-limit windows are preserved (non-empty buckets survive)
+- buckets with an attempt inside the active window are preserved
+- stale non-empty buckets (rotated keys) ARE reclaimed
+- the hard backstop caps the dict even under a within-window flood
 """
 from __future__ import annotations
 
+from time import time
 from unittest.mock import patch
 
 import pytest
@@ -65,26 +71,68 @@ def test_dict_grows_under_cap_then_sweeps(monkeypatch):
 
 
 def test_sweep_preserves_active_rate_limit_windows(monkeypatch):
-    """Buckets with attempts in the active window must NOT be swept."""
+    """Buckets with an attempt inside the active window must NOT be reclaimed,
+    even when the dict is over cap — otherwise an attacker could escape the
+    rate limit by triggering a sweep."""
     monkeypatch.setattr(login_module, '_MAX_TRACKED_IPS', 10)
 
-    # 10 IPs in an active rate-limit window (non-empty lists)
+    now = time()
+    # 10 IPs with a fresh (in-window) attempt — these are active windows.
     for i in range(10):
-        login_module._login_attempts_by_ip[f'attacker-{i}'] = [99999999.0]
+        login_module._login_attempts_by_ip[f'attacker-{i}'] = [now - 1.0]
 
-    # 20 expired IPs (empty lists)
+    # 20 IPs whose only attempt has aged out of the window — non-empty, but
+    # reclaimable (this is exactly the rotated-key case the old sweep missed).
+    stale = now - login_module._LOGIN_RATE_WINDOW_IP - 100
     for i in range(20):
-        login_module._login_attempts_by_ip[f'old-{i}'] = []
+        login_module._login_attempts_by_ip[f'old-{i}'] = [stale]
 
     # Total 30 > cap 10, sweep runs.
     login_module._sweep_empty_buckets()
 
-    # All 10 attackers survive (non-empty); all 20 olds gone.
+    # All 10 active windows survive; all 20 stale buckets are reclaimed.
     assert len(login_module._login_attempts_by_ip) == 10
     for i in range(10):
         assert f'attacker-{i}' in login_module._login_attempts_by_ip
     for i in range(20):
         assert f'old-{i}' not in login_module._login_attempts_by_ip
+
+
+def test_reclaims_rotated_nonempty_buckets(monkeypatch):
+    """The botnet case the cap exists for: each fresh IP is recorded once as a
+    non-empty [ts] bucket and never revisited. Once those timestamps age out
+    of the window, an over-cap sweep must reclaim them — the old empty-only
+    sweep left them forever (unbounded growth)."""
+    monkeypatch.setattr(login_module, '_MAX_TRACKED_IPS', 100)
+    monkeypatch.setattr(login_module, '_LOGIN_RATE_WINDOW_IP', 60)
+
+    stale = time() - 1000.0  # well outside the 60s window
+    for i in range(5000):
+        login_module._login_attempts_by_ip[f'10.{i // 256}.{i % 256}.1'] = [stale]
+    assert len(login_module._login_attempts_by_ip) == 5000
+
+    # A single live check triggers the sweep and reclaims every stale bucket.
+    login_module._check_login_rate_limit('198.51.100.7')
+
+    # Only the live caller's bucket remains; the 5000 rotated buckets are gone.
+    assert len(login_module._login_attempts_by_ip) <= 1
+
+
+def test_hard_cap_backstop_caps_within_window_flood(monkeypatch):
+    """If an attacker floods distinct keys all within the window (so window
+    trimming keeps them), the 2x-cap backstop must still bound the dict to the
+    cap rather than letting it grow without limit."""
+    monkeypatch.setattr(login_module, '_MAX_TRACKED_IPS', 100)
+    monkeypatch.setattr(login_module, '_LOGIN_RATE_WINDOW_IP', 60)
+
+    now = time()
+    # 300 distinct keys, all fresh (in-window) -> trimming keeps them all, so
+    # only the 2x-cap backstop can bound the dict.
+    for i in range(300):
+        login_module._login_attempts_by_ip[f'172.16.{i // 256}.{i % 256}'] = [now - (i % 5)]
+
+    login_module._sweep_empty_buckets()
+    assert len(login_module._login_attempts_by_ip) <= login_module._MAX_TRACKED_IPS
 
 
 def test_check_login_rate_limit_triggers_sweep(monkeypatch):

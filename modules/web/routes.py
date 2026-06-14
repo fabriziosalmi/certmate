@@ -38,28 +38,58 @@ _LOGIN_RATE_WINDOW_USER = 300  # seconds (5 minutes)
 
 # Soft caps on the rate-limit bucket dicts. Per-IP attempts are bounded by
 # _LOGIN_RATE_LIMIT_IP (the rate-limit kicks in at 5 attempts/min), so each
-# list is tiny — but the DICT itself acquires one entry per unique IP that
-# ever attempted, even after the window passed and the list was trimmed to
-# []. A botnet rotating through millions of source IPs would grow the dict
-# unbounded. The sweep below drops empty buckets when the dict crosses the
-# soft cap; non-empty buckets stay (those are active rate-limit windows).
+# list is tiny — but the DICT itself acquires one entry per unique IP/username
+# that ever attempted. A botnet rotating through millions of source IPs (or
+# attacker-chosen usernames behind a proxy) records each key once as [ts] and
+# never revisits it, so the bucket stays non-empty. The previous sweep only
+# dropped ALREADY-empty buckets — but a bucket goes empty only when
+# _trim_attempts runs on its key, which happens solely for the current
+# request's key, so a rotated key was never reclaimed and the dict grew
+# unbounded. The sweep below trims every bucket to its active window when the
+# dict crosses the soft cap, then drops the ones left empty — bounding each
+# dict to the keys active within the window rather than forever.
 _MAX_TRACKED_IPS = 10000
 _MAX_TRACKED_USERS = 10000
 
 
-def _sweep_empty_buckets():
-    """Drop dict entries whose attempt list has been trimmed to empty.
+def _reclaim_stale_buckets(bucket, cap, window):
+    """Bound *bucket* when it crosses *cap* by reclaiming stale keys.
 
-    Called opportunistically from _check_login_rate_limit when either dict
-    crosses its soft cap. O(n) one-time scan; the work is at most O(cap)
-    since we never let the dicts grow past 2x cap before sweeping again.
+    Trims every key to its active *window* (dropping timestamps the
+    rate-limiter would already ignore) and deletes the keys left empty. This
+    is what reclaims rotated keys: a key recorded once as ``[ts]`` and never
+    revisited is dropped once that lone timestamp ages out of the window — the
+    old empty-only sweep could never reach it, so the dict grew without bound
+    under source-IP / username rotation. As a hard backstop against
+    within-window flooding (every key fresh, so trimming keeps them all), if
+    the dict still exceeds 2x cap it evicts the keys whose most recent attempt
+    is oldest until it is back under cap. The O(n) pass is gated behind the cap
+    check, so the steady-state cost of a normal login is unchanged.
     """
-    if len(_login_attempts_by_ip) > _MAX_TRACKED_IPS:
-        for k in [k for k, v in list(_login_attempts_by_ip.items()) if not v]:
-            del _login_attempts_by_ip[k]
-    if len(_login_attempts_by_user) > _MAX_TRACKED_USERS:
-        for k in [k for k, v in list(_login_attempts_by_user.items()) if not v]:
-            del _login_attempts_by_user[k]
+    if len(bucket) <= cap:
+        return
+    cutoff = time() - window
+    for key, attempts in list(bucket.items()):
+        kept = [t for t in attempts if t > cutoff]
+        if kept:
+            bucket[key] = kept
+        else:
+            del bucket[key]
+    if len(bucket) > 2 * cap:
+        # Every remaining bucket is non-empty here, so max() is safe.
+        for key in sorted(bucket, key=lambda k: max(bucket[k]))[:len(bucket) - cap]:
+            del bucket[key]
+
+
+def _sweep_empty_buckets():
+    """Reclaim stale rate-limit buckets when a dict crosses its soft cap.
+
+    Called opportunistically from _check_login_rate_limit. Bounds both the
+    per-IP and per-username dicts under rotation attacks — see
+    _reclaim_stale_buckets. Name kept for the existing call site and tests.
+    """
+    _reclaim_stale_buckets(_login_attempts_by_ip, _MAX_TRACKED_IPS, _LOGIN_RATE_WINDOW_IP)
+    _reclaim_stale_buckets(_login_attempts_by_user, _MAX_TRACKED_USERS, _LOGIN_RATE_WINDOW_USER)
 
 
 # Domain name validation pattern
