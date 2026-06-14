@@ -343,11 +343,50 @@ class FileOperations:
             enc_tag = 'encrypted' if passphrase else 'cleartext'
             logger.info(f"Unified backup created: {backup_filename} (contains {len(domains)} domains; secrets={mode_tag}; at-rest={enc_tag})")
             self._prune_unified_backups()
+            self._upload_backup_offsite(backup_path, backup_filename, settings_data)
             return backup_filename
 
         except Exception as e:
             logger.error(f"Error creating unified backup: {e}")
             return None
+
+    def _upload_backup_offsite(self, backup_path, backup_filename, settings_data):
+        """Best-effort off-site copy of the unified backup to an S3-compatible
+        target. NEVER raises: the local backup is authoritative; the S3 copy is
+        a disaster-recovery convenience. Enabled via settings
+        ``backup_storage`` = {'backend': 's3_compatible', 's3_compatible': {...}}.
+        Works with any S3 endpoint (Hetzner, Contabo, OVHcloud, Scaleway, Wasabi,
+        MinIO, AWS); boto3 is already a core dependency.
+        """
+        try:
+            cfg = (settings_data or {}).get('backup_storage') or {}
+            if cfg.get('backend') != 's3_compatible':
+                return
+            s3 = cfg.get('s3_compatible') or {}
+            endpoint = (s3.get('endpoint_url') or '').strip()
+            bucket = (s3.get('bucket') or '').strip()
+            access_key = (s3.get('access_key_id') or '').strip()
+            secret_key = (s3.get('secret_access_key') or '').strip()
+            if not all([endpoint, bucket, access_key, secret_key]):
+                return
+            prefix = (s3.get('prefix') or 'certmate/backups').strip().strip('/')
+            region = (s3.get('region') or 'us-east-1').strip()
+
+            import boto3
+            client = boto3.client(
+                's3', endpoint_url=endpoint, aws_access_key_id=access_key,
+                aws_secret_access_key=secret_key, region_name=region)
+            with open(backup_path, 'rb') as fh:
+                client.put_object(
+                    Bucket=bucket, Key=f"{prefix}/{backup_filename}", Body=fh.read())
+            logger.info("Backup %s copied off-site to s3://%s/%s/%s",
+                        backup_filename, bucket, prefix, backup_filename)
+        except Exception as e:
+            # Log the type only — never the message/config — and keep the
+            # local backup. Off-site is a convenience, not a hard dependency.
+            logger.warning(
+                "Off-site backup upload failed (local backup is intact): %s",
+                type(e).__name__)
 
     def _prune_unified_backups(self):
         """Enforce backup retention: keep at most MAX_BACKUPS_PER_TYPE files,
