@@ -2107,6 +2107,11 @@ def metrics():
  return generate_latest()
 ```
 
+A ready-to-import **Grafana dashboard**, **Prometheus alert rules**, and an
+authenticated **scrape config** ship in [`monitoring/`](monitoring/) — see
+[monitoring/README.md](monitoring/README.md). The `/metrics` endpoint requires
+the admin role, so scrape it with an admin-scoped API token (Bearer).
+
 #### Log Aggregation
 ```yaml
 # docker-compose.logging.yml
