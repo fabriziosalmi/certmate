@@ -1,0 +1,88 @@
+name: E2E (staging)
+
+# Real-certificate end-to-end: issue + force-renew a cert against Let's
+# Encrypt STAGING via Cloudflare DNS-01, on the real built image. This is the
+# regression net for the DNS / provider / ACME wiring that the mocked unit
+# suite cannot exercise (the class of bug behind most recent cert churn).
+#
+# Opt-in only. It needs a Cloudflare secret and is NOT a required PR check:
+# real ACME + DNS propagation are slow and externally flaky, and it runs on
+# the single self-hosted host. Trigger it by hand (workflow_dispatch) or let
+# the weekly schedule catch wiring regressions proactively.
+#
+# To activate, add these repository secrets:
+#   CLOUDFLARE_API_TOKEN  - token with Zone:DNS:Edit on the test zone (required)
+#   CERTMATE_TEST_DOMAIN  - the Cloudflare-managed zone, e.g. example.org (required)
+#   CERTMATE_TEST_EMAIL   - ACME account email (optional; a default is used)
+# Issuance defaults to Let's Encrypt STAGING (tests/e2e_support.py), so a run
+# never consumes a production rate limit or mints a publicly trusted cert.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '37 4 * * 1'  # Mondays 04:37 UTC
+
+permissions: read-all
+
+concurrency:
+  # Share the host-global container lock with the CI `test` job: both bind the
+  # fixed-name certmate-test-suite container on port 18888, so they must never
+  # run at once on the self-hosted host (see ci.yml / #295).
+  group: certmate-selfhosted-test-container
+  cancel-in-progress: false
+
+jobs:
+  e2e-staging:
+    name: e2e-staging
+    runs-on: [self-hosted, Linux, X64]
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+
+    - name: Preflight - require Cloudflare secret
+      id: preflight
+      env:
+        CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      run: |
+        if [ -z "${CLOUDFLARE_API_TOKEN}" ]; then
+          echo "::notice::CLOUDFLARE_API_TOKEN is not configured - skipping real-cert E2E."
+          echo "run=false" >> "$GITHUB_OUTPUT"
+        else
+          echo "run=true" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Set up Python 3.12
+      if: steps.preflight.outputs.run == 'true'
+      uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
+      with:
+        python-version: '3.12'
+
+    - name: Cache pip dependencies
+      if: steps.preflight.outputs.run == 'true'
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    - name: Install dependencies
+      if: steps.preflight.outputs.run == 'true'
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install -r requirements-test.txt
+
+    - name: Real-cert E2E against Let's Encrypt staging
+      if: steps.preflight.outputs.run == 'true'
+      env:
+        CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        CERTMATE_TEST_DOMAIN: ${{ secrets.CERTMATE_TEST_DOMAIN }}
+        CERTMATE_TEST_EMAIL: ${{ secrets.CERTMATE_TEST_EMAIL }}
+        # Belt-and-suspenders: the tests default to staging, pin it here too.
+        CERTMATE_E2E_CA_PROVIDER: letsencrypt_staging
+      run: |
+        python -m pytest -v -m e2e \
+          tests/test_health_ready_e2e.py \
+          tests/test_cert_lifecycle.py \
+          tests/test_async_issuance_e2e.py
