@@ -1,10 +1,11 @@
 {
   "name": "certmate-mcp-server",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Model Context Protocol server for CertMate",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "test": "node test-smoke.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.1",
