@@ -117,3 +117,79 @@ def test_dns_manager_advertised_providers_match_factory():
     )
 
 
+# ---------------------------------------------------------------------------
+# DNS-alias (CNAME-delegation) subsystem. A deliberately smaller subset of
+# providers, wired through three more registries that must stay in lockstep:
+#   certificates.DNS_ALIAS_SUPPORTED_PROVIDERS  (the gate),
+#   certificates.DNS_ALIAS_REQUIRED_FIELDS      (per-provider creds),
+#   dns_alias_hook.LEXICON_PROVIDER_MAP         (Lexicon adapter names),
+# plus two providers (edgedns, acme-dns) dispatched to native, non-Lexicon
+# adapters. These sets are consistent today but were UNGUARDED — the exact
+# #99 failure mode (a provider added to one map and forgotten in another) was
+# free to recur in the alias subsystem. These ratchets lock the contract.
+# ---------------------------------------------------------------------------
+
+# edgedns and acme-dns are alias-capable but handled by dedicated change
+# functions (_edgedns_change / _acme_dns_change) rather than a Lexicon adapter,
+# so they are intentionally absent from LEXICON_PROVIDER_MAP.
+_ALIAS_NATIVE_ADAPTERS = {'edgedns', 'acme-dns'}
+
+
+def test_dns_alias_supported_set_matches_required_fields():
+    """DNS_ALIAS_SUPPORTED_PROVIDERS and DNS_ALIAS_REQUIRED_FIELDS are the
+    exact symbol pair behind #99 (a provider gated as supported but with no
+    field schema, or vice versa). They must list the same providers."""
+    from modules.core.certificates import (
+        DNS_ALIAS_SUPPORTED_PROVIDERS, DNS_ALIAS_REQUIRED_FIELDS)
+    only_supported = DNS_ALIAS_SUPPORTED_PROVIDERS - set(DNS_ALIAS_REQUIRED_FIELDS)
+    only_fields = set(DNS_ALIAS_REQUIRED_FIELDS) - DNS_ALIAS_SUPPORTED_PROVIDERS
+    assert not (only_supported or only_fields), (
+        f"DNS_ALIAS_SUPPORTED_PROVIDERS and DNS_ALIAS_REQUIRED_FIELDS disagree "
+        f"(certificates.py): only-supported={sorted(only_supported)} "
+        f"only-required-fields={sorted(only_fields)}"
+    )
+
+
+def test_dns_alias_providers_are_real_providers():
+    """Every alias-capable provider must be a real, issuable DNS provider."""
+    from modules.core.certificates import DNS_ALIAS_SUPPORTED_PROVIDERS
+    orphans = DNS_ALIAS_SUPPORTED_PROVIDERS - _factory_dns_providers()
+    assert not orphans, (
+        f"DNS_ALIAS_SUPPORTED_PROVIDERS lists providers with no strategy in "
+        f"DNSStrategyFactory: {sorted(orphans)}"
+    )
+
+
+def test_dns_alias_required_fields_match_credential_schema():
+    """An alias provider's required fields must equal its canonical credential
+    schema — otherwise alias setup validates against a different contract than
+    normal issuance (a silent way to accept an unusable config)."""
+    from modules.core.certificates import DNS_ALIAS_REQUIRED_FIELDS
+    mismatched = {}
+    for provider, alias_fields in DNS_ALIAS_REQUIRED_FIELDS.items():
+        creds = _DNS_PROVIDER_CREDENTIALS.get(provider)
+        if creds is None or tuple(creds) != tuple(alias_fields):
+            mismatched[provider] = {'alias': tuple(alias_fields), 'credentials': creds}
+    assert not mismatched, (
+        f"DNS_ALIAS_REQUIRED_FIELDS diverged from _DNS_PROVIDER_CREDENTIALS: {mismatched}"
+    )
+
+
+def test_every_alias_provider_is_dispatchable():
+    """Every alias provider must be dispatchable at change-time: it either has
+    a Lexicon adapter name or is one of the native adapters. A provider in the
+    supported set but neither would hit the 'Unsupported DNS alias provider'
+    branch at runtime (the alias analogue of #99). Also pins that no Lexicon
+    entry exists for a provider outside the alias set."""
+    from modules.core.certificates import DNS_ALIAS_SUPPORTED_PROVIDERS
+    from modules.core.dns_alias_hook import LEXICON_PROVIDER_MAP
+    dispatchable = set(LEXICON_PROVIDER_MAP) | _ALIAS_NATIVE_ADAPTERS
+    undispatchable = DNS_ALIAS_SUPPORTED_PROVIDERS - dispatchable
+    dispatch_without_support = dispatchable - DNS_ALIAS_SUPPORTED_PROVIDERS
+    assert not (undispatchable or dispatch_without_support), (
+        f"alias dispatch coverage drifted from DNS_ALIAS_SUPPORTED_PROVIDERS: "
+        f"undispatchable={sorted(undispatchable)} "
+        f"dispatch-without-support={sorted(dispatch_without_support)}"
+    )
+
+
