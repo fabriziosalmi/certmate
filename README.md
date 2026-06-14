@@ -105,6 +105,7 @@ CertMate solves the complexity of SSL certificate management in modern distribut
 - **AWS Secrets Manager** - Scalable secret storage with AWS ecosystem integration and cross-region replication
 - **HashiCorp Vault** - Industry-standard secret management with versioning, audit logging, and fine-grained policies
 - **Infisical** - Modern open-source secret management with team collaboration and end-to-end encryption
+- **S3-Compatible Object Storage** - One backend for any S3 endpoint via a configurable endpoint URL (Hetzner, Contabo, OVHcloud, Scaleway, Exoscale, Wasabi, MinIO, AWS) — ideal for EU-sovereign object storage; no extra dependency
 - **Pluggable Architecture** - Easy to extend with additional storage backends
 - **Migration Support** - Seamless migration between storage backends without downtime
 - **Backward Compatibility** - Existing installations continue working without changes
@@ -258,7 +259,7 @@ HOST=0.0.0.0
 PORT=8000
 ```
 
-> **Storage Backends**: By default, certificates are stored locally. For enterprise deployments, you can configure Azure Key Vault, AWS Secrets Manager, HashiCorp Vault, or Infisical via the web interface after startup. See [Storage Backends](#certificate-storage-configuration) for details.
+> **Storage Backends**: By default, certificates are stored locally. For enterprise deployments, you can configure Azure Key Vault, AWS Secrets Manager, HashiCorp Vault, Infisical, or any S3-compatible object storage via the web interface after startup. See [Storage Backends](#certificate-storage-configuration) for details.
 
 > **Backup Best Practices**: CertMate includes a unified backup system that creates atomic snapshots of both settings and certificates. After setup, create your first backup from Settings → Backup Management.
 
