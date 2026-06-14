@@ -9,6 +9,10 @@ Requires:
 Each run generates a random subdomain (e.g. e2e-a1b2c3.gpfree.org) to avoid
 collisions. Certbot cleans up _acme-challenge TXT records automatically.
 The test order is enforced: configure → create → list → download → renew → cleanup.
+
+Issuance defaults to Let's Encrypt STAGING (see tests/e2e_support.py): no
+production rate limit is consumed and no publicly trusted certificate is
+minted on the test domain. The issuer is asserted on the cert itself.
 """
 
 import os
@@ -16,6 +20,12 @@ import uuid
 import zipfile
 import io
 import pytest
+
+from tests.e2e_support import (
+    E2E_CA_PROVIDER,
+    assert_staging_issuer,
+    configure_e2e_provider,
+)
 
 pytestmark = [pytest.mark.e2e, pytest.mark.slow]
 
@@ -29,19 +39,8 @@ TEST_DOMAIN = f"e2e-{_run_id}.{BASE_DOMAIN}"
 
 @pytest.fixture(scope="module", autouse=True)
 def configure_cloudflare(api, cloudflare_token):
-    """Set up Cloudflare account and settings before cert tests."""
-    # Save settings with email + dns provider
-    api.post_json("/api/web/settings", {
-        "email": TEST_EMAIL,
-        "dns_provider": "cloudflare",
-    })
-    # Create Cloudflare account with real token
-    api.post_json("/api/dns/cloudflare/accounts", {
-        "account_id": "e2e-cloudflare",
-        "config": {
-            "api_token": cloudflare_token,
-        },
-    })
+    """Set up the Cloudflare account and STAGING-pinned CA before cert tests."""
+    configure_e2e_provider(api, cloudflare_token, "e2e-cloudflare")
     yield
     # Cleanup DNS account (cert is removed with the container)
     api.delete("/api/dns/cloudflare/accounts/e2e-cloudflare")
@@ -56,6 +55,7 @@ class TestCertificateCreation:
             "domain": TEST_DOMAIN,
             "dns_provider": "cloudflare",
             "account_id": "e2e-cloudflare",
+            "ca_provider": E2E_CA_PROVIDER,
         })
         assert r.status_code in (200, 201), f"Create failed: {r.status_code} {r.text[:300]}"
         data = r.json()
@@ -116,6 +116,14 @@ class TestCertificateDownload:
         assert "-----BEGIN CERTIFICATE-----" in payload["fullchain_pem"]
         assert "-----BEGIN" in payload["private_key_pem"]
 
+    def test_05b_certificate_issued_by_staging(self, api):
+        """Hard safety net: the issued leaf must chain to Let's Encrypt
+        STAGING, never production — proven from the certificate's own issuer,
+        not the requested ca_provider (which the API echoes back regardless)."""
+        bundle = api.get(f"/api/certificates/{TEST_DOMAIN}/download?format=json").json()
+        issuer = assert_staging_issuer(bundle["cert_pem"])
+        print(f"[e2e] issued by staging issuer: {issuer}")
+
     def test_06_invalid_format_returns_400(self, api):
         r = api.get(f"/api/certificates/{TEST_DOMAIN}/download?format=tar")
         assert r.status_code == 400
@@ -131,7 +139,11 @@ class TestCertificateDownload:
 class TestCertificateRenewal:
     """Renew the certificate."""
 
-    def test_08_renew_certificate(self, api):
-        r = api.post_json(f"/api/certificates/{TEST_DOMAIN}/renew", {})
-        # Renewal may succeed or say "not due for renewal" — both are OK
-        assert r.status_code in (200, 400), f"Renew failed: {r.status_code} {r.text[:200]}"
+    def test_08_force_renew_certificate(self, api):
+        """Force-renew actually re-issues — without --force-renewal a freshly
+        issued cert is 'not due' and the renew is a no-op — and the re-issued
+        cert must STAY on staging (a renew must never silently switch CA)."""
+        r = api.post_json(f"/api/certificates/{TEST_DOMAIN}/renew", {"force": True})
+        assert r.status_code == 200, f"Force-renew failed: {r.status_code} {r.text[:300]}"
+        bundle = api.get(f"/api/certificates/{TEST_DOMAIN}/download?format=json").json()
+        assert_staging_issuer(bundle["cert_pem"])

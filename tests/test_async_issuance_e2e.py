@@ -9,7 +9,9 @@ subdomains under CERTMATE_TEST_DOMAIN. Two properties:
    the background, ``/health`` stays snappy — i.e. certbot is off the request
    threads, which is the whole point of the executor.
 
-Cert burn: ~3 real Let's Encrypt certs per run (1 + 2 concurrent).
+Cert burn: ~3 Let's Encrypt STAGING certs per run (1 + 2 concurrent);
+staging by default (see tests/e2e_support.py) so no production rate limit
+is touched and no trusted cert is minted on the test domain.
 """
 import os
 import time
@@ -17,6 +19,12 @@ import uuid
 
 import pytest
 import requests
+
+from tests.e2e_support import (
+    E2E_CA_PROVIDER,
+    assert_staging_issuer,
+    configure_e2e_provider,
+)
 
 pytestmark = [pytest.mark.e2e, pytest.mark.slow]
 
@@ -27,11 +35,7 @@ _RUN = uuid.uuid4().hex[:6]
 
 @pytest.fixture(scope="module", autouse=True)
 def configure_cloudflare(api, cloudflare_token):
-    api.post_json("/api/web/settings", {
-        "email": TEST_EMAIL, "dns_provider": "cloudflare"})
-    api.post_json("/api/dns/cloudflare/accounts", {
-        "account_id": "e2e-async",
-        "config": {"api_token": cloudflare_token}})
+    configure_e2e_provider(api, cloudflare_token, "e2e-async")
     yield
     api.delete("/api/dns/cloudflare/accounts/e2e-async")
 
@@ -67,7 +71,8 @@ class TestAsyncIssuance:
         domain = f"e2e-async-{_RUN}.{BASE_DOMAIN}"
         r = api.post_json("/api/certificates/create", {
             "domain": domain, "dns_provider": "cloudflare",
-            "account_id": "e2e-async", "async": True})
+            "account_id": "e2e-async", "ca_provider": E2E_CA_PROVIDER,
+            "async": True})
         assert r.status_code == 202, f"{r.status_code} {r.text[:300]}"
         body = r.json()
         assert body["status"] == "queued"
@@ -77,6 +82,9 @@ class TestAsyncIssuance:
         job = _poll_job(api, body["status_url"])
         assert job["status"] == "succeeded", f"job failed: {job.get('error')}"
         assert domain in _domains(api), f"{domain} not listed after async create"
+        # Prove the async path also stayed on staging (never silently prod).
+        bundle = api.get(f"/api/certificates/{domain}/download?format=json").json()
+        assert_staging_issuer(bundle["cert_pem"])
 
     def test_concurrent_async_creates_keep_health_responsive(self, api):
         domains = [f"e2e-conc-{_RUN}-{i}.{BASE_DOMAIN}" for i in range(2)]
@@ -84,7 +92,8 @@ class TestAsyncIssuance:
         for d in domains:
             r = api.post_json("/api/certificates/create", {
                 "domain": d, "dns_provider": "cloudflare",
-                "account_id": "e2e-async", "async": True})
+                "account_id": "e2e-async", "ca_provider": E2E_CA_PROVIDER,
+                "async": True})
             assert r.status_code == 202, f"{r.status_code} {r.text[:300]}"
             status_urls.append(r.json()["status_url"])
 
