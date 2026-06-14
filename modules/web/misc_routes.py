@@ -237,8 +237,10 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
                 # per-channel secrets/tokens the UI sent back masked must be
                 # restored from the prior on-disk list (sentinel = unchanged).
                 if isinstance(merged, dict):
-                    old_whs = existing.get('channels', {}).get('webhooks')
-                    new_whs = merged.get('channels', {}).get('webhooks')
+                    old_ch = existing.get('channels') if isinstance(existing, dict) else None
+                    new_ch = merged.get('channels')
+                    old_whs = old_ch.get('webhooks') if isinstance(old_ch, dict) else None
+                    new_whs = new_ch.get('webhooks') if isinstance(new_ch, dict) else None
                     if isinstance(new_whs, list):
                         _restore_masked_list_secrets(old_whs, new_whs)
                 s['notifications'] = merged

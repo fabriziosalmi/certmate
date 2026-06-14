@@ -68,3 +68,18 @@ def test_non_secret_fields_untouched():
     _restore_masked_list_secrets(old, new)
     assert new[0]['priority'] == 'urgent'  # non-secret edit preserved
     assert new[0]['token'] == 'T'          # secret restored
+
+
+def test_duplicate_identity_webhooks_keep_distinct_secrets():
+    # Two webhooks sharing (type, url, name): each masked secret must restore
+    # from its OWN prior (consume-once), not both collapse onto the first.
+    old = [
+        {'name': 'dup', 'type': 'generic', 'url': 'https://x', 'secret': 'S1'},
+        {'name': 'dup', 'type': 'generic', 'url': 'https://x', 'secret': 'S2'},
+    ]
+    new = [
+        {'name': 'dup', 'type': 'generic', 'url': 'https://x', 'secret': MASK},
+        {'name': 'dup', 'type': 'generic', 'url': 'https://x', 'secret': MASK},
+    ]
+    _restore_masked_list_secrets(old, new)
+    assert [w['secret'] for w in new] == ['S1', 'S2']
