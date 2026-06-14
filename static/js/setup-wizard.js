@@ -37,7 +37,7 @@
         'acme-dns':    { label: 'ACME-DNS', icon: 'fa-network-wired', fields: [{ key: 'api_url', label: 'API URL', type: 'text' }, { key: 'username', label: 'Username', type: 'text' }, { key: 'password', label: 'Password', type: 'password' }, { key: 'subdomain', label: 'Subdomain', type: 'text' }] },
         'hetzner-cloud': { label: 'Hetzner Cloud', icon: 'fa-server', fields: [{ key: 'api_token', label: 'API Token', type: 'password' }] },
         desec:         { label: 'deSEC', icon: 'fa-shield-alt', fields: [{ key: 'api_token', label: 'API Token', type: 'password' }] },
-        scaleway:      { label: 'Scaleway', icon: 'fa-cloud', fields: [{ key: 'application_token', label: 'API Secret Key', type: 'password' }] },
+        scaleway:      { label: 'Scaleway', icon: 'fa-cloud', fields: [{ key: 'application_token', label: 'API Secret Key', type: 'password', placeholder: 'Requires: pip install certbot-dns-scaleway (community alpha plugin)' }] },
         duckdns:       { label: 'DuckDNS', icon: 'fa-cloud', fields: [{ key: 'api_token', label: 'Account Token', type: 'password', placeholder: 'UUID-format token from your DuckDNS account page' }] }
     };
 
