@@ -242,6 +242,26 @@
                                     </div>
                                 </label>
                                 <label class="relative">
+                                    <input type="radio" name="dns_provider" value="desec" class="sr-only peer">
+                                    <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
+                                        <div class="text-center">
+                                            <i class="fas fa-shield-alt text-lg text-green-600 mb-1"></i>
+                                            <div class="text-xs font-medium dark:text-white">deSEC</div>
+                                            <div class="text-xs text-muted mt-1" id="desec-status">Not configured</div>
+                                        </div>
+                                    </div>
+                                </label>
+                                <label class="relative">
+                                    <input type="radio" name="dns_provider" value="scaleway" class="sr-only peer">
+                                    <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
+                                        <div class="text-center">
+                                            <i class="fas fa-cloud text-lg text-purple-600 mb-1"></i>
+                                            <div class="text-xs font-medium dark:text-white">Scaleway</div>
+                                            <div class="text-xs text-muted mt-1" id="scaleway-status">Not configured</div>
+                                        </div>
+                                    </div>
+                                </label>
+                                <label class="relative">
                                     <input type="radio" name="dns_provider" value="gandi" class="sr-only peer">
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
@@ -847,6 +867,52 @@
                             </div>
                             <p class="mt-2 text-sm text-muted">
                                 Register an ACME-DNS account first, then enter the returned credentials so certbot can answer the CNAME-delegated challenge.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- deSEC Configuration -->
+                    <div id="desec-config" class="dns-config hidden">
+                        <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
+                            <h4 class="text-lg font-medium text-foreground mb-4">
+                                <i class="fas fa-shield-alt mr-2 text-green-600"></i>
+                                deSEC DNS Configuration
+                            </h4>
+                            <div class="grid grid-cols-1 gap-4">
+                                <div>
+                                    <label for="desec_api_token" class="block text-sm font-medium text-label">
+                                        API Token
+                                    </label>
+                                    <input type="password" id="desec_api_token" name="desec_api_token"
+                                           class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                                           placeholder="Your deSEC API token (desec.io, Token Management)">
+                                </div>
+                            </div>
+                            <p class="mt-2 text-sm text-muted">
+                                Free German DNSSEC provider. Create a token at desec.io with permission to write the zone's RRsets; the domain's nameservers must be delegated to deSEC (ns1.desec.io / ns2.desec.org).
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Scaleway Configuration -->
+                    <div id="scaleway-config" class="dns-config hidden">
+                        <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
+                            <h4 class="text-lg font-medium text-foreground mb-4">
+                                <i class="fas fa-cloud mr-2 text-purple-600"></i>
+                                Scaleway DNS Configuration
+                            </h4>
+                            <div class="grid grid-cols-1 gap-4">
+                                <div>
+                                    <label for="scaleway_application_token" class="block text-sm font-medium text-label">
+                                        API Secret Key
+                                    </label>
+                                    <input type="password" id="scaleway_application_token" name="scaleway_application_token"
+                                           class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                                           placeholder="Your Scaleway API Secret Key">
+                                </div>
+                            </div>
+                            <p class="mt-2 text-sm text-muted">
+                                French sovereign cloud. Use a Scaleway API Secret Key with DNS permissions; the domain's DNS zone must be hosted on Scaleway. Community certbot plugin (alpha).
                             </p>
                         </div>
                     </div>

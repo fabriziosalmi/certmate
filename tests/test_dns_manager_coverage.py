@@ -110,12 +110,18 @@ class TestTestProvider:
         assert ok is False
         assert 'Unsupported' in msg
 
-    def test_phantom_desec_is_rejected(self, manager_factory):
-        """Regression pin: 'desec' used to be advertised despite having no
-        strategy/validation wiring anywhere else in the stack."""
+    def test_desec_is_now_a_real_provider(self, manager_factory):
+        """'desec' was historically a PHANTOM — advertised with no strategy or
+        validation wiring (ripped out in #288). It is now a fully wired generic
+        multi-provider (certbot-dns-desec), so a valid config is accepted and a
+        missing credential is rejected. The guard against genuinely-unknown
+        providers is covered by the 'not-a-provider' test above."""
         mgr, _ = manager_factory({})
-        ok, _ = mgr.test_provider('desec', {'api_token': 'x'})
-        assert ok is False
+        ok, msg = mgr.test_provider('desec', {'api_token': 'tok'})
+        assert ok is True, msg
+        bad, bad_msg = mgr.test_provider('desec', {})
+        assert bad is False
+        assert 'api_token' in bad_msg
 
     def test_missing_required_fields_reported(self, manager_factory):
         mgr, _ = manager_factory({})

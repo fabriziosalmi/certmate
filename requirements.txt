@@ -46,6 +46,13 @@ certbot-dns-duckdns==1.8.0
 # Akamai Edge DNS (enterprise) — separate from certbot-dns-linode (Akamai Connected Cloud).
 # Pinned at 0.1.0 because 0.2.0 requires certbot>=5.2.2 (incompatible with our certbot==2.10.0).
 certbot-plugin-edgedns==0.1.0
+# deSEC: free German DNSSEC provider. Official plugin, no certbot upper bound, no lexicon dep
+# (verified compatible with certbot==2.10.0). Writes _acme-challenge TXT via the deSEC REST API.
+certbot-dns-desec==1.3.2
+# Scaleway: French sovereign cloud. The community plugin certbot-dns-scaleway==0.0.7 is alpha
+# (last released 2022) — NOT pinned in core to avoid pulling an unmaintained dep into every
+# image. The 'scaleway' provider is wired and selectable; install the plugin separately to use it:
+#   pip install certbot-dns-scaleway==0.0.7
 
 # Cloud SDK dependencies
 boto3==1.34.144                    # AWS support
