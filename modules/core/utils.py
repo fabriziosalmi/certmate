@@ -70,6 +70,8 @@ _DNS_PROVIDER_CREDENTIALS = {
     'he-ddns': ['username', 'password'],
     'dynudns': ['token'],
     'edgedns': ['client_token', 'client_secret', 'access_token', 'host'],
+    'desec': ['api_token'],
+    'scaleway': ['application_token'],
     # Admin-supplied hook scripts (#286): the auth hook is the only hard
     # requirement; the cleanup hook is optional.
     'custom-script': ['auth_hook']
@@ -80,7 +82,7 @@ _MULTI_PROVIDER_PLUGIN_FILES = {
     'vultr': 'vultr.ini', 'dnsmadeeasy': 'dnsmadeeasy.ini', 'nsone': 'nsone.ini',
     'rfc2136': 'rfc2136.ini', 'hetzner': 'hetzner.ini', 'hetzner-cloud': 'hetzner-cloud.ini',
     'porkbun': 'porkbun.ini', 'godaddy': 'godaddy.ini', 'he-ddns': 'he-ddns.ini',
-    'dynudns': 'dynudns.ini'
+    'dynudns': 'dynudns.ini', 'desec': 'desec.ini', 'scaleway': 'scaleway.ini'
 }
 
 # A data-driven template for building multi-provider config files.
@@ -102,6 +104,8 @@ _MULTI_PROVIDER_TEMPLATE_MAP = {
     'godaddy': {'dns_godaddy_key': 'api_key', 'dns_godaddy_secret': 'secret'},
     'he-ddns': {'dns_he_ddns_username': 'username', 'dns_he_ddns_password': 'password'},
     'dynudns': {'dns_dynudns_token': 'token'},
+    'desec': {'dns_desec_token': 'api_token'},
+    'scaleway': {'dns_scaleway_application_token': 'application_token'},
 }
 
 

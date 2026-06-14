@@ -987,7 +987,7 @@ class SettingsManager:
                 # Validate dns_provider against supported set.
                 # IMPORTANT: when adding a provider, also update tests/test_provider_wiring_consistency.py
                 # which extracts this literal via inspect.getsource.
-                supported_providers = {'cloudflare','route53','azure','google','powerdns','digitalocean','linode','edgedns','gandi','ovh','namecheap','vultr','dnsmadeeasy','nsone','rfc2136','hetzner','hetzner-cloud','porkbun','godaddy','he-ddns','dynudns','arvancloud','infomaniak','acme-dns','duckdns','custom-script'}
+                supported_providers = {'cloudflare','route53','azure','google','powerdns','digitalocean','linode','edgedns','gandi','ovh','namecheap','vultr','dnsmadeeasy','nsone','rfc2136','hetzner','hetzner-cloud','porkbun','godaddy','he-ddns','dynudns','arvancloud','infomaniak','acme-dns','duckdns','desec','scaleway','custom-script'}
                 if 'dns_provider' in settings and settings['dns_provider'] not in supported_providers:
                     logger.error(f"Invalid dns_provider: {settings['dns_provider']}")
                     return False
@@ -1065,6 +1065,8 @@ class SettingsManager:
                     'duckdns': 60,
                     'edgedns': 90,
                     'hetzner-cloud': 120,
+                    'desec': 80,
+                    'scaleway': 60,
                     'custom-script': 120
                 }
                 if 'dns_propagation_seconds' not in settings or not isinstance(settings['dns_propagation_seconds'], dict):
