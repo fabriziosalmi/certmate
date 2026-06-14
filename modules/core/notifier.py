@@ -292,6 +292,12 @@ class Notifier:
 
             elif wh_type == 'telegram':
                 # Bot API: the token is in the URL path, chat_id in the body.
+                # Send PLAIN TEXT (no parse_mode). Titles/messages/details carry
+                # certbot error strings and wildcard '*' / '_acme-challenge'
+                # metacharacters; with parse_mode='Markdown' those unbalanced
+                # entities make the Bot API reject the message with HTTP 400
+                # "can't parse entities" and the alert is silently dropped —
+                # precisely on the failure events that matter most.
                 token = (cfg.get('token') or '').strip()
                 chat_id = str(cfg.get('chat_id') or '').strip()
                 if not (token and chat_id):
@@ -299,8 +305,7 @@ class Notifier:
                 url = f'https://api.telegram.org/bot{token}/sendMessage'
                 body = json.dumps({
                     'chat_id': chat_id,
-                    'text': f'*{title}*\n{message}{_detail_lines()}',
-                    'parse_mode': 'Markdown',
+                    'text': f'{title}\n{message}{_detail_lines()}',
                 }).encode('utf-8')
 
             elif wh_type == 'ntfy':

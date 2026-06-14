@@ -50,7 +50,8 @@ def test_telegram_uses_bot_api_url_and_body(tmp_path):
     assert cap['url'] == 'https://api.telegram.org/botBOTTOK/sendMessage'
     payload = json.loads(cap['data'])
     assert payload['chat_id'] == '12345'
-    assert payload['parse_mode'] == 'Markdown'
+    # Plain text, no parse_mode (see test_telegram_sends_plain_text_no_markdown_parsing)
+    assert 'parse_mode' not in payload
     assert 'Cert expiring' in payload['text'] and 'example.com' in payload['text']
 
 
@@ -102,3 +103,28 @@ def test_existing_slack_discord_generic_unchanged(tmp_path):
                            'secret': 's3cr3t', 'headers': {'X-Env': 'prod'}})
     assert generic['headers'].get('x-certmate-signature')
     assert generic['headers'].get('x-env') == 'prod'
+
+
+def test_telegram_sends_plain_text_no_markdown_parsing(tmp_path):
+    # Failure events carry '_acme-challenge', '*.example.com', backticks etc.
+    # parse_mode=Markdown would make the Bot API reject the message with HTTP 400
+    # "can't parse entities" and silently drop the alert, so the request must NOT
+    # set parse_mode and must carry the raw text verbatim.
+    n = _notifier(tmp_path)
+    cap = {}
+
+    def fake_urlopen(req, timeout=None):
+        cap['data'] = req.data
+        return _Resp()
+
+    nasty_title = 'Renewal failed for *.example.com'
+    nasty_msg = 'DNS problem: NXDOMAIN looking up TXT for _acme-challenge.example.com'
+    with patch('modules.core.notifier.urlopen', side_effect=fake_urlopen):
+        res = n._send_webhook({'type': 'telegram', 'token': 'T', 'chat_id': '1'},
+                              'certificate_failed', nasty_title, nasty_msg,
+                              {'error': 'see `certbot` log [details]'})
+    assert res.get('success')
+    payload = json.loads(cap['data'])
+    assert 'parse_mode' not in payload            # no Markdown parsing -> no 400
+    assert nasty_title in payload['text']          # raw content preserved verbatim
+    assert '_acme-challenge.example.com' in payload['text']
