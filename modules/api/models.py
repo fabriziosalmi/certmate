@@ -362,15 +362,26 @@ def create_api_models(api):
         'environment': fields.String(description='Infisical Environment', default='prod')
     })
 
+    s3_compatible_storage_model = api.model('S3CompatibleStorage', {
+        'endpoint_url': fields.String(description='S3-compatible endpoint URL '
+                                      '(Hetzner / Contabo / OVHcloud / Scaleway / Wasabi / MinIO / AWS)'),
+        'bucket': fields.String(description='Bucket name'),
+        'access_key_id': fields.String(description='S3 access key ID'),
+        'secret_access_key': fields.String(description='S3 secret access key'),
+        'region': fields.String(description='Region', default='us-east-1'),
+        'prefix': fields.String(description='Object key prefix', default='certmate/certificates')
+    })
+
     storage_config_model = api.model('StorageConfig', {
         'backend': fields.String(description='Storage backend type',
                                  enum=['local_filesystem', 'azure_keyvault', 'aws_secrets_manager',
-                                       'hashicorp_vault', 'infisical']),
+                                       'hashicorp_vault', 'infisical', 's3_compatible']),
         'cert_dir': fields.String(description='Certificate directory for local filesystem'),
         'azure_keyvault': fields.Nested(azure_keyvault_storage_model),
         'aws_secrets_manager': fields.Nested(aws_secrets_manager_storage_model),
         'hashicorp_vault': fields.Nested(hashicorp_vault_storage_model),
-        'infisical': fields.Nested(infisical_storage_model)
+        'infisical': fields.Nested(infisical_storage_model),
+        's3_compatible': fields.Nested(s3_compatible_storage_model)
     })
 
     storage_test_config_model = api.model('StorageTestConfig', {

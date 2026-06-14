@@ -2158,7 +2158,8 @@
             'azure_keyvault': 'storage-azure-config',
             'aws_secrets_manager': 'storage-aws-config',
             'hashicorp_vault': 'storage-vault-config',
-            'infisical': 'storage-infisical-config'
+            'infisical': 'storage-infisical-config',
+            's3_compatible': 'storage-s3-config'
         };
 
         // Show the selected configuration panel
@@ -2328,6 +2329,15 @@
                 config.project_id = document.getElementById('infisical-project-id').value;
                 config.environment = document.getElementById('infisical-environment').value || 'prod';
                 break;
+
+            case 's3_compatible':
+                config.endpoint_url = document.getElementById('s3-endpoint-url').value;
+                config.bucket = document.getElementById('s3-bucket').value;
+                config.access_key_id = document.getElementById('s3-access-key-id').value;
+                config.secret_access_key = document.getElementById('s3-secret-access-key').value;
+                config.region = document.getElementById('s3-region').value || 'us-east-1';
+                config.prefix = document.getElementById('s3-prefix').value || 'certmate/certificates';
+                break;
         }
 
         return config;
@@ -2349,6 +2359,9 @@
 
             case 'infisical':
                 return config.client_id && config.client_secret && config.project_id;
+
+            case 's3_compatible':
+                return config.endpoint_url && config.bucket && config.access_key_id && config.secret_access_key;
 
             default:
                 return false;
@@ -2525,6 +2538,15 @@
                 document.getElementById('infisical-environment').value = infisicalConfig.environment || 'prod';
                 // Don't populate client credentials for security
                 break;
+
+            case 's3_compatible':
+                var s3Config = storageConfig.s3_compatible || storageConfig;
+                document.getElementById('s3-endpoint-url').value = s3Config.endpoint_url || '';
+                document.getElementById('s3-bucket').value = s3Config.bucket || '';
+                document.getElementById('s3-region').value = s3Config.region || 'us-east-1';
+                document.getElementById('s3-prefix').value = s3Config.prefix || 'certmate/certificates';
+                // Don't populate access keys for security
+                break;
         }
     }
 
@@ -2617,6 +2639,9 @@
                 break;
             case 'infisical':
                 result.infisical = config;
+                break;
+            case 's3_compatible':
+                result.s3_compatible = config;
                 break;
         }
         return result;

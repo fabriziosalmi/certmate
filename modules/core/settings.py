@@ -614,6 +614,14 @@ class SettingsManager:
                         'client_secret': '',
                         'project_id': '',
                         'environment': 'prod'
+                    },
+                    's3_compatible': {
+                        'endpoint_url': '',
+                        'bucket': '',
+                        'access_key_id': '',
+                        'secret_access_key': '',
+                        'region': 'us-east-1',
+                        'prefix': 'certmate/certificates'
                     }
                 },
                 # OIDC/SSO identity source. Disabled by default; opt-in via

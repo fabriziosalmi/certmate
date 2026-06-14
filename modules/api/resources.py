@@ -2451,7 +2451,8 @@ def create_api_resources(api, models, managers):
                         'azure_keyvault',
                         'aws_secrets_manager',
                         'hashicorp_vault',
-                        'infisical'
+                        'infisical',
+                        's3_compatible'
                     ],
                     'configuration': {
                         'backend': storage_config.get('backend', 'local_filesystem'),
@@ -2473,7 +2474,7 @@ def create_api_resources(api, models, managers):
                 backend_type = data.get('backend')
                 valid_backends = [
                     'local_filesystem', 'azure_keyvault', 'aws_secrets_manager',
-                    'hashicorp_vault', 'infisical'
+                    'hashicorp_vault', 'infisical', 's3_compatible'
                 ]
                 if backend_type not in valid_backends:
                     return {'error': 'Invalid backend type'}, 400
@@ -2502,6 +2503,8 @@ def create_api_resources(api, models, managers):
                     storage_update['hashicorp_vault'] = data.get('hashicorp_vault', {})
                 elif backend_type == 'infisical':
                     storage_update['infisical'] = data.get('infisical', {})
+                elif backend_type == 's3_compatible':
+                    storage_update['s3_compatible'] = data.get('s3_compatible', {})
 
                 clean_payload = _strip_masked_values({'certificate_storage': storage_update})
                 success = settings_manager.atomic_update(clean_payload)
@@ -2574,7 +2577,7 @@ def create_api_resources(api, models, managers):
                 from ..core.storage_backends import (
                     LocalFileSystemBackend, AzureKeyVaultBackend,
                     AWSSecretsManagerBackend, HashiCorpVaultBackend,
-                    InfisicalBackend
+                    InfisicalBackend, S3CompatibleBackend
                 )
 
                 # Test connection based on backend type
@@ -2593,6 +2596,9 @@ def create_api_resources(api, models, managers):
 
                     elif backend_type == 'infisical':
                         test_backend = InfisicalBackend(config)
+
+                    elif backend_type == 's3_compatible':
+                        test_backend = S3CompatibleBackend(config)
 
                     else:
                         return {'error': 'Invalid backend type'}, 400
@@ -2940,7 +2946,7 @@ def create_api_resources(api, models, managers):
             from ..core.storage_backends import (
                 LocalFileSystemBackend, AzureKeyVaultBackend,
                 AWSSecretsManagerBackend, HashiCorpVaultBackend,
-                InfisicalBackend
+                InfisicalBackend, S3CompatibleBackend
             )
 
             backend_classes = {
@@ -2949,6 +2955,7 @@ def create_api_resources(api, models, managers):
                 'aws_secrets_manager': AWSSecretsManagerBackend,
                 'hashicorp_vault': HashiCorpVaultBackend,
                 'infisical': InfisicalBackend,
+                's3_compatible': S3CompatibleBackend,
             }
 
             def _resolve_config(backend_type, raw):
