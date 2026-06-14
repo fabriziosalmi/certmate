@@ -250,18 +250,25 @@ class Notifier:
 
     def _send_webhook(self, cfg: dict, event: str, title: str,
                       message: str, details: Optional[dict] = None) -> dict:
-        """Send webhook notification (generic, Slack, or Discord format)."""
+        """Send a notification to a webhook-style channel.
+
+        Supported ``type`` values: ``generic`` (signed JSON), ``slack``,
+        ``discord``, ``telegram``, ``ntfy``, ``gotify``. Each formats the
+        request (URL, body, headers) for its target service. Microsoft Teams
+        is covered by the SMTP channel via a Teams channel email address — no
+        dedicated adapter.
+        """
         try:
-            url = cfg.get('url', '')
-            if not url:
-                return {'error': 'Webhook URL not configured'}
-
-            # Only allow http/https schemes to prevent file:// or other attacks
-            if not url.startswith(('https://', 'http://')):
-                return {'error': 'Webhook URL must use http or https scheme'}
-
             wh_type = cfg.get('type', 'generic')
+            url = (cfg.get('url') or '').strip()
             secret = cfg.get('secret', '')
+            headers = {'User-Agent': 'CertMate-Webhook/2.0'}
+            content_type = 'application/json'
+
+            def _detail_lines():
+                if not details:
+                    return ''
+                return '\n' + '\n'.join(f'{k}: {v}' for k, v in details.items())
 
             if wh_type == 'slack':
                 payload = {
@@ -272,50 +279,82 @@ class Notifier:
                     ]
                 }
                 if details:
-                    fields = [{'type': 'mrkdwn', 'text': f'*{k}:* {v}'}
-                              for k, v in details.items()]
-                    payload['blocks'].append({'type': 'section', 'fields': fields})
+                    payload['blocks'].append({'type': 'section', 'fields': [
+                        {'type': 'mrkdwn', 'text': f'*{k}:* {v}'} for k, v in details.items()]})
+                body = json.dumps(payload).encode('utf-8')
 
             elif wh_type == 'discord':
-                embed = {
-                    'title': title,
-                    'description': message,
-                    'color': 2067276,  # CertMate blue
-                }
+                embed = {'title': title, 'description': message, 'color': 2067276}
                 if details:
                     embed['fields'] = [{'name': k, 'value': str(v), 'inline': True}
                                        for k, v in details.items()]
-                payload = {'embeds': [embed]}
+                body = json.dumps({'embeds': [embed]}).encode('utf-8')
 
-            else:  # generic
+            elif wh_type == 'telegram':
+                # Bot API: the token is in the URL path, chat_id in the body.
+                token = (cfg.get('token') or '').strip()
+                chat_id = str(cfg.get('chat_id') or '').strip()
+                if not (token and chat_id):
+                    return {'error': 'Telegram channel requires token and chat_id'}
+                url = f'https://api.telegram.org/bot{token}/sendMessage'
+                body = json.dumps({
+                    'chat_id': chat_id,
+                    'text': f'*{title}*\n{message}{_detail_lines()}',
+                    'parse_mode': 'Markdown',
+                }).encode('utf-8')
+
+            elif wh_type == 'ntfy':
+                # url is the topic URL, e.g. https://ntfy.sh/my-topic
+                body = (message + _detail_lines()).encode('utf-8')
+                content_type = 'text/plain; charset=utf-8'
+                headers['Title'] = title
+                headers['Priority'] = str(cfg.get('priority') or 'default')
+                if cfg.get('token'):
+                    headers['Authorization'] = f"Bearer {cfg['token']}"
+
+            elif wh_type == 'gotify':
+                token = (cfg.get('token') or '').strip()
+                if not (url and token):
+                    return {'error': 'Gotify channel requires url and token'}
+                url = url.rstrip('/') + '/message'
+                headers['X-Gotify-Key'] = token
+                try:
+                    priority = int(cfg.get('priority', 5))
+                except (TypeError, ValueError):
+                    priority = 5
+                body = json.dumps({'title': title, 'message': message + _detail_lines(),
+                                   'priority': priority}).encode('utf-8')
+
+            else:  # generic — signed JSON with optional custom headers
                 payload = {
-                    'event': event,
-                    'title': title,
-                    'message': message,
+                    'event': event, 'title': title, 'message': message,
                     'details': details or {},
-                    'timestamp': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+                    'timestamp': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
                 }
-
-            body = json.dumps(payload).encode('utf-8')
-            req = Request(url, data=body, method='POST')
-            req.add_header('Content-Type', 'application/json')
-            req.add_header('User-Agent', 'CertMate-Webhook/2.0')
-
-            # Custom headers for generic webhooks
-            if wh_type == 'generic':
+                body = json.dumps(payload).encode('utf-8')
                 for hdr_name, hdr_value in cfg.get('headers', {}).items():
-                    req.add_header(hdr_name, hdr_value)
+                    headers[hdr_name] = hdr_value
+                # HMAC-SHA256 signature with timestamp for replay protection.
+                if secret:
+                    timestamp = str(int(time.time()))
+                    sig = hmac.new(secret.encode(), f'{timestamp}.'.encode() + body,
+                                   hashlib.sha256).hexdigest()
+                    headers['X-CertMate-Signature'] = f't={timestamp},v1={sig}'
 
-            # HMAC-SHA256 signature with timestamp for replay protection
-            if secret and wh_type == 'generic':
-                timestamp = str(int(time.time()))
-                signed_payload = f'{timestamp}.'.encode() + body
-                sig = hmac.new(secret.encode(), signed_payload, hashlib.sha256).hexdigest()
-                req.add_header('X-CertMate-Signature', f't={timestamp},v1={sig}')
+            if not url:
+                return {'error': 'Webhook URL not configured'}
+            # Only allow http/https schemes to prevent file:// or other attacks.
+            if not url.startswith(('https://', 'http://')):
+                return {'error': 'Webhook URL must use http or https scheme'}
+
+            req = Request(url, data=body, method='POST')
+            req.add_header('Content-Type', content_type)
+            for hdr_name, hdr_value in headers.items():
+                req.add_header(hdr_name, hdr_value)
 
             with urlopen(req, timeout=10) as resp:  # nosec B310
                 status = resp.status
-                logger.info(f"Webhook '{cfg.get('name', 'webhook')}' sent: HTTP {status}")
+                logger.info(f"Webhook '{cfg.get('name', 'webhook')}' ({wh_type}) sent: HTTP {status}")
                 return {'success': True, 'status': status}
 
         except URLError as e:
