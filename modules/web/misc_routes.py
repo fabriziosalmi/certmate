@@ -43,9 +43,31 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
     @app.route('/metrics')
     @auth_manager.require_role('admin')
     def metrics():
-        """Prometheus metrics endpoint"""
+        """Prometheus metrics endpoint.
+
+        Builds the collection context from the managers so the certificate,
+        DNS-provider and cache gauges are actually populated. Without a
+        context, generate_metrics_response only emits application_uptime and
+        every labelled inventory metric stays empty ('No data' at scrape).
+        """
         try:
-            return generate_metrics_response()
+            app_context = None
+            settings_manager = managers.get('settings')
+            file_ops = managers.get('file_ops')
+            cert_manager = managers.get('certificates')
+            if settings_manager and file_ops and cert_manager:
+                try:
+                    app_context = {
+                        'settings': settings_manager.load_settings(),
+                        'cert_dir': file_ops.cert_dir,
+                        'get_certificate_info': cert_manager.get_certificate_info,
+                        'cache': managers.get('cache'),
+                    }
+                except Exception as ctx_err:
+                    logger.warning(
+                        "Metrics context unavailable, emitting base metrics "
+                        f"only: {ctx_err}")
+            return generate_metrics_response(app_context)
         except Exception as e:
             logger.error(f"Metrics error: {e}")
             return jsonify({'error': 'Internal Server Error'}), 500
