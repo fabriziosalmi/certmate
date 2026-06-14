@@ -391,6 +391,8 @@
             'infomaniak': ['infomaniak_api_token'],
             'acme-dns': ['acme-dns_api_url', 'acme-dns_username', 'acme-dns_password', 'acme-dns_subdomain'],
             'hetzner-cloud': ['hetzner-cloud_api_token'],
+            'desec': ['desec_api_token'],
+            'scaleway': ['scaleway_application_token'],
             'custom-script': ['custom-script_auth_hook', 'custom-script_cleanup_hook']
         };
 
@@ -598,6 +600,7 @@
             'vultr', 'dnsmadeeasy', 'nsone', 'rfc2136', 'hetzner',
             'porkbun', 'godaddy', 'he-ddns', 'dynudns', 'duckdns',
             'arvancloud', 'infomaniak', 'acme-dns', 'hetzner-cloud',
+            'desec', 'scaleway',
             'custom-script'
         ];
 
