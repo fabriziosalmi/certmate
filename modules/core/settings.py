@@ -39,6 +39,7 @@ PUBLIC_SETTINGS_WRITABLE_KEYS = frozenset({
     'renewal_threshold_days',
     'challenge_type',
     'certificate_storage',
+    'backup_storage',          # off-site backup target (S3-compatible)
     'notifications',
     'setup_completed',
     # Per-install "stop nagging me with the first-run wizard" flag. Distinct
@@ -250,6 +251,7 @@ def _strip_masked_values(payload):
 # (the same shape as the settings POST path) closes the gap.
 _DEEP_MERGE_SETTINGS_KEYS = frozenset({
     'certificate_storage',
+    'backup_storage',
     'ca_providers',
     'notifications',
 })
@@ -622,6 +624,17 @@ class SettingsManager:
                         'secret_access_key': '',
                         'region': 'us-east-1',
                         'prefix': 'certmate/certificates'
+                    }
+                },
+                'backup_storage': {  # Optional off-site copy of unified backups (best-effort)
+                    'backend': 'none',
+                    's3_compatible': {
+                        'endpoint_url': '',
+                        'bucket': '',
+                        'access_key_id': '',
+                        'secret_access_key': '',
+                        'region': 'us-east-1',
+                        'prefix': 'certmate/backups'
                     }
                 },
                 # OIDC/SSO identity source. Disabled by default; opt-in via
