@@ -25,10 +25,15 @@ operate certificates on a schedule.
   chain (`data/audit/certificate_audit.chain.jsonl`). Any modification,
   deletion, or reorder by someone who cannot recompute the chain is detectable
   and localizable.
-- **Independent verification.** A standalone, standard-library-only verifier
+- **Independent verification.** A standalone verifier
   (`python -m modules.core.audit_verify`) recomputes the chain and returns
   PASS/FAIL without needing to run or trust CertMate; `GET /api/audit/verify`
   exposes the same check over the API.
+- **Signed, third-party-verifiable export.** The instance signs the chain head
+  (periodic checkpoints) and `GET /api/audit/export` produces an Ed25519-signed
+  bundle. An auditor verifies it off the box, pinning the instance's public key
+  (`GET /api/audit/public-key`) out of band — proving both that the record was
+  not edited and which instance produced it.
 
 ## Regime mapping
 
@@ -68,29 +73,34 @@ operate certificates on a schedule.
 
 ## Honest limits (do not over-read these)
 
-- **The chain does not bind the operator.** It detects tampering by anyone
-  **without** the writer's running state, but the operator holds the file and
-  could recompute and re-sign the whole chain. Constraining the operator requires
-  external anchoring of signed checkpoints off the box — **not implemented in
-  this version**. Treat the current guarantee as "authenticity and ordering of
-  the recorded entries", verifiable by a third party who holds an exported copy.
+- **The signing key does not bind the operator.** A signed export bundle (and
+  the periodic signed checkpoints) let a third party verify, off the box, which
+  instance produced the record and that it was not edited — for anyone who does
+  **not** hold the signing key. But the operator holds the key and could re-sign
+  a rewritten chain. Fully constraining the operator requires shipping the signed
+  checkpoints to an external append-only sink (**opt-in external anchoring — a
+  planned follow-up, not yet shipped**). Treat the current guarantee as
+  "authenticity, ordering, and instance attribution of the recorded entries",
+  independently verifiable by a third party who holds an exported, signed copy.
 - **Authenticity, not completeness.** Audit writes are best-effort and never
   block a certificate operation; the chain proves the recorded entries are
   authentic and ordered, and a missing interior `seq` proves a deletion, but a
   write that failed before it was recorded leaves no entry to verify.
-- **Tail truncation is not detected on its own.** Removing entries from the
-  **end** of the chain leaves a shorter-but-internally-consistent chain that
-  still verifies as intact — the verifier has no external reference for the
-  expected head. Detecting tail truncation requires an external head anchor
-  (the signed-checkpoint anchoring of Phase 3, not in this version). Until then,
-  treat "intact" as "the entries present are authentic and in order", and keep
-  an out-of-band record of the latest `head_hash` / `last_seq` if you need to
-  detect end-removal.
+- **Tail truncation needs an external reference.** Removing entries from the
+  **end** of a single chain leaves a shorter-but-internally-consistent chain
+  that still verifies as intact. The signed checkpoints and export bundles are
+  the anchors for catching this: a later signed export with fewer entries than
+  an earlier one (or than a checkpoint an auditor holds) reveals the truncation.
+  A single in-place export cannot, on its own, prove nothing was removed from the
+  end — keep successive signed exports, or wait for opt-in external anchoring, if
+  you need that guarantee.
 - **The agent-session header is a claim.** It is recorded for correlation but is
   client-supplied; the trustworthy identity is the authenticated API key.
 - **History boundary.** The chain starts when the feature is first enabled;
   earlier `.log` history is not part of the verifiable chain.
 
-If your obligations require binding the operator themselves (off-box anchoring,
-signed exports an external auditor pins to a published key), that is planned but
-not yet available — track it before relying on it.
+Signed exports that an external auditor pins to a published key are available
+today. If your obligations require binding the operator *themselves* — so that
+even the key-holder cannot rewrite history undetected — that needs opt-in
+external anchoring of the signed checkpoints to an append-only sink off the box,
+which is planned but not yet shipped. Track it before relying on it.

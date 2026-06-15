@@ -423,7 +423,13 @@ def initialize_managers(container: AppContainer, app):
     # The tamper-evident hash chain lives under the persistent data tree
     # (not the ephemeral logs/ tree) so it is the durable, verifiable artifact.
     audit_chain_dir = container.data_dir / "audit"
-    audit_logger = AuditLogger(audit_dir, chain_dir=audit_chain_dir)
+    # Ed25519 signer for signed checkpoints + the signed export bundle (Phase 3).
+    # The key persists under data/ like the Flask secret key; off-box via
+    # AUDIT_SIGNING_KEY_FILE. Best-effort: if it can't be set up, the unsigned
+    # hash chain still works.
+    from .audit_signing import AuditSigner
+    audit_signer = AuditSigner(container.data_dir)
+    audit_logger = AuditLogger(audit_dir, chain_dir=audit_chain_dir, signer=audit_signer)
     # Let AuthManager emit RBAC + scope denials through the same audit
     # surface the rest of the app uses (2026-05-12 API auth audit, F-2).
     auth_manager.set_audit_logger(audit_logger)
