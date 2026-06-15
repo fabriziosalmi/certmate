@@ -52,7 +52,11 @@ def test_telegram_uses_bot_api_url_and_body(tmp_path):
     assert payload['chat_id'] == '12345'
     # Plain text, no parse_mode (see test_telegram_sends_plain_text_no_markdown_parsing)
     assert 'parse_mode' not in payload
-    assert 'Cert expiring' in payload['text'] and 'example.com' in payload['text']
+    # Assert on the whole title + message lines. A bare-host substring check
+    # ('example.com' in ...) trips CodeQL's url-sanitization heuristic — a false
+    # positive in a content assertion — and the full-line check is stronger.
+    assert 'Cert expiring' in payload['text']
+    assert 'example.com expires in 3 days' in payload['text']
 
 
 def test_telegram_requires_token_and_chat_id(tmp_path):
