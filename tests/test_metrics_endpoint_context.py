@@ -49,7 +49,11 @@ def test_metrics_endpoint_populates_certificate_inventory(tmp_path):
     assert 'certmate_domains_total 1.0' in body
     assert 'certmate_certificates_total 1.0' in body
     assert 'certmate_certificates_by_status{status="valid"} 1.0' in body
-    assert 'certmate_certificate_expiry_days{' in body and 'example.com' in body
+    # Assert the labelled metric string (a bare-host 'example.com' substring
+    # check trips CodeQL's url-sanitization heuristic — a false positive on a
+    # Prometheus exposition assertion — and the label form is more precise).
+    assert 'certmate_certificate_expiry_days{' in body
+    assert 'domain="example.com"' in body
     assert 'certmate_cache_entries 7.0' in body
 
 
