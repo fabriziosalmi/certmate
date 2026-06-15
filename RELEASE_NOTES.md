@@ -1,3 +1,19 @@
+## v2.15.0 (Feature — notification channels, Grafana monitoring, MCP agent tooling)
+
+Three independent additions toward operating CertMate from where you already are: more notification targets, a ready observability bundle, and an MCP server an AI agent can drive on a schedule.
+
+### Features
+
+- **Notification channels — Telegram, ntfy, Gotify** ([#307](https://github.com/fabriziosalmi/certmate/pull/307)): three first-class webhook types alongside Slack/Discord/generic. Telegram via the Bot API (token + chat_id), ntfy as a topic POST with `Title`/`Priority` headers and optional Bearer token, Gotify to `<server>/message` with the app key and numeric priority. Per-event filtering from Settings > Notifications and testable from the UI. Microsoft Teams needs no adapter — point the SMTP channel at a Teams channel email address.
+- **Grafana dashboard + Prometheus alerts** ([#308](https://github.com/fabriziosalmi/certmate/pull/308)): an importable bundle under `monitoring/` — an 11-panel dashboard (certificate inventory, days-until-expiry, status and provider breakdowns, cache, uptime, version), 4 alert rules (expiring soon/critical, expired, scrape-down), and an authenticated scrape example. All PromQL validated with `promtool`; the dashboard imports into Grafana 10+.
+- **MCP agent tools + AI scheduling guide** ([#309](https://github.com/fabriziosalmi/certmate/pull/309)): the built-in MCP server grows from 6 to 13 tools — per-domain detail, async job polling, certificate download, auto-renew toggle, DNS provider/account listing, activity log. `docs/mcp.md` adds an "Operating CertMate with an AI agent" guide: the list -> decide (`days_left < N`) -> renew -> poll -> notify loop, with example scheduled prompts for Claude, Gemini, or any MCP client.
+
+### Fixes
+
+- **`/metrics` emitted only `application_uptime`** ([#308](https://github.com/fabriziosalmi/certmate/pull/308)): the endpoint was called without a collection context, so every labelled certificate/DNS/cache metric was absent for any scraper. It now builds the context from the managers and populates the inventory gauges. Operations counters (renewals, ACME errors, durations) remain defined but uninstrumented, so the dashboard and alerts are deliberately scoped to what populates today; the operations row returns once `record_*` is wired.
+- **Webhook secrets clobbered on a settings round-trip** ([#307](https://github.com/fabriziosalmi/certmate/pull/307)): the masked-secret machinery protected dict subtrees but not the `webhooks` list, so re-saving notification settings without re-typing a webhook token wrote the mask sentinel over the real secret. Secrets are now restored per webhook, matched by identity and consumed once so duplicate-identity channels keep distinct secrets.
+- **Telegram alerts silently dropped on failure events** ([#307](https://github.com/fabriziosalmi/certmate/pull/307)): `parse_mode=Markdown` over certbot error strings and wildcard domains (`*`, `_acme-challenge`) made the Bot API reject the message with HTTP 400 — precisely on the `certificate_failed` events that matter most. Messages are now sent as plain text.
+
 ## v2.13.0 (Feature — edit & reissue certificates)
 
 Closes [#267](https://github.com/fabriziosalmi/certmate/issues/267): extend or drop a certificate's SAN entries — and change its DNS/alias/CA configuration — without delete + recreate.
