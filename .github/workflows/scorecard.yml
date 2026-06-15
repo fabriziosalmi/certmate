@@ -36,6 +36,11 @@ jobs:
         with:
           results_file: results.sarif
           results_format: sarif
+          # Read-only PAT so Scorecard can evaluate Branch-Protection: the
+          # default GITHUB_TOKEN cannot read branch-protection settings, which
+          # left that high-weight check scored "?". Fine-grained, scoped to
+          # Administration: read + Contents: read.
+          repo_token: ${{ secrets.SCORECARD_TOKEN }}
           # Publish to scorecard.dev so the README badge renders the
           # live score. Requires the repo to be public (it is).
           publish_results: true
