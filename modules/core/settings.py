@@ -7,6 +7,7 @@ import os
 import re
 import threading
 import logging
+from collections import deque
 from pathlib import Path
 
 from modules import __version__ as _CERTMATE_VERSION
@@ -232,6 +233,57 @@ def _strip_masked_values(payload):
         else:
             out[key] = value
     return out
+
+
+def _restore_masked_list_secrets(old_list, new_list):
+    """Restore masked secrets inside a list-of-dicts replaced wholesale on save.
+
+    ``_strip_masked_values`` + ``_deep_merge_dict`` preserve masked secrets only
+    inside *dict* subtrees; a list (e.g. ``notifications.channels.webhooks``) is
+    replaced as a unit, so a secret-named field the UI rendered as
+    ``SECRET_MASK_SENTINEL`` and the user left untouched would be written back as
+    the literal sentinel — clobbering the real token/secret on disk.
+
+    For every dict in ``new_list``, any secret-named field still equal to the
+    sentinel is restored from the matching dict in ``old_list`` — matched first
+    by identity ``(type, url, name)`` (robust to reordering/deletion), then by
+    position. Each prior dict is consumed at most once, so two webhooks sharing
+    an identity keep their own distinct secrets (the Nth new maps to the Nth
+    prior) instead of both collapsing onto the first. With no prior match the
+    masked field is dropped (no value to keep). A blank secret is left as-is, so
+    a deliberately cleared field stays cleared. Mutates and returns ``new_list``.
+    """
+    if not isinstance(new_list, list):
+        return new_list
+    old_list = old_list if isinstance(old_list, list) else []
+
+    def _identity(d):
+        return (d.get('type'), d.get('url'), d.get('name'))
+
+    # Queue prior dicts per identity so duplicate-identity webhooks are matched
+    # one-to-one rather than every duplicate resolving to the first.
+    by_identity = {}
+    for old in old_list:
+        if isinstance(old, dict):
+            by_identity.setdefault(_identity(old), deque()).append(old)
+
+    for i, item in enumerate(new_list):
+        if not isinstance(item, dict):
+            continue
+        queue = by_identity.get(_identity(item))
+        if queue:
+            prior = queue.popleft()
+        elif i < len(old_list) and isinstance(old_list[i], dict):
+            prior = old_list[i]
+        else:
+            prior = {}
+        for key in list(item.keys()):
+            if _is_secret_key(key) and item.get(key) == SECRET_MASK_SENTINEL:
+                if key in prior:
+                    item[key] = prior[key]
+                else:
+                    item.pop(key, None)
+    return new_list
 
 
 # Top-level settings keys whose value is a nested dict that should be
