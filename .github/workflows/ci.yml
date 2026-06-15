@@ -85,15 +85,24 @@ jobs:
         FLASK_ENV: testing
         TESTING: true
       run: |
-        pytest -v --tb=short --cov=. --cov-report=xml --cov-report=html -m "not ui"
+        # Measure the application package (modules/), not the whole repo: a
+        # bare --cov=. folds the tests/ and scripts/ trees (which run at ~100%)
+        # into the number, inflating it and hiding the real app coverage.
+        pytest -v --tb=short --cov=modules --cov-report=xml --cov-report=html -m "not ui"
 
     - name: Upload coverage reports
       if: matrix.python-version == '3.12'
       uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe  # v5 (was v3)
       with:
+        # Required since main is a protected branch — without a token Codecov
+        # rejects the upload ("Token required because branch is protected") and
+        # the badge silently freezes at a stale value. fail_ci_if_error stays
+        # false so a transient Codecov outage never blocks a release.
+        token: ${{ secrets.CODECOV_TOKEN }}
         file: ./coverage.xml
         flags: unittests
         name: codecov-umbrella
+        fail_ci_if_error: false
 
     - name: Test Docker build
       if: matrix.python-version == '3.12'

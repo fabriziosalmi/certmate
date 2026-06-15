@@ -1,0 +1,34 @@
+# Codecov configuration.
+#
+# Coverage is measured over the application package (modules/) only — the CI
+# job runs `pytest --cov=modules` (see .github/workflows/ci.yml). A bare
+# --cov=. would fold the tests/ and scripts/ trees, which run at ~100%, into
+# the number and hide the real application coverage.
+#
+# Statuses are informational: a small coverage change never blocks a PR on this
+# single-maintainer project; the number is a signal, not a gate.
+
+coverage:
+  status:
+    project:
+      default:
+        target: auto
+        threshold: 2%
+        informational: true
+    patch:
+      default:
+        informational: true
+
+# Belt-and-suspenders: even if a future run uploads a wider report, never count
+# these toward the application coverage number.
+ignore:
+  - "tests"
+  - "scripts"
+  - "venv"
+  - ".venv"
+  - "docs"
+  - "mcp/node_modules"
+
+comment:
+  layout: "reach, diff, flags"
+  require_changes: true
