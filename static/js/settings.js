@@ -178,8 +178,6 @@
                 email = (caProviders.zerossl && caProviders.zerossl.email) || '';
             } else if (defaultCA === 'google') {
                 email = (caProviders.google && caProviders.google.email) || '';
-            } else if (defaultCA === 'buypass') {
-                email = (caProviders.buypass && caProviders.buypass.email) || '';
             } else if (defaultCA === 'actalis') {
                 email = (caProviders.actalis && caProviders.actalis.email) || '';
             } else if (defaultCA === 'sslcom') {
@@ -237,7 +235,6 @@
                     defaultCA === 'letsencrypt_staging' ? "Let's Encrypt (Staging)" :
                     defaultCA === 'zerossl' ? 'ZeroSSL' :
                     defaultCA === 'google' ? 'Google Trust Services' :
-                    defaultCA === 'buypass' ? 'BuyPass Go' :
                     defaultCA === 'actalis' ? 'Actalis' :
                     defaultCA === 'sslcom' ? 'SSL.com' :
                     defaultCA === 'digicert' ? 'DigiCert' :
@@ -1917,7 +1914,6 @@
             // provider; the CA panel uses a distinct id so getElementById does
             // not collide and leave the CA panel hidden (issue #226).
             'google': 'google-ca-config',
-            'buypass': 'buypass-config',
             'actalis': 'actalis-config',
             'digicert': 'digicert-config',
             'sslcom': 'sslcom-config',
@@ -1925,7 +1921,7 @@
         };
 
         // Hide all CA configuration panels and disable their required fields
-        var caConfigs = ['letsencrypt-config', 'letsencrypt-staging-config', 'zerossl-config', 'google-ca-config', 'buypass-config', 'actalis-config', 'digicert-config', 'sslcom-config', 'private-ca-config'];
+        var caConfigs = ['letsencrypt-config', 'letsencrypt-staging-config', 'zerossl-config', 'google-ca-config', 'actalis-config', 'digicert-config', 'sslcom-config', 'private-ca-config'];
         caConfigs.forEach(function (configId) {
             var element = document.getElementById(configId);
             if (element) {
@@ -1966,9 +1962,6 @@
                     break;
                 case 'google':
                     hintElement.textContent = 'Enter EAB credentials and email, then test Google Trust Services connection';
-                    break;
-                case 'buypass':
-                    hintElement.textContent = 'Enter your email address and test BuyPass Go connection';
                     break;
                 case 'actalis':
                     hintElement.textContent = 'Enter EAB credentials and email, then test Actalis connection';
@@ -2032,10 +2025,6 @@
             if (!gEabHmac.trim()) missingFields.push('EAB HMAC Key');
             if (!gEmail.trim()) missingFields.push('Email');
             config = { eab_key_id: gEabKid, eab_hmac_key: gEabHmac, email: gEmail };
-        } else if (caProvider === 'buypass') {
-            var bpEmail = document.getElementById('buypass-email').value;
-            if (!bpEmail.trim()) missingFields.push('Email');
-            config = { email: bpEmail };
         } else if (caProvider === 'actalis') {
             var acEabKid = document.getElementById('actalis-eab-kid').value;
             var acEabHmac = document.getElementById('actalis-eab-hmac').value;
@@ -2428,12 +2417,6 @@
             document.getElementById('letsencrypt-staging-email').value = letsencryptStagingConfig.email;
         }
 
-        // Load BuyPass settings
-        var buypassConfig = caProviders.buypass || {};
-        if (buypassConfig.email) {
-            document.getElementById('buypass-email').value = buypassConfig.email;
-        }
-
         // Load Actalis settings
         // Don't populate HMAC key for security reasons - user needs to re-enter
         var actalisConfig = caProviders.actalis || {};
@@ -2579,11 +2562,6 @@
             eab_kid: document.getElementById('google-eab-kid').value || '',
             eab_hmac: document.getElementById('google-eab-hmac').value || '',
             email: document.getElementById('google-email').value || ''
-        };
-
-        // BuyPass Go configuration
-        caProviders.buypass = {
-            email: document.getElementById('buypass-email').value || ''
         };
 
         // Actalis configuration

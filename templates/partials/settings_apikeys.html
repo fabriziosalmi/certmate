@@ -57,6 +57,16 @@
                         Scoped keys can only operate on certificates whose domain matches one of the patterns. Wildcards (<code class="font-mono">*.example.com</code>) match subdomains only, not the apex.
                     </p>
                 </div>
+                <div class="mt-4">
+                    <label class="flex items-center space-x-2 text-sm text-label cursor-pointer">
+                        <input type="checkbox" x-model="newKey.is_agent"
+                               class="rounded border-border text-yellow-600 focus:ring-yellow-500">
+                        <span>AI agent key</span>
+                        <span class="text-gray-400" title="Mark this key as belonging to an AI/MCP agent. Actions authenticated with it are attributed in the audit trail as actor.kind='agent', distinguishing automated agent activity from human operators. Point the MCP server at a dedicated agent key.">
+                            <i class="fas fa-info-circle"></i>
+                        </span>
+                    </label>
+                </div>
             </div>
 
             <!-- Created Token Display (shown once) -->
@@ -98,6 +108,9 @@
                                         <span class="text-xs px-2 py-0.5 rounded-full"
                                               :class="keys[keyId].role === 'admin' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300' : keys[keyId].role === 'operator' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300' : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'"
                                               x-text="keys[keyId].role"></span>
+                                        <template x-if="keys[keyId].is_agent">
+                                            <span class="text-xs px-2 py-0.5 rounded-full bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300" title="AI agent key: actions are attributed as actor.kind=agent in the audit trail"><i class="fas fa-robot mr-1"></i>agent</span>
+                                        </template>
                                         <template x-if="keys[keyId].revoked">
                                             <span class="text-xs px-2 py-0.5 rounded-full bg-danger-surface text-danger-strong">revoked</span>
                                         </template>

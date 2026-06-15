@@ -271,7 +271,7 @@ class AuthManager:
         return False
 
     def create_api_key(self, name, role='viewer', expires_at=None, created_by=None,
-                       allowed_domains=None):
+                       allowed_domains=None, is_agent=False):
         """Create a new scoped API key.
 
         Args:
@@ -284,6 +284,11 @@ class AuthManager:
                 behavior). Empty list = locked-out key (creatable for
                 staging). See AuthManager.domain_matches_scope() for the
                 matching semantics.
+            is_agent: mark this key as belonging to an AI/MCP agent. Actions
+                authenticated with the key are then attributed in the audit
+                trail with ``actor.kind='agent'`` (vs ``api_token``). Point the
+                MCP server at a dedicated agent-flagged key so the audit trail
+                can distinguish an agent from a human operator.
 
         Returns:
             tuple: (success, result_dict_or_error_string)
@@ -321,6 +326,7 @@ class AuthManager:
                 'last_used_at': None,
                 'revoked': False,
                 'allowed_domains': scoped_domains,
+                'is_agent': bool(is_agent),
             }
 
             if self._save_api_keys(api_keys):
@@ -337,6 +343,7 @@ class AuthManager:
                     'created_at': api_keys[key_id]['created_at'],
                     'expires_at': expires_at,
                     'allowed_domains': scoped_domains,
+                    'is_agent': bool(is_agent),
                 }
             return False, "Failed to save API key"
         except (OSError, ValueError, KeyError) as e:
@@ -362,6 +369,7 @@ class AuthManager:
                 'revoked': data.get('revoked', False),
                 'is_expired': is_expired,
                 'allowed_domains': data.get('allowed_domains'),
+                'is_agent': bool(data.get('is_agent')),
             }
         return result
 
@@ -462,6 +470,9 @@ class AuthManager:
                         'role': self._normalize_role(key_data.get('role', 'viewer')),
                         'allowed_domains': key_data.get('allowed_domains'),
                         'api_key_id': key_id,
+                        # Stable, non-secret identifiers for audit attribution.
+                        'token_prefix': key_data.get('token_prefix'),
+                        'is_agent': bool(key_data.get('is_agent')),
                     }
 
             return None

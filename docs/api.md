@@ -604,41 +604,114 @@ curl http://localhost:5000/api/client-certs/invalid-id \
 
 ## Audit Logging
 
-All API requests are logged for audit purposes.
+Certificate-lifecycle operations and configuration/access-control changes are
+recorded to an audit log. This includes the security-relevant lifecycle paths —
+successful and failed create, renew, reissue, deploy, and auto-renew toggles,
+plus **unattended (scheduler-driven) renewals** — each attributed to the actor
+that performed it and the trigger that caused it.
 
-### Logged Information
+### Log format
 
-- Timestamp
-- Operation (create, revoke, download, etc.)
-- Resource ID
-- User/IP address
-- Status (success/failure)
-- Response time
-- Error details (if any)
+The audit log is written to `logs/audit/certificate_audit.log`. Each line is a
+standard Python log line whose message is the JSON audit entry:
 
-### Accessing Audit Logs
+```
+2026-06-15 18:00:00 - certmate.audit - INFO - {"timestamp": "...", ...}
+```
+
+To recover the JSON, split each line on the literal ` - INFO - ` and parse the
+remainder. Note two time bases: the line prefix timestamp is **local** server
+time, while the JSON `timestamp` field is **UTC** (ISO-8601). Read it live with:
 
 ```bash
 tail -f logs/audit/certificate_audit.log
 ```
 
-Each entry is JSON formatted for easy parsing:
+### Entry shape
+
 ```json
 {
- "timestamp": "2024-10-30T18:00:00Z",
- "operation": "create",
- "resource_type": "certificate",
- "resource_id": "cert-001",
- "status": "success",
- "user": "admin@example.com",
- "ip_address": "192.168.1.1",
- "details": {
- "common_name": "user@example.com",
- "usage": "api-mtls"
- },
- "error": null
+  "timestamp": "2026-06-15T18:00:00.000000+00:00",
+  "operation": "renew",
+  "resource_type": "certificate",
+  "resource_id": "api.example.com",
+  "status": "success",
+  "user": "api_key:renew-bot",
+  "ip_address": "10.0.0.9",
+  "details": {"force": false},
+  "error": null,
+  "actor": {
+    "kind": "agent",
+    "id": "9f2c…",
+    "label": "api_key:renew-bot",
+    "token_prefix": "cm_1a2b",
+    "agent_session": "sess-9f2"
+  },
+  "trigger": {"cause": "agent"}
 }
 ```
+
+- **`actor.kind`** — `user` (a human session / OIDC login), `api_token` (an API
+  key or the legacy global bearer token), `agent` (an API key explicitly flagged
+  as an AI/MCP agent — see below), `scheduler` (an unattended renewal job), or
+  `system`. It is derived **only from the authenticated identity**.
+- **`actor.id` / `token_prefix`** — the stable API key id and token prefix behind
+  the action (absent for the legacy global bearer token, which cannot be told
+  apart per-caller — prefer scoped keys).
+- **`actor.agent_session` / `agent_id`** — the values of the client-supplied
+  `X-CertMate-Agent-Session` / `X-CertMate-Agent-Id` headers (the MCP server
+  sends them). These are an **informational claim only**: they are recorded for
+  correlation but never change `actor.kind`, so a non-agent caller cannot forge
+  an `agent` attribution.
+- **`trigger.cause`** — `manual`, `api`, `agent`, `scheduled_renewal`, or
+  `event`; for scheduled renewals `trigger.job_id` names the job.
+
+To have an agent's actions recorded as `actor.kind="agent"`, create a scoped API
+key with `is_agent: true` (a checkbox on Settings → API Keys, or `is_agent` in
+`POST /api/keys`) and point the MCP server at it. See the [MCP guide](./mcp.md).
+
+### Reading the audit log over the API
+
+`GET /api/activity?limit=N` returns the most recent entries (admin/viewer,
+bounded to 500).
+
+### Tamper-evidence (hash chain)
+
+Alongside the human-readable log, every entry is appended to a tamper-evident
+SHA-256 **hash chain** at `data/audit/certificate_audit.chain.jsonl`. Each record
+is `{seq, entry, prev_hash, hash}` where `hash` commits to the entry and the
+previous record's hash, and `seq` is a gap-free counter — so any modification,
+deletion, or reorder by anyone who cannot recompute the whole chain is
+detectable and localizable. It is on by default; disable with
+`CERTMATE_AUDIT_CHAIN=0`.
+
+**Verify from the API:** `GET /api/audit/verify` (admin) returns the verifier
+result and HTTP `200` when intact or `409` when broken:
+
+```json
+{"ok": true, "count": 128, "first_seq": 0, "last_seq": 127, "head_hash": "5ee1…", "reason": "intact"}
+```
+
+**Verify off-box:** the standalone verifier depends only on the Python standard
+library, so an auditor can run it without installing or trusting CertMate:
+
+```bash
+python -m modules.core.audit_verify data/audit/certificate_audit.chain.jsonl
+# OK: audit chain intact (128 entries, seq 0..127)
+# or: FAIL: audit chain broken at seq 42: hash mismatch at seq 42: entry was modified
+```
+
+Exit code `0` intact, `1` broken (with the offending `seq` and reason), `2`
+missing/unreadable.
+
+> **Threat-model honesty.** The chain detects an interior modification,
+> deletion, or reorder by anyone who does not hold the writer's running state.
+> It does **not** detect entries removed from the *end* (tail truncation)
+> without an external head anchor, and it does **not** bind the operator, who
+> holds the file and could recompute and rewrite the whole chain. Constraining
+> the operator (and detecting tail truncation) requires external anchoring of
+> signed checkpoints, which this version does not implement. See
+> [compliance.md](./compliance.md).
 
 ---
 

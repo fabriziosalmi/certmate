@@ -41,7 +41,11 @@ npm install
 ### Environment Variables
 The MCP server communicates with the CertMate REST API and requires two environment variables:
 - `CERTMATE_URL` — The URL of your CertMate instance (default: `http://localhost:8000`).
-- `CERTMATE_TOKEN` — A valid API Bearer token with appropriate role permissions (typically `operator` or `admin`).
+- `CERTMATE_TOKEN` — A valid API Bearer token with appropriate role permissions (typically `operator` or `admin`). For an auditable agent, use a key flagged as an agent key (see [Audit attribution](#audit-attribution)).
+
+Optional:
+- `CERTMATE_AGENT_SESSION` — Overrides the per-process session id the server sends on every call (`X-CertMate-Agent-Session`), so a run can be correlated with an external orchestrator's id. A fresh UUID is generated per process if unset.
+- `CERTMATE_AGENT_ID` — A label for this agent deployment (`X-CertMate-Agent-Id`, default `certmate-mcp-server`).
 
 ### Integration Example (Claude Desktop Config)
 To add the CertMate MCP server to Claude Desktop, add the following to your configuration file (usually located at `~/Library/Application Support/Claude/claude_desktop_config.json` on macOS or `%APPDATA%\Claude\claude_desktop_config.json` on Windows):
@@ -109,3 +113,25 @@ only if it must change settings or read diagnostics.
 1. **Token Protection** — The MCP server requires a valid `CERTMATE_TOKEN`. It passes this token securely in the `Authorization` header for all requests to the CertMate API.
 2. **Least privilege** — Scope the token to what the agent needs. A scheduled renew-keeper needs `operator`; reserve `admin` tokens for agents that must change settings or pull diagnostics. Revoke the token to instantly cut the agent off.
 3. **Log Sanitization Compatibility** — Tools like `certmate_diagnostics` retrieve data after the Log Sanitizer has stripped sensitive credentials, protecting keys and tokens from leaking into LLM contexts.
+
+## Audit attribution
+
+So the audit trail can tell an agent's actions apart from a human operator's,
+give the MCP server a **dedicated, agent-flagged API key** rather than the legacy
+global bearer token:
+
+1. In CertMate, go to **Settings → API Keys**, create a key, and tick **AI agent
+   key** (or send `"is_agent": true` to `POST /api/keys`). Scope it with
+   `allowed_domains` and the least role it needs.
+2. Set that key as `CERTMATE_TOKEN` for the MCP server.
+
+Every certificate action the agent then takes is recorded with
+`actor.kind="agent"`, the key's stable id, and the per-process
+`X-CertMate-Agent-Session` the server sends — so you can later show exactly which
+certificate changes an AI agent made, under which identity, and grouped by run.
+The legacy global bearer token collapses every caller to `api_user` with no key
+id and is recorded as `api_token`, not `agent`. The agent-session header is an
+informational claim and never by itself promotes a caller to `agent`.
+
+The resulting records are part of the tamper-evident audit chain; see
+[Audit Logging](./api.md#audit-logging) and [compliance.md](./compliance.md).

@@ -462,6 +462,7 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
             role = data.get('role', 'viewer')
             expires_at = data.get('expires_at')
             allowed_domains = data.get('allowed_domains')
+            is_agent = bool(data.get('is_agent', False))
 
             if not name:
                 return jsonify({'error': 'Key name is required'}), 400
@@ -473,6 +474,7 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
                 name, role=role, expires_at=expires_at,
                 created_by=user.get('username'),
                 allowed_domains=allowed_domains,
+                is_agent=is_agent,
             )
             if success:
                 if audit_logger:
