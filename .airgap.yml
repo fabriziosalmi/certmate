@@ -1,0 +1,19 @@
+# AGSSH-STD-001 conformance declaration (the fleet runner reads this; §12).
+target_profile: Bronze
+level: L2                       # the app monitors arbitrary external domains by function,
+                                # so AG-NET-04 (connect-src) is CONDITIONAL at L2, not a deviation
+surfaces:
+  - url: https://www.certmate.org/
+    kind: site
+    stateless: false            # Flask app: XFO / CSP / HSTS are header-delivered by the app
+backend: cloudflare             # proxied origin -> Transform Rules add the header set to the
+                                # static surfaces that GitHub-Pages-via-Cloudflare serves header-less (§11)
+dns:
+  zone: certmate.org            # checked for CAA / DNSSEC / dangling CNAME
+deviations: []                  # MUSTs are NEVER waivable (AG-GOV-01)
+
+# OPEN MUST — tracked as remediation, NOT a waiver (AG-GOV-01 forbids waiving a MUST):
+#   AG-CSP-02 (HIGH) — script-src carries 'unsafe-eval' + 'unsafe-inline' (Alpine.js v3).
+#   Surface is non-conformant at Bronze until fixed.
+#   fix:    @alpinejs/csp build + nonce inline scripts -> drop both tokens
+#   issue:  #314   owner: fabrizio   target: 2026-09-30   evidence: modules/core/factory.py:823-851
