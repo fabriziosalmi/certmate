@@ -51,7 +51,9 @@ class AuditLogger:
         details: Optional[Dict[str, Any]] = None,
         user: Optional[str] = None,
         ip_address: Optional[str] = None,
-        error: Optional[str] = None
+        error: Optional[str] = None,
+        actor: Optional[Dict[str, Any]] = None,
+        trigger: Optional[Dict[str, Any]] = None,
     ) -> None:
         """
         Log a certificate operation.
@@ -65,6 +67,21 @@ class AuditLogger:
             user: User who performed operation
             ip_address: IP address of requester
             error: Error message if operation failed
+            actor: Structured attribution of WHO/WHAT acted, e.g.
+                ``{'kind': 'agent'|'user'|'api_token'|'scheduler'|'system',
+                'id': <api_key_id>, 'label': <username>, 'token_prefix': ...,
+                'agent_session': <client-supplied claim>}``. When omitted, a
+                ``{'kind': 'system', 'label': user}`` actor is synthesised so
+                existing call sites keep working and the field is always present.
+            trigger: Structured cause of the action, e.g.
+                ``{'cause': 'manual'|'api'|'agent'|'scheduled_renewal'|'event',
+                'job_id': <scheduler job id>}``. Defaults to ``{'cause': 'event'}``.
+
+        ``actor`` and ``trigger`` are additive: readers that do not know about
+        them ignore the extra keys, and the on-disk line stays backward
+        compatible. ``actor.kind`` is always derived from the *authenticated*
+        identity by the caller — a client-supplied ``agent_session`` is recorded
+        as an informational claim and never sets ``kind`` on its own.
         """
         try:
             audit_entry = {
@@ -76,7 +93,9 @@ class AuditLogger:
                 'user': user or 'system',
                 'ip_address': ip_address or 'unknown',
                 'details': details or {},
-                'error': error
+                'error': error,
+                'actor': actor or {'kind': 'system', 'label': user or 'system'},
+                'trigger': trigger or {'cause': 'event'},
             }
 
             # Log to audit file as JSON for easy parsing

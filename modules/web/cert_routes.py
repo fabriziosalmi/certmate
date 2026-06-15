@@ -6,6 +6,7 @@ from flask import request, jsonify, send_file, after_this_request
 
 from ..core.certificates import DomainOperationInProgress
 from ..core.cert_service import CertificateService, DomainOutOfScope
+from ..core.audit_context import audit_context_from_request
 
 
 logger = logging.getLogger(__name__)
@@ -48,6 +49,7 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
                 domain_alias=data.get('domain_alias'),
                 user=user,
                 ip_address=request.remote_addr,
+                audit_ctx=audit_context_from_request(),
             )
             return jsonify(result)
         except DomainOutOfScope:
@@ -234,6 +236,7 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
             result = cert_service.renew(
                 domain=domain_name, force=force,
                 user=user, ip_address=request.remote_addr,
+                audit_ctx=audit_context_from_request(),
             )
             return jsonify({'message': result.get('message', 'Certificate renewed successfully')})
         except DomainOutOfScope:

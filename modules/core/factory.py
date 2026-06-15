@@ -424,6 +424,11 @@ def initialize_managers(container: AppContainer, app):
     # Let AuthManager emit RBAC + scope denials through the same audit
     # surface the rest of the app uses (2026-05-12 API auth audit, F-2).
     auth_manager.set_audit_logger(audit_logger)
+    # Let unattended (scheduler-driven) renewals produce an attributed audit
+    # record — the headline agentic-audit-trail case where no request actor
+    # exists. Optional setter so standalone/test contexts stay decoupled.
+    certificate_manager.set_audit_logger(audit_logger)
+    client_cert_manager.set_audit_logger(audit_logger)
 
     # OIDC manager — additive identity source. Disabled by default; the
     # admin opts in via Settings → SSO. Lives alongside AuthManager so
