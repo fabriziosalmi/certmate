@@ -253,7 +253,8 @@ alpn = ["h2", "http/1.1"]
 [upstream.backend]
 url = "http://certmate:8000"
 
-# Root + catch-all (a lone /{*rest} can miss the exact "/").
+# Catch-all to the backend. The explicit "/" route is harmless and documents
+# intent; recent Zion also auto-registers "/" for a root catch-all.
 [[route]]
 path = "/"
 upstream = "backend"
@@ -296,10 +297,73 @@ auth-failure warnings resolve to the real client IP rather than Zion's.
 
 > **`/metrics` is served by Zion, not proxied.** Zion exposes its own Prometheus
 > endpoint at `/metrics` (`zion_*` series for the proxy), which shadows
-> CertMate's `/metrics`. Scrape the two separately: Zion's at the edge, and
-> CertMate's `certmate_*` metrics directly against the internal `certmate:8000`
-> with an admin Bearer token (see [`monitoring/`](../monitoring/) for the
-> dashboard and scrape config).
+> CertMate's `/metrics`. Scrape them separately: Zion's `/metrics` from inside
+> the host / cluster network (Zion gates it to private source IPs and returns
+> 403 to public clients), and CertMate's `certmate_*` directly against the
+> internal `certmate:8000` with an admin Bearer token (see
+> [`monitoring/`](../monitoring/) for the dashboard and scrape config).
+
+### Confining outbound traffic (egress hardening)
+
+CertMate makes outbound connections to ACME Certificate Authorities, DNS
+provider APIs, object storage, and notification webhooks over HTTP(S), plus
+SMTP for email notifications. You can confine and audit the **HTTP(S)** traffic
+by routing it through a **forward proxy** and denying CertMate any other route
+to the internet.
+
+CertMate's HTTP(S) clients (`requests`, `certbot`, webhook delivery via
+`urllib`, `boto3`) honor the standard `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY`
+environment variables, so no code changes are needed. **SMTP is the
+exception:** email notifications use `smtplib`, which opens a direct TCP
+connection and does **not** consult the HTTP-proxy variables. On a locked-down
+egress network, allow your SMTP relay's `host:port` directly (a firewall /
+NetworkPolicy rule), or use a webhook notification channel instead of email.
+
+Example with [Secure Proxy Manager](https://github.com/fabriziosalmi/secure-proxy-manager),
+a self-hosted Squid-based forward proxy with a WAF, a DNS sinkhole, and
+domain / IP / CIDR allow-deny lists:
+
+```yaml
+services:
+  certmate:
+    image: certmate:latest
+    environment:
+      HTTP_PROXY:  "http://proxy:3128"
+      HTTPS_PROXY: "http://proxy:3128"
+      NO_PROXY:    "localhost,127.0.0.1"
+    networks:
+      - egress            # CertMate can reach ONLY the proxy on this network
+  # The Secure Proxy Manager stack provides the `proxy` service on :3128.
+  # Attach that proxy to BOTH the `egress` network (so CertMate can reach it)
+  # AND a second, non-internal network (so the proxy itself reaches the
+  # internet). The proxy is then CertMate's only route out.
+networks:
+  egress:
+    internal: true        # no gateway: CertMate has no direct internet
+```
+
+Putting CertMate on an `internal` network (no gateway) shared with the proxy
+makes the proxy its **only** path out. Outbound becomes a single auditable
+choke point: allow the destinations CertMate actually needs (your CA, DNS
+provider, object storage, notification endpoints), deny the rest; raw-IP-literal
+destinations are blocked at the proxy rather than trusted blindly. If you use
+DNS-alias / CNAME delegation, also allow `cloudflare-dns.com` — CertMate
+resolves those CNAMEs over DoH.
+
+- **Kubernetes:** an egress default-deny `NetworkPolicy` that permits traffic
+  only to the proxy Service, plus the `HTTP(S)_PROXY` env on the Deployment.
+- **systemd:** `Environment=HTTPS_PROXY=...` in the unit, plus host firewall
+  rules that restrict egress to the proxy.
+
+**HTTPS content inspection (optional, advanced).** A forward proxy sees only the
+SNI / host / IP of an HTTPS connection — destination allow-deny works on that
+without decryption. If you additionally enable TLS interception (SSL-bump) on
+the proxy to inspect outbound *content*, CertMate must **trust the proxy's
+interception CA**: point `REQUESTS_CA_BUNDLE` (and `SSL_CERT_FILE`) at a bundle
+that includes it, or add it to the container's system trust store. **Exclude
+(`splice`) the ACME endpoints from interception** — you do not want to MITM the
+connection to your Certificate Authority, and some endpoints pin certificates.
+This is not mutual TLS; it is one-way trust of a private CA.
 
 ### Storage location for the data directory
 
