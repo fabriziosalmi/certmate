@@ -230,6 +230,77 @@ proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
 proxy_set_header X-Forwarded-Proto $scheme;
 ```
 
+#### Example: Zion (Rust TLS gateway + WAF)
+
+[Zion](https://github.com/fabriziosalmi/zion) is a high-performance Rust TLS
+reverse proxy with a built-in WAF — a good fit in front of CertMate when you
+want TLS 1.3 termination and request filtering at the edge. CertMate stays on
+plain HTTP on the internal network; Zion terminates TLS and forwards.
+
+`zion.toml`:
+
+```toml
+[server]
+listen_http  = "0.0.0.0:8080"
+listen_https = "0.0.0.0:8443"
+
+[tls]
+cert_path = "/etc/ssl/zion/tls.crt"   # your cert, or use Zion's ACME (--features acme)
+key_path  = "/etc/ssl/zion/tls.key"
+min_version = "1.3"
+alpn = ["h2", "http/1.1"]
+
+[upstream.backend]
+url = "http://certmate:8000"
+
+# Root + catch-all (a lone /{*rest} can miss the exact "/").
+[[route]]
+path = "/"
+upstream = "backend"
+
+[[route]]
+path = "/{*rest}"
+upstream = "backend"
+```
+
+`docker-compose.yml`:
+
+```yaml
+services:
+  certmate:
+    image: certmate:latest          # the published image, or your local build
+    environment:
+      BEHIND_PROXY: "true"          # trust Zion's X-Forwarded-* headers
+    expose:
+      - "8000"                       # internal only; not published to the host
+    volumes:
+      - ./data:/app/data
+
+  zion:
+    image: zion:latest              # the published image, or your local build
+    depends_on:
+      - certmate
+    environment:
+      ZION_CONFIG: /etc/zion/zion.toml
+    volumes:
+      - ./zion.toml:/etc/zion/zion.toml:ro
+      - ./certs:/etc/ssl/zion:ro
+    ports:
+      - "443:8443"                   # host 443 -> Zion's HTTPS listener
+      - "80:8080"                    # host 80  -> Zion's HTTP listener
+```
+
+Keep `BEHIND_PROXY=true` on the CertMate service: Zion appends
+`X-Forwarded-For`, so this makes per-client rate limiting, audit entries and the
+auth-failure warnings resolve to the real client IP rather than Zion's.
+
+> **`/metrics` is served by Zion, not proxied.** Zion exposes its own Prometheus
+> endpoint at `/metrics` (`zion_*` series for the proxy), which shadows
+> CertMate's `/metrics`. Scrape the two separately: Zion's at the edge, and
+> CertMate's `certmate_*` metrics directly against the internal `certmate:8000`
+> with an admin Bearer token (see [`monitoring/`](../monitoring/) for the
+> dashboard and scrape config).
+
 ### Storage location for the data directory
 
 CertMate uses standard Python blocking file I/O for everything under
