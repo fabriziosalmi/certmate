@@ -67,6 +67,51 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
             logger.error(f"Audit verify API error: {e}")
             return jsonify({'error': 'Failed to verify audit chain'}), 500
 
+    @app.route('/api/audit/public-key')
+    @auth_manager.require_role('admin')
+    def audit_public_key_api():
+        """Return this instance's audit signing identity (Ed25519 public key +
+        fingerprint), so an auditor can pin it out-of-band before verifying an
+        export bundle. 404 when the instance has no signing key configured."""
+        try:
+            audit_logger = managers.get('audit')
+            info = audit_logger.public_key_info() if audit_logger and hasattr(audit_logger, 'public_key_info') else None
+            if not info:
+                return jsonify({'error': 'Audit signing not available'}), 404
+            return jsonify(info), 200
+        except Exception as e:
+            logger.error(f"Audit public-key API error: {e}")
+            return jsonify({'error': 'Failed to read audit signing key'}), 500
+
+    @app.route('/api/audit/export')
+    @auth_manager.require_role('admin')
+    def audit_export_api():
+        """Export the audit chain as a signed, independently-verifiable bundle.
+
+        Optional ?from_seq / ?to_seq for an incremental, self-verifying slice.
+        An auditor verifies it off the box with
+        `python -m modules.core.audit_verify --bundle bundle.json [--pubkey key.pem]`
+        without running or trusting CertMate. Admin-only: the bundle is the full
+        audit record."""
+        try:
+            audit_logger = managers.get('audit')
+            if audit_logger is None or not hasattr(audit_logger, 'export_bundle'):
+                return jsonify({'error': 'Audit chain not available'}), 503
+
+            def _seq(name):
+                raw = request.args.get(name)
+                if raw is None:
+                    return None
+                try:
+                    return int(raw)
+                except (TypeError, ValueError):
+                    return None
+            bundle = audit_logger.export_bundle(from_seq=_seq('from_seq'), to_seq=_seq('to_seq'))
+            return jsonify(bundle), 200
+        except Exception as e:
+            logger.error(f"Audit export API error: {e}")
+            return jsonify({'error': 'Failed to export audit bundle'}), 500
+
     @app.route('/metrics')
     @auth_manager.require_role('admin')
     def metrics():
