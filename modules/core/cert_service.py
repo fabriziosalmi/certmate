@@ -80,10 +80,38 @@ class CertificateService:
             )
         raise DomainOutOfScope(domain)
 
+    def _audit_emit(self, audit_ctx, operation, domain, status,
+                    details=None, error=None):
+        """Emit a certificate-lifecycle audit entry, carrying the structured
+        actor/trigger attribution captured at request time. No-op when no audit
+        logger is wired. Never raises (auditing must not break issuance)."""
+        if not self._audit:
+            return
+        ctx = audit_ctx or {}
+        try:
+            self._audit.log_operation(
+                operation=operation,
+                resource_type='certificate',
+                resource_id=domain,
+                status=status,
+                details=details or {},
+                user=ctx.get('user'),
+                ip_address=ctx.get('ip'),
+                error=(str(error)[:500] if error else None),
+                actor=ctx.get('actor'),
+                trigger=ctx.get('trigger'),
+            )
+        except Exception:  # pragma: no cover - defensive
+            # Operation type is enough to diagnose; the domain adds no value
+            # here and only feeds CodeQL's clear-text-logging heuristic (it is
+            # field-insensitive on the `prepared` dict, conflating the domain
+            # with the attribution context).
+            logger.debug("Audit emit failed for operation=%s", operation)
+
     def create(self, *, domain, san_domains=None, dns_provider=None,
                account_id=None, ca_provider=None, challenge_type=None,
                domain_alias=None, key_type=None, key_size=None,
-               elliptic_curve=None, user=None, ip_address=None):
+               elliptic_curve=None, user=None, ip_address=None, audit_ctx=None):
         """Validate, scope-check, resolve defaults, issue, and persist a new
         certificate; returns the ``CertificateManager.create_certificate``
         result dict. Raises ``ValueError`` (bad input / missing config),
@@ -94,19 +122,25 @@ class CertificateService:
         exposed separately so async callers can run the cheap ``prepare_create``
         synchronously (for an immediate 4xx on bad input) and defer the
         blocking ``issue_create`` (certbot) to a background job.
+
+        ``audit_ctx`` is the structured attribution context (see
+        ``audit_context_from_request``); it is carried into ``issue_create`` so
+        the success/failure audit record names the actor and trigger even on the
+        deferred async path.
         """
         return self.issue_create(self.prepare_create(
             domain=domain, san_domains=san_domains, dns_provider=dns_provider,
             account_id=account_id, ca_provider=ca_provider,
             challenge_type=challenge_type, domain_alias=domain_alias,
             key_type=key_type, key_size=key_size, elliptic_curve=elliptic_curve,
-            user=user, ip_address=ip_address,
+            user=user, ip_address=ip_address, audit_ctx=audit_ctx,
         ))
 
     def prepare_create(self, *, domain, san_domains=None, dns_provider=None,
                         account_id=None, ca_provider=None, challenge_type=None,
                         domain_alias=None, key_type=None, key_size=None,
-                        elliptic_curve=None, user=None, ip_address=None):
+                        elliptic_curve=None, user=None, ip_address=None,
+                        audit_ctx=None):
         """Validate, authorize and resolve a create request WITHOUT side
         effects, returning the resolved kwargs for :meth:`issue_create`. Raises
         ``ValueError`` / :class:`DomainOutOfScope`. Cheap (no certbot, no disk
@@ -174,6 +208,9 @@ class CertificateService:
             'elliptic_curve': elliptic_curve,
             # Fallback used only to label the persisted domain entry.
             '_settings_dns_provider': settings.get('dns_provider'),
+            # Attribution captured synchronously so the deferred async issuance
+            # still audits the original actor/trigger.
+            '_audit_ctx': audit_ctx,
         }
 
     def issue_create(self, prepared):
@@ -183,35 +220,46 @@ class CertificateService:
         ``FileExistsError``.
         """
         domain = prepared['domain']
-        result = self._certs.create_certificate(
-            domain=domain,
-            email=prepared['email'],
-            dns_provider=prepared['dns_provider'],
-            account_id=prepared['account_id'],
-            ca_provider=prepared['ca_provider'],
-            domain_alias=prepared['domain_alias'],
-            san_domains=prepared['san_domains'],
-            challenge_type=prepared['challenge_type'],
-            key_type=prepared['key_type'],
-            key_size=prepared['key_size'],
-            elliptic_curve=prepared['elliptic_curve'],
-        )
+        audit_ctx = prepared.get('_audit_ctx')
+        try:
+            result = self._certs.create_certificate(
+                domain=domain,
+                email=prepared['email'],
+                dns_provider=prepared['dns_provider'],
+                account_id=prepared['account_id'],
+                ca_provider=prepared['ca_provider'],
+                domain_alias=prepared['domain_alias'],
+                san_domains=prepared['san_domains'],
+                challenge_type=prepared['challenge_type'],
+                key_type=prepared['key_type'],
+                key_size=prepared['key_size'],
+                elliptic_curve=prepared['elliptic_curve'],
+            )
 
-        # Append the new domain under the settings manager's lock so two
-        # parallel creates for different domains cannot race and drop an entry.
-        resolved_dns_provider = prepared['dns_provider'] or prepared['_settings_dns_provider']
-        self._settings.update(
-            _make_add_domain(domain, resolved_dns_provider, prepared['account_id']),
-            'certificate_created',
-        )
+            # Append the new domain under the settings manager's lock so two
+            # parallel creates for different domains cannot race and drop an entry.
+            resolved_dns_provider = prepared['dns_provider'] or prepared['_settings_dns_provider']
+            self._settings.update(
+                _make_add_domain(domain, resolved_dns_provider, prepared['account_id']),
+                'certificate_created',
+            )
+        except Exception as e:
+            self._audit_emit(audit_ctx, 'create', domain, 'failure', error=e)
+            raise
         logger.info("Ensured domain %s is in settings after certificate creation", _scrub_log(domain))
+        self._audit_emit(audit_ctx, 'create', domain, 'success', details={
+            'ca_provider': prepared.get('ca_provider'),
+            'challenge_type': prepared.get('challenge_type'),
+            'san_count': len(prepared.get('san_domains') or []),
+        })
         return result
 
     def prepare_reissue(self, *, domain, san_domains=None, dns_provider=None,
                         account_id=None, ca_provider=None, challenge_type=None,
                         domain_alias=None, alias_dns_provider=None,
                         key_type=None, key_size=None,
-                        elliptic_curve=None, user=None, ip_address=None):
+                        elliptic_curve=None, user=None, ip_address=None,
+                        audit_ctx=None):
         """Validate and resolve an edit-and-reissue request (#267) without
         side effects, returning kwargs for :meth:`issue_reissue`.
 
@@ -311,6 +359,7 @@ class CertificateService:
             'key_size': key_size,
             'elliptic_curve': elliptic_curve,
             '_settings_dns_provider': settings.get('dns_provider'),
+            '_audit_ctx': audit_ctx,
         }
 
     def issue_reissue(self, prepared):
@@ -321,31 +370,41 @@ class CertificateService:
         ``RuntimeError`` (certbot failure).
         """
         domain = prepared['domain']
-        result = self._certs.create_certificate(
-            domain=domain,
-            email=prepared['email'],
-            dns_provider=prepared['dns_provider'],
-            account_id=prepared['account_id'],
-            ca_provider=prepared['ca_provider'],
-            domain_alias=prepared['domain_alias'],
-            alias_dns_provider=prepared['alias_dns_provider'],
-            san_domains=prepared['san_domains'],
-            challenge_type=prepared['challenge_type'],
-            key_type=prepared['key_type'],
-            key_size=prepared['key_size'],
-            elliptic_curve=prepared['elliptic_curve'],
-            replace=True,
-        )
+        audit_ctx = prepared.get('_audit_ctx')
+        try:
+            result = self._certs.create_certificate(
+                domain=domain,
+                email=prepared['email'],
+                dns_provider=prepared['dns_provider'],
+                account_id=prepared['account_id'],
+                ca_provider=prepared['ca_provider'],
+                domain_alias=prepared['domain_alias'],
+                alias_dns_provider=prepared['alias_dns_provider'],
+                san_domains=prepared['san_domains'],
+                challenge_type=prepared['challenge_type'],
+                key_type=prepared['key_type'],
+                key_size=prepared['key_size'],
+                elliptic_curve=prepared['elliptic_curve'],
+                replace=True,
+            )
 
-        # Idempotent: repairs the settings entry if it ever went missing.
-        resolved_dns_provider = prepared['dns_provider'] or prepared['_settings_dns_provider']
-        self._settings.update(
-            _make_add_domain(domain, resolved_dns_provider, prepared['account_id']),
-            'certificate_reissued',
-        )
+            # Idempotent: repairs the settings entry if it ever went missing.
+            resolved_dns_provider = prepared['dns_provider'] or prepared['_settings_dns_provider']
+            self._settings.update(
+                _make_add_domain(domain, resolved_dns_provider, prepared['account_id']),
+                'certificate_reissued',
+            )
+        except Exception as e:
+            self._audit_emit(audit_ctx, 'reissue', domain, 'failure', error=e)
+            raise
+        self._audit_emit(audit_ctx, 'reissue', domain, 'success', details={
+            'ca_provider': prepared.get('ca_provider'),
+            'challenge_type': prepared.get('challenge_type'),
+            'san_count': len(prepared.get('san_domains') or []),
+        })
         return result
 
-    def renew(self, *, domain, force=False, user=None, ip_address=None):
+    def renew(self, *, domain, force=False, user=None, ip_address=None, audit_ctx=None):
         """Scope-check then renew an existing certificate, returning the
         manager's result dict. Path/sanitisation of *domain* is the adapter's
         responsibility (it owns ``cert_dir`` resolution); here we enforce scope
@@ -356,23 +415,33 @@ class CertificateService:
         async callers can authorize synchronously and defer the certbot call.
         """
         return self.issue_renew(
-            self.prepare_renew(domain=domain, user=user, ip_address=ip_address),
+            self.prepare_renew(domain=domain, user=user, ip_address=ip_address,
+                               audit_ctx=audit_ctx),
             force=force,
         )
 
-    def prepare_renew(self, *, domain, user=None, ip_address=None):
+    def prepare_renew(self, *, domain, user=None, ip_address=None, audit_ctx=None):
         """Authorize a renew request (scope check) with no side effects.
         Raises :class:`DomainOutOfScope`. Returns the resolved kwargs for
         :meth:`issue_renew`.
         """
         self._enforce_scope(domain, 'renew', user, ip_address)
-        return {'domain': domain}
+        return {'domain': domain, '_audit_ctx': audit_ctx}
 
     def issue_renew(self, prepared, *, force=False):
         """Run the (blocking, deferrable) certbot renewal for a prepared renew
         request. Raises ``DomainOperationInProgress`` (409) or ``RuntimeError``.
         """
-        return self._certs.renew_certificate(prepared['domain'], force=force)
+        domain = prepared['domain']
+        audit_ctx = prepared.get('_audit_ctx')
+        try:
+            result = self._certs.renew_certificate(domain, force=force)
+        except Exception as e:
+            self._audit_emit(audit_ctx, 'renew', domain, 'failure', error=e)
+            raise
+        self._audit_emit(audit_ctx, 'renew', domain, 'success',
+                         details={'force': bool(force)})
+        return result
 
 
 def _make_add_domain(domain, dns_provider, account_id):

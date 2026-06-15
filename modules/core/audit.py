@@ -3,12 +3,15 @@ Audit logging module for CertMate
 Tracks all certificate operations for compliance and debugging
 """
 
+import os
 import logging
 import json
+import threading
 from pathlib import Path
 from datetime import datetime
 from collections import deque
 from .utils import utc_now
+from . import audit_chain
 from typing import Optional, Dict, Any
 
 logger = logging.getLogger(__name__)
@@ -17,12 +20,20 @@ logger = logging.getLogger(__name__)
 class AuditLogger:
     """Centralized audit logging for certificate operations."""
 
-    def __init__(self, audit_log_dir: Path):
+    def __init__(self, audit_log_dir: Path, chain_dir: Optional[Path] = None,
+                 enable_chain: bool = True):
         """
         Initialize Audit Logger.
 
         Args:
             audit_log_dir: Directory to store audit logs
+            chain_dir: Directory for the tamper-evident hash chain. Defaults to
+                ``audit_log_dir``. In production this is pointed at a
+                backed-up location (``data/audit``) so the verifiable artifact
+                survives in backups, while the human-readable ``.log`` can stay
+                under the (backup-excluded) ``logs`` tree.
+            enable_chain: write the hash chain (default True). Disable via the
+                ``CERTMATE_AUDIT_CHAIN=0`` environment variable as a kill switch.
         """
         self.audit_log_dir = Path(audit_log_dir)
         self.audit_log_dir.mkdir(parents=True, exist_ok=True)
@@ -42,6 +53,83 @@ class AuditLogger:
         self.audit_logger.addHandler(self.file_handler)
         self.audit_logger.setLevel(logging.INFO)
 
+        # Tamper-evident hash chain (Phase 2). One writer, one local file; the
+        # lock guards the shared next-seq/last-hash state because Flask request
+        # threads and the APScheduler renewal thread share this instance.
+        self._chain_enabled = enable_chain and os.environ.get('CERTMATE_AUDIT_CHAIN', '1') != '0'
+        self._chain_dir = Path(chain_dir) if chain_dir is not None else self.audit_log_dir
+        self.audit_chain_file = self._chain_dir / audit_chain.CHAIN_FILENAME
+        self._chain_lock = threading.Lock()
+        self._next_seq = 0
+        self._last_hash = audit_chain.GENESIS_PREV
+        if self._chain_enabled:
+            self._recover_chain_state()
+
+    def _recover_chain_state(self) -> None:
+        """Recover ``_next_seq`` / ``_last_hash`` from the last complete chain
+        line so appends continue the chain across restarts. A truncated trailing
+        line (an interrupted write) is tolerated: we resume from the last record
+        that parses, and the next append overwrites nothing (append-only)."""
+        try:
+            self._chain_dir.mkdir(parents=True, exist_ok=True)
+            if not self.audit_chain_file.exists():
+                return
+            last_good = None
+            with open(self.audit_chain_file, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        rec = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue  # skip a corrupt/truncated line
+                    if not isinstance(rec, dict):
+                        continue  # a non-object line is not a valid record
+                    if isinstance(rec.get('seq'), int) and rec.get('hash'):
+                        last_good = rec
+            if last_good is not None:
+                self._next_seq = last_good['seq'] + 1
+                self._last_hash = last_good['hash']
+        except Exception as e:
+            # Recovery runs inside AuditLogger.__init__, which the factory calls
+            # unguarded — it must NEVER abort app startup (that would take the
+            # renewal scheduler down with it). On any trouble, disable the chain
+            # rather than fork it from a wrong baseline or raise.
+            logger.error(f"Could not recover audit chain state; disabling chain: {e}")
+            self._chain_enabled = False
+
+    def _chain_append(self, entry: Dict[str, Any]) -> None:
+        """Append one audit entry to the hash chain. Best-effort and isolated:
+        a chain failure must never break audit logging or the audited
+        operation. On failure the seq/hash state is NOT advanced, so the next
+        append retries from the same baseline and no phantom gap is created."""
+        if not self._chain_enabled:
+            return
+        try:
+            with self._chain_lock:
+                seq = self._next_seq
+                line = audit_chain.make_line(seq, entry, self._last_hash)
+                with open(self.audit_chain_file, 'a', encoding='utf-8') as f:
+                    f.write(json.dumps(line, ensure_ascii=False) + '\n')
+                    f.flush()
+                    os.fsync(f.fileno())
+                # Advance only after the line is durably written.
+                self._next_seq = seq + 1
+                self._last_hash = line['hash']
+        except Exception as e:
+            logger.error(f"Failed to append to audit chain: {e}")
+
+    def verify_chain(self) -> Dict[str, Any]:
+        """Verify this instance's hash chain. Thin wrapper over
+        :func:`audit_chain.verify_chain` for in-process callers and tests.
+
+        Takes the append lock so a verify that races an in-flight append does
+        not observe a half-written final line and report a spurious truncation
+        (the standalone CLI verifier cannot take the lock and accepts that)."""
+        with self._chain_lock:
+            return audit_chain.verify_chain(self.audit_chain_file)
+
     def log_operation(
         self,
         operation: str,
@@ -51,7 +139,9 @@ class AuditLogger:
         details: Optional[Dict[str, Any]] = None,
         user: Optional[str] = None,
         ip_address: Optional[str] = None,
-        error: Optional[str] = None
+        error: Optional[str] = None,
+        actor: Optional[Dict[str, Any]] = None,
+        trigger: Optional[Dict[str, Any]] = None,
     ) -> None:
         """
         Log a certificate operation.
@@ -65,6 +155,21 @@ class AuditLogger:
             user: User who performed operation
             ip_address: IP address of requester
             error: Error message if operation failed
+            actor: Structured attribution of WHO/WHAT acted, e.g.
+                ``{'kind': 'agent'|'user'|'api_token'|'scheduler'|'system',
+                'id': <api_key_id>, 'label': <username>, 'token_prefix': ...,
+                'agent_session': <client-supplied claim>}``. When omitted, a
+                ``{'kind': 'system', 'label': user}`` actor is synthesised so
+                existing call sites keep working and the field is always present.
+            trigger: Structured cause of the action, e.g.
+                ``{'cause': 'manual'|'api'|'agent'|'scheduled_renewal'|'event',
+                'job_id': <scheduler job id>}``. Defaults to ``{'cause': 'event'}``.
+
+        ``actor`` and ``trigger`` are additive: readers that do not know about
+        them ignore the extra keys, and the on-disk line stays backward
+        compatible. ``actor.kind`` is always derived from the *authenticated*
+        identity by the caller — a client-supplied ``agent_session`` is recorded
+        as an informational claim and never sets ``kind`` on its own.
         """
         try:
             audit_entry = {
@@ -76,11 +181,16 @@ class AuditLogger:
                 'user': user or 'system',
                 'ip_address': ip_address or 'unknown',
                 'details': details or {},
-                'error': error
+                'error': error,
+                'actor': actor or {'kind': 'system', 'label': user or 'system'},
+                'trigger': trigger or {'cause': 'event'},
             }
 
             # Log to audit file as JSON for easy parsing
             self.audit_logger.info(json.dumps(audit_entry))
+            # Mirror into the tamper-evident hash chain. Isolated: a chain
+            # failure must never break audit logging or the audited operation.
+            self._chain_append(audit_entry)
 
         except Exception as e:
             logger.error(f"Failed to write audit log: {e}")

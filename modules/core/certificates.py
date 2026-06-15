@@ -86,6 +86,34 @@ class CertificateManager:
         # Per-domain locks to prevent concurrent create/renew on the same domain
         self._domain_locks: dict[str, threading.Lock] = {}
         self._domain_locks_mutex = threading.Lock()
+        # Optional audit logger, injected by the factory so unattended renewals
+        # produce an attributed (actor.kind='scheduler') audit record. None in
+        # standalone/unit contexts, where emission is simply skipped.
+        self._audit_logger = None
+        self._renewal_job_id = 'certificate_renewal_check'
+
+    def set_audit_logger(self, audit_logger):
+        """Wire an AuditLogger so scheduled renewals are recorded. Optional."""
+        self._audit_logger = audit_logger
+
+    def _audit_scheduled_renew(self, domain, status, error=None):
+        """Emit an attributed audit record for an unattended renewal. No-op
+        when no audit logger is wired; never raises."""
+        if not self._audit_logger:
+            return
+        try:
+            from .audit_context import audit_context_for_scheduler
+            ctx = audit_context_for_scheduler(self._renewal_job_id)
+            self._audit_logger.log_operation(
+                operation='renew', resource_type='certificate',
+                resource_id=domain, status=status,
+                details={'force': False},
+                error=(str(error)[:500] if error else None),
+                user=ctx.get('user'), ip_address=ctx.get('ip'),
+                actor=ctx.get('actor'), trigger=ctx.get('trigger'),
+            )
+        except Exception:  # pragma: no cover - defensive
+            logger.debug("Failed to emit scheduled-renew audit for a domain")
 
     @staticmethod
     def _certificate_info_cache_ttl() -> int:
@@ -1576,9 +1604,11 @@ class CertificateManager:
                         self.renew_certificate(domain)
                         summary['renewed'] += 1
                         logger.info(f"Successfully renewed certificate for {domain}")
+                        self._audit_scheduled_renew(domain, 'success')
                     except Exception as e:
                         summary['failed'] += 1
                         logger.error(f"Failed to renew certificate for {domain}: {e}")
+                        self._audit_scheduled_renew(domain, 'failure', error=e)
 
             except Exception as e:
                 summary['failed'] += 1

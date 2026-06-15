@@ -420,10 +420,18 @@ def initialize_managers(container: AppContainer, app):
     )
 
     audit_dir = container.logs_dir / "audit"
-    audit_logger = AuditLogger(audit_dir)
+    # The tamper-evident hash chain lives under the persistent data tree
+    # (not the ephemeral logs/ tree) so it is the durable, verifiable artifact.
+    audit_chain_dir = container.data_dir / "audit"
+    audit_logger = AuditLogger(audit_dir, chain_dir=audit_chain_dir)
     # Let AuthManager emit RBAC + scope denials through the same audit
     # surface the rest of the app uses (2026-05-12 API auth audit, F-2).
     auth_manager.set_audit_logger(audit_logger)
+    # Let unattended (scheduler-driven) renewals produce an attributed audit
+    # record — the headline agentic-audit-trail case where no request actor
+    # exists. Optional setter so standalone/test contexts stay decoupled.
+    certificate_manager.set_audit_logger(audit_logger)
+    client_cert_manager.set_audit_logger(audit_logger)
 
     # OIDC manager — additive identity source. Disabled by default; the
     # admin opts in via Settings → SSO. Lives alongside AuthManager so

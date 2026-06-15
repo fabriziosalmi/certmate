@@ -22,6 +22,7 @@ from ..core.auth import ROLE_HIERARCHY
 from ..core.utils import utc_now_iso
 from ..core.certificates import DomainOperationInProgress
 from ..core.cert_service import CertificateService, DomainOutOfScope
+from ..core.audit_context import audit_context_from_request
 
 _DOMAIN_RE = re.compile(r'^(\*\.)?([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$')
 
@@ -838,6 +839,7 @@ def create_api_resources(api, models, managers):
                     }, 400
 
                 user = getattr(request, 'current_user', None) or {}
+                audit_ctx = audit_context_from_request()
 
                 # Async opt-in: validate + authorize synchronously (immediate
                 # 4xx on bad input/scope/config), then defer the blocking
@@ -856,6 +858,7 @@ def create_api_resources(api, models, managers):
                         elliptic_curve=data.get('elliptic_curve'),
                         user=user,
                         ip_address=request.remote_addr,
+                        audit_ctx=audit_ctx,
                     )
                     job_id = cert_executor.submit(
                         'create', domain,
@@ -876,6 +879,7 @@ def create_api_resources(api, models, managers):
                     elliptic_curve=data.get('elliptic_curve'),
                     user=user,
                     ip_address=request.remote_addr,
+                    audit_ctx=audit_ctx,
                 )
 
                 event_bus = current_app.config.get('EVENT_BUS')
@@ -1725,10 +1729,12 @@ def create_api_resources(api, models, managers):
                 if err:
                     return {'error': err}, 400
                 user = getattr(request, 'current_user', None) or {}
+                audit_ctx = audit_context_from_request()
 
                 if _wants_async(payload) and cert_executor is not None:
                     prepared = cert_service.prepare_renew(
                         domain=domain, user=user, ip_address=request.remote_addr,
+                        audit_ctx=audit_ctx,
                     )
                     job_id = cert_executor.submit(
                         'renew', domain,
@@ -1739,6 +1745,7 @@ def create_api_resources(api, models, managers):
                 result = cert_service.renew(
                     domain=domain, force=force,
                     user=user, ip_address=request.remote_addr,
+                    audit_ctx=audit_ctx,
                 )
 
                 event_bus = current_app.config.get('EVENT_BUS')
@@ -1797,6 +1804,7 @@ def create_api_resources(api, models, managers):
                     elliptic_curve=data.get('elliptic_curve'),
                     user=user,
                     ip_address=request.remote_addr,
+                    audit_ctx=audit_context_from_request(),
                 )
 
                 if _wants_async(data) and cert_executor is not None:
@@ -1904,6 +1912,16 @@ def create_api_resources(api, models, managers):
                         'hint': 'Only domains tracked in settings can have auto-renew toggled.'
                     }, 404
 
+                if audit_logger:
+                    actx = audit_context_from_request()
+                    audit_logger.log_operation(
+                        operation='set_auto_renew', resource_type='certificate',
+                        resource_id=domain, status='success',
+                        details={'auto_renew': enabled},
+                        user=actx.get('user'), ip_address=actx.get('ip'),
+                        actor=actx.get('actor'), trigger=actx.get('trigger'),
+                    )
+
                 event_bus = current_app.config.get('EVENT_BUS')
                 if event_bus:
                     event_bus.publish('certificate_auto_renew_changed', {
@@ -1946,7 +1964,32 @@ def create_api_resources(api, models, managers):
                 summary = deploy_manager.run_manual_deploy(domain)
             except Exception as e:
                 logger.error(f"Manual deploy hook run failed for {domain}: {e}")
+                if audit_logger:
+                    actx = audit_context_from_request()
+                    audit_logger.log_operation(
+                        operation='deploy', resource_type='certificate',
+                        resource_id=domain, status='failure', error=str(e)[:500],
+                        details={'manual': True},
+                        user=actx.get('user'), ip_address=actx.get('ip'),
+                        actor=actx.get('actor'), trigger=actx.get('trigger'),
+                    )
                 return {'error': 'Manual deploy hook run failed'}, 500
+
+            if audit_logger:
+                actx = audit_context_from_request()
+                audit_logger.log_operation(
+                    operation='deploy', resource_type='certificate',
+                    resource_id=domain,
+                    status='success' if summary.get('ok') else 'failure',
+                    details={
+                        'manual': True,
+                        'total': summary.get('total'),
+                        'succeeded': summary.get('succeeded'),
+                        'failed': summary.get('failed'),
+                    },
+                    user=actx.get('user'), ip_address=actx.get('ip'),
+                    actor=actx.get('actor'), trigger=actx.get('trigger'),
+                )
 
             event_bus = current_app.config.get('EVENT_BUS')
             if event_bus:
@@ -2747,21 +2790,6 @@ def create_api_resources(api, models, managers):
                         return {
                             'success': True,
                             'message': f'{provider_name} configuration appears valid',
-                            'ca_provider': ca_provider,
-                            'acme_url': ca_manager.ca_providers[ca_provider]['production_url']
-                        }
-
-                    elif ca_provider == 'buypass':
-                        email = config.get('email', '')
-                        if not email:
-                            return {
-                                'success': False,
-                                'message': 'Email is required for BuyPass Go',
-                                'ca_provider': ca_provider
-                            }
-                        return {
-                            'success': True,
-                            'message': 'BuyPass Go configuration appears valid',
                             'ca_provider': ca_provider,
                             'acme_url': ca_manager.ca_providers[ca_provider]['production_url']
                         }
