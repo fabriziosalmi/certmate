@@ -1838,6 +1838,14 @@ iptables -A INPUT -p tcp --dport 8000 -s 192.168.0.0/16 -j ACCEPT
 iptables -A INPUT -p tcp --dport 8000 -j DROP
 ```
 
+The rules above confine **inbound** access. You can also confine **outbound**
+traffic: route CertMate's HTTP(S) egress through a forward proxy and deny it any
+other route to the internet, so it can reach only your CA, DNS provider, object
+storage, and notification endpoints. With [Secure Proxy Manager](https://github.com/fabriziosalmi/secure-proxy-manager)
+v3.9.0+ this is a built-in default-deny egress allowlist. See
+[Confining outbound traffic](docs/installation.md#confining-outbound-traffic-egress-hardening)
+for a worked example.
+
 ### Performance Optimization
 
 #### Production Deployment
