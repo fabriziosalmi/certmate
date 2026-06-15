@@ -111,7 +111,7 @@ CertMate solves the complexity of SSL certificate management in modern distribut
 - **Backward Compatibility** - Existing installations continue working without changes
 
 ### **Notifications & Automation**
-- **Multi-Channel Notifications** - Email (SMTP), Slack, Discord, and generic webhooks
+- **Multi-Channel Notifications** - Email (SMTP), Slack, Discord, Telegram, ntfy, Gotify, and generic webhooks
 - **Webhook HMAC Signatures** - SHA-256 signed payloads for secure webhook verification
 - **Deploy Hooks** - Post-issuance shell commands to reload Nginx/Apache or run custom scripts
 - **Weekly Digest** - Scheduled email summary of certificate status and upcoming renewals
@@ -2174,10 +2174,17 @@ CertMate includes a built-in notification system configurable from Settings > No
 - **Email (SMTP)** - Certificate expiry warnings and renewal confirmations
 - **Slack** - Incoming webhook integration for team channels
 - **Discord** - Webhook notifications for Discord servers
+- **Telegram** - Bot API messages (bot token + chat ID)
+- **ntfy** - Push to an [ntfy](https://ntfy.sh) topic (self-hostable); optional access token, per-message priority
+- **Gotify** - Push to a self-hosted [Gotify](https://gotify.net) server (server URL + app token, numeric priority)
 - **Generic Webhooks** - HTTP POST with HMAC-SHA256 signed payloads for custom integrations
 - **Weekly Digest** - Scheduled summary of certificate status and upcoming renewals
 
 All notification channels support per-event filtering (created, renewed, expiring, failed) and can be tested from the settings UI.
+
+> **Microsoft Teams:** no dedicated adapter is needed. Use a Teams channel's
+> built-in email address (channel → ... → Get email address) as a recipient on
+> the Email (SMTP) channel — Teams posts the message into the channel for you.
 
 ### Downgrades & Recovery
 

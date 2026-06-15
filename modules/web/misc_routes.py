@@ -243,15 +243,29 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
             # and deep-merge against the existing notifications block
             # so a partial UI submit (e.g. toggling `enabled` without
             # re-typing the SMTP password) does not destroy siblings.
-            from modules.core.settings import _strip_masked_values, _deep_merge_dict
+            from modules.core.settings import (
+                _strip_masked_values, _deep_merge_dict, _restore_masked_list_secrets,
+            )
             clean_data = _strip_masked_values(data)
 
             def _mutator(s):
                 existing = s.get('notifications')
                 if isinstance(existing, dict) and isinstance(clean_data, dict):
-                    s['notifications'] = _deep_merge_dict(existing, clean_data)
+                    merged = _deep_merge_dict(existing, clean_data)
                 else:
-                    s['notifications'] = clean_data
+                    existing = existing if isinstance(existing, dict) else {}
+                    merged = clean_data
+                # The webhooks list is replaced wholesale by the merge above, so
+                # per-channel secrets/tokens the UI sent back masked must be
+                # restored from the prior on-disk list (sentinel = unchanged).
+                if isinstance(merged, dict):
+                    old_ch = existing.get('channels') if isinstance(existing, dict) else None
+                    new_ch = merged.get('channels')
+                    old_whs = old_ch.get('webhooks') if isinstance(old_ch, dict) else None
+                    new_whs = new_ch.get('webhooks') if isinstance(new_ch, dict) else None
+                    if isinstance(new_whs, list):
+                        _restore_masked_list_secrets(old_whs, new_whs)
+                s['notifications'] = merged
                 return s
 
             settings_manager.update(_mutator)
