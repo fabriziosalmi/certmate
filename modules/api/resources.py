@@ -2794,21 +2794,6 @@ def create_api_resources(api, models, managers):
                             'acme_url': ca_manager.ca_providers[ca_provider]['production_url']
                         }
 
-                    elif ca_provider == 'buypass':
-                        email = config.get('email', '')
-                        if not email:
-                            return {
-                                'success': False,
-                                'message': 'Email is required for BuyPass Go',
-                                'ca_provider': ca_provider
-                            }
-                        return {
-                            'success': True,
-                            'message': 'BuyPass Go configuration appears valid',
-                            'ca_provider': ca_provider,
-                            'acme_url': ca_manager.ca_providers[ca_provider]['production_url']
-                        }
-
                     elif ca_provider == 'private_ca':
                         # Test Private CA connection
                         acme_url = config.get('acme_url', '')

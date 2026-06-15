@@ -1370,9 +1370,6 @@
                 case 'google':
                     infoText = '<i class="fab fa-google mr-1 text-blue-500"></i> Free certificates from Google Trust Services (requires EAB)';
                     break;
-                case 'buypass':
-                    infoText = '<i class="fas fa-lock mr-1 text-green-500"></i> Free certificates with 180-day validity from BuyPass Go';
-                    break;
                 case 'actalis':
                     infoText = '<i class="fas fa-certificate mr-1 text-blue-500"></i> Free 90-day DV certificates from Actalis, European CA (requires EAB, single domain only)';
                     break;
@@ -1384,6 +1381,12 @@
                     break;
                 case 'private_ca':
                     infoText = '<i class="fas fa-building mr-1 text-purple-500"></i> Internal CA certificates (requires ACME URL configured in Settings)';
+                    break;
+                default:
+                    // A certificate may still carry a removed/unknown CA in its
+                    // metadata (e.g. the discontinued BuyPass). Show a clear note
+                    // instead of a blank line.
+                    infoText = '<i class="fas fa-exclamation-triangle mr-1 text-yellow-500"></i> This certificate authority is no longer available; reissue with a supported CA';
                     break;
             }
             infoDiv.innerHTML = infoText;
