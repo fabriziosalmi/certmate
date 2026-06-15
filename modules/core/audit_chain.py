@@ -125,6 +125,10 @@ def verify_records(records) -> Dict[str, Any]:
     if not records:
         result["ok"] = True
         result["reason"] = "empty chain"
+        # The head of an empty chain is the genesis prev_hash, matching what
+        # build_manifest records for an empty slice (so an empty signed bundle
+        # verifies consistently).
+        result["head_hash"] = GENESIS_PREV
         return result
 
     prev_hash = GENESIS_PREV

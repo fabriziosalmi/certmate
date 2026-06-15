@@ -54,6 +54,24 @@ def verify_bundle(bundle, expected_pubkey_pem=None):
     manifest = bundle.get("manifest") or {}
     entries = bundle.get("entries") or []
 
+    # 0. Reject a format/algorithm this verifier does not understand, rather
+    #    than silently mis-handling a future bundle version.
+    if manifest.get("format_version") != audit_chain.BUNDLE_FORMAT_VERSION:
+        result["reason"] = f"unsupported bundle format_version {manifest.get('format_version')!r}"
+        return result
+    if manifest.get("algorithm") not in (None, "ed25519"):
+        result["reason"] = f"unsupported signature algorithm {manifest.get('algorithm')!r}"
+        return result
+
+    # A bundle must carry either both a signature and a public key, or neither.
+    # Half-present is rejected so a tampered "signed" bundle cannot be silently
+    # downgraded to a clean-looking "unsigned" one by stripping one field.
+    sig = bundle.get("bundle_signature")
+    pem = manifest.get("public_key_pem")
+    if bool(sig) != bool(pem):
+        result["reason"] = "inconsistent bundle: signature and public key are not both present"
+        return result
+
     # 1. Structural chain verification of the entries.
     chain = audit_chain.verify_records(entries)
     for k in ("count", "first_seq", "last_seq", "head_hash", "error_seq"):
@@ -72,9 +90,7 @@ def verify_bundle(bundle, expected_pubkey_pem=None):
         result["reason"] = "manifest seq range / count does not match the entries"
         return result
 
-    # 3. Signature (when present).
-    sig = bundle.get("bundle_signature")
-    pem = manifest.get("public_key_pem")
+    # 3. Signature (present iff both sig and pem were supplied — enforced above).
     if sig and pem:
         result["signed"] = True
         signing = _import_signing()
@@ -136,6 +152,10 @@ def main(argv=None) -> int:
             tag = f"signed by {result['fingerprint']}" if result["signed"] else "UNSIGNED"
             print(f"OK: audit bundle {result['reason']} "
                   f"({result['count']} entries, seq {result['first_seq']}..{result['last_seq']}; {tag})")
+            if result["signed"] and expected_pem is None:
+                print("note: public key NOT pinned — the fingerprint is self-asserted by the "
+                      "bundle. Pin the instance key with --pubkey to bind the attribution.",
+                      file=sys.stderr)
         else:
             where = f" at seq {result['error_seq']}" if result.get("error_seq") is not None else ""
             print(f"FAIL: audit bundle invalid{where}: {result['reason']}", file=sys.stderr)

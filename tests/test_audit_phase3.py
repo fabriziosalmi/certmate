@@ -177,6 +177,35 @@ def test_unsigned_bundle_verifies_chain_only(make_audit, tmp_path):
     assert not audit_verify.verify_bundle(bundle, expected_pubkey_pem=s.public_key_pem())['ok']
 
 
+def test_empty_signed_bundle_verifies(make_audit, tmp_path):
+    # An export with no entries (e.g. ?from_seq past the end, or before the first
+    # audit event) must still verify consistently, not fail on head_hash.
+    audit = make_audit(tmp_path, signer=AuditSigner(tmp_path))
+    _emit(audit, 3)
+    bundle = audit.export_bundle(from_seq=99)  # nothing at/after seq 99
+    assert bundle['entries'] == []
+    r = audit_verify.verify_bundle(bundle)
+    assert r['ok'] and r['signed']
+
+
+def test_half_signed_bundle_is_rejected(make_audit, tmp_path):
+    bundle, _ = _signed_bundle(make_audit, tmp_path)
+    no_pem = copy.deepcopy(bundle)
+    no_pem['manifest']['public_key_pem'] = None
+    assert not audit_verify.verify_bundle(no_pem)['ok']
+    no_sig = copy.deepcopy(bundle)
+    no_sig['bundle_signature'] = None
+    assert not audit_verify.verify_bundle(no_sig)['ok']
+
+
+def test_unsupported_format_is_rejected(make_audit, tmp_path):
+    bundle, _ = _signed_bundle(make_audit, tmp_path)
+    bad = copy.deepcopy(bundle)
+    bad['manifest']['format_version'] = 2
+    r = audit_verify.verify_bundle(bad)
+    assert not r['ok'] and 'format_version' in r['reason']
+
+
 def test_cli_bundle_mode(make_audit, tmp_path):
     bundle, _ = _signed_bundle(make_audit, tmp_path)
     p = tmp_path / 'bundle.json'
