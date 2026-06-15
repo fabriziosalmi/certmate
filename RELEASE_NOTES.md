@@ -1,3 +1,24 @@
+## v2.16.1 (Patch — remove the discontinued BuyPass CA)
+
+BuyPass Go SSL has been discontinued — BuyPass stopped accepting new ACME accounts on 2025-09-15, issued its last certificate on 2025-10-31, and terminated the service with all certificates expired by 2026-04-15. Selecting it could only fail, so it is removed as a CA option.
+
+### Changed
+
+- **Removed BuyPass Go as a selectable CA provider** ([#316](https://github.com/fabriziosalmi/certmate/pull/316)): dropped from the CA registry, the API `ca_provider` enum, the test-CA-provider endpoint, the dashboard and Settings UI, the documented CA list, and its unit test. The other CAs (Let's Encrypt, ZeroSSL, Google Trust Services, Actalis, DigiCert ACME, SSL.com, Private CA) are unaffected. A certificate whose stored metadata still names BuyPass degrades gracefully — `certbot renew` runs against the on-disk config without re-resolving the CA, a reissue surfaces a clear error that is audited as a failure, and the dashboard shows a "this certificate authority is no longer available; reissue with a supported CA" note instead of a blank line.
+
+Thanks to Joni for flagging the BuyPass discontinuation on LinkedIn.
+
+## v2.16.0 (Feature — agentic cert-lifecycle audit trail)
+
+When an AI/MCP agent renews or replaces certificates on a schedule, "it ran" is not an audit trail. This release records what changed, when, and on whose authority, in a form a third party can verify.
+
+### Features
+
+- **Attribution on every certificate-lifecycle action** ([#313](https://github.com/fabriziosalmi/certmate/pull/313)): create, renew, reissue, deploy, the auto-renew toggle, and unattended scheduled renewals are now recorded with a structured `actor` (human vs API token vs AI agent, down to the API key id) and `trigger` (manual, API, agent, or the scheduler job). The previously-silent success paths and scheduled renewals emitted no audit record at all; they do now. `actor.kind` is derived only from the authenticated identity — the client-supplied `X-CertMate-Agent-Session` header is an informational claim and never promotes a caller to `agent`.
+- **AI agent keys** ([#313](https://github.com/fabriziosalmi/certmate/pull/313)): Settings > API Keys gains an "AI agent key" toggle (`is_agent`, also on `POST /api/keys`); point the MCP server at a dedicated agent key and its actions are attributed as `actor.kind="agent"`.
+- **Tamper-evident hash chain + verifier** ([#313](https://github.com/fabriziosalmi/certmate/pull/313)): entries are appended to a SHA-256 hash chain (`data/audit/certificate_audit.chain.jsonl`) so any interior modification, deletion, or reorder is detectable. `GET /api/audit/verify` (admin) and a standalone, standard-library-only verifier (`python -m modules.core.audit_verify`) check integrity — the latter without running or trusting CertMate. No new dependencies; disable with `CERTMATE_AUDIT_CHAIN=0`.
+- **Compliance documentation** ([#313](https://github.com/fabriziosalmi/certmate/pull/313)): `docs/compliance.md` maps the trail honestly to NIS2, EU AI Act Art. 50 (transparency spirit), and ISO 42001, with explicit non-claims; the audit and MCP docs are corrected and expanded. The hash chain attests authenticity and ordering of the recorded entries; it does not detect tail truncation without an external head anchor and does not bind the operator — off-box anchoring of signed checkpoints is a planned follow-up.
+
 ## v2.15.0 (Feature — notification channels, Grafana monitoring, MCP agent tooling)
 
 Three independent additions toward operating CertMate from where you already are: more notification targets, a ready observability bundle, and an MCP server an AI agent can drive on a schedule.

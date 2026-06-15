@@ -77,15 +77,6 @@ class CAManager:
                 'certificate_types': ['DV'],
                 'description': 'Free SSL certificates from Google Trust Services'
             },
-            'buypass': {
-                'name': 'BuyPass Go',
-                'production_url': 'https://api.buypass.com/acme/directory',
-                'staging_url': 'https://api.test4.buypass.no/acme/directory',
-                'requires_eab': False,
-                'supports_wildcard': False,
-                'certificate_types': ['DV'],
-                'description': 'Free SSL certificates with 180-day validity from BuyPass'
-            },
             'sslcom': {
                 'name': 'SSL.com',
                 'production_url': 'https://acme.ssl.com/sslcom-dv-rsa',

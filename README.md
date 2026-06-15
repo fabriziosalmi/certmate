@@ -56,7 +56,7 @@ CertMate solves the complexity of SSL certificate management in modern distribut
 ## Key Features
 
 ### **Certificate Management**
-- **Multiple CA Providers** - Support for Let's Encrypt, ZeroSSL, Google Trust Services, BuyPass Go, Actalis, DigiCert ACME, SSL.com, and Private CAs
+- **Multiple CA Providers** - Support for Let's Encrypt, ZeroSSL, Google Trust Services, Actalis, DigiCert ACME, SSL.com, and Private CAs
 - **Let's Encrypt Integration** - Free, automated SSL certificates, with the staging environment available as a dedicated CA entry for testing
 - **DigiCert ACME Support** - Enterprise-grade certificates with External Account Binding (EAB)
 - **Actalis Support** - Free 90-day DV certificates from a European CA via ACME with EAB

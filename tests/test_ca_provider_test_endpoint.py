@@ -3,11 +3,10 @@ Functional tests for POST /api/settings/test-ca-provider.
 
 Before Actalis support landed, the endpoint only knew letsencrypt,
 digicert and private_ca: every other CA the settings UI offers
-(zerossl, google, buypass, sslcom) fell through to
+(zerossl, google, sslcom) fell through to
 "Invalid CA provider type" with HTTP 400, so the Test CA Connection
 button could never succeed for them. The fixed-directory EAB CAs now
-share one offline-validation branch, and buypass got an email-only
-branch like letsencrypt.
+share one offline-validation branch.
 """
 
 import pytest
@@ -67,14 +66,6 @@ class TestCAProviderTestEndpoint:
                 "eab_hmac_key": "hmac-canonical-spelling-long-enough-to-pass",
                 "email": "admin@example.com",
             },
-        })
-        assert r.status_code == 200
-        assert r.json()["success"] is True
-
-    def test_buypass_email_only(self, api):
-        r = api.post_json("/api/settings/test-ca-provider", {
-            "ca_provider": "buypass",
-            "config": {"email": "admin@example.com"},
         })
         assert r.status_code == 200
         assert r.json()["success"] is True
