@@ -76,8 +76,16 @@ operate certificates on a schedule.
   the recorded entries", verifiable by a third party who holds an exported copy.
 - **Authenticity, not completeness.** Audit writes are best-effort and never
   block a certificate operation; the chain proves the recorded entries are
-  authentic and ordered, and a missing `seq` proves a deletion, but a write that
-  failed before it was recorded leaves no entry to verify.
+  authentic and ordered, and a missing interior `seq` proves a deletion, but a
+  write that failed before it was recorded leaves no entry to verify.
+- **Tail truncation is not detected on its own.** Removing entries from the
+  **end** of the chain leaves a shorter-but-internally-consistent chain that
+  still verifies as intact — the verifier has no external reference for the
+  expected head. Detecting tail truncation requires an external head anchor
+  (the signed-checkpoint anchoring of Phase 3, not in this version). Until then,
+  treat "intact" as "the entries present are authentic and in order", and keep
+  an out-of-band record of the latest `head_hash` / `last_seq` if you need to
+  detect end-removal.
 - **The agent-session header is a claim.** It is recorded for correlation but is
   client-supplied; the trustworthy identity is the authenticated API key.
 - **History boundary.** The chain starts when the feature is first enabled;

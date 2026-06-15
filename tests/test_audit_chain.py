@@ -157,6 +157,47 @@ def test_empty_chain_is_ok(tmp_path):
     assert result['ok'] is True
 
 
+@pytest.mark.parametrize('bad', ['[1, 2, 3]', '42', '"a string"', 'null', 'true'])
+def test_non_object_line_does_not_crash_verifier(make_audit, tmp_path, bad):
+    # A valid-JSON-but-non-object line must be reported as malformed, never
+    # raise AttributeError (which previously could crash app startup via
+    # _recover_chain_state).
+    audit = make_audit(tmp_path)
+    _emit(audit, 2)
+    lines = audit.audit_chain_file.read_text(encoding='utf-8').splitlines()
+    lines.insert(1, bad)
+    _rewrite_lines(audit.audit_chain_file, lines)
+    result = audit_chain.verify_chain(audit.audit_chain_file)
+    assert result['ok'] is False
+    assert 'malformed' in result['reason'] or 'unparseable' in result['reason']
+
+
+def test_recovery_survives_non_object_line(make_audit, tmp_path):
+    # A non-object line in the chain must not abort AuditLogger.__init__.
+    a1 = make_audit(tmp_path)
+    _emit(a1, 2)
+    a1.audit_logger.removeHandler(a1.file_handler)
+    a1.file_handler.close()
+    with open(tmp_path / audit_chain.CHAIN_FILENAME, 'a', encoding='utf-8') as f:
+        f.write('[1,2,3]\n')
+    a2 = make_audit(tmp_path)            # must not raise
+    assert a2._next_seq == 2             # recovered from the last good record
+
+
+def test_tail_truncation_is_a_known_limitation(make_audit, tmp_path):
+    # Documented limitation: removing entries from the END leaves a shorter but
+    # internally-consistent chain that still verifies as intact. Detecting this
+    # needs an external head anchor (Phase 3). This test pins the current
+    # behaviour so a future change to it is deliberate.
+    audit = make_audit(tmp_path)
+    _emit(audit, 5)
+    lines = audit.audit_chain_file.read_text(encoding='utf-8').splitlines()
+    _rewrite_lines(audit.audit_chain_file, lines[:3])  # drop the last 2
+    result = audit_chain.verify_chain(audit.audit_chain_file)
+    assert result['ok'] is True
+    assert result['last_seq'] == 2  # silently shorter — the known gap
+
+
 def test_missing_chain_reports_not_exist(tmp_path):
     result = audit_chain.verify_chain(tmp_path / 'nope.jsonl')
     assert result['ok'] is False

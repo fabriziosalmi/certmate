@@ -109,6 +109,16 @@ def verify_chain(path) -> Dict[str, Any]:
             )
             return result
 
+        # Valid JSON but not an object (e.g. a bare array/number/null) is a
+        # malformed record, not a chain we can read — report, never crash.
+        if not isinstance(rec, dict):
+            result["error_seq"] = expected_seq
+            result["reason"] = (
+                "truncated or unparseable trailing line (likely an interrupted "
+                "write)" if is_last else f"malformed (non-object) line at position {idx}"
+            )
+            return result
+
         seq = rec.get("seq")
         entry = rec.get("entry")
         rec_prev = rec.get("prev_hash")

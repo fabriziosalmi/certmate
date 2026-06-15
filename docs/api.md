@@ -704,11 +704,14 @@ python -m modules.core.audit_verify data/audit/certificate_audit.chain.jsonl
 Exit code `0` intact, `1` broken (with the offending `seq` and reason), `2`
 missing/unreadable.
 
-> **Threat-model honesty.** The hash chain detects tampering by anyone who does
-> not hold the writer's running state, but it does **not** bind the operator,
-> who holds the file and could recompute and rewrite the whole chain.
-> Constraining the operator requires external anchoring of signed checkpoints,
-> which this version does not implement. See [compliance.md](./compliance.md).
+> **Threat-model honesty.** The chain detects an interior modification,
+> deletion, or reorder by anyone who does not hold the writer's running state.
+> It does **not** detect entries removed from the *end* (tail truncation)
+> without an external head anchor, and it does **not** bind the operator, who
+> holds the file and could recompute and rewrite the whole chain. Constraining
+> the operator (and detecting tail truncation) requires external anchoring of
+> signed checkpoints, which this version does not implement. See
+> [compliance.md](./compliance.md).
 
 ---
 

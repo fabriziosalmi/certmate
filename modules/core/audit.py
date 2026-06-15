@@ -84,14 +84,19 @@ class AuditLogger:
                         rec = json.loads(line)
                     except json.JSONDecodeError:
                         continue  # skip a corrupt/truncated line
+                    if not isinstance(rec, dict):
+                        continue  # a non-object line is not a valid record
                     if isinstance(rec.get('seq'), int) and rec.get('hash'):
                         last_good = rec
             if last_good is not None:
                 self._next_seq = last_good['seq'] + 1
                 self._last_hash = last_good['hash']
-        except OSError as e:
-            logger.error(f"Could not recover audit chain state: {e}")
-            # Disable the chain rather than fork it from a wrong baseline.
+        except Exception as e:
+            # Recovery runs inside AuditLogger.__init__, which the factory calls
+            # unguarded — it must NEVER abort app startup (that would take the
+            # renewal scheduler down with it). On any trouble, disable the chain
+            # rather than fork it from a wrong baseline or raise.
+            logger.error(f"Could not recover audit chain state; disabling chain: {e}")
             self._chain_enabled = False
 
     def _chain_append(self, entry: Dict[str, Any]) -> None:
@@ -117,8 +122,13 @@ class AuditLogger:
 
     def verify_chain(self) -> Dict[str, Any]:
         """Verify this instance's hash chain. Thin wrapper over
-        :func:`audit_chain.verify_chain` for in-process callers and tests."""
-        return audit_chain.verify_chain(self.audit_chain_file)
+        :func:`audit_chain.verify_chain` for in-process callers and tests.
+
+        Takes the append lock so a verify that races an in-flight append does
+        not observe a half-written final line and report a spurious truncation
+        (the standalone CLI verifier cannot take the lock and accepts that)."""
+        with self._chain_lock:
+            return audit_chain.verify_chain(self.audit_chain_file)
 
     def log_operation(
         self,
