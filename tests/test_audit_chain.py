@@ -4,12 +4,15 @@ chain and its standalone verifier.
 """
 
 import json
+from types import SimpleNamespace
 
 import pytest
+from flask import Flask
 
 from modules.core.audit import AuditLogger
 from modules.core import audit_chain
 from modules.core import audit_verify
+from modules.web.misc_routes import register_misc_routes
 
 
 @pytest.fixture
@@ -229,3 +232,48 @@ def test_cli_json_mode(make_audit, tmp_path, capsys):
     audit_verify.main(['--json', str(audit.audit_chain_file)])
     out = json.loads(capsys.readouterr().out)
     assert out['ok'] is True and out['count'] == 2
+
+
+# --------------------------------------------------------------------------
+# GET /api/audit/verify  (admin, read-only)
+# --------------------------------------------------------------------------
+
+def _passthrough(*_a, **_k):
+    def deco(fn):
+        return fn
+    return deco
+
+
+def _verify_app(managers):
+    app = Flask(__name__)
+    auth_manager = SimpleNamespace(require_role=_passthrough)
+    register_misc_routes(app, managers, _passthrough, auth_manager)
+    return app
+
+
+def test_verify_endpoint_ok(make_audit, tmp_path):
+    audit = make_audit(tmp_path)
+    _emit(audit, 3)
+    r = _verify_app({'audit': audit}).test_client().get('/api/audit/verify')
+    assert r.status_code == 200
+    body = r.get_json()
+    assert body['ok'] is True
+    assert body['count'] == 3
+    assert body['head_hash']
+
+
+def test_verify_endpoint_409_on_tamper(make_audit, tmp_path):
+    audit = make_audit(tmp_path)
+    _emit(audit, 3)
+    lines = audit.audit_chain_file.read_text(encoding='utf-8').splitlines()
+    rec = json.loads(lines[0]); rec['entry']['status'] = 'tampered'
+    lines[0] = json.dumps(rec)
+    _rewrite_lines(audit.audit_chain_file, lines)
+    r = _verify_app({'audit': audit}).test_client().get('/api/audit/verify')
+    assert r.status_code == 409
+    assert r.get_json()['ok'] is False
+
+
+def test_verify_endpoint_503_without_audit():
+    r = _verify_app({}).test_client().get('/api/audit/verify')
+    assert r.status_code == 503

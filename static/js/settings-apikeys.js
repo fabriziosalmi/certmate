@@ -26,7 +26,7 @@
             keys: {},
             loading: true,
             createdToken: '',
-            newKey: { name: '', role: 'viewer', expires_at: '', allowed_domains: '' },
+            newKey: { name: '', role: 'viewer', expires_at: '', allowed_domains: '', is_agent: false },
 
             loadKeys: function () {
                 var self = this;
@@ -103,6 +103,11 @@
                 if (domains !== undefined) {
                     payload.allowed_domains = domains;
                 }
+                // Mark this key as belonging to an AI/MCP agent so its actions
+                // are attributed in the audit trail as actor.kind='agent'.
+                if (self.newKey.is_agent) {
+                    payload.is_agent = true;
+                }
                 fetch('/api/keys', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -113,7 +118,7 @@
                         return r.json().then(function (data) {
                             if (r.ok) {
                                 self.createdToken = data.token;
-                                self.newKey = { name: '', role: 'viewer', expires_at: '', allowed_domains: '' };
+                                self.newKey = { name: '', role: 'viewer', expires_at: '', allowed_domains: '', is_agent: false };
                                 self.loadKeys();
                                 showMessage('API key "' + data.name + '" created', 'success');
                             } else {
