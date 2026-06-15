@@ -1,0 +1,56 @@
+# CertMate alerting rules for Prometheus.
+#
+# Load with, in prometheus.yml:
+#   rule_files:
+#     - /etc/prometheus/certmate-alerts.yml
+#
+# Every rule below is built on a metric CertMate actually emits at /metrics.
+# certmate_certificate_expiry_days is clamped at 0 (an expired cert reads 0,
+# never negative), so "expired" is detected via the by_status gauge.
+groups:
+  - name: certmate-availability
+    rules:
+      - alert: CertMateDown
+        expr: up{job="certmate"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "CertMate is not being scraped ({{ $labels.instance }})"
+          description: "Prometheus has not scraped CertMate for 5m. The automatic renewal loop may be down while the dashboard still looks healthy."
+
+  - name: certmate-certificates
+    rules:
+      - alert: CertMateCertificateExpiringSoon
+        expr: (min by (domain) (certmate_certificate_expiry_days) < 14) and (min by (domain) (certmate_certificate_expiry_days) > 2)
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Certificate for {{ $labels.domain }} expires in < 14 days"
+          description: "{{ $labels.domain }} has {{ $value | printf \"%.0f\" }} days left. Confirm automatic renewal is running."
+
+      - alert: CertMateCertificateExpiringCritical
+        expr: min by (domain) (certmate_certificate_expiry_days) <= 2
+        for: 30m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Certificate for {{ $labels.domain }} expires within 2 days"
+          description: "{{ $labels.domain }} has {{ $value | printf \"%.0f\" }} days left. Renew immediately."
+
+      - alert: CertMateCertificatesExpired
+        expr: sum(certmate_certificates_by_status{status="expired"}) > 0
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $value }} certificate(s) have expired"
+          description: "CertMate reports expired certificates. Automatic renewal has failed for at least one domain."
+
+# NOTE: alerts on renewal/issuance outcomes, ACME errors and rate-limit hits
+# are intentionally omitted: those metrics (certmate_certificate_renewals_total,
+# certmate_acme_errors_total, certmate_acme_rate_limit_hits_total, and the
+# renewal_failed status) are defined by CertMate but not yet recorded at
+# runtime, so an alert on them could never fire. Add them back together with
+# the record_* instrumentation.

@@ -1,0 +1,21 @@
+# Example Prometheus scrape job for CertMate.
+#
+# CertMate's /metrics endpoint requires the admin role, so the scrape must
+# present an admin-scoped API token as a Bearer credential. Create a dedicated
+# token in Settings > API Keys (admin role) and use it here — do not reuse a
+# human token. Prefer `credentials_file` over inlining the secret in this file.
+#
+# Drop this job into the `scrape_configs:` list of your prometheus.yml.
+scrape_configs:
+  - job_name: certmate
+    metrics_path: /metrics
+    scheme: http            # set to https when CertMate is behind TLS
+    scrape_interval: 60s
+    authorization:
+      type: Bearer
+      # credentials_file: /etc/prometheus/certmate-token   # recommended
+      credentials: "REPLACE_WITH_ADMIN_API_TOKEN"
+    static_configs:
+      - targets: ["certmate:8000"]   # host:port of your CertMate instance
+        labels:
+          instance: certmate
