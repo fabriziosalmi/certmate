@@ -1,3 +1,13 @@
+## v2.17.0 (Feature — third-party-verifiable audit trail)
+
+Completes the agentic audit trail (v2.16.0 added attribution + the tamper-evident hash chain): the record can now be verified by a third party, off the box, without running or trusting CertMate.
+
+### Features
+
+- **Ed25519-signed, independently verifiable export.** The instance holds an Ed25519 signing key (persisted at `data/.audit_signing_key` like the Flask secret key — generated on first run, `0600`, off-box via `AUDIT_SIGNING_KEY_FILE`). `GET /api/audit/export` (admin, optional `?from_seq`/`?to_seq`) returns a signed, self-verifying bundle — `{manifest, entries, bundle_signature}` — whose manifest pins the instance fingerprint, public key, seq range and `head_hash`, with the signature over the canonical manifest transitively committing to every entry. `GET /api/audit/public-key` exposes the signing identity to pin out of band. The chain head is also signed into periodic checkpoints.
+- **Verifier upgrade.** `python -m modules.core.audit_verify --bundle bundle.json [--pubkey instance.pem]` checks the chain structure, manifest consistency, the Ed25519 signature, and the public-key fingerprint, with optional out-of-band key pinning — proving both that the record was not edited and which instance produced it. No new dependencies (`cryptography` is already required).
+- **Honest scope.** A local signing key detects tampering by anyone who does not hold it and attributes the export to an instance, but does not bind the operator (who holds the key); fully constraining the operator needs opt-in external anchoring of the signed checkpoints, a planned follow-up. `docs/compliance.md` and `docs/api.md` document this precisely.
+
 ## v2.16.1 (Patch — remove the discontinued BuyPass CA)
 
 BuyPass Go SSL has been discontinued — BuyPass stopped accepting new ACME accounts on 2025-09-15, issued its last certificate on 2025-10-31, and terminated the service with all certificates expired by 2026-04-15. Selecting it could only fail, so it is removed as a CA option.
