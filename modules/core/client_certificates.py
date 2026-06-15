@@ -47,6 +47,33 @@ class ClientCertificateManager:
 
         self._ensure_directories()
 
+        # Optional audit logger (injected by the factory) so unattended client
+        # certificate renewals are recorded with actor.kind='scheduler'.
+        self._audit_logger = None
+        self._renewal_job_id = 'client_certificate_renewal_check'
+
+    def set_audit_logger(self, audit_logger):
+        """Wire an AuditLogger so scheduled client-cert renewals are recorded."""
+        self._audit_logger = audit_logger
+
+    def _audit_scheduled_renew(self, identifier, status, error=None):
+        """Emit an attributed audit record for an unattended client-cert
+        renewal. No-op when no audit logger is wired; never raises."""
+        if not self._audit_logger:
+            return
+        try:
+            from .audit_context import audit_context_for_scheduler
+            ctx = audit_context_for_scheduler(self._renewal_job_id)
+            self._audit_logger.log_operation(
+                operation='renew', resource_type='client_certificate',
+                resource_id=str(identifier), status=status,
+                error=(str(error)[:500] if error else None),
+                user=ctx.get('user'), ip_address=ctx.get('ip'),
+                actor=ctx.get('actor'), trigger=ctx.get('trigger'),
+            )
+        except Exception:  # pragma: no cover - defensive
+            logger.debug("Failed to emit scheduled client-cert renew audit")
+
     def _ensure_directories(self):
         """Create all required directories."""
         for cert_dir in [self.vpn_certs_dir, self.api_certs_dir, self.other_certs_dir]:
@@ -484,8 +511,10 @@ class ClientCertificateManager:
                         renewed_count += 1
                         renewed_identifiers.append(identifier)
                         logger.info(f"Auto-renewed certificate: {identifier}")
+                        self._audit_scheduled_renew(identifier, 'success')
                     else:
                         logger.warning(f"Failed to auto-renew {identifier}: {error}")
+                        self._audit_scheduled_renew(identifier, 'failure', error=error)
 
             logger.info(f"Certificate renewal check: {checked_count} checked, {renewed_count} renewed")
             return checked_count, renewed_count, renewed_identifiers

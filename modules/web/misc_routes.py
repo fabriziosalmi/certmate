@@ -40,6 +40,33 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
             logger.error(f"Activity API error: {e}")
             return jsonify({'error': 'Failed to fetch activity'}), 500
 
+    @app.route('/api/audit/verify')
+    @auth_manager.require_role('admin')
+    def audit_verify_api():
+        """Verify the tamper-evident audit hash chain.
+
+        Read-only integrity check: recomputes the SHA-256 chain and reports
+        whether it is intact or, on the first break, the exact ``seq`` and
+        reason (modification / deletion / reorder / truncation). Admin-gated
+        because the result and the head hash are sensitive integrity evidence.
+
+        Returns the verifier result plus HTTP 200 when intact and 409 when the
+        chain is broken, so an operator (or a monitoring probe) can alert on a
+        non-2xx without parsing the body. The honest threat-model caveat (a
+        local chain does not bind the operator) is documented in
+        ``modules/core/audit_chain.py`` and ``docs/compliance.md``.
+        """
+        try:
+            audit_logger = managers.get('audit')
+            if audit_logger is None or not hasattr(audit_logger, 'verify_chain'):
+                return jsonify({'error': 'Audit chain not available'}), 503
+            result = audit_logger.verify_chain()
+            status = 200 if result.get('ok') else 409
+            return jsonify(result), status
+        except Exception as e:
+            logger.error(f"Audit verify API error: {e}")
+            return jsonify({'error': 'Failed to verify audit chain'}), 500
+
     @app.route('/metrics')
     @auth_manager.require_role('admin')
     def metrics():

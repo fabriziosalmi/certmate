@@ -5,6 +5,15 @@ const {
   ListToolsRequestSchema,
 } = require("@modelcontextprotocol/sdk/types.js");
 const fetch = require("node-fetch");
+const { randomUUID } = require("crypto");
+
+// Stable id for this agent process, sent on every CertMate call so the audit
+// trail can group an agent session's actions. It is an INFORMATIONAL claim:
+// CertMate derives the trustworthy actor identity from the authenticated API
+// key, never from this header. Override via CERTMATE_AGENT_SESSION (e.g. to
+// correlate with an external orchestrator's run id).
+const AGENT_SESSION = process.env.CERTMATE_AGENT_SESSION || randomUUID();
+const AGENT_ID = process.env.CERTMATE_AGENT_ID || "certmate-mcp-server";
 
 const server = new Server({
   name: "certmate-mcp-server",
@@ -162,7 +171,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
   const headers = {
     "Authorization": `Bearer ${token}`,
-    "Content-Type": "application/json"
+    "Content-Type": "application/json",
+    "X-CertMate-Agent-Session": AGENT_SESSION,
+    "X-CertMate-Agent-Id": AGENT_ID
   };
 
   async function makeRequest(method, path, body = null) {
