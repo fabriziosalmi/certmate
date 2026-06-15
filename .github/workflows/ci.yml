@@ -99,7 +99,7 @@ jobs:
         # the badge silently freezes at a stale value. fail_ci_if_error stays
         # false so a transient Codecov outage never blocks a release.
         token: ${{ secrets.CODECOV_TOKEN }}
-        file: ./coverage.xml
+        files: ./coverage.xml
         flags: unittests
         name: codecov-umbrella
         fail_ci_if_error: false
