@@ -102,7 +102,11 @@ class CertificateService:
                 trigger=ctx.get('trigger'),
             )
         except Exception:  # pragma: no cover - defensive
-            logger.debug("Audit emit failed for %s %s", operation, _scrub_log(domain))
+            # Operation type is enough to diagnose; the domain adds no value
+            # here and only feeds CodeQL's clear-text-logging heuristic (it is
+            # field-insensitive on the `prepared` dict, conflating the domain
+            # with the attribution context).
+            logger.debug("Audit emit failed for operation=%s", operation)
 
     def create(self, *, domain, san_domains=None, dns_provider=None,
                account_id=None, ca_provider=None, challenge_type=None,
