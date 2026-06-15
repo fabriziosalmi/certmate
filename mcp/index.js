@@ -8,7 +8,7 @@ const fetch = require("node-fetch");
 
 const server = new Server({
   name: "certmate-mcp-server",
-  version: "1.0.0"
+  version: "1.1.0"
 }, {
   capabilities: {
     tools: {}
@@ -68,6 +68,76 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "certmate_diagnostics",
         description: "Retrieve a comprehensive and sanitized diagnostic snapshot of the CertMate system.",
         inputSchema: { type: "object", properties: {} }
+      },
+      {
+        name: "certmate_get_certificate",
+        description: "Get full detail for one certificate by domain: status, days until expiry, SANs, DNS/CA provider, auto-renew flag. Use this to decide whether a cert needs renewing (e.g. renew when days_left < 14).",
+        inputSchema: {
+          type: "object",
+          properties: {
+            domain: { type: "string", description: "The domain name (e.g. example.com)" }
+          },
+          required: ["domain"]
+        }
+      },
+      {
+        name: "certmate_get_job",
+        description: "Poll the status of an asynchronous certificate job. certmate_create_certificate and certmate_renew_certificate may return a job_id (HTTP 202); call this with that job_id until status is completed or failed.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            job_id: { type: "string", description: "The job_id returned by an async create/renew" }
+          },
+          required: ["job_id"]
+        }
+      },
+      {
+        name: "certmate_download_certificate",
+        description: "Download a certificate's material as JSON (fullchain, private key, chain) for a domain, so an agent can deploy it elsewhere.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            domain: { type: "string", description: "The domain name" }
+          },
+          required: ["domain"]
+        }
+      },
+      {
+        name: "certmate_set_auto_renew",
+        description: "Enable or disable automatic renewal for a single domain.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            domain: { type: "string", description: "The domain name" },
+            enabled: { type: "boolean", description: "true to enable auto-renew, false to disable" }
+          },
+          required: ["domain", "enabled"]
+        }
+      },
+      {
+        name: "certmate_list_dns_providers",
+        description: "List the DNS providers supported and configured on this instance, so a create call can pass a valid dns_provider.",
+        inputSchema: { type: "object", properties: {} }
+      },
+      {
+        name: "certmate_list_dns_accounts",
+        description: "List configured DNS provider accounts (credentials are masked). Pass a provider to filter; omit to list all. Use a returned account id as account_id when creating a certificate.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            provider: { type: "string", description: "Optional DNS provider key to filter by (e.g. cloudflare)" }
+          }
+        }
+      },
+      {
+        name: "certmate_get_activity",
+        description: "Read the recent activity/audit log to diagnose what changed or what failed.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            limit: { type: "integer", description: "Max entries to return (1-500, default 100)" }
+          }
+        }
       }
     ]
   };
@@ -151,6 +221,31 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         break;
       case "certmate_diagnostics":
         result = await makeRequest("GET", "/api/diagnostics/snapshot");
+        break;
+      case "certmate_get_certificate":
+        result = await makeRequest("GET", `/api/certificates/${encodeURIComponent(args.domain)}`);
+        break;
+      case "certmate_get_job":
+        result = await makeRequest("GET", `/api/certificates/jobs/${encodeURIComponent(args.job_id)}`);
+        break;
+      case "certmate_download_certificate":
+        result = await makeRequest("GET", `/api/certificates/${encodeURIComponent(args.domain)}/download?format=json`);
+        break;
+      case "certmate_set_auto_renew":
+        result = await makeRequest("PUT", `/api/certificates/${encodeURIComponent(args.domain)}/auto-renew`, {
+          enabled: args.enabled
+        });
+        break;
+      case "certmate_list_dns_providers":
+        result = await makeRequest("GET", "/api/settings/dns-providers");
+        break;
+      case "certmate_list_dns_accounts":
+        result = await makeRequest("GET", args.provider
+          ? `/api/dns/${encodeURIComponent(args.provider)}/accounts`
+          : "/api/dns/accounts");
+        break;
+      case "certmate_get_activity":
+        result = await makeRequest("GET", `/api/activity?limit=${encodeURIComponent(args.limit || 100)}`);
         break;
       default:
         throw new Error(`Unknown tool: ${name}`);
