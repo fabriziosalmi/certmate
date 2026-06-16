@@ -9,4 +9,4 @@ azure-identity>=1.12.0
 # PKCS12 builder. Pin a floor explicitly here so a layered install that
 # starts from a stripped-down base fails loudly with a clear constraint
 # error rather than an opaque ImportError at runtime.
-cryptography>=41.0.0
+cryptography>=48.0.1
