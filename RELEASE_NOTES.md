@@ -1,3 +1,18 @@
+## v2.17.1 (Patch — security hardening)
+
+Five must-fix findings from a draconian security/logic review of the existing code (no new features), each verified against source and pinned by a regression test.
+
+### Security
+
+- **Path traversal via client-certificate Common Name.** `create_client_certificate` built the on-disk identifier straight from the caller-supplied Common Name (only spaces replaced) and ran `mkdir(parents=True)` before any other check, so a CN such as `../../../../tmp/evil` created — and wrote a CA-signed key, certificate and metadata into — a directory outside the managed cert tree (single and batch issuance, operator role). The pre-existing `_validate_identifier` guard was only ever applied on retrieval, never to the value that constructs the identifier. The Common Name is now slugified at the construction site (covering every caller) to a filesystem-safe token, with a containment assertion before `mkdir`. Benign Common Names slugify to themselves so existing identifiers and paths are unchanged, and the full Common Name is still preserved verbatim in the certificate subject and metadata.
+- **Backup restore downgraded private keys to world-readable.** `restore_unified_backup` set `0600` only for the exact filename `privkey.pem` and `0644` for everything else, but certbot keeps the real key bytes in `archive/<domain>/privkeyN.pem` (the `live/privkey.pem` symlink points at them) and the ACME account key in `accounts/.../private_key.json` — both retained in the unified backup — so a restore actively rewrote served key material and the account key to `0644`. Restore now mirrors certbot's own permissions: every private-key filename is locked to `0600` and public material (cert/chain/fullchain plus metadata json) stays `0644`.
+- **`GET /api/metrics` was reachable unauthenticated.** The endpoint carried no auth decorator while its sibling info endpoints (`/api/cache`, `/api/backups`) require the `viewer` role. It now requires a viewer credential to match its peers; the Prometheus scrape target remains the separate, intentionally public `/metrics` route.
+- **A disabled, demoted, or deleted user kept their live session.** The role was snapshotted into the session at login and session validation only checked expiry, so disabling, demoting, or deleting a user left an already-issued session valid — with the old role — for up to the session lifetime (default 8h), with no kill switch for a compromised or just-removed account. Those transitions now invalidate the user's in-memory sessions, forcing re-authentication under the new state; an unrelated edit (e.g. email) does not log the user out.
+
+### Fixes
+
+- **Webhook secrets clobbered on a *generic* settings save.** v2.15.0 restored masked webhook secrets on the dedicated `/api/notifications/config` route, but the generic `POST /api/settings` path (the full-settings round-trip used by the UI and integration tests) still merged the `notifications` subtree without restoring secrets nested in the `channels.webhooks` list — `_deep_merge_dict` replaces lists wholesale and `_strip_masked_values` only walks dicts — writing the mask sentinel over the real HMAC secret / bot token. The corruption was silent: deliveries then signed with `********`. `atomic_update` now restores masked list secrets generically for every deep-merge key, so both paths behave identically.
+
 ## v2.17.0 (Feature — third-party-verifiable audit trail)
 
 Completes the agentic audit trail (v2.16.0 added attribution + the tamper-evident hash chain): the record can now be verified by a third party, off the box, without running or trusting CertMate.
