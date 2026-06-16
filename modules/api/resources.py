@@ -263,6 +263,12 @@ def create_api_resources(api, models, managers):
 
     # Metrics endpoints
     class MetricsList(Resource):
+        # Gated like its sibling info endpoints (CacheStats, BackupList): the
+        # Prometheus scrape target is the separate public '/metrics' route —
+        # this JSON summary lives in the authenticated API and must require at
+        # least a viewer credential, not be reachable unauthenticated.
+        @api.doc(security='Bearer')
+        @auth_manager.require_role('viewer')
         def get(self):
             """Get available metrics information"""
             try:
