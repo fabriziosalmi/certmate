@@ -515,6 +515,7 @@ class AuthManager:
                 return False, "User not found"
 
             user = users[username]
+            original_role = self._normalize_role(user.get('role', 'operator'))
 
             # SSO-managed accounts authenticate against the IdP and carry an
             # empty password_hash on purpose. Refuse to set a local password so
@@ -555,6 +556,13 @@ class AuthManager:
             
             if self._save_users(users):
                 logger.info(f"User '{username}' updated successfully")
+                # A privilege change must not be outlived by a live session:
+                # disabling the account or changing its role revokes any
+                # in-memory sessions so the change takes effect immediately —
+                # the user re-authenticates under the new role, or is blocked.
+                role_changed = role is not None and self._normalize_role(role) != original_role
+                if enabled is False or role_changed:
+                    self._invalidate_sessions_for_user(username)
                 return True, "User updated successfully"
             return False, "Failed to save user"
         except (OSError, ValueError, KeyError) as e:
@@ -579,6 +587,8 @@ class AuthManager:
             
             if self._save_users(users):
                 logger.info(f"User '{username}' deleted successfully")
+                # Kill any live sessions so a deleted account can't keep acting.
+                self._invalidate_sessions_for_user(username)
                 return True, "User deleted successfully"
             return False, "Failed to delete user"
         except (OSError, ValueError, KeyError) as e:
@@ -691,6 +701,25 @@ class AuthManager:
                 del self._sessions[session_id]
                 return True
             return False
+
+    def _invalidate_sessions_for_user(self, username):
+        """Drop every in-memory session belonging to ``username``.
+
+        Called when a user is disabled, demoted, or deleted so a live session
+        cannot outlive the privilege change. The role is otherwise snapshotted
+        into the session at login (see ``create_session``) and stays valid
+        until ``SESSION_TIMEOUT_HOURS``, which would leave a just-disabled /
+        just-demoted / deleted account fully privileged for up to the session
+        lifetime. Returns the number of sessions dropped.
+        """
+        with self._session_lock:
+            stale = [sid for sid, data in self._sessions.items()
+                     if data.get('user') == username]
+            for sid in stale:
+                del self._sessions[sid]
+        if stale:
+            logger.info(f"Invalidated {len(stale)} active session(s) for user '{username}'")
+        return len(stale)
 
     def _cleanup_sessions(self):
         """Remove expired sessions (caller must hold _session_lock)"""
