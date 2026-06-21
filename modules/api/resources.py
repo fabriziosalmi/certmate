@@ -112,14 +112,31 @@ def _tls_probe_timeout_seconds():
     return max(1.0, min(value, 30.0))
 
 
-def _probe_https_certificate(domain, timeout=None):
+_PROBE_PROTOCOLS = ('https-tls', 'tls', 'smtp-starttls')
+
+
+def _probe_tls_certificate(domain, port=443, protocol='https-tls', timeout=None):
     """Return the live TLS certificate for a domain, if reachable.
 
-    timeout=None reads CERTMATE_TLS_PROBE_TIMEOUT_SECONDS via the helper above
-    so deployments can tune the per-probe budget without touching the code.
+    Supports three protocol modes:
+      - ``https-tls`` (default): direct TLS on the given port (like HTTPS).
+      - ``tls``:           same wire format as https-tls, no HTTP assumption.
+      - ``smtp-starttls``: plain-text SMTP connection, then STARTTLS upgrade.
+
+    ``timeout=None`` reads ``CERTMATE_TLS_PROBE_TIMEOUT_SECONDS`` (default 3s,
+    clamped [1, 30]). ``port`` defaults to 443 for https-tls/tls, 587 for
+    smtp-starttls when left at the sentinel 0.
     """
     if timeout is None:
         timeout = _tls_probe_timeout_seconds()
+    if protocol not in _PROBE_PROTOCOLS:
+        raise ValueError(f"Unsupported probe protocol: {protocol!r}. "
+                         f"Use one of {_PROBE_PROTOCOLS}")
+
+    # Port defaults per protocol
+    if port is None or port == 0:
+        port = 587 if protocol == 'smtp-starttls' else 443
+
     host = domain[2:] if domain.startswith('*.') else domain
     context = ssl.create_default_context()
     # We intentionally disable PKI validation here. The goal is to compare the
@@ -130,27 +147,80 @@ def _probe_https_certificate(domain, timeout=None):
 
     started = time.monotonic()
     try:
-        with socket.create_connection((host, 443), timeout=timeout) as raw_sock:
-            with context.wrap_socket(raw_sock, server_hostname=host) as tls_sock:
-                cert_bytes = tls_sock.getpeercert(binary_form=True)
-                return {
-                    'reachable': True,
-                    'certificate_bytes': cert_bytes,
-                }
+        if protocol == 'smtp-starttls':
+            cert_bytes = _probe_smtp_starttls(host, port, context, timeout)
+        else:
+            # Direct TLS (https-tls, tls)
+            with socket.create_connection((host, port), timeout=timeout) as raw_sock:
+                with context.wrap_socket(raw_sock, server_hostname=host) as tls_sock:
+                    cert_bytes = tls_sock.getpeercert(binary_form=True)
+
+        return {
+            'reachable': True,
+            'certificate_bytes': cert_bytes,
+            'port': port,
+            'protocol': protocol,
+        }
     finally:
+        elapsed = time.monotonic() - started
         # A probe that takes more than 1s is a strong hint the target is slow
         # or unreachable. Surfacing it in the application log lets an operator
         # spot the offending domain without reproducing a multi-second
         # dashboard stall — and lets them tune CERTMATE_TLS_PROBE_TIMEOUT_SECONDS
         # if the slowness is real but expected.
-        elapsed = time.monotonic() - started
         if elapsed > 1.0:
             logger.warning(
-                "Slow TLS probe for %s: %.2fs (timeout=%.1fs). "
-                "Consider lowering CERTMATE_TLS_PROBE_TIMEOUT_SECONDS to "
-                "free Flask workers faster.",
-                host, elapsed, timeout,
+                "Slow %s probe for %s:%d: %.2fs (timeout=%.1fs).",
+                protocol, host, port, elapsed, timeout,
             )
+
+
+def _probe_smtp_starttls(host, port, context, timeout):
+    """Connect to an SMTP server and upgrade to TLS via STARTTLS.
+
+    SMTP wire: banner → ``EHLO certmate.local`` → ``STARTTLS`` →
+    220 response → ``context.wrap_socket``.
+    """
+    import socket as _socket
+
+    recv_timeout = max(1.0, timeout * 0.5)
+    with socket.create_connection((host, port), timeout=timeout) as raw_sock:
+        raw_sock.settimeout(recv_timeout)
+        f = raw_sock.makefile('rwb')
+
+        # Read banner
+        banner = f.readline()
+        if not banner:
+            raise ConnectionError("SMTP: no banner received")
+
+        # EHLO
+        f.write(b'EHLO certmate.local\r\n')
+        f.flush()
+        _consume_smtp_multiline(f)
+
+        # STARTTLS
+        f.write(b'STARTTLS\r\n')
+        f.flush()
+        response = f.readline()
+        if not response or not response.startswith(b'220'):
+            raise ConnectionError(
+                f"SMTP STARTTLS rejected: {response!r}"
+            )
+
+        # Upgrade to TLS
+        tls_sock = context.wrap_socket(raw_sock, server_hostname=host)
+        return tls_sock.getpeercert(binary_form=True)
+
+
+def _consume_smtp_multiline(f):
+    """Read SMTP multi-line response until a line starting with a digit
+    followed by a space (not '-') is seen."""
+    while True:
+        line = f.readline()
+        if not line:
+            break
+        if len(line) > 3 and line[3:4] == b' ':
+            break
 
 
 logger = logging.getLogger(__name__)
@@ -1112,15 +1182,16 @@ def create_api_resources(api, models, managers):
         @api.doc(security='Bearer')
         @auth_manager.require_role('operator')
         def patch(self, domain):
-            """Update DNS provider for an existing certificate (issue #129).
+            """Update DNS provider or deployment probe config for an existing
+            certificate (issue #129 + deployment probe extension).
 
-            Allows changing the DNS provider (and optionally the alias DNS
-            provider) used for future renewals of this certificate without
-            deleting and re-creating it. Updates both the on-disk
-            metadata.json and the domain entry in settings.
+            DNS changes: ``dns_provider``, ``account_id``, ``alias_dns_provider``.
+            Probe changes: ``deployment_port`` (int, 1-65535) and/or
+            ``deployment_protocol`` ("https-tls" | "tls" | "smtp-starttls").
+            Either category can be used alone or together.
 
-            Body: {"dns_provider": "route53", "account_id": "default",
-                   "alias_dns_provider": "cloudflare"}
+            Body: {"dns_provider": "route53", "deployment_protocol": "smtp-starttls",
+                   "deployment_port": 587}
             """
             scope_err = _check_domain_scope(domain, 'update_dns_provider')
             if scope_err:
@@ -1135,11 +1206,19 @@ def create_api_resources(api, models, managers):
             new_dns_provider = data.get('dns_provider')
             new_account_id = data.get('account_id')
             new_alias_dns_provider = data.get('alias_dns_provider')
+            new_deploy_port = data.get('deployment_port')
+            new_deploy_protocol = data.get('deployment_protocol')
 
-            if not new_dns_provider and not new_alias_dns_provider:
+            # Allow requests that only set deployment probe fields
+            # (deployment_port / deployment_protocol) without requiring
+            # a DNS provider change.
+            has_dns_changes = bool(new_dns_provider or new_alias_dns_provider)
+            has_probe_changes = 'deployment_port' in data or 'deployment_protocol' in data
+
+            if not has_dns_changes and not has_probe_changes:
                 return {
-                    'error': 'At least one of dns_provider or alias_dns_provider is required',
-                    'hint': 'Provide the new DNS provider name to use for future renewals.'
+                    'error': 'At least one of dns_provider, alias_dns_provider, '
+                             'deployment_port, or deployment_protocol is required',
                 }, 400
 
             # Validate the new provider has credentials configured
@@ -1194,6 +1273,27 @@ def create_api_resources(api, models, managers):
                 if new_alias_dns_provider:
                     metadata['alias_dns_provider'] = new_alias_dns_provider
 
+                # --- deployment probe config ---
+                if new_deploy_port is not None:
+                    try:
+                        port = int(new_deploy_port)
+                        if port < 1 or port > 65535:
+                            return {'error': 'deployment_port must be 1-65535'}, 400
+                        metadata['deployment_port'] = port
+                    except (TypeError, ValueError):
+                        return {'error': 'deployment_port must be an integer'}, 400
+                elif 'deployment_port' in metadata:
+                    del metadata['deployment_port']
+
+                if new_deploy_protocol is not None:
+                    if new_deploy_protocol not in _PROBE_PROTOCOLS:
+                        return {
+                            'error': f"deployment_protocol must be one of {_PROBE_PROTOCOLS!r}"
+                        }, 400
+                    metadata['deployment_protocol'] = new_deploy_protocol
+                elif 'deployment_protocol' in metadata:
+                    del metadata['deployment_protocol']
+
                 if not certificate_manager._save_metadata(domain, metadata):
                     return {'error': f'Failed to update metadata for domain: {domain}'}, 500
                 logger.info(
@@ -1213,17 +1313,21 @@ def create_api_resources(api, models, managers):
 
                 settings_manager.update(_update_domain_provider, "dns_provider_change")
 
-                return {
-                    'message': f'DNS provider updated for {domain}',
+                response = {
+                    'message': f'Certificate config updated for {domain}',
                     'domain': domain,
                     'dns_provider': metadata.get('dns_provider'),
                     'alias_dns_provider': metadata.get('alias_dns_provider'),
                     'account_id': metadata.get('account_id'),
-                }, 200
+                }
+                if new_deploy_port is not None or new_deploy_protocol is not None:
+                    response['deployment_port'] = metadata.get('deployment_port')
+                    response['deployment_protocol'] = metadata.get('deployment_protocol')
+                return response, 200
 
             except Exception as e:
-                logger.error(f"Failed to update DNS provider for {domain}: {e}")
-                return {'error': 'Failed to update DNS provider'}, 500
+                logger.error(f"Failed to update certificate config for {domain}: {e}")
+                return {'error': 'Failed to update certificate config'}, 500
 
         @api.doc(security='Bearer')
         @auth_manager.require_role('admin')
@@ -1346,19 +1450,35 @@ def create_api_resources(api, models, managers):
             if not expected_fingerprint:
                 return {'error': f'Could not parse certificate for domain: {domain}'}, 500
 
+            # Read per-cert deployment config from metadata, fall back to
+            # defaults. Stored via PATCH /api/certificates/<domain> as
+            # ``deployment_port`` and ``deployment_protocol``.
+            metadata = certificate_manager._load_metadata(domain) if hasattr(certificate_manager, '_load_metadata') else {}
+            raw_port = metadata.get('deployment_port')
+            deploy_port = raw_port if raw_port is not None else 0
+            deploy_protocol = metadata.get('deployment_protocol') or 'https-tls'
+
             result = {
                 'domain': domain,
                 'deployed': False,
                 'reachable': False,
                 'certificate_match': False,
-                'method': 'https-tls',
+                'method': deploy_protocol,
+                'port': deploy_port if deploy_port is not None else None,
+                'protocol': deploy_protocol,
                 'timestamp': utc_now_iso(),
             }
 
             try:
-                probe = _probe_https_certificate(domain)
+                probe = _probe_tls_certificate(
+                    domain,
+                    port=int(deploy_port) if deploy_port else 0,
+                    protocol=deploy_protocol,
+                )
                 result['reachable'] = True
                 result['deployed'] = True
+                result['port'] = probe.get('port')
+                result['protocol'] = probe.get('protocol')
                 result['certificate_match'] = (
                     _certificate_fingerprint(probe.get('certificate_bytes')) == expected_fingerprint
                 )
