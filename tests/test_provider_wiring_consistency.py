@@ -129,10 +129,11 @@ def test_dns_manager_advertised_providers_match_factory():
 # free to recur in the alias subsystem. These ratchets lock the contract.
 # ---------------------------------------------------------------------------
 
-# edgedns and acme-dns are alias-capable but handled by dedicated change
-# functions (_edgedns_change / _acme_dns_change) rather than a Lexicon adapter,
-# so they are intentionally absent from LEXICON_PROVIDER_MAP.
-_ALIAS_NATIVE_ADAPTERS = {'edgedns', 'acme-dns'}
+# edgedns, acme-dns and rfc2136 are alias-capable but handled by dedicated
+# change functions (_edgedns_change / _acme_dns_change / _rfc2136_change) rather
+# than a Lexicon adapter, so they are intentionally absent from
+# LEXICON_PROVIDER_MAP.
+_ALIAS_NATIVE_ADAPTERS = {'edgedns', 'acme-dns', 'rfc2136'}
 
 
 def test_dns_alias_supported_set_matches_required_fields():
