@@ -144,6 +144,10 @@ def _probe_tls_certificate(domain, port=443, protocol='https-tls', timeout=None)
     # the live cert is invalid or otherwise not trusted.
     context.check_hostname = False
     context.verify_mode = ssl.CERT_NONE
+    # create_default_context() already floors at TLS 1.2; pin it explicitly so
+    # the fingerprint-comparison probe can never negotiate a dead protocol and
+    # to make CodeQL's py/insecure-protocol check provably satisfied.
+    context.minimum_version = ssl.TLSVersion.TLSv1_2
 
     started = time.monotonic()
     try:
@@ -1274,25 +1278,31 @@ def create_api_resources(api, models, managers):
                     metadata['alias_dns_provider'] = new_alias_dns_provider
 
                 # --- deployment probe config ---
-                if new_deploy_port is not None:
-                    try:
-                        port = int(new_deploy_port)
-                        if port < 1 or port > 65535:
-                            return {'error': 'deployment_port must be 1-65535'}, 400
-                        metadata['deployment_port'] = port
-                    except (TypeError, ValueError):
-                        return {'error': 'deployment_port must be an integer'}, 400
-                elif 'deployment_port' in metadata:
-                    del metadata['deployment_port']
+                # Only touch probe config when the caller actually sends the
+                # key: an ABSENT key leaves existing config intact, an explicit
+                # null deletes it. Keying off `is not None` instead would let a
+                # DNS-only PATCH silently wipe a cert's probe config.
+                if 'deployment_port' in data:
+                    if new_deploy_port is not None:
+                        try:
+                            port = int(new_deploy_port)
+                            if port < 1 or port > 65535:
+                                return {'error': 'deployment_port must be 1-65535'}, 400
+                            metadata['deployment_port'] = port
+                        except (TypeError, ValueError):
+                            return {'error': 'deployment_port must be an integer'}, 400
+                    else:
+                        metadata.pop('deployment_port', None)
 
-                if new_deploy_protocol is not None:
-                    if new_deploy_protocol not in _PROBE_PROTOCOLS:
-                        return {
-                            'error': f"deployment_protocol must be one of {_PROBE_PROTOCOLS!r}"
-                        }, 400
-                    metadata['deployment_protocol'] = new_deploy_protocol
-                elif 'deployment_protocol' in metadata:
-                    del metadata['deployment_protocol']
+                if 'deployment_protocol' in data:
+                    if new_deploy_protocol is not None:
+                        if new_deploy_protocol not in _PROBE_PROTOCOLS:
+                            return {
+                                'error': f"deployment_protocol must be one of {_PROBE_PROTOCOLS!r}"
+                            }, 400
+                        metadata['deployment_protocol'] = new_deploy_protocol
+                    else:
+                        metadata.pop('deployment_protocol', None)
 
                 if not certificate_manager._save_metadata(domain, metadata):
                     return {'error': f'Failed to update metadata for domain: {domain}'}, 500
