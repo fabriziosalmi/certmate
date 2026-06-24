@@ -12,7 +12,7 @@ certbot-dns-hetzner==3.0.0
 certbot-dns-hetzner-cloud==1.0.5
 
 # Domain registrars with DNS
-certbot-dns-gandi==1.6.1
+certbot-dns-gandi==1.6.2
 certbot-dns-ovh==2.11.0
 # certbot-dns-namecheap removed: only v1.0.0 exists on PyPI (alpha,
 # targets Python 2.7-3.8) and is incompatible with certbot 2.x / Python 3.12.
