@@ -41,6 +41,22 @@
         </div>
     </div>
 
+    <!-- Deploy error popup modal -->
+    <div id="deployErrorModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50" onclick="if (event.target===this) closeDeployErrorPopup()">
+        <div class="bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 rounded-xl shadow-2xl p-5 w-[36rem]" style="max-height: 85vh; display: grid; grid-template-rows: auto minmax(0, 1fr);" onclick="event.stopPropagation()">
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-2">
+                    <i class="fas fa-terminal text-red-400 text-sm"></i>
+                    <span class="text-sm font-semibold">Deploy Hook Error</span>
+                </div>
+                <button type="button" onclick="closeDeployErrorPopup()" class="text-gray-400 hover:text-white dark:hover:text-gray-900 transition text-lg leading-none">&times;</button>
+            </div>
+            <div id="deployErrorContent" class="space-y-3 pr-1" style="overflow-y: auto; min-height: 0;">
+                <!-- injected by showDeployErrorPopup() -->
+            </div>
+        </div>
+    </div>
+
     <script>
     (function() {
         var escapeHtml = CertMate.escapeHtml;
@@ -309,7 +325,8 @@
                 // aria-label gives screen readers a one-line summary
                 // ("Renewed — certificate foo.example.com, 2h ago").
                 var commonClass = 'flex items-start gap-4 px-4 sm:px-6 py-4 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition';
-                var isCertEntry = entry.resource_type === 'certificate' && entry.resource_id;
+                var isCertEntry = entry.resource_type === 'certificate' && entry.resource_id
+                    && entry.operation !== 'deploy_hook' && entry.operation !== 'deploy';
                 var ariaLabel = opLabel(entry) +
                     (entry.status === 'failure' ? ' (failed)' : '') +
                     ' — ' + (entry.resource_type || '') +
@@ -338,7 +355,18 @@
                             escapeHtml(entry.resource_type) + ': <strong>' + escapeHtml(entry.resource_id) + '</strong>' +
                         '</p>' +
                         (detailStr ? '<p class="text-xs text-gray-400 mt-0.5">' + escapeHtml(detailStr) + '</p>' : '') +
-                        (entry.error ? '<p class="text-xs text-red-500 mt-0.5"><i class="fas fa-exclamation-triangle mr-1"></i>' + escapeHtml(entry.error) + '</p>' : '') +
+                        (
+                            entry.operation === 'deploy_hook' && entry.error && entry.details && (entry.details.stderr || entry.details.stdout)
+                            ? '<p class="text-xs text-red-500 mt-0.5 cursor-pointer" ' +
+                                'data-exit-code="' + escapeHtml(String(entry.details.exit_code != null ? entry.details.exit_code : '')) + '" ' +
+                                'data-stderr="' + escapeHtml(entry.details.stderr || '') + '" ' +
+                                'data-stdout="' + escapeHtml(entry.details.stdout || '') + '" ' +
+                                'onclick="showDeployErrorPopup(this)">' +
+                                '<i class="fas fa-exclamation-triangle mr-1"></i>' + escapeHtml(entry.error) +
+                                '<i class="fas fa-external-link-alt ml-1.5 text-gray-400 text-[10px] align-middle"></i>' +
+                            '</p>'
+                            : (entry.error ? '<p class="text-xs text-red-500 mt-0.5"><i class="fas fa-exclamation-triangle mr-1"></i>' + escapeHtml(entry.error) + '</p>' : '')
+                        ) +
                     '</div>' +
                     '<div class="flex-shrink-0 text-right">' +
                         '<div class="text-xs text-gray-400 cursor-help" title="' + escapeHtml(absoluteTime(entry.timestamp)) + '">' + escapeHtml(formatTime(entry.timestamp)) + '</div>' +
@@ -363,6 +391,43 @@
                 });
             }
         }
+
+        window.showDeployErrorPopup = function(el) {
+            var exitCode = el.getAttribute('data-exit-code');
+            var stderr = el.getAttribute('data-stderr');
+            var stdout = el.getAttribute('data-stdout');
+
+            var html = '';
+            if (exitCode) {
+                html += '<div>' +
+                    '<div class="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500 mb-0.5">Exit code</div>' +
+                    '<div class="font-mono text-sm">' + escapeHtml(exitCode) + '</div>' +
+                '</div>';
+            }
+            if (stderr) {
+                html += '<div>' +
+                    '<div class="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500 mb-1">stderr</div>' +
+                    '<pre class="font-mono text-xs bg-black/20 dark:bg-white/20 rounded p-2 whitespace-pre-wrap break-words">' + escapeHtml(stderr) + '</pre>' +
+                '</div>';
+            }
+            if (stdout) {
+                html += '<div>' +
+                    '<div class="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500 mb-1">stdout</div>' +
+                    '<pre class="font-mono text-xs bg-black/20 dark:bg-white/20 rounded p-2 whitespace-pre-wrap break-words">' + escapeHtml(stdout) + '</pre>' +
+                '</div>';
+            }
+
+            document.getElementById('deployErrorContent').innerHTML = html;
+            var modal = document.getElementById('deployErrorModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        };
+
+        window.closeDeployErrorPopup = function() {
+            var modal = document.getElementById('deployErrorModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        };
 
         document.getElementById('filterOp').addEventListener('change', loadActivity);
         document.getElementById('filterDate').addEventListener('change', loadActivity);
