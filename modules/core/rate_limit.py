@@ -28,18 +28,63 @@ class RateLimitConfig:
         'crl_download': 60,
     }
 
-    def __init__(self, custom_limits: Optional[Dict[str, int]] = None):
+    def __init__(self, custom_limits: Optional[Dict[str, int]] = None,
+                 settings_manager=None):
         """
         Initialize Rate Limit Config.
 
         Args:
-            custom_limits: Custom rate limit overrides
+            custom_limits: Static rate limit overrides (applied over the defaults).
+            settings_manager: Optional SettingsManager. When wired, per-endpoint
+                overrides and the on/off toggle are read LIVE from
+                ``settings['rate_limits']`` on each lookup, so an admin can retune
+                the limits from the UI/API without a restart (#319). Reads are
+                request-scope-cached and never raise.
         """
         self.limits = dict(self.DEFAULT_LIMITS)
         if custom_limits:
             self.limits.update(custom_limits)
+        self.settings_manager = settings_manager
 
         logger.info(f"Rate limiting configured with {len(self.limits)} endpoint limits")
+
+    def _settings_block(self) -> dict:
+        """Read the ``rate_limits`` settings block, defensively. Never raises."""
+        if self.settings_manager is None:
+            return {}
+        try:
+            settings = self.settings_manager.load_settings() or {}
+            block = settings.get('rate_limits')
+            return block if isinstance(block, dict) else {}
+        except Exception:  # pragma: no cover - defensive
+            logger.debug("Failed to read rate_limits settings; using defaults",
+                         exc_info=True)
+            return {}
+
+    def is_enabled(self) -> bool:
+        """Whether API rate limiting is active. Defaults to True when unset."""
+        return bool(self._settings_block().get('enabled', True))
+
+    def effective_limits(self) -> Dict[str, int]:
+        """Static limits overlaid with the live, sanitised settings overrides.
+
+        Only known endpoint keys with a positive integer value are honoured, so
+        a malformed settings entry can never disable a limit or crash a lookup.
+        """
+        merged = dict(self.limits)
+        overrides = self._settings_block().get('limits')
+        if isinstance(overrides, dict):
+            for key, value in overrides.items():
+                if key not in self.DEFAULT_LIMITS:
+                    continue
+                # Only a positive int is a valid limit. bool is an int subclass,
+                # so exclude it; floats/strings are treated as malformed and the
+                # default is kept rather than silently truncated.
+                if isinstance(value, bool) or not isinstance(value, int):
+                    continue
+                if value > 0:
+                    merged[key] = value
+        return merged
 
     def get_limit(self, endpoint: str) -> int:
         """
@@ -51,17 +96,19 @@ class RateLimitConfig:
         Returns:
             Rate limit (requests per minute)
         """
+        limits = self.effective_limits()
+
         # Try exact match first
-        if endpoint in self.limits:
-            return self.limits[endpoint]
+        if endpoint in limits:
+            return limits[endpoint]
 
         # Try prefix match
-        for limit_key in self.limits:
+        for limit_key in limits:
             if endpoint.startswith(limit_key):
-                return self.limits[limit_key]
+                return limits[limit_key]
 
         # Return default
-        return self.limits.get('default', 100)
+        return limits.get('default', 100)
 
 
 class SimpleRateLimiter:

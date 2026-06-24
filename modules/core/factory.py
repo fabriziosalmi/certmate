@@ -446,7 +446,7 @@ def initialize_managers(container: AppContainer, app):
     from .oidc import OIDCManager
     oidc_manager = OIDCManager(settings_manager, auth_manager, audit_logger)
 
-    rate_limit_config = RateLimitConfig()
+    rate_limit_config = RateLimitConfig(settings_manager=settings_manager)
     rate_limiter = SimpleRateLimiter(rate_limit_config)
 
     notifier = Notifier(settings_manager, data_dir=str(container.data_dir))
@@ -890,6 +890,11 @@ def setup_rate_limiting(app, container: AppContainer):
             return None
         # Only skip rate limiting for auth endpoints (login needs its own limiter)
         if path.startswith('/api/auth/'):
+            return None
+        # Admin can turn API rate limiting off entirely from settings (#319),
+        # e.g. when a trusted automation fleet behind one IP would otherwise
+        # trip a shared bucket. Defaults to on.
+        if not rate_limiter.config.is_enabled():
             return None
 
         client_ip = flask_request.remote_addr or '0.0.0.0'  # nosec B104

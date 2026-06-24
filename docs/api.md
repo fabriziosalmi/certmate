@@ -42,6 +42,26 @@ API endpoints have rate limits to prevent abuse:
 | OCSP Status        | 200   | minute |
 | CRL Download       | 60    | minute |
 
+The bucket is per API key (requests authenticated with the same bearer key share one limit) and per IP for session/anonymous requests, so several clients behind one NAT or proxy do not share — and abuse — a single bucket.
+
+### Configuring rate limits
+
+The limits are configurable per instance (admin only), so a trusted automation fleet behind a single address can raise them instead of tripping the default. Settings → API Keys → **API Rate Limits** exposes a value-per-endpoint form and an on/off toggle; changes apply immediately, with no restart.
+
+The same configuration is available over the API:
+
+```
+GET /api/settings/rate-limits
+  -> { "enabled": true,
+       "limits": { "default": 100, "certificate_create": 30, ... },
+       "defaults": { ... } }
+
+PUT /api/settings/rate-limits
+  { "enabled": true, "limits": { "certificate_create": 500 } }
+```
+
+Each limit is requests per minute (1–100000). Only the endpoint keys returned by `GET` are accepted; omitted keys keep their default. Setting `"enabled": false` turns API rate limiting off entirely (the login endpoint keeps its own separate limiter regardless).
+
 ### Rate Limit Response
 
 When rate limited, you'll receive:
