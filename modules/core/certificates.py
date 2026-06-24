@@ -91,10 +91,37 @@ class CertificateManager:
         # standalone/unit contexts, where emission is simply skipped.
         self._audit_logger = None
         self._renewal_job_id = 'certificate_renewal_check'
+        # Optional event bus, injected by the factory. The manual/API renewal
+        # path publishes 'certificate_renewed' via the IssuanceExecutor; the
+        # scheduler calls renew_certificate() directly, so without this the
+        # deploy hooks never fire after a background renewal (#329). None in
+        # standalone/unit contexts, where publishing is simply skipped.
+        self._event_bus = None
 
     def set_audit_logger(self, audit_logger):
         """Wire an AuditLogger so scheduled renewals are recorded. Optional."""
         self._audit_logger = audit_logger
+
+    def set_event_bus(self, event_bus):
+        """Wire an EventBus so scheduled renewals notify the deploy pipeline
+        (#329). Optional — publishing is skipped when unset."""
+        self._event_bus = event_bus
+
+    def _publish_renewed_event(self, domain):
+        """Publish the same 'certificate_renewed' event the manual/API path
+        emits, so deploy hooks fire after an unattended renewal too (#329).
+
+        No-op when no event bus is wired; never raises — a notification
+        failure must not turn a successful renewal into a reported failure.
+        The payload mirrors IssuanceExecutor's: {'domain': domain}."""
+        if self._event_bus is None:
+            return
+        try:
+            self._event_bus.publish('certificate_renewed', {'domain': domain})
+        except Exception:  # pragma: no cover - defensive
+            logger.exception(
+                "Failed to publish certificate_renewed for %s", domain
+            )
 
     def _audit_scheduled_renew(self, domain, status, error=None):
         """Emit an attributed audit record for an unattended renewal. No-op
@@ -1609,6 +1636,10 @@ class CertificateManager:
                         summary['renewed'] += 1
                         logger.info(f"Successfully renewed certificate for {domain}")
                         self._audit_scheduled_renew(domain, 'success')
+                        # Fire deploy hooks for background renewals too (#329):
+                        # the manual path publishes this via the executor, the
+                        # scheduler must publish it itself.
+                        self._publish_renewed_event(domain)
                     except Exception as e:
                         summary['failed'] += 1
                         logger.error(f"Failed to renew certificate for {domain}: {e}")

@@ -80,3 +80,70 @@ def test_global_auto_renew_disabled_short_circuits(tmp_path):
 
     assert summary['auto_renew_disabled'] is True
     mgr.get_certificate_info.assert_not_called()
+
+
+# --- #329: scheduled renewals must fire deploy hooks ----------------------
+# The deployer listens for 'certificate_renewed' on the event bus. The
+# manual/API path publishes it via the IssuanceExecutor; the scheduler calls
+# renew_certificate() directly, so check_renewals has to publish it itself or
+# background renewals silently skip every deploy hook.
+
+def test_successful_scheduled_renewal_publishes_certificate_renewed(tmp_path):
+    settings = {'auto_renew': True, 'domains': ['good.com', 'fresh.com']}
+    mgr = _manager(tmp_path, settings)
+    mgr.get_certificate_info = MagicMock(
+        side_effect=lambda domain, **kw: {'needs_renewal': domain == 'good.com'}
+    )
+    mgr.renew_certificate = MagicMock()
+    bus = MagicMock()
+    mgr.set_event_bus(bus)
+
+    mgr.check_renewals()
+
+    # Exactly the renewed domain, with the same payload the executor emits —
+    # not fresh.com (no renewal) and not a duplicate.
+    bus.publish.assert_called_once_with(
+        'certificate_renewed', {'domain': 'good.com'}
+    )
+
+
+def test_failed_scheduled_renewal_does_not_publish(tmp_path):
+    settings = {'auto_renew': True, 'domains': ['boom.com']}
+    mgr = _manager(tmp_path, settings)
+    mgr.get_certificate_info = MagicMock(return_value={'needs_renewal': True})
+    mgr.renew_certificate = MagicMock(side_effect=RuntimeError("certbot failed"))
+    bus = MagicMock()
+    mgr.set_event_bus(bus)
+
+    summary = mgr.check_renewals()
+
+    assert summary['failed'] == 1
+    bus.publish.assert_not_called()
+
+
+def test_scheduled_renewal_without_event_bus_does_not_crash(tmp_path):
+    settings = {'auto_renew': True, 'domains': ['good.com']}
+    mgr = _manager(tmp_path, settings)
+    mgr.get_certificate_info = MagicMock(return_value={'needs_renewal': True})
+    mgr.renew_certificate = MagicMock()
+    # No set_event_bus() call — standalone/unit default.
+
+    summary = mgr.check_renewals()
+
+    assert summary['renewed'] == 1
+
+
+def test_publish_failure_does_not_fail_the_renewal(tmp_path):
+    settings = {'auto_renew': True, 'domains': ['good.com']}
+    mgr = _manager(tmp_path, settings)
+    mgr.get_certificate_info = MagicMock(return_value={'needs_renewal': True})
+    mgr.renew_certificate = MagicMock()
+    bus = MagicMock()
+    bus.publish.side_effect = RuntimeError("event bus down")
+    mgr.set_event_bus(bus)
+
+    summary = mgr.check_renewals()
+
+    # A notification failure must not turn a successful renewal into a failure.
+    assert summary['renewed'] == 1
+    assert summary['failed'] == 0

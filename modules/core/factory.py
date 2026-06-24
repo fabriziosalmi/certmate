@@ -476,6 +476,11 @@ def initialize_managers(container: AppContainer, app):
         data_dir=str(container.data_dir),
     )
     event_bus.add_listener(deploy_manager.on_certificate_event)
+    # Let unattended (scheduler-driven) renewals publish 'certificate_renewed'
+    # so deploy hooks fire for background renewals, not just manual/API ones
+    # (#329). The manual path publishes via the IssuanceExecutor; the scheduler
+    # calls certificate_manager.renew_certificate() directly.
+    certificate_manager.set_event_bus(event_bus)
     app.config['EVENT_BUS'] = event_bus
     # DATA_DIR is the partition the DiagnosticsSnapshot endpoint queries
     # for disk_free / disk_total. Stored on the Flask app config so the
