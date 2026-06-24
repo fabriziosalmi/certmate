@@ -201,7 +201,11 @@ class DeployManager:
             result['stderr'] = (proc.stderr or '')[:4096]
             result['success'] = proc.returncode == 0
             if proc.returncode != 0:
-                result['error'] = f"exit code {proc.returncode}"
+                stderr_snippet = (proc.stderr or '').strip()[:200]
+                if stderr_snippet:
+                    result['error'] = f"exit code {proc.returncode}: {stderr_snippet}"
+                else:
+                    result['error'] = f"exit code {proc.returncode}"
         except subprocess.TimeoutExpired:
             result['error'] = f"timeout after {timeout}s"
         except Exception as e:
@@ -221,6 +225,8 @@ class DeployManager:
                 'exit_code': result['exit_code'],
                 'duration_ms': result['duration_ms'],
                 'dry_run': dry_run,
+                'stdout': result.get('stdout') or '',
+                'stderr': result.get('stderr') or '',
             },
             error=result.get('error'),
         )

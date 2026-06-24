@@ -91,10 +91,37 @@ class CertificateManager:
         # standalone/unit contexts, where emission is simply skipped.
         self._audit_logger = None
         self._renewal_job_id = 'certificate_renewal_check'
+        # Optional event bus, injected by the factory. The manual/API renewal
+        # path publishes 'certificate_renewed' via the IssuanceExecutor; the
+        # scheduler calls renew_certificate() directly, so without this the
+        # deploy hooks never fire after a background renewal (#329). None in
+        # standalone/unit contexts, where publishing is simply skipped.
+        self._event_bus = None
 
     def set_audit_logger(self, audit_logger):
         """Wire an AuditLogger so scheduled renewals are recorded. Optional."""
         self._audit_logger = audit_logger
+
+    def set_event_bus(self, event_bus):
+        """Wire an EventBus so scheduled renewals notify the deploy pipeline
+        (#329). Optional — publishing is skipped when unset."""
+        self._event_bus = event_bus
+
+    def _publish_renewed_event(self, domain):
+        """Publish the same 'certificate_renewed' event the manual/API path
+        emits, so deploy hooks fire after an unattended renewal too (#329).
+
+        No-op when no event bus is wired; never raises — a notification
+        failure must not turn a successful renewal into a reported failure.
+        The payload mirrors IssuanceExecutor's: {'domain': domain}."""
+        if self._event_bus is None:
+            return
+        try:
+            self._event_bus.publish('certificate_renewed', {'domain': domain})
+        except Exception:  # pragma: no cover - defensive
+            logger.exception(
+                "Failed to publish certificate_renewed for %s", domain
+            )
 
     def _audit_scheduled_renew(self, domain, status, error=None):
         """Emit an attributed audit record for an unattended renewal. No-op
@@ -764,6 +791,8 @@ class CertificateManager:
                 # or stale) is visible on GET, not just buried in the logs.
                 # None when the last issuance stored cleanly.
                 'storage_warning': metadata.get('storage_warning'),
+                'deployment_port': metadata.get('deployment_port'),
+                'deployment_protocol': metadata.get('deployment_protocol'),
             }
         except Exception as e:
             logger.error(f"Error parsing certificate for {domain}: {e}")
@@ -784,6 +813,8 @@ class CertificateManager:
             'challenge_type': challenge_type,
             'account_id': account_id,
             'storage_warning': metadata.get('storage_warning'),
+            'deployment_port': metadata.get('deployment_port'),
+            'deployment_protocol': metadata.get('deployment_protocol'),
         }
 
     def _create_empty_cert_info(self, domain):
@@ -1481,6 +1512,15 @@ class CertificateManager:
                         with open(dest_file, 'rb') as f:
                             cert_files[file_name] = f.read()
                 
+                # Update metadata with renewal timestamp
+                if metadata_file.exists():
+                    try:
+                        metadata['renewed_at'] = utc_now_iso()
+                        self._save_metadata(domain, metadata)
+                        logger.info(f"Updated renewal timestamp in metadata for {domain}")
+                    except Exception as e:
+                        logger.warning(f"Failed to update metadata for {domain}: {e}")
+                
                 if self.storage_manager:
                     try:
                         storage_success = self.storage_manager.store_certificate(domain, cert_files, metadata)
@@ -1490,15 +1530,6 @@ class CertificateManager:
                             logger.warning(f"Failed to store certificate in {self.storage_manager.get_backend_name()} backend for {domain}")
                     except Exception as e:
                         logger.error(f"Error storing certificate in storage backend for {domain}: {e}")
-
-                # Update metadata with renewal timestamp
-                if metadata_file.exists():
-                    try:
-                        metadata['renewed_at'] = utc_now_iso()
-                        self._save_metadata(domain, metadata)
-                        logger.info(f"Updated renewal timestamp in metadata for {domain}")
-                    except Exception as e:
-                        logger.warning(f"Failed to update metadata for {domain}: {e}")
                 
                 logger.info(f"Certificate renewed successfully for {domain}")
                 self._invalidate_certificate_info_cache(domain)
@@ -1605,6 +1636,10 @@ class CertificateManager:
                         summary['renewed'] += 1
                         logger.info(f"Successfully renewed certificate for {domain}")
                         self._audit_scheduled_renew(domain, 'success')
+                        # Fire deploy hooks for background renewals too (#329):
+                        # the manual path publishes this via the executor, the
+                        # scheduler must publish it itself.
+                        self._publish_renewed_event(domain)
                     except Exception as e:
                         summary['failed'] += 1
                         logger.error(f"Failed to renew certificate for {domain}: {e}")
