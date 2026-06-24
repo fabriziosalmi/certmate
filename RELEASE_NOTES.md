@@ -1,3 +1,19 @@
+## v2.18.1 (Patch — dashboard polish + documentation translations)
+
+Objective UI-audit fixes and the first wave of translated documentation. No behaviour change to certificate issuance.
+
+### Fixes
+
+- **Dashboard dates rendered in the browser's locale** ([#337](https://github.com/fabriziosalmi/certmate/pull/337)): `toLocaleDateString(undefined, …)` meant an Italian-locale browser showed Italian month names ("17 apr 2026") inside the otherwise English UI. Pinned to `en-US` on the certificate table and the detail panel.
+- **"Valid" stat card was green even at zero** ([#337](https://github.com/fabriziosalmi/certmate/pull/337)): 0 valid certificates is not a success state; the value is now shown in a neutral colour when the count is 0.
+- **Expired certificates showed a closed padlock** ([#337](https://github.com/fabriziosalmi/certmate/pull/337)): the closed-padlock "secure connection" glyph on an expired cert was a visual paradox; expired rows now use an open padlock.
+- **"Backend: …" deployment badge was ambiguous** ([#337](https://github.com/fabriziosalmi/certmate/pull/337)): easily misread as "the CertMate app is down". Relabelled to "Server" (the probe ran from the server) vs "Browser"; the badge role id and the deployed-counter logic are unchanged.
+- **Client-certificate stat cards used a single mobile column** ([#337](https://github.com/fabriziosalmi/certmate/pull/337)): they now use a two-column mobile grid like the server-certificate stats, halving the vertical space.
+
+### Documentation
+
+- **Translated documentation trees** for French ([#327](https://github.com/fabriziosalmi/certmate/pull/327)), Italian ([#338](https://github.com/fabriziosalmi/certmate/pull/338)), German and Spanish ([#339](https://github.com/fabriziosalmi/certmate/pull/339)) under `docs/fr/`, `docs/it/`, `docs/de/`, `docs/es/`. Each mirrors the English docs structure verbatim (code, commands, links and section layout preserved); only prose is translated. The Italian set is native-reviewed; the German and Spanish sets are awaiting native-speaker review.
+
 ## v2.18.0 (Feature — multi-protocol deployment probes + deploy-hook reliability)
 
 Deployment verification grows beyond HTTPS-on-443, and the deploy-hook pipeline closes two gaps that left scheduled renewals undeployed and a dashboard counter stuck at zero.
