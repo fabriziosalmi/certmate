@@ -28,7 +28,7 @@ class DNSManager:
         'hetzner-cloud', 'rfc2136', 'powerdns', 'edgedns', 'gandi',
         'arvancloud', 'infomaniak', 'acme-dns', 'duckdns', 'vultr',
         'dnsmadeeasy', 'nsone', 'porkbun', 'he-ddns', 'dynudns',
-        'desec', 'scaleway',
+        'desec', 'scaleway', 'solidserver',
         'custom-script',
     ]
 

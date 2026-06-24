@@ -157,6 +157,7 @@ CertMate supports a wide range of DNS providers through Let's Encrypt DNS-01 cha
 | **Google Cloud DNS**   | Service Account JSON          | **Yes**       | Google Cloud Platform           | **Stable** |
 | **DigitalOcean**       | API Token                     | **Yes**       | Cloud infrastructure            | **Stable** |
 | **PowerDNS**           | API URL, API Key              | **Yes**       | Self-hosted, On-premises        | **Stable** |
+| **EfficientIP SOLIDserver** | Host, API Credentials     | **Yes**       | Enterprise DDI / Smart Architecture | **Stable** |
 | **RFC2136**            | Nameserver, TSIG Key/Secret   | **Yes**       | Standard DNS update protocol    | **Stable** |
 | **Linode** (Akamai Connected Cloud) | API Key             | Single        | Cloud hosting                   | **Stable** |
 | **Akamai Edge DNS**    | EdgeGrid (.edgerc) credentials| Single        | Enterprise managed DNS          | **Stable** |
@@ -184,7 +185,7 @@ CertMate supports a wide range of DNS providers through Let's Encrypt DNS-01 cha
 
 - **Enterprise Multi-Account**: Cloudflare, AWS Route53, Azure DNS, Google Cloud DNS, DigitalOcean, PowerDNS, RFC2136
 - **Cloud Providers**: AWS Route53, Azure DNS, Google Cloud DNS, DigitalOcean, Linode, Akamai Edge DNS, Vultr, Hetzner
-- **Enterprise DNS**: Cloudflare, DNS Made Easy, NS1, PowerDNS
+- **Enterprise DNS**: Cloudflare, DNS Made Easy, NS1, PowerDNS, EfficientIP SOLIDserver
 - **Domain Registrars**: Gandi, OVH, Namecheap, Porkbun, GoDaddy 
 - **European Providers**: OVH, Gandi, Hetzner
 - **Free Services**: Hurricane Electric, Dynu

@@ -390,6 +390,7 @@
             'hetzner-cloud': ['hetzner-cloud_api_token'],
             'desec': ['desec_api_token'],
             'scaleway': ['scaleway_application_token'],
+            'solidserver': ['solidserver_host', 'solidserver_username', 'solidserver_password', 'solidserver_dns_name', 'solidserver_dnsview_name', 'solidserver_propagation_seconds'],
             'custom-script': ['custom-script_auth_hook', 'custom-script_cleanup_hook']
         };
 
@@ -594,7 +595,7 @@
         var providers = [
             'cloudflare', 'route53', 'azure', 'google', 'powerdns',
             'digitalocean', 'linode', 'edgedns', 'gandi', 'ovh', 'namecheap',
-            'vultr', 'dnsmadeeasy', 'nsone', 'rfc2136', 'hetzner',
+            'vultr', 'solidserver', 'dnsmadeeasy', 'nsone', 'rfc2136', 'hetzner',
             'porkbun', 'godaddy', 'he-ddns', 'dynudns', 'duckdns',
             'arvancloud', 'infomaniak', 'acme-dns', 'hetzner-cloud',
             'desec', 'scaleway',
@@ -1148,6 +1149,14 @@
             ],
             'vultr': [
                 { name: 'api_key', label: 'API Key', type: 'password', placeholder: 'Your Vultr API key', required: true }
+            ],
+            'solidserver': [
+                { name: 'host', label: 'Host', type: 'text', placeholder: 'IP or hostname', required: true },
+                { name: 'username', label: 'Username', type: 'text', placeholder: 'API user', required: true },
+                { name: 'password', label: 'Password', type: 'password', placeholder: 'API password', required: true },
+                { name: 'dns_name', label: 'DNS Server Name', type: 'text', placeholder: 'SOLIDserver smart architecture DNS name', required: true },
+                { name: 'dnsview_name', label: 'DNS View Name', type: 'text', placeholder: 'External (optional)', required: false },
+                { name: 'propagation_seconds', label: 'Propagation Delay (s)', type: 'number', placeholder: '120', required: false }
             ],
             'duckdns': [
                 { name: 'api_token', label: 'Account Token', type: 'password', placeholder: 'UUID-format token from your DuckDNS account page', required: true }
