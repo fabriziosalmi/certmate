@@ -1,3 +1,12 @@
+## v2.19.0 (Feature — configurable rate limits + rfc2136 CNAME delegation)
+
+Two backlog features: operator-tunable API rate limits and DNS-alias (CNAME delegation) support for rfc2136.
+
+### Features
+
+- **Configurable API rate limits** ([#319](https://github.com/fabriziosalmi/certmate/issues/319)): the per-endpoint limits were hardcoded, so a trusted automation fleet (e.g. a cron deploy fanning out across VMs behind one egress IP) tripped the shared bucket with no way to raise it. Settings → API Keys → **API Rate Limits** now exposes a value-per-endpoint form and an on/off toggle, mirrored by `GET`/`PUT /api/settings/rate-limits` (admin). Changes apply live, with no restart; the values are read and sanitised on each request so a malformed entry can never disable a limit. The login endpoint keeps its own separate limiter.
+- **rfc2136 domain_alias (CNAME delegation)** ([#330](https://github.com/fabriziosalmi/certmate/issues/330)): `domain_alias` mode previously rejected rfc2136. It now writes the `_acme-challenge.<alias>` TXT into the alias zone with a TSIG-signed dynamic update, discovering the owning zone from the server's SOA — so one rfc2136 TSIG key can serve several zones, including externally-managed domains whose owners only add the delegating CNAME. Reuses the existing `nameserver` / `tsig_key` / `tsig_secret` credentials (plus an optional `tsig_algorithm`, default HMAC-SHA512); no new dependency. Verified against a Technitium-style HMAC-SHA512 setup.
+
 ## v2.18.1 (Patch — dashboard polish + documentation translations)
 
 Objective UI-audit fixes and the first wave of translated documentation. No behaviour change to certificate issuance.
