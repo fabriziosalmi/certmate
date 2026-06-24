@@ -102,8 +102,8 @@ def test_create_builds_tsig_update_to_alias_record(captured_update):
     msg = captured_update['message']
     # Signed with TSIG, addressed to the discovered zone.
     assert msg.keyname is not None
+    assert msg.origin == dns.name.from_text('example.com.')
     rendered = msg.to_text()
-    assert 'example.com' in rendered
     assert '_acme-challenge.validation' in rendered
     assert 'TXT' in rendered
     assert 'validation-token-123' in rendered
