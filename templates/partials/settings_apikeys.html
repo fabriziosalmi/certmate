@@ -163,4 +163,44 @@
             </div>
         </div>
 
+        <!-- TAB: API Keys — Configurable API rate limits (#319) -->
+        <div x-show="tab === 'apikeys'" x-cloak
+             x-data="rateLimitManager()" x-init="load()"
+             class="bg-surface border-border rounded-lg shadow-sm border p-6 mt-6">
+
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold text-foreground flex items-center">
+                    <i class="fas fa-gauge-high mr-2 text-primary"></i>
+                    API Rate Limits
+                </h3>
+                <label class="inline-flex items-center cursor-pointer text-sm text-muted">
+                    <input type="checkbox" x-model="enabled" class="mr-2" title="Enable API rate limiting">
+                    Enabled
+                </label>
+            </div>
+
+            <p class="text-muted text-sm mb-6">
+                Requests per minute per client &mdash; per API key, or per IP for session and anonymous requests. Raise these if a trusted automation fleet behind one address trips a shared bucket. Turning the toggle off disables API rate limiting entirely.
+            </p>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4" :class="enabled ? '' : 'opacity-50'">
+                <template x-for="k in keys" :key="k">
+                    <div>
+                        <label class="block text-xs text-muted mb-1" x-text="label(k)"></label>
+                        <input type="number" min="1" max="100000" x-model.number="limits[k]" :disabled="!enabled"
+                               :aria-label="label(k) + ' requests per minute'"
+                               class="w-full px-3 py-2 border border-border rounded-md text-sm dark:bg-gray-700 dark:text-white">
+                    </div>
+                </template>
+            </div>
+
+            <div class="mt-6 flex justify-end">
+                <button type="button" @click="save()" :disabled="saving" title="Save rate limits"
+                        class="px-4 py-2 bg-yellow-600 text-white rounded-md hover:bg-yellow-700 text-sm whitespace-nowrap">
+                    <i class="fas fa-save mr-1"></i>
+                    <span x-text="saving ? 'Saving...' : 'Save Rate Limits'"></span>
+                </button>
+            </div>
+        </div>
+
         

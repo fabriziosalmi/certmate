@@ -42,6 +42,7 @@ PUBLIC_SETTINGS_WRITABLE_KEYS = frozenset({
     'certificate_storage',
     'backup_storage',          # off-site backup target (S3-compatible)
     'notifications',
+    'rate_limits',             # configurable API rate limits (#319); no side-effects
     'setup_completed',
     # Per-install "stop nagging me with the first-run wizard" flag. Distinct
     # from setup_completed, which must stay truthful for recovery/downgrade
@@ -328,6 +329,7 @@ _DEEP_MERGE_SETTINGS_KEYS = frozenset({
     'backup_storage',
     'ca_providers',
     'notifications',
+    'rate_limits',
 })
 
 

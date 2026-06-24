@@ -362,6 +362,81 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
             logger.error(f"Failed to save notifications config: {e}")
             return jsonify({'error': 'Failed to save notifications config'}), 500
 
+    @app.route('/api/settings/rate-limits', methods=['GET', 'PUT'])
+    @auth_manager.require_role('admin')
+    def api_rate_limits_config():
+        """Get or replace the configurable API rate limits (#319).
+
+        GET  -> {enabled, limits (effective = defaults + overrides), defaults}
+        PUT  -> {enabled?: bool, limits?: {endpoint: requests_per_minute}}
+        Only the known endpoint keys are accepted, each a positive integer.
+        """
+        from modules.core.rate_limit import RateLimitConfig
+        settings_manager = managers.get('settings')
+        if settings_manager is None:
+            return jsonify({'error': 'Settings not available'}), 503
+        defaults = dict(RateLimitConfig.DEFAULT_LIMITS)
+
+        if request.method == 'GET':
+            try:
+                block = (settings_manager.load_settings() or {}).get('rate_limits') or {}
+                overrides = block.get('limits') if isinstance(block.get('limits'), dict) else {}
+                return jsonify({
+                    'enabled': bool(block.get('enabled', True)),
+                    'limits': {**defaults, **{k: v for k, v in overrides.items() if k in defaults}},
+                    'defaults': defaults,
+                })
+            except Exception as e:
+                logger.error(f"Failed to read rate limits: {e}")
+                return jsonify({'error': 'Failed to read rate limits'}), 500
+
+        try:
+            data = request.json or {}
+            if not isinstance(data, dict):
+                return jsonify({'error': 'Body must be a JSON object'}), 400
+
+            enabled = bool(data.get('enabled', True))
+            raw_limits = data.get('limits', {})
+            if not isinstance(raw_limits, dict):
+                return jsonify({'error': 'limits must be an object'}), 400
+
+            clean_limits = {}
+            for key, value in raw_limits.items():
+                if key not in defaults:
+                    return jsonify({'error': f'Unknown rate-limit key: {key}'}), 400
+                # bool is an int subclass; reject it and any non-int (float/str).
+                if isinstance(value, bool) or not isinstance(value, int):
+                    return jsonify({'error': f'{key} must be an integer'}), 400
+                if value < 1 or value > 100000:
+                    return jsonify({'error': f'{key} must be between 1 and 100000'}), 400
+                clean_limits[key] = value
+
+            def _mutator(s):
+                s['rate_limits'] = {'enabled': enabled, 'limits': clean_limits}
+                return s
+
+            settings_manager.update(_mutator)
+            audit_logger = managers.get('audit')
+            if audit_logger:
+                actor = getattr(request, 'current_user', {}) or {}
+                audit_logger.log_operation(
+                    operation='update',
+                    resource_type='rate_limits_config',
+                    resource_id='rate_limits',
+                    status='success',
+                    details={'enabled': enabled, 'overrides': sorted(clean_limits.keys())},
+                    user=actor.get('username'),
+                    ip_address=request.remote_addr,
+                )
+            return jsonify({
+                'message': 'Rate limits updated',
+                'enabled': enabled,
+                'limits': {**defaults, **clean_limits},
+            })
+        except Exception as e:
+            logger.error(f"Failed to save rate limits: {e}")
+            return jsonify({'error': 'Failed to save rate limits'}), 500
+
     @app.route('/api/notifications/test', methods=['POST'])
     @auth_manager.require_role('admin')
     def api_notifications_test():
