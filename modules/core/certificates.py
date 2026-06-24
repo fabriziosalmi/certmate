@@ -43,6 +43,7 @@ DNS_ALIAS_SUPPORTED_PROVIDERS = {
     'infomaniak',
     'acme-dns',
     'duckdns',
+    'rfc2136',
 }
 
 DNS_ALIAS_REQUIRED_FIELDS = {
@@ -61,6 +62,7 @@ DNS_ALIAS_REQUIRED_FIELDS = {
     'infomaniak': ('api_token',),
     'acme-dns': ('api_url', 'username', 'password', 'subdomain'),
     'duckdns': ('api_token',),
+    'rfc2136': ('nameserver', 'tsig_key', 'tsig_secret'),
 }
 
 

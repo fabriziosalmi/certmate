@@ -324,6 +324,119 @@ def _acme_dns_change(config, validation, action):
     )
 
 
+def _rfc2136_keyalgorithm(algorithm):
+    """Map a CertMate TSIG algorithm string (e.g. 'HMAC-SHA512') to the
+    dnspython algorithm name. Defaults to HMAC-SHA512 to match the normal
+    rfc2136 issuance path."""
+    import dns.tsig
+    name = (algorithm or 'HMAC-SHA512').strip().upper().replace('-', '_')
+    algo = getattr(dns.tsig, name, None)
+    if algo is None:
+        raise DNSAliasError(
+            f"Unsupported rfc2136 TSIG algorithm: {algorithm!r}. Use one of "
+            "HMAC-MD5, HMAC-SHA1, HMAC-SHA224, HMAC-SHA256, HMAC-SHA384, HMAC-SHA512."
+        )
+    return algo
+
+
+def _rfc2136_server(nameserver):
+    """Split a 'host' or 'host:port' nameserver into (host, port). IPv6 in
+    brackets ('[::1]:5353') is honoured; default port is 53."""
+    import dns.name  # noqa: F401  (ensures dnspython present for clear errors)
+    server = (nameserver or '').strip()
+    if server.startswith('[') and ']' in server:  # [ipv6](:port)?
+        host, _, rest = server[1:].partition(']')
+        port = rest.lstrip(':')
+        return host, int(port) if port.isdigit() else 53
+    # Only treat a single trailing ':NNN' as a port, never an IPv6 address.
+    if server.count(':') == 1:
+        host, _, port = server.partition(':')
+        if port.isdigit():
+            return host, int(port)
+    return server, 53
+
+
+def _rfc2136_find_zone(record_fqdn, host, port, timeout):
+    """Find the zone apex hosting *record_fqdn* by walking parent labels and
+    asking the authoritative server for the SOA. dnspython's dynamic UPDATE is
+    addressed to the zone, not the record FQDN."""
+    import dns.name
+    import dns.message
+    import dns.query
+    import dns.rdatatype
+    import dns.flags
+
+    candidate = dns.name.from_text(record_fqdn)
+    while True:
+        query = dns.message.make_query(candidate, dns.rdatatype.SOA)
+        try:
+            resp = dns.query.udp(query, host, port=port, timeout=timeout)
+            if resp.flags & dns.flags.TC:
+                resp = dns.query.tcp(query, host, port=port, timeout=timeout)
+        except Exception:
+            resp = dns.query.tcp(query, host, port=port, timeout=timeout)
+        for section in (resp.answer, resp.authority):
+            for rrset in section:
+                if rrset.rdtype == dns.rdatatype.SOA:
+                    return rrset.name  # zone apex
+        # Stop once we reach a TLD-level name (labels = ['tld', '']).
+        if len(candidate.labels) <= 2:
+            break
+        candidate = candidate.parent()
+    raise DNSAliasError(
+        f"Could not determine the rfc2136 zone for '{record_fqdn}'. Verify the "
+        "nameserver is authoritative for the alias zone."
+    )
+
+
+def _rfc2136_change(config, validation, action):
+    provider_config = _provider_config(config)
+    _require(provider_config, 'nameserver', 'tsig_key', 'tsig_secret')
+    try:
+        import dns.name
+        import dns.query
+        import dns.rcode
+        import dns.tsigkeyring
+        import dns.update
+    except Exception as exc:
+        raise DNSAliasError("dnspython is required for rfc2136 alias mode") from exc
+
+    record = _record_name(config['domain_alias'])
+    host, port = _rfc2136_server(provider_config['nameserver'])
+    keyalgorithm = _rfc2136_keyalgorithm(provider_config.get('tsig_algorithm'))
+    try:
+        keyring = dns.tsigkeyring.from_text(
+            {provider_config['tsig_key']: provider_config['tsig_secret']}
+        )
+    except Exception as exc:
+        raise DNSAliasError(f"Invalid rfc2136 TSIG key/secret: {exc}") from exc
+
+    timeout = 30
+    zone = _rfc2136_find_zone(record, host, port, timeout)
+    rel_name = dns.name.from_text(record).relativize(zone)
+
+    update = dns.update.Update(zone, keyring=keyring, keyalgorithm=keyalgorithm)
+    if action == 'create':
+        update.add(rel_name, 60, 'TXT', validation)
+    else:
+        update.delete(rel_name, 'TXT', validation)
+
+    try:
+        response = dns.query.tcp(update, host, port=port, timeout=timeout)
+    except Exception as exc:
+        raise DNSAliasError(f"rfc2136 TSIG update to {host}:{port} failed: {exc}") from exc
+
+    rcode = response.rcode()
+    if rcode != dns.rcode.NOERROR:
+        # NXRRSET on a delete just means the record was already gone — benign.
+        if action == 'delete' and rcode == dns.rcode.NXRRSET:
+            return
+        raise DNSAliasError(
+            f"rfc2136 TSIG update rejected by {host}:{port}: "
+            f"{dns.rcode.to_text(rcode)}"
+        )
+
+
 def _change_txt(config, action):
     validation = os.environ.get('CERTBOT_VALIDATION')
     if not validation:
@@ -338,6 +451,8 @@ def _change_txt(config, action):
         _edgedns_change(config, validation, action)
     elif provider == 'acme-dns':
         _acme_dns_change(config, validation, action)
+    elif provider == 'rfc2136':
+        _rfc2136_change(config, validation, action)
     else:
         raise DNSAliasError(f"Unsupported DNS alias provider: {provider}")
 

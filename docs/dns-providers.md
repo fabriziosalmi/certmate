@@ -649,6 +649,16 @@ Cloudflare, PowerDNS, and Route53 all use the same request shape:
 
 For ACME-DNS, `domain_alias` must exactly match the configured ACME-DNS `subdomain`/fulldomain. CertMate updates that ACME-DNS record directly and does not attempt cleanup because ACME-DNS stores the latest validation value.
 
+For **RFC2136** (BIND, Technitium, and other dynamic-update servers), `domain_alias` writes the `_acme-challenge.<alias>` TXT into the alias zone with a TSIG-signed dynamic update, using the same `nameserver` / `tsig_key` / `tsig_secret` (and optional `tsig_algorithm`, default HMAC-SHA512) as normal issuance. CertMate discovers the owning zone from the server's SOA, so one TSIG key can serve several zones — including externally-managed domains whose owners only added the delegating CNAME:
+
+```json
+{
+  "domain": "external.example.com",
+  "dns_provider": "rfc2136",
+  "domain_alias": "internal.example.net"
+}
+```
+
 ### Wildcard Certificates with Domain Alias
 
 ```bash

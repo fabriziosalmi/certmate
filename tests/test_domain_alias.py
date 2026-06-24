@@ -12,7 +12,7 @@ from modules.core.shell import MockShellExecutor
 CORE_ALIAS_PROVIDERS = [
     'cloudflare', 'route53', 'azure', 'google', 'powerdns', 'digitalocean',
     'linode', 'edgedns', 'gandi', 'ovh', 'namecheap', 'arvancloud',
-    'infomaniak', 'acme-dns', 'duckdns',
+    'infomaniak', 'acme-dns', 'duckdns', 'rfc2136',
 ]
 
 
@@ -323,14 +323,15 @@ def test_dns_alias_check_reports_missing_and_ok_records(tmp_path):
 
 
 def test_domain_alias_rejects_unsupported_provider(tmp_path):
-    mgr, _ = _manager(tmp_path, provider='rfc2136')
+    # hetzner is a real DNS provider but has no alias-zone writer.
+    mgr, _ = _manager(tmp_path, provider='hetzner')
 
     with patch('modules.core.certificates.check_certbot_plugin_installed', return_value=True):
         with pytest.raises(RuntimeError) as exc_info:
             mgr.create_certificate(
                 domain='example.com',
                 email='test@example.com',
-                dns_provider='rfc2136',
+                dns_provider='hetzner',
                 staging=True,
                 domain_alias='validation.example.org',
             )
