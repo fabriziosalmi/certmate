@@ -251,7 +251,7 @@
             .then(function (snapshot) {
                 var markdown = buildMarkdown(snapshot, errorContext, clientContext);
                 if (snapshot && snapshot._snapshot_unavailable) {
-                    markdown = '> ⚠️ Server snapshot was unavailable (status ' +
+                    markdown = '> **Note:** Server snapshot was unavailable (status ' +
                         (snapshot._snapshot_status || 'network error') +
                         '). The report below is client-side only.\n\n' + markdown;
                 }

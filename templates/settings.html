@@ -3,14 +3,14 @@
 {% block title %}Settings - CertMate{% endblock %}
 {% block content %}
     <!-- Settings page: single Alpine root that tab-switches every section below it. -->
-    <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8"
+    <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8"
          x-data="{ tab: (location.hash.slice(1) || 'dns') }"
          x-init="$watch('tab', t => history.replaceState(null, '', '#' + t))">
         <div class="bg-surface shadow-card rounded-xl">
             <div class="px-6 py-3 border-b border-gray-100 dark:border-white/5 overflow-x-auto">
                 <div class="flex items-center justify-between mb-2">
                     <nav class="flex items-center text-sm" aria-label="Breadcrumb">
-                        <a href="/" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"><i class="fas fa-home"></i></a>
+                        <a href="/" aria-label="Home" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"><i class="fas fa-home"></i></a>
                         <i class="fas fa-chevron-right text-[10px] text-gray-300 dark:text-gray-600 mx-2"></i>
                         <span class="text-gray-700 dark:text-gray-200 font-medium">Settings</span>
                     </nav>
@@ -37,9 +37,12 @@
                         </div>
                     </div>
                 </div>
-                <nav class="flex space-x-1 min-w-max" role="tablist">
+                <nav class="flex space-x-1 min-w-max" role="tablist" @keydown="onSettingsTabKeydown($event)">
                     <template x-for="t in [{id:'dns',icon:'fa-server',label:'DNS'},{id:'ca',icon:'fa-shield-alt',label:'CA'},{id:'general',icon:'fa-cogs',label:'General'},{id:'storage',icon:'fa-database',label:'Storage'},{id:'notifications',icon:'fa-bell',label:'Notifications'},{id:'deploy',icon:'fa-rocket',label:'Deploy'},{id:'probe',icon:'fa-network-wired',label:'Probe'},{id:'users',icon:'fa-users',label:'Users'},{id:'apikeys',icon:'fa-key',label:'API Keys'},{id:'oidc',icon:'fa-id-badge',label:'SSO'},{id:'backup',icon:'fa-archive',label:'Backup'}]">
                         <button type="button" @click="tab = t.id" role="tab"
+                                :id="'settings-tab-' + t.id"
+                                :aria-controls="'settings-panel-' + t.id"
+                                :tabindex="tab === t.id ? '0' : '-1'"
                                 :title="t.label"
                                 :aria-label="t.label"
                                 :aria-selected="tab === t.id ? 'true' : 'false'"
@@ -71,7 +74,7 @@
                     {% include 'partials/settings_oidc.html' %}
 
                     <!-- TAB: Backup & Restore Section -->
-                    <div x-show="tab === 'backup'" x-cloak class="bg-surface rounded-xl shadow-card p-6 mt-6">
+                    <div x-show="tab === 'backup'" x-cloak id="settings-panel-backup" role="tabpanel" aria-labelledby="settings-tab-backup" tabindex="0" class="bg-surface rounded-xl shadow-card p-6 mt-6">
             <div class="flex items-center justify-between mb-4">
                 <h3 class="text-lg font-semibold text-foreground flex items-center">
                     <i class="fas fa-database mr-2 text-blue-500"></i>
@@ -174,7 +177,7 @@
                     Account Name *
                 </label>
                 <input type="text" id="account-name" name="name" required
-                       class="mt-1 block w-full border border-border dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                       class="mt-1 block w-full border border-border bg-input text-foreground rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
                        placeholder="e.g., Production, Development, Client-A">
             </div>
 
@@ -183,7 +186,7 @@
                     Description (optional)
                 </label>
                 <input type="text" id="account-description" name="description"
-                       class="mt-1 block w-full border border-border dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                       class="mt-1 block w-full border border-border bg-input text-foreground rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
                        placeholder="Brief description of this account">
             </div>
 
@@ -221,7 +224,7 @@
                     Account Name *
                 </label>
                 <input type="text" id="edit-account-name" name="name" required
-                       class="mt-1 block w-full border border-border dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary">
+                       class="mt-1 block w-full border border-border bg-input text-foreground rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary">
             </div>
 
             <div>
@@ -229,7 +232,7 @@
                     Description (optional)
                 </label>
                 <input type="text" id="edit-account-description" name="description"
-                       class="mt-1 block w-full border border-border dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary">
+                       class="mt-1 block w-full border border-border bg-input text-foreground rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary">
             </div>
 
             <!-- Dynamic fields will be populated here based on provider -->

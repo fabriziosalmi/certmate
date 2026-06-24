@@ -1,5 +1,5 @@
 <!-- TAB: User Management Section -->
-        <div x-show="tab === 'users'" x-cloak class="bg-surface border-border rounded-lg shadow-sm border p-6 mt-6">
+        <div x-show="tab === 'users'" x-cloak id="settings-panel-users" role="tabpanel" aria-labelledby="settings-tab-users" tabindex="0" class="bg-surface border-border rounded-lg shadow-sm border p-6 mt-6">
             <div class="flex items-center justify-between mb-4">
                 <h3 class="text-lg font-semibold text-foreground flex items-center">
                     <i class="fas fa-users mr-2 text-primary"></i>
@@ -36,7 +36,7 @@
                     </div>
                     <label class="relative inline-flex items-center cursor-pointer">
                         <input type="checkbox" id="localAuthToggle" class="sr-only peer" onchange="toggleLocalAuth()">
-                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-primary"></div>
                     </label>
                 </div>
             </div>
@@ -48,27 +48,27 @@
                 </h4>
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div>
-                        <label class="block text-xs text-muted mb-1">Username</label>
+                        <label for="newUserUsername" class="block text-xs text-muted mb-1">Username</label>
                         <input type="text" id="newUserUsername" placeholder="username"
-                               class="w-full px-3 py-2 border border-border rounded-md text-sm dark:bg-gray-700 dark:text-white">
+                               class="w-full px-3 py-2 border border-border rounded-md text-sm bg-input text-foreground">
                     </div>
                     <div>
-                        <label class="block text-xs text-muted mb-1">Password</label>
+                        <label for="newUserPassword" class="block text-xs text-muted mb-1">Password</label>
                         <input type="password" id="newUserPassword" placeholder="password"
                                autocomplete="new-password"
-                               class="w-full px-3 py-2 border border-border rounded-md text-sm dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-primary focus:border-primary">
+                               class="w-full px-3 py-2 border border-border rounded-md text-sm bg-input text-foreground focus:outline-none focus:ring-primary focus:border-primary">
                         <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">Min 12 chars, 1 digit, 1 symbol</p>
                     </div>
                     <div>
-                        <label class="block text-xs text-muted mb-1">Email (optional)</label>
+                        <label for="newUserEmail" class="block text-xs text-muted mb-1">Email (optional)</label>
                         <input type="email" id="newUserEmail" placeholder="user@example.com"
-                               class="w-full px-3 py-2 border border-border rounded-md text-sm dark:bg-gray-700 dark:text-white">
+                               class="w-full px-3 py-2 border border-border rounded-md text-sm bg-input text-foreground">
                     </div>
                     <div>
-                        <label class="block text-xs text-muted mb-1">Role</label>
+                        <label for="newUserRole" class="block text-xs text-muted mb-1">Role</label>
                         <div class="flex items-center space-x-2">
-                            <select id="newUserRole" 
-                                    class="flex-1 px-3 py-2 border border-border rounded-md text-sm dark:bg-gray-700 dark:text-white">
+                            <select id="newUserRole"
+                                    class="flex-1 px-3 py-2 border border-border rounded-md text-sm bg-input text-foreground">
                                 <option value="viewer">Viewer</option>
                                 <option value="operator" selected>Operator</option>
                                 <option value="admin">Admin</option>

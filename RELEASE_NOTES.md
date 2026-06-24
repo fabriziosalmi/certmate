@@ -1,3 +1,30 @@
+## v2.19.1 (Patch — UI defect sweep, accessibility, design-token consistency)
+
+A focused frontend pass from an internal UI/UX audit: objective interaction bugs, a broad accessibility upgrade, and design-token consistency. No change to certificate issuance; gated through the full real-cert E2E suite (Let's Encrypt staging via Cloudflare DNS-01).
+
+### Fixes
+
+- **In-page confirm dialogs rendered "[object Object]" titles**: `runDeployHooks` and `toggleAutoRenew` passed an options object where `CertMate.confirm(message, title, options)` expects the title, so the modal heading showed `[object Object]` and the custom button label was dropped. Corrected the argument order; both are non-destructive (blue) confirmations.
+- **Dead duplicate detail-panel button**: the certificate detail panel rendered two byte-identical "Check Deployment" / "Check Probe" buttons wired to the same handler. Removed the dead duplicate.
+- **`Check all` deployment button relied on implicit `window.event`**: `checkAllDeploymentStatuses()` read `event.target` with no parameter, which is undefined in Firefox/Safari under the strict-mode module, so the button never disabled and rapid clicks fanned out parallel batches. The event is now passed explicitly.
+- **Toast notifications clipped off-screen on mobile and were invisible to screen readers**: the container used `right-4 w-full` (pushing its left edge off-screen below ~410px) with no live region. It now spans the viewport with margins and announces via `aria-live` (errors as `role="alert"`).
+- **Core pages had no mobile horizontal padding**: the dashboard, settings and activity wrappers sat flush to the screen edge below 640px. Added `px-4`.
+- **Certificate-created toast shown as info (blue)** instead of success (green); the deploy-hook loading overlay could stick if the error handler threw (now cleared via `finally`); a deployment-status badge `id` was emitted up to three times per row (invalid HTML) — the deployed-counter now reads the cache directly and the duplicate `id` is gone.
+
+### Accessibility
+
+- **Modal dialog semantics and focus management**: the shared `CertMate.confirm` / `CertMate.prompt` dialogs gained `role="alertdialog"`/`"dialog"`, `aria-modal`, labelled headings, a Tab focus-trap and focus restore on close; destructive confirms now focus Cancel so an inadvertent Enter cannot confirm before the message is read.
+- **WAI-ARIA tab pattern completed**: the 11 settings tabs, the client-certificate single/bulk tabs and the server/client view toggle now expose proper `tabpanel`/`aria-controls`/`aria-selected` (or `aria-pressed`) relationships, a roving tabindex and arrow-key navigation.
+- **Labels and names**: search box, detail-panel close, debug-console controls, breadcrumb home links, the add-user and SMTP/webhook fields and 25 storage fields are now programmatically labelled; collapsible sections expose `aria-expanded`; certificate table rows are keyboard-operable (Enter/Space).
+- **Command palette**: added the five settings tabs it was missing (Notifications, Deploy, Probe, API Keys, SSO), `role="dialog"`, and focus restore on close.
+
+### Consistency
+
+- **Form inputs migrated to semantic tokens**: 113 inputs using `dark:bg-gray-700 dark:text-white` (a dark-only override) now use `bg-input text-foreground`, so a future theme change reaches every field. The theme codemod gained a dark-only ratchet so the pattern cannot silently return.
+- **Dark-mode and token clean-ups**: the activity deploy-error popup no longer inverts the theme; both toggle switches use `peer-checked:bg-primary`; two hardcoded modal backdrops now use `bg-black/50`.
+- **Public emoji removed** from the DNS provider selector, the CA quick-start hint and the issue-report body, per the project's plain-text convention.
+- **Responsive/touch**: API Docs is now reachable from the mobile bottom navigation; dense icon buttons (table actions, form close, deploy-hook remove) have larger touch targets.
+
 ## v2.19.0 (Feature — configurable rate limits + rfc2136 CNAME delegation)
 
 Two backlog features: operator-tunable API rate limits and DNS-alias (CNAME delegation) support for rfc2136.

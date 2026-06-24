@@ -56,18 +56,18 @@
     <div class="px-6 py-6">
         <!-- Tab Selection -->
         <div class="flex space-x-4 mb-6 border-b border-border" role="tablist">
-            <button id="singleTabBtn" role="tab" aria-selected="true" aria-controls="createClientCertForm"
+            <button id="singleTabBtn" role="tab" aria-selected="true" aria-controls="createClientCertForm" tabindex="0"
                     class="px-4 py-2 border-b-2 border-primary text-primary font-medium">
-                <i class="fas fa-user mr-1"></i> Single Certificate
+                <i class="fas fa-user mr-1" aria-hidden="true"></i> Single Certificate
             </button>
-            <button id="batchTabBtn" role="tab" aria-selected="false" aria-controls="batchForm"
+            <button id="batchTabBtn" role="tab" aria-selected="false" aria-controls="batchForm" tabindex="-1"
                     class="px-4 py-2 border-b-2 border-transparent text-muted hover:text-foreground font-medium">
-                <i class="fas fa-users mr-1"></i> Bulk Upload (CSV)
+                <i class="fas fa-users mr-1" aria-hidden="true"></i> Bulk Upload (CSV)
             </button>
         </div>
 
         <!-- Single Certificate Form -->
-        <form id="createClientCertForm" class="space-y-6">
+        <form id="createClientCertForm" role="tabpanel" aria-labelledby="singleTabBtn" tabindex="0" class="space-y-6">
             <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
                 <div>
                     <label for="commonName" class="block text-sm font-medium text-label mb-2">
@@ -140,7 +140,7 @@
         </form>
 
         <!-- Batch Upload Form (Hidden by default) -->
-        <div id="batchForm" class="hidden space-y-6">
+        <div id="batchForm" role="tabpanel" aria-labelledby="batchTabBtn" tabindex="0" class="hidden space-y-6">
             <div class="bg-info-surface border border-info-line rounded-lg p-4">
                 <p class="text-sm text-info-strong">
                     <i class="fas fa-info-circle mr-2"></i>

@@ -1,5 +1,5 @@
 <!-- TAB: Notifications -->
-        <div x-show="tab === 'notifications'" x-cloak class="bg-surface border-border rounded-lg shadow-sm border p-6 mt-6"
+        <div x-show="tab === 'notifications'" x-cloak id="settings-panel-notifications" role="tabpanel" aria-labelledby="settings-tab-notifications" tabindex="0" class="bg-surface border-border rounded-lg shadow-sm border p-6 mt-6"
              x-data="notificationSettings()" x-init="loadConfig()">
             <h3 class="text-lg font-semibold text-foreground flex items-center mb-6">
                 <i class="fas fa-bell mr-2 text-primary"></i>
@@ -50,12 +50,12 @@
                             <span class="text-sm text-label">Enable email notifications</span>
                         </label>
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div><label class="block text-xs text-muted mb-1">SMTP Host</label><input type="text" x-model="config.channels.smtp.host" placeholder="smtp.gmail.com" class="w-full px-3 py-2 text-sm border text-foreground border-border rounded-lg bg-input"></div>
-                            <div><label class="block text-xs text-muted mb-1">Port</label><input type="number" x-model.number="config.channels.smtp.port" placeholder="587" class="w-full px-3 py-2 text-sm border text-foreground border-border rounded-lg bg-input"></div>
-                            <div><label class="block text-xs text-muted mb-1">Username</label><input type="text" x-model="config.channels.smtp.username" placeholder="user@example.com" class="w-full px-3 py-2 text-sm border text-foreground border-border rounded-lg bg-input"></div>
-                            <div><label class="block text-xs text-muted mb-1">Password</label><input type="password" x-model="config.channels.smtp.password" placeholder="App password" class="w-full px-3 py-2 text-sm border text-foreground border-border rounded-lg bg-input"></div>
-                            <div><label class="block text-xs text-muted mb-1">From Address</label><input type="email" x-model="config.channels.smtp.from_address" placeholder="certmate@example.com" class="w-full px-3 py-2 text-sm border text-foreground border-border rounded-lg bg-input"></div>
-                            <div><label class="block text-xs text-muted mb-1">To Addresses (comma-separated)</label><input type="text" x-model="smtpToStr" placeholder="admin@example.com" class="w-full px-3 py-2 text-sm border text-foreground border-border rounded-lg bg-input"></div>
+                            <div><label class="block text-xs text-muted mb-1">SMTP Host</label><input type="text" aria-label="SMTP host" x-model="config.channels.smtp.host" placeholder="smtp.gmail.com" class="w-full px-3 py-2 text-sm border text-foreground border-border rounded-lg bg-input"></div>
+                            <div><label class="block text-xs text-muted mb-1">Port</label><input type="number" aria-label="SMTP port" x-model.number="config.channels.smtp.port" placeholder="587" class="w-full px-3 py-2 text-sm border text-foreground border-border rounded-lg bg-input"></div>
+                            <div><label class="block text-xs text-muted mb-1">Username</label><input type="text" aria-label="SMTP username" autocomplete="username" x-model="config.channels.smtp.username" placeholder="user@example.com" class="w-full px-3 py-2 text-sm border text-foreground border-border rounded-lg bg-input"></div>
+                            <div><label class="block text-xs text-muted mb-1">Password</label><input type="password" aria-label="SMTP password" autocomplete="new-password" data-lpignore="true" x-model="config.channels.smtp.password" placeholder="App password" class="w-full px-3 py-2 text-sm border text-foreground border-border rounded-lg bg-input"></div>
+                            <div><label class="block text-xs text-muted mb-1">From Address</label><input type="email" aria-label="From address" x-model="config.channels.smtp.from_address" placeholder="certmate@example.com" class="w-full px-3 py-2 text-sm border text-foreground border-border rounded-lg bg-input"></div>
+                            <div><label class="block text-xs text-muted mb-1">To Addresses (comma-separated)</label><input type="text" aria-label="To addresses, comma-separated" x-model="smtpToStr" placeholder="admin@example.com" class="w-full px-3 py-2 text-sm border text-foreground border-border rounded-lg bg-input"></div>
                         </div>
                         <button type="button" @click="testSmtp()" class="text-sm text-info-fg hover:underline"><i class="fas fa-paper-plane mr-1"></i>Send test email</button>
                     </div>
@@ -75,7 +75,7 @@
                             <button type="button" @click="sendDigest()" x-show="config.digest_enabled !== false && config.channels.smtp.enabled" class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"><i class="fas fa-paper-plane mr-1"></i>Send now</button>
                             <label class="relative inline-flex items-center cursor-pointer">
                                 <input type="checkbox" x-model="config.digest_enabled" class="sr-only peer" :disabled="!config.channels.smtp.enabled" title="Enable weekly digest">
-                                <div class="w-9 h-5 bg-gray-200 peer-focus:ring-2 peer-focus:ring-indigo-500 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-500 peer-checked:bg-indigo-500"></div>
+                                <div class="w-9 h-5 bg-gray-200 peer-focus:ring-2 peer-focus:ring-indigo-500 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-500 peer-checked:bg-primary"></div>
                             </label>
                         </div>
                     </div>
@@ -96,7 +96,7 @@
                                 <div class="flex items-center justify-between">
                                     <div class="flex items-center gap-2">
                                         <input type="checkbox" x-model="wh.enabled" class="w-4 h-4 rounded text-primary focus:ring-primary">
-                                        <input type="text" x-model="wh.name" placeholder="Webhook name" class="text-sm font-medium bg-transparent border-none p-0 text-foreground focus:ring-0 w-32">
+                                        <input type="text" aria-label="Webhook name" x-model="wh.name" placeholder="Webhook name" class="text-sm font-medium bg-transparent border-none p-0 text-foreground focus:ring-0 w-32">
                                     </div>
                                     <button type="button" @click="config.channels.webhooks.splice(idx, 1)" class="text-red-400 hover:text-red-600 text-sm"><i class="fas fa-trash"></i></button>
                                 </div>

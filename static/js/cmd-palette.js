@@ -12,6 +12,7 @@
     var selectedIndex = 0;
     var currentResults = [];
     var certCache = null;
+    var lastFocusedBeforeOpen = null;
 
     // Static searchable items
     var staticItems = [
@@ -25,7 +26,12 @@
         { type: 'settings', icon: 'fa-shield-alt', label: 'CA Settings', desc: 'Certificate authority configuration', url: '/settings#ca' },
         { type: 'settings', icon: 'fa-sliders-h', label: 'General Settings', desc: 'Notifications, defaults', url: '/settings#general' },
         { type: 'settings', icon: 'fa-database', label: 'Storage Settings', desc: 'Certificate storage paths', url: '/settings#storage' },
+        { type: 'settings', icon: 'fa-bell', label: 'Notification Settings', desc: 'Email, webhooks, weekly digest', url: '/settings#notifications' },
+        { type: 'settings', icon: 'fa-rocket', label: 'Deploy Hooks', desc: 'Post-issuance deploy automation', url: '/settings#deploy' },
+        { type: 'settings', icon: 'fa-network-wired', label: 'Deployment Probes', desc: 'Probe certificate deployment status', url: '/settings#probe' },
         { type: 'settings', icon: 'fa-users', label: 'User Management', desc: 'Manage user accounts', url: '/settings#users' },
+        { type: 'settings', icon: 'fa-key', label: 'API Keys', desc: 'Manage API keys and rate limits', url: '/settings#apikeys' },
+        { type: 'settings', icon: 'fa-id-badge', label: 'SSO / OIDC', desc: 'Single sign-on configuration', url: '/settings#oidc' },
         { type: 'settings', icon: 'fa-archive', label: 'Backup & Restore', desc: 'Backup configuration and certificates', url: '/settings#backup' },
         { type: 'action', icon: 'fa-plus-circle', label: 'Create Certificate', desc: 'Issue a new SSL certificate', url: '/', action: 'focusCreate' },
         { type: 'action', icon: 'fa-moon', label: 'Toggle Dark Mode', desc: 'Switch theme', action: 'toggleTheme' },
@@ -38,10 +44,10 @@
         div.className = 'fixed inset-0 z-[100] hidden';
         div.innerHTML =
             '<div class="fixed inset-0 bg-black/50 backdrop-blur-sm" id="cmdPaletteOverlay"></div>' +
-            '<div class="fixed inset-x-4 top-[15vh] sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 sm:w-full sm:max-w-lg bg-surface border-border rounded-xl shadow-2xl border overflow-hidden">' +
+            '<div role="dialog" aria-modal="true" aria-label="Command palette" class="fixed inset-x-4 top-[15vh] sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 sm:w-full sm:max-w-lg bg-surface border-border rounded-xl shadow-2xl border overflow-hidden">' +
                 '<div class="flex items-center px-4 border-b border-border">' +
-                    '<i class="fas fa-search text-gray-400 mr-3"></i>' +
-                    '<input id="cmdPaletteInput" type="text" placeholder="Search pages, settings, certificates..." ' +
+                    '<i class="fas fa-search text-gray-400 mr-3" aria-hidden="true"></i>' +
+                    '<input id="cmdPaletteInput" type="text" aria-label="Search pages, settings, certificates" placeholder="Search pages, settings, certificates..." ' +
                            'class="flex-1 py-3 bg-transparent text-foreground placeholder-gray-400 outline-none text-sm">' +
                     '<kbd class="hidden sm:inline-flex items-center px-2 py-0.5 text-xs text-gray-400 bg-surface-2 rounded">ESC</kbd>' +
                 '</div>' +
@@ -79,6 +85,8 @@
 
     function openPalette() {
         if (!paletteEl) createPaletteHTML();
+        // Remember what had focus so we can restore it on close (a11y).
+        lastFocusedBeforeOpen = document.activeElement;
         paletteEl.classList.remove('hidden');
         inputEl.value = '';
         selectedIndex = 0;
@@ -92,6 +100,12 @@
 
     function closePalette() {
         if (paletteEl) paletteEl.classList.add('hidden');
+        // Restore focus to the element that was active before opening, unless
+        // a result handler intentionally moved focus elsewhere (navigation).
+        if (lastFocusedBeforeOpen && typeof lastFocusedBeforeOpen.focus === 'function') {
+            try { lastFocusedBeforeOpen.focus(); } catch (e) { /* element gone */ }
+        }
+        lastFocusedBeforeOpen = null;
     }
 
     function isOpen() {

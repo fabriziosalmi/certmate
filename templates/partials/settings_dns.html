@@ -1,5 +1,5 @@
 <!-- TAB: DNS Providers -->
-                    <div x-show="tab === 'dns'" x-cloak>
+                    <div x-show="tab === 'dns'" x-cloak id="settings-panel-dns" role="tabpanel" aria-labelledby="settings-tab-dns" tabindex="0">
                     <!-- Challenge Type Selection -->
                     <div class="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg mb-4">
                         <label class="block text-sm font-medium text-label mb-3">
@@ -408,7 +408,7 @@
                                 </label>
                                 <div class="mt-1">
                                     <input type="password" id="cloudflare_api_token" name="cloudflare_api_token" 
-                                           class="block w-full border border-border dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                           class="block w-full border border-border bg-input text-foreground rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
                                            placeholder="Enter your Cloudflare API token"
                                            autocomplete="new-password" 
                                            spellcheck="false"
@@ -449,7 +449,7 @@
                                             Access Key ID
                                         </label>
                                         <input type="password" id="route53_access_key_id" name="route53_access_key_id" 
-                                               class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                                               class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground"
                                                placeholder="AKIAIOSFODNN7EXAMPLE"
                                                autocomplete="new-password" 
                                                spellcheck="false"
@@ -460,7 +460,7 @@
                                             Secret Access Key
                                         </label>
                                         <input type="password" id="route53_secret_access_key" name="route53_secret_access_key" 
-                                               class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                                               class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground"
                                                placeholder="Your AWS secret access key"
                                                autocomplete="new-password" 
                                                spellcheck="false"
@@ -471,7 +471,7 @@
                                             Region (Optional)
                                         </label>
                                         <input type="text" id="route53_region" name="route53_region" 
-                                               class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                                               class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground"
                                                placeholder="us-east-1" value="us-east-1">
                                     </div>
                                 </div>
@@ -510,7 +510,7 @@
                                             Subscription ID
                                         </label>
                                         <input type="text" id="azure_subscription_id" name="azure_subscription_id" 
-                                               class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                                               class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground"
                                                placeholder="12345678-1234-1234-1234-123456789012">
                                     </div>
                                     <div>
@@ -518,7 +518,7 @@
                                             Resource Group
                                         </label>
                                         <input type="text" id="azure_resource_group" name="azure_resource_group" 
-                                               class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                                               class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground"
                                                placeholder="my-dns-resource-group">
                                     </div>
                                     <div>
@@ -526,7 +526,7 @@
                                             Tenant ID
                                         </label>
                                         <input type="text" id="azure_tenant_id" name="azure_tenant_id" 
-                                               class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                                               class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground"
                                                placeholder="12345678-1234-1234-1234-123456789012">
                                     </div>
                                     <div>
@@ -534,7 +534,7 @@
                                             Client ID
                                         </label>
                                         <input type="text" id="azure_client_id" name="azure_client_id" 
-                                               class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                                               class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground"
                                                placeholder="12345678-1234-1234-1234-123456789012">
                                     </div>
                                     <div class="md:col-span-2">
@@ -542,7 +542,7 @@
                                             Client Secret
                                         </label>
                                         <input type="password" id="azure_client_secret" name="azure_client_secret" 
-                                               class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                                               class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground"
                                                placeholder="Your Azure client secret"
                                                autocomplete="new-password" 
                                                spellcheck="false"
@@ -584,7 +584,7 @@
                                             Project ID
                                         </label>
                                         <input type="text" id="google_project_id" name="google_project_id" 
-                                               class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                                               class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground"
                                                placeholder="my-gcp-project-123456">
                                     </div>
                                     <div>
@@ -592,7 +592,7 @@
                                             Service Account JSON Key
                                         </label>
                                         <textarea id="google_service_account_key" name="google_service_account_key" rows="4"
-                                               class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                                               class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground"
                                                placeholder='Paste your GCP service account JSON key here'></textarea>
                                     </div>
                                 </div>
@@ -631,7 +631,7 @@
                                             API URL
                                         </label>
                                         <input type="url" id="powerdns_api_url" name="powerdns_api_url" 
-                                               class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                                               class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground"
                                                placeholder="https://powerdns.example.com:8081">
                                     </div>
                                     <div>
@@ -639,7 +639,7 @@
                                             API Key
                                         </label>
                                         <input type="password" id="powerdns_api_key" name="powerdns_api_key" 
-                                               class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                                               class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground"
                                                placeholder="Your PowerDNS API key"
                                                autocomplete="new-password" 
                                                spellcheck="false"
@@ -681,7 +681,7 @@
                                             API Token
                                         </label>
                                         <input type="password" id="digitalocean_api_token" name="digitalocean_api_token" 
-                                               class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                                               class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground"
                                                placeholder="Your DigitalOcean API token"
                                                autocomplete="new-password" 
                                                spellcheck="false"
@@ -722,7 +722,7 @@
                                 </label>
                                 <div class="mt-1">
                                     <input type="password" id="vultr_api_key" name="vultr_api_key" 
-                                           class="block w-full border border-border dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                           class="block w-full border border-border bg-input text-foreground rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
                                            placeholder="Enter your Vultr API key">
                                 </div>
                                 <p class="mt-2 text-sm text-muted">
@@ -745,7 +745,7 @@
                                         API Key
                                     </label>
                                     <input type="password" id="linode_api_key" name="linode_api_key"
-                                           class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                                           class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground"
                                            placeholder="Your Linode API key">
                                 </div>
                             </div>
@@ -768,7 +768,7 @@
                                         API Token
                                     </label>
                                     <input type="password" id="hetzner-cloud_api_token" name="hetzner-cloud_api_token"
-                                           class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                                           class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground"
                                            placeholder="Your Hetzner Cloud DNS API token">
                                 </div>
                             </div>
@@ -791,7 +791,7 @@
                                         API Key
                                     </label>
                                     <input type="password" id="arvancloud_api_key" name="arvancloud_api_key"
-                                           class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                                           class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground"
                                            placeholder="Your ArvanCloud API key">
                                 </div>
                             </div>
@@ -814,7 +814,7 @@
                                         API Token
                                     </label>
                                     <input type="password" id="infomaniak_api_token" name="infomaniak_api_token"
-                                           class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                                           class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground"
                                            placeholder="Your Infomaniak API token">
                                 </div>
                             </div>
@@ -837,7 +837,7 @@
                                         API URL
                                     </label>
                                     <input type="text" id="acme-dns_api_url" name="acme-dns_api_url"
-                                           class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                                           class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground"
                                            placeholder="https://auth.acme-dns.io">
                                 </div>
                                 <div>
@@ -845,7 +845,7 @@
                                         Subdomain
                                     </label>
                                     <input type="text" id="acme-dns_subdomain" name="acme-dns_subdomain"
-                                           class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                                           class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground"
                                            placeholder="The ACME-DNS subdomain">
                                 </div>
                                 <div>
@@ -853,7 +853,7 @@
                                         Username
                                     </label>
                                     <input type="text" id="acme-dns_username" name="acme-dns_username"
-                                           class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                                           class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground"
                                            placeholder="The ACME-DNS username">
                                 </div>
                                 <div>
@@ -861,7 +861,7 @@
                                         Password
                                     </label>
                                     <input type="password" id="acme-dns_password" name="acme-dns_password"
-                                           class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                                           class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground"
                                            placeholder="The ACME-DNS password">
                                 </div>
                             </div>
@@ -884,7 +884,7 @@
                                         API Token
                                     </label>
                                     <input type="password" id="desec_api_token" name="desec_api_token"
-                                           class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                                           class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground"
                                            placeholder="Your deSEC API token (desec.io, Token Management)">
                                 </div>
                             </div>
@@ -907,7 +907,7 @@
                                         API Secret Key
                                     </label>
                                     <input type="password" id="scaleway_application_token" name="scaleway_application_token"
-                                           class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                                           class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground"
                                            placeholder="Your Scaleway API Secret Key">
                                 </div>
                             </div>
@@ -930,7 +930,7 @@
                                         Client Token
                                     </label>
                                     <input type="password" id="edgedns_client_token" name="edgedns_client_token"
-                                           class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                                           class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground"
                                            placeholder="akab-XXXXXXXXXXXXXXXX-XXXXXXXXXXXXXXXX">
                                 </div>
                                 <div>
@@ -938,7 +938,7 @@
                                         Client Secret
                                     </label>
                                     <input type="password" id="edgedns_client_secret" name="edgedns_client_secret"
-                                           class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                                           class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground"
                                            placeholder="Your Akamai client secret">
                                 </div>
                                 <div>
@@ -946,7 +946,7 @@
                                         Access Token
                                     </label>
                                     <input type="password" id="edgedns_access_token" name="edgedns_access_token"
-                                           class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                                           class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground"
                                            placeholder="akab-XXXXXXXXXXXXXXXX-XXXXXXXXXXXXXXXX">
                                 </div>
                                 <div>
@@ -954,7 +954,7 @@
                                         API Host
                                     </label>
                                     <input type="text" id="edgedns_host" name="edgedns_host"
-                                           class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                                           class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground"
                                            placeholder="akab-XXXX.luna.akamaiapis.net">
                                 </div>
                             </div>
@@ -980,7 +980,7 @@
                                         API Token
                                     </label>
                                     <input type="password" id="gandi_api_token" name="gandi_api_token" 
-                                           class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                                           class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground"
                                            placeholder="Your Gandi LiveDNS API token">
                                 </div>
                             </div>
@@ -1003,7 +1003,7 @@
                                         Endpoint
                                     </label>
                                     <select id="ovh_endpoint" name="ovh_endpoint" 
-                                            class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
+                                            class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground">
                                         <option value="">Select endpoint</option>
                                         <option value="ovh-eu">ovh-eu (Europe)</option>
                                         <option value="ovh-us">ovh-us (US)</option>
@@ -1019,7 +1019,7 @@
                                         Application Key
                                     </label>
                                     <input type="password" id="ovh_application_key" name="ovh_application_key" 
-                                           class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                                           class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground"
                                            placeholder="Your application key">
                                 </div>
                                 <div>
@@ -1027,7 +1027,7 @@
                                         Application Secret
                                     </label>
                                     <input type="password" id="ovh_application_secret" name="ovh_application_secret" 
-                                           class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                                           class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground"
                                            placeholder="Your application secret">
                                 </div>
                                 <div>
@@ -1035,7 +1035,7 @@
                                         Consumer Key
                                     </label>
                                     <input type="password" id="ovh_consumer_key" name="ovh_consumer_key" 
-                                           class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                                           class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground"
                                            placeholder="Your consumer key">
                                 </div>
                             </div>
@@ -1058,7 +1058,7 @@
                                         Username
                                     </label>
                                     <input type="text" id="namecheap_username" name="namecheap_username" 
-                                           class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                                           class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground"
                                            placeholder="Your Namecheap username">
                                 </div>
                                 <div>
@@ -1066,7 +1066,7 @@
                                         API Key
                                     </label>
                                     <input type="password" id="namecheap_api_key" name="namecheap_api_key" 
-                                           class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                                           class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground"
                                            placeholder="Your Namecheap API key">
                                 </div>
                             </div>
@@ -1104,7 +1104,7 @@
                                             Nameserver
                                         </label>
                                         <input type="text" id="rfc2136_nameserver" name="rfc2136_nameserver" 
-                                               class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                                               class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground"
                                                placeholder="ns.example.com">
                                     </div>
                                     <div>
@@ -1112,7 +1112,7 @@
                                             TSIG Key Name
                                         </label>
                                         <input type="text" id="rfc2136_tsig_key" name="rfc2136_tsig_key" 
-                                               class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                                               class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground"
                                                placeholder="mykey">
                                     </div>
                                     <div>
@@ -1120,7 +1120,7 @@
                                             TSIG Secret
                                         </label>
                                         <input type="password" id="rfc2136_tsig_secret" name="rfc2136_tsig_secret" 
-                                               class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                                               class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground"
                                                placeholder="Base64-encoded secret">
                                     </div>
                                     <div>
@@ -1128,7 +1128,7 @@
                                             TSIG Algorithm (Optional)
                                         </label>
                                         <select id="rfc2136_tsig_algorithm" name="rfc2136_tsig_algorithm" 
-                                                class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
+                                                class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground">
                                             <option value="">Default (HMAC-MD5)</option>
                                             <option value="HMAC-MD5">HMAC-MD5</option>
                                             <option value="HMAC-SHA1">HMAC-SHA1</option>
@@ -1160,7 +1160,7 @@
                                     API Token
                                 </label>
                                 <input type="password" id="hetzner_api_token" name="hetzner_api_token" 
-                                       class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                                       class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground"
                                        placeholder="Your Hetzner DNS API token">
                             </div>
                             <p class="mt-2 text-sm text-muted">
@@ -1182,7 +1182,7 @@
                                         API Key
                                     </label>
                                     <input type="password" id="porkbun_api_key" name="porkbun_api_key" 
-                                           class="mt-1 block w-full border border-border dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                           class="mt-1 block w-full border border-border bg-input text-foreground rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
                                            placeholder="Your Porkbun API key">
                                 </div>
                                 <div>
@@ -1190,7 +1190,7 @@
                                         Secret Key
                                     </label>
                                     <input type="password" id="porkbun_secret_key" name="porkbun_secret_key" 
-                                           class="mt-1 block w-full border border-border dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                           class="mt-1 block w-full border border-border bg-input text-foreground rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
                                            placeholder="Your Porkbun secret key">
                                 </div>
                             </div>
@@ -1213,7 +1213,7 @@
                                         API Key
                                     </label>
                                     <input type="password" id="godaddy_api_key" name="godaddy_api_key" 
-                                           class="mt-1 block w-full border border-border dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                           class="mt-1 block w-full border border-border bg-input text-foreground rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
                                            placeholder="Your GoDaddy API key">
                                 </div>
                                 <div>
@@ -1221,7 +1221,7 @@
                                         API Secret
                                     </label>
                                     <input type="password" id="godaddy_secret" name="godaddy_secret" 
-                                           class="mt-1 block w-full border border-border dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                           class="mt-1 block w-full border border-border bg-input text-foreground rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
                                            placeholder="Your GoDaddy API secret">
                                 </div>
                             </div>
@@ -1244,7 +1244,7 @@
                                         Username
                                     </label>
                                     <input type="text" id="he_ddns_username" name="he_ddns_username" 
-                                           class="mt-1 block w-full border border-border dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                           class="mt-1 block w-full border border-border bg-input text-foreground rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
                                            placeholder="Your Hurricane Electric username">
                                 </div>
                                 <div>
@@ -1252,7 +1252,7 @@
                                         Password
                                     </label>
                                     <input type="password" id="he_ddns_password" name="he_ddns_password" 
-                                           class="mt-1 block w-full border border-border dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                           class="mt-1 block w-full border border-border bg-input text-foreground rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
                                            placeholder="Your Hurricane Electric password">
                                 </div>
                             </div>
@@ -1274,7 +1274,7 @@
                                     API Token
                                 </label>
                                 <input type="password" id="dynudns_token" name="dynudns_token"
-                                       class="mt-1 block w-full border border-border dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                       class="mt-1 block w-full border border-border bg-input text-foreground rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
                                        placeholder="Your Dynu API token">
                             </div>
                             <p class="mt-2 text-sm text-muted">
@@ -1309,7 +1309,7 @@
                                         Account Token
                                     </label>
                                     <input type="password" id="duckdns_api_token" name="duckdns_api_token"
-                                           class="mt-1 block w-full border border-border dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                           class="mt-1 block w-full border border-border bg-input text-foreground rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
                                            placeholder="UUID-format token from your DuckDNS account page">
                                 </div>
                             </div>
@@ -1347,7 +1347,7 @@
                                         Auth Hook Script Path
                                     </label>
                                     <input type="text" id="custom-script_auth_hook" name="custom-script_auth_hook"
-                                           class="mt-1 block w-full border border-border dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                           class="mt-1 block w-full border border-border bg-input text-foreground rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
                                            placeholder="/usr/local/bin/certmate-dns-auth.sh">
                                 </div>
                                 <div class="mt-3">
@@ -1355,7 +1355,7 @@
                                         Cleanup Hook Script Path - Optional
                                     </label>
                                     <input type="text" id="custom-script_cleanup_hook" name="custom-script_cleanup_hook"
-                                           class="mt-1 block w-full border border-border dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                           class="mt-1 block w-full border border-border bg-input text-foreground rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
                                            placeholder="/usr/local/bin/certmate-dns-cleanup.sh">
                                 </div>
                             </div>
@@ -1393,7 +1393,7 @@
                                         API Key
                                     </label>
                                     <input type="password" id="nsone_api_key" name="nsone_api_key"
-                                           class="mt-1 block w-full border border-border dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                           class="mt-1 block w-full border border-border bg-input text-foreground rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
                                            placeholder="Your NS1 API key">
                                 </div>
                                 <p class="mt-2 text-sm text-muted">
@@ -1431,7 +1431,7 @@
                                             API Key
                                         </label>
                                         <input type="password" id="dnsmadeeasy_api_key" name="dnsmadeeasy_api_key"
-                                               class="mt-1 block w-full border border-border dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                               class="mt-1 block w-full border border-border bg-input text-foreground rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
                                                placeholder="Your DNS Made Easy API key">
                                     </div>
                                     <div>
@@ -1439,7 +1439,7 @@
                                             Secret Key
                                         </label>
                                         <input type="password" id="dnsmadeeasy_secret_key" name="dnsmadeeasy_secret_key"
-                                               class="mt-1 block w-full border border-border dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
+                                               class="mt-1 block w-full border border-border bg-input text-foreground rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary"
                                                placeholder="Your DNS Made Easy secret key">
                                     </div>
                                 </div>

@@ -1,5 +1,6 @@
 <!-- TAB: API Keys Management -->
         <div x-show="tab === 'apikeys'" x-cloak
+             id="settings-panel-apikeys" role="tabpanel" aria-labelledby="settings-tab-apikeys" tabindex="0"
              x-data="apiKeyManager()" x-init="loadKeys()"
              class="bg-surface border-border rounded-lg shadow-sm border p-6 mt-6">
 
@@ -22,11 +23,11 @@
                     <div>
                         <label class="block text-xs text-muted mb-1">Key Name</label>
                         <input type="text" x-model="newKey.name" placeholder="e.g., CI/CD Pipeline"
-                               class="w-full px-3 py-2 border border-border rounded-md text-sm dark:bg-gray-700 dark:text-white" maxlength="64">
+                               class="w-full px-3 py-2 border border-border rounded-md text-sm bg-input text-foreground" maxlength="64">
                     </div>
                     <div>
                         <label class="block text-xs text-muted mb-1">Role</label>
-                        <select x-model="newKey.role" title="API key role" class="w-full px-3 py-2 border border-border rounded-md text-sm dark:bg-gray-700 dark:text-white">
+                        <select x-model="newKey.role" title="API key role" class="w-full px-3 py-2 border border-border rounded-md text-sm bg-input text-foreground">
                             <option value="viewer">Viewer (read-only)</option>
                             <option value="operator">Operator (read + write)</option>
                             <option value="admin">Admin (full access)</option>
@@ -35,7 +36,7 @@
                     <div>
                         <label class="block text-xs text-muted mb-1">Expiration (optional)</label>
                         <input type="date" x-model="newKey.expires_at" title="Expiration date"
-                               class="w-full px-3 py-2 border border-border rounded-md text-sm dark:bg-gray-700 dark:text-white">
+                               class="w-full px-3 py-2 border border-border rounded-md text-sm bg-input text-foreground">
                     </div>
                 </div>
                 <div class="mt-4">
@@ -47,7 +48,7 @@
                     </label>
                     <div class="flex items-center space-x-2">
                         <input type="text" x-model="newKey.allowed_domains" placeholder="example.com, *.foo.org   (empty = unrestricted)"
-                               class="flex-1 px-3 py-2 border border-border rounded-md text-sm dark:bg-gray-700 dark:text-white">
+                               class="flex-1 px-3 py-2 border border-border rounded-md text-sm bg-input text-foreground">
                         <button type="button" @click="createKey()"
                                 class="px-4 py-2 bg-yellow-600 text-white rounded-md hover:bg-yellow-700 text-sm whitespace-nowrap">
                             <i class="fas fa-plus mr-1"></i> Create
@@ -189,7 +190,7 @@
                         <label class="block text-xs text-muted mb-1" x-text="label(k)"></label>
                         <input type="number" min="1" max="100000" x-model.number="limits[k]" :disabled="!enabled"
                                :aria-label="label(k) + ' requests per minute'"
-                               class="w-full px-3 py-2 border border-border rounded-md text-sm dark:bg-gray-700 dark:text-white">
+                               class="w-full px-3 py-2 border border-border rounded-md text-sm bg-input text-foreground">
                     </div>
                 </template>
             </div>

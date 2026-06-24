@@ -53,7 +53,14 @@
         if (toastContainer && document.body.contains(toastContainer)) return toastContainer;
         toastContainer = document.createElement('div');
         toastContainer.id = 'cm-toasts';
-        toastContainer.className = 'fixed top-4 right-4 z-[9999] flex flex-col gap-3 max-w-sm w-full pointer-events-none';
+        // Anchor top-right on desktop; on mobile span the viewport (left-4 +
+        // right-4) instead of `right-4 w-full`, which pushed the left edge to
+        // -16px and clipped content on screens narrower than the max width.
+        toastContainer.className = 'fixed top-4 right-4 left-4 sm:left-auto z-[9999] flex flex-col gap-3 sm:max-w-sm pointer-events-none';
+        // Announce async results to assistive tech. Individual error toasts
+        // additionally get role="alert" (assertive) below.
+        toastContainer.setAttribute('aria-live', 'polite');
+        toastContainer.setAttribute('aria-atomic', 'false');
         document.body.appendChild(toastContainer);
         return toastContainer;
     }
@@ -99,6 +106,11 @@
 
         var toast = document.createElement('div');
         toast.className = 'pointer-events-auto relative border rounded-lg shadow-lg p-4 flex flex-col gap-2 transform translate-x-full opacity-0 transition-all duration-300 overflow-hidden ' + (TOAST_COLORS[type] || TOAST_COLORS.info);
+        // Errors are assertive (interrupt the screen reader); the polite
+        // container handles success/info without interrupting.
+        if (type === 'error') {
+            toast.setAttribute('role', 'alert');
+        }
 
         var headerHtml =
             '<div class="flex items-start gap-3">' +
@@ -193,15 +205,48 @@
         return overlay;
     }
 
-    function createDialogBox(title, bodyHtml) {
+    var dialogSeq = 0;
+    function createDialogBox(title, bodyHtml, role) {
         var box = document.createElement('div');
+        var titleId = 'cm-dialog-title-' + (++dialogSeq);
+        // Dialog semantics so assistive tech announces this as a modal dialog
+        // and scopes the user inside it. 'alertdialog' for confirm (a decision
+        // is required), 'dialog' for prompt/info.
+        box.setAttribute('role', role || 'dialog');
+        box.setAttribute('aria-modal', 'true');
+        box.setAttribute('aria-labelledby', titleId);
+        box.setAttribute('tabindex', '-1');
         box.className = 'relative bg-surface rounded-xl shadow-2xl w-full max-w-md border border-border transform scale-95 opacity-0 transition-all duration-200';
         box.innerHTML =
             '<div class="px-6 py-4 border-b border-border">' +
-                '<h3 class="text-lg font-semibold text-foreground">' + CM.escapeHtml(title) + '</h3>' +
+                '<h3 id="' + titleId + '" class="text-lg font-semibold text-foreground">' + CM.escapeHtml(title) + '</h3>' +
             '</div>' +
             '<div class="px-6 py-4">' + bodyHtml + '</div>';
         return box;
+    }
+
+    // Trap Tab focus inside a dynamically-created overlay and restore focus to
+    // the previously-focused element when it closes. Mirrors the [data-modal-
+    // root] machinery below, for the JS-built confirm/prompt overlays that
+    // aren't static modal roots.
+    function trapOverlayFocus(overlay) {
+        var prevFocus = document.activeElement;
+        overlay.addEventListener('keydown', function (e) {
+            if (e.key !== 'Tab') return;
+            var f = overlay.querySelectorAll(FOCUSABLE_SELECTOR);
+            if (!f.length) { e.preventDefault(); return; }
+            var first = f[0], last = f[f.length - 1];
+            if (e.shiftKey && document.activeElement === first) {
+                e.preventDefault(); last.focus();
+            } else if (!e.shiftKey && document.activeElement === last) {
+                e.preventDefault(); first.focus();
+            }
+        });
+        return function restoreFocus() {
+            if (prevFocus && typeof prevFocus.focus === 'function') {
+                try { prevFocus.focus(); } catch (e) { /* element gone */ }
+            }
+        };
     }
 
     function animateIn(overlay, box) {
@@ -240,8 +285,9 @@
                     '<button data-action="confirm" class="' + (danger ? BTN_DANGER : BTN_PRIMARY) + '">' + CM.escapeHtml(options.confirmText || 'Confirm') + '</button>' +
                 '</div>';
 
-            var box = createDialogBox(title, bodyHtml);
+            var box = createDialogBox(title, bodyHtml, 'alertdialog');
             overlay.appendChild(box);
+            var restoreFocus = trapOverlayFocus(overlay);
             animateIn(overlay, box);
 
             var confirmBtn = box.querySelector('[data-action="confirm"]');
@@ -249,6 +295,7 @@
 
             function close(result) {
                 animateOut(overlay);
+                restoreFocus();
                 resolve(result);
             }
 
@@ -256,8 +303,10 @@
             cancelBtn.addEventListener('click', function() { close(false); });
             overlay.querySelector('.absolute').addEventListener('click', function() { close(false); });
 
-            // Focus confirm button, handle Escape
-            setTimeout(function() { confirmBtn.focus(); }, 50);
+            // Focus the safe choice (Cancel) for destructive prompts so an
+            // inadvertent Enter doesn't confirm a delete/revoke before the
+            // message is read; focus Confirm for non-destructive ones.
+            setTimeout(function() { (danger ? cancelBtn : confirmBtn).focus(); }, 50);
             overlay.addEventListener('keydown', function(e) {
                 if (e.key === 'Escape') close(false);
             });
@@ -283,6 +332,7 @@
 
             var box = createDialogBox(title, bodyHtml);
             overlay.appendChild(box);
+            var restoreFocus = trapOverlayFocus(overlay);
             animateIn(overlay, box);
 
             var input = box.querySelector('input');
@@ -291,6 +341,7 @@
 
             function close(value) {
                 animateOut(overlay);
+                restoreFocus();
                 resolve(value);
             }
 
@@ -300,6 +351,10 @@
 
             input.addEventListener('keydown', function(e) {
                 if (e.key === 'Enter') close(input.value);
+            });
+            // Escape at the overlay level so it works regardless of which
+            // control (input or button) currently holds focus.
+            overlay.addEventListener('keydown', function(e) {
                 if (e.key === 'Escape') close(null);
             });
 
