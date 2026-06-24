@@ -764,6 +764,8 @@ class CertificateManager:
                 # or stale) is visible on GET, not just buried in the logs.
                 # None when the last issuance stored cleanly.
                 'storage_warning': metadata.get('storage_warning'),
+                'deployment_port': metadata.get('deployment_port'),
+                'deployment_protocol': metadata.get('deployment_protocol'),
             }
         except Exception as e:
             logger.error(f"Error parsing certificate for {domain}: {e}")
@@ -784,6 +786,8 @@ class CertificateManager:
             'challenge_type': challenge_type,
             'account_id': account_id,
             'storage_warning': metadata.get('storage_warning'),
+            'deployment_port': metadata.get('deployment_port'),
+            'deployment_protocol': metadata.get('deployment_protocol'),
         }
 
     def _create_empty_cert_info(self, domain):
