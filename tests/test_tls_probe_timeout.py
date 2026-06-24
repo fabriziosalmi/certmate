@@ -27,6 +27,16 @@ import pytest
 from modules.api.resources import _tls_probe_timeout_seconds, _probe_tls_certificate
 
 
+@pytest.fixture(autouse=True)
+def _no_proxy_env(monkeypatch):
+    """These tests exercise the direct-socket probe path. Clear proxy env so a
+    runner that happens to have HTTPS_PROXY set doesn't route the probe through
+    the CONNECT tunnel instead (proxy tunnelling is covered in
+    test_tls_probe_proxy.py)."""
+    for var in ('HTTPS_PROXY', 'https_proxy', 'HTTP_PROXY', 'http_proxy'):
+        monkeypatch.delenv(var, raising=False)
+
+
 # ---- _tls_probe_timeout_seconds -------------------------------------------
 
 

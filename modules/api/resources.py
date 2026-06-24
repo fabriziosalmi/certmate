@@ -3,12 +3,16 @@ API endpoints module for CertMate
 Defines Flask-RESTX Resource classes for REST API endpoints
 """
 
+import base64
+import http.client
 import logging
 import re
 import socket
 import ssl
 import tempfile
 import time
+import urllib.parse
+import urllib.request
 import zipfile
 import os
 import io
@@ -115,6 +119,29 @@ def _tls_probe_timeout_seconds():
 _PROBE_PROTOCOLS = ('https-tls', 'tls', 'smtp-starttls')
 
 
+def _https_proxy_for(host):
+    """Return (proxy_host, proxy_port, auth_headers) for tunneling to *host*.
+
+    Honours the standard HTTPS_PROXY/https_proxy env vars and the NO_PROXY
+    bypass list (via urllib). Returns None when no proxy applies, so the probe
+    falls back to a direct connection. A raw socket ignores these env vars, so
+    without this CertMate cannot reach external targets on a machine that
+    requires an outbound HTTP proxy (#326).
+    """
+    proxy = urllib.request.getproxies().get('https')
+    if not proxy or urllib.request.proxy_bypass(host):
+        return None
+    parts = urllib.parse.urlsplit(proxy if '://' in proxy else 'http://' + proxy)
+    if not parts.hostname:
+        return None
+    headers = {}
+    if parts.username:
+        raw = f"{urllib.parse.unquote(parts.username)}:{urllib.parse.unquote(parts.password or '')}"
+        token = base64.b64encode(raw.encode()).decode()
+        headers['Proxy-Authorization'] = f'Basic {token}'
+    return parts.hostname, parts.port or 8080, headers
+
+
 def _probe_tls_certificate(domain, port=443, protocol='https-tls', timeout=None):
     """Return the live TLS certificate for a domain, if reachable.
 
@@ -154,10 +181,25 @@ def _probe_tls_certificate(domain, port=443, protocol='https-tls', timeout=None)
         if protocol == 'smtp-starttls':
             cert_bytes = _probe_smtp_starttls(host, port, context, timeout)
         else:
-            # Direct TLS (https-tls, tls)
-            with socket.create_connection((host, port), timeout=timeout) as raw_sock:
-                with context.wrap_socket(raw_sock, server_hostname=host) as tls_sock:
-                    cert_bytes = tls_sock.getpeercert(binary_form=True)
+            # Direct TLS (https-tls, tls). When an HTTPS_PROXY applies (and the
+            # host isn't in NO_PROXY) tunnel the TCP leg through the proxy with
+            # HTTP CONNECT, then run the TLS handshake over that tunnel so we
+            # still read the real peer certificate (#326).
+            proxy = _https_proxy_for(host)
+            if proxy:
+                proxy_host, proxy_port, proxy_headers = proxy
+                conn = http.client.HTTPConnection(proxy_host, proxy_port, timeout=timeout)
+                try:
+                    conn.set_tunnel(host, port, headers=proxy_headers)
+                    conn.connect()
+                    with context.wrap_socket(conn.sock, server_hostname=host) as tls_sock:
+                        cert_bytes = tls_sock.getpeercert(binary_form=True)
+                finally:
+                    conn.close()
+            else:
+                with socket.create_connection((host, port), timeout=timeout) as raw_sock:
+                    with context.wrap_socket(raw_sock, server_hostname=host) as tls_sock:
+                        cert_bytes = tls_sock.getpeercert(binary_form=True)
 
         return {
             'reachable': True,
