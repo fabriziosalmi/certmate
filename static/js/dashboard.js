@@ -184,7 +184,7 @@
 
         statsContainer.innerHTML = [
             statCard('Total', total, 'text-foreground', 'fa-certificate text-blue-500 dark:text-blue-400'),
-            statCard('Valid', valid, 'text-success-fg', 'fa-check-circle text-green-500 dark:text-green-400', null, valid + ' of ' + total),
+            statCard('Valid', valid, valid > 0 ? 'text-success-fg' : 'text-muted', 'fa-check-circle text-green-500 dark:text-green-400', null, valid + ' of ' + total),
             statCard('Expiring', expiring, 'text-warning-fg', 'fa-exclamation-triangle text-yellow-500 dark:text-yellow-400'),
             statCard('Deployed', '<span class="text-gray-300 dark:text-gray-600 animate-pulse">...</span>', 'text-indigo-600 dark:text-indigo-400', 'fa-globe text-indigo-500 dark:text-indigo-400', 'deploymentCount')
         ].join('');
@@ -377,7 +377,10 @@
 
     function deploymentStatusDisplay(role, result) {
         var isBrowser = role === 'browser';
-        var roleLabel = isBrowser ? 'Browser' : 'Backend';
+        // "Server" (the probe ran from CertMate's server) vs "Browser" (from
+        // your browser). Avoids reading "Backend: Unreachable" as "the CertMate
+        // app is down" when it only means the target endpoint failed a probe.
+        var roleLabel = isBrowser ? 'Browser' : 'Server';
         var roleIcon = isBrowser ? 'fa-globe' : 'fa-server';
         var statusClass;
         var statusIcon = roleIcon;
@@ -564,7 +567,7 @@
             }
 
             var expiryDate = new Date(cert.expiry_date);
-            var expiryStr = expiryDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+            var expiryStr = expiryDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
             var daysClass = isExpired ? 'text-danger-fg' : isExpiringSoon ? 'text-warning-fg' : 'text-muted';
 
             // Inline subtle glyph instead of a rounded blue panel — the
@@ -602,10 +605,14 @@
             var mobileDeploymentLine = rowRaw(rowHtml`<div class="flex items-start text-xs text-muted"><i class="fas fa-rocket mr-1.5 mt-0.5 w-3 shrink-0" aria-hidden="true"></i><div class="flex-1 min-w-0">${rowRaw(deploymentBadgesHtml(cert))}</div></div>`);
             var mobileMeta = rowRaw(rowHtml`<div class="md:hidden mt-2 pt-2 border-t border-gray-100 dark:border-gray-700/50 space-y-1">${mobileExpiryLine}${mobileProviderLine}${mobileDeploymentLine}</div>`);
             var lockColor = isExpired ? 'text-red-400' : isExpiringSoon ? 'text-yellow-400' : 'text-green-500';
+            // An expired cert is no longer trusted; a closed padlock (the
+            // "secure connection" glyph) is a visual paradox there. Show an
+            // open padlock for expired so the icon matches the state.
+            var lockIcon = isExpired ? 'fa-lock-open' : 'fa-lock';
             return rowHtml`<tr class="${rowRaw(healthClass)} row-enter hover:bg-blue-50/40 dark:hover:bg-blue-900/10 transition-colors duration-150 cursor-pointer" style="animation-delay:${rowRaw(String(i * 30))}ms" onclick="openCertDetail('${cert.domain}')">
                 <td class="px-6 py-4 max-w-0">
                     <div class="flex items-center min-w-0">
-                        <i class="fas fa-lock ${rowRaw(lockColor)} mr-2 text-sm shrink-0" aria-hidden="true"></i>
+                        <i class="fas ${rowRaw(lockIcon)} ${rowRaw(lockColor)} mr-2 text-sm shrink-0" aria-hidden="true"></i>
                         <div class="min-w-0">
                             <div class="text-sm font-medium text-foreground truncate">${cert.domain}</div>
                             ${aliasHint}
@@ -736,7 +743,7 @@
                 '<dl class="space-y-2">' +
                 '<div class="flex justify-between gap-4 py-2 border-b border-border"><dt class="text-sm text-muted">Domain</dt><dd class="text-sm font-medium text-right text-foreground">' + safeDomain + '</dd></div>' +
                 (sanDomains.length ? '<div class="flex justify-between gap-4 py-2 border-b border-border"><dt class="text-sm text-muted">SANs</dt><dd class="text-sm font-medium text-right text-foreground">' + sanDomainsHtml + '</dd></div>' : '') +
-                '<div class="flex justify-between gap-4 py-2 border-b border-border"><dt class="text-sm text-muted">Expires</dt><dd class="text-sm font-medium text-right text-foreground">' + expiryDate.toLocaleDateString(undefined, { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' }) + '</dd></div>' +
+                '<div class="flex justify-between gap-4 py-2 border-b border-border"><dt class="text-sm text-muted">Expires</dt><dd class="text-sm font-medium text-right text-foreground">' + expiryDate.toLocaleDateString('en-US', { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' }) + '</dd></div>' +
                 (providerLabel ? '<div class="flex justify-between gap-4 py-2 border-b border-border"><dt class="text-sm text-muted">DNS Provider</dt><dd class="text-sm font-medium text-right text-foreground">' + providerLabel + '</dd></div>' : '') +
                 (safeDomainAlias ? '<div class="flex justify-between gap-4 py-2 border-b border-border"><dt class="text-sm text-muted">DNS-01 Alias</dt><dd class="text-sm font-medium text-right break-all text-info-fg">' + safeDomainAlias + '</dd></div>' : '') +
                 (safeDomainAlias && aliasProviderLabel ? '<div class="flex justify-between gap-4 py-2 border-b border-border"><dt class="text-sm text-muted">Alias Provider</dt><dd class="text-sm font-medium text-right text-foreground">' + aliasProviderLabel + '</dd></div>' : '') +
