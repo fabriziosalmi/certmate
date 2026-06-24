@@ -912,7 +912,13 @@
 
         var deployedCount = allCertificates.filter(function (cert) {
             if (!cert.exists) return false;
-            var statusElement = document.getElementById('deployment-status-' + cert.domain.replace(/\./g, '-'));
+            // Must match deploymentBadgeHtml's id exactly: it builds
+            // 'deployment-status-<domainId>-<role>' where domainId is the
+            // escaped, dot-stripped domain. The backend badge carries the
+            // authoritative verdict; without the '-backend' suffix this lookup
+            // matched nothing and the counter was stuck at 0 (#324).
+            var domainId = escapeHtml(cert.domain).replace(/\./g, '-');
+            var statusElement = document.getElementById('deployment-status-' + domainId + '-backend');
             var isDeployed = statusElement && statusElement.textContent.indexOf('Deployed') !== -1;
             return isDeployed;
         }).length;
