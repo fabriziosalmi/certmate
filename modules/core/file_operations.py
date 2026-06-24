@@ -6,6 +6,7 @@ Handles file I/O, backup management, and safe file operations
 import base64
 import io
 import os
+import re
 import json
 import tempfile
 import zipfile
@@ -28,6 +29,20 @@ MAX_BACKUPS_PER_TYPE = 50   # Maximum number of backups to keep per type
 # directories are intentionally retained because renew_certificate() reuses
 # the domain config dir for future renewals after a restore.
 _BACKUP_EXCLUDE_DIRS = frozenset({'logs', 'work'})
+
+# Private-key material that certbot/CertMate writes into the cert tree. On
+# restore every one of these must get 0600 — not just the live `privkey.pem`.
+# certbot keeps the real key bytes in archive/<domain>/privkeyN.pem (the
+# live/privkey.pem symlink points at them) and the ACME account key in
+# accounts/.../private_key.json; both are retained in the unified backup
+# (accounts/ and archive/ are intentionally kept — see _BACKUP_EXCLUDE_DIRS).
+# Matching only the exact name 'privkey.pem' left those world-readable (0644).
+# Public material (cert/chain/fullchain + *.json metadata) stays 0644 so
+# external consumers can still read it, mirroring certbot's own permissions.
+_PRIVATE_KEY_FILE_RE = re.compile(
+    r'(?:^|[._-])privkey\d*\.pem$|^private_key\.json$|\.key$',
+    re.IGNORECASE,
+)
 
 # --- Backup encryption at rest --------------------------------------------
 # Unified backups embed every certificate private key (privkey.pem). With
@@ -701,8 +716,10 @@ class FileOperations:
                             logger.error(f"Error extracting {file_info.filename}: {e}")
                             continue
 
-                        # Set appropriate permissions
-                        if target_path.name == 'privkey.pem':
+                        # Set appropriate permissions: lock down every private
+                        # key (live, archived, and the ACME account key), leave
+                        # public cert material world-readable.
+                        if _PRIVATE_KEY_FILE_RE.search(target_path.name):
                             os.chmod(target_path, 0o600)
                         else:
                             os.chmod(target_path, 0o644)

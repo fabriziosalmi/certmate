@@ -50,6 +50,7 @@ def test_deployment_status_route_exists_and_returns_match(tmp_path, monkeypatch)
             cert_dir=Path(tmp_path),
             storage_manager=None,
             get_certificate_info=MagicMock(return_value={'exists': True}),
+            _load_metadata=MagicMock(return_value={}),
         ),
         'file_ops': MagicMock(cert_dir=Path(tmp_path)),
         'cache': MagicMock(
@@ -66,8 +67,8 @@ def test_deployment_status_route_exists_and_returns_match(tmp_path, monkeypatch)
     )
     monkeypatch.setattr(
         api_resources_module,
-        '_probe_https_certificate',
-        lambda _domain: {'reachable': True, 'certificate_bytes': b'expected-cert-bytes'},
+        '_probe_tls_certificate',
+        lambda _domain, **_kw: {'reachable': True, 'certificate_bytes': b'expected-cert-bytes'},
     )
 
     app = _build_app(managers)
@@ -124,8 +125,8 @@ def test_deployment_status_refresh_bypasses_cache(tmp_path, monkeypatch):
     )
     monkeypatch.setattr(
         api_resources_module,
-        '_probe_https_certificate',
-        lambda _domain: {'reachable': True, 'certificate_bytes': b'expected-cert-bytes'},
+        '_probe_tls_certificate',
+        lambda _domain, **_kw: {'reachable': True, 'certificate_bytes': b'expected-cert-bytes'},
     )
 
     app = _build_app(managers)
@@ -207,6 +208,11 @@ def test_browser_report_is_persisted_separately(tmp_path, monkeypatch):
             return json.loads(_metadata_path().read_text())
         return {}
 
+    # The deployment-status route reads per-cert probe config via
+    # certificate_manager._load_metadata(domain) (#328); wire it to the same
+    # on-disk metadata the record_* side-effects use.
+    certificate_manager._load_metadata.side_effect = lambda _domain: _load_metadata()
+
     def _write_metadata(metadata):
         _metadata_path().write_text(json.dumps(metadata, indent=2))
 
@@ -277,8 +283,8 @@ def test_browser_report_is_persisted_separately(tmp_path, monkeypatch):
     )
     monkeypatch.setattr(
         api_resources_module,
-        '_probe_https_certificate',
-        lambda _domain: (_ for _ in ()).throw(ConnectionRefusedError('[Errno 111] Connection refused')),
+        '_probe_tls_certificate',
+        lambda _domain, **_kw: (_ for _ in ()).throw(ConnectionRefusedError('[Errno 111] Connection refused')),
     )
 
     response = client.get(f'/api/certificates/{domain}/deployment-status?refresh=1')

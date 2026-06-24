@@ -91,32 +91,54 @@ def verify_chain(path) -> Dict[str, Any]:
         result["reason"] = "empty chain"
         return result
 
-    prev_hash = GENESIS_PREV
-    expected_seq: Optional[int] = None
-    count = 0
-
+    # Parse each line into a record, with file-specific tolerance: a corrupt or
+    # non-object FINAL line is most likely a truncated trailing write, not
+    # tampering. The structural checks are delegated to verify_records.
+    records = []
     for idx, raw in enumerate(lines):
         is_last = idx == len(lines) - 1
         try:
             rec = json.loads(raw)
+            ok_obj = isinstance(rec, dict)
         except json.JSONDecodeError:
-            # A corrupt FINAL line is most likely a truncated trailing write
-            # (a crash mid-append), not tampering — report it as such.
-            result["error_seq"] = expected_seq
+            ok_obj = False
+        if not ok_obj:
+            result["error_seq"] = None
             result["reason"] = (
                 "truncated or unparseable trailing line (likely an interrupted "
                 "write)" if is_last else f"unparseable line at position {idx}"
             )
             return result
+        records.append(rec)
 
-        # Valid JSON but not an object (e.g. a bare array/number/null) is a
-        # malformed record, not a chain we can read — report, never crash.
+    return verify_records(records)
+
+
+def verify_records(records) -> Dict[str, Any]:
+    """Verify a list of parsed chain records ``[{seq, entry, prev_hash, hash}, ...]``.
+    Returns the same result dict as :func:`verify_chain`. Shared by the file
+    verifier and the export-bundle verifier."""
+    result: Dict[str, Any] = {
+        "ok": False, "count": 0, "first_seq": None, "last_seq": None,
+        "head_hash": None, "error_seq": None, "reason": None,
+    }
+    if not records:
+        result["ok"] = True
+        result["reason"] = "empty chain"
+        # The head of an empty chain is the genesis prev_hash, matching what
+        # build_manifest records for an empty slice (so an empty signed bundle
+        # verifies consistently).
+        result["head_hash"] = GENESIS_PREV
+        return result
+
+    prev_hash = GENESIS_PREV
+    expected_seq: Optional[int] = None
+    count = 0
+
+    for idx, rec in enumerate(records):
         if not isinstance(rec, dict):
             result["error_seq"] = expected_seq
-            result["reason"] = (
-                "truncated or unparseable trailing line (likely an interrupted "
-                "write)" if is_last else f"malformed (non-object) line at position {idx}"
-            )
+            result["reason"] = f"malformed (non-object) record at position {idx}"
             return result
 
         seq = rec.get("seq")
@@ -163,3 +185,65 @@ def verify_chain(path) -> Dict[str, Any]:
     result["head_hash"] = prev_hash
     result["reason"] = "intact"
     return result
+
+
+# --- Phase 3: signed export bundle + checkpoints --------------------------
+
+CHECKPOINT_FILENAME = "certificate_audit.checkpoints.jsonl"
+BUNDLE_FORMAT_VERSION = 1
+
+
+def load_records(path, from_seq: Optional[int] = None, to_seq: Optional[int] = None):
+    """Read the chain file into a list of valid record dicts (a truncated
+    trailing line is skipped). Optional inclusive ``from_seq`` / ``to_seq``
+    slice. Best-effort: returns [] if the file is missing."""
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            raw_lines = [ln for ln in f.read().splitlines() if ln.strip()]
+    except OSError:
+        return []
+    records = []
+    for raw in raw_lines:
+        try:
+            rec = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(rec, dict) or not isinstance(rec.get("seq"), int):
+            continue
+        seq = rec["seq"]
+        if from_seq is not None and seq < from_seq:
+            continue
+        if to_seq is not None and seq > to_seq:
+            continue
+        records.append(rec)
+    return records
+
+
+def build_manifest(records, *, fingerprint, public_key_pem, exported_at,
+                   algorithm) -> Dict[str, Any]:
+    """Build the export-bundle manifest. The ``head_hash`` transitively commits
+    to every record via the chain, so signing the manifest commits to the whole
+    exported slice without per-entry signatures."""
+    if records:
+        seq_first = records[0]["seq"]
+        seq_last = records[-1]["seq"]
+        head_hash = records[-1]["hash"]
+    else:
+        seq_first = seq_last = None
+        head_hash = GENESIS_PREV
+    return {
+        "format_version": BUNDLE_FORMAT_VERSION,
+        "algorithm": algorithm,
+        "instance_fingerprint": fingerprint,
+        "public_key_pem": public_key_pem,
+        "seq_first": seq_first,
+        "seq_last": seq_last,
+        "count": len(records),
+        "head_hash": head_hash,
+        "exported_at": exported_at,
+    }
+
+
+def manifest_signing_bytes(manifest: Dict[str, Any]) -> bytes:
+    """Canonical bytes the bundle signature is computed over."""
+    return canon_bytes(manifest)

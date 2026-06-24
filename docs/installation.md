@@ -320,8 +320,9 @@ egress network, allow your SMTP relay's `host:port` directly (a firewall /
 NetworkPolicy rule), or use a webhook notification channel instead of email.
 
 Example with [Secure Proxy Manager](https://github.com/fabriziosalmi/secure-proxy-manager),
-a self-hosted Squid-based forward proxy with a WAF, a DNS sinkhole, and
-domain / IP / CIDR allow-deny lists:
+a self-hosted Squid-based forward proxy with a WAF, a DNS sinkhole, and — since
+v3.9.0 — a first-class **default-deny egress allowlist** (only explicitly
+approved destinations are reachable; everything else is refused):
 
 ```yaml
 services:
@@ -349,6 +350,28 @@ provider, object storage, notification endpoints), deny the rest; raw-IP-literal
 destinations are blocked at the proxy rather than trusted blindly. If you use
 DNS-alias / CNAME delegation, also allow `cloudflare-dns.com` — CertMate
 resolves those CNAMEs over DoH.
+
+With Secure Proxy Manager v3.9.0+ this is a built-in mode rather than a manual
+ACL exercise: enable **Default-deny egress** in Settings and populate the
+**Egress Allowlist** with the destinations CertMate needs. Each entry is a
+domain or an IP/CIDR (auto-classified), and the `/api/egress-allowlist` endpoint
+lets you manage the list from IaC. A representative starter allowlist:
+
+- your ACME CA's API host — e.g. `acme-v02.api.letsencrypt.org` (plus
+  `acme-staging-v02.api.letsencrypt.org` if you issue against staging), or the
+  endpoint of whichever CA you configured;
+- your DNS provider's API host — varies by provider (for example
+  `api.cloudflare.com`);
+- your object-storage endpoint, if off-site backup is enabled;
+- your notification host — the webhook, Gotify, ntfy, or Telegram endpoint, if
+  used;
+- `cloudflare-dns.com`, if you use DNS-alias / CNAME delegation (resolved over
+  DoH, as above).
+
+Everything else is refused at the proxy, so a misconfiguration or a compromised
+dependency cannot quietly exfiltrate to an arbitrary host. For HTTPS the
+allowlist matches on the host of the `CONNECT` request, so it works without TLS
+interception.
 
 - **Kubernetes:** an egress default-deny `NetworkPolicy` that permits traffic
   only to the proxy Service, plus the `HTTP(S)_PROXY` env on the Deployment.

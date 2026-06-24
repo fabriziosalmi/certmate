@@ -286,6 +286,28 @@ def _restore_masked_list_secrets(old_list, new_list):
     return new_list
 
 
+def _restore_masked_list_secrets_deep(old_subtree, new_subtree):
+    """Recursively apply ``_restore_masked_list_secrets`` across a merged
+    settings subtree.
+
+    ``_deep_merge_dict`` replaces lists wholesale, so a secret the UI masked
+    inside a list-of-dicts (e.g. ``notifications.channels.webhooks``) survives
+    the merge only as the sentinel. Walking the merged subtree in lockstep with
+    the on-disk one and restoring every list lets the *generic* settings POST
+    path preserve list-nested secrets exactly like the dedicated notifications
+    route already does. Mutates and returns ``new_subtree``.
+    """
+    if not isinstance(new_subtree, dict) or not isinstance(old_subtree, dict):
+        return new_subtree
+    for key, value in new_subtree.items():
+        old_value = old_subtree.get(key)
+        if isinstance(value, list):
+            _restore_masked_list_secrets(old_value, value)
+        elif isinstance(value, dict):
+            _restore_masked_list_secrets_deep(old_value, value)
+    return new_subtree
+
+
 # Top-level settings keys whose value is a nested dict that should be
 # deep-merged rather than wholesale-replaced on save. Each of these stores
 # multiple secret-bearing subtrees (per-backend storage credentials, per-CA
@@ -558,7 +580,15 @@ class SettingsManager:
                 if (key in _DEEP_MERGE_SETTINGS_KEYS
                         and isinstance(existing.get(key), dict)
                         and isinstance(value, dict)):
-                    merged[key] = _deep_merge_dict(existing[key], value)
+                    merged_subtree = _deep_merge_dict(existing[key], value)
+                    # _deep_merge_dict replaces lists wholesale, so a secret the
+                    # UI masked inside a list-of-dicts (e.g.
+                    # notifications.channels.webhooks) would otherwise be written
+                    # back as the sentinel. Restore those from the on-disk
+                    # subtree so the generic settings POST path preserves them
+                    # like the dedicated notifications route does.
+                    _restore_masked_list_secrets_deep(existing[key], merged_subtree)
+                    merged[key] = merged_subtree
             for key in protected_keys:
                 if key in existing:
                     merged[key] = existing[key]

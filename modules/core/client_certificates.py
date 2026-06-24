@@ -6,6 +6,7 @@ Handles creation, management, renewal, and revocation of client certificates
 import logging
 import json
 import os
+import re
 from pathlib import Path
 from datetime import datetime, timedelta
 from .utils import utc_now
@@ -22,6 +23,32 @@ from .csr_handler import CSRHandler
 from .constants import MIN_CERTIFICATE_VALIDITY_DAYS, MAX_CERTIFICATE_VALIDITY_DAYS
 
 logger = logging.getLogger(__name__)
+
+
+# Characters allowed verbatim in the on-disk identifier slug. Anything else
+# (path separators, NUL, unicode, ...) is collapsed to '-'; runs of '.' are
+# then collapsed so a '..' traversal token can never survive. The allowed set
+# mirrors _validate_identifier's _SAFE_IDENTIFIER_RE, so a benign CN such as
+# 'svc.example.com' slugifies to itself — byte-for-byte the same identifier the
+# old `.lower().replace(' ', '-')` produced — while '/', '\\' and '..' cannot.
+_CN_SLUG_STRIP_RE = re.compile(r'[^a-z0-9._-]+')
+
+
+def _slugify_common_name(common_name: str) -> str:
+    """Reduce a certificate Common Name to a filesystem-safe slug.
+
+    Lowercases, replaces every run of disallowed characters with a single '-',
+    collapses any run of dots to one (killing the '..' traversal token), and
+    strips leading separators so the result starts with an alphanumeric. The
+    output therefore matches ``_SAFE_IDENTIFIER_RE`` (or falls back to 'client'
+    when the CN slugifies to empty) and can never contain '/', '\\', '..' or
+    NUL. The full Common Name is still preserved verbatim in the certificate
+    subject and metadata — only the directory/file naming uses the slug.
+    """
+    slug = _CN_SLUG_STRIP_RE.sub('-', (common_name or '').strip().lower())
+    slug = re.sub(r'\.{2,}', '.', slug)   # collapse '..'+ so no traversal token
+    slug = slug.lstrip('.-_')             # _SAFE_IDENTIFIER_RE needs alnum first
+    return slug or 'client'
 
 
 class ClientCertificateManager:
@@ -130,12 +157,23 @@ class ClientCertificateManager:
             if not isinstance(days_valid, int) or days_valid < MIN_CERTIFICATE_VALIDITY_DAYS or days_valid > MAX_CERTIFICATE_VALIDITY_DAYS:
                 return False, f"days_valid must be between {MIN_CERTIFICATE_VALIDITY_DAYS} and {MAX_CERTIFICATE_VALIDITY_DAYS}", None
             
-            # Generate unique identifier
-            identifier = f"{common_name.lower().replace(' ', '-')}-{uuid4().hex[:8]}"
+            # Generate unique identifier. The Common Name is caller-controlled
+            # (anyone with cert-issuance rights), so slugify it to a
+            # filesystem-safe token before it ever touches a path — otherwise a
+            # CN like '../../../tmp/evil' would make cert_subdir.mkdir() create,
+            # and write a CA-signed key + cert into, a directory outside the tree.
+            identifier = f"{_slugify_common_name(common_name)}-{uuid4().hex[:8]}"
 
             # Determine storage directory
             cert_dir = self._get_cert_subdir(cert_usage)
             cert_subdir = cert_dir / identifier
+            # Defence in depth: refuse to create/write anything outside the
+            # managed cert tree even if the slug logic above were ever weakened.
+            cert_root = cert_dir.resolve()
+            resolved_subdir = cert_subdir.resolve()
+            if cert_root != resolved_subdir and cert_root not in resolved_subdir.parents:
+                logger.error("Refusing to create client cert outside the cert tree: %r", identifier)
+                return False, "Invalid certificate identifier", None
             cert_subdir.mkdir(parents=True, exist_ok=True)
 
             # Handle CSR or generate CSR + key

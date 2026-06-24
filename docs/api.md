@@ -704,14 +704,39 @@ python -m modules.core.audit_verify data/audit/certificate_audit.chain.jsonl
 Exit code `0` intact, `1` broken (with the offending `seq` and reason), `2`
 missing/unreadable.
 
-> **Threat-model honesty.** The chain detects an interior modification,
-> deletion, or reorder by anyone who does not hold the writer's running state.
-> It does **not** detect entries removed from the *end* (tail truncation)
-> without an external head anchor, and it does **not** bind the operator, who
-> holds the file and could recompute and rewrite the whole chain. Constraining
-> the operator (and detecting tail truncation) requires external anchoring of
-> signed checkpoints, which this version does not implement. See
-> [compliance.md](./compliance.md).
+### Signed export bundle (third-party verifiable)
+
+The instance holds an Ed25519 signing key, persisted at `data/.audit_signing_key`
+(generated on first run, `0600`; override with `AUDIT_SIGNING_KEY_FILE` to hold
+it off-box). Its public identity is exposed at `GET /api/audit/public-key`
+(admin): `{algorithm, public_key_pem, fingerprint}`. The chain head is signed
+into periodic checkpoints (`certificate_audit.checkpoints.jsonl`).
+
+`GET /api/audit/export` (admin, optional `?from_seq`/`?to_seq`) returns a signed,
+self-verifying bundle — `{manifest, entries, bundle_signature}`. The manifest
+pins the instance fingerprint, public key, seq range and `head_hash`; the
+signature is over the canonical manifest, which (via `head_hash`) transitively
+commits to every entry. An auditor verifies it **off the box** without running
+or trusting CertMate, optionally pinning the key out of band:
+
+```bash
+python -m modules.core.audit_verify --bundle bundle.json --pubkey instance.pem
+# OK: audit bundle intact and signed (128 entries, seq 0..127; signed by 0m2V5lDmnkPWOUHX)
+```
+
+The verifier checks the chain structure, that the manifest matches the entries,
+the Ed25519 signature, and that the fingerprint matches the (optionally pinned)
+public key.
+
+> **Threat-model honesty.** The chain + signature detect any interior
+> modification, deletion, or reorder, and tie an export to this instance's
+> public key — for anyone who does not hold the signing key. They do **not**
+> bind the operator, who holds the key and could re-sign a rewritten chain, and
+> tail truncation is only caught by comparing exports over time (a later export
+> with fewer entries) or against an externally held checkpoint. Fully
+> constraining the operator requires shipping the signed checkpoints to an
+> external append-only sink — opt-in external anchoring, a planned follow-up not
+> yet shipped. See [compliance.md](./compliance.md).
 
 ---
 

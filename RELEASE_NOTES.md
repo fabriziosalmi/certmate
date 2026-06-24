@@ -1,3 +1,44 @@
+## v2.18.0 (Feature — multi-protocol deployment probes + deploy-hook reliability)
+
+Deployment verification grows beyond HTTPS-on-443, and the deploy-hook pipeline closes two gaps that left scheduled renewals undeployed and a dashboard counter stuck at zero.
+
+### Features
+
+- **Multi-protocol deployment probes with per-certificate port** ([#328](https://github.com/fabriziosalmi/certmate/pull/328)): the "is this cert actually deployed?" probe now supports `https-tls`, plain `tls`, and `smtp-starttls`, with the port and protocol configurable per certificate from a new Probe tab in Settings. The backend probes the real service (including the SMTP STARTTLS upgrade) and the browser fallback is skipped for the non-HTTPS protocols. The probe's TLS minimum version is pinned to 1.2. Thanks to Christophe Kyvrakidis.
+- **Tunnel the deployment probe through an outbound HTTP proxy** ([#326](https://github.com/fabriziosalmi/certmate/pull/326)): on a host that can only reach the internet via an HTTP proxy, the raw-socket probe always reported "Unreachable" even when the target was up. It now honours `HTTPS_PROXY`/`NO_PROXY`, tunnelling the TCP leg with HTTP CONNECT (basic proxy auth supported) and running the TLS handshake over the tunnel to the configured per-cert port, so the real peer certificate is still compared. Pure stdlib, no new dependency. Thanks to Hiep Ho Minh.
+
+### Fixes
+
+- **Scheduled auto-renewals now fire deploy hooks** ([#329](https://github.com/fabriziosalmi/certmate/issues/329)): the manual/API path published `certificate_renewed` via the issuance executor, but the scheduler called the certificate manager directly with no event bus, so a background renewal updated the cert on disk yet never notified the deployer — the hook never ran and the live endpoint kept serving the old certificate. The scheduler now publishes the same event after a successful renewal; publishing stays out of the renewal routine to avoid double-firing the manual path, and a notification failure never demotes a successful renewal to a failure. Reported by SpeeDFireCZE.
+- **"Deployed" dashboard counter stuck at zero** ([#324](https://github.com/fabriziosalmi/certmate/issues/324)): the counter looked up `deployment-status-<domain>` but the badges render as `deployment-status-<domainId>-<role>`, so the lookup never matched and the stat card stayed at 0. It now mirrors the badge id and reads the authoritative backend badge. Reported by SpeeDFireCZE.
+- **Deploy-hook errors are now visible from the Activity page** ([#332](https://github.com/fabriziosalmi/certmate/pull/332)): a failing hook (e.g. exit code 127) showed only "exit code N" and clicking the entry bounced to the certificate page. The error now carries an stderr snippet, the full stdout/stderr is stored in the audit detail, and the entry opens a popup with the full output; deploy entries no longer link to the certificate page. Thanks to Christophe Kyvrakidis.
+- **Renewal timestamp now reaches the storage backend** ([#282](https://github.com/fabriziosalmi/certmate/pull/282)): `renewed_at` was written to metadata after the certificate had already been uploaded, so the storage backend persisted metadata without it. The metadata update now happens before the upload. Thanks to luksiol.
+
+## v2.17.1 (Patch — security hardening)
+
+Five must-fix findings from a draconian security/logic review of the existing code (no new features), each verified against source and pinned by a regression test.
+
+### Security
+
+- **Path traversal via client-certificate Common Name.** `create_client_certificate` built the on-disk identifier straight from the caller-supplied Common Name (only spaces replaced) and ran `mkdir(parents=True)` before any other check, so a CN such as `../../../../tmp/evil` created — and wrote a CA-signed key, certificate and metadata into — a directory outside the managed cert tree (single and batch issuance, operator role). The pre-existing `_validate_identifier` guard was only ever applied on retrieval, never to the value that constructs the identifier. The Common Name is now slugified at the construction site (covering every caller) to a filesystem-safe token, with a containment assertion before `mkdir`. Benign Common Names slugify to themselves so existing identifiers and paths are unchanged, and the full Common Name is still preserved verbatim in the certificate subject and metadata.
+- **Backup restore downgraded private keys to world-readable.** `restore_unified_backup` set `0600` only for the exact filename `privkey.pem` and `0644` for everything else, but certbot keeps the real key bytes in `archive/<domain>/privkeyN.pem` (the `live/privkey.pem` symlink points at them) and the ACME account key in `accounts/.../private_key.json` — both retained in the unified backup — so a restore actively rewrote served key material and the account key to `0644`. Restore now mirrors certbot's own permissions: every private-key filename is locked to `0600` and public material (cert/chain/fullchain plus metadata json) stays `0644`.
+- **`GET /api/metrics` was reachable unauthenticated.** The endpoint carried no auth decorator while its sibling info endpoints (`/api/cache`, `/api/backups`) require the `viewer` role. It now requires a viewer credential to match its peers; the Prometheus scrape target remains the separate, intentionally public `/metrics` route.
+- **A disabled, demoted, or deleted user kept their live session.** The role was snapshotted into the session at login and session validation only checked expiry, so disabling, demoting, or deleting a user left an already-issued session valid — with the old role — for up to the session lifetime (default 8h), with no kill switch for a compromised or just-removed account. Those transitions now invalidate the user's in-memory sessions, forcing re-authentication under the new state; an unrelated edit (e.g. email) does not log the user out.
+
+### Fixes
+
+- **Webhook secrets clobbered on a *generic* settings save.** v2.15.0 restored masked webhook secrets on the dedicated `/api/notifications/config` route, but the generic `POST /api/settings` path (the full-settings round-trip used by the UI and integration tests) still merged the `notifications` subtree without restoring secrets nested in the `channels.webhooks` list — `_deep_merge_dict` replaces lists wholesale and `_strip_masked_values` only walks dicts — writing the mask sentinel over the real HMAC secret / bot token. The corruption was silent: deliveries then signed with `********`. `atomic_update` now restores masked list secrets generically for every deep-merge key, so both paths behave identically.
+
+## v2.17.0 (Feature — third-party-verifiable audit trail)
+
+Completes the agentic audit trail (v2.16.0 added attribution + the tamper-evident hash chain): the record can now be verified by a third party, off the box, without running or trusting CertMate.
+
+### Features
+
+- **Ed25519-signed, independently verifiable export.** The instance holds an Ed25519 signing key (persisted at `data/.audit_signing_key` like the Flask secret key — generated on first run, `0600`, off-box via `AUDIT_SIGNING_KEY_FILE`). `GET /api/audit/export` (admin, optional `?from_seq`/`?to_seq`) returns a signed, self-verifying bundle — `{manifest, entries, bundle_signature}` — whose manifest pins the instance fingerprint, public key, seq range and `head_hash`, with the signature over the canonical manifest transitively committing to every entry. `GET /api/audit/public-key` exposes the signing identity to pin out of band. The chain head is also signed into periodic checkpoints.
+- **Verifier upgrade.** `python -m modules.core.audit_verify --bundle bundle.json [--pubkey instance.pem]` checks the chain structure, manifest consistency, the Ed25519 signature, and the public-key fingerprint, with optional out-of-band key pinning — proving both that the record was not edited and which instance produced it. No new dependencies (`cryptography` is already required).
+- **Honest scope.** A local signing key detects tampering by anyone who does not hold it and attributes the export to an instance, but does not bind the operator (who holds the key); fully constraining the operator needs opt-in external anchoring of the signed checkpoints, a planned follow-up. `docs/compliance.md` and `docs/api.md` document this precisely.
+
 ## v2.16.1 (Patch — remove the discontinued BuyPass CA)
 
 BuyPass Go SSL has been discontinued — BuyPass stopped accepting new ACME accounts on 2025-09-15, issued its last certificate on 2025-10-31, and terminated the service with all certificates expired by 2026-04-15. Selecting it could only fail, so it is removed as a CA option.

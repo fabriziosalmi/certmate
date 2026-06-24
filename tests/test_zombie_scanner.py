@@ -98,7 +98,7 @@ def test_scan_certificates_aggregation():
     scanner = ZombieScanner()
 
     with patch.object(ZombieScanner, 'check_domain') as mock_check:
-        def check_side_effect(d):
+        def check_side_effect(d, port=None):
             if 'alive' in d:
                 return 'alive'
             if 'suspect' in d:
