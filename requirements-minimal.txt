@@ -24,4 +24,4 @@ cryptography==46.0.7
 pyopenssl==26.0.0
 
 # Production server
-gunicorn==23.0.0
+gunicorn==26.0.0
