@@ -2303,20 +2303,52 @@ docker inspect certmate | jq '.[0].Mounts'
 
 **Q: All my certificates show "Backend: Unreachable" even though they are issued, served, and downloadable. Is something broken?**
 
-No. The deployment-status badge is an optional health indicator — it does not affect issuance, renewal, or download. CertMate's own process opens a plain TLS connection to `<domain>:443` and compares the served certificate's fingerprint against the stored one. There is nothing to "report back": the badge only answers whether CertMate itself can reach the domain on 443 and see the expected certificate.
+No. The deployment-status badge is an optional health indicator — it does not affect issuance, renewal, or download. CertMate's own process opens a TLS connection to `<domain>:<port>` and compares the served certificate's fingerprint against the stored one. The badge only answers whether CertMate itself can reach the service and see the expected certificate.
 
 - **Deployed** — handshake succeeded and the fingerprint matches.
 - **Wrong Cert** — handshake succeeded but a different certificate is served.
 - **Unreachable** — CertMate could not open a TLS connection to the domain at all.
 
-"Unreachable" for every certificate is common in Kubernetes/ingress setups where the CertMate pod cannot dial the public/ingress IP directly (split-horizon DNS, an egress `NetworkPolicy`, or TLS terminated by an ingress controller / load balancer). If the target is merely slow, raise the probe budget:
+**Configuring the probe per certificate**
+
+By default the probe connects on port 443 with a direct TLS handshake (HTTPS). You can change the port and protocol per certificate via the API or the dashboard:
+
+| Protocol | Port (default) | Use case |
+|---|---|---|
+| `https-tls` | 443 | Standard HTTPS |
+| `tls` | 465 | SMTPS, IMAPS, or any direct TLS service |
+| `smtp-starttls` | 587 | SMTP with STARTTLS (port 25 also works) |
+
+From the **dashboard**, open a certificate's detail panel and click **Configure Probe**, then enter the port and protocol.
+
+From the **API**:
+
+```bash
+# Set probe to SMTP STARTTLS on port 587
+curl -X PATCH https://certmate.example.com/api/certificates/example.com \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"deployment_port": 587, "deployment_protocol": "smtp-starttls"}'
+
+# Reset to defaults (HTTPS on port 443)
+curl -X PATCH https://certmate.example.com/api/certificates/example.com \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"deployment_port": null, "deployment_protocol": "https-tls"}'
+```
+
+The probe protocol defaults to the global timeout (3s) and can be tuned via the `CERTMATE_TLS_PROBE_TIMEOUT_SECONDS` environment variable.
+
+**Global timeout tuning:**
 
 ```bash
 # Accepts 1–30 seconds; default is 3
 CERTMATE_TLS_PROBE_TIMEOUT_SECONDS=10
 ```
 
-Otherwise the badge is safe to ignore. See [docs/kubernetes.md](docs/kubernetes.md#deployment-status-badge-shows-backend-unreachable) for the Kubernetes-specific note. (Reference: [#263](https://github.com/fabriziosalmi/certmate/issues/263).)
+**"Unreachable" for every certificate** is common in Kubernetes/ingress setups where the CertMate pod cannot dial the public/ingress IP directly (split-horizon DNS, an egress `NetworkPolicy`, or TLS terminated by an ingress controller / load balancer). If the target is merely slow, raise the probe budget or configure the port/protocol to match your topology.
+
+See [docs/kubernetes.md](docs/kubernetes.md#deployment-status-badge-shows-backend-unreachable) for the Kubernetes-specific note. (Reference: [#263](https://github.com/fabriziosalmi/certmate/issues/263).)
 
 #### DNS Provider Specific Issues
 
@@ -2433,6 +2465,7 @@ curl -sS -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/diagnostics
 | **[docs/testing.md](docs/testing.md)**             | Testing framework and CI/CD         | Developers            |
 | **[docs/architecture.md](docs/architecture.md)**   | System architecture                 | Developers            |
 | **[docs/api.md](docs/api.md)**                     | Client certificates API reference   | Developers            |
+| **[docs/probes.en.md](docs/probes.en.md)**         | Deployment probe configuration      | DevOps engineers      |
 | **[CONTRIBUTING.md](CONTRIBUTING.md)**             | Development and contribution guide  | Developers            |
 | **[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)**       | Community guidelines                | Contributors          |
 

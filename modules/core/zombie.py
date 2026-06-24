@@ -22,7 +22,7 @@ class ZombieScanner:
         self.timeout = timeout
         self.max_workers = max_workers
 
-    def check_domain(self, domain: str) -> str:
+    def check_domain(self, domain: str, port: int | None = None) -> str:
         """
         Check the status of a single domain.
         Returns: 'alive', 'suspect', or 'zombie'.
@@ -45,25 +45,29 @@ class ZombieScanner:
             logger.debug("DNS resolution failed for %s (target: %s): %s", domain, target, e)
             return 'zombie'
 
-        # 2. Active HTTPS probe
+        # 2. Active HTTPS probe (use deployment_port if configured)
+        if port:
+            https_url = f"https://{target}:{port}"
+            http_url = f"http://{target}:{port}"
+        else:
+            https_url = f"https://{target}"
+            http_url = f"http://{target}"
+
         try:
             requests.head(
-                f"https://{target}",
+                https_url,
                 timeout=self.timeout,
                 headers={"User-Agent": "CertMate-ZombieScanner/1.0"}
             )
-            # Any HTTP response means the host is alive
             return 'alive'
         except requests.exceptions.SSLError as e:
-            # SSL error means the host responded to the TLS handshake, so it is alive!
             logger.debug("HTTPS probe returned SSL error for %s (target: %s) - host is alive: %s", domain, target, e)
             return 'alive'
         except requests.RequestException as e:
             logger.debug("HTTPS probe failed for %s (target: %s): %s", domain, target, e)
-            # Try HTTP as fallback if HTTPS failed, just in case
             try:
                 requests.head(
-                    f"http://{target}",
+                    http_url,
                     timeout=self.timeout,
                     headers={"User-Agent": "CertMate-ZombieScanner/1.0"}
                 )
@@ -79,6 +83,7 @@ class ZombieScanner:
         """
         domain = cert_info.get('domain')
         san_domains = cert_info.get('san_domains') or []
+        port = cert_info.get('deployment_port')
         
         # Collect all unique domains to scan
         unique_domains = list(set([domain] + list(san_domains)))
@@ -86,7 +91,7 @@ class ZombieScanner:
         
         domain_statuses = {}
         for d in unique_domains:
-            domain_statuses[d] = self.check_domain(d)
+            domain_statuses[d] = self.check_domain(d, port=port)
             
         # Determine overall certificate status
         # alive: at least one domain is alive
