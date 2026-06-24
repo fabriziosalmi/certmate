@@ -12,7 +12,7 @@ josepy==1.13.0
 
 # DNS provider plugins - Major cloud providers
 certbot-dns-cloudflare==2.10.0
-certbot-dns-route53==2.10.0
+certbot-dns-route53==5.6.0
 certbot-dns-digitalocean==2.10.0
 certbot-dns-google==2.10.0
 # certbot-dns-azure has independent versioning. 2.5.0 is the latest in
