@@ -1171,7 +1171,7 @@
             html += '</label>';
 
             if (field.type === 'select') {
-                html += '<select id="' + fieldId + '" name="' + field.name + '" class="mt-1 block w-full border border-border dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary" ' + (field.required ? 'required' : '') + '>';
+                html += '<select id="' + fieldId + '" name="' + field.name + '" class="mt-1 block w-full border border-border bg-input text-foreground rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary" ' + (field.required ? 'required' : '') + '>';
                 if (!field.required) {
                     html += '<option value="">Select ' + field.label.toLowerCase() + '</option>';
                 }
@@ -1181,9 +1181,9 @@
                 });
                 html += '</select>';
             } else if (field.type === 'textarea') {
-                html += '<textarea id="' + fieldId + '" name="' + field.name + '" rows="4" class="mt-1 block w-full border border-border dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary" placeholder="' + field.placeholder + '" ' + (field.required ? 'required' : '') + '>' + value + '</textarea>';
+                html += '<textarea id="' + fieldId + '" name="' + field.name + '" rows="4" class="mt-1 block w-full border border-border bg-input text-foreground rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary" placeholder="' + field.placeholder + '" ' + (field.required ? 'required' : '') + '>' + value + '</textarea>';
             } else {
-                html += '<input type="' + field.type + '" id="' + fieldId + '" name="' + field.name + '" class="mt-1 block w-full border border-border dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary" placeholder="' + field.placeholder + '" value="' + value + '" ' + (field.required ? 'required' : '') + '>';
+                html += '<input type="' + field.type + '" id="' + fieldId + '" name="' + field.name + '" class="mt-1 block w-full border border-border bg-input text-foreground rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary" placeholder="' + field.placeholder + '" value="' + value + '" ' + (field.required ? 'required' : '') + '>';
             }
 
             html += '</div>';
@@ -2636,7 +2636,7 @@
         // Create migration modal dynamically
         var modal = document.createElement('div');
         modal.id = 'storageMigrationModal';
-        modal.className = 'fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50';
+        modal.className = 'fixed inset-0 bg-black/50 overflow-y-auto h-full w-full z-50';
         modal.setAttribute('role', 'dialog');
         modal.setAttribute('aria-modal', 'true');
         modal.setAttribute('aria-labelledby', 'storageMigrationModal-title');
@@ -3255,5 +3255,28 @@
     window.deleteUser = deleteUser;
     window.clearDeploymentCache = clearDeploymentCache;
     window.refreshCacheStats = refreshCacheStats;
+
+    // WAI-ARIA tabs: Left/Right/Home/End move between the settings tabs and
+    // activate the focused one (automatic activation). Wired from settings.html
+    // via @keydown on the [role=tablist]. Clicking the target button triggers
+    // Alpine's `tab = t.id`, which also updates the roving tabindex reactively.
+    function onSettingsTabKeydown(event) {
+        var keys = ['ArrowRight', 'ArrowLeft', 'Home', 'End'];
+        if (keys.indexOf(event.key) === -1) return;
+        var tablist = event.currentTarget;
+        var tabs = Array.prototype.slice.call(tablist.querySelectorAll('[role="tab"]'));
+        if (!tabs.length) return;
+        var current = tabs.indexOf(document.activeElement);
+        if (current === -1) current = 0;
+        var next = current;
+        if (event.key === 'ArrowRight') next = (current + 1) % tabs.length;
+        else if (event.key === 'ArrowLeft') next = (current - 1 + tabs.length) % tabs.length;
+        else if (event.key === 'Home') next = 0;
+        else if (event.key === 'End') next = tabs.length - 1;
+        event.preventDefault();
+        tabs[next].focus();
+        tabs[next].click();
+    }
+    window.onSettingsTabKeydown = onSettingsTabKeydown;
 
 })();

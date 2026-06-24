@@ -1,12 +1,12 @@
 {% extends "base.html" %}
 {% block title %}CertMate - Activity{% endblock %}
 {% block content %}
-    <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+    <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
         <div class="bg-surface shadow-card rounded-xl overflow-hidden">
             <div class="px-6 py-3 border-b border-gray-100 dark:border-white/5">
                 <div class="flex items-center justify-between">
                     <nav class="flex items-center text-sm" aria-label="Breadcrumb">
-                        <a href="/" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"><i class="fas fa-home"></i></a>
+                        <a href="/" aria-label="Home" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"><i class="fas fa-home"></i></a>
                         <i class="fas fa-chevron-right text-[10px] text-gray-300 dark:text-gray-600 mx-2"></i>
                         <span class="text-gray-700 dark:text-gray-200 font-medium">Activity</span>
                     </nav>
@@ -43,13 +43,13 @@
 
     <!-- Deploy error popup modal -->
     <div id="deployErrorModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50" onclick="if (event.target===this) closeDeployErrorPopup()">
-        <div class="bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 rounded-xl shadow-2xl p-5 w-[36rem]" style="max-height: 85vh; display: grid; grid-template-rows: auto minmax(0, 1fr);" onclick="event.stopPropagation()">
+        <div class="bg-surface text-foreground border border-border rounded-xl shadow-2xl p-5 w-[36rem]" style="max-height: 85vh; display: grid; grid-template-rows: auto minmax(0, 1fr);" onclick="event.stopPropagation()">
             <div class="flex items-center justify-between mb-4">
                 <div class="flex items-center gap-2">
                     <i class="fas fa-terminal text-red-400 text-sm"></i>
                     <span class="text-sm font-semibold">Deploy Hook Error</span>
                 </div>
-                <button type="button" onclick="closeDeployErrorPopup()" class="text-gray-400 hover:text-white dark:hover:text-gray-900 transition text-lg leading-none">&times;</button>
+                <button type="button" onclick="closeDeployErrorPopup()" aria-label="Close" class="text-muted hover:text-foreground transition text-lg leading-none">&times;</button>
             </div>
             <div id="deployErrorContent" class="space-y-3 pr-1" style="overflow-y: auto; min-height: 0;">
                 <!-- injected by showDeployErrorPopup() -->
@@ -407,13 +407,13 @@
             if (stderr) {
                 html += '<div>' +
                     '<div class="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500 mb-1">stderr</div>' +
-                    '<pre class="font-mono text-xs bg-black/20 dark:bg-white/20 rounded p-2 whitespace-pre-wrap break-words">' + escapeHtml(stderr) + '</pre>' +
+                    '<pre class="font-mono text-xs bg-gray-900 text-gray-100 rounded p-2 whitespace-pre-wrap break-words">' + escapeHtml(stderr) + '</pre>' +
                 '</div>';
             }
             if (stdout) {
                 html += '<div>' +
                     '<div class="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500 mb-1">stdout</div>' +
-                    '<pre class="font-mono text-xs bg-black/20 dark:bg-white/20 rounded p-2 whitespace-pre-wrap break-words">' + escapeHtml(stdout) + '</pre>' +
+                    '<pre class="font-mono text-xs bg-gray-900 text-gray-100 rounded p-2 whitespace-pre-wrap break-words">' + escapeHtml(stdout) + '</pre>' +
                 '</div>';
             }
 

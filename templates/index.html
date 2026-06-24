@@ -3,7 +3,7 @@
 {% block title %}CertMate - SSL Certificate Manager{% endblock %}
 {% block content %}
     <!-- Main Content -->
-    <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8"
+    <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8"
          x-data="{ certView: (location.hash === '#client' ? 'client' : 'server') }"
          x-init="$watch('certView', v => { history.replaceState(null, '', v === 'client' ? '#client' : '#'); if (v === 'client') initClientCerts(); })">
 
@@ -13,25 +13,28 @@
              of overflowing. The button is only shown on the server view
              — client certs have their own create UI inside that partial. -->
         <div class="flex flex-wrap items-center gap-3 mb-6">
-            <div class="flex items-center space-x-1 bg-gray-100 dark:bg-gray-700/50 rounded-lg p-1 w-fit">
+            <div class="flex items-center space-x-1 bg-gray-100 dark:bg-gray-700/50 rounded-lg p-1 w-fit" role="group" aria-label="Certificate view">
                 <button type="button" @click="certView = 'server'"
+                        :aria-pressed="certView === 'server' ? 'true' : 'false'"
                         :class="certView === 'server'
                             ? 'bg-surface shadow text-foreground'
                             : 'text-muted hover:text-gray-700 dark:hover:text-gray-200'"
                         class="px-4 py-2 text-sm font-medium rounded-md transition-all">
-                    <i class="fas fa-globe mr-1.5"></i>Server Certificates
+                    <i class="fas fa-globe mr-1.5" aria-hidden="true"></i>Server Certificates
                 </button>
                 <button type="button" @click="certView = 'client'"
+                        :aria-pressed="certView === 'client' ? 'true' : 'false'"
                         :class="certView === 'client'
                             ? 'bg-surface shadow text-foreground'
                             : 'text-muted hover:text-gray-700 dark:hover:text-gray-200'"
                         class="px-4 py-2 text-sm font-medium rounded-md transition-all">
-                    <i class="fas fa-id-card mr-1.5"></i>Client Certificates
+                    <i class="fas fa-id-card mr-1.5" aria-hidden="true"></i>Client Certificates
                 </button>
             </div>
             <div x-show="certView === 'server'" x-cloak class="ml-auto">
                 <button type="button" id="toggleCreateForm"
                         onclick="toggleCreateCertForm()"
+                        aria-expanded="false" aria-controls="createCertFormContainer"
                         class="inline-flex items-center px-5 py-2.5 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-gradient-to-r from-primary to-secondary hover:from-secondary hover:to-primary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-all duration-200">
                     <i class="fas fa-plus-circle mr-2"></i>
                     <span id="toggleCreateFormText">Create New Certificate</span>
@@ -70,7 +73,7 @@
                                 Private CA
                             </span>
                         </div>
-                        <button type="button" onclick="toggleCreateCertForm()" class="ml-3 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1" title="Close form">
+                        <button type="button" onclick="toggleCreateCertForm()" class="ml-3 inline-flex items-center justify-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-2 rounded hover:bg-hover" title="Close form" aria-label="Close create certificate form">
                             <i class="fas fa-times text-lg"></i>
                         </button>
                     </div>
@@ -88,7 +91,7 @@
                                 </label>
                                 <input type="text" id="domain" name="domain"
                                        autocomplete="off"
-                                       class="block w-full border border-border dark:bg-gray-700 dark:text-white rounded-lg shadow-sm py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors duration-200 placeholder-gray-400"
+                                       class="block w-full border border-border bg-input text-foreground rounded-lg shadow-sm py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors duration-200 placeholder-gray-400"
                                        placeholder="example.com or *.example.com" required>
                                 <p class="mt-1 text-xs text-muted">
                                     <i class="fas fa-info-circle mr-1"></i>
@@ -105,7 +108,7 @@
                                 </label>
                                 <input type="text" id="san_domains" name="san_domains"
                                        autocomplete="off"
-                                       class="block w-full border border-border dark:bg-gray-700 dark:text-white rounded-lg shadow-sm py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors duration-200 placeholder-gray-400"
+                                       class="block w-full border border-border bg-input text-foreground rounded-lg shadow-sm py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors duration-200 placeholder-gray-400"
                                        placeholder="www.example.com, mail.example.com, *.api.example.com">
                                 <p class="mt-1 text-xs text-muted">
                                     <i class="fas fa-info-circle mr-1"></i>
@@ -119,7 +122,7 @@
                                     Certificate Authority
                                 </label>
                                 <select id="ca_provider_select" name="ca_provider" 
-                                        class="block w-full border border-border dark:bg-gray-700 dark:text-white rounded-lg shadow-sm py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors duration-200"
+                                        class="block w-full border border-border bg-input text-foreground rounded-lg shadow-sm py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors duration-200"
                                         onchange="updateCAProviderInfo()">
                                     <option value="">Use default from settings</option>
                                     <option value="letsencrypt">Let's Encrypt (Free, DV certificates)</option>
@@ -144,7 +147,7 @@
                                     Challenge Type
                                 </label>
                                 <select id="challenge_type_select" name="challenge_type"
-                                        class="block w-full border border-border dark:bg-gray-700 dark:text-white rounded-lg shadow-sm py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors duration-200"
+                                        class="block w-full border border-border bg-input text-foreground rounded-lg shadow-sm py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors duration-200"
                                         onchange="toggleDnsProviderVisibility()">
                                     <option value="">Use default from settings</option>
                                     <option value="dns-01">DNS-01 (DNS provider credentials)</option>
@@ -163,30 +166,30 @@
                                     DNS Provider
                                 </label>
                                 <select id="dns_provider_select" name="dns_provider"
-                                        class="block w-full border border-border dark:bg-gray-700 dark:text-white rounded-lg shadow-sm py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors duration-200"
+                                        class="block w-full border border-border bg-input text-foreground rounded-lg shadow-sm py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors duration-200"
                                         onchange="updateAccountSelection()">
-                                    <option value="">🔧 Use default from settings</option>
-                                    <option value="cloudflare">☁️ Cloudflare</option>
-                                    <option value="route53">🚀 AWS Route53</option>
-                                    <option value="digitalocean">🌊 DigitalOcean</option>
-                                    <option value="azure">☁️ Azure DNS</option>
-                                    <option value="google">📊 Google Cloud DNS</option>
-                                    <option value="powerdns">⚡ PowerDNS</option>
-                                    <option value="rfc2136">🔧 RFC2136 (Generic)</option>
-                                    <option value="linode">🌐 Akamai Connected Cloud (Linode)</option>
-                                    <option value="edgedns">🌐 Akamai EdgeDNS</option>
-                                    <option value="vultr">⚡ Vultr</option>
-                                    <option value="hetzner">🇩🇪 Hetzner</option>
-                                    <option value="gandi">🇫🇷 Gandi</option>
-                                    <option value="ovh">🇫🇷 OVH</option>
-                                    <option value="namecheap">💰 Namecheap</option>
-                                    <option value="porkbun">🐷 Porkbun</option>
-                                    <option value="godaddy">🌐 GoDaddy</option>
-                                    <option value="dnsmadeeasy">📡 DNS Made Easy</option>
-                                    <option value="nsone">1️⃣ NS1</option>
-                                    <option value="he-ddns">🌪️ Hurricane Electric</option>
-                                    <option value="dynudns">🔄 Dynu</option>
-                                    <option value="duckdns">🦆 DuckDNS (free subdomain)</option>
+                                    <option value="">Use default from settings</option>
+                                    <option value="cloudflare">Cloudflare</option>
+                                    <option value="route53">AWS Route53</option>
+                                    <option value="digitalocean">DigitalOcean</option>
+                                    <option value="azure">Azure DNS</option>
+                                    <option value="google">Google Cloud DNS</option>
+                                    <option value="powerdns">PowerDNS</option>
+                                    <option value="rfc2136">RFC2136 (Generic)</option>
+                                    <option value="linode">Akamai Connected Cloud (Linode)</option>
+                                    <option value="edgedns">Akamai EdgeDNS</option>
+                                    <option value="vultr">Vultr</option>
+                                    <option value="hetzner">Hetzner</option>
+                                    <option value="gandi">Gandi</option>
+                                    <option value="ovh">OVH</option>
+                                    <option value="namecheap">Namecheap</option>
+                                    <option value="porkbun">Porkbun</option>
+                                    <option value="godaddy">GoDaddy</option>
+                                    <option value="dnsmadeeasy">DNS Made Easy</option>
+                                    <option value="nsone">NS1</option>
+                                    <option value="he-ddns">Hurricane Electric</option>
+                                    <option value="dynudns">Dynu</option>
+                                    <option value="duckdns">DuckDNS (free subdomain)</option>
                                     <option value="hetzner-cloud">Hetzner Cloud</option>
                                     <option value="arvancloud">ArvanCloud</option>
                                     <option value="infomaniak">Infomaniak</option>
@@ -207,8 +210,8 @@
                                     Account
                                 </label>
                                 <select id="account_select" name="account_id"
-                                        class="block w-full border border-border dark:bg-gray-700 dark:text-white rounded-lg shadow-sm py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors duration-200">
-                                    <option value="">🔧 Use default account</option>
+                                        class="block w-full border border-border bg-input text-foreground rounded-lg shadow-sm py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors duration-200">
+                                    <option value="">Use default account</option>
                                 </select>
                                 <p class="mt-1 text-xs text-muted">
                                     <i class="fas fa-info-circle mr-1"></i>
@@ -221,7 +224,8 @@
                     
                     <!-- Advanced Options (Collapsible) -->
                     <div class="border-t border-border pt-6">
-                        <button type="button" onclick="toggleAdvancedOptions()" 
+                        <button type="button" onclick="toggleAdvancedOptions()" id="toggleAdvancedOptions"
+                                aria-expanded="false" aria-controls="advanced-options"
                                 class="flex items-center text-sm font-medium text-label hover:text-primary transition-colors duration-200">
                             <i class="fas fa-cog mr-2"></i>
                             Advanced Options
@@ -253,7 +257,7 @@
                                 </label>
                                 <input type="text" id="dns_alias_domain" name="dns_alias_domain"
                                        autocomplete="off"
-                                       class="w-full px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm"
+                                       class="w-full px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground text-sm"
                                        placeholder="e.g. validation.example.org">
                                 <p id="dns_alias_help" class="mt-1 text-xs text-muted">
                                     Use DNS-01 Alias Mode when <code class="font-mono bg-gray-100 dark:bg-gray-600 px-1 rounded">_acme-challenge.yourdomain.com</code>
@@ -277,7 +281,7 @@
                                         Key Type <span class="text-xs font-normal text-muted">(optional)</span>
                                     </label>
                                     <select id="cert_key_type"
-                                            class="w-full px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm"
+                                            class="w-full px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground text-sm"
                                             onchange="toggleCertKeyOptions()">
                                         <option value="">Use global default</option>
                                         <option value="rsa">RSA</option>
@@ -292,7 +296,7 @@
                                         RSA Key Size
                                     </label>
                                     <select id="cert_key_size"
-                                            class="w-full px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm">
+                                            class="w-full px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground text-sm">
                                         <option value="2048">2048 bits (default)</option>
                                         <option value="3072">3072 bits</option>
                                         <option value="4096">4096 bits</option>
@@ -303,7 +307,7 @@
                                         ECDSA Curve
                                     </label>
                                     <select id="cert_elliptic_curve"
-                                            class="w-full px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm">
+                                            class="w-full px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground text-sm">
                                         <option value="secp256r1">secp256r1 / P-256 (default)</option>
                                         <option value="secp384r1">secp384r1 / P-384</option>
                                     </select>
@@ -348,6 +352,8 @@
             var chevron = document.getElementById('toggleCreateFormChevron');
             var isHidden = container.classList.contains('hidden');
             container.classList.toggle('hidden');
+            var toggleBtn = document.getElementById('toggleCreateForm');
+            if (toggleBtn) { toggleBtn.setAttribute('aria-expanded', isHidden ? 'true' : 'false'); }
             if (chevron) {
                 chevron.style.transform = isHidden ? 'rotate(180deg)' : '';
             }
@@ -394,6 +400,7 @@
                     <div class="flex flex-col sm:flex-row items-stretch sm:items-center space-y-2 sm:space-y-0 sm:space-x-2 lg:space-x-3">
                         <div class="relative">
                             <input type="text" id="certificateSearch" placeholder="Search certificates..."
+                                   aria-label="Search certificates"
                                    class="pl-10 pr-8 py-2 border border-border bg-input dark:text-white rounded-lg focus:ring-2 focus:ring-primary focus:border-primary text-sm shadow-sm transition-shadow duration-200 w-full sm:w-48">
                             <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                 <i class="fas fa-search text-gray-400"></i>
@@ -408,7 +415,7 @@
                             <option value="expiring">Expiring Soon</option>
                             <option value="expired">Expired</option>
                         </select>
-                        <button type="button" onclick="checkAllDeploymentStatuses()"
+                        <button type="button" onclick="checkAllDeploymentStatuses(event)"
                                 class="inline-flex items-center px-3 py-2 border border-indigo-300 dark:border-indigo-600 shadow-sm text-sm font-medium rounded-lg text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/30 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200 whitespace-nowrap"
                                 title="Re-check deployment status for every certificate in the list. Probes both the backend (TLS handshake from the server) and the browser (this tab), one row at a time."
                                 aria-label="Re-check deployment status for all certificates">
@@ -494,7 +501,7 @@
     <div id="certDetailPanel" class="fixed top-0 right-0 h-full w-full sm:w-96 lg:w-[480px] bg-surface shadow-elevated z-50 transform translate-x-full panel-slide overflow-y-auto">
         <div class="sticky top-0 bg-surface border-b border-gray-100 dark:border-white/5 px-6 py-4 flex items-center justify-between z-10">
             <h3 class="text-lg font-semibold text-foreground truncate" id="detailDomain">Certificate Details</h3>
-            <button type="button" onclick="closeCertDetail()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 transition-colors" title="Close panel">
+            <button type="button" onclick="closeCertDetail()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 transition-colors" title="Close panel" aria-label="Close certificate details panel">
                 <i class="fas fa-times text-lg"></i>
             </button>
         </div>
@@ -504,7 +511,7 @@
     </div>
 
     <!-- Loading Modal -->
-    <div id="loadingModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden z-50">
+    <div id="loadingModal" class="fixed inset-0 bg-black/50 hidden z-50">
         <div class="bg-surface rounded-lg p-6 m-4 max-w-md w-full">
             <div class="text-center">
                 <div class="relative">
@@ -560,16 +567,16 @@
                 <span class="text-gray-400 text-xs">| Cache: <span id="debug-cache-info">Loading...</span></span>
             </div>
             <div class="flex items-center space-x-2">
-                <button onclick="showCacheStats()" class="text-blue-400 hover:text-blue-300" title="Show cache stats">
+                <button onclick="showCacheStats()" class="text-blue-400 hover:text-blue-300" title="Show cache stats" aria-label="Show cache stats">
                     <i class="fas fa-database"></i>
                 </button>
-                <button onclick="invalidateAllCache()" class="text-orange-400 hover:text-orange-300" title="Clear cache">
+                <button onclick="invalidateAllCache()" class="text-orange-400 hover:text-orange-300" title="Clear cache" aria-label="Clear cache">
                     <i class="fas fa-trash"></i>
                 </button>
-                <button onclick="clearDebugConsole()" class="text-yellow-400 hover:text-yellow-300" title="Clear console">
+                <button onclick="clearDebugConsole()" class="text-yellow-400 hover:text-yellow-300" title="Clear console" aria-label="Clear debug console">
                     <i class="fas fa-eraser"></i>
                 </button>
-                <button onclick="toggleDebugConsole()" class="text-gray-400 hover:text-white" title="Close console">
+                <button onclick="toggleDebugConsole()" class="text-gray-400 hover:text-white" title="Close console" aria-label="Close debug console">
                     <i class="fas fa-times"></i>
                 </button>
             </div>

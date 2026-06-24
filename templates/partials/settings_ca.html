@@ -1,5 +1,5 @@
 <!-- TAB: CA Providers -->
-                    <div x-show="tab === 'ca'" x-cloak>
+                    <div x-show="tab === 'ca'" x-cloak id="settings-panel-ca" role="tabpanel" aria-labelledby="settings-tab-ca" tabindex="0">
                     <!-- CA Providers Section -->
                     <div class="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
                         <label class="block text-sm font-medium text-label mb-3">
@@ -14,7 +14,7 @@
                                     Default Certificate Authority
                                 </label>
                                 <select id="default-ca" name="default_ca" 
-                                        class="w-full px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm"
+                                        class="w-full px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground text-sm"
                                         onchange="toggleCAProviderConfig()">
                                     <option value="letsencrypt">Let's Encrypt (Default)</option>
                                     <option value="letsencrypt_staging">Let's Encrypt (Staging)</option>
@@ -334,7 +334,7 @@
                                 </div>
                                 <p class="text-xs text-purple-700 dark:text-purple-300 mt-2">
                                     Configure your private or corporate CA. Supports ACME-compatible CAs like step-ca, Smallstep, Boulder, and others.
-                                    <br><strong>🚀 Quick Start:</strong>
+                                    <br><strong><i class="fas fa-rocket mr-1" aria-hidden="true"></i>Quick Start:</strong>
                                     <br>1. Enter your CA's ACME directory URL above
                                     <br>2. Enter your email address
                                     <br>3. Click "Test CA Connection" to verify

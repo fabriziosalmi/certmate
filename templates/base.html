@@ -151,6 +151,10 @@
                 <i class="fas fa-history text-lg"></i>
                 <span class="text-xs mt-0.5 font-medium">Activity</span>
             </a>
+            <a href="/redoc" {% if request.path == '/redoc' %}aria-current="page"{% endif %} class="flex flex-col items-center justify-center flex-1 py-1 transition-colors duration-150 {% if request.path == '/redoc' %}text-primary{% else %}text-muted{% endif %}">
+                <i class="fas fa-code text-lg"></i>
+                <span class="text-xs mt-0.5 font-medium">API</span>
+            </a>
         </div>
     </nav>
     <script>

@@ -150,11 +150,23 @@ _LITERAL_PAIRS = [
     for light, dark, token in MAPPINGS
 ]
 
+# Dark-ONLY override pairs — no light counterpart, so they don't fit MAPPINGS
+# (which keys on a light class being present). Form inputs historically carried
+# `dark:bg-gray-700 dark:text-white` with NO light class, relying on inherited
+# light-mode colors; the semantic equivalent is `bg-input text-foreground`
+# (one class set covering both modes). Ratchet the canonical adjacent form here
+# so the Phase-9 input migration can't silently regress. The boundary guards
+# match _LITERAL_PAIRS: don't fire inside a larger token or on an opacity suffix.
+_DARK_ONLY_PAIRS = [
+    (re.compile(r"(?<![\w:/-])dark:bg-gray-700\s+dark:text-white(?![\w/-])"),
+     "bg-input text-foreground"),
+]
+
 
 def literal_pass(text: str) -> tuple[str, "Counter"]:
-    """Collapse adjacent LIGHT+DARK pairs anywhere in the raw text."""
+    """Collapse adjacent LIGHT+DARK (and dark-only) pairs in the raw text."""
     hits: Counter = Counter()
-    for pat, token in _LITERAL_PAIRS:
+    for pat, token in _LITERAL_PAIRS + _DARK_ONLY_PAIRS:
         text, n = pat.subn(token, text)
         if n:
             hits[token] += n

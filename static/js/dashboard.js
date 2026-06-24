@@ -425,7 +425,6 @@
     }
 
     function deploymentBadgeHtml(role, result, safeDomain, domainId) {
-        var badgeId = 'deployment-status-' + domainId + '-' + role;
         var display = deploymentStatusDisplay(role, result);
         var title = display.text;
         if (result && result.method) {
@@ -440,7 +439,11 @@
         if (result && result.timestamp) {
             title += ' at ' + result.timestamp;
         }
-        return '<span data-deployment-domain="' + safeDomain + '" data-deployment-role="' + role + '" id="' + badgeId + '" title="' + escapeHtml(title) + '" class="' + display.className + '"><i class="fas ' + display.icon + ' mr-1"></i>' + display.text + '</span>';
+        // No `id` here on purpose: this badge renders in up to three places per
+        // domain (desktop cell, mobile meta, detail panel), so an id would be
+        // duplicated (invalid HTML). The data-deployment-* attributes identify
+        // it for updates; the deployed-count reads deploymentCache directly.
+        return '<span data-deployment-domain="' + safeDomain + '" data-deployment-role="' + role + '" title="' + escapeHtml(title) + '" class="' + display.className + '"><i class="fas ' + display.icon + ' mr-1"></i>' + display.text + '</span>';
     }
 
     // Build deployment status badges HTML
@@ -528,7 +531,7 @@
         // API, Auto-renew, Delete" with no domain context, repeated for
         // every row in the table (B1 fix).
         function actionBtn(action, domain, hoverColor, title, icon) {
-            return rowRaw(rowHtml`<button type="button" data-action="${action}" data-domain="${domain}" onclick="event.stopPropagation()" class="p-1.5 text-gray-400 hover:text-${rowRaw(hoverColor)}-600 dark:hover:text-${rowRaw(hoverColor)}-400 rounded hover:bg-hover" title="${title}" aria-label="${title} ${domain}"><i class="fas ${rowRaw(icon)}" aria-hidden="true"></i></button>`);
+            return rowRaw(rowHtml`<button type="button" data-action="${action}" data-domain="${domain}" onclick="event.stopPropagation()" class="inline-flex items-center justify-center p-2 text-gray-400 hover:text-${rowRaw(hoverColor)}-600 dark:hover:text-${rowRaw(hoverColor)}-400 rounded hover:bg-hover" title="${title}" aria-label="${title} ${domain}"><i class="fas ${rowRaw(icon)}" aria-hidden="true"></i></button>`);
         }
 
         container.innerHTML = sorted.map(function (cert, i) {
@@ -540,7 +543,7 @@
             var domainAlias = cert.domain_alias || '';
 
             if (!cert.exists) {
-                return rowHtml`<tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer" onclick="openCertDetail('${cert.domain}')">
+                return rowHtml`<tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer" tabindex="0" role="button" aria-label="View details for ${cert.domain}" onclick="openCertDetail('${cert.domain}')" onkeydown="certRowKey(event, '${cert.domain}')">
                     <td class="px-6 py-4 max-w-0"><div class="text-sm font-medium text-foreground truncate">${cert.domain}</div></td>
                     <td class="px-4 py-4 whitespace-nowrap"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-500/10 text-danger-fg ring-1 ring-inset ring-red-500/20"><i class="fas fa-times-circle mr-1"></i>Not Found</span></td>
                     <td class="px-4 py-4 whitespace-nowrap hidden md:table-cell text-sm text-muted">\u2014</td>
@@ -609,7 +612,7 @@
             // "secure connection" glyph) is a visual paradox there. Show an
             // open padlock for expired so the icon matches the state.
             var lockIcon = isExpired ? 'fa-lock-open' : 'fa-lock';
-            return rowHtml`<tr class="${rowRaw(healthClass)} row-enter hover:bg-blue-50/40 dark:hover:bg-blue-900/10 transition-colors duration-150 cursor-pointer" style="animation-delay:${rowRaw(String(i * 30))}ms" onclick="openCertDetail('${cert.domain}')">
+            return rowHtml`<tr class="${rowRaw(healthClass)} row-enter hover:bg-blue-50/40 dark:hover:bg-blue-900/10 transition-colors duration-150 cursor-pointer" style="animation-delay:${rowRaw(String(i * 30))}ms" tabindex="0" role="button" aria-label="View details for ${cert.domain}" onclick="openCertDetail('${cert.domain}')" onkeydown="certRowKey(event, '${cert.domain}')">
                 <td class="px-6 py-4 max-w-0">
                     <div class="flex items-center min-w-0">
                         <i class="fas ${rowRaw(lockIcon)} ${rowRaw(lockColor)} mr-2 text-sm shrink-0" aria-hidden="true"></i>
@@ -685,6 +688,16 @@
                 '<div class="skeleton h-9 w-full rounded-md"></div>' +
             '</div>' +
         '</div>';
+    }
+
+    // Keyboard activation for the clickable certificate rows: Enter or Space
+    // opens the detail panel, matching the row's onclick. Space is prevented
+    // from scrolling the page.
+    function certRowKey(event, domain) {
+        if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') {
+            event.preventDefault();
+            openCertDetail(domain);
+        }
     }
 
     function openCertDetail(domain) {
@@ -763,7 +776,6 @@
                 '<button type="button" onclick="downloadCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-border shadow-sm text-sm font-medium rounded-md text-label bg-input hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-download mr-2 text-blue-600"></i>Download Certificate</button>' +
                 '<button type="button" onclick="copyCurlCommand(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-info-line shadow-sm text-sm font-medium rounded-md text-info-fg bg-info-surface hover:bg-blue-100 dark:hover:bg-blue-900/50"><i class="fas fa-code mr-2"></i>Show API Command</button>' +
                 '<button type="button" onclick="checkDeploymentStatus(\'' + safeDomain + '\', this, true)" class="w-full inline-flex items-center justify-center px-4 py-2 border border-border shadow-sm text-sm font-medium rounded-md text-label bg-input hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-globe mr-2 text-indigo-600"></i>Check Deployment</button>' +
-                '<button type="button" onclick="checkDeploymentStatus(\'' + safeDomain + '\', this, true)" class="w-full inline-flex items-center justify-center px-4 py-2 border border-border shadow-sm text-sm font-medium rounded-md text-label bg-input hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-network-wired mr-2 text-indigo-600"></i>Check Probe</button>' +
                 (safeDomainAlias ? '<button type="button" onclick="checkDnsAliasForCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-info-line shadow-sm text-sm font-medium rounded-md text-info-fg bg-info-surface hover:bg-blue-100 dark:hover:bg-blue-900/50"><i class="fas fa-search mr-2"></i>Check DNS-01 Alias</button>' : '') +
                 '<div id="cert_dns_alias_check_result" class="hidden"></div>' +
                 (roleAtLeast('admin')
@@ -919,15 +931,13 @@
 
         var deployedCount = allCertificates.filter(function (cert) {
             if (!cert.exists) return false;
-            // Must match deploymentBadgeHtml's id exactly: it builds
-            // 'deployment-status-<domainId>-<role>' where domainId is the
-            // escaped, dot-stripped domain. The backend badge carries the
-            // authoritative verdict; without the '-backend' suffix this lookup
-            // matched nothing and the counter was stuck at 0 (#324).
-            var domainId = escapeHtml(cert.domain).replace(/\./g, '-');
-            var statusElement = document.getElementById('deployment-status-' + domainId + '-backend');
-            var isDeployed = statusElement && statusElement.textContent.indexOf('Deployed') !== -1;
-            return isDeployed;
+            // Read the authoritative backend verdict straight from the cache the
+            // badges themselves render from, rather than scraping badge text from
+            // the DOM (#324). This mirrors deploymentStatusDisplay's "Deployed"
+            // condition for the backend role and avoids depending on a DOM id
+            // (the badge renders in up to three places, so an id can't be unique).
+            var cached = deploymentCache.get(cert.domain);
+            return !!(cached && cached.deployed && cached.certificate_match === true);
         }).length;
 
         var deploymentCountElement = document.getElementById('deploymentCount');
@@ -1003,11 +1013,23 @@
     }
 
     // Check deployment status for all certificates (manual "Check all" button)
-    function checkAllDeploymentStatuses() {
-        var button = event.target;
-        var originalText = button.innerHTML;
-        button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Checking...';
-        button.disabled = true;
+    function checkAllDeploymentStatuses(evt) {
+        // Resolve the trigger from the passed event (currentTarget = the button
+        // the inline onclick is bound to). Avoid implicit window.event, which is
+        // unreliable in Firefox/Safari under the strict-mode module.
+        var button = (evt && evt.currentTarget) ? evt.currentTarget : null;
+        var originalText = button ? button.innerHTML : '';
+        if (button) {
+            button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Checking...';
+            button.disabled = true;
+        }
+
+        var restoreButton = function () {
+            if (button) {
+                button.innerHTML = originalText;
+                button.disabled = false;
+            }
+        };
 
         // Ensure allCertificates is an array
         if (!Array.isArray(allCertificates)) {
@@ -1018,20 +1040,19 @@
 
         if (certificatesToCheck.length === 0) {
             showMessage('No certificates found to check', 'info');
-            button.innerHTML = originalText;
-            button.disabled = false;
+            restoreButton();
             return;
         }
 
         runDeploymentChecks(certificatesToCheck, {
             onProgress: function (completed, totalCount) {
+                if (!button) return;
                 var percentage = Math.round((completed / totalCount) * 100);
                 button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Checking... ' + completed + '/' + totalCount + ' (' + percentage + '%)';
             }
         }).then(function () {
             showMessage('Deployment status updated for ' + certificatesToCheck.length + ' certificates', 'success');
-            button.innerHTML = originalText;
-            button.disabled = false;
+            restoreButton();
         });
     }
 
@@ -1436,13 +1457,16 @@
     function toggleAdvancedOptions() {
         var optionsDiv = document.getElementById('advanced-options');
         var chevron = document.getElementById('advanced-chevron');
+        var toggleBtn = document.getElementById('toggleAdvancedOptions');
 
         if (optionsDiv.classList.contains('hidden')) {
             optionsDiv.classList.remove('hidden');
             chevron.classList.add('rotate-180');
+            if (toggleBtn) { toggleBtn.setAttribute('aria-expanded', 'true'); }
         } else {
             optionsDiv.classList.add('hidden');
             chevron.classList.remove('rotate-180');
+            if (toggleBtn) { toggleBtn.setAttribute('aria-expanded', 'false'); }
         }
     }
 
@@ -1945,7 +1969,7 @@
         }).then(function (response) {
             return response.json().then(function (result) {
                 if (response.ok && result.success !== false) {
-                    showMessage('Certificate ' + (editingDomain ? 'reissued' : 'created') + ' successfully for ' + domainsDisplay + '!');
+                    showMessage('Certificate ' + (editingDomain ? 'reissued' : 'created') + ' successfully for ' + domainsDisplay + '!', 'success');
                     if (editingDomain) {
                         cancelEditReissue();
                     } else {
@@ -2032,7 +2056,7 @@
 
     // Manually trigger deploy hooks for a domain (issue #109).
     async function runDeployHooks(domain) {
-        var confirmed = await CertMate.confirm('Run deploy hooks for ' + domain + ' now?\n\nAll enabled global and domain-specific hooks will execute with CERTMATE_EVENT=manual.', { confirmText: 'Run Hooks', type: 'warning' });
+        var confirmed = await CertMate.confirm('Run deploy hooks for ' + domain + ' now?\n\nAll enabled global and domain-specific hooks will execute with CERTMATE_EVENT=manual.', 'Run Deploy Hooks', { confirmText: 'Run Hooks', danger: false });
         if (!confirmed) return;
         var progressInterval = showLoadingModal(
             'Running Deploy Hooks for ' + domain,
@@ -2094,7 +2118,9 @@
         }).catch(function (error) {
             console.error('Error running deploy hooks:', error);
             showMessage('Failed to run deploy hooks. Please try again.', 'error');
-        }).then(function () {
+        }).finally(function () {
+            // finally (not a trailing .then) so the blocking overlay clears even
+            // if the .catch handler itself throws.
             hideLoadingModal(progressInterval);
         });
     }
@@ -2103,7 +2129,7 @@
     async function toggleAutoRenew(domain, currentlyEnabled) {
         var nextState = !currentlyEnabled;
         var verb = nextState ? 'Enable' : 'Disable';
-        var confirmed = await CertMate.confirm(verb + ' automatic renewal for ' + domain + '?', { confirmText: verb, type: 'warning' });
+        var confirmed = await CertMate.confirm(verb + ' automatic renewal for ' + domain + '?', verb + ' Auto-Renew', { confirmText: verb, danger: false });
         if (!confirmed) return;
         fetch('/api/certificates/' + encodeURIComponent(domain) + '/auto-renew', {
             method: 'PUT',
@@ -2408,6 +2434,7 @@
     // Expose functions needed by HTML onclick handlers and SSE
     window.loadCertificates = loadCertificates;
     window.openCertDetail = openCertDetail;
+    window.certRowKey = certRowKey;
     window.startEditReissue = startEditReissue;
     window.cancelEditReissue = cancelEditReissue;
     window.closeCertDetail = closeCertDetail;

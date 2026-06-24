@@ -1,5 +1,5 @@
 <!-- TAB: Deploy Hooks -->
-        <div x-show="tab === 'deploy'" x-cloak
+        <div x-show="tab === 'deploy'" x-cloak id="settings-panel-deploy" role="tabpanel" aria-labelledby="settings-tab-deploy" tabindex="0"
              class="bg-surface border-border rounded-lg shadow-sm border p-6 mt-6"
              x-data="deployManager()" x-init="loadConfig()">
 
@@ -82,24 +82,24 @@
                                             <div class="w-9 h-5 bg-gray-200 peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
                                         </label>
                                         <input type="text" x-model="hook.name" placeholder="Hook name"
-                                               class="flex-1 text-sm border border-border dark:bg-gray-700 dark:text-white rounded px-3 py-1.5 focus:ring-2 focus:ring-primary focus:border-primary">
+                                               class="flex-1 text-sm border border-border bg-input text-foreground rounded px-3 py-1.5 focus:ring-2 focus:ring-primary focus:border-primary">
                                     </div>
                                     <div class="flex items-center gap-2 ml-3">
                                         <button type="button" @click="testHook(hook)" class="text-xs px-2 py-1 bg-info-surface text-info-fg rounded hover:bg-blue-200 dark:hover:bg-blue-900/50 transition" title="Test hook">
                                             <i class="fas fa-play mr-1"></i>Test
                                         </button>
-                                        <button type="button" @click="config.global_hooks.splice(idx, 1)" class="text-red-400 hover:text-red-600 transition" title="Remove hook">
+                                        <button type="button" @click="config.global_hooks.splice(idx, 1)" class="inline-flex items-center justify-center p-2 rounded text-red-400 hover:text-red-600 hover:bg-hover transition" title="Remove hook" aria-label="Remove hook">
                                             <i class="fas fa-trash-alt"></i>
                                         </button>
                                     </div>
                                 </div>
                                 <textarea x-model="hook.command" placeholder="e.g. systemctl reload nginx" rows="2"
-                                          class="w-full text-sm font-mono border border-border dark:bg-gray-700 dark:text-white rounded px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary mb-2"></textarea>
+                                          class="w-full text-sm font-mono border border-border bg-input text-foreground rounded px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary mb-2"></textarea>
                                 <div class="flex items-center gap-4 text-xs">
                                     <label class="flex items-center gap-1 text-muted">
                                         <span>Timeout:</span>
                                         <input type="number" x-model.number="hook.timeout" min="1" max="300"
-                                               class="w-16 border border-border dark:bg-gray-700 dark:text-white rounded px-2 py-1 text-xs" title="Timeout in seconds">
+                                               class="w-16 border border-border bg-input text-foreground rounded px-2 py-1 text-xs" title="Timeout in seconds">
                                         <span>s</span>
                                     </label>
                                     <label class="flex items-center gap-1 text-muted">
@@ -153,24 +153,24 @@
                                                     <div class="w-9 h-5 bg-gray-200 peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
                                                 </label>
                                                 <input type="text" x-model="hook.name" placeholder="Hook name"
-                                                       class="flex-1 text-sm border border-border dark:bg-gray-700 dark:text-white rounded px-3 py-1.5 focus:ring-2 focus:ring-primary focus:border-primary">
+                                                       class="flex-1 text-sm border border-border bg-input text-foreground rounded px-3 py-1.5 focus:ring-2 focus:ring-primary focus:border-primary">
                                             </div>
                                             <div class="flex items-center gap-2 ml-3">
                                                 <button type="button" @click="testHook(hook)" class="text-xs px-2 py-1 bg-info-surface text-info-fg rounded hover:bg-blue-200 dark:hover:bg-blue-900/50 transition" title="Test hook">
                                                     <i class="fas fa-play mr-1"></i>Test
                                                 </button>
-                                                <button type="button" @click="config.domain_hooks[domain].splice(idx, 1)" class="text-red-400 hover:text-red-600 transition" title="Remove hook">
+                                                <button type="button" @click="config.domain_hooks[domain].splice(idx, 1)" class="inline-flex items-center justify-center p-2 rounded text-red-400 hover:text-red-600 hover:bg-hover transition" title="Remove hook" aria-label="Remove hook">
                                                     <i class="fas fa-trash-alt"></i>
                                                 </button>
                                             </div>
                                         </div>
                                         <textarea x-model="hook.command" placeholder="e.g. /opt/scripts/deploy.sh" rows="2"
-                                                  class="w-full text-sm font-mono border border-border dark:bg-gray-700 dark:text-white rounded px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary mb-2"></textarea>
+                                                  class="w-full text-sm font-mono border border-border bg-input text-foreground rounded px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary mb-2"></textarea>
                                         <div class="flex items-center gap-4 text-xs">
                                             <label class="flex items-center gap-1 text-muted">
                                                 <span>Timeout:</span>
                                                 <input type="number" x-model.number="hook.timeout" min="1" max="300"
-                                                       class="w-16 border border-border dark:bg-gray-700 dark:text-white rounded px-2 py-1 text-xs" title="Timeout in seconds">
+                                                       class="w-16 border border-border bg-input text-foreground rounded px-2 py-1 text-xs" title="Timeout in seconds">
                                                 <span>s</span>
                                             </label>
                                             <label class="flex items-center gap-1 text-muted">
@@ -195,7 +195,7 @@
                         <!-- Add domain section -->
                         <div class="flex gap-2">
                             <input type="text" x-model="newDomain" placeholder="example.com"
-                                   class="flex-1 text-sm border border-border dark:bg-gray-700 dark:text-white rounded px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary"
+                                   class="flex-1 text-sm border border-border bg-input text-foreground rounded px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary"
                                    @keydown.enter="addDomainSection()">
                             <button type="button" @click="addDomainSection()"
                                     class="px-4 py-2 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded text-sm hover:bg-purple-200 dark:hover:bg-purple-900/50 transition">

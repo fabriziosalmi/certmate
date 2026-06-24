@@ -24,6 +24,8 @@
         var batchBtn = document.getElementById('batchTabBtn');
         if (singleBtn) singleBtn.addEventListener('click', function() { ccSwitchTab('single'); });
         if (batchBtn) batchBtn.addEventListener('click', function() { ccSwitchTab('batch'); });
+        if (singleBtn) singleBtn.addEventListener('keydown', ccTabKeydown);
+        if (batchBtn) batchBtn.addEventListener('keydown', ccTabKeydown);
 
         var form = document.getElementById('createClientCertForm');
         if (form) form.addEventListener('submit', ccHandleCreateCert);
@@ -143,7 +145,8 @@
         var batchBtn = document.getElementById('batchTabBtn');
         if (!singleForm || !batchForm) return;
 
-        if (tab === 'single') {
+        var singleActive = tab === 'single';
+        if (singleActive) {
             singleForm.classList.remove('hidden');
             batchForm.classList.add('hidden');
             singleBtn.classList.add('border-primary', 'text-primary');
@@ -158,6 +161,23 @@
             singleBtn.classList.remove('border-primary', 'text-primary');
             singleBtn.classList.add('border-transparent', 'text-gray-600', 'dark:text-gray-300');
         }
+        // Keep ARIA state and the roving tabindex in sync with the visual state.
+        singleBtn.setAttribute('aria-selected', singleActive ? 'true' : 'false');
+        batchBtn.setAttribute('aria-selected', singleActive ? 'false' : 'true');
+        singleBtn.setAttribute('tabindex', singleActive ? '0' : '-1');
+        batchBtn.setAttribute('tabindex', singleActive ? '-1' : '0');
+    }
+
+    // WAI-ARIA tabs keyboard nav for the single/bulk client-cert tabs.
+    function ccTabKeydown(event) {
+        if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight' &&
+            event.key !== 'Home' && event.key !== 'End') return;
+        event.preventDefault();
+        // Two tabs: Left/Home -> single, Right/End -> batch.
+        var goSingle = (event.key === 'ArrowLeft' || event.key === 'Home');
+        ccSwitchTab(goSingle ? 'single' : 'batch');
+        var target = document.getElementById(goSingle ? 'singleTabBtn' : 'batchTabBtn');
+        if (target) target.focus();
     }
 
     function ccHandleCreateCert(e) {

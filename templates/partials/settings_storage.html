@@ -1,5 +1,5 @@
 <!-- TAB: Storage -->
-                    <div x-show="tab === 'storage'" x-cloak>
+                    <div x-show="tab === 'storage'" x-cloak id="settings-panel-storage" role="tabpanel" aria-labelledby="settings-tab-storage" tabindex="0">
                     <!-- Certificate Storage Backend Section -->
                     <div class="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
                         <label class="block text-sm font-medium text-label mb-3">
@@ -10,11 +10,11 @@
                         <div class="space-y-4">
                             <!-- Backend Selection -->
                             <div>
-                                <label class="block text-xs font-medium text-muted mb-2">
+                                <label for="storage-backend" class="block text-xs font-medium text-muted mb-2">
                                     Storage Backend Type
                                 </label>
                                 <select id="storage-backend" name="storage_backend" 
-                                        class="w-full px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm"
+                                        class="w-full px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground text-sm"
                                         onchange="toggleStorageBackendConfig()">
                                     <option value="local_filesystem">Local Filesystem (Default)</option>
                                     <option value="azure_keyvault">Azure Key Vault</option>
@@ -36,7 +36,7 @@
                                     </h5>
                                     <div class="space-y-2">
                                         <div>
-                                            <label class="block text-xs text-info-strong mb-1">Certificate Directory</label>
+                                            <label for="storage-cert-dir" class="block text-xs text-info-strong mb-1">Certificate Directory</label>
                                             <input type="text" id="storage-cert-dir" 
                                                    class="w-full px-2 py-1 text-sm border border-info-line rounded bg-surface text-foreground"
                                                    placeholder="certificates" value="certificates">
@@ -56,25 +56,25 @@
                                     </h5>
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                                         <div>
-                                            <label class="block text-xs text-info-strong mb-1">Vault URL</label>
-                                            <input type="text" id="azure-vault-url" 
+                                            <label for="azure-vault-url" class="block text-xs text-info-strong mb-1">Vault URL</label>
+                                            <input type="text" id="azure-vault-url"
                                                    class="w-full px-2 py-1 text-sm border border-info-line rounded bg-surface text-foreground"
                                                    placeholder="https://yourvault.vault.azure.net/">
                                         </div>
                                         <div>
-                                            <label class="block text-xs text-info-strong mb-1">Tenant ID</label>
+                                            <label for="azure-tenant-id" class="block text-xs text-info-strong mb-1">Tenant ID</label>
                                             <input type="text" id="azure-tenant-id" 
                                                    class="w-full px-2 py-1 text-sm border border-info-line rounded bg-surface text-foreground"
                                                    placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
                                         </div>
                                         <div>
-                                            <label class="block text-xs text-info-strong mb-1">Client ID</label>
+                                            <label for="azure-client-id" class="block text-xs text-info-strong mb-1">Client ID</label>
                                             <input type="text" id="azure-client-id" 
                                                    class="w-full px-2 py-1 text-sm border border-info-line rounded bg-surface text-foreground"
                                                    placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
                                         </div>
                                         <div>
-                                            <label class="block text-xs text-info-strong mb-1">Client Secret</label>
+                                            <label for="azure-client-secret" class="block text-xs text-info-strong mb-1">Client Secret</label>
                                             <input type="password" id="azure-client-secret"
                                                    class="w-full px-2 py-1 text-sm border border-info-line rounded bg-surface text-foreground"
                                                    placeholder="Enter client secret"
@@ -83,7 +83,7 @@
                                                    data-lpignore="true">
                                         </div>
                                         <div class="md:col-span-2">
-                                            <label class="block text-xs text-info-strong mb-1">Storage mode</label>
+                                            <label for="azure-storage-mode" class="block text-xs text-info-strong mb-1">Storage mode</label>
                                             <select id="azure-storage-mode"
                                                     class="w-full px-2 py-1 text-sm border border-info-line rounded bg-surface text-foreground"
                                                     onchange="toggleAzureBackfillRow()">
@@ -123,19 +123,19 @@
                                     </h5>
                                     <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
                                         <div>
-                                            <label class="block text-xs text-orange-800 dark:text-orange-200 mb-1">Region</label>
+                                            <label for="aws-region" class="block text-xs text-orange-800 dark:text-orange-200 mb-1">Region</label>
                                             <input type="text" id="aws-region" 
                                                    class="w-full px-2 py-1 text-sm border border-orange-300 dark:border-orange-600 rounded bg-surface text-foreground"
                                                    placeholder="us-east-1" value="us-east-1">
                                         </div>
                                         <div>
-                                            <label class="block text-xs text-orange-800 dark:text-orange-200 mb-1">Access Key ID</label>
+                                            <label for="aws-access-key-id" class="block text-xs text-orange-800 dark:text-orange-200 mb-1">Access Key ID</label>
                                             <input type="text" id="aws-access-key-id" 
                                                    class="w-full px-2 py-1 text-sm border border-orange-300 dark:border-orange-600 rounded bg-surface text-foreground"
                                                    placeholder="AKIAIOSFODNN7EXAMPLE">
                                         </div>
                                         <div>
-                                            <label class="block text-xs text-orange-800 dark:text-orange-200 mb-1">Secret Access Key</label>
+                                            <label for="aws-secret-access-key" class="block text-xs text-orange-800 dark:text-orange-200 mb-1">Secret Access Key</label>
                                             <input type="password" id="aws-secret-access-key" 
                                                    class="w-full px-2 py-1 text-sm border border-orange-300 dark:border-orange-600 rounded bg-surface text-foreground"
                                                    placeholder="Enter secret access key"
@@ -158,13 +158,13 @@
                                     </h5>
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                                         <div>
-                                            <label class="block text-xs text-purple-800 dark:text-purple-200 mb-1">Vault URL</label>
+                                            <label for="vault-url" class="block text-xs text-purple-800 dark:text-purple-200 mb-1">Vault URL</label>
                                             <input type="text" id="vault-url" 
                                                    class="w-full px-2 py-1 text-sm border border-purple-300 dark:border-purple-600 rounded bg-surface text-foreground"
                                                    placeholder="https://vault.example.com:8200">
                                         </div>
                                         <div>
-                                            <label class="block text-xs text-purple-800 dark:text-purple-200 mb-1">Vault Token</label>
+                                            <label for="vault-token" class="block text-xs text-purple-800 dark:text-purple-200 mb-1">Vault Token</label>
                                             <input type="password" id="vault-token" 
                                                    class="w-full px-2 py-1 text-sm border border-purple-300 dark:border-purple-600 rounded bg-surface text-foreground"
                                                    placeholder="Enter vault token"
@@ -173,13 +173,13 @@
                                                    data-lpignore="true">
                                         </div>
                                         <div>
-                                            <label class="block text-xs text-purple-800 dark:text-purple-200 mb-1">Mount Point</label>
+                                            <label for="vault-mount-point" class="block text-xs text-purple-800 dark:text-purple-200 mb-1">Mount Point</label>
                                             <input type="text" id="vault-mount-point" 
                                                    class="w-full px-2 py-1 text-sm border border-purple-300 dark:border-purple-600 rounded bg-surface text-foreground"
                                                    placeholder="secret" value="secret">
                                         </div>
                                         <div>
-                                            <label class="block text-xs text-purple-800 dark:text-purple-200 mb-1">Engine Version</label>
+                                            <label for="vault-engine-version" class="block text-xs text-purple-800 dark:text-purple-200 mb-1">Engine Version</label>
                                             <select id="vault-engine-version" 
                                                     class="w-full px-2 py-1 text-sm border border-purple-300 dark:border-purple-600 rounded bg-surface text-foreground">
                                                 <option value="v2">KV v2</option>
@@ -201,25 +201,25 @@
                                     </h5>
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                                         <div>
-                                            <label class="block text-xs text-success-strong mb-1">Site URL</label>
+                                            <label for="infisical-site-url" class="block text-xs text-success-strong mb-1">Site URL</label>
                                             <input type="text" id="infisical-site-url" 
                                                    class="w-full px-2 py-1 text-sm border border-success-line rounded bg-surface text-foreground"
                                                    placeholder="https://app.infisical.com" value="https://app.infisical.com">
                                         </div>
                                         <div>
-                                            <label class="block text-xs text-success-strong mb-1">Project ID</label>
+                                            <label for="infisical-project-id" class="block text-xs text-success-strong mb-1">Project ID</label>
                                             <input type="text" id="infisical-project-id" 
                                                    class="w-full px-2 py-1 text-sm border border-success-line rounded bg-surface text-foreground"
                                                    placeholder="Enter project ID">
                                         </div>
                                         <div>
-                                            <label class="block text-xs text-success-strong mb-1">Client ID</label>
+                                            <label for="infisical-client-id" class="block text-xs text-success-strong mb-1">Client ID</label>
                                             <input type="text" id="infisical-client-id" 
                                                    class="w-full px-2 py-1 text-sm border border-success-line rounded bg-surface text-foreground"
                                                    placeholder="Enter client ID">
                                         </div>
                                         <div>
-                                            <label class="block text-xs text-success-strong mb-1">Client Secret</label>
+                                            <label for="infisical-client-secret" class="block text-xs text-success-strong mb-1">Client Secret</label>
                                             <input type="password" id="infisical-client-secret" 
                                                    class="w-full px-2 py-1 text-sm border border-success-line rounded bg-surface text-foreground"
                                                    placeholder="Enter client secret"
@@ -228,7 +228,7 @@
                                                    data-lpignore="true">
                                         </div>
                                         <div>
-                                            <label class="block text-xs text-success-strong mb-1">Environment</label>
+                                            <label for="infisical-environment" class="block text-xs text-success-strong mb-1">Environment</label>
                                             <input type="text" id="infisical-environment" 
                                                    class="w-full px-2 py-1 text-sm border border-success-line rounded bg-surface text-foreground"
                                                    placeholder="prod" value="prod">
@@ -247,38 +247,38 @@
                                     </h5>
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                                         <div>
-                                            <label class="block text-xs text-success-strong mb-1">Endpoint URL</label>
+                                            <label for="s3-endpoint-url" class="block text-xs text-success-strong mb-1">Endpoint URL</label>
                                             <input type="text" id="s3-endpoint-url"
                                                    class="w-full px-2 py-1 text-sm border border-success-line rounded bg-surface text-foreground"
                                                    placeholder="https://s3.eu-central-1.example.com">
                                         </div>
                                         <div>
-                                            <label class="block text-xs text-success-strong mb-1">Bucket</label>
+                                            <label for="s3-bucket" class="block text-xs text-success-strong mb-1">Bucket</label>
                                             <input type="text" id="s3-bucket"
                                                    class="w-full px-2 py-1 text-sm border border-success-line rounded bg-surface text-foreground"
                                                    placeholder="my-certmate-bucket">
                                         </div>
                                         <div>
-                                            <label class="block text-xs text-success-strong mb-1">Access Key ID</label>
+                                            <label for="s3-access-key-id" class="block text-xs text-success-strong mb-1">Access Key ID</label>
                                             <input type="text" id="s3-access-key-id"
                                                    class="w-full px-2 py-1 text-sm border border-success-line rounded bg-surface text-foreground"
                                                    placeholder="Access key" autocomplete="off">
                                         </div>
                                         <div>
-                                            <label class="block text-xs text-success-strong mb-1">Secret Access Key</label>
+                                            <label for="s3-secret-access-key" class="block text-xs text-success-strong mb-1">Secret Access Key</label>
                                             <input type="password" id="s3-secret-access-key"
                                                    class="w-full px-2 py-1 text-sm border border-success-line rounded bg-surface text-foreground"
                                                    placeholder="Secret key"
                                                    autocomplete="new-password" spellcheck="false" data-lpignore="true">
                                         </div>
                                         <div>
-                                            <label class="block text-xs text-success-strong mb-1">Region</label>
+                                            <label for="s3-region" class="block text-xs text-success-strong mb-1">Region</label>
                                             <input type="text" id="s3-region"
                                                    class="w-full px-2 py-1 text-sm border border-success-line rounded bg-surface text-foreground"
                                                    placeholder="us-east-1" value="us-east-1">
                                         </div>
                                         <div>
-                                            <label class="block text-xs text-success-strong mb-1">Key Prefix</label>
+                                            <label for="s3-prefix" class="block text-xs text-success-strong mb-1">Key Prefix</label>
                                             <input type="text" id="s3-prefix"
                                                    class="w-full px-2 py-1 text-sm border border-success-line rounded bg-surface text-foreground"
                                                    placeholder="certmate/certificates" value="certmate/certificates">
