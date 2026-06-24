@@ -164,7 +164,9 @@ def create_api_models(api):
         'total_revoked': fields.Integer(description='Total revoked certificates'),
         'total_expired': fields.Integer(description='Total expired certificates'),
         'latest_issuance': fields.String(description='Latest issuance timestamp'),
-        'oldest_active_issuance': fields.String(description='Oldest active issuance timestamp')
+        'oldest_active_issuance': fields.String(description='Oldest active issuance timestamp'),
+        'deployment_port': fields.Integer(description='TCP port for deployment probe'),
+        'deployment_protocol': fields.String(description='Protocol used by deployment probe (https-tls, tls, or smtp-starttls)')
     })
 
     # Single source of truth: the dns_provider enum is derived from the
@@ -290,6 +292,8 @@ def create_api_models(api):
         'reachable': fields.Boolean(description='Whether the domain responds over HTTPS'),
         'certificate_match': fields.Raw(description='Whether the served certificate matches the local certificate'),
         'method': fields.String(description='Check method'),
+        'port': fields.Integer(description='TCP port probed', default=443),
+        'protocol': fields.String(description='Probe protocol (https-tls, tls, smtp-starttls)'),
         'timestamp': fields.String(description='Check timestamp'),
         'error': fields.String(description='Optional error message'),
         # Machine-readable error code surfaced when _check_domain_scope denies
