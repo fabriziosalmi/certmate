@@ -1,3 +1,19 @@
+## v2.18.0 (Feature — multi-protocol deployment probes + deploy-hook reliability)
+
+Deployment verification grows beyond HTTPS-on-443, and the deploy-hook pipeline closes two gaps that left scheduled renewals undeployed and a dashboard counter stuck at zero.
+
+### Features
+
+- **Multi-protocol deployment probes with per-certificate port** ([#328](https://github.com/fabriziosalmi/certmate/pull/328)): the "is this cert actually deployed?" probe now supports `https-tls`, plain `tls`, and `smtp-starttls`, with the port and protocol configurable per certificate from a new Probe tab in Settings. The backend probes the real service (including the SMTP STARTTLS upgrade) and the browser fallback is skipped for the non-HTTPS protocols. The probe's TLS minimum version is pinned to 1.2. Thanks to Christophe Kyvrakidis.
+- **Tunnel the deployment probe through an outbound HTTP proxy** ([#326](https://github.com/fabriziosalmi/certmate/pull/326)): on a host that can only reach the internet via an HTTP proxy, the raw-socket probe always reported "Unreachable" even when the target was up. It now honours `HTTPS_PROXY`/`NO_PROXY`, tunnelling the TCP leg with HTTP CONNECT (basic proxy auth supported) and running the TLS handshake over the tunnel to the configured per-cert port, so the real peer certificate is still compared. Pure stdlib, no new dependency. Thanks to Hiep Ho Minh.
+
+### Fixes
+
+- **Scheduled auto-renewals now fire deploy hooks** ([#329](https://github.com/fabriziosalmi/certmate/issues/329)): the manual/API path published `certificate_renewed` via the issuance executor, but the scheduler called the certificate manager directly with no event bus, so a background renewal updated the cert on disk yet never notified the deployer — the hook never ran and the live endpoint kept serving the old certificate. The scheduler now publishes the same event after a successful renewal; publishing stays out of the renewal routine to avoid double-firing the manual path, and a notification failure never demotes a successful renewal to a failure. Reported by SpeeDFireCZE.
+- **"Deployed" dashboard counter stuck at zero** ([#324](https://github.com/fabriziosalmi/certmate/issues/324)): the counter looked up `deployment-status-<domain>` but the badges render as `deployment-status-<domainId>-<role>`, so the lookup never matched and the stat card stayed at 0. It now mirrors the badge id and reads the authoritative backend badge. Reported by SpeeDFireCZE.
+- **Deploy-hook errors are now visible from the Activity page** ([#332](https://github.com/fabriziosalmi/certmate/pull/332)): a failing hook (e.g. exit code 127) showed only "exit code N" and clicking the entry bounced to the certificate page. The error now carries an stderr snippet, the full stdout/stderr is stored in the audit detail, and the entry opens a popup with the full output; deploy entries no longer link to the certificate page. Thanks to Christophe Kyvrakidis.
+- **Renewal timestamp now reaches the storage backend** ([#282](https://github.com/fabriziosalmi/certmate/pull/282)): `renewed_at` was written to metadata after the certificate had already been uploaded, so the storage backend persisted metadata without it. The metadata update now happens before the upload. Thanks to luksiol.
+
 ## v2.17.1 (Patch — security hardening)
 
 Five must-fix findings from a draconian security/logic review of the existing code (no new features), each verified against source and pinned by a regression test.
