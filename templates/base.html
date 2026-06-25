@@ -250,23 +250,14 @@
         badge.textContent = active.length > 9 ? '9+' : active.length;
         badge.classList.remove('hidden');
     }
-    function checkNotifications(force) {
-        // Use cached data if fresh (< 60s) to avoid extra API calls
-        if (!force) {
-            try {
-                var cached = JSON.parse(sessionStorage.getItem('cm_notif') || '{}');
-                if (cached.t && (Date.now() - cached.t) < 60000) {
-                    _updateNotifBadge(cached.d);
-                    return;
-                }
-            } catch(e){}
-        }
+    function checkNotifications() {
+        // Fetch fresh each time. The certificate list is intentionally NOT
+        // cached in web storage — that would be clear-text storage of sensitive
+        // data (CodeQL js/clear-text-storage); the badge fetch is cheap and
+        // already staggered/throttled below.
         fetch('/api/certificates', {credentials: 'same-origin'})
             .then(function(r) { return r.ok ? r.json() : []; })
-            .then(function(certs) {
-                try { sessionStorage.setItem('cm_notif', JSON.stringify({t: Date.now(), d: certs})); } catch(e){}
-                _updateNotifBadge(certs);
-            })
+            .then(function(certs) { _updateNotifBadge(certs); })
             .catch(function() {});
     }
     // Check on load (with cache, staggered after auth) and refresh every 5 min

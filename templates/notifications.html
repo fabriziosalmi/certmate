@@ -181,8 +181,6 @@
                 .then(function(r) { return r.ok ? r.json() : []; })
                 .then(function(certs) {
                     _certs = Array.isArray(certs) ? certs : [];
-                    // keep the top-bar badge cache in sync with this fresh read
-                    try { sessionStorage.setItem('cm_notif', JSON.stringify({ t: Date.now(), d: _certs })); } catch (e) {}
                     render();
                 })
                 .catch(function() {

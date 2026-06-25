@@ -139,7 +139,9 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
                     # Log the detail; return a generic per-item message so raw
                     # exception text (non-certbot ValueError/IO) never reaches
                     # the client. Mirrors the single-cert path's non-disclosure.
-                    logger.warning(f"Batch create failed for {domain}: {e}")
+                    logger.warning("Batch create failed for %s: %s",
+                                   str(domain).replace('\n', ' ').replace('\r', ' '),
+                                   str(e).replace('\n', ' ').replace('\r', ' '))
                     results.append({'domain': domain, 'success': False, 'message': 'Certificate creation failed'})
             return jsonify(results)
         except Exception as e:

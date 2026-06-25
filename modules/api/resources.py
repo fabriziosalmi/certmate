@@ -1950,14 +1950,18 @@ def create_api_resources(api, models, managers):
                 # fault: return 422 and say WHY (classify_renewal_error flags the
                 # broken-renewal-config case with an actionable reissue hint)
                 # instead of the old opaque 500 "Certificate renewal failed".
-                logger.error(f"Certificate renewal failed for {domain}: {str(e)}")
+                logger.error("Certificate renewal failed for %s: %s",
+                             domain.replace('\n', ' ').replace('\r', ' '),
+                             str(e).replace('\n', ' ').replace('\r', ' '))
                 event_bus = current_app.config.get('EVENT_BUS')
                 if event_bus:
                     event_bus.publish('certificate_failed', {'domain': domain, 'error': str(e)})
                 message, code = classify_renewal_error(str(e))
                 return {'error': message, 'code': code}, 422
             except Exception as e:
-                logger.error(f"Certificate renewal failed for {domain}: {str(e)}")
+                logger.error("Certificate renewal failed for %s: %s",
+                             domain.replace('\n', ' ').replace('\r', ' '),
+                             str(e).replace('\n', ' ').replace('\r', ' '))
                 event_bus = current_app.config.get('EVENT_BUS')
                 if event_bus:
                     event_bus.publish('certificate_failed', {'domain': domain, 'error': str(e)})
