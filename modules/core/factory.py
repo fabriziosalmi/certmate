@@ -331,8 +331,14 @@ def _secret_key_from_env_or_generate(data_dir: Path) -> str:
 
     key = secrets.token_hex(32)
     try:
-        implicit_key_file.write_text(key)
-        implicit_key_file.chmod(0o600)
+        # Create the file 0600 race-free (O_CREAT|O_EXCL-less O_TRUNC with an
+        # explicit mode) so the key is never briefly world-readable between a
+        # write and a follow-up chmod — matches audit_signing / file_operations.
+        fd = os.open(str(implicit_key_file), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        try:
+            os.write(fd, key.encode('utf-8'))
+        finally:
+            os.close(fd)
     except OSError as e:
         logger.warning(f"Could not persist SECRET_KEY to {implicit_key_file}: {e}. Sessions will not survive restarts.")
     return key
@@ -340,6 +346,19 @@ def _secret_key_from_env_or_generate(data_dir: Path) -> str:
 def configure_app(container: AppContainer, app, test_config=None):
     app.secret_key = _secret_key_from_env_or_generate(container.data_dir)
     app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
+
+    # Harden the Flask session cookie. It carries the OIDC PKCE transients
+    # (state / nonce / code_verifier) and the post-login `next` URL. HttpOnly is
+    # already Flask's default; SameSite=Lax (not Strict — the OIDC callback is a
+    # cross-site top-level GET, and Strict would drop the cookie on return).
+    # Mark it Secure only when an HTTPS deployment is signalled, so plain-HTTP
+    # local/dev installs still receive the cookie (and OIDC login keeps working).
+    app.config['SESSION_COOKIE_HTTPONLY'] = True
+    app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+    app.config['SESSION_COOKIE_SECURE'] = (
+        os.getenv('PREFERRED_URL_SCHEME', '').lower() == 'https'
+        or os.getenv('CERTMATE_ENABLE_HSTS', '').lower() == 'true'
+    )
 
     # HTTP-01 webroot: certbot writes challenge tokens here and the Flask route
     # in modules/web/routes.py serves them. Both sides resolve the path through

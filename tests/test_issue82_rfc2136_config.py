@@ -27,7 +27,11 @@ def test_rfc2136_config_uses_certbot_server_key(tmp_path, monkeypatch):
         },
     )
 
-    assert config_file == Path('letsencrypt/config/rfc2136.ini')
+    # The credentials file now carries a per-operation random suffix
+    # (<provider>-<hex>.ini) to avoid a same-provider race; renewal passes the
+    # path to certbot explicitly, so only the dir + provider prefix are pinned.
+    assert config_file.parent == Path('letsencrypt/config')
+    assert config_file.name.startswith('rfc2136-') and config_file.name.endswith('.ini')
     assert config_file.exists()
 
     content = config_file.read_text(encoding='utf-8')

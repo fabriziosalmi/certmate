@@ -1616,69 +1616,74 @@
                 '<div class="text-xs mt-1">Create your first backup above!</div>' +
                 '</div>';
         } else if (backups.unified) {
-            var unifiedHtml = '';
-            backups.unified.slice(0, 10).forEach(function (backup) {
+            // Compact single-row layout on a neutral surface (the old per-row
+            // green fill made the list hard to scan). The whole list grows the
+            // page instead of scrolling inside a 256px box; a working "Show
+            // more" reveals the rest in batches rather than the old dead-end
+            // "N more backups available" label.
+            var all = backups.unified;
+            var visible = 8;
+
+            function backupRow(backup) {
                 var metadata = backup.metadata || {};
                 var createdDate = new Date(metadata.created || metadata.timestamp).toLocaleString();
                 var sizeMB = Math.round((metadata.size || 0) / (1024 * 1024) * 10) / 10;
                 var reason = metadata.backup_reason || metadata.reason || 'manual';
                 var domains = metadata.total_domains || (metadata.domains && metadata.domains.length) || 0;
-
                 var safeFilename = escapeHtml(backup.filename);
                 var safeReason = escapeHtml(reason);
-                unifiedHtml +=
-                    '<div class="flex items-center justify-between p-3 bg-success-surface rounded-lg border border-success-line">' +
+                var iconBtn = 'p-1.5 rounded transition-colors';
+                return '<div class="flex items-center gap-3 px-3 py-2 rounded-lg border border-border hover:bg-hover transition-colors">' +
+                    '<i class="fas fa-file-zipper text-success-fg text-sm shrink-0" aria-hidden="true"></i>' +
                     '<div class="flex-1 min-w-0">' +
-                    '<div class="text-sm font-medium text-foreground truncate">' + safeFilename + '</div>' +
-                    '<div class="text-xs text-muted mt-1">' + createdDate + '</div>' +
-                    '<div class="flex items-center space-x-3 text-xs text-gray-400 dark:text-gray-500 mt-1">' +
-                    '<span><i class="fas fa-weight mr-1"></i>' + sizeMB + 'MB</span>' +
-                    '<span><i class="fas fa-archive mr-1"></i>' + domains + ' domains</span>' +
-                    '<span><i class="fas fa-tag mr-1"></i>' + safeReason + '</span>' +
+                        '<div class="text-sm font-medium text-foreground truncate">' + safeFilename + '</div>' +
+                        '<div class="flex items-center flex-wrap gap-x-2 gap-y-0.5 text-xs text-muted mt-0.5">' +
+                            '<span>' + escapeHtml(createdDate) + '</span>' +
+                            '<span aria-hidden="true">·</span>' +
+                            '<span>' + sizeMB + ' MB</span>' +
+                            '<span aria-hidden="true">·</span>' +
+                            '<span>' + domains + ' domains</span>' +
+                            '<span aria-hidden="true">·</span>' +
+                            '<span class="px-1.5 py-0.5 rounded bg-surface-2 text-[11px]">' + safeReason + '</span>' +
+                        '</div>' +
                     '</div>' +
+                    '<div class="flex items-center gap-0.5 shrink-0">' +
+                        '<button data-action="download-backup" data-backup-type="unified" data-filename="' + safeFilename + '" class="' + iconBtn + ' text-info-fg hover:bg-blue-50 dark:hover:bg-blue-900/30" title="Download backup" aria-label="Download ' + safeFilename + '"><i class="fas fa-download text-sm"></i></button>' +
+                        '<button data-action="restore-backup" data-backup-type="unified" data-filename="' + safeFilename + '" class="' + iconBtn + ' text-success-fg hover:bg-green-50 dark:hover:bg-green-900/30" title="Restore backup" aria-label="Restore ' + safeFilename + '"><i class="fas fa-rotate-left text-sm"></i></button>' +
+                        '<button data-action="delete-backup" data-backup-type="unified" data-filename="' + safeFilename + '" class="' + iconBtn + ' text-danger-fg hover:bg-red-50 dark:hover:bg-red-900/30" title="Delete backup" aria-label="Delete ' + safeFilename + '"><i class="fas fa-trash text-sm"></i></button>' +
                     '</div>' +
-                    '<div class="flex space-x-1 ml-2">' +
-                    '<button data-action="download-backup" data-backup-type="unified" data-filename="' + safeFilename + '"' +
-                    ' class="p-2 text-info-fg hover:text-blue-800 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded transition-colors"' +
-                    ' title="Download backup">' +
-                    '<i class="fas fa-download text-sm"></i>' +
-                    '</button>' +
-                    '<button data-action="restore-backup" data-backup-type="unified" data-filename="' + safeFilename + '"' +
-                    ' class="p-2 text-success-fg hover:text-green-800 dark:hover:text-green-300 hover:bg-green-50 dark:hover:bg-green-900/30 rounded transition-colors"' +
-                    ' title="Restore backup">' +
-                    '<i class="fas fa-undo text-sm"></i>' +
-                    '</button>' +
-                    '<button data-action="delete-backup" data-backup-type="unified" data-filename="' + safeFilename + '"' +
-                    ' class="p-2 text-danger-fg hover:text-red-800 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30 rounded transition-colors"' +
-                    ' title="Delete backup">' +
-                    '<i class="fas fa-trash text-sm"></i>' +
-                    '</button>' +
-                    '</div>' +
-                    '</div>';
-            });
-
-            if (backups.unified.length > 10) {
-                unifiedHtml +=
-                    '<div class="text-xs text-muted text-center p-3 bg-sunken rounded-lg">' +
-                    '<i class="fas fa-ellipsis-h mr-1"></i>' +
-                    (backups.unified.length - 10) + ' more backups available' +
-                    '</div>';
+                '</div>';
             }
 
-            unifiedBackupList.innerHTML = unifiedHtml;
-
-            // Bind backup action buttons via event delegation
-            unifiedBackupList.querySelectorAll('button[data-action]').forEach(function (btn) {
-                btn.addEventListener('click', function () {
-                    var bType = btn.dataset.backupType;
-                    var filename = btn.dataset.filename;
-                    switch (btn.dataset.action) {
-                        case 'download-backup': downloadBackup(bType, filename); break;
-                        case 'restore-backup': restoreBackup(bType, filename); break;
-                        case 'delete-backup': deleteBackup(bType, filename); break;
-                    }
+            function bindActions() {
+                unifiedBackupList.querySelectorAll('button[data-action]').forEach(function (btn) {
+                    btn.addEventListener('click', function () {
+                        var bType = btn.dataset.backupType;
+                        var filename = btn.dataset.filename;
+                        switch (btn.dataset.action) {
+                            case 'download-backup': downloadBackup(bType, filename); break;
+                            case 'restore-backup': restoreBackup(bType, filename); break;
+                            case 'delete-backup': deleteBackup(bType, filename); break;
+                        }
+                    });
                 });
-            });
+            }
+
+            function renderUnified() {
+                var html = all.slice(0, visible).map(backupRow).join('');
+                var remaining = all.length - visible;
+                if (remaining > 0) {
+                    html += '<button type="button" id="backup-show-more" class="w-full mt-1 px-3 py-2 text-xs font-medium text-info-fg border border-border rounded-lg hover:bg-hover transition-colors">' +
+                        '<i class="fas fa-chevron-down mr-1.5"></i>Show ' + Math.min(8, remaining) + ' more (' + remaining + ' hidden)' +
+                    '</button>';
+                }
+                unifiedBackupList.innerHTML = html;
+                bindActions();
+                var more = document.getElementById('backup-show-more');
+                if (more) more.addEventListener('click', function () { visible += 8; renderUnified(); });
+            }
+
+            renderUnified();
         }
     }
 

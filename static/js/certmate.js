@@ -645,6 +645,22 @@
             });
     };
 
+    // ── Scroll lock (modals) ─────────────────────────────────────
+    // Stop the page behind an open modal from scrolling on wheel/touch. The
+    // page scroller is <html> (base.html sets `overflow-y: scroll`), so we
+    // toggle overflow there; scrollbar-gutter:stable keeps the layout from
+    // shifting when the scrollbar is removed. Counter-based so stacked modals
+    // don't unlock the page prematurely.
+    var _scrollLocks = 0;
+    CM.lockScroll = function () {
+        _scrollLocks++;
+        document.documentElement.style.overflow = 'hidden';
+    };
+    CM.unlockScroll = function () {
+        _scrollLocks = Math.max(0, _scrollLocks - 1);
+        if (_scrollLocks === 0) document.documentElement.style.overflow = '';
+    };
+
     // ── Expose globally ──────────────────────────────────────────
     window.CertMate = CM;
 

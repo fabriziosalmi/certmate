@@ -96,7 +96,7 @@
             return;
         }
 
-        tbody.innerHTML = certificatesData.map(function(cert) {
+        tbody.innerHTML = ccApplySort(certificatesData).map(function(cert) {
             var expiresDate = new Date(cert.expires_at);
             var createdDate = new Date(cert.created_at);
             var isExpiringSoon = expiresDate - new Date() < 30 * 24 * 60 * 60 * 1000;
@@ -105,7 +105,9 @@
             var safeUsage = escapeHtml(cert.cert_usage);
             var safeId = escapeHtml(cert.identifier);
 
-            return '<tr class="hover:bg-gray-50 dark:hover:bg-gray-700 transition">' +
+            // Whole row opens the detail modal (role=button + keyboard); the
+            // action buttons stopPropagation so they don't also open it.
+            return '<tr data-cc-id="' + safeId + '" role="button" tabindex="0" aria-label="View details for ' + safeCN + '" class="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary">' +
                 '<td class="px-6 py-4 text-sm font-medium text-foreground">' + safeCN + '</td>' +
                 '<td class="px-6 py-4 text-sm text-muted hidden md:table-cell">' + safeEmail + '</td>' +
                 '<td class="px-6 py-4 text-sm hidden lg:table-cell"><span class="px-2 py-1 bg-info-surface text-info-strong rounded text-xs font-medium">' + safeUsage + '</span></td>' +
@@ -127,7 +129,8 @@
         }).join('');
 
         tbody.querySelectorAll('button[data-cc-action]').forEach(function(btn) {
-            btn.addEventListener('click', function() {
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();  // don't also trigger the row-open handler
                 var id = btn.dataset.id;
                 switch (btn.dataset.ccAction) {
                     case 'details': ccShowCertDetails(id); break;
@@ -136,7 +139,49 @@
                 }
             });
         });
+
+        tbody.querySelectorAll('tr[data-cc-id]').forEach(function(tr) {
+            tr.addEventListener('click', function() { ccShowCertDetails(tr.dataset.ccId); });
+            tr.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ccShowCertDetails(tr.dataset.ccId); }
+            });
+        });
     }
+
+    // Sort state + comparator for the client-cert table (mirrors the server
+    // table). Dates sort chronologically; status sorts Active-before-Revoked;
+    // everything else is a case-insensitive string compare.
+    var ccSort = { field: 'expires_at', dir: 'asc' };
+
+    function ccApplySort(list) {
+        var f = ccSort.field, dir = ccSort.dir === 'asc' ? 1 : -1;
+        return list.slice().sort(function(a, b) {
+            if (f === 'created_at' || f === 'expires_at') {
+                return dir * ((new Date(a[f]).getTime() || 0) - (new Date(b[f]).getTime() || 0));
+            }
+            if (f === 'status') {
+                return dir * ((a.revoked ? 1 : 0) - (b.revoked ? 1 : 0));
+            }
+            var av = (a[f] || '').toString().toLowerCase();
+            var bv = (b[f] || '').toString().toLowerCase();
+            return dir * av.localeCompare(bv);
+        });
+    }
+
+    window.ccSortCertificates = function(field) {
+        if (ccSort.field === field) {
+            ccSort.dir = ccSort.dir === 'asc' ? 'desc' : 'asc';
+        } else {
+            ccSort.field = field; ccSort.dir = 'asc';
+        }
+        document.querySelectorAll('[id^="cc-sort-icon-"]').forEach(function(i) { i.className = 'fas fa-sort ml-1 text-gray-400'; });
+        document.querySelectorAll('[id^="cc-sort-th-"]').forEach(function(th) { th.setAttribute('aria-sort', 'none'); });
+        var ic = document.getElementById('cc-sort-icon-' + field);
+        if (ic) ic.className = 'fas fa-sort-' + (ccSort.dir === 'asc' ? 'up' : 'down') + ' ml-1 text-primary';
+        var th = document.getElementById('cc-sort-th-' + field);
+        if (th) th.setAttribute('aria-sort', ccSort.dir === 'asc' ? 'ascending' : 'descending');
+        ccRenderCertificates();
+    };
 
     function ccSwitchTab(tab) {
         var singleForm = document.getElementById('createClientCertForm');
@@ -301,28 +346,60 @@
         var cert = certificatesData.find(function(c) { return c.identifier === id; });
         if (!cert) return;
         currentCertId = id;
-        var content = document.getElementById('modalContent');
-        content.innerHTML =
-            '<div><strong>Identifier:</strong> ' + escapeHtml(cert.identifier || '') + '</div>' +
-            '<div><strong>Common Name:</strong> ' + escapeHtml(cert.common_name || '') + '</div>' +
-            '<div><strong>Email:</strong> ' + escapeHtml(cert.email || 'N/A') + '</div>' +
-            '<div><strong>Organization:</strong> ' + escapeHtml(cert.organization || '') + '</div>' +
-            '<div><strong>Usage:</strong> ' + escapeHtml(cert.cert_usage || '') + '</div>' +
-            // Serial numbers are 30+ digit integers with no natural break points,
-            // so the browser wouldn't wrap them and they'd overflow the modal on
-            // the right edge. Render in a smaller monospace span with break-all
-            // so the number wraps cleanly to a second line when needed.
-            '<div><strong>Serial:</strong> <span class="font-mono text-xs break-all">' + escapeHtml(String(cert.serial_number || '')) + '</span></div>' +
-            '<div><strong>Created:</strong> ' + escapeHtml(new Date(cert.created_at).toLocaleString()) + '</div>' +
-            '<div><strong>Expires:</strong> ' + escapeHtml(new Date(cert.expires_at).toLocaleString()) + '</div>' +
-            '<div><strong>Status:</strong> ' + (cert.revoked ? 'Revoked' : 'Active') + '</div>';
+
+        var expiresDate = new Date(cert.expires_at);
+        var expired = expiresDate < new Date();
+        var expiringSoon = !expired && (expiresDate - new Date() < 30 * 24 * 60 * 60 * 1000);
+        var danger = cert.revoked || expired;
+        var bannerBg = danger ? 'bg-danger-surface' : expiringSoon ? 'bg-warning-surface' : 'bg-success-surface';
+        var bannerFg = danger ? 'text-danger-fg' : expiringSoon ? 'text-warning-fg' : 'text-success-fg';
+        var bannerIcon = cert.revoked ? 'fa-ban' : expired ? 'fa-circle-xmark' : expiringSoon ? 'fa-triangle-exclamation' : 'fa-circle-check';
+        var statusLabel = cert.revoked ? 'Revoked' : expired ? 'Expired' : expiringSoon ? 'Expiring soon' : 'Active';
+
+        function row(label, val, mono) {
+            if (val === undefined || val === null || val === '') return '';
+            return '<div class="flex items-start justify-between gap-4 py-2.5">' +
+                '<dt class="text-sm text-muted flex-shrink-0">' + label + '</dt>' +
+                '<dd class="text-sm font-medium text-right text-foreground min-w-0 ' + (mono ? 'font-mono text-xs break-all' : 'break-words') + '">' + escapeHtml(String(val)) + '</dd></div>';
+        }
+
+        document.getElementById('modalContent').innerHTML =
+            // Status banner — status + expiry date integrated (mirrors the server modal)
+            '<div class="flex items-center gap-3 p-4 rounded-lg ' + bannerBg + ' mb-4">' +
+                '<i class="fas ' + bannerIcon + ' text-2xl ' + bannerFg + ' flex-shrink-0"></i>' +
+                '<div class="min-w-0">' +
+                    '<div class="text-lg font-semibold ' + bannerFg + '">' + statusLabel + '</div>' +
+                    '<div class="text-sm ' + bannerFg + ' opacity-80">' + (expired ? 'Expired ' : 'Expires ') + expiresDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + '</div>' +
+                '</div>' +
+            '</div>' +
+            '<dl class="divide-y divide-border">' +
+                row('Common Name', cert.common_name) +
+                row('Email', cert.email || 'N/A') +
+                row('Organization', cert.organization) +
+                row('Usage', cert.cert_usage) +
+                row('Serial', cert.serial_number, true) +
+                row('Created', new Date(cert.created_at).toLocaleString()) +
+                row('Identifier', cert.identifier, true) +
+            '</dl>';
+
+        var titleEl = document.getElementById('certModalTitle');
+        if (titleEl) titleEl.textContent = cert.common_name || 'Certificate Details';
         document.getElementById('certModal').classList.remove('hidden');
+        if (CertMate.lockScroll) CertMate.lockScroll();
     }
 
     // Global functions referenced by onclick in the partial HTML
     window.closeCertModal = function() {
-        document.getElementById('certModal').classList.add('hidden');
+        var modal = document.getElementById('certModal');
+        if (modal.classList.contains('hidden')) return;  // already closed — don't double-unlock
+        modal.classList.add('hidden');
+        if (CertMate.unlockScroll) CertMate.unlockScroll();
     };
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && !document.getElementById('certModal').classList.contains('hidden')) {
+            window.closeCertModal();
+        }
+    });
 
     window.downloadCertFile = function(type) {
         if (!currentCertId) return;

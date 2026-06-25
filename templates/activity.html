@@ -41,25 +41,34 @@
         </div>
     </div>
 
-    <!-- Deploy error popup modal -->
-    <div id="deployErrorModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50" onclick="if (event.target===this) closeDeployErrorPopup()">
-        <div class="bg-surface text-foreground border border-border rounded-xl shadow-2xl p-5 w-[36rem]" style="max-height: 85vh; display: grid; grid-template-rows: auto minmax(0, 1fr);" onclick="event.stopPropagation()">
-            <div class="flex items-center justify-between mb-4">
-                <div class="flex items-center gap-2">
-                    <i class="fas fa-terminal text-red-400 text-sm"></i>
-                    <span class="text-sm font-semibold">Deploy Hook Error</span>
+    <!-- Activity entry detail modal — opened by clicking any row. Populated by
+         openDetail() with the full audit entry (metadata, error, command
+         output for deploy hooks, raw details JSON) plus contextual actions. -->
+    <div id="activityDetailModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 p-4" onclick="if (event.target===this) closeDetail()" role="dialog" aria-modal="true" aria-labelledby="activityDetailTitle">
+        <div class="bg-surface text-foreground border border-border rounded-xl shadow-2xl w-full max-w-2xl" style="max-height: 85vh; display: grid; grid-template-rows: auto minmax(0, 1fr) auto;" onclick="event.stopPropagation()">
+            <div class="flex items-center justify-between px-5 py-4 border-b border-border">
+                <div class="flex items-center gap-3 min-w-0">
+                    <div id="activityDetailIcon" class="w-9 h-9 rounded-full bg-surface-2 flex items-center justify-center flex-shrink-0"><i class="fas fa-circle text-muted text-sm"></i></div>
+                    <div class="min-w-0">
+                        <h2 id="activityDetailTitle" class="text-sm font-semibold truncate">Activity detail</h2>
+                        <p id="activityDetailSub" class="text-xs text-muted truncate"></p>
+                    </div>
                 </div>
-                <button type="button" onclick="closeDeployErrorPopup()" aria-label="Close" class="text-muted hover:text-foreground transition text-lg leading-none">&times;</button>
+                <button type="button" onclick="closeDetail()" aria-label="Close" class="text-muted hover:text-foreground transition text-xl leading-none flex-shrink-0">&times;</button>
             </div>
-            <div id="deployErrorContent" class="space-y-3 pr-1" style="overflow-y: auto; min-height: 0;">
-                <!-- injected by showDeployErrorPopup() -->
-            </div>
+            <div id="activityDetailBody" class="px-5 py-4 space-y-4 overflow-y-auto" style="min-height:0;"></div>
+            <div id="activityDetailActions" class="flex items-center justify-end gap-2 px-5 py-3 border-t border-border flex-wrap"></div>
         </div>
     </div>
 
     <script>
     (function() {
         var escapeHtml = CertMate.escapeHtml;
+        // Entries currently rendered (post-filter); the detail modal reads
+        // _rendered[index] off each row's data-entry-index. _lastFocus restores
+        // focus to the triggering row when the modal closes.
+        var _rendered = [];
+        var _lastFocus = null;
 
         // Page-state for incremental Load-more pagination. The backend
         // caps `?limit=` at 500, so once we hit that the button hides.
@@ -302,7 +311,8 @@
                 return;
             }
 
-            list.innerHTML = entries.map(function(entry) {
+            _rendered = entries;
+            list.innerHTML = entries.map(function(entry, idx) {
                 var style = getOpStyle(entry);
                 var details = entry.details || {};
                 var detailParts = [];
@@ -314,66 +324,53 @@
                 if (details.status_code) detailParts.push('HTTP ' + details.status_code);
                 var detailStr = detailParts.length > 0 ? detailParts.join(' · ') : '';
 
-                // Entries whose resource is a certificate become a link to
-                // the dashboard with a `?cert=<domain>` deep-link param,
-                // which dashboard.js picks up after the initial cert list
-                // load and opens the detail panel. Other entry types
-                // (api_request, etc.) stay as inert <div>s so we don't
-                // promise an action the page can't deliver.
-                // Each entry is wrapped in <li role="article"> so it
-                // satisfies the parent <ul role="feed"> contract; the
+                // Every row opens the detail modal (openDetail) regardless of
+                // resource type — the modal carries the cert deep-link, the
+                // command output, and the raw entry, so no row is a dead end.
+                // role=button + tabindex make it keyboard-operable; the
                 // aria-label gives screen readers a one-line summary
-                // ("Renewed — certificate foo.example.com, 2h ago").
-                var commonClass = 'flex items-start gap-4 px-4 sm:px-6 py-4 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition';
-                var isCertEntry = entry.resource_type === 'certificate' && entry.resource_id
-                    && entry.operation !== 'deploy_hook' && entry.operation !== 'deploy';
+                // ("Renewed — certificate foo.example.com, 2h ago. Activate for details.").
                 var ariaLabel = opLabel(entry) +
                     (entry.status === 'failure' ? ' (failed)' : '') +
                     ' — ' + (entry.resource_type || '') +
                     (entry.resource_id ? ' ' + entry.resource_id : '') +
-                    ', ' + formatTime(entry.timestamp);
-                var innerClass = isCertEntry ? commonClass + ' cursor-pointer' : commonClass;
-                var innerOpen = isCertEntry
-                    ? '<a href="/?cert=' + encodeURIComponent(entry.resource_id) + '" class="' + innerClass + '">'
-                    : '<div class="' + innerClass + '">';
-                var innerClose = isCertEntry ? '</a>' : '</div>';
-                var wrapperOpen = '<li role="article" aria-label="' + escapeHtml(ariaLabel) + '">' + innerOpen;
-                var wrapperClose = innerClose + '</li>';
+                    ', ' + formatTime(entry.timestamp) + '. Activate for details.';
 
-                return wrapperOpen +
-                    '<div class="flex-shrink-0 mt-0.5">' +
-                        '<div class="w-9 h-9 rounded-full ' + style.bg + ' flex items-center justify-center">' +
-                            '<i class="fas ' + style.icon + ' ' + style.color + ' text-sm"></i>' +
+                return '<li role="article">' +
+                    '<div role="button" tabindex="0" data-entry-index="' + idx + '" aria-label="' + escapeHtml(ariaLabel) + '"' +
+                        ' class="flex items-start gap-4 px-4 sm:px-6 py-4 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition cursor-pointer focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary">' +
+                        '<div class="flex-shrink-0 mt-0.5">' +
+                            '<div class="w-9 h-9 rounded-full ' + style.bg + ' flex items-center justify-center">' +
+                                '<i class="fas ' + style.icon + ' ' + style.color + ' text-sm"></i>' +
+                            '</div>' +
+                        '</div>' +
+                        '<div class="flex-1 min-w-0">' +
+                            '<div class="flex items-center gap-2">' +
+                                '<span class="text-sm font-medium text-foreground">' + escapeHtml(opLabel(entry)) + '</span>' +
+                                (entry.status === 'failure' ? '<span class="px-1.5 py-0.5 text-[10px] font-medium bg-danger-surface text-danger-fg rounded">FAILED</span>' : '') +
+                            '</div>' +
+                            '<p class="text-sm text-muted truncate">' +
+                                escapeHtml(entry.resource_type || '') + (entry.resource_id ? ': <strong>' + escapeHtml(entry.resource_id) + '</strong>' : '') +
+                            '</p>' +
+                            (detailStr ? '<p class="text-xs text-gray-400 mt-0.5 truncate">' + escapeHtml(detailStr) + '</p>' : '') +
+                            (entry.error ? '<p class="text-xs text-red-500 mt-0.5 truncate"><i class="fas fa-triangle-exclamation mr-1"></i>' + escapeHtml(entry.error) + '</p>' : '') +
+                        '</div>' +
+                        '<div class="flex-shrink-0 text-right">' +
+                            '<div class="text-xs text-gray-400" title="' + escapeHtml(absoluteTime(entry.timestamp)) + '">' + escapeHtml(formatTime(entry.timestamp)) + '</div>' +
+                            '<div class="text-[10px] text-gray-400 mt-1">' + escapeHtml(entry.user || 'system') + '</div>' +
+                            '<i class="fas fa-chevron-right text-[10px] text-gray-300 dark:text-gray-600 mt-1" aria-hidden="true"></i>' +
                         '</div>' +
                     '</div>' +
-                    '<div class="flex-1 min-w-0">' +
-                        '<div class="flex items-center gap-2">' +
-                            '<span class="text-sm font-medium text-foreground">' + escapeHtml(opLabel(entry)) + '</span>' +
-                            (entry.status === 'failure' ? '<span class="px-1.5 py-0.5 text-[10px] font-medium bg-danger-surface text-danger-fg rounded">FAILED</span>' : '') +
-                        '</div>' +
-                        '<p class="text-sm text-muted truncate">' +
-                            escapeHtml(entry.resource_type) + ': <strong>' + escapeHtml(entry.resource_id) + '</strong>' +
-                        '</p>' +
-                        (detailStr ? '<p class="text-xs text-gray-400 mt-0.5">' + escapeHtml(detailStr) + '</p>' : '') +
-                        (
-                            entry.operation === 'deploy_hook' && entry.error && entry.details && (entry.details.stderr || entry.details.stdout)
-                            ? '<p class="text-xs text-red-500 mt-0.5 cursor-pointer" ' +
-                                'data-exit-code="' + escapeHtml(String(entry.details.exit_code != null ? entry.details.exit_code : '')) + '" ' +
-                                'data-stderr="' + escapeHtml(entry.details.stderr || '') + '" ' +
-                                'data-stdout="' + escapeHtml(entry.details.stdout || '') + '" ' +
-                                'onclick="showDeployErrorPopup(this)">' +
-                                '<i class="fas fa-exclamation-triangle mr-1"></i>' + escapeHtml(entry.error) +
-                                '<i class="fas fa-external-link-alt ml-1.5 text-gray-400 text-[10px] align-middle"></i>' +
-                            '</p>'
-                            : (entry.error ? '<p class="text-xs text-red-500 mt-0.5"><i class="fas fa-exclamation-triangle mr-1"></i>' + escapeHtml(entry.error) + '</p>' : '')
-                        ) +
-                    '</div>' +
-                    '<div class="flex-shrink-0 text-right">' +
-                        '<div class="text-xs text-gray-400 cursor-help" title="' + escapeHtml(absoluteTime(entry.timestamp)) + '">' + escapeHtml(formatTime(entry.timestamp)) + '</div>' +
-                        '<div class="text-[10px] text-gray-400 mt-1">' + escapeHtml(entry.user || 'system') + '</div>' +
-                    '</div>' +
-                wrapperClose;
+                '</li>';
             }).join('');
+
+            // Wire row activation (click / Enter / Space) to the detail modal.
+            list.querySelectorAll('[data-entry-index]').forEach(function(el) {
+                el.addEventListener('click', function() { openDetail(parseInt(el.getAttribute('data-entry-index'), 10)); });
+                el.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDetail(parseInt(el.getAttribute('data-entry-index'), 10)); }
+                });
+            });
 
             if (hasMore) {
                 // Wrap the control row in <li role="presentation"> so it
@@ -392,42 +389,134 @@
             }
         }
 
-        window.showDeployErrorPopup = function(el) {
-            var exitCode = el.getAttribute('data-exit-code');
-            var stderr = el.getAttribute('data-stderr');
-            var stdout = el.getAttribute('data-stdout');
+        function kvRow(label, value, mono) {
+            if (value === null || value === undefined || value === '') return '';
+            return '<div class="flex gap-3 py-1.5 border-b border-gray-100 dark:border-gray-700/40 last:border-0">' +
+                '<div class="w-32 flex-shrink-0 text-xs uppercase tracking-wide text-gray-400 dark:text-gray-500 pt-0.5">' + escapeHtml(label) + '</div>' +
+                '<div class="flex-1 min-w-0 text-sm ' + (mono ? 'font-mono break-all' : 'break-words') + '">' + escapeHtml(String(value)) + '</div>' +
+            '</div>';
+        }
 
-            var html = '';
-            if (exitCode) {
-                html += '<div>' +
-                    '<div class="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500 mb-0.5">Exit code</div>' +
-                    '<div class="font-mono text-sm">' + escapeHtml(exitCode) + '</div>' +
-                '</div>';
-            }
-            if (stderr) {
-                html += '<div>' +
-                    '<div class="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500 mb-1">stderr</div>' +
-                    '<pre class="font-mono text-xs bg-gray-900 text-gray-100 rounded p-2 whitespace-pre-wrap break-words">' + escapeHtml(stderr) + '</pre>' +
-                '</div>';
-            }
-            if (stdout) {
-                html += '<div>' +
-                    '<div class="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500 mb-1">stdout</div>' +
-                    '<pre class="font-mono text-xs bg-gray-900 text-gray-100 rounded p-2 whitespace-pre-wrap break-words">' + escapeHtml(stdout) + '</pre>' +
+        window.openDetail = function(idx) {
+            var entry = _rendered[idx];
+            if (!entry) return;
+            var style = getOpStyle(entry);
+            var details = entry.details || {};
+            var actor = entry.actor || {};
+            var trigger = entry.trigger || {};
+
+            var iconEl = document.getElementById('activityDetailIcon');
+            iconEl.className = 'w-9 h-9 rounded-full ' + style.bg + ' flex items-center justify-center flex-shrink-0';
+            iconEl.innerHTML = '<i class="fas ' + style.icon + ' ' + style.color + ' text-sm"></i>';
+            document.getElementById('activityDetailTitle').textContent = opLabel(entry) + (entry.status === 'failure' ? ' (failed)' : '');
+            document.getElementById('activityDetailSub').textContent = (entry.resource_type || '') + (entry.resource_id ? ' · ' + entry.resource_id : '');
+
+            var body = '<div>' +
+                kvRow('When', absoluteTime(entry.timestamp)) +
+                kvRow('Operation', opLabel(entry) + ' (' + entry.operation + ')') +
+                kvRow('Status', entry.status) +
+                kvRow('Resource', (entry.resource_type || '') + (entry.resource_id ? ': ' + entry.resource_id : '')) +
+                kvRow('User', entry.user) +
+                kvRow('IP address', entry.ip_address, true) +
+                kvRow('Actor', actor.label ? actor.label + (actor.kind ? ' (' + actor.kind + ')' : '') : '') +
+                kvRow('Trigger', trigger.cause) +
+                kvRow('Sequence', (entry.seq !== undefined && entry.seq !== null) ? '#' + entry.seq : '') +
+            '</div>';
+
+            if (entry.error) {
+                body += '<div class="rounded-lg bg-danger-surface border border-danger-line p-3">' +
+                    '<div class="text-[10px] uppercase tracking-wide text-danger-fg mb-1">Error</div>' +
+                    '<div class="text-sm text-danger-fg break-words">' + escapeHtml(entry.error) + '</div>' +
                 '</div>';
             }
 
-            document.getElementById('deployErrorContent').innerHTML = html;
-            var modal = document.getElementById('deployErrorModal');
+            // Command output (deploy hooks): exit code + std streams.
+            var out = '';
+            if (details.exit_code !== undefined && details.exit_code !== null) {
+                out += '<div class="text-xs"><span class="text-gray-400">Exit code:</span> <span class="font-mono">' + escapeHtml(String(details.exit_code)) + '</span></div>';
+            }
+            if (details.stderr) {
+                out += '<div><div class="text-[10px] uppercase tracking-wide text-gray-400 mb-1">stderr</div><pre class="font-mono text-xs bg-gray-900 text-gray-100 rounded p-2 whitespace-pre-wrap break-words max-h-48 overflow-y-auto">' + escapeHtml(details.stderr) + '</pre></div>';
+            }
+            if (details.stdout) {
+                out += '<div><div class="text-[10px] uppercase tracking-wide text-gray-400 mb-1">stdout</div><pre class="font-mono text-xs bg-gray-900 text-gray-100 rounded p-2 whitespace-pre-wrap break-words max-h-48 overflow-y-auto">' + escapeHtml(details.stdout) + '</pre></div>';
+            }
+            if (out) body += '<div class="space-y-2">' + out + '</div>';
+
+            // Remaining details (everything except the streams shown above).
+            var shown = { exit_code: 1, stderr: 1, stdout: 1 };
+            var rest = {};
+            Object.keys(details).forEach(function(k) { if (!shown[k]) rest[k] = details[k]; });
+            if (Object.keys(rest).length) {
+                body += '<div><div class="text-[10px] uppercase tracking-wide text-gray-400 mb-1">Details</div>' +
+                    '<pre class="font-mono text-xs bg-surface-2 rounded p-2 whitespace-pre-wrap break-words max-h-48 overflow-y-auto">' + escapeHtml(JSON.stringify(rest, null, 2)) + '</pre></div>';
+            }
+
+            document.getElementById('activityDetailBody').innerHTML = body;
+
+            // Contextual actions.
+            var btnCls = 'inline-flex items-center px-3 py-1.5 text-xs border border-border rounded-lg bg-input text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 transition';
+            var actions = '';
+            if (entry.resource_type === 'certificate' && entry.resource_id) {
+                actions += '<a href="/?cert=' + encodeURIComponent(entry.resource_id) + '" class="' + btnCls + '"><i class="fas fa-arrow-up-right-from-square mr-1.5 text-[10px]"></i>View certificate</a>';
+            }
+            if (entry.user) {
+                actions += '<button type="button" data-detail-filter="user" data-value="' + escapeHtml(entry.user) + '" class="' + btnCls + '"><i class="fas fa-user mr-1.5 text-[10px]"></i>Filter by user</button>';
+            }
+            if (entry.operation) {
+                actions += '<button type="button" data-detail-filter="op" data-value="' + escapeHtml(entry.operation) + '" class="' + btnCls + '"><i class="fas fa-filter mr-1.5 text-[10px]"></i>Filter by operation</button>';
+            }
+            actions += '<button type="button" data-detail-copy class="' + btnCls + '"><i class="fas fa-copy mr-1.5 text-[10px]"></i>Copy JSON</button>';
+            var actionsEl = document.getElementById('activityDetailActions');
+            actionsEl.innerHTML = actions;
+            actionsEl.querySelectorAll('[data-detail-filter]').forEach(function(b) {
+                b.addEventListener('click', function() {
+                    var kind = b.getAttribute('data-detail-filter');
+                    var val = b.getAttribute('data-value');
+                    if (kind === 'op') {
+                        var sel = document.getElementById('filterOp');
+                        if (!Array.prototype.some.call(sel.options, function(o) { return o.value === val; })) {
+                            var opt = document.createElement('option'); opt.value = val; opt.textContent = val; sel.appendChild(opt);
+                        }
+                        sel.value = val;
+                    } else {
+                        document.getElementById('filterSearch').value = val;
+                    }
+                    closeDetail();
+                    loadActivity();
+                });
+            });
+            var copyBtn = actionsEl.querySelector('[data-detail-copy]');
+            if (copyBtn) copyBtn.addEventListener('click', function() {
+                var text = JSON.stringify(entry, null, 2);
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(text).then(function() { if (CertMate.toast) CertMate.toast('Entry copied as JSON', 'info'); });
+                }
+            });
+
+            _lastFocus = document.activeElement;
+            var modal = document.getElementById('activityDetailModal');
             modal.classList.remove('hidden');
             modal.classList.add('flex');
+            CertMate.lockScroll();
+            var closeBtn = modal.querySelector('button[aria-label="Close"]');
+            if (closeBtn) closeBtn.focus();
         };
 
-        window.closeDeployErrorPopup = function() {
-            var modal = document.getElementById('deployErrorModal');
+        window.closeDetail = function() {
+            var modal = document.getElementById('activityDetailModal');
+            if (modal.classList.contains('hidden')) return;  // already closed — don't double-unlock
             modal.classList.add('hidden');
             modal.classList.remove('flex');
+            CertMate.unlockScroll();
+            if (_lastFocus && _lastFocus.focus) _lastFocus.focus();
         };
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                var modal = document.getElementById('activityDetailModal');
+                if (modal && !modal.classList.contains('hidden')) { e.preventDefault(); closeDetail(); }
+            }
+        });
 
         document.getElementById('filterOp').addEventListener('change', loadActivity);
         document.getElementById('filterDate').addEventListener('change', loadActivity);

@@ -166,7 +166,8 @@ CertMate supports a wide range of DNS providers through Let's Encrypt DNS-01 cha
 | **Vultr**              | API Key                       | Single        | Global cloud infrastructure     | **Stable** |
 | **DNS Made Easy**      | API Key, Secret Key           | Single        | Enterprise DNS management       | **Stable** |
 | **NS1**                | API Key                       | Single        | Intelligent DNS platform        | **Stable** |
-| **Hetzner**            | API Token                     | Single        | European cloud hosting          | **Stable** |
+| **Hetzner** (legacy DNS) | API Token                   | Single        | European cloud hosting          | **Stable** |
+| **Hetzner Cloud**      | API Token                     | Single        | Hetzner Cloud DNS (hcloud)      | **Stable** |
 | **Porkbun**            | API Key, Secret Key           | Single        | Domain registrar with DNS       | **Stable** |
 | **GoDaddy**            | API Key, Secret               | Single        | Popular domain registrar        | **Stable** |
 | **Hurricane Electric** | Username, Password            | Single        | Free DNS hosting                | **Stable** |
@@ -174,6 +175,10 @@ CertMate supports a wide range of DNS providers through Let's Encrypt DNS-01 cha
 | **ArvanCloud**         | API Key                       | Single        | Iranian cloud provider          | **Stable** |
 | **Infomaniak**         | API Token                     | Single        | Swiss ISP & cloud provider      | **Stable** |
 | **ACME-DNS**           | JSON Config                   | Single        | Generic ACME-DNS server         | **Stable** |
+| **Scaleway**           | API Token (secret key)        | Single        | European cloud (EU-sovereign)   | **Stable** |
+| **deSEC**              | API Token                     | Single        | Free, non-profit DNSSEC DNS     | **Stable** |
+| **DuckDNS**            | Token                         | Single        | Free dynamic DNS                | **Stable** |
+| **Custom Script**      | User-provided hook scripts    | Single        | Any provider via custom hooks   | **Stable** |
 
 ### Provider Categories
 
@@ -255,7 +260,8 @@ CLOUDFLARE_TOKEN=your_cloudflare_api_token_here
 # Optional: Application Settings
 SECRET_KEY=your_flask_secret_key_here
 FLASK_ENV=production
-HOST=0.0.0.0
+# Bind to localhost by default; front it with a reverse proxy for external access.
+HOST=127.0.0.1
 PORT=8000
 ```
 
@@ -325,8 +331,9 @@ docker-compose up -d
 # Build and push to Docker Hub for all platforms
 ./build-multiplatform.sh -r YOUR_DOCKERHUB_USERNAME -p
 
-# Use pre-built multi-platform image
-docker run --platform linux/arm64 -d --name certmate --env-file .env -p 8000:8000 USERNAME/certmate:latest
+# Use pre-built multi-platform image (bound to localhost; put it behind a
+# reverse proxy and enable authentication before exposing it externally)
+docker run --platform linux/arm64 -d --name certmate --env-file .env -p 127.0.0.1:8000:8000 fabriziosalmi/certmate:latest
 ```
 
 > **Multi-Platform Guide**: See [Docker Guide](docs/docker.md) for comprehensive multi-architecture setup instructions.
@@ -2516,10 +2523,12 @@ cd certmate
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-pip install -r requirements-dev.txt
+pip install -r requirements-test.txt
 
-# Set up pre-commit hooks
-pre-commit install
+# Lint, format, and security-scan (the same tools CI runs)
+make lint
+make format
+make security
 
 # Run tests
 pytest

@@ -834,6 +834,42 @@ class CertificateManager:
             'dns_provider': dns_provider
         }
 
+    def _quarantine_broken_lineage(self, cert_output_dir, domain):
+        """Before a reissue, move aside a BROKEN certbot lineage so ``certonly``
+        rebuilds a clean one instead of inheriting the breakage.
+
+        A lineage is broken when ``renewal/<domain>.conf`` exists but
+        ``live/<domain>/cert.pem`` is missing (its archive target is gone — e.g.
+        the data dir moved from host to container) or is a plain file rather than
+        a symlink (e.g. restored from a backup, which extracts flat files). In
+        both cases certbot reports a ``parsefail`` and skips the lineage, so the
+        "Use Edit & Reissue" remediation we surface to users would otherwise not
+        actually repair it. We *move* (not delete) the lineage state into a
+        ``.broken-lineage-*`` dir so it stays recoverable; the flat
+        ``<domain>/*.pem`` we serve from is untouched.
+        """
+        conf = cert_output_dir / 'renewal' / f'{domain}.conf'
+        if not conf.exists():
+            return
+        live_cert = cert_output_dir / 'live' / domain / 'cert.pem'
+        broken = (not live_cert.exists()) or (not live_cert.is_symlink())
+        if not broken:
+            return
+        quarantine = Path(tempfile.mkdtemp(prefix='.broken-lineage-', dir=str(cert_output_dir)))
+        for rel in (Path('renewal') / f'{domain}.conf', Path('live') / domain, Path('archive') / domain):
+            src = cert_output_dir / rel
+            if src.exists() or src.is_symlink():
+                dst = quarantine / rel
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                try:
+                    src.rename(dst)
+                except OSError as e:
+                    logger.warning(f"Could not quarantine {src} during reissue of {domain}: {e}")
+        logger.info(
+            f"Quarantined broken certbot lineage for {domain} into "
+            f"{quarantine.name}; reissue will rebuild it from scratch"
+        )
+
     def create_certificate(self, domain, email, dns_provider=None, dns_config=None, account_id=None, staging=False, ca_provider=None, ca_account_id=None, domain_alias=None, alias_dns_provider=None, san_domains=None, challenge_type=None, key_type=None, key_size=None, elliptic_curve=None, replace=False):
         """Create SSL certificate using configurable CA with DNS challenge
 
@@ -1119,6 +1155,12 @@ class CertificateManager:
                     certbot_cmd.extend(['--key-type', 'ecdsa', '--elliptic-curve', elliptic_curve])
 
             if replace:
+                # If the existing lineage is broken (stale paths / non-symlink
+                # live cert after a data-dir move or backup restore), move it
+                # aside first so certbot rebuilds a clean lineage rather than
+                # parsefailing on the broken conf — this is what makes "Edit &
+                # Reissue" a reliable repair for the RENEWAL_CONFIG_BROKEN case.
+                self._quarantine_broken_lineage(cert_output_dir, domain)
                 # Reissue over the existing lineage: a different -d set with
                 # the same --cert-name replaces the lineage's domains (expand
                 # and shrink). --renew-with-new-domains makes that
@@ -1480,6 +1522,16 @@ class CertificateManager:
                         dns_provider, dns_config, domain, san_domains=renew_sans,
                     )
                     credentials_file = strategy.create_config_file(strategy_config)
+                    # Pass the authenticator + credentials explicitly at renew
+                    # (mirrors the create path) so renewal does not depend on the
+                    # credentials path certbot baked into renewal/<domain>.conf at
+                    # issue time — that path is written relative to the issuing
+                    # CWD and goes stale after a data-dir/CWD move, which silently
+                    # broke renewal for file-based DNS providers. Env-based
+                    # providers (route53) return no credentials file and keep
+                    # using the stored authenticator + prepared env vars.
+                    if credentials_file:
+                        strategy.configure_certbot_arguments(cmd, credentials_file)
                     if dns_provider == 'custom-script':
                         # Mirror the create path: expose the propagation
                         # setting to the hooks certbot replays at renewal.
@@ -1493,9 +1545,14 @@ class CertificateManager:
                             str(max(1, min(3600, renew_propagation))))
                     logger.info(f"Prepared DNS environment for renewal of {domain} with {dns_provider}")
                 else:
-                    logger.warning(
-                        f"DNS config for provider '{dns_provider}' not found during "
-                        f"renewal of {domain}; certbot may fail if credentials are required"
+                    # The DNS account this cert was issued with is gone from
+                    # settings. create_certificate raises on this same condition,
+                    # so renewal fails fast with a clear message instead of
+                    # letting certbot fail opaquely (which surfaced as a 500 with
+                    # no hint about the missing account).
+                    raise RuntimeError(
+                        f"Cannot renew {domain}: DNS provider '{dns_provider}' "
+                        f"account '{metadata.get('account_id') or 'default'}' is not configured"
                     )
 
             result = self.shell_executor.run(cmd, capture_output=True, text=True, env=process_env)

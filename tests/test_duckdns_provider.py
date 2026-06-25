@@ -47,7 +47,8 @@ class TestDuckDNSConfigFile:
         config_path = create_duckdns_config('a1b2c3d4-e5f6-7890-abcd-ef1234567890')
 
         assert config_path.exists()
-        assert config_path.name == 'duckdns.ini'
+        # Per-operation random suffix (<provider>-<hex>.ini) avoids a same-provider race.
+        assert config_path.name.startswith('duckdns-') and config_path.name.endswith('.ini')
         content = config_path.read_text()
         # Exact key required by certbot-dns-duckdns plugin.
         assert 'dns_duckdns_token = a1b2c3d4-e5f6-7890-abcd-ef1234567890' in content

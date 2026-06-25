@@ -1,41 +1,51 @@
 <!-- Client Certificates Partial — included in index.html under "Client" tab -->
 
 <!-- Statistics Bar -->
+<!-- KPI tiles — same hero-number + left-accent language as the server
+     dashboard stat cards (replaces the old border-l-4 / faded-icon style so
+     the Server↔Client toggle doesn't swap card vocabularies). -->
 <div class="grid grid-cols-2 gap-4 md:grid-cols-4 mb-6">
-    <div class="bg-surface rounded-lg shadow p-6 border-l-4 border-blue-500">
-        <div class="flex items-center">
-            <div class="flex-1">
-                <p class="text-muted text-sm">Total Certificates</p>
-                <p class="text-3xl font-bold text-foreground" id="totalCount">0</p>
+    <div class="relative overflow-hidden rounded-xl shadow-card hover:shadow-elevated transition-shadow duration-200 bg-surface">
+        <span class="absolute inset-y-0 left-0 w-1 bg-blue-500" aria-hidden="true"></span>
+        <div class="pl-4 pr-3 py-3">
+            <div class="flex items-start justify-between gap-2">
+                <p class="text-[11px] font-semibold text-muted uppercase tracking-wider mt-0.5">Total</p>
+                <i class="fas fa-certificate text-blue-500 text-sm flex-shrink-0"></i>
             </div>
-            <i class="fas fa-certificate text-blue-500 text-3xl opacity-20"></i>
+            <p class="text-3xl font-bold text-foreground tabular-nums leading-none mt-1.5" id="totalCount">0</p>
+            <p class="text-xs text-muted mt-1.5">client certificates</p>
         </div>
     </div>
-    <div class="bg-surface rounded-lg shadow p-6 border-l-4 border-green-500">
-        <div class="flex items-center">
-            <div class="flex-1">
-                <p class="text-muted text-sm">Active</p>
-                <p class="text-3xl font-bold text-foreground" id="activeCount">0</p>
+    <div class="relative overflow-hidden rounded-xl shadow-card hover:shadow-elevated transition-shadow duration-200 bg-surface">
+        <span class="absolute inset-y-0 left-0 w-1 bg-green-500" aria-hidden="true"></span>
+        <div class="pl-4 pr-3 py-3">
+            <div class="flex items-start justify-between gap-2">
+                <p class="text-[11px] font-semibold text-muted uppercase tracking-wider mt-0.5">Active</p>
+                <i class="fas fa-circle-check text-success-fg text-sm flex-shrink-0"></i>
             </div>
-            <i class="fas fa-check-circle text-green-500 text-3xl opacity-20"></i>
+            <p class="text-3xl font-bold text-success-fg tabular-nums leading-none mt-1.5" id="activeCount">0</p>
+            <p class="text-xs text-muted mt-1.5">valid &amp; usable</p>
         </div>
     </div>
-    <div class="bg-surface rounded-lg shadow p-6 border-l-4 border-red-500">
-        <div class="flex items-center">
-            <div class="flex-1">
-                <p class="text-muted text-sm">Revoked</p>
-                <p class="text-3xl font-bold text-foreground" id="revokedCount">0</p>
+    <div class="relative overflow-hidden rounded-xl shadow-card hover:shadow-elevated transition-shadow duration-200 bg-surface">
+        <span class="absolute inset-y-0 left-0 w-1 bg-red-500" aria-hidden="true"></span>
+        <div class="pl-4 pr-3 py-3">
+            <div class="flex items-start justify-between gap-2">
+                <p class="text-[11px] font-semibold text-muted uppercase tracking-wider mt-0.5">Revoked</p>
+                <i class="fas fa-ban text-danger-fg text-sm flex-shrink-0"></i>
             </div>
-            <i class="fas fa-ban text-red-500 text-3xl opacity-20"></i>
+            <p class="text-3xl font-bold text-danger-fg tabular-nums leading-none mt-1.5" id="revokedCount">0</p>
+            <p class="text-xs text-muted mt-1.5">no longer trusted</p>
         </div>
     </div>
-    <div class="bg-surface rounded-lg shadow p-6 border-l-4 border-purple-500">
-        <div class="flex items-center">
-            <div class="flex-1">
-                <p class="text-muted text-sm">By Usage</p>
-                <p class="text-sm text-muted mt-2" id="usageBreakdown">Loading...</p>
+    <div class="relative overflow-hidden rounded-xl shadow-card hover:shadow-elevated transition-shadow duration-200 bg-surface">
+        <span class="absolute inset-y-0 left-0 w-1 bg-indigo-500" aria-hidden="true"></span>
+        <div class="pl-4 pr-3 py-3">
+            <div class="flex items-start justify-between gap-2">
+                <p class="text-[11px] font-semibold text-muted uppercase tracking-wider mt-0.5">By Usage</p>
+                <i class="fas fa-chart-pie text-indigo-500 text-sm flex-shrink-0"></i>
             </div>
-            <i class="fas fa-chart-pie text-purple-500 text-3xl opacity-20"></i>
+            <p class="text-sm font-medium text-foreground leading-snug mt-1.5" id="usageBreakdown">—</p>
         </div>
     </div>
 </div>
@@ -208,13 +218,25 @@
         <table class="w-full">
             <thead class="bg-surface-2 border-border border-b">
                 <tr>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-label uppercase tracking-wider">Common Name</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-label uppercase tracking-wider hidden md:table-cell">Email</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-label uppercase tracking-wider hidden lg:table-cell">Usage</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-label uppercase tracking-wider hidden lg:table-cell">Created</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-label uppercase tracking-wider">Expires</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-label uppercase tracking-wider">Status</th>
-                    <th class="px-6 py-3 text-right text-xs font-medium text-label uppercase tracking-wider">Actions</th>
+                    <th id="cc-sort-th-common_name" scope="col" aria-sort="none" class="px-6 py-3 text-left text-xs font-medium text-label uppercase tracking-wider">
+                        <button type="button" onclick="ccSortCertificates('common_name')" class="inline-flex items-center uppercase tracking-wider hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:ring-inset rounded">Common Name <i class="fas fa-sort ml-1 text-gray-400" id="cc-sort-icon-common_name" aria-hidden="true"></i></button>
+                    </th>
+                    <th id="cc-sort-th-email" scope="col" aria-sort="none" class="px-6 py-3 text-left text-xs font-medium text-label uppercase tracking-wider hidden md:table-cell">
+                        <button type="button" onclick="ccSortCertificates('email')" class="inline-flex items-center uppercase tracking-wider hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:ring-inset rounded">Email <i class="fas fa-sort ml-1 text-gray-400" id="cc-sort-icon-email" aria-hidden="true"></i></button>
+                    </th>
+                    <th id="cc-sort-th-cert_usage" scope="col" aria-sort="none" class="px-6 py-3 text-left text-xs font-medium text-label uppercase tracking-wider hidden lg:table-cell">
+                        <button type="button" onclick="ccSortCertificates('cert_usage')" class="inline-flex items-center uppercase tracking-wider hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:ring-inset rounded">Usage <i class="fas fa-sort ml-1 text-gray-400" id="cc-sort-icon-cert_usage" aria-hidden="true"></i></button>
+                    </th>
+                    <th id="cc-sort-th-created_at" scope="col" aria-sort="none" class="px-6 py-3 text-left text-xs font-medium text-label uppercase tracking-wider hidden lg:table-cell">
+                        <button type="button" onclick="ccSortCertificates('created_at')" class="inline-flex items-center uppercase tracking-wider hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:ring-inset rounded">Created <i class="fas fa-sort ml-1 text-gray-400" id="cc-sort-icon-created_at" aria-hidden="true"></i></button>
+                    </th>
+                    <th id="cc-sort-th-expires_at" scope="col" aria-sort="none" class="px-6 py-3 text-left text-xs font-medium text-label uppercase tracking-wider">
+                        <button type="button" onclick="ccSortCertificates('expires_at')" class="inline-flex items-center uppercase tracking-wider hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:ring-inset rounded">Expires <i class="fas fa-sort ml-1 text-gray-400" id="cc-sort-icon-expires_at" aria-hidden="true"></i></button>
+                    </th>
+                    <th id="cc-sort-th-status" scope="col" aria-sort="none" class="px-6 py-3 text-left text-xs font-medium text-label uppercase tracking-wider">
+                        <button type="button" onclick="ccSortCertificates('status')" class="inline-flex items-center uppercase tracking-wider hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:ring-inset rounded">Status <i class="fas fa-sort ml-1 text-gray-400" id="cc-sort-icon-status" aria-hidden="true"></i></button>
+                    </th>
+                    <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-label uppercase tracking-wider">Actions</th>
                 </tr>
             </thead>
             <tbody id="certTableBody" class="divide-y divide-gray-200 dark:divide-gray-700">
@@ -225,25 +247,25 @@
 </div>
 
 <!-- Modal for certificate details -->
-<div id="certModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-     role="dialog" aria-modal="true" aria-labelledby="certModalTitle">
-    <div class="bg-surface rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
-        <div class="flex justify-between items-center mb-4">
-            <h3 id="certModalTitle" class="text-lg font-bold text-foreground">Certificate Details</h3>
-            <button type="button" onclick="closeCertModal()" class="text-muted hover:text-gray-700 dark:hover:text-gray-200" aria-label="Close dialog">
-                <i class="fas fa-times"></i>
+<div id="certModal" class="hidden fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6"
+     role="dialog" aria-modal="true" aria-labelledby="certModalTitle" onclick="if (event.target === this) closeCertModal()">
+    <div class="bg-surface rounded-2xl shadow-elevated w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
+        <div class="flex-shrink-0 flex justify-between items-center gap-2 px-6 py-4 border-b border-gray-100 dark:border-white/5">
+            <h3 id="certModalTitle" class="text-base font-semibold font-mono text-foreground whitespace-nowrap overflow-x-auto min-w-0">Certificate Details</h3>
+            <button type="button" onclick="closeCertModal()" class="flex-shrink-0 text-gray-400 hover:text-foreground p-1 rounded-lg hover:bg-hover transition-colors" aria-label="Close dialog">
+                <i class="fas fa-times text-lg"></i>
             </button>
         </div>
-        <div id="modalContent" class="space-y-3 text-sm"></div>
-        <div class="mt-6 flex space-x-3">
-            <button type="button" onclick="downloadCertFile('crt')" aria-label="Download certificate file" class="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-2 rounded-lg px-3 text-sm font-semibold flex items-center justify-center">
-                <i class="fas fa-download mr-1"></i> .crt
+        <div id="modalContent" class="px-6 py-4 overflow-y-auto"></div>
+        <div class="flex-shrink-0 flex flex-wrap gap-2 px-6 py-3 border-t border-border">
+            <button type="button" onclick="downloadCertFile('crt')" aria-label="Download certificate file" class="btn btn-primary flex-1 min-w-[6rem]">
+                <i class="fas fa-download mr-1.5"></i> .crt
             </button>
-            <button type="button" onclick="downloadCertFile('key')" aria-label="Download private key file" class="flex-1 bg-red-500 hover:bg-red-600 text-white py-2 rounded-lg px-3 text-sm font-semibold flex items-center justify-center">
-                <i class="fas fa-download mr-1"></i> .key
+            <button type="button" onclick="downloadCertFile('key')" aria-label="Download private key file (keep secret)" title="Private key — keep it secret" class="btn btn-secondary flex-1 min-w-[6rem] text-warning-fg">
+                <i class="fas fa-key mr-1.5"></i> .key
             </button>
-            <button type="button" onclick="downloadCertFile('csr')" aria-label="Download CSR file" class="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 rounded-lg px-3 text-sm font-semibold flex items-center justify-center">
-                <i class="fas fa-download mr-1"></i> .csr
+            <button type="button" onclick="downloadCertFile('csr')" aria-label="Download CSR file" class="btn btn-secondary flex-1 min-w-[6rem]">
+                <i class="fas fa-download mr-1.5"></i> .csr
             </button>
         </div>
     </div>

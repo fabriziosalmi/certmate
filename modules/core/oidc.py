@@ -416,6 +416,16 @@ class OIDCManager:
             raw_verified is True
             or (isinstance(raw_verified, str) and raw_verified.lower() == 'true')
         )
+        # `email_verified` (OIDC Core §5.1) attests the STANDARD `email` claim
+        # only. When a custom `email_claim` is configured and its value differs
+        # from the standard `email`, email_verified does NOT cover it — an IdP
+        # that lets a user self-set the custom claim (e.g. `mail`) could present
+        # a verified throwaway standard `email` while matching an admin's address
+        # via the custom claim and inherit that row's role at the link seam.
+        # Only treat the address used for the link as verified when it IS the
+        # verified standard email.
+        standard_email = claims.get('email') or ''
+        email_is_verified = email_verified and bool(email) and email == standard_email
         role = self._map_role(claims, cfg)
 
         # Captured outcome — written by the mutator, read after update()
@@ -444,14 +454,16 @@ class OIDCManager:
             if cfg.get('link_by_email') and email:
                 existing_by_email = self._find_by_email(users, email)
                 if existing_by_email:
-                    if cfg.get('require_verified_email', True) and not email_verified:
+                    if cfg.get('require_verified_email', True) and not email_is_verified:
                         outcome['error'] = 'email_not_verified'
                         outcome['audit'] = (
                             'oidc_user_link_refused',
                             existing_by_email,
                             'failure',
                             {'email': email, 'issuer': iss,
-                             'reason': 'email_verified claim missing or false'},
+                             'reason': 'email not verified (email_verified missing/false, '
+                                       'or a custom email_claim not covered by the standard '
+                                       'email_verified claim)'},
                         )
                         return
                     username = existing_by_email

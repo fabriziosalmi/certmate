@@ -197,7 +197,7 @@
             return;
         }
         if (item.action === 'toggleNotifs') {
-            if (typeof toggleNotifications === 'function') toggleNotifications();
+            window.location.href = '/notifications';
             return;
         }
         if (item.action === 'focusCreate') {

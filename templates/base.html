@@ -13,15 +13,6 @@
     <link href="/static/css/tailwind.min.css" rel="stylesheet">
     <link href="/static/css/fontawesome.min.css" rel="stylesheet">
     <style>
-        /* Theme-toggle icon visibility keyed off the `dark` class on
-           <html>. ID-selector specificity (100) beats FontAwesome's
-           `.fas { display: inline-block }` (10), so this works without
-           !important. Loaded in <head> after both stylesheets so the
-           initial paint already has the right icon — no FOUC, no JS
-           sync needed beyond the existing classList.toggle('dark'). */
-        html:not(.dark) #theme-icon-sun { display: none; }
-        html.dark #theme-icon-moon { display: none; }
-
         /* Reserve the scrollbar gutter always, so navigating between
            pages or settings sub-tabs of different heights doesn't shift
            the whole layout horizontally by ~15px when the scrollbar
@@ -57,7 +48,7 @@
                 <div class="flex items-center">
                     <div class="flex-shrink-0">
                         <a href="/">
-                            <img src="/static/img/certmate_logo_256.png" alt="CertMate" class="w-9 h-9 md:w-12 md:h-12">
+                            <img src="/static/img/certmate_logo_256.png" alt="CertMate" class="w-12 h-12 md:w-16 md:h-16">
                         </a>
                     </div>
                     <div class="ml-2 md:ml-3">
@@ -66,58 +57,53 @@
                     </div>
                 </div>
                 <div class="flex items-center space-x-1 sm:space-x-4">
-                    <!-- Desktop nav links (hidden on mobile — bottom tab bar used instead) -->
-                    <a href="/" {% if request.path == '/' %}aria-current="page"{% endif %} class="hidden md:inline-flex items-center px-3 py-2 text-sm {% if request.path == '/' %}nav-active{% else %}nav-inactive{% endif %}">
-                        <i class="fas fa-certificate mr-1.5 text-[0.85em] leading-none"></i> Certificates
-                    </a>
-
-                    <a href="/settings" {% if request.path == '/settings' %}aria-current="page"{% endif %} class="hidden md:inline-flex items-center px-3 py-2 text-sm {% if request.path == '/settings' %}nav-active{% else %}nav-inactive{% endif %}">
-                        <i class="fas fa-cog mr-1.5 text-[0.85em] leading-none"></i> Settings
-                    </a>
-                    <a href="/help" {% if request.path == '/help' %}aria-current="page"{% endif %} class="hidden md:inline-flex items-center px-3 py-2 text-sm {% if request.path == '/help' %}nav-active{% else %}nav-inactive{% endif %}">
-                        <i class="fas fa-question-circle mr-1.5 text-[0.85em] leading-none"></i> Help
-                    </a>
-                    <a href="/activity" {% if request.path == '/activity' %}aria-current="page"{% endif %} class="hidden md:inline-flex items-center px-3 py-2 text-sm {% if request.path == '/activity' %}nav-active{% else %}nav-inactive{% endif %}">
-                        <i class="fas fa-history mr-1.5 text-[0.85em] leading-none"></i> Activity
-                    </a>
-                    <a href="/redoc" {% if request.path == '/redoc' %}aria-current="page"{% endif %} class="hidden md:inline-flex items-center px-3 py-2 text-sm {% if request.path == '/redoc' %}nav-active{% else %}nav-inactive{% endif %}">
-                        <i class="fas fa-code mr-1.5 text-[0.85em] leading-none"></i> API Docs
-                    </a>
-                    <!-- Search (Cmd+K) — desktop variant with visible label + kbd hint -->
+                    <!-- Search (Cmd+K) — first item in the cluster. Desktop shows a
+                         labelled pill; mobile a compact icon. Same keydown dispatch
+                         feeds the existing command palette. -->
                     <button type="button" onclick="document.dispatchEvent(new KeyboardEvent('keydown',{key:'k',metaKey:true}))" class="hidden sm:inline-flex items-center px-2.5 py-1.5 text-sm text-gray-400 bg-surface-2 border-border border rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition" title="Search (Cmd+K)" aria-label="Open search">
                         <i class="fas fa-search mr-1.5 text-xs"></i>
                         <span class="text-xs">Search</span>
                         <kbd class="ml-2 px-1.5 py-0.5 text-[10px] bg-surface border-border rounded border">&#8984;K</kbd>
                     </button>
-                    <!-- Search — compact icon-only mobile variant. Same keydown dispatch
-                         so the existing Cmd+K command palette handler picks it up. -->
                     <button type="button" onclick="document.dispatchEvent(new KeyboardEvent('keydown',{key:'k',metaKey:true}))" class="sm:hidden px-2 py-2 rounded-md text-muted hover:bg-hover" title="Search" aria-label="Open search">
                         <i class="fas fa-search"></i>
                     </button>
+                    <!-- Divider between Search and the icon nav -->
+                    <span class="hidden md:block w-px h-5 bg-border" aria-hidden="true"></span>
+                    <!-- Primary operations — icon-only on desktop (label via tooltip +
+                         aria-label); on mobile they live in the bottom tab bar. -->
+                    <a href="/" {% if request.path == '/' %}aria-current="page"{% endif %} class="hidden md:inline-flex items-center px-2 py-2 rounded-md hover:bg-hover {% if request.path == '/' %}text-primary{% else %}text-muted{% endif %}" title="Certificates" aria-label="Certificates">
+                        <i class="fas fa-certificate"></i>
+                    </a>
+                    <a href="/activity" {% if request.path == '/activity' %}aria-current="page"{% endif %} class="hidden md:inline-flex items-center px-2 py-2 rounded-md hover:bg-hover {% if request.path == '/activity' %}text-primary{% else %}text-muted{% endif %}" title="Activity" aria-label="Activity">
+                        <i class="fas fa-history"></i>
+                    </a>
+                    <!-- Divider between primary operations and utility icons -->
+                    <span class="hidden md:block w-px h-5 bg-border" aria-hidden="true"></span>
+                    <!-- Utility icons: Settings · API Docs · Help. Icon-only on
+                         desktop; on mobile these live in the bottom tab bar. -->
+                    <a href="/settings" {% if request.path == '/settings' %}aria-current="page"{% endif %} class="hidden md:inline-flex items-center px-2 py-2 rounded-md hover:bg-hover {% if request.path == '/settings' %}text-primary{% else %}text-muted{% endif %}" title="Settings" aria-label="Settings">
+                        <i class="fas fa-cog"></i>
+                    </a>
+                    <a href="/redoc" target="_blank" rel="noopener" class="hidden md:inline-flex items-center px-2 py-2 rounded-md hover:bg-hover text-muted" title="API Docs (opens in a new tab)" aria-label="API Docs (opens in a new tab)">
+                        <i class="fas fa-code"></i>
+                    </a>
+                    <a href="/help" {% if request.path == '/help' %}aria-current="page"{% endif %} class="hidden md:inline-flex items-center px-2 py-2 rounded-md hover:bg-hover {% if request.path == '/help' %}text-primary{% else %}text-muted{% endif %}" title="Help" aria-label="Help">
+                        <i class="fas fa-question-circle"></i>
+                    </a>
                     <!-- Keyboard shortcuts hint -->
                     <button type="button" onclick="document.dispatchEvent(new KeyboardEvent('keydown',{key:'?'}))" class="hidden sm:inline-flex items-center px-2 py-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-hover rounded-lg transition" title="Keyboard shortcuts (?)" aria-label="Show keyboard shortcuts">
                         <i class="fas fa-keyboard text-sm"></i>
                     </button>
-                    <!-- Notification bell -->
-                    <div class="relative">
-                        <button type="button" id="notifBtn" onclick="toggleNotifications()" class="px-2 py-2 rounded-md text-muted hover:bg-hover relative" title="Notifications" aria-label="Open notifications" aria-haspopup="true" aria-expanded="false" aria-controls="notifPanel">
-                            <i class="fas fa-bell"></i>
-                            <span id="notifBadge" class="hidden absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold badge-pulse">0</span>
-                        </button>
-                        <div id="notifPanel" role="region" aria-label="Notifications" class="hidden absolute right-0 mt-2 w-[calc(100vw-2rem)] max-w-sm md:w-80 bg-surface border-border rounded-lg shadow-xl border z-50 max-h-96 overflow-y-auto">
-                            <div class="px-4 py-3 border-b border-border">
-                                <h3 class="text-sm font-semibold text-foreground">Notifications</h3>
-                            </div>
-                            <div id="notifList" class="py-2">
-                                <p class="px-4 py-3 text-sm text-muted">No notifications</p>
-                            </div>
-                        </div>
-                    </div>
-                    <!-- Dark mode toggle -->
-                    <button type="button" id="themeToggle" onclick="toggleTheme()" class="px-2 py-2 rounded-md text-muted hover:bg-hover" title="Toggle theme" aria-label="Toggle dark mode">
-                        <i class="fas fa-moon" id="theme-icon-moon"></i>
-                        <i class="fas fa-sun" id="theme-icon-sun"></i>
-                    </button>
+                    <!-- Notification bell — links to the full /notifications
+                         page (no dropdown). Badge shows the count of active
+                         (non-snoozed) certificate warnings. -->
+                    <a href="/notifications" {% if request.path == '/notifications' %}aria-current="page"{% endif %} id="notifBtn" class="px-2 py-2 rounded-md hover:bg-hover relative {% if request.path == '/notifications' %}text-primary{% else %}text-muted{% endif %}" title="Notifications" aria-label="Notifications">
+                        <i class="fas fa-bell"></i>
+                        <span id="notifBadge" class="hidden absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold badge-pulse">0</span>
+                    </a>
+                    <!-- Theme is auto (follows OS) by default; override lives in
+                         Settings → General → Appearance. No top-bar toggle. -->
                     <!-- Logout (rendered only when authenticated; gated
                          server-side via the `current_user` context var, so
                          the button no longer flashes in then out as the
@@ -151,7 +137,7 @@
                 <i class="fas fa-history text-lg"></i>
                 <span class="text-xs mt-0.5 font-medium">Activity</span>
             </a>
-            <a href="/redoc" {% if request.path == '/redoc' %}aria-current="page"{% endif %} class="flex flex-col items-center justify-center flex-1 py-1 transition-colors duration-150 {% if request.path == '/redoc' %}text-primary{% else %}text-muted{% endif %}">
+            <a href="/redoc" target="_blank" rel="noopener" class="flex flex-col items-center justify-center flex-1 py-1 transition-colors duration-150 text-muted">
                 <i class="fas fa-code text-lg"></i>
                 <span class="text-xs mt-0.5 font-medium">API</span>
             </a>
@@ -166,124 +152,120 @@
             .then(function(){window.location.href='/login'})
             .catch(function(){window.location.href='/login'});
     }
-    // Theme toggle. Icon visibility is driven by CSS rules in <head>
-    // that key off the `dark` class on <html>, so this function only
-    // needs to flip the class and persist the choice.
-    function toggleTheme(){
-        var html = document.documentElement;
-        if (html.classList.contains('dark')) {
-            html.classList.remove('dark');
-            localStorage.setItem('theme', 'light');
-        } else {
-            html.classList.add('dark');
-            localStorage.setItem('theme', 'dark');
-        }
+    // Theme preference is tri-state: 'auto' (no stored key — follows the OS
+    // prefers-color-scheme), 'light', or 'dark'. The pre-paint bootstrap in
+    // <head> resolves the same way. There is no top-bar toggle; the override
+    // lives in Settings → General → Appearance via data-theme-option buttons.
+    function _themeResolvesDark(){
+        var theme = localStorage.getItem('theme');
+        return theme === 'dark' ||
+            (theme !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
     }
-    // Notifications — disclosure popup (non-modal): aria-expanded flip on
-    // the trigger, focus moves into the panel when opened, focus restored
-    // to the trigger on close, Escape dismisses. No focus trap because
-    // this is a disclosure / menu pattern, not a dialog — Tab should be
-    // free to leave the panel (ARIA APG Disclosure pattern).
-    var _notifOpen = false;
-    function _closeNotifPanel(restoreFocus) {
-        var panel = document.getElementById('notifPanel');
-        var btn = document.getElementById('notifBtn');
-        panel.classList.add('hidden');
-        if (btn) btn.setAttribute('aria-expanded', 'false');
-        _notifOpen = false;
-        if (restoreFocus && btn) btn.focus();
+    function _applyResolvedTheme(){
+        document.documentElement.classList.toggle('dark', _themeResolvesDark());
+        _syncThemeControls();
     }
-    function toggleNotifications() {
-        var panel = document.getElementById('notifPanel');
-        var btn = document.getElementById('notifBtn');
-        _notifOpen = !_notifOpen;
-        panel.classList.toggle('hidden', !_notifOpen);
-        if (btn) btn.setAttribute('aria-expanded', _notifOpen ? 'true' : 'false');
-        if (_notifOpen) {
-            // Move focus into the panel so keyboard users land where they
-            // can act on the contents (first notification link, or the
-            // panel itself if empty).
-            var first = panel.querySelector('a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])');
-            if (first) first.focus();
-        }
-    }
-    document.addEventListener('click', function(e) {
-        if (_notifOpen && !e.target.closest('#notifBtn') && !e.target.closest('#notifPanel')) {
-            _closeNotifPanel(false);
-        }
-    });
-    document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape' && _notifOpen) {
-            e.preventDefault();
-            _closeNotifPanel(true);
-        }
-    });
-    function renderNotifications(certs) {
-        if (!Array.isArray(certs)) return;
-        var warnings = [];
-        certs.forEach(function(c) {
-            if (!c.exists) return;
-            var days = c.days_until_expiry;
-            if (days !== null && days !== undefined) {
-                if (days <= 0) {
-                    warnings.push({domain: c.domain, days: days, type: 'expired'});
-                } else if (days <= 7) {
-                    warnings.push({domain: c.domain, days: days, type: 'critical'});
-                } else if (days <= 30) {
-                    warnings.push({domain: c.domain, days: days, type: 'warning'});
-                }
-            }
+    // Reflect the active preference onto any rendered segmented control. Uses
+    // aria-pressed so the Tailwind `aria-pressed:` variant drives styling and
+    // screen readers announce the selected option.
+    function _syncThemeControls(){
+        var current = localStorage.getItem('theme') || 'auto';
+        document.querySelectorAll('[data-theme-option]').forEach(function(el){
+            el.setAttribute('aria-pressed', el.getAttribute('data-theme-option') === current ? 'true' : 'false');
         });
-        var badge = document.getElementById('notifBadge');
-        var list = document.getElementById('notifList');
-        if (warnings.length === 0) {
-            badge.classList.add('hidden');
-            list.innerHTML = '<p class="px-4 py-3 text-sm text-muted"><i class="fas fa-check-circle text-green-500 mr-2"></i>All certificates healthy</p>';
-            return;
-        }
-        badge.textContent = warnings.length > 9 ? '9+' : warnings.length;
-        badge.classList.remove('hidden');
-        var html = '';
-        warnings.sort(function(a, b) { return a.days - b.days; });
-        warnings.forEach(function(w) {
-            var icon, color, msg;
-            if (w.type === 'expired') {
-                icon = 'fa-times-circle'; color = 'text-red-500'; msg = 'Expired';
-            } else if (w.type === 'critical') {
-                icon = 'fa-exclamation-circle'; color = 'text-red-500'; msg = w.days + 'd left';
-            } else {
-                icon = 'fa-exclamation-triangle'; color = 'text-yellow-500'; msg = w.days + 'd left';
-            }
-            html += '<a href="/" class="block px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-700/50">' +
-                '<div class="flex items-center gap-3">' +
-                '<i class="fas ' + icon + ' ' + color + '"></i>' +
-                '<div class="min-w-0 flex-1">' +
-                '<p class="text-sm font-medium text-foreground truncate">' + CertMate.escapeHtml(w.domain) + '</p>' +
-                '<p class="text-xs ' + color + '">' + msg + '</p>' +
-                '</div></div></a>';
-        });
-        list.innerHTML = html;
-        try { sessionStorage.setItem('cm_notif', JSON.stringify({t: Date.now(), d: certs})); } catch(e){}
     }
-    function checkNotifications(force) {
-        // Use cached data if fresh (< 60s) to avoid extra API calls
-        if (!force) {
+    function setTheme(mode){
+        if (mode === 'auto') { localStorage.removeItem('theme'); }
+        else { localStorage.setItem('theme', mode); }
+        _applyResolvedTheme();
+    }
+    // When in Auto, react live to the OS switching light/dark.
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(){
+        if (!localStorage.getItem('theme')) _applyResolvedTheme();
+    });
+    // Keep the keyboard shortcut (shortcuts.js) working — flip to the
+    // opposite explicit theme from whatever is currently resolved.
+    function toggleTheme(){ setTheme(document.documentElement.classList.contains('dark') ? 'light' : 'dark'); }
+    document.addEventListener('DOMContentLoaded', _syncThemeControls);
+    // Notifications — the bell links to /notifications; here we only keep the
+    // unread badge in sync. Warnings are derived from /api/certificates (the
+    // same data the page renders) and a domain can be snoozed client-side, in
+    // which case it drops out of both the badge count and the page's active
+    // list until the snooze expires. CertMateNotif is the single source of
+    // truth for severity thresholds and snooze state, shared with the page.
+    var CertMateNotif = (function() {
+        var SNOOZE_KEY = 'cm_notif_snooze';
+        function readSnooze() {
             try {
-                var cached = JSON.parse(sessionStorage.getItem('cm_notif') || '{}');
-                if (cached.t && (Date.now() - cached.t) < 60000) {
-                    renderNotifications(cached.d);
-                    return;
-                }
-            } catch(e){}
+                var m = JSON.parse(localStorage.getItem(SNOOZE_KEY) || '{}');
+                return (m && typeof m === 'object') ? m : {};
+            } catch (e) { return {}; }
         }
+        function writeSnooze(m) {
+            try { localStorage.setItem(SNOOZE_KEY, JSON.stringify(m)); } catch (e) {}
+        }
+        // Drop expired snoozes on every read so the store self-cleans.
+        function activeSnooze() {
+            var m = readSnooze(), now = Date.now(), changed = false, out = {};
+            Object.keys(m).forEach(function(d) {
+                if (typeof m[d] === 'number' && m[d] > now) { out[d] = m[d]; }
+                else { changed = true; }
+            });
+            if (changed) writeSnooze(out);
+            return out;
+        }
+        return {
+            isSnoozed: function(domain) { return !!activeSnooze()[domain]; },
+            snoozedUntil: function(domain) { return activeSnooze()[domain] || null; },
+            snooze: function(domain, ms) { var m = activeSnooze(); m[domain] = Date.now() + ms; writeSnooze(m); },
+            unsnooze: function(domain) { var m = activeSnooze(); delete m[domain]; writeSnooze(m); },
+            // Map a cert list to severity-classified warnings, most urgent first.
+            deriveWarnings: function(certs) {
+                if (!Array.isArray(certs)) return [];
+                var out = [];
+                certs.forEach(function(c) {
+                    if (!c.exists) return;
+                    var days = c.days_until_expiry;
+                    if (days === null || days === undefined) return;
+                    var type = null;
+                    if (days <= 0) type = 'expired';
+                    else if (days <= 7) type = 'critical';
+                    else if (days <= 30) type = 'warning';
+                    if (type) out.push({ domain: c.domain, days: days, type: type, expiry_date: c.expiry_date });
+                });
+                out.sort(function(a, b) { return a.days - b.days; });
+                return out;
+            }
+        };
+    })();
+    window.CertMateNotif = CertMateNotif;
+
+    function _updateNotifBadge(certs) {
+        var badge = document.getElementById('notifBadge');
+        if (!badge) return;
+        var active = CertMateNotif.deriveWarnings(certs).filter(function(w) {
+            return !CertMateNotif.isSnoozed(w.domain);
+        });
+        if (active.length === 0) { badge.classList.add('hidden'); return; }
+        badge.textContent = active.length > 9 ? '9+' : active.length;
+        badge.classList.remove('hidden');
+    }
+    function checkNotifications() {
+        // Fetch fresh each time. The certificate list is intentionally NOT
+        // cached in web storage — that would be clear-text storage of sensitive
+        // data (CodeQL js/clear-text-storage); the badge fetch is cheap and
+        // already staggered/throttled below.
         fetch('/api/certificates', {credentials: 'same-origin'})
             .then(function(r) { return r.ok ? r.json() : []; })
-            .then(function(certs) { renderNotifications(certs); })
+            .then(function(certs) { _updateNotifBadge(certs); })
             .catch(function() {});
     }
     // Check on load (with cache, staggered after auth) and refresh every 5 min
     setTimeout(checkNotifications, 4000);
     setInterval(function() { checkNotifications(true); }, 300000);
+    // Re-sync when returning to the tab — a snooze set on the notifications
+    // page should shrink the badge as soon as you switch back.
+    window.addEventListener('focus', function() { checkNotifications(false); });
 
     // SSE real-time updates
     (function() {
@@ -377,6 +359,11 @@
     });
     </script>
     <script src="/static/js/certmate.js"></script>
+    <!-- Provider brand icons: exposes window.providerIconHtml + enhances any
+         DNS-provider radio grid. Loaded globally so the dashboard table and
+         the certificate detail modal can render provider logos too, not just
+         the Settings page. -->
+    <script src="/static/js/provider-icons.js"></script>
     <script defer src="/static/js/report-issue.js"></script>
     <script defer src="/static/js/cmd-palette.js"></script>
     <script defer src="/static/js/shortcuts.js"></script>
