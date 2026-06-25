@@ -4,7 +4,7 @@
 {% block content %}
     <!-- Settings page: single Alpine root that tab-switches every section below it. -->
     <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8"
-         x-data="{ tab: (location.hash.slice(1) || 'dns') }"
+         x-data="{ tab: (location.hash.slice(1) || 'general') }"
          x-init="$watch('tab', t => history.replaceState(null, '', '#' + t))">
         <div class="bg-surface shadow-card rounded-xl">
             <div class="px-6 py-3 border-b border-gray-100 dark:border-white/5 overflow-x-auto">
@@ -38,7 +38,7 @@
                     </div>
                 </div>
                 <nav class="flex space-x-1 min-w-max" role="tablist" @keydown="onSettingsTabKeydown($event)">
-                    <template x-for="t in [{id:'dns',icon:'fa-server',label:'DNS'},{id:'ca',icon:'fa-shield-alt',label:'CA'},{id:'general',icon:'fa-cogs',label:'General'},{id:'storage',icon:'fa-database',label:'Storage'},{id:'notifications',icon:'fa-bell',label:'Notifications'},{id:'deploy',icon:'fa-rocket',label:'Deploy'},{id:'probe',icon:'fa-network-wired',label:'Probe'},{id:'users',icon:'fa-users',label:'Users'},{id:'apikeys',icon:'fa-key',label:'API Keys'},{id:'oidc',icon:'fa-id-badge',label:'SSO'},{id:'backup',icon:'fa-archive',label:'Backup'}]">
+                    <template x-for="t in [{id:'general',icon:'fa-cogs',label:'General'},{id:'dns',icon:'fa-server',label:'DNS'},{id:'ca',icon:'fa-shield-alt',label:'CA'},{id:'storage',icon:'fa-database',label:'Storage'},{id:'notifications',icon:'fa-bell',label:'Notifications'},{id:'deploy',icon:'fa-rocket',label:'Deploy'},{id:'probe',icon:'fa-network-wired',label:'Probe'},{id:'users',icon:'fa-users',label:'Users'},{id:'apikeys',icon:'fa-key',label:'API Keys'},{id:'oidc',icon:'fa-id-badge',label:'SSO'},{id:'backup',icon:'fa-archive',label:'Backup'}]">
                         <button type="button" @click="tab = t.id" role="tab"
                                 :id="'settings-tab-' + t.id"
                                 :aria-controls="'settings-panel-' + t.id"
@@ -90,45 +90,28 @@
             </p>
 
             <!-- Create Backup Section -->
-            <div class="grid md:grid-cols-2 gap-6 mb-6">
-                <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
-                    <h4 class="font-medium text-foreground mb-3 flex items-center">
-                        <i class="fas fa-plus-circle mr-2 text-green-500"></i>
-                        Create Backup
-                    </h4>
-                    <p class="text-sm text-muted mb-4">
-                        Create atomic backups that include both settings and certificates to ensure data consistency.
-                    </p>
-                    <div class="space-y-3">
-                        <button type="button" onclick="createBackup('unified', this)" 
-                                class="w-full bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-colors text-sm">
-                            <i class="fas fa-archive mr-2"></i>
-                            Create Unified Backup (Recommended)
-                        </button>
-                        <button type="button" onclick="CertMate.copyDiagnosticsSnapshot(this)"
-                                class="w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors text-sm">
-                            <i class="fas fa-clipboard mr-2"></i>
-                            Copy Diagnostic Snapshot
-                        </button>
-                    </div>
+            <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 mb-6">
+                <h4 class="font-medium text-foreground mb-1 flex items-center">
+                    <i class="fas fa-plus-circle mr-2 text-green-500"></i>
+                    Create Backup
+                </h4>
+                <p class="text-sm text-muted mb-4">
+                    Atomic backup of both settings and certificates, captured together so they can never drift out of sync.
+                </p>
+                <div class="flex flex-col sm:flex-row gap-3">
+                    <button type="button" onclick="createBackup('unified', this)" class="btn-cta w-full sm:w-auto">
+                        <i class="fas fa-archive mr-2"></i>
+                        Create Unified Backup
+                    </button>
+                    <button type="button" onclick="CertMate.copyDiagnosticsSnapshot(this)" class="btn btn-secondary w-full sm:w-auto">
+                        <i class="fas fa-clipboard mr-2"></i>
+                        Copy Diagnostic Snapshot
+                    </button>
                 </div>
-
-                <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
-                    <h4 class="font-medium text-foreground mb-3 flex items-center">
-                        <i class="fas fa-info-circle mr-2 text-blue-500"></i>
-                        Backup Information
-                    </h4>
-                    <div class="space-y-2 text-sm text-muted">
-                        <div class="flex items-start">
-                            <i class="fas fa-check text-green-500 mr-2 mt-0.5 text-xs"></i>
-                            <span><strong>Unified Backup:</strong> Atomic backup of both settings and certificates ensuring data consistency and preventing configuration mismatches</span>
-                        </div>
-                        <div class="flex items-start mt-3 pt-2 border-t border-border">
-                            <i class="fas fa-shield-alt text-yellow-500 mr-2 mt-0.5 text-xs"></i>
-                            <span class="text-xs">Backups contain sensitive data. Keep them secure and stored safely.</span>
-                        </div>
-                    </div>
-                </div>
+                <p class="text-xs text-muted mt-3 flex items-start">
+                    <i class="fas fa-shield-alt text-yellow-500 mr-1.5 mt-0.5"></i>
+                    Backups contain sensitive data (private keys, tokens). Store them securely.
+                </p>
             </div>
 
             <!-- Existing Backups Section -->
@@ -154,7 +137,7 @@
                             Unified Backups (Recommended)
                             <span class="text-xs bg-success-surface text-success-strong px-2 py-1 rounded-full ml-2">Atomic</span>
                         </h5>
-                        <div id="unified-backup-list" class="space-y-2 max-h-64 overflow-y-auto">
+                        <div id="unified-backup-list" class="space-y-2">
                             <div class="text-sm text-muted text-center py-4">
                                 Loading unified backups...
                             </div>

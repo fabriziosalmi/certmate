@@ -59,6 +59,14 @@ def register_ui_routes(app, managers, require_web_auth, auth_manager):
         """Activity page"""
         return render_template('activity.html')
 
+    @app.route('/notifications')
+    @auth_manager.require_role('viewer')
+    def notifications_page():
+        """Notifications page — certificate expiry warnings, with client-side
+        snooze. Warnings are derived in the browser from /api/certificates
+        (same source as the top-bar bell badge), so no server-side state."""
+        return render_template('notifications.html')
+
     @app.route('/redoc')
     @auth_manager.require_role('viewer')
     def redoc_page():

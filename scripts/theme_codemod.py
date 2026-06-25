@@ -160,6 +160,12 @@ _LITERAL_PAIRS = [
 _DARK_ONLY_PAIRS = [
     (re.compile(r"(?<![\w:/-])dark:bg-gray-700\s+dark:text-white(?![\w/-])"),
      "bg-input text-foreground"),
+    # Card/label text that only overrode the dark side (`font-medium
+    # dark:text-white`), relying on inherited gray-900 in light mode. The
+    # foreground token is gray-900 / pure-white, so this collapses with ZERO
+    # value shift while making the light colour explicit instead of inherited.
+    (re.compile(r"(?<![\w:/-])font-medium\s+dark:text-white(?![\w/-])"),
+     "font-medium text-foreground"),
 ]
 
 

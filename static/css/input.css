@@ -210,6 +210,21 @@ summary:focus-visible {
            focus:ring-primary focus:ring-offset-white
            dark:focus:ring-offset-gray-800;
   }
+  /* Page-level call-to-action — the gradient pill used for the single most
+     important action on a page (Create New Certificate on the dashboard,
+     Create Unified Backup on the backup tab). Self-contained: use bare, not
+     paired with .btn. One per view so the primary action reads the same
+     everywhere. */
+  .btn-cta {
+    @apply inline-flex items-center justify-center
+           px-5 py-2.5 text-sm font-medium rounded-lg shadow-sm
+           border border-transparent text-white
+           bg-gradient-to-r from-primary to-secondary
+           hover:from-secondary hover:to-primary
+           focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-primary
+           transition-all duration-200
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
   .btn-secondary {
     @apply bg-input
            text-label

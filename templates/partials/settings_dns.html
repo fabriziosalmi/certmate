@@ -12,7 +12,7 @@
                                 <div class="px-4 py-2 border-2 border-border rounded-lg transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                     <div class="flex items-center gap-2">
                                         <i class="fas fa-globe-americas text-blue-500"></i>
-                                        <span class="text-sm font-medium dark:text-white">DNS-01</span>
+                                        <span class="text-sm font-medium text-foreground">DNS-01</span>
                                     </div>
                                     <p class="text-xs text-muted mt-1">Requires DNS provider credentials. Supports wildcards.</p>
                                 </div>
@@ -22,7 +22,7 @@
                                 <div class="px-4 py-2 border-2 border-border rounded-lg transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                     <div class="flex items-center gap-2">
                                         <i class="fas fa-globe text-green-500"></i>
-                                        <span class="text-sm font-medium dark:text-white">HTTP-01</span>
+                                        <span class="text-sm font-medium text-foreground">HTTP-01</span>
                                     </div>
                                     <p class="text-xs text-muted mt-1">Domain must point to this server. No wildcards.</p>
                                 </div>
@@ -50,7 +50,7 @@
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
                                             <i class="fab fa-cloudflare text-lg text-orange-500 mb-1"></i>
-                                            <div class="text-xs font-medium dark:text-white">Cloudflare</div>
+                                            <div class="text-xs font-medium text-foreground">Cloudflare</div>
                                             <div class="text-xs text-muted mt-1" id="cloudflare-status">Not configured</div>
                                             <!-- Multi-account indicator -->
                                             <div class="text-xs text-info-fg mt-1 hidden" id="cloudflare-accounts">
@@ -65,7 +65,7 @@
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
                                             <i class="fab fa-aws text-lg text-orange-400 mb-1"></i>
-                                            <div class="text-xs font-medium dark:text-white">Route53</div>
+                                            <div class="text-xs font-medium text-foreground">Route53</div>
                                             <div class="text-xs text-muted mt-1" id="route53-status">Not configured</div>
                                             <!-- Multi-account indicator -->
                                             <div class="text-xs text-info-fg mt-1 hidden" id="route53-accounts">
@@ -80,7 +80,7 @@
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
                                             <i class="fab fa-digital-ocean text-lg text-blue-600 mb-1"></i>
-                                            <div class="text-xs font-medium dark:text-white">DigitalOcean</div>
+                                            <div class="text-xs font-medium text-foreground">DigitalOcean</div>
                                             <div class="text-xs text-muted mt-1" id="digitalocean-status">Not configured</div>
                                             <!-- Multi-account indicator -->
                                             <div class="text-xs text-info-fg mt-1 hidden" id="digitalocean-accounts">
@@ -95,7 +95,7 @@
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
                                             <i class="fab fa-microsoft text-lg text-blue-600 mb-1"></i>
-                                            <div class="text-xs font-medium dark:text-white">Azure DNS</div>
+                                            <div class="text-xs font-medium text-foreground">Azure DNS</div>
                                             <div class="text-xs text-muted mt-1" id="azure-status">Not configured</div>
                                             <!-- Multi-account indicator -->
                                             <div class="text-xs text-info-fg mt-1 hidden" id="azure-accounts">
@@ -110,7 +110,7 @@
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
                                             <i class="fab fa-google text-lg text-blue-500 mb-1"></i>
-                                            <div class="text-xs font-medium dark:text-white">Google DNS</div>
+                                            <div class="text-xs font-medium text-foreground">Google DNS</div>
                                             <div class="text-xs text-muted mt-1" id="google-status">Not configured</div>
                                             <!-- Multi-account indicator -->
                                             <div class="text-xs text-info-fg mt-1 hidden" id="google-accounts">
@@ -125,7 +125,7 @@
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
                                             <i class="fas fa-server text-lg text-muted mb-1"></i>
-                                            <div class="text-xs font-medium dark:text-white">PowerDNS</div>
+                                            <div class="text-xs font-medium text-foreground">PowerDNS</div>
                                             <div class="text-xs text-muted mt-1" id="powerdns-status">Not configured</div>
                                             <!-- Multi-account indicator -->
                                             <div class="text-xs text-info-fg mt-1 hidden" id="powerdns-accounts">
@@ -140,7 +140,7 @@
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
                                             <i class="fas fa-exchange-alt text-lg text-muted mb-1"></i>
-                                            <div class="text-xs font-medium dark:text-white">RFC2136</div>
+                                            <div class="text-xs font-medium text-foreground">RFC2136</div>
                                             <div class="text-xs text-muted mt-1" id="rfc2136-status">Not configured</div>
                                             <!-- Multi-account indicator -->
                                             <div class="text-xs text-info-fg mt-1 hidden" id="rfc2136-accounts">
@@ -166,7 +166,7 @@
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
                                             <i class="fas fa-cloud text-lg text-green-600 mb-1"></i>
-                                            <div class="text-xs font-medium dark:text-white">Akamai Connected Cloud (Linode)</div>
+                                            <div class="text-xs font-medium text-foreground">Akamai Connected Cloud (Linode)</div>
                                             <div class="text-xs text-muted mt-1" id="linode-status">Not configured</div>
                                         </div>
                                     </div>
@@ -176,7 +176,7 @@
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
                                             <i class="fas fa-cloud text-lg text-orange-600 mb-1"></i>
-                                            <div class="text-xs font-medium dark:text-white">Akamai Edge DNS</div>
+                                            <div class="text-xs font-medium text-foreground">Akamai Edge DNS</div>
                                             <div class="text-xs text-muted mt-1" id="edgedns-status">Not configured</div>
                                         </div>
                                     </div>
@@ -186,7 +186,7 @@
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
                                             <i class="fas fa-cloud text-lg text-blue-600 mb-1"></i>
-                                            <div class="text-xs font-medium dark:text-white">Vultr</div>
+                                            <div class="text-xs font-medium text-foreground">Vultr</div>
                                             <div class="text-xs text-muted mt-1" id="vultr-status">Not configured</div>
                                         </div>
                                     </div>
@@ -196,7 +196,7 @@
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
                                             <i class="fas fa-server text-lg text-red-600 mb-1"></i>
-                                            <div class="text-xs font-medium dark:text-white">Hetzner</div>
+                                            <div class="text-xs font-medium text-foreground">Hetzner</div>
                                             <div class="text-xs text-muted mt-1" id="hetzner-status">Not configured</div>
                                         </div>
                                     </div>
@@ -206,7 +206,7 @@
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
                                             <i class="fas fa-server text-lg text-red-600 mb-1"></i>
-                                            <div class="text-xs font-medium dark:text-white">Hetzner Cloud</div>
+                                            <div class="text-xs font-medium text-foreground">Hetzner Cloud</div>
                                             <div class="text-xs text-muted mt-1" id="hetzner-cloud-status">Not configured</div>
                                         </div>
                                     </div>
@@ -216,7 +216,7 @@
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
                                             <i class="fas fa-cloud text-lg text-blue-600 mb-1"></i>
-                                            <div class="text-xs font-medium dark:text-white">ArvanCloud</div>
+                                            <div class="text-xs font-medium text-foreground">ArvanCloud</div>
                                             <div class="text-xs text-muted mt-1" id="arvancloud-status">Not configured</div>
                                         </div>
                                     </div>
@@ -226,7 +226,7 @@
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
                                             <i class="fas fa-cloud text-lg text-purple-600 mb-1"></i>
-                                            <div class="text-xs font-medium dark:text-white">Infomaniak</div>
+                                            <div class="text-xs font-medium text-foreground">Infomaniak</div>
                                             <div class="text-xs text-muted mt-1" id="infomaniak-status">Not configured</div>
                                         </div>
                                     </div>
@@ -236,7 +236,7 @@
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
                                             <i class="fas fa-network-wired text-lg text-green-600 mb-1"></i>
-                                            <div class="text-xs font-medium dark:text-white">ACME-DNS</div>
+                                            <div class="text-xs font-medium text-foreground">ACME-DNS</div>
                                             <div class="text-xs text-muted mt-1" id="acme-dns-status">Not configured</div>
                                         </div>
                                     </div>
@@ -246,7 +246,7 @@
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
                                             <i class="fas fa-shield-alt text-lg text-green-600 mb-1"></i>
-                                            <div class="text-xs font-medium dark:text-white">deSEC</div>
+                                            <div class="text-xs font-medium text-foreground">deSEC</div>
                                             <div class="text-xs text-muted mt-1" id="desec-status">Not configured</div>
                                         </div>
                                     </div>
@@ -256,7 +256,7 @@
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
                                             <i class="fas fa-cloud text-lg text-purple-600 mb-1"></i>
-                                            <div class="text-xs font-medium dark:text-white">Scaleway</div>
+                                            <div class="text-xs font-medium text-foreground">Scaleway</div>
                                             <div class="text-xs text-muted mt-1" id="scaleway-status">Not configured</div>
                                         </div>
                                     </div>
@@ -266,7 +266,7 @@
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
                                             <i class="fas fa-globe text-lg text-orange-600 mb-1"></i>
-                                            <div class="text-xs font-medium dark:text-white">Gandi</div>
+                                            <div class="text-xs font-medium text-foreground">Gandi</div>
                                             <div class="text-xs text-muted mt-1" id="gandi-status">Not configured</div>
                                         </div>
                                     </div>
@@ -276,7 +276,7 @@
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
                                             <i class="fas fa-server text-lg text-purple-600 mb-1"></i>
-                                            <div class="text-xs font-medium dark:text-white">OVH</div>
+                                            <div class="text-xs font-medium text-foreground">OVH</div>
                                             <div class="text-xs text-muted mt-1" id="ovh-status">Not configured</div>
                                         </div>
                                     </div>
@@ -286,7 +286,7 @@
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
                                             <i class="fas fa-shopping-cart text-lg text-red-600 mb-1"></i>
-                                            <div class="text-xs font-medium dark:text-white">Namecheap</div>
+                                            <div class="text-xs font-medium text-foreground">Namecheap</div>
                                             <div class="text-xs text-muted mt-1" id="namecheap-status">Not configured</div>
                                         </div>
                                     </div>
@@ -296,7 +296,7 @@
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
                                             <i class="fas fa-paw text-lg text-pink-600 mb-1"></i>
-                                            <div class="text-xs font-medium dark:text-white">Porkbun</div>
+                                            <div class="text-xs font-medium text-foreground">Porkbun</div>
                                             <div class="text-xs text-muted mt-1" id="porkbun-status">Not configured</div>
                                         </div>
                                     </div>
@@ -306,7 +306,7 @@
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
                                             <i class="fas fa-globe text-lg text-green-600 mb-1"></i>
-                                            <div class="text-xs font-medium dark:text-white">GoDaddy</div>
+                                            <div class="text-xs font-medium text-foreground">GoDaddy</div>
                                             <div class="text-xs text-muted mt-1" id="godaddy-status">Not configured</div>
                                         </div>
                                     </div>
@@ -316,7 +316,7 @@
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
                                             <i class="fas fa-cogs text-lg text-green-600 mb-1"></i>
-                                            <div class="text-xs font-medium dark:text-white">DNS Made Easy</div>
+                                            <div class="text-xs font-medium text-foreground">DNS Made Easy</div>
                                             <div class="text-xs text-muted mt-1" id="dnsmadeeasy-status">Not configured</div>
                                         </div>
                                     </div>
@@ -326,7 +326,7 @@
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
                                             <i class="fas fa-network-wired text-lg text-indigo-600 mb-1"></i>
-                                            <div class="text-xs font-medium dark:text-white">NS1</div>
+                                            <div class="text-xs font-medium text-foreground">NS1</div>
                                             <div class="text-xs text-muted mt-1" id="nsone-status">Not configured</div>
                                         </div>
                                     </div>
@@ -336,7 +336,7 @@
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
                                             <i class="fas fa-bolt text-lg text-yellow-600 mb-1"></i>
-                                            <div class="text-xs font-medium dark:text-white">Hurricane Electric</div>
+                                            <div class="text-xs font-medium text-foreground">Hurricane Electric</div>
                                             <div class="text-xs text-muted mt-1" id="he-ddns-status">Not configured</div>
                                         </div>
                                     </div>
@@ -346,7 +346,7 @@
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
                                             <i class="fas fa-sync-alt text-lg text-purple-600 mb-1"></i>
-                                            <div class="text-xs font-medium dark:text-white">Dynu</div>
+                                            <div class="text-xs font-medium text-foreground">Dynu</div>
                                             <div class="text-xs text-muted mt-1" id="dynudns-status">Not configured</div>
                                         </div>
                                     </div>
@@ -356,7 +356,7 @@
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
                                             <i class="fas fa-feather text-lg text-yellow-500 mb-1"></i>
-                                            <div class="text-xs font-medium dark:text-white">DuckDNS</div>
+                                            <div class="text-xs font-medium text-foreground">DuckDNS</div>
                                             <div class="text-xs text-muted mt-1" id="duckdns-status">Not configured</div>
                                         </div>
                                     </div>
@@ -366,7 +366,7 @@
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
                                             <i class="fas fa-terminal text-lg text-gray-600 mb-1"></i>
-                                            <div class="text-xs font-medium dark:text-white">Custom Script</div>
+                                            <div class="text-xs font-medium text-foreground">Custom Script</div>
                                             <div class="text-xs text-muted mt-1" id="custom-script-status">Not configured</div>
                                         </div>
                                     </div>

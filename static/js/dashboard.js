@@ -166,27 +166,52 @@
 
         var statsContainer = document.getElementById('statsCards');
 
-        function statCard(label, value, colorClass, iconClass, valueId, subtitle) {
-            // Compact layout: label + icon on a single inline row, value
-            // underneath. Drops vertical footprint by ~40% vs. the
-            // previous icon-on-the-left card while keeping all four
-            // metrics legible side-by-side on md+ screens.
-            return '<div class="bg-surface overflow-hidden shadow-card rounded-xl hover:shadow-elevated transition-shadow duration-200">' +
-                '<div class="px-3 py-2">' +
-                '<div class="flex items-center justify-between gap-2">' +
-                '<p class="text-xs font-medium text-muted uppercase tracking-wider">' + CertMate.escapeHtml(label) + '</p>' +
-                '<i class="fas ' + iconClass + ' ' + colorClass + ' text-sm flex-shrink-0"></i>' +
+        // Reactive KPI tile: a hero number with the label above it and a
+        // discreet icon accent, plus a left accent bar + surface tint that
+        // light up only when the metric needs action — so the most urgent
+        // number draws the eye the moment the dashboard loads. The old layout
+        // pushed the label and icon to opposite corners (justify-between) with
+        // no link between the three elements; this groups them and adds meaning.
+        function statCard(label, value, state, iconClass, valueId, subtitle) {
+            var S = ({
+                headline: { bar: 'bg-blue-500', val: 'text-foreground', bg: 'bg-surface' },
+                neutral:  { bar: 'bg-gray-200 dark:bg-gray-700', val: 'text-muted', bg: 'bg-surface' },
+                good:     { bar: 'bg-green-500', val: 'text-success-fg', bg: 'bg-surface' },
+                warn:     { bar: 'bg-yellow-500', val: 'text-warning-fg', bg: 'bg-warning-surface' },
+                danger:   { bar: 'bg-red-500', val: 'text-danger-fg', bg: 'bg-danger-surface' },
+                info:     { bar: 'bg-indigo-500', val: 'text-indigo-600 dark:text-indigo-400', bg: 'bg-surface' }
+            })[state] || {};
+            return '<div class="relative overflow-hidden rounded-xl shadow-card hover:shadow-elevated transition-shadow duration-200 ' + S.bg + '">' +
+                '<span class="absolute inset-y-0 left-0 w-1 ' + S.bar + '" aria-hidden="true"></span>' +
+                '<div class="pl-4 pr-3 py-3">' +
+                '<div class="flex items-start justify-between gap-2">' +
+                '<p class="text-[11px] font-semibold text-muted uppercase tracking-wider mt-0.5">' + CertMate.escapeHtml(label) + '</p>' +
+                '<i class="fas ' + iconClass + ' text-sm flex-shrink-0"></i>' +
                 '</div>' +
-                '<p class="text-lg font-bold ' + colorClass + ' tabular-nums leading-none mt-1"' + (valueId ? ' id="' + valueId + '"' : '') + '>' + value + '</p>' +
-                (subtitle ? '<p class="text-xs text-gray-400 dark:text-gray-500 leading-none mt-1">' + subtitle + '</p>' : '') +
+                '<p class="text-3xl font-bold ' + S.val + ' tabular-nums leading-none mt-1.5"' + (valueId ? ' id="' + valueId + '"' : '') + '>' + value + '</p>' +
+                (subtitle ? '<p class="text-xs text-muted mt-1.5">' + CertMate.escapeHtml(subtitle) + '</p>' : '') +
                 '</div></div>';
         }
 
+        // The third tile surfaces the MOST urgent lifecycle state. It becomes a
+        // red "Expired" tile when any cert has lapsed (expired was computed but
+        // never shown — those certs were invisible on the dashboard), an amber
+        // "Expiring" tile within 30 days, else a calm neutral one.
+        var attn;
+        if (expired > 0) {
+            attn = ['Expired', expired, 'danger', 'fa-circle-xmark text-danger-fg',
+                    expiring > 0 ? (expiring + ' expiring soon') : 'renew now'];
+        } else if (expiring > 0) {
+            attn = ['Expiring', expiring, 'warn', 'fa-triangle-exclamation text-warning-fg', 'within 30 days'];
+        } else {
+            attn = ['Expiring', 0, 'neutral', 'fa-triangle-exclamation text-muted', 'none expiring'];
+        }
+
         statsContainer.innerHTML = [
-            statCard('Total', total, 'text-foreground', 'fa-certificate text-blue-500 dark:text-blue-400'),
-            statCard('Valid', valid, valid > 0 ? 'text-success-fg' : 'text-muted', 'fa-check-circle text-green-500 dark:text-green-400', null, valid + ' of ' + total),
-            statCard('Expiring', expiring, 'text-warning-fg', 'fa-exclamation-triangle text-yellow-500 dark:text-yellow-400'),
-            statCard('Deployed', '<span class="text-gray-300 dark:text-gray-600 animate-pulse">...</span>', 'text-indigo-600 dark:text-indigo-400', 'fa-globe text-indigo-500 dark:text-indigo-400', 'deploymentCount')
+            statCard('Total', total, 'headline', 'fa-certificate text-blue-500 dark:text-blue-400', null, total === 1 ? 'certificate' : 'certificates'),
+            statCard('Valid', valid, valid > 0 ? 'good' : 'neutral', 'fa-circle-check ' + (valid > 0 ? 'text-success-fg' : 'text-muted'), null, valid + ' of ' + total + ' healthy'),
+            statCard(attn[0], attn[1], attn[2], attn[3], null, attn[4]),
+            statCard('Deployed', '<span class="text-gray-300 dark:text-gray-600 animate-pulse">...</span>', 'info', 'fa-globe text-indigo-500 dark:text-indigo-400', 'deploymentCount', 'reachable')
         ].join('');
     }
 
@@ -353,6 +378,19 @@
             if (field === 'domain') return dir * a.domain.localeCompare(b.domain);
             if (field === 'status') return dir * ((a.days_until_expiry || 0) - (b.days_until_expiry || 0));
             if (field === 'expiry') return dir * ((a.days_until_expiry || 0) - (b.days_until_expiry || 0));
+            if (field === 'provider') {
+                var pa = (a.dns_provider || '').toLowerCase();
+                var pb = (b.dns_provider || '').toLowerCase();
+                if (pa !== pb) {
+                    // Certs with no provider sort to the bottom regardless of direction.
+                    if (!pa) return 1;
+                    if (!pb) return -1;
+                    return dir * pa.localeCompare(pb);
+                }
+                // Tiebreaker: within a provider group, order by expiry (most
+                // overdue / soonest first), independent of the chosen direction.
+                return (a.days_until_expiry || 0) - (b.days_until_expiry || 0);
+            }
             return 0;
         });
     }
@@ -382,46 +420,51 @@
         // app is down" when it only means the target endpoint failed a probe.
         var roleLabel = isBrowser ? 'Browser' : 'Server';
         var roleIcon = isBrowser ? 'fa-globe' : 'fa-server';
-        var statusClass;
-        var statusIcon = roleIcon;
-        var statusText;
+        // chipClass: subtle surface + status-coloured foreground (the role icon
+        // and the status glyph both inherit it). statusIcon: a small glyph that
+        // encodes the state so it is not conveyed by colour alone (WCAG 1.4.1).
+        var chipClass, statusIcon, statusText;
 
         if (isBrowser) {
             if (result && result.reachable) {
-                statusClass = 'bg-info-surface text-blue-800 dark:text-blue-400';
-                statusText = 'Reachable';
+                chipClass = 'bg-success-surface text-success-fg'; statusIcon = 'fa-check'; statusText = 'Reachable';
             } else if (result && result.reachable === false) {
-                statusClass = 'bg-danger-surface text-red-800 dark:text-red-400';
-                statusText = 'Unreachable';
+                chipClass = 'bg-danger-surface text-danger-fg'; statusIcon = 'fa-xmark'; statusText = 'Unreachable';
             } else {
-                statusClass = 'bg-surface-2 text-muted';
-                statusText = 'Not Checked';
+                chipClass = 'bg-surface-2 text-muted'; statusIcon = 'fa-minus'; statusText = 'Not Checked';
             }
         } else {
             if (result && result.error === 'backend-unavailable') {
-                statusClass = 'bg-surface-2 text-muted';
-                statusIcon = 'fa-exclamation-circle';
-                statusText = 'Unavailable';
+                chipClass = 'bg-surface-2 text-muted'; statusIcon = 'fa-exclamation'; statusText = 'Unavailable';
             } else if (result && result.deployed && result.certificate_match === true) {
-                statusClass = 'bg-success-surface text-green-800 dark:text-green-400';
-                statusText = 'Deployed';
+                chipClass = 'bg-success-surface text-success-fg'; statusIcon = 'fa-check'; statusText = 'Deployed';
             } else if (result && result.reachable && result.certificate_match === false) {
-                statusClass = 'bg-warning-surface text-yellow-800 dark:text-yellow-400';
-                statusText = 'Wrong Cert';
+                chipClass = 'bg-warning-surface text-warning-fg'; statusIcon = 'fa-triangle-exclamation'; statusText = 'Wrong Cert';
             } else if (result && result.reachable === false) {
-                statusClass = 'bg-danger-surface text-red-800 dark:text-red-400';
-                statusText = 'Unreachable';
+                chipClass = 'bg-danger-surface text-danger-fg'; statusIcon = 'fa-xmark'; statusText = 'Unreachable';
             } else {
-                statusClass = 'bg-surface-2 text-muted';
-                statusText = 'Unknown';
+                chipClass = 'bg-surface-2 text-muted'; statusIcon = 'fa-minus'; statusText = 'Unknown';
             }
         }
 
         return {
-            className: 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ' + statusClass,
-            icon: statusIcon,
+            roleIcon: roleIcon,
+            statusIcon: statusIcon,
+            chipClass: chipClass,
             text: roleLabel + ': ' + statusText
         };
+    }
+
+    // Shared chip presentation so the initial render (deploymentBadgeHtml) and
+    // the post-probe update (updateDeploymentUI) always produce identical
+    // markup — otherwise the cell flips from icon chip to stale text after a
+    // deployment check.
+    function deploymentChipClass(display) {
+        return 'inline-flex items-center gap-1 px-1.5 py-1 rounded-md ' + display.chipClass;
+    }
+    function deploymentChipInner(display) {
+        return '<i class="fas ' + display.roleIcon + '" aria-hidden="true"></i>' +
+            '<i class="fas ' + display.statusIcon + ' text-[0.65rem]" aria-hidden="true"></i>';
     }
 
     function deploymentBadgeHtml(role, result, safeDomain, domainId) {
@@ -439,20 +482,28 @@
         if (result && result.timestamp) {
             title += ' at ' + result.timestamp;
         }
+        // Compact icon chip: role glyph + status glyph side by side. The full
+        // "Role: Status …" string lives in title (tooltip) and aria-label, and
+        // role="img" makes screen readers announce it as a single labelled unit.
         // No `id` here on purpose: this badge renders in up to three places per
         // domain (desktop cell, mobile meta, detail panel), so an id would be
         // duplicated (invalid HTML). The data-deployment-* attributes identify
         // it for updates; the deployed-count reads deploymentCache directly.
-        return '<span data-deployment-domain="' + safeDomain + '" data-deployment-role="' + role + '" title="' + escapeHtml(title) + '" class="' + display.className + '"><i class="fas ' + display.icon + ' mr-1"></i>' + display.text + '</span>';
+        return '<span data-deployment-domain="' + safeDomain + '" data-deployment-role="' + role + '" role="img"' +
+            ' title="' + escapeHtml(title) + '" aria-label="' + escapeHtml(title) + '"' +
+            ' class="' + deploymentChipClass(display) + '">' +
+            deploymentChipInner(display) +
+            '</span>';
     }
 
-    // Build deployment status badges HTML
+    // Build deployment status badges HTML — two compact icon chips (server,
+    // browser) on a single horizontal row.
     function deploymentBadgesHtml(cert) {
         var safeDomain = escapeHtml(cert.domain);
         var domainId = safeDomain.replace(/\./g, '-');
         var cachedStatus = deploymentCache.get(cert.domain) || {};
         var browserStatus = cachedStatus.browser || null;
-        return '<div class="flex flex-wrap items-center gap-2">' +
+        return '<div class="flex items-center gap-1.5">' +
             deploymentBadgeHtml('backend', cachedStatus, safeDomain, domainId) +
             deploymentBadgeHtml('browser', browserStatus, safeDomain, domainId) +
             '</div>';
@@ -461,6 +512,19 @@
     function providerDisplayName(provider) {
         var safeProvider = escapeHtml(provider || '');
         return safeProvider ? safeProvider.charAt(0).toUpperCase() + safeProvider.slice(1) : '';
+    }
+
+    // Provider label with its brand logo (or monogram) inline, shared by the
+    // table Provider column and the detail modal. `label` must already be
+    // escaped (providerDisplayName output). Returns '' when there's no label;
+    // falls back to the bare label when no icon exists for the provider.
+    function providerCellHtml(provider, label, wrapClass) {
+        if (!label) return '';
+        var icon = window.providerIconHtml
+            ? window.providerIconHtml(provider, label, { sizeCls: 'h-4 w-4', textCls: 'text-[8px]' })
+            : null;
+        return '<span class="inline-flex items-center gap-1.5 ' + (wrapClass || '') + '">' +
+            (icon || '') + '<span>' + label + '</span></span>';
     }
 
     function displayCertificates(certificates) {
@@ -547,7 +611,7 @@
                     <td class="px-6 py-4 max-w-0"><div class="text-sm font-medium text-foreground truncate">${cert.domain}</div></td>
                     <td class="px-4 py-4 whitespace-nowrap"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-500/10 text-danger-fg ring-1 ring-inset ring-red-500/20"><i class="fas fa-times-circle mr-1"></i>Not Found</span></td>
                     <td class="px-4 py-4 whitespace-nowrap hidden md:table-cell text-sm text-muted">\u2014</td>
-                    <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">${providerLabel || '\u2014'}</td>
+                    <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">${providerLabel ? rowRaw(providerCellHtml(cert.dns_provider, providerLabel)) : '\u2014'}</td>
                     <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell">\u2014</td>
                     <td class="px-4 py-4 whitespace-nowrap text-right">
                         <div class="flex items-center justify-end gap-1">
@@ -571,7 +635,15 @@
 
             var expiryDate = new Date(cert.expiry_date);
             var expiryStr = expiryDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-            var daysClass = isExpired ? 'text-danger-fg' : isExpiringSoon ? 'text-warning-fg' : 'text-muted';
+            // The day counter is the focal value (large, status-coloured); the
+            // absolute date drops to a smaller secondary line. Status colour is
+            // carried onto the counter itself — green for healthy so the colour
+            // encodes the state, not just the expired/expiring alarm cases.
+            var daysClass = isExpired ? 'text-danger-fg' : isExpiringSoon ? 'text-warning-fg' : 'text-success-fg';
+            var absDays = Math.abs(cert.days_until_expiry);
+            var daysText = isExpired
+                ? absDays + (absDays === 1 ? ' day ago' : ' days ago')
+                : cert.days_until_expiry + (cert.days_until_expiry === 1 ? ' day left' : ' days left');
 
             // Inline subtle glyph instead of a rounded blue panel — the
             // rounded panel read like an interactive control to users
@@ -600,10 +672,10 @@
             // the meta block, reading as a card on phones without breaking
             // the table on bigger screens.
             var mobileExpiryLine = (daysKnown && cert.expiry_date)
-                ? rowRaw(rowHtml`<div class="flex items-center text-xs ${rowRaw(daysClass)}"><i class="fas fa-clock mr-1.5 w-3 shrink-0" aria-hidden="true"></i><span class="truncate">${expiryStr} · ${rowRaw(String(cert.days_until_expiry))} days left</span></div>`)
+                ? rowRaw(rowHtml`<div class="flex items-center text-xs"><i class="fas fa-clock mr-1.5 w-3 shrink-0 text-muted" aria-hidden="true"></i><span class="truncate"><span class="font-semibold ${rowRaw(daysClass)}">${daysText}</span><span class="text-muted"> · ${expiryStr}</span></span></div>`)
                 : false;
             var mobileProviderLine = providerLabel
-                ? rowRaw(rowHtml`<div class="flex items-center text-xs text-muted"><i class="fas fa-server mr-1.5 w-3 shrink-0" aria-hidden="true"></i><span class="truncate">${rowRaw(providerLabel)}</span></div>`)
+                ? rowRaw(rowHtml`<div class="flex items-center text-xs text-muted">${rowRaw(providerCellHtml(cert.dns_provider, providerLabel))}</div>`)
                 : false;
             var mobileDeploymentLine = rowRaw(rowHtml`<div class="flex items-start text-xs text-muted"><i class="fas fa-rocket mr-1.5 mt-0.5 w-3 shrink-0" aria-hidden="true"></i><div class="flex-1 min-w-0">${rowRaw(deploymentBadgesHtml(cert))}</div></div>`);
             var mobileMeta = rowRaw(rowHtml`<div class="md:hidden mt-2 pt-2 border-t border-gray-100 dark:border-gray-700/50 space-y-1">${mobileExpiryLine}${mobileProviderLine}${mobileDeploymentLine}</div>`);
@@ -624,8 +696,8 @@
                     </div>
                 </td>
                 <td class="px-4 py-4 whitespace-nowrap"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${rowRaw(statusClass)}"><i class="fas ${rowRaw(statusIcon)} mr-1"></i>${statusText}</span></td>
-                <td class="px-4 py-4 whitespace-nowrap hidden md:table-cell"><div class="text-sm text-foreground">${expiryStr}</div><div class="text-xs ${rowRaw(daysClass)}">${cert.days_until_expiry} days</div></td>
-                <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">${rowRaw(providerLabel) || '—'}</td>
+                <td class="px-4 py-4 whitespace-nowrap hidden md:table-cell"><div class="text-sm font-semibold ${rowRaw(daysClass)}">${daysText}</div><div class="text-xs text-muted mt-0.5">${expiryStr}</div></td>
+                <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">${providerLabel ? rowRaw(providerCellHtml(cert.dns_provider, providerLabel)) : '—'}</td>
                 <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell">${rowRaw(deploymentBadgesHtml(cert))}</td>
                 <td class="px-4 py-4 whitespace-nowrap text-right">
                     <div class="flex items-center justify-end gap-1">
@@ -700,6 +772,31 @@
         }
     }
 
+    // Element focused before the detail modal opened, so focus can be
+    // restored to the triggering row when it closes.
+    var _lastDetailFocus = null;
+
+    // Inline auto-renew toggle for the detail modal (replaces the old text row +
+    // separate "Disable Auto-Renew" button). role="switch" for a11y; the click
+    // routes through toggleAutoRenew, which confirms, persists, and reloads.
+    function autoRenewSwitchHtml(domain, on) {
+        return '<button type="button" role="switch" aria-checked="' + (on ? 'true' : 'false') + '" ' +
+            'aria-label="Auto-renew" title="' + (on ? 'Auto-renew on — click to disable' : 'Auto-renew off — click to enable') + '" ' +
+            'onclick="toggleAutoRenew(\'' + domain + '\', ' + (on ? 'true' : 'false') + ')" ' +
+            'class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ' + (on ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600') + '">' +
+            '<span class="inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ' + (on ? 'translate-x-5' : 'translate-x-1') + '"></span>' +
+            '</button>';
+    }
+
+    // Copy the detail modal's domain (the header value) to the clipboard.
+    window.copyDetailDomain = function () {
+        var el = document.getElementById('detailDomain');
+        if (!el || !navigator.clipboard) return;
+        navigator.clipboard.writeText(el.textContent.trim()).then(function () {
+            if (CertMate.toast) CertMate.toast('Domain copied to clipboard', 'info');
+        });
+    };
+
     function openCertDetail(domain) {
         var cert = allCertificates.find(function (c) { return c.domain === domain; });
         if (!cert) return;
@@ -724,6 +821,12 @@
             return '<div class="break-all">' + escapeHtml(san) + '</div>';
         }).join('');
 
+        // Provider cells render the brand logo (or monogram) inline next to the
+        // name (right-aligned in the detail grid), matching the table column
+        // and DNS selector for consistency.
+        var providerCell = providerCellHtml(cert.dns_provider, providerLabel, 'justify-end');
+        var aliasProviderCell = providerCellHtml(cert.alias_dns_provider, aliasProviderLabel, 'justify-end');
+
         if (!cert.exists) {
             content.innerHTML = '<div class="text-center py-8"><i class="fas fa-exclamation-triangle text-red-400 text-3xl mb-3"></i>' +
                 '<p class="text-muted mb-6">Certificate not found on disk.</p>' +
@@ -741,79 +844,123 @@
             else if (isExpiringSoon) { statusClass = 'text-warning-fg'; statusText = 'Expiring Soon'; }
             else { statusClass = 'text-success-fg'; statusText = 'Valid'; }
 
+            var absDays = Math.abs(cert.days_until_expiry);
+            var daysText = isExpired
+                ? absDays + (absDays === 1 ? ' day ago' : ' days ago')
+                : cert.days_until_expiry + (cert.days_until_expiry === 1 ? ' day left' : ' days left');
+            var expiryStr = expiryDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            var bannerBg = isExpired ? 'bg-danger-surface' : isExpiringSoon ? 'bg-warning-surface' : 'bg-success-surface';
+            var bannerIcon = isExpired ? 'fa-circle-xmark' : isExpiringSoon ? 'fa-triangle-exclamation' : 'fa-circle-check';
+            var autoOn = cert.auto_renew !== false;
+
+            // Quick-action icon button — same glyphs as the dashboard table row
+            // actions so the action vocabulary reads identically everywhere; the
+            // label lives in the tooltip + aria-label.
+            function actIcon(onclick, icon, hover, title) {
+                return '<button type="button" onclick="' + onclick + '" title="' + title + '" aria-label="' + title + '" ' +
+                    'class="inline-flex items-center justify-center w-10 h-10 rounded-lg border border-border bg-input text-muted hover:text-' + hover + '-600 dark:hover:text-' + hover + '-400 hover:bg-hover hover:border-border-strong transition">' +
+                    '<i class="fas ' + icon + '"></i></button>';
+            }
+            function detailRow(label, valueHtml) {
+                return '<div class="flex items-center justify-between gap-4 py-2.5"><dt class="text-sm text-muted flex-shrink-0">' + label + '</dt>' +
+                    '<dd class="text-sm font-medium text-right text-foreground min-w-0">' + valueHtml + '</dd></div>';
+            }
+
             content.innerHTML =
-                '<div class="space-y-6">' +
-                // Status banner
-                '<div class="flex items-center justify-between p-4 rounded-lg ' +
-                (isExpired ? 'bg-danger-surface' : isExpiringSoon ? 'bg-warning-surface' : 'bg-success-surface') + '">' +
-                '<div><div class="text-sm font-medium ' + statusClass + '">' + statusText + '</div>' +
-                '<div class="text-2xl font-bold ' + statusClass + '">' + cert.days_until_expiry + ' days</div></div>' +
-                '<i class="fas ' + (isExpired ? 'fa-times-circle' : isExpiringSoon ? 'fa-exclamation-triangle' : 'fa-check-circle') + ' text-3xl ' + statusClass + '"></i>' +
+                '<div class="space-y-5">' +
+                // Status banner: status word + days + date, integrated and at one
+                // weight (the day count and the calendar date are the same datum).
+                '<div class="flex items-center gap-3 p-4 rounded-lg ' + bannerBg + '">' +
+                '<i class="fas ' + bannerIcon + ' text-2xl ' + statusClass + ' flex-shrink-0"></i>' +
+                '<div class="min-w-0">' +
+                '<div class="text-lg font-semibold ' + statusClass + '">' + statusText + (daysKnown2 ? ' · ' + daysText : '') + '</div>' +
+                (cert.expiry_date ? '<div class="text-sm ' + statusClass + ' opacity-80">' + (isExpired ? 'Expired ' : 'Expires ') + expiryStr + '</div>' : '') +
                 '</div>' +
-                // Details grid
-                '<div class="space-y-3">' +
-                '<h4 class="text-sm font-semibold text-foreground uppercase tracking-wider">Details</h4>' +
-                '<dl class="space-y-2">' +
-                '<div class="flex justify-between gap-4 py-2 border-b border-border"><dt class="text-sm text-muted">Domain</dt><dd class="text-sm font-medium text-right text-foreground">' + safeDomain + '</dd></div>' +
-                (sanDomains.length ? '<div class="flex justify-between gap-4 py-2 border-b border-border"><dt class="text-sm text-muted">SANs</dt><dd class="text-sm font-medium text-right text-foreground">' + sanDomainsHtml + '</dd></div>' : '') +
-                '<div class="flex justify-between gap-4 py-2 border-b border-border"><dt class="text-sm text-muted">Expires</dt><dd class="text-sm font-medium text-right text-foreground">' + expiryDate.toLocaleDateString('en-US', { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' }) + '</dd></div>' +
-                (providerLabel ? '<div class="flex justify-between gap-4 py-2 border-b border-border"><dt class="text-sm text-muted">DNS Provider</dt><dd class="text-sm font-medium text-right text-foreground">' + providerLabel + '</dd></div>' : '') +
-                (safeDomainAlias ? '<div class="flex justify-between gap-4 py-2 border-b border-border"><dt class="text-sm text-muted">DNS-01 Alias</dt><dd class="text-sm font-medium text-right break-all text-info-fg">' + safeDomainAlias + '</dd></div>' : '') +
-                (safeDomainAlias && aliasProviderLabel ? '<div class="flex justify-between gap-4 py-2 border-b border-border"><dt class="text-sm text-muted">Alias Provider</dt><dd class="text-sm font-medium text-right text-foreground">' + aliasProviderLabel + '</dd></div>' : '') +
-                '<div class="flex justify-between gap-4 py-2 border-b border-border"><dt class="text-sm text-muted">Auto-Renew</dt><dd class="text-sm font-medium text-right ' + (cert.auto_renew !== false ? 'text-success-fg' : 'text-warning-fg') + '">' + (cert.auto_renew !== false ? 'Enabled' : 'Disabled') + '</dd></div>' +
-                '<div class="flex justify-between gap-4 py-2 border-b border-border"><dt class="text-sm text-muted">Deployment</dt><dd>' + deploymentBadgesHtml(cert) + '</dd></div>' +
+                '</div>' +
+                // Details
+                '<dl class="divide-y divide-border">' +
+                (providerLabel ? detailRow('DNS Provider', providerCell) : '') +
+                (sanDomains.length ? detailRow('SANs', '<div class="text-right">' + sanDomainsHtml + '</div>') : '') +
+                (safeDomainAlias ? detailRow('DNS-01 Alias', '<span class="break-all text-info-fg">' + safeDomainAlias + '</span>') : '') +
+                (safeDomainAlias && aliasProviderLabel ? detailRow('Alias Provider', aliasProviderCell) : '') +
+                detailRow('Auto-Renew', roleAtLeast('operator')
+                    ? autoRenewSwitchHtml(safeDomain, autoOn)
+                    : '<span class="' + (autoOn ? 'text-success-fg' : 'text-warning-fg') + '">' + (autoOn ? 'Enabled' : 'Disabled') + '</span>') +
                 '</dl>' +
+                // Deployment — its own section, separated by a rule.
+                '<div class="pt-4 border-t border-border">' +
+                '<div class="flex items-center justify-between mb-3">' +
+                '<h4 class="text-xs font-semibold text-muted uppercase tracking-wider">Deployment</h4>' +
+                '<button type="button" onclick="checkDeploymentStatus(\'' + safeDomain + '\', this, true)" title="Check deployment now" aria-label="Check deployment now" class="inline-flex items-center justify-center w-8 h-8 rounded-lg text-muted hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-hover transition"><i class="fas fa-arrows-rotate text-sm"></i></button>' +
                 '</div>' +
-                // Actions
-                '<div class="space-y-3">' +
-                '<h4 class="text-sm font-semibold text-foreground uppercase tracking-wider">Actions</h4>' +
-                '<div class="grid grid-cols-1 gap-2">' +
+                '<div class="flex items-center gap-2 mb-3">' + deploymentBadgesHtml(cert) + '</div>' +
+                '<div class="flex items-center justify-between gap-2 rounded-lg bg-surface-2 px-3 py-2">' +
+                '<span class="text-sm text-muted min-w-0 truncate"><i class="fas fa-rocket mr-1.5 text-green-500"></i>Deploy hooks</span>' +
+                '<div class="flex items-center gap-1 flex-shrink-0">' +
+                '<a href="/settings#deploy" title="View / edit deploy hooks in Settings" aria-label="View or edit deploy hooks" class="inline-flex items-center justify-center w-8 h-8 rounded-lg text-muted hover:text-blue-600 dark:hover:text-blue-400 hover:bg-hover transition"><i class="fas fa-pen-to-square text-sm"></i></a>' +
+                (roleAtLeast('admin') ? '<button type="button" onclick="runDeployHooks(\'' + safeDomain + '\')" title="Run deploy hooks now" aria-label="Run deploy hooks now" class="inline-flex items-center justify-center w-8 h-8 rounded-lg text-muted hover:text-green-600 dark:hover:text-green-400 hover:bg-hover transition"><i class="fas fa-play text-sm"></i></button>' : '') +
+                '</div>' +
+                '</div>' +
+                (safeDomainAlias ? '<button type="button" onclick="checkDnsAliasForCertificate(\'' + safeDomain + '\')" class="mt-2 w-full inline-flex items-center justify-center px-3 py-1.5 text-xs border border-info-line rounded-lg text-info-fg bg-info-surface hover:bg-blue-100 dark:hover:bg-blue-900/50"><i class="fas fa-search mr-1.5"></i>Check DNS-01 Alias</button>' : '') +
+                '<div id="cert_dns_alias_check_result" class="hidden mt-2"></div>' +
+                '</div>' +
+                // Quick actions — consistent icons (label on hover), separated.
+                '<div class="pt-4 border-t border-border">' +
+                '<h4 class="text-xs font-semibold text-muted uppercase tracking-wider mb-3">Actions</h4>' +
+                '<div class="flex flex-wrap items-center gap-2">' +
                 (roleAtLeast('operator')
-                    ? '<button type="button" onclick="renewCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-border shadow-sm text-sm font-medium rounded-md text-label bg-input hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-sync-alt mr-2 text-green-600"></i>Renew Certificate</button>' +
-                    '<button type="button" onclick="renewCertificate(\'' + safeDomain + '\', true)" class="w-full inline-flex items-center justify-center px-4 py-2 border border-warning-line shadow-sm text-sm font-medium rounded-md text-warning-fg bg-warning-surface hover:bg-amber-100 dark:hover:bg-amber-900/40"><i class="fas fa-bolt mr-2"></i>Force Renew Certificate</button>' +
-                    '<button type="button" onclick="startEditReissue(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-info-line shadow-sm text-sm font-medium rounded-md text-info-fg bg-info-surface hover:bg-blue-100 dark:hover:bg-blue-900/50"><i class="fas fa-pen mr-2"></i>Edit &amp; Reissue</button>'
+                    ? actIcon("renewCertificate('" + safeDomain + "')", 'fa-sync-alt', 'green', 'Renew certificate') +
+                      actIcon("renewCertificate('" + safeDomain + "', true)", 'fa-bolt', 'amber', 'Force renew') +
+                      actIcon("startEditReissue('" + safeDomain + "')", 'fa-pen', 'blue', 'Edit & reissue')
                     : '') +
-                '<button type="button" onclick="downloadCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-border shadow-sm text-sm font-medium rounded-md text-label bg-input hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-download mr-2 text-blue-600"></i>Download Certificate</button>' +
-                '<button type="button" onclick="copyCurlCommand(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-info-line shadow-sm text-sm font-medium rounded-md text-info-fg bg-info-surface hover:bg-blue-100 dark:hover:bg-blue-900/50"><i class="fas fa-code mr-2"></i>Show API Command</button>' +
-                '<button type="button" onclick="checkDeploymentStatus(\'' + safeDomain + '\', this, true)" class="w-full inline-flex items-center justify-center px-4 py-2 border border-border shadow-sm text-sm font-medium rounded-md text-label bg-input hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-globe mr-2 text-indigo-600"></i>Check Deployment</button>' +
-                (safeDomainAlias ? '<button type="button" onclick="checkDnsAliasForCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-info-line shadow-sm text-sm font-medium rounded-md text-info-fg bg-info-surface hover:bg-blue-100 dark:hover:bg-blue-900/50"><i class="fas fa-search mr-2"></i>Check DNS-01 Alias</button>' : '') +
-                '<div id="cert_dns_alias_check_result" class="hidden"></div>' +
+                actIcon("downloadCertificate('" + safeDomain + "')", 'fa-download', 'blue', 'Download certificate') +
+                actIcon("copyCurlCommand('" + safeDomain + "')", 'fa-code', 'indigo', 'Show API command') +
                 (roleAtLeast('admin')
-                    ? '<button type="button" onclick="runDeployHooks(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-border shadow-sm text-sm font-medium rounded-md text-label bg-input hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas fa-rocket mr-2 text-green-600"></i>Run Deploy Hooks Now</button>'
-                    : '') +
-                (roleAtLeast('operator')
-                    ? '<button type="button" onclick="toggleAutoRenew(\'' + safeDomain + '\', ' + (cert.auto_renew !== false ? 'true' : 'false') + ')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-border shadow-sm text-sm font-medium rounded-md text-label bg-input hover:bg-gray-50 dark:hover:bg-gray-600"><i class="fas ' + (cert.auto_renew !== false ? 'fa-toggle-on text-purple-600' : 'fa-toggle-off text-amber-600') + ' mr-2"></i>' + (cert.auto_renew !== false ? 'Disable Auto-Renew' : 'Enable Auto-Renew') + '</button>'
-                    : '') +
-                (roleAtLeast('admin')
-                    ? '<button type="button" onclick="deleteCertificate(\'' + safeDomain + '\')" class="w-full inline-flex items-center justify-center px-4 py-2 border border-danger-line shadow-sm text-sm font-medium rounded-md text-danger-fg bg-danger-surface hover:bg-red-100 dark:hover:bg-red-900/40"><i class="fas fa-trash-alt mr-2"></i>Delete Certificate</button>'
+                    ? '<span class="flex-grow"></span>' + actIcon("deleteCertificate('" + safeDomain + "')", 'fa-trash-alt', 'red', 'Delete certificate')
                     : '') +
                 '</div>' +
                 '</div>' +
                 '</div>';
         }
 
+        // Reveal the backdrop and modal, then animate the card in (scale +
+        // fade) on the next frame so the transition actually plays. Focus moves
+        // to the close button and is restored to the triggering row on close.
+        _lastDetailFocus = document.activeElement;
         overlay.classList.remove('hidden');
+        panel.classList.remove('hidden');
+        panel.classList.add('flex');
+        CertMate.lockScroll();
+        var card = document.getElementById('certDetailCard');
         requestAnimationFrame(function () {
-            panel.classList.remove('translate-x-full');
+            if (card) card.classList.remove('opacity-0', 'scale-95');
         });
+        var closeBtn = panel.querySelector('[data-detail-close]');
+        if (closeBtn) closeBtn.focus();
     }
 
     function closeCertDetail() {
         var panel = document.getElementById('certDetailPanel');
+        if (!panel || panel.classList.contains('hidden')) return;
+        CertMate.unlockScroll();
         var overlay = document.getElementById('certDetailOverlay');
         var content = document.getElementById('certDetailContent');
-        panel.classList.add('translate-x-full');
+        var card = document.getElementById('certDetailCard');
+        if (card) card.classList.add('opacity-0', 'scale-95');
         setTimeout(function () {
             overlay.classList.add('hidden');
-            // Clear after the slide-out transition so the next open
-            // starts from a blank surface — prevents the previous cert's
-            // details from flashing visible for a frame when the user
-            // opens cert B right after closing cert A.
+            panel.classList.add('hidden');
+            panel.classList.remove('flex');
+            // Clear after the close transition so the next open starts from a
+            // blank surface — prevents the previous cert's details from
+            // flashing visible for a frame when opening cert B right after
+            // closing cert A.
             if (content) content.innerHTML = '';
-        }, 300);
+        }, 200);
+        if (_lastDetailFocus && _lastDetailFocus.focus) _lastDetailFocus.focus();
     }
 
-    // Close detail panel on Escape key
+    // Close detail modal on Escape key
     document.addEventListener('keydown', function (e) {
         if (e.key === 'Escape') closeCertDetail();
     });
@@ -1222,17 +1369,20 @@
                     return el.getAttribute('data-deployment-domain') === domain;
                 }
             ).forEach(function (statusElement) {
-                statusElement.className = display.className;
-                statusElement.innerHTML = '<i class="fas ' + display.icon + ' mr-1"></i>' + display.text;
+                // Re-render through the SAME chip helpers the initial paint uses
+                // so a completed probe updates the icon + colour in place instead
+                // of replacing the chip with stale "Role: Status" text.
+                statusElement.className = deploymentChipClass(display);
+                statusElement.innerHTML = deploymentChipInner(display);
+                var title = display.text;
                 if (roleResult && roleResult.method) {
-                    var title = display.text + ' via ' + roleResult.method;
+                    title += ' via ' + roleResult.method;
                     if (roleResult.timestamp) {
                         title += ' at ' + roleResult.timestamp;
                     }
-                    statusElement.title = title;
-                } else {
-                    statusElement.removeAttribute('title');
                 }
+                statusElement.title = title;
+                statusElement.setAttribute('aria-label', title);
             });
         });
     }
@@ -1457,7 +1607,7 @@
     function toggleAdvancedOptions() {
         var optionsDiv = document.getElementById('advanced-options');
         var chevron = document.getElementById('advanced-chevron');
-        var toggleBtn = document.getElementById('toggleAdvancedOptions');
+        var toggleBtn = document.getElementById('advancedOptionsToggle');
 
         if (optionsDiv.classList.contains('hidden')) {
             optionsDiv.classList.remove('hidden');

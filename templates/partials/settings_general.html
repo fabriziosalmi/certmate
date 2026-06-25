@@ -1,5 +1,32 @@
 <!-- TAB: General Settings -->
                     <div x-show="tab === 'general'" x-cloak id="settings-panel-general" role="tabpanel" aria-labelledby="settings-tab-general" tabindex="0">
+                    <!-- Appearance Section — client-side display preference (stored in
+                         localStorage, not the server settings form). Auto follows the OS
+                         colour scheme; Light / Dark force an override. Buttons call the
+                         global setTheme() defined in base.html; aria-pressed drives both
+                         the active styling and the screen-reader announcement. -->
+                    <div class="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg mb-4">
+                        <h4 class="text-sm font-medium text-label mb-3">
+                            <i class="fas fa-palette mr-1 text-primary"></i>
+                            Appearance
+                        </h4>
+                        <label class="block text-xs font-medium text-muted mb-2">Theme</label>
+                        <div class="inline-flex rounded-lg border border-border bg-surface-2 p-0.5" role="group" aria-label="Theme preference">
+                            <button type="button" data-theme-option="auto" onclick="setTheme('auto')" aria-pressed="false"
+                                    class="inline-flex items-center px-3 py-1.5 text-sm rounded-md text-muted hover:text-foreground transition aria-pressed:bg-surface aria-pressed:text-foreground aria-pressed:shadow-sm">
+                                <i class="fas fa-circle-half-stroke mr-1.5" aria-hidden="true"></i>Auto
+                            </button>
+                            <button type="button" data-theme-option="light" onclick="setTheme('light')" aria-pressed="false"
+                                    class="inline-flex items-center px-3 py-1.5 text-sm rounded-md text-muted hover:text-foreground transition aria-pressed:bg-surface aria-pressed:text-foreground aria-pressed:shadow-sm">
+                                <i class="fas fa-sun mr-1.5" aria-hidden="true"></i>Light
+                            </button>
+                            <button type="button" data-theme-option="dark" onclick="setTheme('dark')" aria-pressed="false"
+                                    class="inline-flex items-center px-3 py-1.5 text-sm rounded-md text-muted hover:text-foreground transition aria-pressed:bg-surface aria-pressed:text-foreground aria-pressed:shadow-sm">
+                                <i class="fas fa-moon mr-1.5" aria-hidden="true"></i>Dark
+                            </button>
+                        </div>
+                        <p class="mt-2 text-xs text-muted">Auto matches your operating system's light or dark setting.</p>
+                    </div>
                     <!-- General Certificate Settings Section -->
                     <div class="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
                         <h4 class="text-sm font-medium text-label mb-3">

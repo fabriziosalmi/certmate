@@ -1,0 +1,218 @@
+{% extends "base.html" %}
+{% block title %}CertMate - Notifications{% endblock %}
+{% block content %}
+    <div class="max-w-5xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+        <div class="bg-surface shadow-card rounded-xl overflow-hidden">
+            <div class="px-6 py-3 border-b border-gray-100 dark:border-white/5">
+                <div class="flex items-center justify-between gap-3">
+                    <nav class="flex items-center text-sm min-w-0" aria-label="Breadcrumb">
+                        <a href="/" aria-label="Home" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"><i class="fas fa-home"></i></a>
+                        <i class="fas fa-chevron-right text-[10px] text-gray-300 dark:text-gray-600 mx-2"></i>
+                        <span class="text-gray-700 dark:text-gray-200 font-medium">Notifications</span>
+                    </nav>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <label class="inline-flex items-center gap-1.5 text-xs text-muted cursor-pointer select-none">
+                            <input type="checkbox" id="showSnoozed" class="rounded border-border text-primary focus:ring-primary focus:ring-offset-0 dark:bg-gray-700">
+                            Show snoozed
+                        </label>
+                        <button type="button" onclick="loadNotifications()" class="px-2.5 py-1.5 text-xs bg-surface-2 text-muted rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition" title="Refresh" aria-label="Refresh notifications">
+                            <i class="fas fa-sync"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Summary strip -->
+            <div id="notifSummary" class="px-6 py-3 text-sm text-muted border-b border-gray-100 dark:border-white/5" aria-live="polite">
+                Loading…
+            </div>
+
+            <div id="notifContent" aria-busy="true">
+                <!-- groups injected by JS -->
+            </div>
+        </div>
+        <p class="mt-3 text-xs text-muted text-center">
+            <i class="fas fa-circle-info mr-1"></i>Notifications are derived from certificate expiry. Snoozes are stored in this browser only.
+        </p>
+    </div>
+
+    <script>
+    (function() {
+        var escapeHtml = CertMate.escapeHtml;
+        var N = window.CertMateNotif;
+        var DAY = 86400000;
+        var _certs = [];
+
+        // Severity presentation. critical/expired share the danger palette;
+        // warning uses the amber palette — mirrors the dashboard status colours.
+        function sev(type) {
+            if (type === 'expired') return { label: 'Expired', icon: 'fa-circle-xmark', fg: 'text-danger-fg', bg: 'bg-danger-surface', group: 'Expired' };
+            if (type === 'critical') return { label: 'Critical', icon: 'fa-circle-exclamation', fg: 'text-danger-fg', bg: 'bg-danger-surface', group: 'Critical — 7 days or less' };
+            return { label: 'Expiring', icon: 'fa-triangle-exclamation', fg: 'text-warning-fg', bg: 'bg-warning-surface', group: 'Expiring — 30 days or less' };
+        }
+        function daysText(days) {
+            var a = Math.abs(days);
+            return days <= 0
+                ? a + (a === 1 ? ' day ago' : ' days ago')
+                : days + (days === 1 ? ' day left' : ' days left');
+        }
+        function fmtDate(ts) {
+            if (!ts) return '';
+            var d = new Date(ts);
+            if (isNaN(d.getTime())) return '';
+            return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        }
+        function fmtDateTime(ms) {
+            var d = new Date(ms);
+            return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+        }
+
+        function rowHtml(w) {
+            var s = sev(w.type);
+            var meta = daysText(w.days) + (w.expiry_date ? ' · Expires ' + escapeHtml(fmtDate(w.expiry_date)) : '');
+            return '<li class="flex items-center gap-4 px-4 sm:px-6 py-4">' +
+                '<div class="flex-shrink-0">' +
+                    '<div class="w-9 h-9 rounded-full ' + s.bg + ' flex items-center justify-center">' +
+                        '<i class="fas ' + s.icon + ' ' + s.fg + ' text-sm" aria-hidden="true"></i>' +
+                    '</div>' +
+                '</div>' +
+                '<div class="flex-1 min-w-0">' +
+                    '<p class="text-sm font-medium text-foreground truncate">' + escapeHtml(w.domain) + '</p>' +
+                    '<p class="text-xs ' + s.fg + ' mt-0.5">' + escapeHtml(meta) + '</p>' +
+                '</div>' +
+                '<div class="flex-shrink-0 flex items-center gap-1.5">' +
+                    '<a href="/?cert=' + encodeURIComponent(w.domain) + '" class="inline-flex items-center px-2.5 py-1.5 text-xs border border-border rounded-lg bg-input text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 transition" title="View certificate">' +
+                        '<i class="fas fa-arrow-up-right-from-square mr-1.5 text-[10px]"></i>View' +
+                    '</a>' +
+                    '<details class="relative">' +
+                        '<summary class="list-none inline-flex items-center px-2.5 py-1.5 text-xs border border-border rounded-lg bg-input text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 transition cursor-pointer" title="Snooze this notification">' +
+                            '<i class="fas fa-clock mr-1.5 text-[10px]"></i>Snooze' +
+                        '</summary>' +
+                        '<div class="absolute right-0 mt-1 w-40 bg-surface border border-border rounded-lg shadow-xl z-10 py-1">' +
+                            '<button type="button" data-snooze="' + escapeHtml(w.domain) + '" data-days="1" class="block w-full text-left px-3 py-1.5 text-xs text-foreground hover:bg-gray-50 dark:hover:bg-gray-700/50">For 1 day</button>' +
+                            '<button type="button" data-snooze="' + escapeHtml(w.domain) + '" data-days="7" class="block w-full text-left px-3 py-1.5 text-xs text-foreground hover:bg-gray-50 dark:hover:bg-gray-700/50">For 7 days</button>' +
+                            '<button type="button" data-snooze="' + escapeHtml(w.domain) + '" data-days="30" class="block w-full text-left px-3 py-1.5 text-xs text-foreground hover:bg-gray-50 dark:hover:bg-gray-700/50">For 30 days</button>' +
+                        '</div>' +
+                    '</details>' +
+                '</div>' +
+            '</li>';
+        }
+
+        function snoozedRowHtml(w) {
+            var until = N.snoozedUntil(w.domain);
+            return '<li class="flex items-center gap-4 px-4 sm:px-6 py-3">' +
+                '<div class="flex-shrink-0"><div class="w-8 h-8 rounded-full bg-surface-2 flex items-center justify-center"><i class="fas fa-clock text-muted text-xs" aria-hidden="true"></i></div></div>' +
+                '<div class="flex-1 min-w-0">' +
+                    '<p class="text-sm font-medium text-foreground truncate">' + escapeHtml(w.domain) + '</p>' +
+                    '<p class="text-xs text-muted mt-0.5">Snoozed until ' + escapeHtml(fmtDateTime(until)) + ' · ' + escapeHtml(daysText(w.days)) + '</p>' +
+                '</div>' +
+                '<button type="button" data-unsnooze="' + escapeHtml(w.domain) + '" class="flex-shrink-0 inline-flex items-center px-2.5 py-1.5 text-xs border border-border rounded-lg bg-input text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 transition" title="Remove snooze">' +
+                    '<i class="fas fa-bell mr-1.5 text-[10px]"></i>Unsnooze' +
+                '</button>' +
+            '</li>';
+        }
+
+        function groupHtml(title, warnings) {
+            if (warnings.length === 0) return '';
+            var s = sev(warnings[0].type);
+            return '<div>' +
+                '<h3 class="px-4 sm:px-6 py-2 text-[11px] font-semibold uppercase tracking-wide ' + s.fg + ' bg-gray-50 dark:bg-gray-700/30">' +
+                    escapeHtml(title) + ' <span class="text-muted font-normal">(' + warnings.length + ')</span>' +
+                '</h3>' +
+                '<ul class="divide-y divide-gray-100 dark:divide-gray-700/50 list-none m-0 p-0">' +
+                    warnings.map(rowHtml).join('') +
+                '</ul>' +
+            '</div>';
+        }
+
+        function render() {
+            var content = document.getElementById('notifContent');
+            var summary = document.getElementById('notifSummary');
+            content.setAttribute('aria-busy', 'false');
+
+            var all = N.deriveWarnings(_certs);
+            var active = all.filter(function(w) { return !N.isSnoozed(w.domain); });
+            var snoozed = all.filter(function(w) { return N.isSnoozed(w.domain); });
+
+            // Summary line
+            if (all.length === 0) {
+                summary.innerHTML = '<i class="fas fa-circle-check text-green-500 mr-2"></i>All certificates are healthy.';
+            } else {
+                var nExpired = active.filter(function(w){ return w.type === 'expired'; }).length;
+                var nCrit = active.filter(function(w){ return w.type === 'critical'; }).length;
+                var nWarn = active.filter(function(w){ return w.type === 'warning'; }).length;
+                var parts = [];
+                if (nExpired) parts.push('<span class="text-danger-fg font-medium">' + nExpired + ' expired</span>');
+                if (nCrit) parts.push('<span class="text-danger-fg font-medium">' + nCrit + ' critical</span>');
+                if (nWarn) parts.push('<span class="text-warning-fg font-medium">' + nWarn + ' expiring</span>');
+                if (snoozed.length) parts.push('<span class="text-muted">' + snoozed.length + ' snoozed</span>');
+                summary.innerHTML = parts.length ? parts.join(' · ') : '<i class="fas fa-circle-check text-green-500 mr-2"></i>Nothing needs attention right now.';
+            }
+
+            var html = '';
+            if (active.length === 0 && all.length > 0 && snoozed.length === all.length) {
+                html += '<div class="px-6 py-12 text-center text-muted"><i class="fas fa-bell-slash text-3xl text-gray-300 dark:text-gray-600 mb-3 block"></i>All active warnings are snoozed.</div>';
+            } else if (all.length === 0) {
+                html += '<div class="px-6 py-12 text-center text-muted"><i class="fas fa-circle-check text-3xl text-green-400 mb-3 block"></i>No certificates need your attention.</div>';
+            } else {
+                html += groupHtml('Expired', active.filter(function(w){ return w.type === 'expired'; }));
+                html += groupHtml('Critical — 7 days or less', active.filter(function(w){ return w.type === 'critical'; }));
+                html += groupHtml('Expiring — 30 days or less', active.filter(function(w){ return w.type === 'warning'; }));
+            }
+
+            // Snoozed section (toggle)
+            var showSnoozed = document.getElementById('showSnoozed').checked;
+            if (snoozed.length && showSnoozed) {
+                html += '<div class="border-t border-gray-100 dark:border-white/5">' +
+                    '<h3 class="px-4 sm:px-6 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted bg-gray-50 dark:bg-gray-700/30">Snoozed <span class="font-normal">(' + snoozed.length + ')</span></h3>' +
+                    '<ul class="divide-y divide-gray-100 dark:divide-gray-700/50 list-none m-0 p-0">' +
+                        snoozed.map(snoozedRowHtml).join('') +
+                    '</ul>' +
+                '</div>';
+            }
+
+            content.innerHTML = html;
+        }
+
+        window.loadNotifications = function() {
+            var content = document.getElementById('notifContent');
+            content.setAttribute('aria-busy', 'true');
+            fetch('/api/certificates', { credentials: 'same-origin' })
+                .then(function(r) { return r.ok ? r.json() : []; })
+                .then(function(certs) {
+                    _certs = Array.isArray(certs) ? certs : [];
+                    // keep the top-bar badge cache in sync with this fresh read
+                    try { sessionStorage.setItem('cm_notif', JSON.stringify({ t: Date.now(), d: _certs })); } catch (e) {}
+                    render();
+                })
+                .catch(function() {
+                    document.getElementById('notifContent').innerHTML =
+                        '<div class="px-6 py-12 text-center text-muted"><i class="fas fa-triangle-exclamation text-2xl text-gray-300 dark:text-gray-600 mb-3 block"></i>Could not load certificates.</div>';
+                });
+        };
+
+        // Event delegation for snooze / unsnooze.
+        document.getElementById('notifContent').addEventListener('click', function(e) {
+            var snz = e.target.closest('[data-snooze]');
+            if (snz) {
+                var days = parseInt(snz.getAttribute('data-days'), 10) || 1;
+                var domain = snz.getAttribute('data-snooze');
+                N.snooze(domain, days * DAY);
+                if (CertMate.toast) CertMate.toast('Snoozed ' + domain + ' for ' + days + (days === 1 ? ' day' : ' days'), 'info');
+                render();
+                return;
+            }
+            var uns = e.target.closest('[data-unsnooze]');
+            if (uns) {
+                var d = uns.getAttribute('data-unsnooze');
+                N.unsnooze(d);
+                if (CertMate.toast) CertMate.toast('Unsnoozed ' + d, 'info');
+                render();
+            }
+        });
+        document.getElementById('showSnoozed').addEventListener('change', render);
+
+        loadNotifications();
+    })();
+    </script>
+{% endblock %}
