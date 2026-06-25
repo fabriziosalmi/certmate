@@ -19,7 +19,7 @@
 ## Key Features
 
 - **Zero-Downtime Automation** - Auto-renewal 30 days before expiry
-- **22 DNS Providers** - Cloudflare, AWS, Azure, GCP, Hetzner, and more
+- **23 DNS Providers** - Cloudflare, AWS, Azure, GCP, Hetzner, SOLIDserver, and more
 - **Multiple CA Support** - Let's Encrypt, DigiCert ACME, Private CAs
 - **Unified Backups** - Atomic snapshots of settings and certificates
 - **Multiple Storage Backends** - Local, Azure Key Vault, AWS Secrets Manager, Vault, Infisical

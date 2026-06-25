@@ -13,6 +13,7 @@ CertMate supports a wide range of DNS providers for Let's Encrypt DNS-01 challen
 | **Azure DNS** | `certbot-dns-azure` | Service Principal | Major Cloud |
 | **Google Cloud DNS** | `certbot-dns-google` | Service Account JSON | Major Cloud |
 | **PowerDNS** | `certbot-dns-powerdns` | API URL, API Key | Enterprise |
+| **EfficientIP SOLIDserver** | custom REST API script | Host, API Credentials | Enterprise |
 | **DNS Made Easy** | `certbot-dns-dnsmadeeasy` | API Key, Secret Key | Enterprise |
 | **NS1** | `certbot-dns-nsone` | API Key | Enterprise |
 | **DigitalOcean** | `certbot-dns-digitalocean` | API Token | Cloud |
@@ -136,6 +137,25 @@ curl -X POST http://localhost:8000/api/settings \
     "powerdns": {
       "api_url": "https://your-powerdns-server:8081",
       "api_key": "your_powerdns_api_key"
+```
+    }
+  }
+}
+```
+
+### EfficientIP SOLIDserver
+
+```json
+{
+  "dns_provider": "solidserver",
+  "dns_providers": {
+    "solidserver": {
+      "host": "your-solidserver.example.com",
+      "username": "user",
+      "password": "password",
+      "dns_name": "dns_name",
+      "dnsview_name": "optionnal",
+      "propagation_seconds": 120
     }
   }
 }

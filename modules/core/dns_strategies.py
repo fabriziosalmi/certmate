@@ -5,6 +5,7 @@ Implements the Strategy Pattern for DNS provider configuration and management.
 
 import logging
 import os
+import sys
 import shlex
 import subprocess
 from abc import ABC, abstractmethod
@@ -644,6 +645,39 @@ class HTTP01Strategy(DNSProviderStrategy):
         return 0  # No propagation needed for HTTP-01
 
 
+class SolidServerStrategy(DNSProviderStrategy):
+    """EfficientIP SOLIDserver DNS strategy using custom hook script."""
+
+    def create_config_file(self, config_data: Dict[str, Any]) -> Optional[Path]:
+        return None
+
+    @property
+    def plugin_name(self) -> str:
+        return 'manual'
+
+    @property
+    def supports_propagation_seconds_flag(self) -> bool:
+        return False
+
+    def configure_certbot_arguments(self, cmd: list, credentials_file: Optional[Path], domain_alias: Optional[str] = None) -> None:
+        script_path = str(Path('scripts/solidserver_hook.py').resolve())
+        cmd.extend([
+            '--manual',
+            '--preferred-challenges', 'dns',
+            '--manual-auth-hook', f'{sys.executable} {script_path} auth',
+            '--manual-cleanup-hook', f'{sys.executable} {script_path} cleanup'
+        ])
+
+    def prepare_environment(self, env: Dict[str, str], config_data: Dict[str, Any]) -> None:
+        env['SOLIDSERVER_HOST'] = config_data.get('host', '')
+        env['SOLIDSERVER_USERNAME'] = config_data.get('username', '')
+        env['SOLIDSERVER_PASSWORD'] = config_data.get('password', '')
+        env['SOLIDSERVER_DNS_NAME'] = config_data.get('dns_name', '')
+        env['SOLIDSERVER_DNSVIEW_NAME'] = config_data.get('dnsview_name', '')
+        if config_data.get('propagation_seconds'):
+            env['CERTMATE_DNS_PROPAGATION_SECONDS'] = str(config_data.get('propagation_seconds'))
+
+
 class DNSStrategyFactory:
     """Factory to get the correct strategy for a provider"""
 
@@ -663,6 +697,7 @@ class DNSStrategyFactory:
         'infomaniak': InfomaniakStrategy,
         'acme-dns': AcmeDNSStrategy,
         'duckdns': DuckDNSStrategy,
+        'solidserver': SolidServerStrategy,
         'custom-script': CustomScriptStrategy,
         'http-01': HTTP01Strategy,
     }

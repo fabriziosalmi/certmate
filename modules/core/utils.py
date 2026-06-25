@@ -72,6 +72,7 @@ _DNS_PROVIDER_CREDENTIALS = {
     'edgedns': ['client_token', 'client_secret', 'access_token', 'host'],
     'desec': ['api_token'],
     'scaleway': ['application_token'],
+    'solidserver': ['host', 'username', 'password', 'dns_name'],
     # Admin-supplied hook scripts (#286): the auth hook is the only hard
     # requirement; the cleanup hook is optional.
     'custom-script': ['auth_hook']

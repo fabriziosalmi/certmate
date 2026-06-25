@@ -192,6 +192,16 @@
                                     </div>
                                 </label>
                                 <label class="relative">
+                                    <input type="radio" name="dns_provider" value="solidserver" class="sr-only peer">
+                                    <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
+                                        <div class="text-center">
+                                            <i class="fas fa-server text-lg text-blue-600 mb-1"></i>
+                                            <div class="text-xs font-medium text-foreground">SOLIDserver</div>
+                                            <div class="text-xs text-muted mt-1" id="solidserver-status">Not configured</div>
+                                        </div>
+                                    </div>
+                                </label>
+                                <label class="relative">
                                     <input type="radio" name="dns_provider" value="hetzner" class="sr-only peer">
                                     <div class="p-2 border-2 border-border rounded-lg cursor-pointer transition-all peer-checked:border-primary peer-checked:bg-blue-50 dark:bg-blue-900/20 dark:peer-checked:bg-blue-900/30 hover:border-border-strong">
                                         <div class="text-center">
@@ -727,6 +737,85 @@
                                 </div>
                                 <p class="mt-2 text-sm text-muted">
                                     Generate an API key from your Vultr control panel with DNS permissions.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SOLIDserver Configuration -->
+                    <div id="solidserver-config" class="dns-config hidden">
+                        <div class="border border-orange-200 dark:border-orange-600 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
+                            <div class="flex items-center justify-between mb-4">
+                                <h4 class="text-lg font-medium text-foreground">
+                                    <i class="fas fa-server mr-2 text-blue-600"></i>
+                                    EfficientIP SOLIDserver DNS Configuration
+                                </h4>
+                                <button type="button" id="solidserver-add-account" onclick="showAddAccountModal('solidserver')" 
+                                        class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-primary hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                                    <i class="fas fa-plus mr-1"></i>
+                                    Add Account
+                                </button>
+                            </div>
+                            
+                            <!-- Account Management List -->
+                            <div id="solidserver-accounts-list" class="space-y-3 mb-4">
+                                <!-- Accounts will be populated here -->
+                            </div>
+                            
+                            <!-- Legacy single account fields (hidden when multi-account mode is active) -->
+                            <div id="solidserver-legacy-config">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label for="solidserver_host" class="block text-sm font-medium text-label">
+                                            Host
+                                        </label>
+                                        <input type="text" id="solidserver_host" name="solidserver_host" 
+                                               class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground"
+                                               placeholder="IP or hostname">
+                                    </div>
+                                    <div>
+                                        <label for="solidserver_username" class="block text-sm font-medium text-label">
+                                            Username
+                                        </label>
+                                        <input type="text" id="solidserver_username" name="solidserver_username" 
+                                               class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground"
+                                               placeholder="API user">
+                                    </div>
+                                    <div>
+                                        <label for="solidserver_password" class="block text-sm font-medium text-label">
+                                            Password
+                                        </label>
+                                        <input type="password" id="solidserver_password" name="solidserver_password" 
+                                               class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground"
+                                               placeholder="API password">
+                                    </div>
+                                    <div>
+                                        <label for="solidserver_dns_name" class="block text-sm font-medium text-label">
+                                            DNS Server Name
+                                        </label>
+                                        <input type="text" id="solidserver_dns_name" name="solidserver_dns_name" 
+                                               class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground"
+                                               placeholder="SOLIDserver smart architecture DNS name">
+                                    </div>
+                                    <div>
+                                        <label for="solidserver_dnsview_name" class="block text-sm font-medium text-label">
+                                            DNS View Name (optional)
+                                        </label>
+                                        <input type="text" id="solidserver_dnsview_name" name="solidserver_dnsview_name" 
+                                               class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground"
+                                               placeholder="e.g. External">
+                                    </div>
+                                    <div>
+                                        <label for="solidserver_propagation_seconds" class="block text-sm font-medium text-label">
+                                            Propagation Delay (s)
+                                        </label>
+                                        <input type="number" id="solidserver_propagation_seconds" name="solidserver_propagation_seconds" 
+                                               class="mt-1 block w-full border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary bg-input text-foreground"
+                                               placeholder="120">
+                                    </div>
+                                </div>
+                                <p class="mt-2 text-sm text-muted">
+                                    Configure the REST API connection to your EfficientIP SOLIDserver.
                                 </p>
                             </div>
                         </div>

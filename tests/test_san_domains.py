@@ -158,10 +158,10 @@ class TestRoute53PropagationFlag:
 
     def test_all_non_route53_strategies_support_flag(self):
         """Pin which strategies omit the propagation flag: Route53 (the
-        plugin removed it and polls internally) and custom-script
-        (certbot --manual has no propagation flag; the auth hook waits)."""
+        plugin removed it and polls internally) and custom-script /
+        SOLIDserver (certbot --manual has no propagation flag; the hook waits)."""
         from modules.core.dns_strategies import DNSStrategyFactory
-        no_flag = {'route53', 'custom-script'}
+        no_flag = {'route53', 'custom-script', 'solidserver'}
         for name, strategy_cls in DNSStrategyFactory._strategies.items():
             strategy = strategy_cls()
             if name in no_flag:
