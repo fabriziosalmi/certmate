@@ -55,11 +55,15 @@ def main():
     if dnsview_name:
         params["dnsview_name"] = dnsview_name
     
+    # TLS verification is ON by default; allow opt-out for self-signed
+    # SOLIDserver appliances via SOLIDSERVER_SSL_VERIFY=false (never hard-disabled).
+    verify_ssl = os.environ.get("SOLIDSERVER_SSL_VERIFY", "true").lower() not in ("false", "0", "no")
+
     if action == "auth":
         url = f"https://{host}/rest/dns_rr_add"
         try:
             print(f"Adding TXT record {rr_name} for SOLIDserver DNS: {dns_name}" + (f" (View: {dnsview_name})" if dnsview_name else ""))
-            res = requests.post(url, headers=headers, params=params, verify=False)
+            res = requests.post(url, headers=headers, params=params, verify=verify_ssl)
             if res.status_code >= 400:
                 print(f"Error adding record: HTTP {res.status_code} - {res.text}")
                 sys.exit(1)
@@ -77,7 +81,7 @@ def main():
         url = f"https://{host}/rest/dns_rr_delete"
         try:
             print(f"Cleaning up TXT record {rr_name}")
-            res = requests.delete(url, headers=headers, params=params, verify=False)
+            res = requests.delete(url, headers=headers, params=params, verify=verify_ssl)
             if res.status_code >= 400:
                 print(f"Warning: Failed to cleanup record: HTTP {res.status_code} - {res.text}")
         except Exception as e:
