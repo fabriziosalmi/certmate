@@ -9,6 +9,8 @@ import os
 import smtplib
 import hashlib
 import hmac
+import ipaddress
+import socket
 import time
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -16,8 +18,40 @@ from pathlib import Path
 from typing import Optional, Dict, Any, List
 from urllib.request import Request, urlopen
 from urllib.error import URLError
+from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
+
+
+def _webhook_url_is_internal(url: str) -> bool:
+    """Return True if *url*'s host resolves to a loopback / private / link-local
+    / reserved address.
+
+    Used to block SSRF to internal services or the cloud metadata endpoint
+    (169.254.169.254) via an admin-supplied webhook URL — including the
+    interactive "Test" button, which would otherwise turn CertMate into a
+    confused deputy on its own network segment. Checks every resolved address so
+    a dual A-record can't smuggle one private IP past the guard. Hosts that do
+    not resolve are NOT treated as internal (they aren't a reachable internal
+    target — urlopen will just fail), so transient-DNS / placeholder hosts are
+    left to the normal request path.
+    """
+    try:
+        host = urlparse(url).hostname
+        if not host:
+            return False
+        infos = socket.getaddrinfo(host, None)
+    except Exception:
+        return False
+    for info in infos:
+        try:
+            ip = ipaddress.ip_address(info[4][0])
+        except ValueError:
+            continue
+        if (ip.is_private or ip.is_loopback or ip.is_link_local
+                or ip.is_reserved or ip.is_multicast or ip.is_unspecified):
+            return True
+    return False
 
 
 class Notifier:
@@ -351,6 +385,15 @@ class Notifier:
             # Only allow http/https schemes to prevent file:// or other attacks.
             if not url.startswith(('https://', 'http://')):
                 return {'error': 'Webhook URL must use http or https scheme'}
+            # SSRF guard: refuse targets that resolve to internal/loopback/
+            # metadata addresses unless an operator explicitly allows them.
+            if _webhook_url_is_internal(url) and \
+                    os.getenv('CERTMATE_ALLOW_INTERNAL_WEBHOOKS', '').lower() not in ('true', '1', 'yes'):
+                logger.warning("Refused webhook to internal/loopback target: %s",
+                               urlparse(url).hostname)
+                return {'error': 'Webhook target resolves to an internal/loopback address; '
+                                 'refused (SSRF guard). Set CERTMATE_ALLOW_INTERNAL_WEBHOOKS=true '
+                                 'to permit internal targets.'}
 
             req = Request(url, data=body, method='POST')
             req.add_header('Content-Type', content_type)
