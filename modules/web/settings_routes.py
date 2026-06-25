@@ -100,7 +100,7 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
                 validate_settings_post,
                 diff_settings_keys,
             )
-            data = request.json
+            data = request.json or {}
             # Load *before* validating: validate_settings_post uses the
             # current state to drop no-op echoes from a GET-then-POST-back
             # round-trip (the dominant pattern from the web UI).
@@ -147,6 +147,17 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
             if not settings_manager.atomic_update(filtered):
                 return jsonify({'error': 'Update failed'}), 500
 
+            # The deployment-status cache only reads its TTL at construction, so
+            # a persisted cache_ttl change was a silent no-op until restart. Push
+            # it live now that the write succeeded.
+            if 'cache_ttl' in filtered:
+                cache_manager = managers.get('cache')
+                if cache_manager and hasattr(cache_manager, 'update_cache_settings'):
+                    try:
+                        cache_manager.update_cache_settings()
+                    except Exception as e:
+                        logger.warning("Failed to apply cache_ttl live: %s", e)
+
             after = settings_manager.load_settings() or {}
             changed = diff_settings_keys(before, after)
             if audit_logger and changed:
@@ -174,7 +185,7 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
             users = auth_manager.list_users()
             return jsonify({'users': users})
 
-        data = request.json
+        data = request.json or {}
         username = data.get('username')
         password = data.get('password')
         role = data.get('role', 'viewer')
@@ -297,7 +308,7 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
             return jsonify(accounts)
 
         try:
-            data = request.json
+            data = request.json or {}
             name = data.get('name') or data.get('account_id')
             req_provider = provider or data.get('provider')
             config = data.get('config', {})
@@ -540,7 +551,7 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
                 return jsonify({'error': 'Failed to get deploy config'}), 500
 
         try:
-            data = request.json
+            data = request.json or {}
             ok, err = deploy_manager.save_config(data)
             if ok:
                 if audit_logger:

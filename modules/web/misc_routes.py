@@ -192,9 +192,13 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
         # Always return 200 — Flask is serving requests.
         # Load balancers and the conftest health-wait both check for 200.
         # The 'status' field ('healthy'/'degraded') is for monitoring systems.
+        # VERSION was never set in app.config, so /health always reported
+        # "unknown"; fall back to the canonical package version (same source
+        # Swagger and the Prometheus build_info use).
+        from modules import __version__
         return jsonify({
             'status': overall,
-            'version': app.config.get('VERSION', 'unknown'),
+            'version': app.config.get('VERSION') or __version__,
             'checks': checks
         })
 

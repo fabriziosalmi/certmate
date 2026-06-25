@@ -54,7 +54,11 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
             return jsonify(result)
         except DomainOutOfScope:
             return jsonify({'error': 'API key not authorized for this domain', 'code': 'DOMAIN_OUT_OF_SCOPE'}), 403
-        except (ValueError, FileExistsError) as e:
+        except FileExistsError:
+            # "Already exists" is a distinct, expected condition — 409 with a
+            # reissue hint, not a generic 400 (matches the flask-restx path).
+            return jsonify({'error': 'A certificate already exists for this domain. Use reissue to replace it.', 'code': 'CERTIFICATE_ALREADY_EXISTS'}), 409
+        except ValueError as e:
             # Log the specific reason; return a generic message so the caught
             # exception text never reaches the client (CodeQL py/stack-trace-exposure).
             logger.info("Certificate creation rejected: %s", e)
@@ -132,7 +136,11 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
                     )
                     results.append({'domain': domain, 'success': True, 'message': 'Certificate created'})
                 except Exception as e:
-                    results.append({'domain': domain, 'success': False, 'message': str(e)})
+                    # Log the detail; return a generic per-item message so raw
+                    # exception text (non-certbot ValueError/IO) never reaches
+                    # the client. Mirrors the single-cert path's non-disclosure.
+                    logger.warning(f"Batch create failed for {domain}: {e}")
+                    results.append({'domain': domain, 'success': False, 'message': 'Certificate creation failed'})
             return jsonify(results)
         except Exception as e:
             logger.error(f"Batch creation failed: {e}")
@@ -143,7 +151,7 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
     def download_batch_web():
         """Download multiple certificates as zip"""
         try:
-            data = request.json
+            data = request.json or {}
             domains = data.get('domains', [])
             if not domains:
                 return jsonify({'error': 'Domains required'}), 400
@@ -206,7 +214,7 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
     def test_dns_provider_web():
         """Test DNS provider configuration"""
         try:
-            data = request.json
+            data = request.json or {}
             provider = data.get('provider')
             config = data.get('config', {})
             if not provider:
@@ -247,8 +255,12 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
         except DomainOperationInProgress:
             return jsonify({'error': 'A certificate operation is already in progress for this domain', 'code': 'DOMAIN_OPERATION_IN_PROGRESS'}), 409
         except RuntimeError as e:
+            # Surface WHY (and flag the broken-renewal-config case with a reissue
+            # hint) instead of an opaque message. See classify_renewal_error.
             logger.error(f"Certificate renewal failed: {e}")
-            return jsonify({'error': 'Certificate renewal failed'}), 422
+            from ..core.utils import classify_renewal_error
+            message, code = classify_renewal_error(str(e))
+            return jsonify({'error': message, 'code': code}), 422
         except Exception as e:
             logger.error(f"Certificate renewal failed via web: {str(e)}")
             return jsonify({'error': 'Certificate renewal failed'}), 500

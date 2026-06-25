@@ -379,6 +379,39 @@ _CERTBOT_CONFIG_PATH_RE = re.compile(
 _CERTBOT_STDERR_MAX_BYTES = 4096
 
 
+def classify_renewal_error(reason: str) -> tuple:
+    """Map a renewal failure reason to a (user_message, code) pair.
+
+    The renew endpoints used to return an opaque ``"Certificate renewal failed"``
+    with HTTP 500, hiding diagnosable conditions. The most common one is a
+    *broken renewal configuration*: certbot's ``renewal/<domain>.conf`` bakes
+    absolute paths and expects the ``live/`` cert to be a symlink, so after the
+    data directory moves (e.g. a cert created on the host then mounted into the
+    container, or a relocated volume) certbot reports a ``parsefail`` and skips
+    the lineage. That is not a server fault — it is actionable: reissue.
+
+    Returns the clean broken-config message (no host paths leaked) with code
+    ``RENEWAL_CONFIG_BROKEN`` for that case, else a generic pair the caller can
+    pad with the sanitized reason.
+    """
+    low = (reason or '').lower()
+    broken_markers = ('parsefail', 'renewal configuration', 'is broken', 'to be a symlink')
+    if any(marker in low for marker in broken_markers):
+        return (
+            "This certificate's renewal configuration is broken: its certbot "
+            "config references paths that no longer exist. Use Edit & Reissue "
+            "to regenerate the certificate.",
+            'RENEWAL_CONFIG_BROKEN',
+        )
+    if 'not configured' in low and ('account' in low or 'dns provider' in low):
+        return (
+            "The DNS provider account this certificate uses is no longer "
+            "configured. Re-add it in Settings → DNS, then retry the renewal.",
+            'DNS_ACCOUNT_NOT_CONFIGURED',
+        )
+    return ('Certificate renewal failed', 'RENEWAL_FAILED')
+
+
 def sanitize_certbot_stderr(stderr_text: str) -> str:
     """Strip credential material from a certbot stderr blob before it
     is sent to an API client.
@@ -468,14 +501,22 @@ def generate_secure_token(length: int = 40) -> str:
 # =============================================
 
 def _create_config_file(plugin_name: str, content: str) -> Path:
-    """Generic helper to create a config file in the right directory."""
+    """Generic helper to create a per-operation credentials file.
+
+    The filename carries a random suffix so two concurrent operations on the
+    SAME provider (e.g. renewing a.com and b.com, both Cloudflare) no longer
+    write — and then delete in their ``finally`` — the same shared
+    ``<plugin>.ini``, which raced one certbot run's credentials out from under
+    another. Each caller deletes its own unique file. The directory is
+    unchanged so the certbot-stderr path sanitizer still redacts these paths.
+    """
     config_dir = Path("letsencrypt/config")
     config_dir.mkdir(parents=True, exist_ok=True)
-    
-    config_file = config_dir / f"{plugin_name}.ini"
+
+    config_file = config_dir / f"{plugin_name}-{secrets.token_hex(8)}.ini"
     with open(config_file, 'w', encoding='utf-8') as f:
         f.write(content)
-    
+
     config_file.chmod(0o600)
     return config_file
 

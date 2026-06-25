@@ -23,7 +23,7 @@ from flask_restx import Resource, fields
 from ..core.metrics import get_metrics_summary, is_prometheus_available
 from ..core.constants import CERTIFICATE_FILES, iter_cert_domain_dirs
 from ..core.auth import ROLE_HIERARCHY
-from ..core.utils import utc_now_iso
+from ..core.utils import utc_now_iso, classify_renewal_error
 from ..core.certificates import DomainOperationInProgress
 from ..core.cert_service import CertificateService, DomainOutOfScope
 from ..core.audit_context import audit_context_from_request
@@ -1942,6 +1942,20 @@ def create_api_resources(api, models, managers):
             except DomainOperationInProgress as e:
                 # Domain busy is not a failure; do not publish a failure event.
                 return {'error': str(e), 'code': 'DOMAIN_OPERATION_IN_PROGRESS'}, 409
+            except FileNotFoundError:
+                # Missing cert on disk is a 404, not a 500 (matches the web route).
+                return {'error': 'Certificate not found', 'code': 'NOT_FOUND'}, 404
+            except RuntimeError as e:
+                # A renewal failure is a certificate-level outcome, not a server
+                # fault: return 422 and say WHY (classify_renewal_error flags the
+                # broken-renewal-config case with an actionable reissue hint)
+                # instead of the old opaque 500 "Certificate renewal failed".
+                logger.error(f"Certificate renewal failed for {domain}: {str(e)}")
+                event_bus = current_app.config.get('EVENT_BUS')
+                if event_bus:
+                    event_bus.publish('certificate_failed', {'domain': domain, 'error': str(e)})
+                message, code = classify_renewal_error(str(e))
+                return {'error': message, 'code': code}, 422
             except Exception as e:
                 logger.error(f"Certificate renewal failed for {domain}: {str(e)}")
                 event_bus = current_app.config.get('EVENT_BUS')
@@ -2606,7 +2620,7 @@ def create_api_resources(api, models, managers):
             try:
                 file_ops_manager = managers.get('file_ops')
                 if not file_ops_manager:
-                    return {'error': 'File operations manager not available'}, 500
+                    return {'error': 'File operations manager not available'}, 503
 
                 if backup_type != 'unified':
                     return {'error': 'Only unified backup deletion is supported'}, 400
@@ -2659,7 +2673,7 @@ def create_api_resources(api, models, managers):
             try:
                 storage_manager = managers.get('storage')
                 if not storage_manager:
-                    return {'error': 'Storage manager not available'}, 500
+                    return {'error': 'Storage manager not available'}, 503
 
                 backend_name = storage_manager.get_backend_name()
                 settings = settings_manager.load_settings()
@@ -2872,7 +2886,7 @@ def create_api_resources(api, models, managers):
                 # Import CA manager
                 ca_manager = managers.get('ca')
                 if not ca_manager:
-                    return {'error': 'CA manager not available'}, 500
+                    return {'error': 'CA manager not available'}, 503
 
                 # Test connection based on CA provider type
                 try:
@@ -3105,7 +3119,7 @@ def create_api_resources(api, models, managers):
                             logger.error(f"CA provider connection test failed: {conn_error}")
                             return {
                                 'success': False,
-                                'message': f'Connection test failed: {conn_error}',
+                                'message': f'Connection test failed ({type(conn_error).__name__}). See server logs for details.',
                                 'ca_provider': ca_provider
                             }
                         finally:
@@ -3130,7 +3144,7 @@ def create_api_resources(api, models, managers):
 
             except Exception as e:
                 logger.error(f"Error testing CA provider: {e}")
-                return {'success': False, 'message': str(e)}, 500
+                return {'success': False, 'message': f'CA provider test failed ({type(e).__name__}). See server logs for details.'}, 500
 
     class StorageBackendMigrate(Resource):
         @api.doc(security='Bearer')
@@ -3221,7 +3235,7 @@ def create_api_resources(api, models, managers):
 
                     storage_manager = managers.get('storage')
                     if not storage_manager:
-                        return {'error': 'Storage manager not available'}, 500
+                        return {'error': 'Storage manager not available'}, 503
 
                     migration_results = storage_manager.migrate_certificates(
                         source_backend, target_backend)
@@ -3280,7 +3294,7 @@ def create_api_resources(api, models, managers):
                         )
                     return {
                         'success': False,
-                        'message': f'Migration failed: {migration_error}',
+                        'message': f'Migration failed ({type(migration_error).__name__}). See server logs for details.',
                         'source_backend': source_backend_type,
                         'target_backend': target_backend_type,
                     }, 500
@@ -3312,7 +3326,7 @@ def create_api_resources(api, models, managers):
             try:
                 storage_manager = managers.get('storage')
                 if not storage_manager:
-                    return {'error': 'Storage manager not available'}, 500
+                    return {'error': 'Storage manager not available'}, 503
 
                 backend = storage_manager.get_backend()
                 if backend.get_backend_name() != 'azure_keyvault':

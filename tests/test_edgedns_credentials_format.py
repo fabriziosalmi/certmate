@@ -79,9 +79,10 @@ def test_file_permissions_are_0600(edgedns_ini):
 
 
 def test_filename_is_edgedns_ini(edgedns_ini):
-    """Path is referenced by certbot --edgedns-credentials; pinning the
-    filename so we don't break that contract by accident."""
-    assert edgedns_ini.name == 'edgedns.ini'
+    """certbot receives this path via --edgedns-credentials explicitly, so the
+    file carries a per-operation random suffix (<provider>-<hex>.ini) to avoid a
+    same-provider race; the provider prefix + .ini suffix are what we pin."""
+    assert edgedns_ini.name.startswith('edgedns-') and edgedns_ini.name.endswith('.ini')
 
 
 def test_certbot_credentials_parser_reads_all_four_keys(edgedns_ini):
