@@ -1,3 +1,50 @@
+## v2.19.2 (Patch — heavy-use UI/UX, renewal robustness, security hardening, adoption fixes)
+
+A broad pass driven by hands-on review of the most-used surfaces plus an adversarial multi-agent sweep of the backend, API, security posture, and docs. No change to the core issuance protocol; gated through the full real-cert E2E suite (Let's Encrypt via Cloudflare DNS-01).
+
+### Security
+
+- **OIDC account-takeover via a custom `email_claim` is closed.** The verified-email gate read the standard `email_verified` claim, which only attests the standard `email` claim — so an IdP that let a user self-set a custom claim (e.g. `mail`) could present a verified throwaway address while matching an admin's address via the custom claim and inherit that row's role. Linking now only trusts verification when the matched address is the verified standard email.
+- **Flask session cookie hardened.** It carries the OIDC PKCE transients (state / nonce / code_verifier); it is now `SameSite=Lax` and marked `Secure` when an HTTPS deployment is signalled, so those values no longer transit in cleartext.
+- **`.secret_key` is written 0600 race-free** (no brief world-readable window between write and chmod).
+- **Webhook SSRF guard.** Webhook delivery, including the interactive Test button, refuses targets that resolve to loopback / private / link-local / reserved addresses (e.g. the cloud metadata endpoint). Opt out with `CERTMATE_ALLOW_INTERNAL_WEBHOOKS=true` for legitimate internal targets.
+
+### Certificate renewal and reissue
+
+- **Renewal is now CWD-independent.** It passes the DNS credentials explicitly instead of trusting the (often relative) credentials path certbot baked into the renewal config at issue time, which silently broke renewal for file-based DNS providers whenever the process working directory differed between issuance and renewal.
+- **Per-operation credentials file.** The shared `letsencrypt/config/<provider>.ini` is now uniquely named per operation, removing a race where two concurrent same-provider operations clobbered/deleted each other's credentials mid-run.
+- **"Edit and Reissue" repairs a broken lineage.** A reissue now quarantines a parsefail certbot lineage (stale absolute paths or a non-symlink live cert, e.g. after a data-dir move or a backup restore) before issuing, so the remediation the UI recommends actually works.
+- **Clear failures instead of an opaque 500.** Renewal fails fast with a clear message when the cert's DNS account is no longer configured, and a broken renewal config returns a 422 with an actionable `RENEWAL_CONFIG_BROKEN` code rather than a generic 500.
+
+### UI and UX
+
+- **Certificate detail modal redesigned** (one of the most-used surfaces): integrated status banner (status, days, and date as one datum at equal weight), a monospace single-line copyable domain, an inline auto-renew toggle, a separated Deployment section with a view/edit deploy-hook link, and consistent icon quick-actions matching the table row.
+- **Dashboard stat cards redesigned** with hero numbers and a reactive state accent; the previously-invisible "expired" count is now surfaced.
+- **Top bar restructured**: Search first, icon-only navigation with grouping dividers, theme toggle moved to Settings (auto by default), and a full Notifications page (with client-side snooze) replacing the dropdown.
+- **Activity** entries open a detail modal (full metadata, command output, copy-as-JSON, filter actions).
+- **Client Certificates table**: sortable columns, whole-row click to open details, and a redesigned modal consistent with the server one.
+- **Advanced Options toggle fixed**: the button's `id` collided with its handler's name inside the form, so the form's named-element access shadowed the global function (DOM clobbering); renamed the id.
+- Settings: General tab first; an Appearance theme override (Auto / Light / Dark); modal background scroll-lock; provider brand logos in the DNS selector, table, and detail modal; a clearer backup section.
+
+### API and robustness
+
+- Empty JSON request bodies no longer 500 (six web endpoints now tolerate a missing body).
+- A changed `cache_ttl` takes effect without a restart.
+- "Manager not available" conditions return 503 instead of 500 across the storage / CA / backup endpoints.
+- Raw exception strings are no longer echoed to clients in the CA / storage-migrate / batch-create paths.
+- `/health` reports the real application version (it previously always returned "unknown").
+
+### Adoption and docs
+
+- The bundled nginx compose profile pointed at a flat `cert.pem` / `key.pem` that CertMate never produces; corrected to the per-domain `fullchain.pem` / `privkey.pem` with a note.
+- The README quick-start `docker run` used a placeholder image and bound `0.0.0.0`; it now uses the real image and binds `127.0.0.1`.
+- Added five DNS providers missing from the README table (Hetzner Cloud, Scaleway, deSEC, DuckDNS, Custom Script).
+- Fixed the contributor setup (the referenced `requirements-dev.txt` and pre-commit config do not exist), added an Upgrading section to the Docker docs, and refreshed the SECURITY.md supported-version line.
+
+### Dependencies
+
+- Alpine.js 3.15.8 to 3.15.12 (patch-level).
+
 ## v2.19.1 (Patch — UI defect sweep, accessibility, design-token consistency)
 
 A focused frontend pass from an internal UI/UX audit: objective interaction bugs, a broad accessibility upgrade, and design-token consistency. No change to certificate issuance; gated through the full real-cert E2E suite (Let's Encrypt staging via Cloudflare DNS-01).
