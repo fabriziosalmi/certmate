@@ -704,11 +704,8 @@
                 <td class="px-4 py-4 whitespace-nowrap text-right">
                     <div class="flex items-center justify-end gap-1">
                         ${roleAtLeast('operator') ? actionBtn('renew', cert.domain, 'green', 'Renew', 'fa-sync-alt') : false}
-                        ${roleAtLeast('operator') ? actionBtn('force-renew', cert.domain, 'amber', 'Force renew', 'fa-bolt') : false}
                         ${actionBtn('download', cert.domain, 'blue', 'Download', 'fa-download')}
-                        ${actionBtn('curl', cert.domain, 'indigo', 'API', 'fa-code')}
-                        ${roleAtLeast('operator') ? rowRaw(autoRenewButtonHtml(escapeHtml(cert.domain), cert.auto_renew !== false)) : false}
-                        ${roleAtLeast('admin') ? actionBtn('delete', cert.domain, 'red', 'Delete certificate', 'fa-trash-alt') : false}
+                        ${rowRaw('<button type="button" data-more-domain="' + escapeHtml(cert.domain) + '" data-autorenew="' + (cert.auto_renew !== false ? 'true' : 'false') + '" data-op="' + (roleAtLeast('operator') ? '1' : '0') + '" data-admin="' + (roleAtLeast('admin') ? '1' : '0') + '" onclick="event.stopPropagation()" class="inline-flex items-center justify-center p-2 text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-100 rounded hover:bg-hover" title="More actions" aria-label="More actions for ' + escapeHtml(cert.domain) + '" aria-haspopup="menu"><i class="fas fa-ellipsis-vertical" aria-hidden="true"></i></button>')}
                     </div>
                 </td>
             </tr>`;
@@ -731,9 +728,72 @@
             });
         });
 
+        // "More actions" overflow menu (force-renew, API, auto-renew, delete).
+        container.querySelectorAll('button[data-more-domain]').forEach(function (btn) {
+            btn.addEventListener('click', function (e) { e.stopPropagation(); openRowMenu(btn); });
+        });
+
         // Automatic deployment checks are triggered once, from loadCertificates(),
         // via runDeploymentChecks() — batched and deduped. We intentionally do NOT
         // fire a second (unbatched) pass here.
+    }
+
+    // Row "More actions" overflow menu. Secondary cert actions live here so the
+    // row shows only the daily-use Renew + Download inline. Appended to <body>
+    // (position:fixed) so the table's overflow-hidden / overflow-x-auto wrappers
+    // don't clip it.
+    var _rowMenu = null;
+    function closeRowMenu() {
+        if (!_rowMenu) return;
+        _rowMenu.remove();
+        _rowMenu = null;
+        document.removeEventListener('click', _rowMenuAway, true);
+        document.removeEventListener('keydown', _rowMenuKey, true);
+    }
+    function _rowMenuAway(e) {
+        if (_rowMenu && !_rowMenu.contains(e.target) && !e.target.closest('[data-more-domain]')) closeRowMenu();
+    }
+    function _rowMenuKey(e) { if (e.key === 'Escape') closeRowMenu(); }
+    function _menuItem(icon, label, danger) {
+        return '<button type="button" role="menuitem" class="w-full flex items-center gap-2 px-3 py-2 text-left ' +
+            (danger ? 'text-danger-fg hover:bg-red-50 dark:hover:bg-red-900/20' : 'text-foreground hover:bg-hover') +
+            '"><i class="fas ' + icon + ' w-4 ' + (danger ? '' : 'text-muted') + '" aria-hidden="true"></i>' + label + '</button>';
+    }
+    function openRowMenu(btn) {
+        closeRowMenu();
+        var domain = btn.getAttribute('data-more-domain');
+        var autoOn = btn.getAttribute('data-autorenew') === 'true';
+        var isOp = btn.getAttribute('data-op') === '1';
+        var isAdmin = btn.getAttribute('data-admin') === '1';
+        var actions = [];
+        if (isOp) actions.push({ html: _menuItem('fa-bolt', 'Force renew'), fn: function () { renewCertificate(domain, true); } });
+        actions.push({ html: _menuItem('fa-code', 'Copy API command'), fn: function () { copyCurlCommand(domain); } });
+        if (isOp) actions.push({ html: _menuItem(autoOn ? 'fa-toggle-on' : 'fa-toggle-off', autoOn ? 'Disable auto-renew' : 'Enable auto-renew'), fn: function () { toggleAutoRenew(domain, autoOn); } });
+        if (isAdmin) actions.push({ html: '<div class="my-1 border-t border-border"></div>' + _menuItem('fa-trash-can', 'Delete certificate', true), fn: function () { deleteCertificate(domain); } });
+        if (!actions.length) return;
+        var menu = document.createElement('div');
+        menu.className = 'fixed w-52 py-1 bg-surface border border-border rounded-lg shadow-xl text-sm';
+        menu.style.zIndex = '60';
+        menu.setAttribute('role', 'menu');
+        menu.innerHTML = actions.map(function (a) { return a.html; }).join('');
+        document.body.appendChild(menu);
+        var r = btn.getBoundingClientRect();
+        var top = r.bottom + 4;
+        var left = r.right - menu.offsetWidth;
+        if (top + menu.offsetHeight > window.innerHeight - 8) top = Math.max(8, r.top - menu.offsetHeight - 4);
+        if (left < 8) left = 8;
+        menu.style.top = top + 'px';
+        menu.style.left = left + 'px';
+        var items = menu.querySelectorAll('button[role="menuitem"]');
+        items.forEach(function (b, i) {
+            b.addEventListener('click', function () { closeRowMenu(); actions[i].fn(); });
+        });
+        _rowMenu = menu;
+        setTimeout(function () {
+            document.addEventListener('click', _rowMenuAway, true);
+            document.addEventListener('keydown', _rowMenuKey, true);
+        }, 0);
+        if (items[0]) items[0].focus();
     }
 
     // Certificate detail slide-out panel
