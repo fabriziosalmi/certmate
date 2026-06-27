@@ -608,7 +608,7 @@
 
             if (!cert.exists) {
                 return rowHtml`<tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer" tabindex="0" role="button" aria-label="View details for ${cert.domain}" onclick="openCertDetail('${cert.domain}')" onkeydown="certRowKey(event, '${cert.domain}')">
-                    <td class="px-6 py-4 max-w-0"><div class="text-sm font-medium text-foreground truncate">${cert.domain}</div></td>
+                    <td class="px-6 py-4 md:max-w-0"><div class="text-sm font-medium text-foreground break-words md:truncate">${cert.domain}</div></td>
                     <td class="px-4 py-4 whitespace-nowrap"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-500/10 text-danger-fg ring-1 ring-inset ring-red-500/20"><i class="fas fa-times-circle mr-1"></i>Not Found</span></td>
                     <td class="px-4 py-4 whitespace-nowrap hidden md:table-cell text-sm text-muted">\u2014</td>
                     <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">${providerLabel ? rowRaw(providerCellHtml(cert.dns_provider, providerLabel)) : '\u2014'}</td>
@@ -672,24 +672,24 @@
             // the meta block, reading as a card on phones without breaking
             // the table on bigger screens.
             var mobileExpiryLine = (daysKnown && cert.expiry_date)
-                ? rowRaw(rowHtml`<div class="flex items-center text-xs"><i class="fas fa-clock mr-1.5 w-3 shrink-0 text-muted" aria-hidden="true"></i><span class="truncate"><span class="font-semibold ${rowRaw(daysClass)}">${daysText}</span><span class="text-muted"> · ${expiryStr}</span></span></div>`)
+                ? rowRaw(rowHtml`<div class="md:hidden flex items-center text-xs"><i class="fas fa-clock mr-1.5 w-3 shrink-0 text-muted" aria-hidden="true"></i><span><span class="font-semibold ${rowRaw(daysClass)}">${daysText}</span><span class="text-muted"> · ${expiryStr}</span></span></div>`)
                 : false;
             var mobileProviderLine = providerLabel
                 ? rowRaw(rowHtml`<div class="flex items-center text-xs text-muted">${rowRaw(providerCellHtml(cert.dns_provider, providerLabel))}</div>`)
                 : false;
             var mobileDeploymentLine = rowRaw(rowHtml`<div class="flex items-start text-xs text-muted"><i class="fas fa-rocket mr-1.5 mt-0.5 w-3 shrink-0" aria-hidden="true"></i><div class="flex-1 min-w-0">${rowRaw(deploymentBadgesHtml(cert))}</div></div>`);
-            var mobileMeta = rowRaw(rowHtml`<div class="md:hidden mt-2 pt-2 border-t border-gray-100 dark:border-gray-700/50 space-y-1">${mobileExpiryLine}${mobileProviderLine}${mobileDeploymentLine}</div>`);
+            var mobileMeta = rowRaw(rowHtml`<div class="lg:hidden mt-2 pt-2 border-t border-gray-100 dark:border-gray-700/50 space-y-1">${mobileExpiryLine}${mobileProviderLine}${mobileDeploymentLine}</div>`);
             var lockColor = isExpired ? 'text-red-400' : isExpiringSoon ? 'text-yellow-400' : 'text-green-500';
             // An expired cert is no longer trusted; a closed padlock (the
             // "secure connection" glyph) is a visual paradox there. Show an
             // open padlock for expired so the icon matches the state.
             var lockIcon = isExpired ? 'fa-lock-open' : 'fa-lock';
             return rowHtml`<tr class="${rowRaw(healthClass)} row-enter hover:bg-blue-50/40 dark:hover:bg-blue-900/10 transition-colors duration-150 cursor-pointer" style="animation-delay:${rowRaw(String(i * 30))}ms" tabindex="0" role="button" aria-label="View details for ${cert.domain}" onclick="openCertDetail('${cert.domain}')" onkeydown="certRowKey(event, '${cert.domain}')">
-                <td class="px-6 py-4 max-w-0">
+                <td class="px-6 py-4 md:max-w-0">
                     <div class="flex items-center min-w-0">
                         <i class="fas ${rowRaw(lockIcon)} ${rowRaw(lockColor)} mr-2 text-sm shrink-0" aria-hidden="true"></i>
                         <div class="min-w-0">
-                            <div class="text-sm font-medium text-foreground truncate">${cert.domain}</div>
+                            <div class="text-sm font-medium text-foreground break-words md:truncate">${cert.domain}</div>
                             ${aliasHint}
                             ${mobileMeta}
                         </div>
