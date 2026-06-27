@@ -78,14 +78,46 @@
         var ACTIVITY_MAX_LIMIT = 500;
         var currentLimit = ACTIVITY_INITIAL_LIMIT;
 
+        // Coherent glyph+colour semantics per operation FAMILY so the icon
+        // column triages at a glance instead of a wall of identical grey discs:
+        // green=create, blue=update, cyan=renew, red=delete/revoke,
+        // purple=deploy, indigo=download, teal=restore, amber=auto-renew/test,
+        // slate/grey=maintenance/read/API. Unknown ops fall back to a grey circle.
         var opIcons = {
-            create: { icon: 'fa-plus-circle', color: 'text-green-500', bg: 'bg-success-surface' },
-            renew: { icon: 'fa-sync', color: 'text-blue-500', bg: 'bg-info-surface' },
-            revoke: { icon: 'fa-ban', color: 'text-red-500', bg: 'bg-danger-surface' },
-            download: { icon: 'fa-download', color: 'text-indigo-500', bg: 'bg-indigo-100 dark:bg-indigo-900/30' },
-            api_request: { icon: 'fa-code', color: 'text-gray-500', bg: 'bg-surface-2' },
-            batch_create: { icon: 'fa-layer-group', color: 'text-purple-500', bg: 'bg-purple-100 dark:bg-purple-900/30' },
-            failure: { icon: 'fa-exclamation-circle', color: 'text-red-500', bg: 'bg-danger-surface' }
+            // create (green)
+            create:              { icon: 'fa-plus-circle',       color: 'text-green-500',  bg: 'bg-success-surface' },
+            create_account:      { icon: 'fa-user-plus',         color: 'text-green-500',  bg: 'bg-success-surface' },
+            batch_create:        { icon: 'fa-layer-group',       color: 'text-green-500',  bg: 'bg-success-surface' },
+            oidc_login_success:  { icon: 'fa-right-to-bracket',  color: 'text-green-500',  bg: 'bg-success-surface' },
+            // update (blue)
+            update:              { icon: 'fa-pen',               color: 'text-blue-500',   bg: 'bg-info-surface' },
+            update_config:       { icon: 'fa-sliders',           color: 'text-blue-500',   bg: 'bg-info-surface' },
+            update_account:      { icon: 'fa-user-pen',          color: 'text-blue-500',   bg: 'bg-info-surface' },
+            oidc_config_changed: { icon: 'fa-id-badge',          color: 'text-blue-500',   bg: 'bg-info-surface' },
+            // renew (cyan) / auto-renew (amber)
+            renew:               { icon: 'fa-arrows-rotate',     color: 'text-cyan-500',   bg: 'bg-cyan-100 dark:bg-cyan-900/30' },
+            set_auto_renew:      { icon: 'fa-clock-rotate-left', color: 'text-amber-500',  bg: 'bg-warning-surface' },
+            // delete / revoke (red)
+            revoke:              { icon: 'fa-ban',               color: 'text-red-500',    bg: 'bg-danger-surface' },
+            delete:              { icon: 'fa-trash-can',         color: 'text-red-500',    bg: 'bg-danger-surface' },
+            delete_account:      { icon: 'fa-user-minus',        color: 'text-red-500',    bg: 'bg-danger-surface' },
+            clear:               { icon: 'fa-eraser',            color: 'text-red-500',    bg: 'bg-danger-surface' },
+            oidc_login_failure:  { icon: 'fa-right-to-bracket',  color: 'text-red-500',    bg: 'bg-danger-surface' },
+            // deploy (purple)
+            deploy:              { icon: 'fa-rocket',            color: 'text-purple-500', bg: 'bg-purple-100 dark:bg-purple-900/30' },
+            deploy_hook:         { icon: 'fa-bolt',              color: 'text-purple-500', bg: 'bg-purple-100 dark:bg-purple-900/30' },
+            // download (indigo)
+            download:            { icon: 'fa-download',          color: 'text-indigo-500', bg: 'bg-indigo-100 dark:bg-indigo-900/30' },
+            batch_download:      { icon: 'fa-file-zipper',       color: 'text-indigo-500', bg: 'bg-indigo-100 dark:bg-indigo-900/30' },
+            // restore / maintenance (teal / slate)
+            restore:             { icon: 'fa-clock-rotate-left', color: 'text-teal-500',   bg: 'bg-teal-100 dark:bg-teal-900/30' },
+            backfill:            { icon: 'fa-database',          color: 'text-slate-500',  bg: 'bg-surface-2' },
+            migrate:             { icon: 'fa-arrow-right-arrow-left', color: 'text-slate-500', bg: 'bg-surface-2' },
+            // read / API / test
+            access:              { icon: 'fa-eye',               color: 'text-gray-500',   bg: 'bg-surface-2' },
+            api_request:         { icon: 'fa-code',              color: 'text-gray-500',   bg: 'bg-surface-2' },
+            test:                { icon: 'fa-vial',              color: 'text-amber-500',  bg: 'bg-warning-surface' },
+            failure:             { icon: 'fa-exclamation-circle', color: 'text-red-500',   bg: 'bg-danger-surface' }
         };
 
         function getOpStyle(entry) {
