@@ -27,16 +27,13 @@
                     <i class="fas fa-id-card" aria-hidden="true"></i>Client
                 </button>
                 <span class="mx-1 h-6 w-px bg-border" aria-hidden="true"></span>
-                <button type="button" onclick="openCertDrawer()" x-show="certView === 'server'" x-cloak
+                <button type="button" @click="openCertDrawer(certView)"
                         class="inline-flex items-center gap-2 px-3.5 py-2 text-sm font-semibold rounded-lg bg-primary text-white hover:bg-secondary transition-colors shadow-sm"
                         title="New certificate">
                     <i class="fas fa-plus" aria-hidden="true"></i>New
                 </button>
             </div>
         </div>
-
-        <!-- SERVER CERTIFICATES -->
-        <div x-show="certView === 'server'">
 
         <!-- Create Certificate drawer (overlay from the right). The form below
              was relocated out of the inline layout to kill the layout-jump;
@@ -54,7 +51,7 @@
                             <i class="fas fa-plus-circle mr-2 text-primary"></i>
                             Create New Certificate
                         </h3>
-                        <p class="text-sm text-muted mt-1">Generate SSL certificates with multiple CA providers and advanced DNS challenge support</p>
+                        <p id="drawerSubtitle" class="text-sm text-muted mt-1">Generate SSL certificates with multiple CA providers and advanced DNS challenge support</p>
                     </div>
                     <div class="flex items-center space-x-2">
                         <button type="button" onclick="closeCertDrawer()" class="ml-3 inline-flex items-center justify-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-2 rounded hover:bg-hover" title="Close form" aria-label="Close create certificate form">
@@ -64,6 +61,19 @@
                 </div>
             </div>
             <div class="px-6 py-6 flex-1 overflow-y-auto">
+                <!-- Type segmented: the decision, in the head. Preset from the
+                     active view; locally overridable for this one creation. -->
+                <div class="grid grid-cols-2 gap-1.5 rounded-xl border border-border bg-surface-2 p-1.5 mb-5" role="group" aria-label="Certificate type">
+                    <button type="button" id="drawerTypeServer" aria-pressed="true" onclick="setDrawerType('server')"
+                            class="inline-flex items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-semibold text-muted hover:text-foreground transition-all aria-pressed:bg-surface aria-pressed:text-primary aria-pressed:shadow-sm">
+                        <i class="fas fa-globe" aria-hidden="true"></i>Server
+                    </button>
+                    <button type="button" id="drawerTypeClient" aria-pressed="false" onclick="setDrawerType('client')"
+                            class="inline-flex items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-semibold text-muted hover:text-foreground transition-all aria-pressed:bg-surface aria-pressed:text-primary aria-pressed:shadow-sm">
+                        <i class="fas fa-id-card" aria-hidden="true"></i>Client
+                    </button>
+                </div>
+                <div id="form-server">
                 <form id="createCertForm" class="space-y-6">
                     <!-- Main Certificate Configuration -->
                     <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -326,6 +336,10 @@
                         </div>
                     </div>
                 </form>
+                </div><!-- /#form-server -->
+                <div id="form-client" class="hidden">
+                    {% include 'partials/_client_create.html' %}
+                </div>
             </div>
         </div>
         </div><!-- /createCertFormContainer -->
@@ -335,15 +349,35 @@
         // inline expand-in-place form that pushed the page down on open. The
         // form markup and all its field IDs are unchanged, so the submit
         // handler in dashboard.js keeps working untouched.
-        function openCertDrawer() {
+        function setDrawerType(type) {
+            var isServer = type !== 'client';
+            var fs = document.getElementById('form-server');
+            var fc = document.getElementById('form-client');
+            if (fs) fs.classList.toggle('hidden', !isServer);
+            if (fc) fc.classList.toggle('hidden', isServer);
+            var bs = document.getElementById('drawerTypeServer');
+            var bc = document.getElementById('drawerTypeClient');
+            if (bs) bs.setAttribute('aria-pressed', isServer ? 'true' : 'false');
+            if (bc) bc.setAttribute('aria-pressed', isServer ? 'false' : 'true');
+            var sub = document.getElementById('drawerSubtitle');
+            if (sub) sub.textContent = isServer
+                ? 'Generate SSL certificates with multiple CA providers and advanced DNS challenge support'
+                : 'Client identity for mTLS, VPN or user authentication';
+            // Bind the client form lazily (initClientCerts is idempotent) so it
+            // works even if the drawer is opened to Client without first
+            // visiting the Client tab.
+            if (!isServer && typeof initClientCerts === 'function') initClientCerts();
+        }
+        function openCertDrawer(type) {
             var d = document.getElementById('createCertFormContainer');
             var s = document.getElementById('certDrawerScrim');
             if (!d) return;
+            setDrawerType(type === 'client' ? 'client' : 'server');
             d.classList.remove('translate-x-full');
             if (s) { s.classList.remove('opacity-0', 'pointer-events-none'); s.classList.add('opacity-100'); }
             try { CertMate.lockScroll(); } catch (e) {}
-            var dom = document.getElementById('domain');
-            if (dom) setTimeout(function () { dom.focus(); }, 320);
+            var focusTarget = (type === 'client') ? document.getElementById('commonName') : document.getElementById('domain');
+            if (focusTarget) setTimeout(function () { focusTarget.focus(); }, 320);
         }
         function closeCertDrawer() {
             var d = document.getElementById('createCertFormContainer');
@@ -354,8 +388,8 @@
         }
         // Back-compat aliases — the dashboard empty-state CTA and any other
         // caller used these names to reveal the (now drawer) create form.
-        function toggleCreateCertForm() { openCertDrawer(); }
-        function openCreateCertForm() { openCertDrawer(); }
+        function toggleCreateCertForm() { openCertDrawer('server'); }
+        function openCreateCertForm() { openCertDrawer('server'); }
         document.addEventListener('keydown', function (e) {
             if (e.key === 'Escape') {
                 var d = document.getElementById('createCertFormContainer');
@@ -364,6 +398,9 @@
         });
         </script>
 
+        <!-- SERVER CERTIFICATES (stats + table). The creation drawer sits
+             above, outside this x-show, so it is available from either view. -->
+        <div x-show="certView === 'server'">
         <!-- Statistics Cards (skeleton placeholders rendered by JS on
              DOMContentLoaded; count is driven by STAT_METRICS_COUNT in
              dashboard.js so the placeholder matches whatever number of
