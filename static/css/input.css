@@ -139,6 +139,16 @@ button:not(.btn):focus-visible,
   border-radius: 3px;
 }
 
+/* ── Horizontal scroll affordance ────────────────────────────────
+   overflow-x-auto hides its scrollbar on overlay-scrollbar platforms
+   (macOS) until you actively scroll, so a clipped strip — e.g. the 11
+   Settings tabs at tablet width — gives no hint that more is hidden.
+   Force a thin, always-present scrollbar once the content overflows. */
+.scroll-x-affordance { scrollbar-width: thin; scrollbar-color: rgba(120, 120, 120, .45) transparent; }
+.scroll-x-affordance::-webkit-scrollbar { height: 6px; }
+.scroll-x-affordance::-webkit-scrollbar-thumb { background: rgba(120, 120, 120, .45); border-radius: 3px; }
+.scroll-x-affordance::-webkit-scrollbar-track { background: transparent; }
+
 /* ── Table readability ───────────────────────────────────────── */
 /* #8:  Impercettible zebra striping for horizontal eye-tracking */
 /* #22: Focus-within highlight for keyboard navigation          */
