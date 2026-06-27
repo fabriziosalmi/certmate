@@ -301,6 +301,12 @@
     // Global variable to store all certificates
     var allCertificates = [];
 
+    // Async issuance lifecycle (redesign phase 3). A create submitted with
+    // async:true returns 202 + a job id; we track each in-flight job here so the
+    // table can show an optimistic "Issuing" row and poll the job to resolution.
+    var pendingJobs = {};        // job_id -> { domain, provider, sanCount, state, error, errorCode, payload, domainsDisplay }
+    var pendingPollTimers = {};  // job_id -> setTimeout handle
+
     // Filter and search certificates
     function filterCertificates() {
         var searchTerm = document.getElementById('certificateSearch').value.toLowerCase();
@@ -543,7 +549,7 @@
             thead.style.display = 'none';
 
             if (isFiltered) {
-                container.innerHTML = '<tr><td colspan="6">' +
+                container.innerHTML = '<tr data-empty-state><td colspan="6">' +
                     '<div class="px-6 py-12 text-center">' +
                     '<div class="mx-auto max-w-sm border-2 border-dashed border-border rounded-xl p-8">' +
                     '<div class="mx-auto h-16 w-16 flex items-center justify-center bg-surface-2 rounded-full mb-4">' +
@@ -557,7 +563,7 @@
                     '</div>' +
                     '</td></tr>';
             } else {
-                container.innerHTML = '<tr><td colspan="6">' +
+                container.innerHTML = '<tr data-empty-state><td colspan="6">' +
                     '<div class="px-6 py-8"><div class="mx-auto max-w-lg">' +
                     '<div class="text-center mb-6">' +
                     '<div class="mx-auto h-16 w-16 flex items-center justify-center bg-info-surface rounded-full mb-4"><i class="fas fa-rocket text-blue-500 text-2xl"></i></div>' +
@@ -579,6 +585,7 @@
                     '</div></div>' +
                     '</td></tr>';
             }
+            renderPendingRows();
             return;
         }
 
@@ -736,6 +743,10 @@
         // Automatic deployment checks are triggered once, from loadCertificates(),
         // via runDeploymentChecks() — batched and deduped. We intentionally do NOT
         // fire a second (unbatched) pass here.
+
+        // Re-attach any optimistic Issuing/Failed rows on top: a full rebuild
+        // here (loadCertificates or a filter pass) would otherwise drop them.
+        renderPendingRows();
     }
 
     // Row "More actions" overflow menu. Secondary cert actions live here so the
@@ -2170,6 +2181,16 @@
             requestBody.elliptic_curve = document.getElementById('cert_elliptic_curve').value;
         }
 
+        // Phase 3: opt fresh creates into async issuance so the UI can show an
+        // optimistic "Issuing" row + poll the job instead of blocking on the
+        // full ACME round-trip. Reissue stays synchronous — it edits a row that
+        // already exists, so an optimistic new row would be wrong. If the server
+        // has no async executor it ignores the flag and replies synchronously,
+        // which the 202-vs-200 branch below handles transparently.
+        if (!editingDomain) {
+            requestBody.async = true;
+        }
+
         var submitEndpoint = editingDomain
             ? '/api/certificates/' + encodeURIComponent(editingDomain) + '/reissue'
             : '/api/certificates/create';
@@ -2180,22 +2201,19 @@
             body: JSON.stringify(requestBody)
         }).then(function (response) {
             return response.json().then(function (result) {
+                // Async accepted (202): the server queued the issuance and
+                // handed back a job id. Show the optimistic row + poll instead
+                // of treating this as a finished create.
+                if (response.status === 202 && result && result.job_id) {
+                    handleAsyncAccepted(result, requestBody, domainsDisplay);
+                    return;
+                }
                 if (response.ok && result.success !== false) {
                     showMessage('Certificate ' + (editingDomain ? 'reissued' : 'created') + ' successfully for ' + domainsDisplay + '!', 'success');
                     if (editingDomain) {
                         cancelEditReissue();
                     } else {
-                        document.getElementById('domain').value = '';
-                        document.getElementById('san_domains').value = '';
-                        document.getElementById('wildcard-cert').checked = false;
-                        document.getElementById('challenge_type_select').value = '';
-                        document.getElementById('dns_provider_select').value = '';
-                        document.getElementById('account_select').value = '';
-                        document.getElementById('ca_provider_select').value = '';
-                        var aliasField = document.getElementById('dns_alias_domain');
-                        if (aliasField) { aliasField.value = ''; }
-                        updateDnsAliasHelp();
-                        toggleDnsProviderVisibility();
+                        clearCreateFormAfterSubmit();
                     }
                     updateAccountSelection();
                     loadCertificates();
@@ -2238,6 +2256,219 @@
             isCreatingCert = false;
         });
     });
+
+    // ===== Async issuance lifecycle (redesign phase 3) =======================
+    // When a create is accepted asynchronously the table gets an optimistic
+    // "Issuing" row at the top; we poll the job endpoint and resolve the row to
+    // the real certificate (success, via loadCertificates) or to a "Failed" row
+    // carrying the reason + a Retry button. There is no certificate_failed SSE
+    // handler, so polling owns the failure path.
+
+    // Reset the create form to its empty state after a submit was accepted
+    // (shared by the sync-success and async-accepted paths).
+    function clearCreateFormAfterSubmit() {
+        document.getElementById('domain').value = '';
+        document.getElementById('san_domains').value = '';
+        document.getElementById('wildcard-cert').checked = false;
+        document.getElementById('challenge_type_select').value = '';
+        document.getElementById('dns_provider_select').value = '';
+        document.getElementById('account_select').value = '';
+        document.getElementById('ca_provider_select').value = '';
+        var aliasField = document.getElementById('dns_alias_domain');
+        if (aliasField) { aliasField.value = ''; }
+        updateDnsAliasHelp();
+        toggleDnsProviderVisibility();
+    }
+
+    function buildPendingRowsHtml() {
+        var ids = Object.keys(pendingJobs);
+        if (!ids.length) return '';
+        // A job whose real certificate has already landed (SSE/reload beat our
+        // poll) is obsolete — skip its optimistic row so the table never shows
+        // both an "Issuing" and a "Valid" row for the same domain.
+        var live = {};
+        (allCertificates || []).forEach(function (c) { if (c && c.exists) { live[c.domain] = true; } });
+        var parts = [];
+        // Newest first: a just-submitted job should sit at the very top.
+        ids.slice().reverse().forEach(function (id) {
+            var job = pendingJobs[id];
+            if (!job) return;
+            if (job.state !== 'failed' && live[job.domain]) return;
+            parts.push(job.state === 'failed' ? failedRowHtml(id, job) : issuingRowHtml(id, job));
+        });
+        return parts.join('');
+    }
+
+    function issuingRowHtml(jobId, job) {
+        var domain = escapeHtml(job.domain || '');
+        var providerLabel = job.provider ? escapeHtml(providerDisplayName(job.provider)) : '—';
+        var sub = job.sanCount > 0
+            ? ('+' + job.sanCount + ' SAN' + (job.sanCount > 1 ? 's' : ''))
+            : 'Requesting certificate…';
+        return '<tr data-pending-job="' + jobId + '" class="bg-blue-50/40 dark:bg-blue-900/10">' +
+            '<td class="px-6 py-4 md:max-w-0"><div class="flex items-center min-w-0">' +
+            '<i class="fas fa-spinner fa-spin text-info-fg mr-2 text-sm shrink-0" aria-hidden="true"></i>' +
+            '<div class="min-w-0"><div class="text-sm font-medium text-foreground break-words md:truncate">' + domain + '</div>' +
+            '<div class="mt-1 text-xs text-muted">' + sub + '</div></div></div></td>' +
+            '<td class="px-4 py-4 whitespace-nowrap"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-500/10 text-info-fg ring-1 ring-inset ring-blue-500/20"><i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i>Issuing</span></td>' +
+            '<td class="px-4 py-4 whitespace-nowrap hidden md:table-cell text-sm text-muted">—</td>' +
+            '<td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">' + providerLabel + '</td>' +
+            '<td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">—</td>' +
+            '<td class="px-4 py-4 whitespace-nowrap text-right"><span class="text-xs text-muted">Just now</span></td>' +
+            '</tr>';
+    }
+
+    function failedRowHtml(jobId, job) {
+        var domain = escapeHtml(job.domain || '');
+        var providerLabel = job.provider ? escapeHtml(providerDisplayName(job.provider)) : '—';
+        var rawErr = String(job.error || 'Certificate issuance failed');
+        var errText = escapeHtml(rawErr.length > 140 ? rawErr.slice(0, 137) + '…' : rawErr);
+        var errTitle = escapeHtml(rawErr);
+        return '<tr data-pending-job="' + jobId + '" class="bg-red-50/40 dark:bg-red-900/10">' +
+            '<td class="px-6 py-4 md:max-w-0"><div class="flex items-center min-w-0">' +
+            '<i class="fas fa-times-circle text-danger-fg mr-2 text-sm shrink-0" aria-hidden="true"></i>' +
+            '<div class="min-w-0"><div class="text-sm font-medium text-foreground break-words md:truncate">' + domain + '</div>' +
+            '<div class="mt-1 text-xs text-danger-fg break-words" title="' + errTitle + '">' + errText + '</div></div></div></td>' +
+            '<td class="px-4 py-4 whitespace-nowrap"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-500/10 text-danger-fg ring-1 ring-inset ring-red-500/20"><i class="fas fa-times-circle mr-1" aria-hidden="true"></i>Failed</span></td>' +
+            '<td class="px-4 py-4 whitespace-nowrap hidden md:table-cell text-sm text-muted">—</td>' +
+            '<td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">' + providerLabel + '</td>' +
+            '<td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">—</td>' +
+            '<td class="px-4 py-4 whitespace-nowrap text-right"><div class="flex items-center justify-end gap-1">' +
+            '<button type="button" onclick="retryCreateJob(\'' + jobId + '\')" class="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded border border-border text-label bg-input hover:bg-gray-50 dark:hover:bg-gray-600" title="Retry issuance for ' + domain + '" aria-label="Retry issuance for ' + domain + '"><i class="fas fa-sync-alt mr-1" aria-hidden="true"></i>Retry</button>' +
+            '<button type="button" onclick="dismissPendingJob(\'' + jobId + '\')" class="inline-flex items-center justify-center p-2 text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-100 rounded hover:bg-hover" title="Dismiss" aria-label="Dismiss failed issuance for ' + domain + '"><i class="fas fa-times" aria-hidden="true"></i></button>' +
+            '</div></td></tr>';
+    }
+
+    // Replace the optimistic rows in place without disturbing the real rows or
+    // any active filter view. Called after every pendingJobs mutation, and at
+    // the tail of displayCertificates so a full rebuild re-attaches them.
+    function renderPendingRows() {
+        var container = document.getElementById('certificatesList');
+        if (!container) return;
+        container.querySelectorAll('tr[data-pending-job]').forEach(function (r) { r.remove(); });
+        var html = buildPendingRowsHtml();
+        if (!html) {
+            // Removing the last optimistic row can leave the body blank on an
+            // empty instance (the welcome panel was cleared to show the row).
+            // Restore it. Guarded to 0 real certs so we never re-render — and
+            // thus never clobber — a populated or filtered view.
+            if (!container.children.length && (allCertificates || []).length === 0) {
+                displayCertificates(allCertificates);
+            }
+            return;
+        }
+        var thead = document.querySelector('#certificatesTable thead');
+        if (thead) thead.style.display = '';
+        // If the body is showing the empty/welcome state, clear it first so the
+        // pending rows don't render beneath a "Welcome to CertMate" panel.
+        var emptyState = container.querySelector('[data-empty-state]');
+        if (emptyState) container.innerHTML = '';
+        container.insertAdjacentHTML('afterbegin', html);
+    }
+
+    function handleAsyncAccepted(job, requestBody, domainsDisplay) {
+        var jobId = job.job_id;
+        pendingJobs[jobId] = {
+            domain: job.domain || requestBody.domain,
+            provider: requestBody.dns_provider || '',
+            sanCount: (requestBody.san_domains || []).length,
+            state: 'issuing',
+            payload: requestBody,
+            domainsDisplay: domainsDisplay
+        };
+        clearCreateFormAfterSubmit();
+        updateAccountSelection();
+        if (typeof closeCertDrawer === 'function') { closeCertDrawer(); }
+        showMessage('Issuing certificate for ' + domainsDisplay + '…', 'info');
+        renderPendingRows();
+        pollCertJob(jobId, job.status_url || ('/api/certificates/jobs/' + jobId));
+    }
+
+    function pollCertJob(jobId, statusUrl) {
+        var attempts = 0;
+        var MAX_ATTEMPTS = 150;   // ~5 min at 2s — well beyond a normal ACME issue
+        function tick() {
+            if (!pendingJobs[jobId]) return;   // dismissed/retried away
+            attempts++;
+            fetch(statusUrl, { headers: API_HEADERS }).then(function (resp) {
+                if (resp.status === 404) return { status: '__gone__' };
+                return resp.json();
+            }).then(function (jobRec) {
+                if (!pendingJobs[jobId]) return;   // dismissed during the request
+                var status = jobRec && jobRec.status;
+                if (status === 'succeeded') {
+                    delete pendingJobs[jobId];
+                    delete pendingPollTimers[jobId];
+                    loadCertificates();   // the real row replaces the optimistic one
+                } else if (status === 'failed') {
+                    pendingJobs[jobId].state = 'failed';
+                    pendingJobs[jobId].error = (jobRec && jobRec.error) || 'Certificate issuance failed';
+                    pendingJobs[jobId].errorCode = jobRec && jobRec.error_code;
+                    delete pendingPollTimers[jobId];
+                    renderPendingRows();
+                    showMessage('Certificate issuance failed for ' + pendingJobs[jobId].domain + ': ' + pendingJobs[jobId].error, 'error');
+                } else if (status === '__gone__') {
+                    // Job evicted/unknown — drop the optimistic row and resync.
+                    delete pendingJobs[jobId];
+                    delete pendingPollTimers[jobId];
+                    loadCertificates();
+                } else if (attempts >= MAX_ATTEMPTS) {
+                    // Still running after the cap: stop polling and drop the row
+                    // rather than fail it — SSE/reload will reconcile the result.
+                    delete pendingJobs[jobId];
+                    delete pendingPollTimers[jobId];
+                    renderPendingRows();
+                } else {
+                    pendingPollTimers[jobId] = setTimeout(tick, 2000);
+                }
+            }).catch(function () {
+                if (!pendingJobs[jobId]) return;
+                if (attempts >= MAX_ATTEMPTS) { delete pendingPollTimers[jobId]; return; }
+                pendingPollTimers[jobId] = setTimeout(tick, 2000);
+            });
+        }
+        pendingPollTimers[jobId] = setTimeout(tick, 1500);
+    }
+
+    // POST a create payload again (used by Retry). Lean create-only mirror of
+    // the form submit's request handling — no reissue branch, no form locking.
+    function postCreate(requestBody, domainsDisplay) {
+        return fetch('/api/certificates/create', {
+            method: 'POST', headers: API_HEADERS, body: JSON.stringify(requestBody)
+        }).then(function (response) {
+            return response.json().then(function (result) {
+                if (response.status === 202 && result && result.job_id) {
+                    handleAsyncAccepted(result, requestBody, domainsDisplay);
+                } else if (response.ok && result.success !== false) {
+                    showMessage('Certificate created successfully for ' + domainsDisplay + '!', 'success');
+                    loadCertificates();
+                } else {
+                    var errorMsg = result.error || result.message || 'Failed to create certificate';
+                    if (result.hint) { errorMsg += '\n\n' + result.hint; }
+                    showMessage(errorMsg, 'error');
+                }
+            });
+        }).catch(function () {
+            showMessage('Failed to create certificate. Please check your network connection and try again.', 'error');
+        });
+    }
+
+    function retryCreateJob(jobId) {
+        var job = pendingJobs[jobId];
+        if (!job) return;
+        var payload = job.payload || {};
+        var domainsDisplay = job.domainsDisplay || payload.domain || 'certificate';
+        delete pendingJobs[jobId];
+        if (pendingPollTimers[jobId]) { clearTimeout(pendingPollTimers[jobId]); delete pendingPollTimers[jobId]; }
+        renderPendingRows();
+        postCreate(payload, domainsDisplay);
+    }
+
+    function dismissPendingJob(jobId) {
+        if (pendingPollTimers[jobId]) { clearTimeout(pendingPollTimers[jobId]); delete pendingPollTimers[jobId]; }
+        delete pendingJobs[jobId];
+        renderPendingRows();
+    }
 
     // Certificate action functions
     function downloadCertificate(domain) {
@@ -2676,4 +2907,6 @@
     window.updateDnsAliasHelp = updateDnsAliasHelp;
     window.checkDnsAliasForCertificate = checkDnsAliasForCertificate;
     window.copyAliasValueToClipboard = copyAliasValueToClipboard;
+    window.retryCreateJob = retryCreateJob;
+    window.dismissPendingJob = dismissPendingJob;
 })();
