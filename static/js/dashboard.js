@@ -200,7 +200,7 @@
         var attn;
         if (expired > 0) {
             attn = ['Expired', expired, 'danger', 'fa-circle-xmark text-danger-fg',
-                    expiring > 0 ? (expiring + ' expiring soon') : 'renew now'];
+                    expiring > 0 ? ('renew now · ' + expiring + ' expiring') : 'renew now'];
         } else if (expiring > 0) {
             attn = ['Expiring', expiring, 'warn', 'fa-triangle-exclamation text-warning-fg', 'within 30 days'];
         } else {
@@ -211,7 +211,9 @@
             statCard('Total', total, 'headline', 'fa-certificate text-blue-500 dark:text-blue-400', null, total === 1 ? 'certificate' : 'certificates'),
             statCard('Valid', valid, valid > 0 ? 'good' : 'neutral', 'fa-circle-check ' + (valid > 0 ? 'text-success-fg' : 'text-muted'), null, valid + ' of ' + total + ' healthy'),
             statCard(attn[0], attn[1], attn[2], attn[3], null, attn[4]),
-            statCard('Deployed', '<span class="text-gray-300 dark:text-gray-600 animate-pulse">...</span>', 'info', 'fa-globe text-indigo-500 dark:text-indigo-400', 'deploymentCount', 'reachable')
+            (total === 0
+                ? statCard('Deployed', '0', 'neutral', 'fa-globe text-muted', null, 'none deployed')
+                : statCard('Deployed', '<span class="text-gray-300 dark:text-gray-600 animate-pulse" aria-label="checking deployments">—</span>', 'info', 'fa-globe text-indigo-500 dark:text-indigo-400', 'deploymentCount', 'reachable'))
         ].join('');
     }
 
@@ -595,7 +597,7 @@
         // API, Auto-renew, Delete" with no domain context, repeated for
         // every row in the table (B1 fix).
         function actionBtn(action, domain, hoverColor, title, icon) {
-            return rowRaw(rowHtml`<button type="button" data-action="${action}" data-domain="${domain}" onclick="event.stopPropagation()" class="inline-flex items-center justify-center p-2 text-gray-400 hover:text-${rowRaw(hoverColor)}-600 dark:hover:text-${rowRaw(hoverColor)}-400 rounded hover:bg-hover" title="${title}" aria-label="${title} ${domain}"><i class="fas ${rowRaw(icon)}" aria-hidden="true"></i></button>`);
+            return rowRaw(rowHtml`<button type="button" data-action="${action}" data-domain="${domain}" onclick="event.stopPropagation()" class="inline-flex items-center justify-center p-2 text-gray-500 dark:text-gray-300 hover:text-${rowRaw(hoverColor)}-600 dark:hover:text-${rowRaw(hoverColor)}-400 rounded hover:bg-hover" title="${title}" aria-label="${title} ${domain}"><i class="fas ${rowRaw(icon)}" aria-hidden="true"></i></button>`);
         }
 
         container.innerHTML = sorted.map(function (cert, i) {
