@@ -125,6 +125,20 @@
             } catch (e) { return String(ts || ''); }
         }
 
+        // Compact absolute timestamp (no year/seconds) shown inline on each
+        // row so the exact moment is reachable on touch, where the title
+        // tooltip on the relative label never fires.
+        function compactTime(ts) {
+            try {
+                if (!ts) return '';
+                var d = new Date(ts);
+                if (isNaN(d.getTime())) return '';
+                return d.toLocaleString(undefined, {
+                    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                });
+            } catch (e) { return ''; }
+        }
+
         function opLabel(entry) {
             var labels = {
                 create: 'Created',
@@ -402,6 +416,7 @@
                         '</div>' +
                         '<div class="flex-shrink-0 text-right">' +
                             '<div class="text-xs text-gray-400" title="' + escapeHtml(absoluteTime(entry.timestamp)) + '">' + escapeHtml(formatTime(entry.timestamp)) + '</div>' +
+                            '<div class="text-[10px] text-muted mt-0.5">' + escapeHtml(compactTime(entry.timestamp)) + '</div>' +
                             '<div class="text-[10px] text-gray-400 mt-1">' + escapeHtml(entry.user || 'system') + '</div>' +
                             '<i class="fas fa-chevron-right text-[10px] text-gray-300 dark:text-gray-600 mt-1" aria-hidden="true"></i>' +
                         '</div>' +
