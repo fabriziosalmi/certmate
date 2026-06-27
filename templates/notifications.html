@@ -142,9 +142,9 @@
                 var nCrit = active.filter(function(w){ return w.type === 'critical'; }).length;
                 var nWarn = active.filter(function(w){ return w.type === 'warning'; }).length;
                 var parts = [];
-                if (nExpired) parts.push('<span class="text-danger-fg font-medium">' + nExpired + ' expired</span>');
-                if (nCrit) parts.push('<span class="text-danger-fg font-medium">' + nCrit + ' critical</span>');
-                if (nWarn) parts.push('<span class="text-warning-fg font-medium">' + nWarn + ' expiring</span>');
+                if (nExpired) parts.push('<span class="text-foreground"><span class="px-1.5 rounded bg-danger-surface text-danger-fg font-semibold">' + nExpired + '</span> expired</span>');
+                if (nCrit) parts.push('<span class="text-foreground"><span class="px-1.5 rounded bg-danger-surface text-danger-fg font-semibold">' + nCrit + '</span> critical</span>');
+                if (nWarn) parts.push('<span class="text-foreground"><span class="px-1.5 rounded bg-warning-surface text-warning-fg font-semibold">' + nWarn + '</span> expiring</span>');
                 if (snoozed.length) parts.push('<span class="text-muted">' + snoozed.length + ' snoozed</span>');
                 summary.innerHTML = parts.length ? parts.join(' · ') : '<i class="fas fa-circle-check text-green-500 mr-2"></i>Nothing needs attention right now.';
             }
