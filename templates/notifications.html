@@ -196,7 +196,7 @@
                 var days = parseInt(snz.getAttribute('data-days'), 10) || 1;
                 var domain = snz.getAttribute('data-snooze');
                 N.snooze(domain, days * DAY);
-                if (CertMate.toast) CertMate.toast('Snoozed ' + domain + ' for ' + days + (days === 1 ? ' day' : ' days'), 'info');
+                if (CertMate.toast) CertMate.toast('Snoozed ' + domain + ' for ' + days + (days === 1 ? ' day' : ' days'), 'success');
                 render();
                 return;
             }
@@ -204,7 +204,7 @@
             if (uns) {
                 var d = uns.getAttribute('data-unsnooze');
                 N.unsnooze(d);
-                if (CertMate.toast) CertMate.toast('Unsnoozed ' + d, 'info');
+                if (CertMate.toast) CertMate.toast('Unsnoozed ' + d, 'success');
                 render();
             }
         });
