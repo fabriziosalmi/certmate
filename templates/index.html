@@ -7,38 +7,30 @@
          x-data="{ certView: (location.hash === '#client' ? 'client' : 'server') }"
          x-init="$watch('certView', v => { history.replaceState(null, '', v === 'client' ? '#client' : '#'); if (v === 'client') initClientCerts(); })">
 
-        <!-- Top toolbar: certificate type toggle on the left, create-new
-             button on the right (`ml-auto`). `flex-wrap` lets the
-             button drop to the second line on narrow viewports instead
-             of overflowing. The button is only shown on the server view
-             — client certs have their own create UI inside that partial. -->
+        <!-- Page-header cluster: [ Server | Client | New ]. The Server/Client
+             segments are state toggles (ghost); "New" is an imperative action
+             (filled brand, divider, text label) so it never reads as a third
+             certificate type. "New" opens the creation drawer (overlay) — no
+             inline form, no layout jump. -->
         <div class="flex flex-wrap items-center gap-3 mb-6">
-            <div class="flex items-center space-x-1 bg-gray-100 dark:bg-gray-700/50 rounded-lg p-1 w-fit" role="group" aria-label="Certificate view">
+            <div class="inline-flex items-center gap-1 rounded-xl border border-border bg-surface-2 p-1" role="group" aria-label="Certificate view and creation">
                 <button type="button" @click="certView = 'server'"
                         :aria-pressed="certView === 'server' ? 'true' : 'false'"
-                        :class="certView === 'server'
-                            ? 'bg-surface shadow text-foreground'
-                            : 'text-muted hover:text-gray-700 dark:hover:text-gray-200'"
-                        class="px-4 py-2 text-sm font-medium rounded-md transition-all">
-                    <i class="fas fa-globe mr-1.5" aria-hidden="true"></i>Server Certificates
+                        :class="certView === 'server' ? 'bg-surface text-foreground shadow-sm' : 'text-muted hover:text-foreground'"
+                        class="inline-flex items-center gap-2 px-3.5 py-2 text-sm font-semibold rounded-lg transition-all">
+                    <i class="fas fa-globe" aria-hidden="true"></i>Server
                 </button>
                 <button type="button" @click="certView = 'client'"
                         :aria-pressed="certView === 'client' ? 'true' : 'false'"
-                        :class="certView === 'client'
-                            ? 'bg-surface shadow text-foreground'
-                            : 'text-muted hover:text-gray-700 dark:hover:text-gray-200'"
-                        class="px-4 py-2 text-sm font-medium rounded-md transition-all">
-                    <i class="fas fa-id-card mr-1.5" aria-hidden="true"></i>Client Certificates
+                        :class="certView === 'client' ? 'bg-surface text-foreground shadow-sm' : 'text-muted hover:text-foreground'"
+                        class="inline-flex items-center gap-2 px-3.5 py-2 text-sm font-semibold rounded-lg transition-all">
+                    <i class="fas fa-id-card" aria-hidden="true"></i>Client
                 </button>
-            </div>
-            <div x-show="certView === 'server'" x-cloak class="ml-auto">
-                <button type="button" id="toggleCreateForm"
-                        onclick="toggleCreateCertForm()"
-                        aria-expanded="false" aria-controls="createCertFormContainer"
-                        class="btn-cta">
-                    <i class="fas fa-plus-circle mr-2"></i>
-                    <span id="toggleCreateFormText">Create New Certificate</span>
-                    <i id="toggleCreateFormChevron" class="fas fa-chevron-down ml-2 transform transition-transform duration-200"></i>
+                <span class="mx-1 h-6 w-px bg-border" aria-hidden="true"></span>
+                <button type="button" onclick="openCertDrawer()" x-show="certView === 'server'" x-cloak
+                        class="inline-flex items-center gap-2 px-3.5 py-2 text-sm font-semibold rounded-lg bg-primary text-white hover:bg-secondary transition-colors shadow-sm"
+                        title="New certificate">
+                    <i class="fas fa-plus" aria-hidden="true"></i>New
                 </button>
             </div>
         </div>
@@ -46,9 +38,15 @@
         <!-- SERVER CERTIFICATES -->
         <div x-show="certView === 'server'">
 
-        <!-- Create Certificate Form (hidden by default) -->
-        <div id="createCertFormContainer" class="hidden">
-        <div class="bg-surface border-border shadow-lg rounded-xl mb-6 border overflow-hidden">
+        <!-- Create Certificate drawer (overlay from the right). The form below
+             was relocated out of the inline layout to kill the layout-jump;
+             all field IDs are unchanged, so the submit handler in dashboard.js
+             keeps working untouched. -->
+        <div id="certDrawerScrim" onclick="closeCertDrawer()" aria-hidden="true"
+             class="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm opacity-0 pointer-events-none transition-opacity duration-200 motion-reduce:transition-none"></div>
+        <div id="createCertFormContainer" role="dialog" aria-modal="true" aria-label="New certificate"
+             class="fixed top-0 right-0 z-50 h-full w-full max-w-[480px] bg-surface shadow-2xl flex flex-col translate-x-full transition-transform duration-300 ease-out motion-reduce:transition-none">
+        <div class="bg-surface flex flex-col h-full overflow-hidden">
             <div class="px-6 py-5 border-b border-border bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-700">
                 <div class="flex items-center justify-between">
                     <div>
@@ -59,13 +57,13 @@
                         <p class="text-sm text-muted mt-1">Generate SSL certificates with multiple CA providers and advanced DNS challenge support</p>
                     </div>
                     <div class="flex items-center space-x-2">
-                        <button type="button" onclick="toggleCreateCertForm()" class="ml-3 inline-flex items-center justify-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-2 rounded hover:bg-hover" title="Close form" aria-label="Close create certificate form">
+                        <button type="button" onclick="closeCertDrawer()" class="ml-3 inline-flex items-center justify-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-2 rounded hover:bg-hover" title="Close form" aria-label="Close create certificate form">
                             <i class="fas fa-times text-lg"></i>
                         </button>
                     </div>
                 </div>
             </div>
-            <div class="px-6 py-6">
+            <div class="px-6 py-6 flex-1 overflow-y-auto">
                 <form id="createCertForm" class="space-y-6">
                     <!-- Main Certificate Configuration -->
                     <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -333,44 +331,37 @@
         </div><!-- /createCertFormContainer -->
 
         <script>
-        // Fix #131: toggle create certificate form visibility
-        function toggleCreateCertForm() {
-            var container = document.getElementById('createCertFormContainer');
-            var chevron = document.getElementById('toggleCreateFormChevron');
-            var isHidden = container.classList.contains('hidden');
-            container.classList.toggle('hidden');
-            var toggleBtn = document.getElementById('toggleCreateForm');
-            if (toggleBtn) { toggleBtn.setAttribute('aria-expanded', isHidden ? 'true' : 'false'); }
-            if (chevron) {
-                chevron.style.transform = isHidden ? 'rotate(180deg)' : '';
-            }
-            // Persist state in sessionStorage
-            try { sessionStorage.setItem('cm_create_form_open', isHidden ? '1' : '0'); } catch(e){}
-        }
-        // Open the form (no-op if already open), focus the domain input,
-        // and scroll it into view. Called from the empty-state CTA
-        // rendered by dashboard.js — that button previously just called
-        // .focus() on a hidden input, which silently did nothing.
-        function openCreateCertForm() {
-            var c = document.getElementById('createCertFormContainer');
-            if (c && c.classList.contains('hidden')) toggleCreateCertForm();
+        // Create-certificate drawer (overlay from the right). Replaces the old
+        // inline expand-in-place form that pushed the page down on open. The
+        // form markup and all its field IDs are unchanged, so the submit
+        // handler in dashboard.js keeps working untouched.
+        function openCertDrawer() {
+            var d = document.getElementById('createCertFormContainer');
+            var s = document.getElementById('certDrawerScrim');
+            if (!d) return;
+            d.classList.remove('translate-x-full');
+            if (s) { s.classList.remove('opacity-0', 'pointer-events-none'); s.classList.add('opacity-100'); }
+            try { CertMate.lockScroll(); } catch (e) {}
             var dom = document.getElementById('domain');
-            if (dom) {
-                dom.focus();
-                dom.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }
+            if (dom) setTimeout(function () { dom.focus(); }, 320);
         }
-        // Restore form state on load
-        (function() {
-            try {
-                if (sessionStorage.getItem('cm_create_form_open') === '1') {
-                    var c = document.getElementById('createCertFormContainer');
-                    var ch = document.getElementById('toggleCreateFormChevron');
-                    if (c) c.classList.remove('hidden');
-                    if (ch) ch.style.transform = 'rotate(180deg)';
-                }
-            } catch(e){}
-        })();
+        function closeCertDrawer() {
+            var d = document.getElementById('createCertFormContainer');
+            var s = document.getElementById('certDrawerScrim');
+            if (d) d.classList.add('translate-x-full');
+            if (s) { s.classList.add('opacity-0', 'pointer-events-none'); s.classList.remove('opacity-100'); }
+            try { CertMate.unlockScroll(); } catch (e) {}
+        }
+        // Back-compat aliases — the dashboard empty-state CTA and any other
+        // caller used these names to reveal the (now drawer) create form.
+        function toggleCreateCertForm() { openCertDrawer(); }
+        function openCreateCertForm() { openCertDrawer(); }
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') {
+                var d = document.getElementById('createCertFormContainer');
+                if (d && !d.classList.contains('translate-x-full')) closeCertDrawer();
+            }
+        });
         </script>
 
         <!-- Statistics Cards (skeleton placeholders rendered by JS on

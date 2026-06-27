@@ -2199,6 +2199,7 @@
                     }
                     updateAccountSelection();
                     loadCertificates();
+                    if (typeof closeCertDrawer === 'function') closeCertDrawer();
                 } else {
                     var errorMsg = result.error || result.message || 'Failed to create certificate';
                     if (result.hint) {
