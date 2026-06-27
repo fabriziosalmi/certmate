@@ -151,9 +151,9 @@
 
             var html = '';
             if (active.length === 0 && all.length > 0 && snoozed.length === all.length) {
-                html += '<div class="px-6 py-12 text-center text-muted"><i class="fas fa-bell-slash text-3xl text-gray-300 dark:text-gray-600 mb-3 block"></i>All active warnings are snoozed.</div>';
+                html += '<div class="px-6 py-12 flex flex-col items-center gap-3 text-muted"><i class="fas fa-bell-slash text-3xl text-gray-300 dark:text-gray-600" aria-hidden="true"></i><p>All active warnings are snoozed.</p></div>';
             } else if (all.length === 0) {
-                html += '<div class="px-6 py-12 text-center text-muted"><i class="fas fa-circle-check text-3xl text-green-400 mb-3 block"></i>No certificates need your attention.</div>';
+                html += '<div class="px-6 py-12 flex flex-col items-center gap-3 text-muted"><i class="fas fa-circle-check text-3xl text-green-400" aria-hidden="true"></i><p>No certificates need your attention.</p></div>';
             } else {
                 html += groupHtml('Expired', active.filter(function(w){ return w.type === 'expired'; }));
                 html += groupHtml('Critical — 7 days or less', active.filter(function(w){ return w.type === 'critical'; }));
@@ -185,7 +185,7 @@
                 })
                 .catch(function() {
                     document.getElementById('notifContent').innerHTML =
-                        '<div class="px-6 py-12 text-center text-muted"><i class="fas fa-triangle-exclamation text-2xl text-gray-300 dark:text-gray-600 mb-3 block"></i>Could not load certificates.</div>';
+                        '<div class="px-6 py-12 flex flex-col items-center gap-3 text-muted"><i class="fas fa-triangle-exclamation text-2xl text-gray-300 dark:text-gray-600" aria-hidden="true"></i><p>Could not load certificates.</p></div>';
                 });
         };
 
