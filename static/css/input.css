@@ -149,6 +149,13 @@ button:not(.btn):focus-visible,
 .scroll-x-affordance::-webkit-scrollbar-thumb { background: rgba(120, 120, 120, .45); border-radius: 3px; }
 .scroll-x-affordance::-webkit-scrollbar-track { background: transparent; }
 
+/* ── Help: prose reading measure ─────────────────────────────────
+   Long-form help prose ran the full card width (~150+ chars/line).
+   Cap paragraphs inside help sections to a ~65ch reading measure;
+   tables, code blocks and the API grid are not <p>, so they keep
+   their full width. */
+[data-help-section] p { max-width: 65ch; }
+
 /* ── Table readability ───────────────────────────────────────── */
 /* #8:  Impercettible zebra striping for horizontal eye-tracking */
 /* #22: Focus-within highlight for keyboard navigation          */
