@@ -430,6 +430,24 @@ button[class*="bg-red-6"]:active {
   font-feature-settings: 'tnum';
 }
 
+/* Defined in @layer components so single-utility overrides (e.g. `hidden`)
+   still win over the component's own `display`. */
+@layer components {
+  /* ── Quick-action icon button ───────────────────────────────── */
+  /* Shared by the table-header action groups (Check all, Export, Refresh) so
+     the action vocabulary looks identical on the server and client lists. */
+  .cm-icon-btn {
+    @apply inline-flex items-center justify-center w-10 h-10 rounded-lg border border-border bg-input text-muted hover:text-foreground hover:bg-hover hover:border-border-strong transition;
+  }
+
+  /* ── Filter chip ────────────────────────────────────────────── */
+  /* Base chrome for the status/usage filter chips (active colours are applied
+     per-chip via aria-pressed: utilities). Matches the server status chips. */
+  .cm-chip {
+    @apply inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors text-muted hover:text-foreground;
+  }
+}
+
 /* ── Login page ambient background ───────────────────────────── */
 .login-ambient {
   background:
