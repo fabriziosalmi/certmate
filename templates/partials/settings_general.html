@@ -5,31 +5,31 @@
                          colour scheme; Light / Dark force an override. Buttons call the
                          global setTheme() defined in base.html; aria-pressed drives both
                          the active styling and the screen-reader announcement. -->
-                    <div class="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg mb-4">
-                        <h4 class="text-sm font-medium text-label mb-3">
+                    <div class="pb-2">
+                        <h4 class="text-base font-semibold text-foreground mb-3">
                             <i class="fas fa-palette mr-1 text-primary"></i>
                             Appearance
                         </h4>
                         <label class="block text-xs font-medium text-muted mb-2">Theme</label>
                         <div class="inline-flex rounded-lg border border-border bg-surface-2 p-0.5" role="group" aria-label="Theme preference">
                             <button type="button" data-theme-option="auto" onclick="setTheme('auto')" aria-pressed="false"
-                                    class="inline-flex items-center px-3 py-1.5 text-sm rounded-md text-muted hover:text-foreground transition aria-pressed:bg-surface aria-pressed:text-foreground aria-pressed:shadow-sm">
+                                    class="inline-flex items-center px-3 py-1.5 text-sm rounded-md text-muted hover:text-foreground transition aria-pressed:bg-surface aria-pressed:text-foreground aria-pressed:shadow-sm aria-pressed:ring-1 aria-pressed:ring-primary">
                                 <i class="fas fa-circle-half-stroke mr-1.5" aria-hidden="true"></i>Auto
                             </button>
                             <button type="button" data-theme-option="light" onclick="setTheme('light')" aria-pressed="false"
-                                    class="inline-flex items-center px-3 py-1.5 text-sm rounded-md text-muted hover:text-foreground transition aria-pressed:bg-surface aria-pressed:text-foreground aria-pressed:shadow-sm">
+                                    class="inline-flex items-center px-3 py-1.5 text-sm rounded-md text-muted hover:text-foreground transition aria-pressed:bg-surface aria-pressed:text-foreground aria-pressed:shadow-sm aria-pressed:ring-1 aria-pressed:ring-primary">
                                 <i class="fas fa-sun mr-1.5" aria-hidden="true"></i>Light
                             </button>
                             <button type="button" data-theme-option="dark" onclick="setTheme('dark')" aria-pressed="false"
-                                    class="inline-flex items-center px-3 py-1.5 text-sm rounded-md text-muted hover:text-foreground transition aria-pressed:bg-surface aria-pressed:text-foreground aria-pressed:shadow-sm">
+                                    class="inline-flex items-center px-3 py-1.5 text-sm rounded-md text-muted hover:text-foreground transition aria-pressed:bg-surface aria-pressed:text-foreground aria-pressed:shadow-sm aria-pressed:ring-1 aria-pressed:ring-primary">
                                 <i class="fas fa-moon mr-1.5" aria-hidden="true"></i>Dark
                             </button>
                         </div>
                         <p class="mt-2 text-xs text-muted">Auto matches your operating system's light or dark setting.</p>
                     </div>
                     <!-- General Certificate Settings Section -->
-                    <div class="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
-                        <h4 class="text-sm font-medium text-label mb-3">
+                    <div class="border-t border-border pt-6 mt-6">
+                        <h4 class="text-base font-semibold text-foreground mb-3">
                             <i class="fas fa-cogs mr-1 text-primary"></i>
                             Certificate Management Settings
                         </h4>
@@ -129,8 +129,8 @@
                     </div>
 
                     <!-- API Security Settings Section -->
-                    <div class="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
-                        <h4 class="text-sm font-medium text-label mb-3">
+                    <div class="border-t border-border pt-6 mt-6">
+                        <h4 class="text-base font-semibold text-foreground mb-3">
                             <i class="fas fa-key mr-1 text-primary"></i>
                             API Security Settings
                         </h4>
@@ -149,8 +149,8 @@
                                             class="px-3 py-2 text-muted hover:text-gray-700 dark:hover:text-gray-200">
                                         <i class="fas fa-eye" id="tokenToggleIcon"></i>
                                     </button>
-                                    <button type="button" onclick="generateToken()" 
-                                            class="px-3 py-2 bg-gray-100 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md hover:bg-gray-200 dark:hover:bg-gray-500 text-sm">
+                                    <button type="button" onclick="generateToken()"
+                                            class="px-3 py-2 border border-primary text-primary rounded-md hover:bg-primary hover:text-white text-sm transition-colors">
                                         <i class="fas fa-random mr-1"></i> Generate
                                     </button>
                                 </div>

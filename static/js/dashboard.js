@@ -88,8 +88,16 @@
 
     // Clear filters function
     function clearFilters() {
-        document.getElementById('certificateSearch').value = '';
-        document.getElementById('statusFilter').value = 'all';
+        setStatusFilter('all');
+    }
+
+    // Status filter chips (redesign phase 5) — replaced the #statusFilter select.
+    // The clicked chip becomes aria-pressed; the rest reset.
+    function setStatusFilter(value) {
+        currentStatusFilter = value;
+        document.querySelectorAll('[data-status-chip]').forEach(function (chip) {
+            chip.setAttribute('aria-pressed', chip.getAttribute('data-status-chip') === value ? 'true' : 'false');
+        });
         filterCertificates();
     }
 
@@ -138,15 +146,15 @@
     // placeholder count always matches the real count — when the metric
     // list changes, bump this constant in lockstep with the statCard()
     // calls in `updateStats`.
-    var STAT_METRICS_COUNT = 4;
+    var STAT_METRICS_COUNT = 3;
 
     function statsSkeletonHtml(count) {
         var rows = [];
         for (var i = 0; i < count; i++) {
             rows.push(
-                '<div class="bg-surface rounded-xl px-3 py-2" aria-hidden="true">' +
-                    '<div class="skeleton h-3 w-16 mb-1"></div>' +
-                    '<div class="skeleton h-6 w-8"></div>' +
+                '<div class="flex items-baseline gap-1.5 px-3.5 py-3" aria-hidden="true">' +
+                    '<div class="skeleton h-4 w-5"></div>' +
+                    '<div class="skeleton h-2 w-10"></div>' +
                 '</div>'
             );
         }
@@ -173,24 +181,21 @@
         // pushed the label and icon to opposite corners (justify-between) with
         // no link between the three elements; this groups them and adds meaning.
         function statCard(label, value, state, iconClass, valueId, subtitle) {
-            var S = ({
-                headline: { bar: 'bg-blue-500', val: 'text-foreground', bg: 'bg-surface' },
-                neutral:  { bar: 'bg-gray-200 dark:bg-gray-700', val: 'text-muted', bg: 'bg-surface' },
-                good:     { bar: 'bg-green-500', val: 'text-success-fg', bg: 'bg-surface' },
-                warn:     { bar: 'bg-yellow-500', val: 'text-warning-fg', bg: 'bg-warning-surface' },
-                danger:   { bar: 'bg-red-500', val: 'text-danger-fg', bg: 'bg-danger-surface' },
-                info:     { bar: 'bg-indigo-500', val: 'text-indigo-600 dark:text-indigo-400', bg: 'bg-surface' }
-            })[state] || {};
-            return '<div class="relative overflow-hidden rounded-xl shadow-card hover:shadow-elevated transition-shadow duration-200 ' + S.bg + '">' +
-                '<span class="absolute inset-y-0 left-0 w-1 ' + S.bar + '" aria-hidden="true"></span>' +
-                '<div class="pl-4 pr-3 py-3">' +
-                '<div class="flex items-start justify-between gap-2">' +
-                '<p class="text-[11px] font-semibold text-muted uppercase tracking-wider mt-0.5">' + CertMate.escapeHtml(label) + '</p>' +
-                '<i class="fas ' + iconClass + ' text-sm flex-shrink-0"></i>' +
-                '</div>' +
-                '<p class="text-3xl font-bold ' + S.val + ' tabular-nums leading-none mt-1.5"' + (valueId ? ' id="' + valueId + '"' : '') + '>' + value + '</p>' +
-                (subtitle ? '<p class="text-xs text-muted mt-1.5">' + CertMate.escapeHtml(subtitle) + '</p>' : '') +
-                '</div></div>';
+            var valColor = ({
+                headline: 'text-foreground',
+                neutral:  'text-muted',
+                good:     'text-success-fg',
+                warn:     'text-warning-fg',
+                danger:   'text-danger-fg',
+                info:     'text-info-fg'
+            })[state] || 'text-foreground';
+            // Compact KPI segment: number + label on ONE line ("7 TOTAL"), sized
+            // to the toggle's height. State shows in the number colour; the old
+            // subtitle becomes a hover title since there's no room to print it.
+            return '<div class="flex items-baseline gap-1.5 px-3.5 py-3"' + (subtitle ? ' title="' + CertMate.escapeHtml(subtitle) + '"' : '') + '>' +
+                '<span class="text-lg font-bold leading-none tabular-nums ' + valColor + '"' + (valueId ? ' id="' + valueId + '"' : '') + '>' + value + '</span>' +
+                '<span class="text-[10px] font-medium text-muted uppercase tracking-wider">' + CertMate.escapeHtml(label) + '</span>' +
+                '</div>';
         }
 
         // The third tile surfaces the MOST urgent lifecycle state. It becomes a
@@ -200,19 +205,27 @@
         var attn;
         if (expired > 0) {
             attn = ['Expired', expired, 'danger', 'fa-circle-xmark text-danger-fg',
-                    expiring > 0 ? (expiring + ' expiring soon') : 'renew now'];
+                    expiring > 0 ? ('renew now · ' + expiring + ' expiring') : 'renew now'];
         } else if (expiring > 0) {
             attn = ['Expiring', expiring, 'warn', 'fa-triangle-exclamation text-warning-fg', 'within 30 days'];
         } else {
             attn = ['Expiring', 0, 'neutral', 'fa-triangle-exclamation text-muted', 'none expiring'];
         }
 
+        // Deployed counter removed by request — per-row deployment status still
+        // shows in the table's Deployment column.
         statsContainer.innerHTML = [
             statCard('Total', total, 'headline', 'fa-certificate text-blue-500 dark:text-blue-400', null, total === 1 ? 'certificate' : 'certificates'),
             statCard('Valid', valid, valid > 0 ? 'good' : 'neutral', 'fa-circle-check ' + (valid > 0 ? 'text-success-fg' : 'text-muted'), null, valid + ' of ' + total + ' healthy'),
-            statCard(attn[0], attn[1], attn[2], attn[3], null, attn[4]),
-            statCard('Deployed', '<span class="text-gray-300 dark:text-gray-600 animate-pulse">...</span>', 'info', 'fa-globe text-indigo-500 dark:text-indigo-400', 'deploymentCount', 'reachable')
+            statCard(attn[0], attn[1], attn[2], attn[3], null, attn[4])
         ].join('');
+
+        // Keep the status-filter chip counts in sync with the strip (phase 5).
+        var chipCounts = { all: total, valid: valid, expiring: expiring, expired: expired };
+        Object.keys(chipCounts).forEach(function (k) {
+            var c = document.querySelector('[data-status-count="' + k + '"]');
+            if (c) { c.textContent = chipCounts[k]; }
+        });
     }
 
     // Deployment Status Cache System
@@ -299,10 +312,19 @@
     // Global variable to store all certificates
     var allCertificates = [];
 
+    // Async issuance lifecycle (redesign phase 3). A create submitted with
+    // async:true returns 202 + a job id; we track each in-flight job here so the
+    // table can show an optimistic "Issuing" row and poll the job to resolution.
+    var pendingJobs = {};        // job_id -> { domain, provider, sanCount, state, error, errorCode, payload, domainsDisplay }
+    var pendingPollTimers = {};  // job_id -> setTimeout handle
+
+    // Active status filter (redesign phase 5). The status chips replaced the old
+    // #statusFilter <select>; this is the single source of truth they drive.
+    var currentStatusFilter = 'all';
+
     // Filter and search certificates
     function filterCertificates() {
-        var searchTerm = document.getElementById('certificateSearch').value.toLowerCase();
-        var statusFilter = document.getElementById('statusFilter').value;
+        var statusFilter = currentStatusFilter;
 
         // Ensure allCertificates is an array
         if (!Array.isArray(allCertificates)) {
@@ -310,10 +332,7 @@
         }
 
         var filteredCerts = allCertificates.filter(function (cert) {
-            // Search filter
-            var matchesSearch = cert.domain.toLowerCase().indexOf(searchTerm) !== -1;
-
-            // Status filter
+            // Status filter (free-text search now lives in the ⌘K palette)
             var matchesStatus = true;
             if (statusFilter !== 'all') {
                 var isExpired = cert.exists && cert.days_until_expiry !== null && cert.days_until_expiry !== undefined && cert.days_until_expiry <= 0;
@@ -333,7 +352,7 @@
                 }
             }
 
-            return matchesSearch && matchesStatus;
+            return matchesStatus;
         });
 
         displayCertificates(filteredCerts);
@@ -462,12 +481,18 @@
     function deploymentChipClass(display) {
         return 'inline-flex items-center gap-1 px-1.5 py-1 rounded-md ' + display.chipClass;
     }
+
+    // Square variant (w-10 h-10, bordered) so the detail modal's two deploy
+    // indicators line up with the quick-action buttons on a single row.
+    function deploymentSquareClass(display) {
+        return 'inline-flex items-center justify-center gap-1 w-10 h-10 rounded-lg border border-border ' + display.chipClass;
+    }
     function deploymentChipInner(display) {
         return '<i class="fas ' + display.roleIcon + '" aria-hidden="true"></i>' +
             '<i class="fas ' + display.statusIcon + ' text-[0.65rem]" aria-hidden="true"></i>';
     }
 
-    function deploymentBadgeHtml(role, result, safeDomain, domainId) {
+    function deploymentBadgeHtml(role, result, safeDomain, domainId, square) {
         var display = deploymentStatusDisplay(role, result);
         var title = display.text;
         if (result && result.method) {
@@ -490,23 +515,25 @@
         // duplicated (invalid HTML). The data-deployment-* attributes identify
         // it for updates; the deployed-count reads deploymentCache directly.
         return '<span data-deployment-domain="' + safeDomain + '" data-deployment-role="' + role + '" role="img"' +
+            (square ? ' data-deployment-variant="square"' : '') +
             ' title="' + escapeHtml(title) + '" aria-label="' + escapeHtml(title) + '"' +
-            ' class="' + deploymentChipClass(display) + '">' +
+            ' class="' + (square ? deploymentSquareClass(display) : deploymentChipClass(display)) + '">' +
             deploymentChipInner(display) +
             '</span>';
     }
 
     // Build deployment status badges HTML — two compact icon chips (server,
     // browser) on a single horizontal row.
-    function deploymentBadgesHtml(cert) {
+    function deploymentBadgesHtml(cert, square) {
         var safeDomain = escapeHtml(cert.domain);
         var domainId = safeDomain.replace(/\./g, '-');
         var cachedStatus = deploymentCache.get(cert.domain) || {};
         var browserStatus = cachedStatus.browser || null;
-        return '<div class="flex items-center gap-1.5">' +
-            deploymentBadgeHtml('backend', cachedStatus, safeDomain, domainId) +
-            deploymentBadgeHtml('browser', browserStatus, safeDomain, domainId) +
-            '</div>';
+        var inner = deploymentBadgeHtml('backend', cachedStatus, safeDomain, domainId, square) +
+            deploymentBadgeHtml('browser', browserStatus, safeDomain, domainId, square);
+        // Square variant returns the bare badges so they sit in the modal's
+        // quick-action row; the default wraps them in their own chip row.
+        return square ? inner : '<div class="flex items-center gap-1.5">' + inner + '</div>';
     }
 
     function providerDisplayName(provider) {
@@ -536,12 +563,11 @@
         }
 
         if (certificates.length === 0) {
-            var isFiltered = document.getElementById('certificateSearch').value ||
-                document.getElementById('statusFilter').value !== 'all';
+            var isFiltered = currentStatusFilter !== 'all';
             thead.style.display = 'none';
 
             if (isFiltered) {
-                container.innerHTML = '<tr><td colspan="6">' +
+                container.innerHTML = '<tr data-empty-state><td colspan="6">' +
                     '<div class="px-6 py-12 text-center">' +
                     '<div class="mx-auto max-w-sm border-2 border-dashed border-border rounded-xl p-8">' +
                     '<div class="mx-auto h-16 w-16 flex items-center justify-center bg-surface-2 rounded-full mb-4">' +
@@ -555,7 +581,7 @@
                     '</div>' +
                     '</td></tr>';
             } else {
-                container.innerHTML = '<tr><td colspan="6">' +
+                container.innerHTML = '<tr data-empty-state><td colspan="6">' +
                     '<div class="px-6 py-8"><div class="mx-auto max-w-lg">' +
                     '<div class="text-center mb-6">' +
                     '<div class="mx-auto h-16 w-16 flex items-center justify-center bg-info-surface rounded-full mb-4"><i class="fas fa-rocket text-blue-500 text-2xl"></i></div>' +
@@ -577,6 +603,7 @@
                     '</div></div>' +
                     '</td></tr>';
             }
+            renderPendingRows();
             return;
         }
 
@@ -595,7 +622,7 @@
         // API, Auto-renew, Delete" with no domain context, repeated for
         // every row in the table (B1 fix).
         function actionBtn(action, domain, hoverColor, title, icon) {
-            return rowRaw(rowHtml`<button type="button" data-action="${action}" data-domain="${domain}" onclick="event.stopPropagation()" class="inline-flex items-center justify-center p-2 text-gray-400 hover:text-${rowRaw(hoverColor)}-600 dark:hover:text-${rowRaw(hoverColor)}-400 rounded hover:bg-hover" title="${title}" aria-label="${title} ${domain}"><i class="fas ${rowRaw(icon)}" aria-hidden="true"></i></button>`);
+            return rowRaw(rowHtml`<button type="button" data-action="${action}" data-domain="${domain}" onclick="event.stopPropagation()" class="inline-flex items-center justify-center p-2 text-gray-500 dark:text-gray-300 hover:text-${rowRaw(hoverColor)}-600 dark:hover:text-${rowRaw(hoverColor)}-400 rounded hover:bg-hover" title="${title}" aria-label="${title} ${domain}"><i class="fas ${rowRaw(icon)}" aria-hidden="true"></i></button>`);
         }
 
         container.innerHTML = sorted.map(function (cert, i) {
@@ -607,8 +634,8 @@
             var domainAlias = cert.domain_alias || '';
 
             if (!cert.exists) {
-                return rowHtml`<tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer" tabindex="0" role="button" aria-label="View details for ${cert.domain}" onclick="openCertDetail('${cert.domain}')" onkeydown="certRowKey(event, '${cert.domain}')">
-                    <td class="px-6 py-4 max-w-0"><div class="text-sm font-medium text-foreground truncate">${cert.domain}</div></td>
+                return rowHtml`<tr data-row-domain="${cert.domain}" class="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer" tabindex="0" role="button" aria-label="View details for ${cert.domain}" onclick="openCertDetail('${cert.domain}')" onkeydown="certRowKey(event, '${cert.domain}')">
+                    <td class="px-6 py-4 md:max-w-0"><div class="text-sm font-medium text-foreground break-words md:truncate cm-mono">${cert.domain}</div></td>
                     <td class="px-4 py-4 whitespace-nowrap"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-500/10 text-danger-fg ring-1 ring-inset ring-red-500/20"><i class="fas fa-times-circle mr-1"></i>Not Found</span></td>
                     <td class="px-4 py-4 whitespace-nowrap hidden md:table-cell text-sm text-muted">\u2014</td>
                     <td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">${providerLabel ? rowRaw(providerCellHtml(cert.dns_provider, providerLabel)) : '\u2014'}</td>
@@ -672,24 +699,24 @@
             // the meta block, reading as a card on phones without breaking
             // the table on bigger screens.
             var mobileExpiryLine = (daysKnown && cert.expiry_date)
-                ? rowRaw(rowHtml`<div class="flex items-center text-xs"><i class="fas fa-clock mr-1.5 w-3 shrink-0 text-muted" aria-hidden="true"></i><span class="truncate"><span class="font-semibold ${rowRaw(daysClass)}">${daysText}</span><span class="text-muted"> · ${expiryStr}</span></span></div>`)
+                ? rowRaw(rowHtml`<div class="md:hidden flex items-center text-xs"><i class="fas fa-clock mr-1.5 w-3 shrink-0 text-muted" aria-hidden="true"></i><span><span class="font-semibold ${rowRaw(daysClass)}">${daysText}</span><span class="text-muted"> · ${expiryStr}</span></span></div>`)
                 : false;
             var mobileProviderLine = providerLabel
                 ? rowRaw(rowHtml`<div class="flex items-center text-xs text-muted">${rowRaw(providerCellHtml(cert.dns_provider, providerLabel))}</div>`)
                 : false;
             var mobileDeploymentLine = rowRaw(rowHtml`<div class="flex items-start text-xs text-muted"><i class="fas fa-rocket mr-1.5 mt-0.5 w-3 shrink-0" aria-hidden="true"></i><div class="flex-1 min-w-0">${rowRaw(deploymentBadgesHtml(cert))}</div></div>`);
-            var mobileMeta = rowRaw(rowHtml`<div class="md:hidden mt-2 pt-2 border-t border-gray-100 dark:border-gray-700/50 space-y-1">${mobileExpiryLine}${mobileProviderLine}${mobileDeploymentLine}</div>`);
+            var mobileMeta = rowRaw(rowHtml`<div class="lg:hidden mt-2 pt-2 border-t border-gray-100 dark:border-gray-700/50 space-y-1">${mobileExpiryLine}${mobileProviderLine}${mobileDeploymentLine}</div>`);
             var lockColor = isExpired ? 'text-red-400' : isExpiringSoon ? 'text-yellow-400' : 'text-green-500';
             // An expired cert is no longer trusted; a closed padlock (the
             // "secure connection" glyph) is a visual paradox there. Show an
             // open padlock for expired so the icon matches the state.
             var lockIcon = isExpired ? 'fa-lock-open' : 'fa-lock';
-            return rowHtml`<tr class="${rowRaw(healthClass)} row-enter hover:bg-blue-50/40 dark:hover:bg-blue-900/10 transition-colors duration-150 cursor-pointer" style="animation-delay:${rowRaw(String(i * 30))}ms" tabindex="0" role="button" aria-label="View details for ${cert.domain}" onclick="openCertDetail('${cert.domain}')" onkeydown="certRowKey(event, '${cert.domain}')">
-                <td class="px-6 py-4 max-w-0">
+            return rowHtml`<tr data-row-domain="${cert.domain}" class="${rowRaw(healthClass)} row-enter hover:bg-blue-50/40 dark:hover:bg-blue-900/10 transition-colors duration-150 cursor-pointer" style="animation-delay:${rowRaw(String(i * 30))}ms" tabindex="0" role="button" aria-label="View details for ${cert.domain}" onclick="openCertDetail('${cert.domain}')" onkeydown="certRowKey(event, '${cert.domain}')">
+                <td class="px-6 py-4 md:max-w-0">
                     <div class="flex items-center min-w-0">
                         <i class="fas ${rowRaw(lockIcon)} ${rowRaw(lockColor)} mr-2 text-sm shrink-0" aria-hidden="true"></i>
                         <div class="min-w-0">
-                            <div class="text-sm font-medium text-foreground truncate">${cert.domain}</div>
+                            <div class="text-sm font-medium text-foreground break-words md:truncate cm-mono">${cert.domain}</div>
                             ${aliasHint}
                             ${mobileMeta}
                         </div>
@@ -702,11 +729,8 @@
                 <td class="px-4 py-4 whitespace-nowrap text-right">
                     <div class="flex items-center justify-end gap-1">
                         ${roleAtLeast('operator') ? actionBtn('renew', cert.domain, 'green', 'Renew', 'fa-sync-alt') : false}
-                        ${roleAtLeast('operator') ? actionBtn('force-renew', cert.domain, 'amber', 'Force renew', 'fa-bolt') : false}
                         ${actionBtn('download', cert.domain, 'blue', 'Download', 'fa-download')}
-                        ${actionBtn('curl', cert.domain, 'indigo', 'API', 'fa-code')}
-                        ${roleAtLeast('operator') ? rowRaw(autoRenewButtonHtml(escapeHtml(cert.domain), cert.auto_renew !== false)) : false}
-                        ${roleAtLeast('admin') ? actionBtn('delete', cert.domain, 'red', 'Delete certificate', 'fa-trash-alt') : false}
+                        ${rowRaw('<button type="button" data-more-domain="' + escapeHtml(cert.domain) + '" data-autorenew="' + (cert.auto_renew !== false ? 'true' : 'false') + '" data-op="' + (roleAtLeast('operator') ? '1' : '0') + '" data-admin="' + (roleAtLeast('admin') ? '1' : '0') + '" onclick="event.stopPropagation()" class="inline-flex items-center justify-center p-2 text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-100 rounded hover:bg-hover" title="More actions" aria-label="More actions for ' + escapeHtml(cert.domain) + '" aria-haspopup="menu"><i class="fas fa-ellipsis-vertical" aria-hidden="true"></i></button>')}
                     </div>
                 </td>
             </tr>`;
@@ -729,9 +753,76 @@
             });
         });
 
+        // "More actions" overflow menu (force-renew, API, auto-renew, delete).
+        container.querySelectorAll('button[data-more-domain]').forEach(function (btn) {
+            btn.addEventListener('click', function (e) { e.stopPropagation(); openRowMenu(btn); });
+        });
+
         // Automatic deployment checks are triggered once, from loadCertificates(),
         // via runDeploymentChecks() — batched and deduped. We intentionally do NOT
         // fire a second (unbatched) pass here.
+
+        // Re-attach any optimistic Issuing/Failed rows on top: a full rebuild
+        // here (loadCertificates or a filter pass) would otherwise drop them.
+        renderPendingRows();
+    }
+
+    // Row "More actions" overflow menu. Secondary cert actions live here so the
+    // row shows only the daily-use Renew + Download inline. Appended to <body>
+    // (position:fixed) so the table's overflow-hidden / overflow-x-auto wrappers
+    // don't clip it.
+    var _rowMenu = null;
+    function closeRowMenu() {
+        if (!_rowMenu) return;
+        _rowMenu.remove();
+        _rowMenu = null;
+        document.removeEventListener('click', _rowMenuAway, true);
+        document.removeEventListener('keydown', _rowMenuKey, true);
+    }
+    function _rowMenuAway(e) {
+        if (_rowMenu && !_rowMenu.contains(e.target) && !e.target.closest('[data-more-domain]')) closeRowMenu();
+    }
+    function _rowMenuKey(e) { if (e.key === 'Escape') closeRowMenu(); }
+    function _menuItem(icon, label, danger) {
+        return '<button type="button" role="menuitem" class="w-full flex items-center gap-2 px-3 py-2 text-left ' +
+            (danger ? 'text-danger-fg hover:bg-red-50 dark:hover:bg-red-900/20' : 'text-foreground hover:bg-hover') +
+            '"><i class="fas ' + icon + ' w-4 ' + (danger ? '' : 'text-muted') + '" aria-hidden="true"></i>' + label + '</button>';
+    }
+    function openRowMenu(btn) {
+        closeRowMenu();
+        var domain = btn.getAttribute('data-more-domain');
+        var autoOn = btn.getAttribute('data-autorenew') === 'true';
+        var isOp = btn.getAttribute('data-op') === '1';
+        var isAdmin = btn.getAttribute('data-admin') === '1';
+        var actions = [];
+        if (isOp) actions.push({ html: _menuItem('fa-bolt', 'Force renew'), fn: function () { renewCertificate(domain, true); } });
+        actions.push({ html: _menuItem('fa-code', 'Copy API command'), fn: function () { copyCurlCommand(domain); } });
+        if (isOp) actions.push({ html: _menuItem(autoOn ? 'fa-toggle-on' : 'fa-toggle-off', autoOn ? 'Disable auto-renew' : 'Enable auto-renew'), fn: function () { toggleAutoRenew(domain, autoOn); } });
+        if (isAdmin) actions.push({ html: '<div class="my-1 border-t border-border"></div>' + _menuItem('fa-trash-can', 'Delete certificate', true), fn: function () { deleteCertificate(domain); } });
+        if (!actions.length) return;
+        var menu = document.createElement('div');
+        menu.className = 'fixed w-52 py-1 bg-surface border border-border rounded-lg shadow-xl text-sm';
+        menu.style.zIndex = '60';
+        menu.setAttribute('role', 'menu');
+        menu.innerHTML = actions.map(function (a) { return a.html; }).join('');
+        document.body.appendChild(menu);
+        var r = btn.getBoundingClientRect();
+        var top = r.bottom + 4;
+        var left = r.right - menu.offsetWidth;
+        if (top + menu.offsetHeight > window.innerHeight - 8) top = Math.max(8, r.top - menu.offsetHeight - 4);
+        if (left < 8) left = 8;
+        menu.style.top = top + 'px';
+        menu.style.left = left + 'px';
+        var items = menu.querySelectorAll('button[role="menuitem"]');
+        items.forEach(function (b, i) {
+            b.addEventListener('click', function () { closeRowMenu(); actions[i].fn(); });
+        });
+        _rowMenu = menu;
+        setTimeout(function () {
+            document.addEventListener('click', _rowMenuAway, true);
+            document.addEventListener('keydown', _rowMenuKey, true);
+        }, 0);
+        if (items[0]) items[0].focus();
     }
 
     // Certificate detail slide-out panel
@@ -861,6 +952,19 @@
                     'class="inline-flex items-center justify-center w-10 h-10 rounded-lg border border-border bg-input text-muted hover:text-' + hover + '-600 dark:hover:text-' + hover + '-400 hover:bg-hover hover:border-border-strong transition">' +
                     '<i class="fas ' + icon + '"></i></button>';
             }
+            // Link variant of actIcon (same chrome) for controls that navigate.
+            function actLink(href, icon, hover, title) {
+                return '<a href="' + href + '" title="' + title + '" aria-label="' + title + '" ' +
+                    'class="inline-flex items-center justify-center w-10 h-10 rounded-lg border border-border bg-input text-muted hover:text-' + hover + '-600 dark:hover:text-' + hover + '-400 hover:bg-hover hover:border-border-strong transition">' +
+                    '<i class="fas ' + icon + '"></i></a>';
+            }
+            // Danger variant — red at rest, same chrome as the topbar Logout, for
+            // the destructive delete. (deleteCertificate still confirms first.)
+            function actIconDanger(onclick, icon, title) {
+                return '<button type="button" onclick="' + onclick + '" title="' + title + '" aria-label="' + title + '" ' +
+                    'class="inline-flex items-center justify-center w-10 h-10 rounded-lg border border-danger-line text-danger-fg hover:bg-red-50 dark:hover:bg-red-900/30 transition">' +
+                    '<i class="fas ' + icon + '"></i></button>';
+            }
             function detailRow(label, valueHtml) {
                 return '<div class="flex items-center justify-between gap-4 py-2.5"><dt class="text-sm text-muted flex-shrink-0">' + label + '</dt>' +
                     '<dd class="text-sm font-medium text-right text-foreground min-w-0">' + valueHtml + '</dd></div>';
@@ -872,9 +976,16 @@
                 // weight (the day count and the calendar date are the same datum).
                 '<div class="flex items-center gap-3 p-4 rounded-lg ' + bannerBg + '">' +
                 '<i class="fas ' + bannerIcon + ' text-2xl ' + statusClass + ' flex-shrink-0"></i>' +
-                '<div class="min-w-0">' +
+                '<div class="min-w-0 flex-1">' +
                 '<div class="text-lg font-semibold ' + statusClass + '">' + statusText + (daysKnown2 ? ' · ' + daysText : '') + '</div>' +
                 (cert.expiry_date ? '<div class="text-sm ' + statusClass + ' opacity-80">' + (isExpired ? 'Expired ' : 'Expires ') + expiryStr + '</div>' : '') +
+                '</div>' +
+                // Auto-Renew moved into the banner's empty right side (point 1).
+                '<div class="flex-shrink-0 flex items-center gap-2">' +
+                '<span class="text-[11px] font-semibold uppercase tracking-wide ' + statusClass + ' opacity-80">Auto-renew</span>' +
+                (roleAtLeast('operator')
+                    ? autoRenewSwitchHtml(safeDomain, autoOn)
+                    : '<span class="text-xs font-semibold ' + (autoOn ? 'text-success-fg' : 'text-warning-fg') + '">' + (autoOn ? 'On' : 'Off') + '</span>') +
                 '</div>' +
                 '</div>' +
                 // Details
@@ -883,29 +994,22 @@
                 (sanDomains.length ? detailRow('SANs', '<div class="text-right">' + sanDomainsHtml + '</div>') : '') +
                 (safeDomainAlias ? detailRow('DNS-01 Alias', '<span class="break-all text-info-fg">' + safeDomainAlias + '</span>') : '') +
                 (safeDomainAlias && aliasProviderLabel ? detailRow('Alias Provider', aliasProviderCell) : '') +
-                detailRow('Auto-Renew', roleAtLeast('operator')
-                    ? autoRenewSwitchHtml(safeDomain, autoOn)
-                    : '<span class="' + (autoOn ? 'text-success-fg' : 'text-warning-fg') + '">' + (autoOn ? 'Enabled' : 'Disabled') + '</span>') +
                 '</dl>' +
-                // Deployment — its own section, separated by a rule.
-                '<div class="pt-4 border-t border-border">' +
-                '<div class="flex items-center justify-between mb-3">' +
-                '<h4 class="text-xs font-semibold text-muted uppercase tracking-wider">Deployment</h4>' +
-                '<button type="button" onclick="checkDeploymentStatus(\'' + safeDomain + '\', this, true)" title="Check deployment now" aria-label="Check deployment now" class="inline-flex items-center justify-center w-8 h-8 rounded-lg text-muted hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-hover transition"><i class="fas fa-arrows-rotate text-sm"></i></button>' +
-                '</div>' +
-                '<div class="flex items-center gap-2 mb-3">' + deploymentBadgesHtml(cert) + '</div>' +
-                '<div class="flex items-center justify-between gap-2 rounded-lg bg-surface-2 px-3 py-2">' +
-                '<span class="text-sm text-muted min-w-0 truncate"><i class="fas fa-rocket mr-1.5 text-green-500"></i>Deploy hooks</span>' +
-                '<div class="flex items-center gap-1 flex-shrink-0">' +
-                '<a href="/settings#deploy" title="View / edit deploy hooks in Settings" aria-label="View or edit deploy hooks" class="inline-flex items-center justify-center w-8 h-8 rounded-lg text-muted hover:text-blue-600 dark:hover:text-blue-400 hover:bg-hover transition"><i class="fas fa-pen-to-square text-sm"></i></a>' +
-                (roleAtLeast('admin') ? '<button type="button" onclick="runDeployHooks(\'' + safeDomain + '\')" title="Run deploy hooks now" aria-label="Run deploy hooks now" class="inline-flex items-center justify-center w-8 h-8 rounded-lg text-muted hover:text-green-600 dark:hover:text-green-400 hover:bg-hover transition"><i class="fas fa-play text-sm"></i></button>' : '') +
-                '</div>' +
+                // Deployment + Actions side by side — two sections, one column
+                // each, every control a quick-action button (points 2 & 3).
+                '<div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 pt-4 border-t border-border">' +
+                '<div>' +
+                '<h4 class="text-xs font-semibold text-muted uppercase tracking-wider mb-3">Deployment</h4>' +
+                '<div class="flex flex-wrap items-center gap-2">' +
+                deploymentBadgesHtml(cert, true) +
+                actIcon("checkDeploymentStatus('" + safeDomain + "', this, true)", 'fa-arrows-rotate', 'indigo', 'Check deployment now') +
+                actLink('/settings#deploy', 'fa-pen-to-square', 'blue', 'View / edit deploy hooks') +
+                (roleAtLeast('admin') ? actIcon("runDeployHooks('" + safeDomain + "')", 'fa-play', 'green', 'Run deploy hooks now') : '') +
                 '</div>' +
                 (safeDomainAlias ? '<button type="button" onclick="checkDnsAliasForCertificate(\'' + safeDomain + '\')" class="mt-2 w-full inline-flex items-center justify-center px-3 py-1.5 text-xs border border-info-line rounded-lg text-info-fg bg-info-surface hover:bg-blue-100 dark:hover:bg-blue-900/50"><i class="fas fa-search mr-1.5"></i>Check DNS-01 Alias</button>' : '') +
                 '<div id="cert_dns_alias_check_result" class="hidden mt-2"></div>' +
                 '</div>' +
-                // Quick actions — consistent icons (label on hover), separated.
-                '<div class="pt-4 border-t border-border">' +
+                '<div>' +
                 '<h4 class="text-xs font-semibold text-muted uppercase tracking-wider mb-3">Actions</h4>' +
                 '<div class="flex flex-wrap items-center gap-2">' +
                 (roleAtLeast('operator')
@@ -916,8 +1020,9 @@
                 actIcon("downloadCertificate('" + safeDomain + "')", 'fa-download', 'blue', 'Download certificate') +
                 actIcon("copyCurlCommand('" + safeDomain + "')", 'fa-code', 'indigo', 'Show API command') +
                 (roleAtLeast('admin')
-                    ? '<span class="flex-grow"></span>' + actIcon("deleteCertificate('" + safeDomain + "')", 'fa-trash-alt', 'red', 'Delete certificate')
+                    ? actIconDanger("deleteCertificate('" + safeDomain + "')", 'fa-trash-alt', 'Delete certificate')
                     : '') +
+                '</div>' +
                 '</div>' +
                 '</div>' +
                 '</div>';
@@ -1372,7 +1477,9 @@
                 // Re-render through the SAME chip helpers the initial paint uses
                 // so a completed probe updates the icon + colour in place instead
                 // of replacing the chip with stale "Role: Status" text.
-                statusElement.className = deploymentChipClass(display);
+                statusElement.className = (statusElement.getAttribute('data-deployment-variant') === 'square'
+                    ? deploymentSquareClass(display)
+                    : deploymentChipClass(display));
                 statusElement.innerHTML = deploymentChipInner(display);
                 var title = display.text;
                 if (roleResult && roleResult.method) {
@@ -2108,6 +2215,16 @@
             requestBody.elliptic_curve = document.getElementById('cert_elliptic_curve').value;
         }
 
+        // Phase 3: opt fresh creates into async issuance so the UI can show an
+        // optimistic "Issuing" row + poll the job instead of blocking on the
+        // full ACME round-trip. Reissue stays synchronous — it edits a row that
+        // already exists, so an optimistic new row would be wrong. If the server
+        // has no async executor it ignores the flag and replies synchronously,
+        // which the 202-vs-200 branch below handles transparently.
+        if (!editingDomain) {
+            requestBody.async = true;
+        }
+
         var submitEndpoint = editingDomain
             ? '/api/certificates/' + encodeURIComponent(editingDomain) + '/reissue'
             : '/api/certificates/create';
@@ -2118,25 +2235,23 @@
             body: JSON.stringify(requestBody)
         }).then(function (response) {
             return response.json().then(function (result) {
+                // Async accepted (202): the server queued the issuance and
+                // handed back a job id. Show the optimistic row + poll instead
+                // of treating this as a finished create.
+                if (response.status === 202 && result && result.job_id) {
+                    handleAsyncAccepted(result, requestBody, domainsDisplay);
+                    return;
+                }
                 if (response.ok && result.success !== false) {
                     showMessage('Certificate ' + (editingDomain ? 'reissued' : 'created') + ' successfully for ' + domainsDisplay + '!', 'success');
                     if (editingDomain) {
                         cancelEditReissue();
                     } else {
-                        document.getElementById('domain').value = '';
-                        document.getElementById('san_domains').value = '';
-                        document.getElementById('wildcard-cert').checked = false;
-                        document.getElementById('challenge_type_select').value = '';
-                        document.getElementById('dns_provider_select').value = '';
-                        document.getElementById('account_select').value = '';
-                        document.getElementById('ca_provider_select').value = '';
-                        var aliasField = document.getElementById('dns_alias_domain');
-                        if (aliasField) { aliasField.value = ''; }
-                        updateDnsAliasHelp();
-                        toggleDnsProviderVisibility();
+                        clearCreateFormAfterSubmit();
                     }
                     updateAccountSelection();
                     loadCertificates();
+                    if (typeof closeCertDrawer === 'function') closeCertDrawer();
                 } else {
                     var errorMsg = result.error || result.message || 'Failed to create certificate';
                     if (result.hint) {
@@ -2175,6 +2290,219 @@
             isCreatingCert = false;
         });
     });
+
+    // ===== Async issuance lifecycle (redesign phase 3) =======================
+    // When a create is accepted asynchronously the table gets an optimistic
+    // "Issuing" row at the top; we poll the job endpoint and resolve the row to
+    // the real certificate (success, via loadCertificates) or to a "Failed" row
+    // carrying the reason + a Retry button. There is no certificate_failed SSE
+    // handler, so polling owns the failure path.
+
+    // Reset the create form to its empty state after a submit was accepted
+    // (shared by the sync-success and async-accepted paths).
+    function clearCreateFormAfterSubmit() {
+        document.getElementById('domain').value = '';
+        document.getElementById('san_domains').value = '';
+        document.getElementById('wildcard-cert').checked = false;
+        document.getElementById('challenge_type_select').value = '';
+        document.getElementById('dns_provider_select').value = '';
+        document.getElementById('account_select').value = '';
+        document.getElementById('ca_provider_select').value = '';
+        var aliasField = document.getElementById('dns_alias_domain');
+        if (aliasField) { aliasField.value = ''; }
+        updateDnsAliasHelp();
+        toggleDnsProviderVisibility();
+    }
+
+    function buildPendingRowsHtml() {
+        var ids = Object.keys(pendingJobs);
+        if (!ids.length) return '';
+        // A job whose real certificate has already landed (SSE/reload beat our
+        // poll) is obsolete — skip its optimistic row so the table never shows
+        // both an "Issuing" and a "Valid" row for the same domain.
+        var live = {};
+        (allCertificates || []).forEach(function (c) { if (c && c.exists) { live[c.domain] = true; } });
+        var parts = [];
+        // Newest first: a just-submitted job should sit at the very top.
+        ids.slice().reverse().forEach(function (id) {
+            var job = pendingJobs[id];
+            if (!job) return;
+            if (job.state !== 'failed' && live[job.domain]) return;
+            parts.push(job.state === 'failed' ? failedRowHtml(id, job) : issuingRowHtml(id, job));
+        });
+        return parts.join('');
+    }
+
+    function issuingRowHtml(jobId, job) {
+        var domain = escapeHtml(job.domain || '');
+        var providerLabel = job.provider ? escapeHtml(providerDisplayName(job.provider)) : '—';
+        var sub = job.sanCount > 0
+            ? ('+' + job.sanCount + ' SAN' + (job.sanCount > 1 ? 's' : ''))
+            : 'Requesting certificate…';
+        return '<tr data-pending-job="' + jobId + '" class="bg-blue-50/40 dark:bg-blue-900/10">' +
+            '<td class="px-6 py-4 md:max-w-0"><div class="flex items-center min-w-0">' +
+            '<i class="fas fa-spinner fa-spin text-info-fg mr-2 text-sm shrink-0" aria-hidden="true"></i>' +
+            '<div class="min-w-0"><div class="text-sm font-medium text-foreground break-words md:truncate">' + domain + '</div>' +
+            '<div class="mt-1 text-xs text-muted">' + sub + '</div></div></div></td>' +
+            '<td class="px-4 py-4 whitespace-nowrap"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-500/10 text-info-fg ring-1 ring-inset ring-blue-500/20"><i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i>Issuing</span></td>' +
+            '<td class="px-4 py-4 whitespace-nowrap hidden md:table-cell text-sm text-muted">—</td>' +
+            '<td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">' + providerLabel + '</td>' +
+            '<td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">—</td>' +
+            '<td class="px-4 py-4 whitespace-nowrap text-right"><span class="text-xs text-muted">Just now</span></td>' +
+            '</tr>';
+    }
+
+    function failedRowHtml(jobId, job) {
+        var domain = escapeHtml(job.domain || '');
+        var providerLabel = job.provider ? escapeHtml(providerDisplayName(job.provider)) : '—';
+        var rawErr = String(job.error || 'Certificate issuance failed');
+        var errText = escapeHtml(rawErr.length > 140 ? rawErr.slice(0, 137) + '…' : rawErr);
+        var errTitle = escapeHtml(rawErr);
+        return '<tr data-pending-job="' + jobId + '" class="bg-red-50/40 dark:bg-red-900/10">' +
+            '<td class="px-6 py-4 md:max-w-0"><div class="flex items-center min-w-0">' +
+            '<i class="fas fa-times-circle text-danger-fg mr-2 text-sm shrink-0" aria-hidden="true"></i>' +
+            '<div class="min-w-0"><div class="text-sm font-medium text-foreground break-words md:truncate">' + domain + '</div>' +
+            '<div class="mt-1 text-xs text-danger-fg break-words" title="' + errTitle + '">' + errText + '</div></div></div></td>' +
+            '<td class="px-4 py-4 whitespace-nowrap"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-500/10 text-danger-fg ring-1 ring-inset ring-red-500/20"><i class="fas fa-times-circle mr-1" aria-hidden="true"></i>Failed</span></td>' +
+            '<td class="px-4 py-4 whitespace-nowrap hidden md:table-cell text-sm text-muted">—</td>' +
+            '<td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">' + providerLabel + '</td>' +
+            '<td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">—</td>' +
+            '<td class="px-4 py-4 whitespace-nowrap text-right"><div class="flex items-center justify-end gap-1">' +
+            '<button type="button" onclick="retryCreateJob(\'' + jobId + '\')" class="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded border border-border text-label bg-input hover:bg-gray-50 dark:hover:bg-gray-600" title="Retry issuance for ' + domain + '" aria-label="Retry issuance for ' + domain + '"><i class="fas fa-sync-alt mr-1" aria-hidden="true"></i>Retry</button>' +
+            '<button type="button" onclick="dismissPendingJob(\'' + jobId + '\')" class="inline-flex items-center justify-center p-2 text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-100 rounded hover:bg-hover" title="Dismiss" aria-label="Dismiss failed issuance for ' + domain + '"><i class="fas fa-times" aria-hidden="true"></i></button>' +
+            '</div></td></tr>';
+    }
+
+    // Replace the optimistic rows in place without disturbing the real rows or
+    // any active filter view. Called after every pendingJobs mutation, and at
+    // the tail of displayCertificates so a full rebuild re-attaches them.
+    function renderPendingRows() {
+        var container = document.getElementById('certificatesList');
+        if (!container) return;
+        container.querySelectorAll('tr[data-pending-job]').forEach(function (r) { r.remove(); });
+        var html = buildPendingRowsHtml();
+        if (!html) {
+            // Removing the last optimistic row can leave the body blank on an
+            // empty instance (the welcome panel was cleared to show the row).
+            // Restore it. Guarded to 0 real certs so we never re-render — and
+            // thus never clobber — a populated or filtered view.
+            if (!container.children.length && (allCertificates || []).length === 0) {
+                displayCertificates(allCertificates);
+            }
+            return;
+        }
+        var thead = document.querySelector('#certificatesTable thead');
+        if (thead) thead.style.display = '';
+        // If the body is showing the empty/welcome state, clear it first so the
+        // pending rows don't render beneath a "Welcome to CertMate" panel.
+        var emptyState = container.querySelector('[data-empty-state]');
+        if (emptyState) container.innerHTML = '';
+        container.insertAdjacentHTML('afterbegin', html);
+    }
+
+    function handleAsyncAccepted(job, requestBody, domainsDisplay) {
+        var jobId = job.job_id;
+        pendingJobs[jobId] = {
+            domain: job.domain || requestBody.domain,
+            provider: requestBody.dns_provider || '',
+            sanCount: (requestBody.san_domains || []).length,
+            state: 'issuing',
+            payload: requestBody,
+            domainsDisplay: domainsDisplay
+        };
+        clearCreateFormAfterSubmit();
+        updateAccountSelection();
+        if (typeof closeCertDrawer === 'function') { closeCertDrawer(); }
+        showMessage('Issuing certificate for ' + domainsDisplay + '…', 'info');
+        renderPendingRows();
+        pollCertJob(jobId, job.status_url || ('/api/certificates/jobs/' + jobId));
+    }
+
+    function pollCertJob(jobId, statusUrl) {
+        var attempts = 0;
+        var MAX_ATTEMPTS = 150;   // ~5 min at 2s — well beyond a normal ACME issue
+        function tick() {
+            if (!pendingJobs[jobId]) return;   // dismissed/retried away
+            attempts++;
+            fetch(statusUrl, { headers: API_HEADERS }).then(function (resp) {
+                if (resp.status === 404) return { status: '__gone__' };
+                return resp.json();
+            }).then(function (jobRec) {
+                if (!pendingJobs[jobId]) return;   // dismissed during the request
+                var status = jobRec && jobRec.status;
+                if (status === 'succeeded') {
+                    delete pendingJobs[jobId];
+                    delete pendingPollTimers[jobId];
+                    loadCertificates();   // the real row replaces the optimistic one
+                } else if (status === 'failed') {
+                    pendingJobs[jobId].state = 'failed';
+                    pendingJobs[jobId].error = (jobRec && jobRec.error) || 'Certificate issuance failed';
+                    pendingJobs[jobId].errorCode = jobRec && jobRec.error_code;
+                    delete pendingPollTimers[jobId];
+                    renderPendingRows();
+                    showMessage('Certificate issuance failed for ' + pendingJobs[jobId].domain + ': ' + pendingJobs[jobId].error, 'error');
+                } else if (status === '__gone__') {
+                    // Job evicted/unknown — drop the optimistic row and resync.
+                    delete pendingJobs[jobId];
+                    delete pendingPollTimers[jobId];
+                    loadCertificates();
+                } else if (attempts >= MAX_ATTEMPTS) {
+                    // Still running after the cap: stop polling and drop the row
+                    // rather than fail it — SSE/reload will reconcile the result.
+                    delete pendingJobs[jobId];
+                    delete pendingPollTimers[jobId];
+                    renderPendingRows();
+                } else {
+                    pendingPollTimers[jobId] = setTimeout(tick, 2000);
+                }
+            }).catch(function () {
+                if (!pendingJobs[jobId]) return;
+                if (attempts >= MAX_ATTEMPTS) { delete pendingPollTimers[jobId]; return; }
+                pendingPollTimers[jobId] = setTimeout(tick, 2000);
+            });
+        }
+        pendingPollTimers[jobId] = setTimeout(tick, 1500);
+    }
+
+    // POST a create payload again (used by Retry). Lean create-only mirror of
+    // the form submit's request handling — no reissue branch, no form locking.
+    function postCreate(requestBody, domainsDisplay) {
+        return fetch('/api/certificates/create', {
+            method: 'POST', headers: API_HEADERS, body: JSON.stringify(requestBody)
+        }).then(function (response) {
+            return response.json().then(function (result) {
+                if (response.status === 202 && result && result.job_id) {
+                    handleAsyncAccepted(result, requestBody, domainsDisplay);
+                } else if (response.ok && result.success !== false) {
+                    showMessage('Certificate created successfully for ' + domainsDisplay + '!', 'success');
+                    loadCertificates();
+                } else {
+                    var errorMsg = result.error || result.message || 'Failed to create certificate';
+                    if (result.hint) { errorMsg += '\n\n' + result.hint; }
+                    showMessage(errorMsg, 'error');
+                }
+            });
+        }).catch(function () {
+            showMessage('Failed to create certificate. Please check your network connection and try again.', 'error');
+        });
+    }
+
+    function retryCreateJob(jobId) {
+        var job = pendingJobs[jobId];
+        if (!job) return;
+        var payload = job.payload || {};
+        var domainsDisplay = job.domainsDisplay || payload.domain || 'certificate';
+        delete pendingJobs[jobId];
+        if (pendingPollTimers[jobId]) { clearTimeout(pendingPollTimers[jobId]); delete pendingPollTimers[jobId]; }
+        renderPendingRows();
+        postCreate(payload, domainsDisplay);
+    }
+
+    function dismissPendingJob(jobId) {
+        if (pendingPollTimers[jobId]) { clearTimeout(pendingPollTimers[jobId]); delete pendingPollTimers[jobId]; }
+        delete pendingJobs[jobId];
+        renderPendingRows();
+    }
 
     // Certificate action functions
     function downloadCertificate(domain) {
@@ -2517,6 +2845,44 @@
         } catch (e) { /* old browser, skip */ }
     }
 
+    // ⌘K jump-and-flash: scroll the named row into view and pulse it. Distinct
+    // from ?cert= (which opens the detail panel) — flashing just locates the row
+    // so the user can act on it. Returns false if the row is absent or hidden
+    // (e.g. the client view is active), so the caller can fall back to a reload.
+    function flashCertRow(domain) {
+        if (!domain) return false;
+        // Match by reading data-row-domain directly instead of interpolating the
+        // (user-derived) domain into a CSS selector — no escaping subtleties, no
+        // injection surface.
+        var row = null;
+        var rows = document.querySelectorAll('#certificatesList tr[data-row-domain]');
+        for (var i = 0; i < rows.length; i++) {
+            if (rows[i].getAttribute('data-row-domain') === domain) { row = rows[i]; break; }
+        }
+        if (!row || row.offsetParent === null) return false;
+        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        row.classList.remove('cmd-flash');
+        void row.offsetWidth;            // reflow so the animation restarts on repeat jumps
+        row.classList.add('cmd-flash');
+        setTimeout(function () { row.classList.remove('cmd-flash'); }, 1900);
+        return true;
+    }
+
+    // Cross-page jump-and-flash: the palette navigates to /?flash=<domain> when
+    // the user isn't already on the dashboard. Flash once, then strip the param
+    // so a refresh doesn't re-trigger it.
+    function maybeFlashCertFromQuery() {
+        try {
+            var params = new URLSearchParams(window.location.search);
+            var domain = params.get('flash');
+            if (!domain) return;
+            params.delete('flash');
+            var qs = params.toString();
+            history.replaceState(null, '', window.location.pathname + (qs ? '?' + qs : '') + window.location.hash);
+            flashCertRow(domain);
+        } catch (e) { /* old browser, skip */ }
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
         // Paint the stats-card skeleton placeholders before the cert
         // fetch returns, so the surface is never an empty grid — count
@@ -2528,12 +2894,11 @@
         // Resolve the caller's role first so the initial cert list can
         // already render with the right buttons hidden — avoids the
         // viewer briefly seeing admin-only controls before they vanish.
-        refreshCurrentRole().then(function () { loadCertificates().then(maybeOpenCertFromQuery); });
+        refreshCurrentRole().then(function () { loadCertificates().then(function () { maybeOpenCertFromQuery(); maybeFlashCertFromQuery(); }); });
         loadProviderAccounts();
 
-        // Initialize search and filters
-        document.getElementById('certificateSearch').addEventListener('input', filterCertificates);
-        document.getElementById('statusFilter').addEventListener('change', filterCertificates);
+        // Status filtering is driven by the chips (onclick -> setStatusFilter);
+        // free-text search moved to the ⌘K palette. No select listener needed.
         document.getElementById('domain').addEventListener('input', updateDnsAliasHelp);
         document.getElementById('san_domains').addEventListener('input', updateDnsAliasHelp);
         document.getElementById('wildcard-cert').addEventListener('change', updateDnsAliasHelp);
@@ -2581,8 +2946,35 @@
         setupCacheSettingsListener();
     });
 
+    // Export every existing certificate in the list as one ZIP (batch-download
+    // web endpoint). Wired to the list-actions icon group.
+    function exportAllCertificates() {
+        var domains = (allCertificates || [])
+            .filter(function (c) { return c && c.exists; })
+            .map(function (c) { return c.domain; });
+        if (!domains.length) { showMessage('No certificates to export', 'info'); return; }
+        fetch('/api/web/certificates/download/batch', {
+            method: 'POST', headers: API_HEADERS, body: JSON.stringify({ domains: domains })
+        }).then(function (response) {
+            if (!response.ok) {
+                return response.json().then(function (e) { throw new Error((e && e.error) || 'Export failed'); });
+            }
+            return response.blob();
+        }).then(function (blob) {
+            var url = window.URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url; a.download = 'certificates.zip';
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+            showMessage('Exported ' + domains.length + ' certificate' + (domains.length === 1 ? '' : 's') + ' as ZIP', 'success');
+        }).catch(function (error) {
+            showMessage((error && error.message) || 'Failed to export certificates', 'error');
+        });
+    }
+
     // Expose functions needed by HTML onclick handlers and SSE
     window.loadCertificates = loadCertificates;
+    window.exportAllCertificates = exportAllCertificates;
     window.openCertDetail = openCertDetail;
     window.certRowKey = certRowKey;
     window.startEditReissue = startEditReissue;
@@ -2598,6 +2990,7 @@
     window.closeCurlModal = closeCurlModal;
     window.copyFromModal = copyFromModal;
     window.clearFilters = clearFilters;
+    window.setStatusFilter = setStatusFilter;
     window.sortCertificates = sortCertificates;
     window.filterCertificates = filterCertificates;
     window.toggleDebugConsole = toggleDebugConsole;
@@ -2613,4 +3006,7 @@
     window.updateDnsAliasHelp = updateDnsAliasHelp;
     window.checkDnsAliasForCertificate = checkDnsAliasForCertificate;
     window.copyAliasValueToClipboard = copyAliasValueToClipboard;
+    window.retryCreateJob = retryCreateJob;
+    window.dismissPendingJob = dismissPendingJob;
+    window.flashCertRow = flashCertRow;
 })();

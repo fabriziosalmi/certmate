@@ -464,8 +464,13 @@
         if (el) el.remove();
     }
 
-    // Auto-check on page load (only on dashboard)
-    if (window.location.pathname === '/') {
+    // Auto-check on page load (only on the dashboard, never on the first-run
+    // setup screen). setup.html also renders at '/' when no users exist yet,
+    // and it carries the admin-creation form (#setupForm); the wizard collects
+    // email + DNS, which is premature before an admin account exists, so it
+    // must not overlay setup.html. Let setup.html own first-run; the wizard
+    // owns dashboard onboarding once an admin account is in place.
+    if (window.location.pathname === '/' && !document.getElementById('setupForm')) {
         setTimeout(checkSetup, 500);
     }
 })();

@@ -8,6 +8,8 @@
     var escapeHtml = CertMate.escapeHtml;
     var currentCertId = null;
     var certificatesData = [];
+    var ccCurrentUsage = '';   // '' = all — driven by the usage filter chips
+    var ccCurrentStatus = '';  // '' = all — driven by the status filter chips
     var _initialized = false;
 
     // Public init — called when client tab becomes visible
@@ -54,13 +56,8 @@
 
         var submitBatchBtn = document.getElementById('submitBatchBtn');
         if (submitBatchBtn) submitBatchBtn.addEventListener('click', ccHandleBatchSubmit);
-
-        var search = document.getElementById('searchInput');
-        var fUsage = document.getElementById('filterUsage');
-        var fStatus = document.getElementById('filterStatus');
-        if (search) search.addEventListener('input', ccFilterCertificates);
-        if (fUsage) fUsage.addEventListener('change', ccFilterCertificates);
-        if (fStatus) fStatus.addEventListener('change', ccFilterCertificates);
+        // Status/usage filtering is driven by the header chips (onclick ->
+        // ccSetStatusFilter / ccSetUsageFilter); no select listeners needed.
     }
 
     function ccLoadStatistics() {
@@ -71,9 +68,16 @@
                 if (el('totalCount')) el('totalCount').textContent = stats.total || 0;
                 if (el('activeCount')) el('activeCount').textContent = stats.active || 0;
                 if (el('revokedCount')) el('revokedCount').textContent = stats.revoked || 0;
+                // Status filter chip counts (mirror the server chips).
+                var setChipCount = function (k, v) { var c = document.querySelector('[data-cc-status-count="' + k + '"]'); if (c) { c.textContent = v; } };
+                setChipCount('all', stats.total || 0);
+                setChipCount('active', stats.active || 0);
+                setChipCount('revoked', stats.revoked || 0);
                 var byUsage = stats.by_usage || {};
                 var usageText = Object.entries(byUsage).map(function(e) { return e[1] + ' ' + e[0]; }).join(', ') || 'No certs';
-                if (el('usageBreakdown')) el('usageBreakdown').textContent = usageText;
+                // The strip value truncates to one line; keep the full breakdown
+                // available on hover.
+                if (el('usageBreakdown')) { el('usageBreakdown').textContent = usageText; el('usageBreakdown').title = usageText; }
             })
             .catch(function(e) { console.error('Error loading client cert statistics:', e); });
     }
@@ -92,7 +96,27 @@
         var tbody = document.getElementById('certTableBody');
         if (!tbody) return;
         if (certificatesData.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-8 text-center text-muted">No client certificates found</td></tr>';
+            // Distinguish "none exist yet" (offer a CTA) from "none match the
+            // active usage/status filter" (offer a reorientation hint).
+            var usageSel = document.getElementById('filterUsage');
+            var statusSel = document.getElementById('filterStatus');
+            var isFiltered = (usageSel && usageSel.value) || (statusSel && statusSel.value);
+            if (isFiltered) {
+                tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-12">' +
+                    '<div class="mx-auto max-w-sm text-center">' +
+                    '<div class="mx-auto h-14 w-14 flex items-center justify-center bg-surface-2 rounded-full mb-3"><i class="fas fa-filter text-gray-400 text-xl" aria-hidden="true"></i></div>' +
+                    '<h3 class="text-base font-medium text-foreground mb-1">No matching client certificates</h3>' +
+                    '<p class="text-sm text-muted">Try a different usage or status filter.</p>' +
+                    '</div></td></tr>';
+            } else {
+                tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-12">' +
+                    '<div class="mx-auto max-w-sm text-center">' +
+                    '<div class="mx-auto h-16 w-16 flex items-center justify-center bg-info-surface rounded-full mb-4"><i class="fas fa-id-card text-blue-500 text-2xl" aria-hidden="true"></i></div>' +
+                    '<h3 class="text-lg font-medium text-foreground mb-2">No client certificates yet</h3>' +
+                    '<p class="text-muted mb-6">Issue mTLS / client identity certificates for VPN access, API authentication, or user login.</p>' +
+                    '<button type="button" onclick="openCertDrawer(\'client\')" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary hover:bg-secondary"><i class="fas fa-plus mr-2" aria-hidden="true"></i>New Client Certificate</button>' +
+                    '</div></td></tr>';
+            }
             return;
         }
 
@@ -100,6 +124,9 @@
             var expiresDate = new Date(cert.expires_at);
             var createdDate = new Date(cert.created_at);
             var isExpiringSoon = expiresDate - new Date() < 30 * 24 * 60 * 60 * 1000;
+            // Match the server table's coloured left border: revoked = red,
+            // expiring-soon = amber, otherwise green (see .health-* in input.css).
+            var healthClass = cert.revoked ? 'health-expired' : (isExpiringSoon ? 'health-warning' : 'health-valid');
             var safeCN = escapeHtml(cert.common_name);
             var safeEmail = escapeHtml(cert.email || '-');
             var safeUsage = escapeHtml(cert.cert_usage);
@@ -107,8 +134,8 @@
 
             // Whole row opens the detail modal (role=button + keyboard); the
             // action buttons stopPropagation so they don't also open it.
-            return '<tr data-cc-id="' + safeId + '" role="button" tabindex="0" aria-label="View details for ' + safeCN + '" class="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary">' +
-                '<td class="px-6 py-4 text-sm font-medium text-foreground">' + safeCN + '</td>' +
+            return '<tr data-cc-id="' + safeId + '" role="button" tabindex="0" aria-label="View details for ' + safeCN + '" class="' + healthClass + ' cursor-pointer hover:bg-blue-50/40 dark:hover:bg-blue-900/10 transition-colors focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary">' +
+                '<td class="px-6 py-4 text-sm font-medium text-foreground cm-mono">' + safeCN + '</td>' +
                 '<td class="px-6 py-4 text-sm text-muted hidden md:table-cell">' + safeEmail + '</td>' +
                 '<td class="px-6 py-4 text-sm hidden lg:table-cell"><span class="px-2 py-1 bg-info-surface text-info-strong rounded text-xs font-medium">' + safeUsage + '</span></td>' +
                 '<td class="px-6 py-4 text-sm text-muted hidden lg:table-cell">' + createdDate.toLocaleDateString() + '</td>' +
@@ -321,21 +348,44 @@
         reader.readAsText(file);
     }
 
-    function ccFilterCertificates() {
-        var search = (document.getElementById('searchInput').value || '').toLowerCase();
-        var usage = document.getElementById('filterUsage').value;
-        var status = document.getElementById('filterStatus').value;
+    // Status/usage filter chips — the clicked chip becomes aria-pressed; the
+    // rest reset. ccCurrent{Status,Usage} are the source of truth read below.
+    function ccSetStatusFilter(value) {
+        ccCurrentStatus = value;
+        document.querySelectorAll('[data-cc-status-chip]').forEach(function (chip) {
+            chip.setAttribute('aria-pressed', chip.getAttribute('data-cc-status-chip') === value ? 'true' : 'false');
+        });
+        ccFilterCertificates();
+    }
+    function ccSetUsageFilter(value) {
+        ccCurrentUsage = value;
+        document.querySelectorAll('[data-cc-usage-chip]').forEach(function (chip) {
+            chip.setAttribute('aria-pressed', chip.getAttribute('data-cc-usage-chip') === value ? 'true' : 'false');
+        });
+        ccFilterCertificates();
+    }
+    function ccRefresh() {
+        ccLoadStatistics();
+        ccLoadCertificates();
+    }
+    window.ccSetStatusFilter = ccSetStatusFilter;
+    window.ccSetUsageFilter = ccSetUsageFilter;
+    window.ccRefresh = ccRefresh;
 
-        // Re-fetch original data and filter
+    function ccFilterCertificates() {
+        var usage = ccCurrentUsage;
+        var status = ccCurrentStatus;
+
+        // Re-fetch original data and filter (free-text CN/email search now lives
+        // in the global ⌘K palette).
         fetch('/api/client-certs')
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 var all = data.certificates || [];
                 certificatesData = all.filter(function(cert) {
-                    var matchSearch = !search || cert.common_name.toLowerCase().indexOf(search) !== -1 || (cert.email || '').toLowerCase().indexOf(search) !== -1;
                     var matchUsage = !usage || cert.cert_usage === usage;
                     var matchStatus = !status || (status === 'active' && !cert.revoked) || (status === 'revoked' && cert.revoked);
-                    return matchSearch && matchUsage && matchStatus;
+                    return matchUsage && matchStatus;
                 });
                 ccRenderCertificates();
             })

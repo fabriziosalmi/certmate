@@ -57,38 +57,30 @@
                     </div>
                 </div>
                 <div class="flex items-center space-x-1 sm:space-x-4">
-                    <!-- Search (Cmd+K) — first item in the cluster. Desktop shows a
-                         labelled pill; mobile a compact icon. Same keydown dispatch
-                         feeds the existing command palette. -->
-                    <button type="button" onclick="document.dispatchEvent(new KeyboardEvent('keydown',{key:'k',metaKey:true}))" class="hidden sm:inline-flex items-center px-2.5 py-1.5 text-sm text-gray-400 bg-surface-2 border-border border rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition" title="Search (Cmd+K)" aria-label="Open search">
-                        <i class="fas fa-search mr-1.5 text-xs"></i>
-                        <span class="text-xs">Search</span>
-                        <kbd class="ml-2 px-1.5 py-0.5 text-[10px] bg-surface border-border rounded border">&#8984;K</kbd>
-                    </button>
-                    <button type="button" onclick="document.dispatchEvent(new KeyboardEvent('keydown',{key:'k',metaKey:true}))" class="sm:hidden px-2 py-2 rounded-md text-muted hover:bg-hover" title="Search" aria-label="Open search">
+                    <!-- Search (Cmd+K) — a plain lens; clicking opens the command
+                         palette (the labelled box was redundant). It sits where the
+                         old Certificates link was: the logo links home and the
+                         Server/Client toggle handles cert navigation now. Visible at
+                         all widths so mobile keeps search access. -->
+                    <button type="button" onclick="document.dispatchEvent(new KeyboardEvent('keydown',{key:'k',metaKey:true}))" class="inline-flex items-center px-2 py-2 rounded-md border-b-2 border-transparent hover:bg-hover text-muted hover:text-foreground" title="Search (Cmd+K)" aria-label="Open search">
                         <i class="fas fa-search"></i>
                     </button>
-                    <!-- Divider between Search and the icon nav -->
-                    <span class="hidden md:block w-px h-5 bg-border" aria-hidden="true"></span>
                     <!-- Primary operations — icon-only on desktop (label via tooltip +
                          aria-label); on mobile they live in the bottom tab bar. -->
-                    <a href="/" {% if request.path == '/' %}aria-current="page"{% endif %} class="hidden md:inline-flex items-center px-2 py-2 rounded-md hover:bg-hover {% if request.path == '/' %}text-primary{% else %}text-muted{% endif %}" title="Certificates" aria-label="Certificates">
-                        <i class="fas fa-certificate"></i>
-                    </a>
-                    <a href="/activity" {% if request.path == '/activity' %}aria-current="page"{% endif %} class="hidden md:inline-flex items-center px-2 py-2 rounded-md hover:bg-hover {% if request.path == '/activity' %}text-primary{% else %}text-muted{% endif %}" title="Activity" aria-label="Activity">
+                    <a href="/activity" {% if request.path == '/activity' %}aria-current="page"{% endif %} class="hidden md:inline-flex items-center px-2 py-2 rounded-md border-b-2 hover:bg-hover {% if request.path == '/activity' %}text-primary border-primary{% else %}text-muted border-transparent{% endif %}" title="Activity" aria-label="Activity">
                         <i class="fas fa-history"></i>
                     </a>
                     <!-- Divider between primary operations and utility icons -->
                     <span class="hidden md:block w-px h-5 bg-border" aria-hidden="true"></span>
                     <!-- Utility icons: Settings · API Docs · Help. Icon-only on
                          desktop; on mobile these live in the bottom tab bar. -->
-                    <a href="/settings" {% if request.path == '/settings' %}aria-current="page"{% endif %} class="hidden md:inline-flex items-center px-2 py-2 rounded-md hover:bg-hover {% if request.path == '/settings' %}text-primary{% else %}text-muted{% endif %}" title="Settings" aria-label="Settings">
+                    <a href="/settings" {% if request.path == '/settings' %}aria-current="page"{% endif %} class="hidden md:inline-flex items-center px-2 py-2 rounded-md border-b-2 hover:bg-hover {% if request.path == '/settings' %}text-primary border-primary{% else %}text-muted border-transparent{% endif %}" title="Settings" aria-label="Settings">
                         <i class="fas fa-cog"></i>
                     </a>
-                    <a href="/redoc" target="_blank" rel="noopener" class="hidden md:inline-flex items-center px-2 py-2 rounded-md hover:bg-hover text-muted" title="API Docs (opens in a new tab)" aria-label="API Docs (opens in a new tab)">
+                    <a href="/redoc" target="_blank" rel="noopener" class="hidden md:inline-flex items-center px-2 py-2 rounded-md border-b-2 border-transparent hover:bg-hover text-muted" title="API Docs (opens in a new tab)" aria-label="API Docs (opens in a new tab)">
                         <i class="fas fa-code"></i>
                     </a>
-                    <a href="/help" {% if request.path == '/help' %}aria-current="page"{% endif %} class="hidden md:inline-flex items-center px-2 py-2 rounded-md hover:bg-hover {% if request.path == '/help' %}text-primary{% else %}text-muted{% endif %}" title="Help" aria-label="Help">
+                    <a href="/help" {% if request.path == '/help' %}aria-current="page"{% endif %} class="hidden md:inline-flex items-center px-2 py-2 rounded-md border-b-2 hover:bg-hover {% if request.path == '/help' %}text-primary border-primary{% else %}text-muted border-transparent{% endif %}" title="Help" aria-label="Help">
                         <i class="fas fa-question-circle"></i>
                     </a>
                     <!-- Keyboard shortcuts hint -->
@@ -98,7 +90,7 @@
                     <!-- Notification bell — links to the full /notifications
                          page (no dropdown). Badge shows the count of active
                          (non-snoozed) certificate warnings. -->
-                    <a href="/notifications" {% if request.path == '/notifications' %}aria-current="page"{% endif %} id="notifBtn" class="px-2 py-2 rounded-md hover:bg-hover relative {% if request.path == '/notifications' %}text-primary{% else %}text-muted{% endif %}" title="Notifications" aria-label="Notifications">
+                    <a href="/notifications" {% if request.path == '/notifications' %}aria-current="page"{% endif %} id="notifBtn" class="px-2 py-2 rounded-md border-b-2 hover:bg-hover relative {% if request.path == '/notifications' %}text-primary border-primary{% else %}text-muted border-transparent{% endif %}" title="Notifications" aria-label="Notifications">
                         <i class="fas fa-bell"></i>
                         <span id="notifBadge" class="hidden absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold badge-pulse">0</span>
                     </a>
@@ -109,8 +101,8 @@
                          the button no longer flashes in then out as the
                          old JS auth-check completed 500 ms after paint). -->
                     {% if current_user %}
-                    <button type="button" id="logoutBtn" onclick="doLogout()" class="px-3 py-2 rounded-md text-sm font-medium text-danger-fg hover:bg-red-50 dark:hover:bg-red-900/30 border border-danger-line" title="Logout" aria-label="Log out">
-                        <i class="fas fa-sign-out-alt mr-1"></i><span class="hidden sm:inline"> Logout</span>
+                    <button type="button" id="logoutBtn" onclick="doLogout()" class="inline-flex items-center px-2.5 py-2 rounded-md text-danger-fg hover:bg-red-50 dark:hover:bg-red-900/30 border border-danger-line" title="Logout" aria-label="Log out">
+                        <i class="fas fa-sign-out-alt"></i>
                     </button>
                     {% endif %}
                 </div>

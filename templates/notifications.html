@@ -86,7 +86,7 @@
                     '</a>' +
                     '<details class="relative">' +
                         '<summary class="list-none inline-flex items-center px-2.5 py-1.5 text-xs border border-border rounded-lg bg-input text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 transition cursor-pointer" title="Snooze this notification">' +
-                            '<i class="fas fa-clock mr-1.5 text-[10px]"></i>Snooze' +
+                            '<i class="fas fa-clock mr-1.5 text-[10px]"></i>Snooze<i class="fas fa-chevron-down ml-1.5 text-[8px] opacity-60" aria-hidden="true"></i>' +
                         '</summary>' +
                         '<div class="absolute right-0 mt-1 w-40 bg-surface border border-border rounded-lg shadow-xl z-10 py-1">' +
                             '<button type="button" data-snooze="' + escapeHtml(w.domain) + '" data-days="1" class="block w-full text-left px-3 py-1.5 text-xs text-foreground hover:bg-gray-50 dark:hover:bg-gray-700/50">For 1 day</button>' +
@@ -142,18 +142,18 @@
                 var nCrit = active.filter(function(w){ return w.type === 'critical'; }).length;
                 var nWarn = active.filter(function(w){ return w.type === 'warning'; }).length;
                 var parts = [];
-                if (nExpired) parts.push('<span class="text-danger-fg font-medium">' + nExpired + ' expired</span>');
-                if (nCrit) parts.push('<span class="text-danger-fg font-medium">' + nCrit + ' critical</span>');
-                if (nWarn) parts.push('<span class="text-warning-fg font-medium">' + nWarn + ' expiring</span>');
+                if (nExpired) parts.push('<span class="text-foreground"><span class="px-1.5 rounded bg-danger-surface text-danger-fg font-semibold">' + nExpired + '</span> expired</span>');
+                if (nCrit) parts.push('<span class="text-foreground"><span class="px-1.5 rounded bg-danger-surface text-danger-fg font-semibold">' + nCrit + '</span> critical</span>');
+                if (nWarn) parts.push('<span class="text-foreground"><span class="px-1.5 rounded bg-warning-surface text-warning-fg font-semibold">' + nWarn + '</span> expiring</span>');
                 if (snoozed.length) parts.push('<span class="text-muted">' + snoozed.length + ' snoozed</span>');
                 summary.innerHTML = parts.length ? parts.join(' · ') : '<i class="fas fa-circle-check text-green-500 mr-2"></i>Nothing needs attention right now.';
             }
 
             var html = '';
             if (active.length === 0 && all.length > 0 && snoozed.length === all.length) {
-                html += '<div class="px-6 py-12 text-center text-muted"><i class="fas fa-bell-slash text-3xl text-gray-300 dark:text-gray-600 mb-3 block"></i>All active warnings are snoozed.</div>';
+                html += '<div class="px-6 py-12 flex flex-col items-center gap-3 text-muted"><i class="fas fa-bell-slash text-3xl text-gray-300 dark:text-gray-600" aria-hidden="true"></i><p>All active warnings are snoozed.</p></div>';
             } else if (all.length === 0) {
-                html += '<div class="px-6 py-12 text-center text-muted"><i class="fas fa-circle-check text-3xl text-green-400 mb-3 block"></i>No certificates need your attention.</div>';
+                html += '<div class="px-6 py-12 flex flex-col items-center gap-3 text-muted"><i class="fas fa-circle-check text-3xl text-green-400" aria-hidden="true"></i><p>No certificates need your attention.</p></div>';
             } else {
                 html += groupHtml('Expired', active.filter(function(w){ return w.type === 'expired'; }));
                 html += groupHtml('Critical — 7 days or less', active.filter(function(w){ return w.type === 'critical'; }));
@@ -185,7 +185,7 @@
                 })
                 .catch(function() {
                     document.getElementById('notifContent').innerHTML =
-                        '<div class="px-6 py-12 text-center text-muted"><i class="fas fa-triangle-exclamation text-2xl text-gray-300 dark:text-gray-600 mb-3 block"></i>Could not load certificates.</div>';
+                        '<div class="px-6 py-12 flex flex-col items-center gap-3 text-muted"><i class="fas fa-triangle-exclamation text-2xl text-gray-300 dark:text-gray-600" aria-hidden="true"></i><p>Could not load certificates.</p></div>';
                 });
         };
 
@@ -196,7 +196,7 @@
                 var days = parseInt(snz.getAttribute('data-days'), 10) || 1;
                 var domain = snz.getAttribute('data-snooze');
                 N.snooze(domain, days * DAY);
-                if (CertMate.toast) CertMate.toast('Snoozed ' + domain + ' for ' + days + (days === 1 ? ' day' : ' days'), 'info');
+                if (CertMate.toast) CertMate.toast('Snoozed ' + domain + ' for ' + days + (days === 1 ? ' day' : ' days'), 'success');
                 render();
                 return;
             }
@@ -204,7 +204,7 @@
             if (uns) {
                 var d = uns.getAttribute('data-unsnooze');
                 N.unsnooze(d);
-                if (CertMate.toast) CertMate.toast('Unsnoozed ' + d, 'info');
+                if (CertMate.toast) CertMate.toast('Unsnoozed ' + d, 'success');
                 render();
             }
         });

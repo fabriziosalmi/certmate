@@ -21,9 +21,11 @@
                             <option value="30d">Last 30 days</option>
                         </select>
                         <select id="filterOp" aria-label="Filter by operation type" class="px-3 py-1.5 text-xs border text-foreground border-border rounded-lg bg-input focus:ring-2 focus:ring-primary">
-                            <option value="">All user activity</option>
+                            <option value="">All operations</option>
                             <option value="create">Created</option>
+                            <option value="update">Updated</option>
                             <option value="renew">Renewed</option>
+                            <option value="deploy">Deployed</option>
                             <option value="revoke">Revoked</option>
                             <option value="download">Downloaded</option>
                             <option value="api_request">API requests only</option>
@@ -76,14 +78,46 @@
         var ACTIVITY_MAX_LIMIT = 500;
         var currentLimit = ACTIVITY_INITIAL_LIMIT;
 
+        // Coherent glyph+colour semantics per operation FAMILY so the icon
+        // column triages at a glance instead of a wall of identical grey discs:
+        // green=create, blue=update, cyan=renew, red=delete/revoke,
+        // purple=deploy, indigo=download, teal=restore, amber=auto-renew/test,
+        // slate/grey=maintenance/read/API. Unknown ops fall back to a grey circle.
         var opIcons = {
-            create: { icon: 'fa-plus-circle', color: 'text-green-500', bg: 'bg-success-surface' },
-            renew: { icon: 'fa-sync', color: 'text-blue-500', bg: 'bg-info-surface' },
-            revoke: { icon: 'fa-ban', color: 'text-red-500', bg: 'bg-danger-surface' },
-            download: { icon: 'fa-download', color: 'text-indigo-500', bg: 'bg-indigo-100 dark:bg-indigo-900/30' },
-            api_request: { icon: 'fa-code', color: 'text-gray-500', bg: 'bg-surface-2' },
-            batch_create: { icon: 'fa-layer-group', color: 'text-purple-500', bg: 'bg-purple-100 dark:bg-purple-900/30' },
-            failure: { icon: 'fa-exclamation-circle', color: 'text-red-500', bg: 'bg-danger-surface' }
+            // create (green)
+            create:              { icon: 'fa-plus-circle',       color: 'text-green-500',  bg: 'bg-success-surface' },
+            create_account:      { icon: 'fa-user-plus',         color: 'text-green-500',  bg: 'bg-success-surface' },
+            batch_create:        { icon: 'fa-layer-group',       color: 'text-green-500',  bg: 'bg-success-surface' },
+            oidc_login_success:  { icon: 'fa-right-to-bracket',  color: 'text-green-500',  bg: 'bg-success-surface' },
+            // update (blue)
+            update:              { icon: 'fa-pen',               color: 'text-blue-500',   bg: 'bg-info-surface' },
+            update_config:       { icon: 'fa-sliders',           color: 'text-blue-500',   bg: 'bg-info-surface' },
+            update_account:      { icon: 'fa-user-pen',          color: 'text-blue-500',   bg: 'bg-info-surface' },
+            oidc_config_changed: { icon: 'fa-id-badge',          color: 'text-blue-500',   bg: 'bg-info-surface' },
+            // renew (cyan) / auto-renew (amber)
+            renew:               { icon: 'fa-arrows-rotate',     color: 'text-cyan-500',   bg: 'bg-cyan-100 dark:bg-cyan-900/30' },
+            set_auto_renew:      { icon: 'fa-clock-rotate-left', color: 'text-amber-500',  bg: 'bg-warning-surface' },
+            // delete / revoke (red)
+            revoke:              { icon: 'fa-ban',               color: 'text-red-500',    bg: 'bg-danger-surface' },
+            delete:              { icon: 'fa-trash-can',         color: 'text-red-500',    bg: 'bg-danger-surface' },
+            delete_account:      { icon: 'fa-user-minus',        color: 'text-red-500',    bg: 'bg-danger-surface' },
+            clear:               { icon: 'fa-eraser',            color: 'text-red-500',    bg: 'bg-danger-surface' },
+            oidc_login_failure:  { icon: 'fa-right-to-bracket',  color: 'text-red-500',    bg: 'bg-danger-surface' },
+            // deploy (purple)
+            deploy:              { icon: 'fa-rocket',            color: 'text-purple-500', bg: 'bg-purple-100 dark:bg-purple-900/30' },
+            deploy_hook:         { icon: 'fa-bolt',              color: 'text-purple-500', bg: 'bg-purple-100 dark:bg-purple-900/30' },
+            // download (indigo)
+            download:            { icon: 'fa-download',          color: 'text-indigo-500', bg: 'bg-indigo-100 dark:bg-indigo-900/30' },
+            batch_download:      { icon: 'fa-file-zipper',       color: 'text-indigo-500', bg: 'bg-indigo-100 dark:bg-indigo-900/30' },
+            // restore / maintenance (teal / slate)
+            restore:             { icon: 'fa-clock-rotate-left', color: 'text-teal-500',   bg: 'bg-teal-100 dark:bg-teal-900/30' },
+            backfill:            { icon: 'fa-database',          color: 'text-slate-500',  bg: 'bg-surface-2' },
+            migrate:             { icon: 'fa-arrow-right-arrow-left', color: 'text-slate-500', bg: 'bg-surface-2' },
+            // read / API / test
+            access:              { icon: 'fa-eye',               color: 'text-gray-500',   bg: 'bg-surface-2' },
+            api_request:         { icon: 'fa-code',              color: 'text-gray-500',   bg: 'bg-surface-2' },
+            test:                { icon: 'fa-vial',              color: 'text-amber-500',  bg: 'bg-warning-surface' },
+            failure:             { icon: 'fa-exclamation-circle', color: 'text-red-500',   bg: 'bg-danger-surface' }
         };
 
         function getOpStyle(entry) {
@@ -123,6 +157,20 @@
             } catch (e) { return String(ts || ''); }
         }
 
+        // Compact absolute timestamp (no year/seconds) shown inline on each
+        // row so the exact moment is reachable on touch, where the title
+        // tooltip on the relative label never fires.
+        function compactTime(ts) {
+            try {
+                if (!ts) return '';
+                var d = new Date(ts);
+                if (isNaN(d.getTime())) return '';
+                return d.toLocaleString(undefined, {
+                    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                });
+            } catch (e) { return ''; }
+        }
+
         function opLabel(entry) {
             var labels = {
                 create: 'Created',
@@ -130,9 +178,25 @@
                 revoke: 'Revoked',
                 download: 'Downloaded',
                 api_request: 'API call',
-                batch_create: 'Batch created'
+                batch_create: 'Batch created',
+                batch_download: 'Batch downloaded',
+                create_account: 'Account added',
+                update_account: 'Account updated',
+                delete_account: 'Account removed',
+                update_config: 'Config updated',
+                set_auto_renew: 'Auto-renew changed',
+                deploy: 'Deployed',
+                deploy_hook: 'Deploy hook ran',
+                update: 'Updated',
+                delete: 'Deleted',
+                restore: 'Restored'
             };
-            return labels[entry.operation] || entry.operation;
+            // Humanize any unmapped operation rather than leaking the raw
+            // snake_case identifier (e.g. 'oidc_config_changed' -> 'Oidc
+            // Config Changed') so the headline is never developer jargon.
+            return labels[entry.operation] || String(entry.operation || '')
+                .replace(/_/g, ' ')
+                .replace(/\b\w/g, function(c) { return c.toUpperCase(); });
         }
 
         // Render a status-aware error state so the user knows *why* the
@@ -281,7 +345,16 @@
                     // hard ceiling.
                     var hasMore = rawCount >= currentLimit && currentLimit < ACTIVITY_MAX_LIMIT;
                     if (opFilter) {
-                        entries = entries.filter(function(e) { return e.operation === opFilter; });
+                        // Match the operation FAMILY, not just the exact value:
+                        // "Created" must catch create_account and batch_create,
+                        // "Updated" must catch update_config/update_account, etc.
+                        // The '_' boundary keeps "renew" from matching
+                        // set_auto_renew (toggling auto-renew is not a renewal).
+                        entries = entries.filter(function(e) {
+                            return e.operation === opFilter
+                                || e.operation.indexOf(opFilter + '_') === 0
+                                || e.operation === 'batch_' + opFilter;
+                        });
                     } else {
                         // Default view hides api_request entries: those are
                         // technical audit rows (HTTP method, status code)
@@ -307,7 +380,18 @@
             var list = document.getElementById('activityList');
             list.setAttribute('aria-busy', 'false');
             if (entries.length === 0) {
-                list.innerHTML = '<li role="presentation" class="px-6 py-12 text-center text-muted"><i class="fas fa-inbox text-3xl text-gray-300 dark:text-gray-600 mb-3 block"></i>No activity recorded yet</li>';
+                // Distinguish "nothing matches your filters" from "the log is
+                // genuinely empty" — the old copy claimed the latter even when
+                // a filter simply excluded everything.
+                var anyFilter = document.getElementById('filterOp').value ||
+                                document.getElementById('filterDate').value ||
+                                (document.getElementById('filterSearch').value || '').trim();
+                var emptyMsg = anyFilter ? 'No activity matches the current filters' : 'No activity recorded yet';
+                list.innerHTML = '<li role="presentation" class="px-6 py-12 flex flex-col items-center gap-3 text-muted">' +
+                    '<i class="fas fa-inbox text-3xl text-gray-300 dark:text-gray-600" aria-hidden="true"></i>' +
+                    '<p>' + emptyMsg + '</p>' +
+                    (anyFilter ? '<button type="button" onclick="clearActivityFilters()" class="text-xs text-primary hover:underline">Clear filters</button>' : '') +
+                '</li>';
                 return;
             }
 
@@ -336,6 +420,15 @@
                     (entry.resource_id ? ' ' + entry.resource_id : '') +
                     ', ' + formatTime(entry.timestamp) + '. Activate for details.';
 
+                // Humanize resource_type (raw snake_case otherwise) and drop a
+                // resource_id that merely repeats the type ("settings: settings").
+                var rTypeLabel = String(entry.resource_type || '')
+                    .replace(/_/g, ' ')
+                    .replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+                var showResourceId = entry.resource_id && entry.resource_id !== entry.resource_type;
+                var resourceHtml = escapeHtml(rTypeLabel) +
+                    (showResourceId ? ': <strong>' + escapeHtml(entry.resource_id) + '</strong>' : '');
+
                 return '<li role="article">' +
                     '<div role="button" tabindex="0" data-entry-index="' + idx + '" aria-label="' + escapeHtml(ariaLabel) + '"' +
                         ' class="flex items-start gap-4 px-4 sm:px-6 py-4 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition cursor-pointer focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary">' +
@@ -349,14 +442,13 @@
                                 '<span class="text-sm font-medium text-foreground">' + escapeHtml(opLabel(entry)) + '</span>' +
                                 (entry.status === 'failure' ? '<span class="px-1.5 py-0.5 text-[10px] font-medium bg-danger-surface text-danger-fg rounded">FAILED</span>' : '') +
                             '</div>' +
-                            '<p class="text-sm text-muted truncate">' +
-                                escapeHtml(entry.resource_type || '') + (entry.resource_id ? ': <strong>' + escapeHtml(entry.resource_id) + '</strong>' : '') +
-                            '</p>' +
+                            '<p class="text-sm text-muted truncate">' + resourceHtml + '</p>' +
                             (detailStr ? '<p class="text-xs text-gray-400 mt-0.5 truncate">' + escapeHtml(detailStr) + '</p>' : '') +
                             (entry.error ? '<p class="text-xs text-red-500 mt-0.5 truncate"><i class="fas fa-triangle-exclamation mr-1"></i>' + escapeHtml(entry.error) + '</p>' : '') +
                         '</div>' +
                         '<div class="flex-shrink-0 text-right">' +
                             '<div class="text-xs text-gray-400" title="' + escapeHtml(absoluteTime(entry.timestamp)) + '">' + escapeHtml(formatTime(entry.timestamp)) + '</div>' +
+                            '<div class="text-[10px] text-muted mt-0.5">' + escapeHtml(compactTime(entry.timestamp)) + '</div>' +
                             '<div class="text-[10px] text-gray-400 mt-1">' + escapeHtml(entry.user || 'system') + '</div>' +
                             '<i class="fas fa-chevron-right text-[10px] text-gray-300 dark:text-gray-600 mt-1" aria-hidden="true"></i>' +
                         '</div>' +
@@ -490,7 +582,7 @@
             if (copyBtn) copyBtn.addEventListener('click', function() {
                 var text = JSON.stringify(entry, null, 2);
                 if (navigator.clipboard && navigator.clipboard.writeText) {
-                    navigator.clipboard.writeText(text).then(function() { if (CertMate.toast) CertMate.toast('Entry copied as JSON', 'info'); });
+                    navigator.clipboard.writeText(text).then(function() { if (CertMate.toast) CertMate.toast('Entry copied as JSON', 'success'); });
                 }
             });
 
@@ -518,13 +610,25 @@
             }
         });
 
-        document.getElementById('filterOp').addEventListener('change', loadActivity);
-        document.getElementById('filterDate').addEventListener('change', loadActivity);
+        // Changing any filter resets pagination — otherwise a filter change
+        // after several "Load more" clicks re-fetches at the inflated limit.
+        function reloadFromFilters() {
+            currentLimit = ACTIVITY_INITIAL_LIMIT;
+            loadActivity();
+        }
+        window.clearActivityFilters = function() {
+            document.getElementById('filterOp').value = '';
+            document.getElementById('filterDate').value = '';
+            document.getElementById('filterSearch').value = '';
+            reloadFromFilters();
+        };
+        document.getElementById('filterOp').addEventListener('change', reloadFromFilters);
+        document.getElementById('filterDate').addEventListener('change', reloadFromFilters);
         // Debounce search-as-you-type so we don't refetch on every keystroke.
         var searchDebounce;
         document.getElementById('filterSearch').addEventListener('input', function() {
             clearTimeout(searchDebounce);
-            searchDebounce = setTimeout(loadActivity, 250);
+            searchDebounce = setTimeout(reloadFromFilters, 250);
         });
         loadActivity();
     })();

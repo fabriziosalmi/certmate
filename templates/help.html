@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Help - CertMate{% endblock %}
 {% block content %}
-    <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+    <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
 
         <!-- Breadcrumb + small inline links to the read-only references
              (API docs + the live /health probe). The links sit at the
@@ -45,7 +45,6 @@
             <a href="#troubleshooting" class="px-3 py-1.5 rounded-md text-gray-700 dark:text-gray-200 hover:bg-hover"><i class="fas fa-tools text-orange-600 mr-1.5" aria-hidden="true"></i>Troubleshooting</a>
             <a href="#report-issue"   class="px-3 py-1.5 rounded-md text-gray-700 dark:text-gray-200 hover:bg-hover"><i class="fab fa-github text-label mr-1.5" aria-hidden="true"></i>Report an issue</a>
             <span class="mx-1 h-5 w-px bg-gray-200 dark:bg-gray-700" aria-hidden="true"></span>
-            <a href="#whats-new"      class="px-3 py-1.5 rounded-md text-gray-700 dark:text-gray-200 hover:bg-hover"><i class="fas fa-star text-yellow-500 mr-1.5" aria-hidden="true"></i>What's new</a>
             <a href="https://github.com/fabriziosalmi/certmate/blob/main/RELEASE_NOTES.md" target="_blank" rel="noopener" class="px-3 py-1.5 rounded-md text-gray-700 dark:text-gray-200 hover:bg-hover"><i class="fas fa-external-link-alt text-xs text-gray-400 mr-1.5" aria-hidden="true"></i>Full changelog</a>
         </nav>
 
@@ -150,7 +149,7 @@
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
                         <div>
                             <h4 class="text-sm font-medium text-foreground mb-2">Common endpoints</h4>
-                            <ul class="text-xs text-gray-700 dark:text-gray-200 space-y-1 font-mono">
+                            <ul class="text-xs text-gray-700 dark:text-gray-200 space-y-1 font-mono overflow-x-auto whitespace-nowrap">
                                 <li><span class="text-blue-500">GET</span> /api/certificates</li>
                                 <li><span class="text-green-500">POST</span> /api/certificates/create</li>
                                 <li><span class="text-green-500">POST</span> /api/certificates/{domain}/renew</li>
@@ -284,19 +283,6 @@ curl -H "Authorization: Bearer $TOKEN" \
                 </div>
             </section>
 
-            <!-- What's new (changelog excerpt) -->
-            <section id="whats-new" data-help-section class="bg-surface shadow rounded-lg">
-                <div class="px-4 py-4">
-                    <h3 class="text-lg font-semibold text-foreground mb-2">
-                        <i class="fas fa-star text-yellow-500 mr-2" aria-hidden="true"></i>What's new
-                    </h3>
-                    <p class="text-sm text-gray-700 dark:text-gray-200">
-                        Release notes for every version live in
-                        <a href="https://github.com/fabriziosalmi/certmate/blob/main/RELEASE_NOTES.md" target="_blank" rel="noopener" class="text-primary hover:underline">RELEASE_NOTES.md</a>
-                        on the repository — kept in sync with what the running image actually contains.
-                    </p>
-                </div>
-            </section>
 
             <!-- No-results placeholder for the in-page search. -->
             <div id="noHelpResults" class="hidden bg-surface shadow rounded-lg p-8 text-center" role="status" aria-live="polite">

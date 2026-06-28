@@ -7,7 +7,7 @@
          x-data="{ tab: (location.hash.slice(1) || 'general') }"
          x-init="$watch('tab', t => history.replaceState(null, '', '#' + t))">
         <div class="bg-surface shadow-card rounded-xl">
-            <div class="px-6 py-3 border-b border-gray-100 dark:border-white/5 overflow-x-auto">
+            <div class="px-6 py-3 border-b border-gray-100 dark:border-white/5 overflow-x-auto scroll-x-affordance">
                 <div class="flex items-center justify-between mb-2">
                     <nav class="flex items-center text-sm" aria-label="Breadcrumb">
                         <a href="/" aria-label="Home" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"><i class="fas fa-home"></i></a>

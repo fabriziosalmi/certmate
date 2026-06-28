@@ -120,19 +120,41 @@ html.dark {
 ::selection { background: hsla(214, 80%, 52%, 0.3); }
 .dark ::selection { background: hsla(214, 80%, 52%, 0.35); }
 
-/* ── Keyboard focus floor for links ──────────────────────────────
-   Buttons / inputs already carry their own focus rings (and .btn
-   uses focus-visible). Inline links did not — they fell back to the
-   UA's default outline, inconsistent and off-brand. Give anchors and
-   <summary> a single branded focus-visible ring, accent-tokened so it
-   flips with the theme. focus-visible (not :focus) means mouse clicks
-   stay clean; the ring shows only on keyboard navigation. */
+/* ── Keyboard focus floor for links & bare buttons ───────────────
+   Inputs carry their own focus rings, and .btn uses focus-visible.
+   Inline links, <summary>, and ICON-ONLY chrome buttons (the top-bar
+   search / shortcuts / logout, which are bare <button>s, not .btn)
+   did not — they fell back to the UA's default outline, inconsistent
+   and off-brand (and suppressed entirely in some themes). Give them a
+   single branded focus-visible ring, accent-tokened so it flips with
+   the theme. :not(.btn) keeps .btn's own ring authoritative.
+   focus-visible (not :focus) means mouse clicks stay clean; the ring
+   shows only on keyboard navigation. */
 a:focus-visible,
-summary:focus-visible {
+summary:focus-visible,
+button:not(.btn):focus-visible,
+[role="button"]:not(.btn):focus-visible {
   outline: 2px solid hsl(var(--color-accent));
   outline-offset: 2px;
   border-radius: 3px;
 }
+
+/* ── Horizontal scroll affordance ────────────────────────────────
+   overflow-x-auto hides its scrollbar on overlay-scrollbar platforms
+   (macOS) until you actively scroll, so a clipped strip — e.g. the 11
+   Settings tabs at tablet width — gives no hint that more is hidden.
+   Force a thin, always-present scrollbar once the content overflows. */
+.scroll-x-affordance { scrollbar-width: thin; scrollbar-color: rgba(120, 120, 120, .45) transparent; }
+.scroll-x-affordance::-webkit-scrollbar { height: 6px; }
+.scroll-x-affordance::-webkit-scrollbar-thumb { background: rgba(120, 120, 120, .45); border-radius: 3px; }
+.scroll-x-affordance::-webkit-scrollbar-track { background: transparent; }
+
+/* ── Help: prose reading measure ─────────────────────────────────
+   Long-form help prose ran the full card width (~150+ chars/line).
+   Cap paragraphs inside help sections to a ~65ch reading measure;
+   tables, code blocks and the API grid are not <p>, so they keep
+   their full width. */
+[data-help-section] p { max-width: 65ch; }
 
 /* ── Table readability ───────────────────────────────────────── */
 /* #8:  Impercettible zebra striping for horizontal eye-tracking */
@@ -380,6 +402,50 @@ button[class*="bg-red-6"]:active {
 }
 .badge-pulse {
   animation: badgePulse 2s ease-in-out infinite;
+}
+
+/* ── ⌘K jump-and-flash ───────────────────────────────────────── */
+/* Briefly highlights the table row the command palette jumped to.   */
+/* primary brand is theme-independent (hsl(216,76%,43%)), so a single */
+/* translucent value reads on both light and dark backgrounds.       */
+@keyframes cmdFlash {
+  0%   { background-color: hsla(216, 76%, 43%, 0.30); }
+  25%  { background-color: hsla(216, 76%, 43%, 0.07); }
+  50%  { background-color: hsla(216, 76%, 43%, 0.30); }
+  100% { background-color: transparent; }
+}
+.cmd-flash { animation: cmdFlash 1.8s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  /* No fade — a static ring while the JS holds the class, then removed. */
+  .cmd-flash { animation: none; box-shadow: inset 0 0 0 2px hsl(216, 76%, 43%); }
+}
+
+/* ── Machine-value type (redesign phase 6) ───────────────────── */
+/* Identifiers — domains, client CNs, serials — read better in the mono
+   stack: even glyph widths make hostnames easy to scan and compare. tnum
+   keeps embedded digits aligned. One semantic hook so the treatment can be
+   tuned in a single place. */
+.cm-mono {
+  font-family: 'JetBrains Mono', 'Menlo', 'Consolas', monospace;
+  font-feature-settings: 'tnum';
+}
+
+/* Defined in @layer components so single-utility overrides (e.g. `hidden`)
+   still win over the component's own `display`. */
+@layer components {
+  /* ── Quick-action icon button ───────────────────────────────── */
+  /* Shared by the table-header action groups (Check all, Export, Refresh) so
+     the action vocabulary looks identical on the server and client lists. */
+  .cm-icon-btn {
+    @apply inline-flex items-center justify-center w-10 h-10 rounded-lg border border-border bg-input text-muted hover:text-foreground hover:bg-hover hover:border-border-strong transition;
+  }
+
+  /* ── Filter chip ────────────────────────────────────────────── */
+  /* Base chrome for the status/usage filter chips (active colours are applied
+     per-chip via aria-pressed: utilities). Matches the server status chips. */
+  .cm-chip {
+    @apply inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors text-muted hover:text-foreground;
+  }
 }
 
 /* ── Login page ambient background ───────────────────────────── */
