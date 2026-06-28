@@ -128,7 +128,7 @@
             // Whole row opens the detail modal (role=button + keyboard); the
             // action buttons stopPropagation so they don't also open it.
             return '<tr data-cc-id="' + safeId + '" role="button" tabindex="0" aria-label="View details for ' + safeCN + '" class="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary">' +
-                '<td class="px-6 py-4 text-sm font-medium text-foreground">' + safeCN + '</td>' +
+                '<td class="px-6 py-4 text-sm font-medium text-foreground cm-mono">' + safeCN + '</td>' +
                 '<td class="px-6 py-4 text-sm text-muted hidden md:table-cell">' + safeEmail + '</td>' +
                 '<td class="px-6 py-4 text-sm hidden lg:table-cell"><span class="px-2 py-1 bg-info-surface text-info-strong rounded text-xs font-medium">' + safeUsage + '</span></td>' +
                 '<td class="px-6 py-4 text-sm text-muted hidden lg:table-cell">' + createdDate.toLocaleDateString() + '</td>' +

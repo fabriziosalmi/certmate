@@ -368,14 +368,33 @@
             // visiting the Client tab.
             if (!isServer && typeof initClientCerts === 'function') initClientCerts();
         }
+        // Focus trap for the modal drawer (a11y, redesign phase 6). aria-modal
+        // promises focus stays inside; this keeps Tab/Shift+Tab cycling within
+        // the drawer's visible controls (the hidden server/client form is
+        // excluded via offsetParent), and focus is restored to the opener on
+        // close.
+        var drawerLastFocused = null;
+        function drawerTrapTab(e) {
+            if (e.key !== 'Tab') return;
+            var d = document.getElementById('createCertFormContainer');
+            if (!d || d.classList.contains('translate-x-full')) return;
+            var nodes = d.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])');
+            var f = Array.prototype.filter.call(nodes, function (el) { return el.offsetParent !== null; });
+            if (!f.length) return;
+            var first = f[0], last = f[f.length - 1];
+            if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+            else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+        }
         function openCertDrawer(type) {
             var d = document.getElementById('createCertFormContainer');
             var s = document.getElementById('certDrawerScrim');
             if (!d) return;
+            drawerLastFocused = document.activeElement;
             setDrawerType(type === 'client' ? 'client' : 'server');
             d.classList.remove('translate-x-full');
             if (s) { s.classList.remove('opacity-0', 'pointer-events-none'); s.classList.add('opacity-100'); }
             try { CertMate.lockScroll(); } catch (e) {}
+            document.addEventListener('keydown', drawerTrapTab);
             var focusTarget = (type === 'client') ? document.getElementById('commonName') : document.getElementById('domain');
             if (focusTarget) setTimeout(function () { focusTarget.focus(); }, 320);
         }
@@ -385,6 +404,13 @@
             if (d) d.classList.add('translate-x-full');
             if (s) { s.classList.add('opacity-0', 'pointer-events-none'); s.classList.remove('opacity-100'); }
             try { CertMate.unlockScroll(); } catch (e) {}
+            document.removeEventListener('keydown', drawerTrapTab);
+            // Return focus to whatever opened the drawer (the +New button, a
+            // palette action, the empty-state CTA), unless it has since vanished.
+            if (drawerLastFocused && typeof drawerLastFocused.focus === 'function') {
+                try { drawerLastFocused.focus(); } catch (e) { /* opener gone */ }
+            }
+            drawerLastFocused = null;
         }
         // Back-compat aliases — the dashboard empty-state CTA and any other
         // caller used these names to reveal the (now drawer) create form.
