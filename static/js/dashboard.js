@@ -146,15 +146,15 @@
     // placeholder count always matches the real count — when the metric
     // list changes, bump this constant in lockstep with the statCard()
     // calls in `updateStats`.
-    var STAT_METRICS_COUNT = 4;
+    var STAT_METRICS_COUNT = 3;
 
     function statsSkeletonHtml(count) {
         var rows = [];
         for (var i = 0; i < count; i++) {
             rows.push(
-                '<div class="bg-surface rounded-lg shadow-card pl-3.5 pr-3 py-2" aria-hidden="true">' +
-                    '<div class="skeleton h-2.5 w-12 mb-2"></div>' +
-                    '<div class="skeleton h-6 w-8"></div>' +
+                '<div class="flex items-baseline gap-1.5 px-3.5 py-3" aria-hidden="true">' +
+                    '<div class="skeleton h-4 w-5"></div>' +
+                    '<div class="skeleton h-2 w-10"></div>' +
                 '</div>'
             );
         }
@@ -181,27 +181,21 @@
         // pushed the label and icon to opposite corners (justify-between) with
         // no link between the three elements; this groups them and adds meaning.
         function statCard(label, value, state, iconClass, valueId, subtitle) {
-            var S = ({
-                headline: { bar: 'bg-blue-500', val: 'text-foreground', bg: 'bg-surface' },
-                neutral:  { bar: 'bg-gray-200 dark:bg-gray-700', val: 'text-muted', bg: 'bg-surface' },
-                good:     { bar: 'bg-green-500', val: 'text-success-fg', bg: 'bg-surface' },
-                warn:     { bar: 'bg-yellow-500', val: 'text-warning-fg', bg: 'bg-warning-surface' },
-                danger:   { bar: 'bg-red-500', val: 'text-danger-fg', bg: 'bg-danger-surface' },
-                info:     { bar: 'bg-indigo-500', val: 'text-indigo-600 dark:text-indigo-400', bg: 'bg-surface' }
-            })[state] || {};
-            // Compact single-row strip tile (redesign phase 5): icon + label on
-            // one line, a tighter hero number, and the subtitle dropped below sm
-            // so four tiles sit in a single row even on phones.
-            return '<div class="relative overflow-hidden rounded-lg shadow-card hover:shadow-elevated transition-shadow duration-200 ' + S.bg + '">' +
-                '<span class="absolute inset-y-0 left-0 w-1 ' + S.bar + '" aria-hidden="true"></span>' +
-                '<div class="pl-3.5 pr-3 py-2">' +
-                '<div class="flex items-center gap-1.5">' +
-                '<i class="fas ' + iconClass + ' text-xs flex-shrink-0"></i>' +
-                '<p class="text-[10px] font-semibold text-muted uppercase tracking-wider truncate">' + CertMate.escapeHtml(label) + '</p>' +
-                '</div>' +
-                '<p class="text-2xl font-bold ' + S.val + ' tabular-nums leading-none mt-1"' + (valueId ? ' id="' + valueId + '"' : '') + '>' + value + '</p>' +
-                (subtitle ? '<p class="text-[10px] text-muted mt-0.5 truncate hidden sm:block">' + CertMate.escapeHtml(subtitle) + '</p>' : '') +
-                '</div></div>';
+            var valColor = ({
+                headline: 'text-foreground',
+                neutral:  'text-muted',
+                good:     'text-success-fg',
+                warn:     'text-warning-fg',
+                danger:   'text-danger-fg',
+                info:     'text-info-fg'
+            })[state] || 'text-foreground';
+            // Compact KPI segment: number + label on ONE line ("7 TOTAL"), sized
+            // to the toggle's height. State shows in the number colour; the old
+            // subtitle becomes a hover title since there's no room to print it.
+            return '<div class="flex items-baseline gap-1.5 px-3.5 py-3"' + (subtitle ? ' title="' + CertMate.escapeHtml(subtitle) + '"' : '') + '>' +
+                '<span class="text-lg font-bold leading-none tabular-nums ' + valColor + '"' + (valueId ? ' id="' + valueId + '"' : '') + '>' + value + '</span>' +
+                '<span class="text-[10px] font-medium text-muted uppercase tracking-wider">' + CertMate.escapeHtml(label) + '</span>' +
+                '</div>';
         }
 
         // The third tile surfaces the MOST urgent lifecycle state. It becomes a
@@ -218,13 +212,12 @@
             attn = ['Expiring', 0, 'neutral', 'fa-triangle-exclamation text-muted', 'none expiring'];
         }
 
+        // Deployed counter removed by request — per-row deployment status still
+        // shows in the table's Deployment column.
         statsContainer.innerHTML = [
             statCard('Total', total, 'headline', 'fa-certificate text-blue-500 dark:text-blue-400', null, total === 1 ? 'certificate' : 'certificates'),
             statCard('Valid', valid, valid > 0 ? 'good' : 'neutral', 'fa-circle-check ' + (valid > 0 ? 'text-success-fg' : 'text-muted'), null, valid + ' of ' + total + ' healthy'),
-            statCard(attn[0], attn[1], attn[2], attn[3], null, attn[4]),
-            (total === 0
-                ? statCard('Deployed', '0', 'neutral', 'fa-globe text-muted', null, 'none deployed')
-                : statCard('Deployed', '<span class="text-gray-300 dark:text-gray-600 animate-pulse" aria-label="checking deployments">—</span>', 'info', 'fa-globe text-indigo-500 dark:text-indigo-400', 'deploymentCount', 'reachable'))
+            statCard(attn[0], attn[1], attn[2], attn[3], null, attn[4])
         ].join('');
 
         // Keep the status-filter chip counts in sync with the strip (phase 5).
@@ -488,12 +481,18 @@
     function deploymentChipClass(display) {
         return 'inline-flex items-center gap-1 px-1.5 py-1 rounded-md ' + display.chipClass;
     }
+
+    // Square variant (w-10 h-10, bordered) so the detail modal's two deploy
+    // indicators line up with the quick-action buttons on a single row.
+    function deploymentSquareClass(display) {
+        return 'inline-flex items-center justify-center gap-1 w-10 h-10 rounded-lg border border-border ' + display.chipClass;
+    }
     function deploymentChipInner(display) {
         return '<i class="fas ' + display.roleIcon + '" aria-hidden="true"></i>' +
             '<i class="fas ' + display.statusIcon + ' text-[0.65rem]" aria-hidden="true"></i>';
     }
 
-    function deploymentBadgeHtml(role, result, safeDomain, domainId) {
+    function deploymentBadgeHtml(role, result, safeDomain, domainId, square) {
         var display = deploymentStatusDisplay(role, result);
         var title = display.text;
         if (result && result.method) {
@@ -516,23 +515,25 @@
         // duplicated (invalid HTML). The data-deployment-* attributes identify
         // it for updates; the deployed-count reads deploymentCache directly.
         return '<span data-deployment-domain="' + safeDomain + '" data-deployment-role="' + role + '" role="img"' +
+            (square ? ' data-deployment-variant="square"' : '') +
             ' title="' + escapeHtml(title) + '" aria-label="' + escapeHtml(title) + '"' +
-            ' class="' + deploymentChipClass(display) + '">' +
+            ' class="' + (square ? deploymentSquareClass(display) : deploymentChipClass(display)) + '">' +
             deploymentChipInner(display) +
             '</span>';
     }
 
     // Build deployment status badges HTML — two compact icon chips (server,
     // browser) on a single horizontal row.
-    function deploymentBadgesHtml(cert) {
+    function deploymentBadgesHtml(cert, square) {
         var safeDomain = escapeHtml(cert.domain);
         var domainId = safeDomain.replace(/\./g, '-');
         var cachedStatus = deploymentCache.get(cert.domain) || {};
         var browserStatus = cachedStatus.browser || null;
-        return '<div class="flex items-center gap-1.5">' +
-            deploymentBadgeHtml('backend', cachedStatus, safeDomain, domainId) +
-            deploymentBadgeHtml('browser', browserStatus, safeDomain, domainId) +
-            '</div>';
+        var inner = deploymentBadgeHtml('backend', cachedStatus, safeDomain, domainId, square) +
+            deploymentBadgeHtml('browser', browserStatus, safeDomain, domainId, square);
+        // Square variant returns the bare badges so they sit in the modal's
+        // quick-action row; the default wraps them in their own chip row.
+        return square ? inner : '<div class="flex items-center gap-1.5">' + inner + '</div>';
     }
 
     function providerDisplayName(provider) {
@@ -951,6 +952,19 @@
                     'class="inline-flex items-center justify-center w-10 h-10 rounded-lg border border-border bg-input text-muted hover:text-' + hover + '-600 dark:hover:text-' + hover + '-400 hover:bg-hover hover:border-border-strong transition">' +
                     '<i class="fas ' + icon + '"></i></button>';
             }
+            // Link variant of actIcon (same chrome) for controls that navigate.
+            function actLink(href, icon, hover, title) {
+                return '<a href="' + href + '" title="' + title + '" aria-label="' + title + '" ' +
+                    'class="inline-flex items-center justify-center w-10 h-10 rounded-lg border border-border bg-input text-muted hover:text-' + hover + '-600 dark:hover:text-' + hover + '-400 hover:bg-hover hover:border-border-strong transition">' +
+                    '<i class="fas ' + icon + '"></i></a>';
+            }
+            // Danger variant — red at rest, same chrome as the topbar Logout, for
+            // the destructive delete. (deleteCertificate still confirms first.)
+            function actIconDanger(onclick, icon, title) {
+                return '<button type="button" onclick="' + onclick + '" title="' + title + '" aria-label="' + title + '" ' +
+                    'class="inline-flex items-center justify-center w-10 h-10 rounded-lg border border-danger-line text-danger-fg hover:bg-red-50 dark:hover:bg-red-900/30 transition">' +
+                    '<i class="fas ' + icon + '"></i></button>';
+            }
             function detailRow(label, valueHtml) {
                 return '<div class="flex items-center justify-between gap-4 py-2.5"><dt class="text-sm text-muted flex-shrink-0">' + label + '</dt>' +
                     '<dd class="text-sm font-medium text-right text-foreground min-w-0">' + valueHtml + '</dd></div>';
@@ -962,9 +976,16 @@
                 // weight (the day count and the calendar date are the same datum).
                 '<div class="flex items-center gap-3 p-4 rounded-lg ' + bannerBg + '">' +
                 '<i class="fas ' + bannerIcon + ' text-2xl ' + statusClass + ' flex-shrink-0"></i>' +
-                '<div class="min-w-0">' +
+                '<div class="min-w-0 flex-1">' +
                 '<div class="text-lg font-semibold ' + statusClass + '">' + statusText + (daysKnown2 ? ' · ' + daysText : '') + '</div>' +
                 (cert.expiry_date ? '<div class="text-sm ' + statusClass + ' opacity-80">' + (isExpired ? 'Expired ' : 'Expires ') + expiryStr + '</div>' : '') +
+                '</div>' +
+                // Auto-Renew moved into the banner's empty right side (point 1).
+                '<div class="flex-shrink-0 flex items-center gap-2">' +
+                '<span class="text-[11px] font-semibold uppercase tracking-wide ' + statusClass + ' opacity-80">Auto-renew</span>' +
+                (roleAtLeast('operator')
+                    ? autoRenewSwitchHtml(safeDomain, autoOn)
+                    : '<span class="text-xs font-semibold ' + (autoOn ? 'text-success-fg' : 'text-warning-fg') + '">' + (autoOn ? 'On' : 'Off') + '</span>') +
                 '</div>' +
                 '</div>' +
                 // Details
@@ -973,29 +994,22 @@
                 (sanDomains.length ? detailRow('SANs', '<div class="text-right">' + sanDomainsHtml + '</div>') : '') +
                 (safeDomainAlias ? detailRow('DNS-01 Alias', '<span class="break-all text-info-fg">' + safeDomainAlias + '</span>') : '') +
                 (safeDomainAlias && aliasProviderLabel ? detailRow('Alias Provider', aliasProviderCell) : '') +
-                detailRow('Auto-Renew', roleAtLeast('operator')
-                    ? autoRenewSwitchHtml(safeDomain, autoOn)
-                    : '<span class="' + (autoOn ? 'text-success-fg' : 'text-warning-fg') + '">' + (autoOn ? 'Enabled' : 'Disabled') + '</span>') +
                 '</dl>' +
-                // Deployment — its own section, separated by a rule.
-                '<div class="pt-4 border-t border-border">' +
-                '<div class="flex items-center justify-between mb-3">' +
-                '<h4 class="text-xs font-semibold text-muted uppercase tracking-wider">Deployment</h4>' +
-                '<button type="button" onclick="checkDeploymentStatus(\'' + safeDomain + '\', this, true)" title="Check deployment now" aria-label="Check deployment now" class="inline-flex items-center justify-center w-8 h-8 rounded-lg text-muted hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-hover transition"><i class="fas fa-arrows-rotate text-sm"></i></button>' +
-                '</div>' +
-                '<div class="flex items-center gap-2 mb-3">' + deploymentBadgesHtml(cert) + '</div>' +
-                '<div class="flex items-center justify-between gap-2 rounded-lg bg-surface-2 px-3 py-2">' +
-                '<span class="text-sm text-muted min-w-0 truncate"><i class="fas fa-rocket mr-1.5 text-green-500"></i>Deploy hooks</span>' +
-                '<div class="flex items-center gap-1 flex-shrink-0">' +
-                '<a href="/settings#deploy" title="View / edit deploy hooks in Settings" aria-label="View or edit deploy hooks" class="inline-flex items-center justify-center w-8 h-8 rounded-lg text-muted hover:text-blue-600 dark:hover:text-blue-400 hover:bg-hover transition"><i class="fas fa-pen-to-square text-sm"></i></a>' +
-                (roleAtLeast('admin') ? '<button type="button" onclick="runDeployHooks(\'' + safeDomain + '\')" title="Run deploy hooks now" aria-label="Run deploy hooks now" class="inline-flex items-center justify-center w-8 h-8 rounded-lg text-muted hover:text-green-600 dark:hover:text-green-400 hover:bg-hover transition"><i class="fas fa-play text-sm"></i></button>' : '') +
-                '</div>' +
+                // Deployment + Actions side by side — two sections, one column
+                // each, every control a quick-action button (points 2 & 3).
+                '<div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 pt-4 border-t border-border">' +
+                '<div>' +
+                '<h4 class="text-xs font-semibold text-muted uppercase tracking-wider mb-3">Deployment</h4>' +
+                '<div class="flex flex-wrap items-center gap-2">' +
+                deploymentBadgesHtml(cert, true) +
+                actIcon("checkDeploymentStatus('" + safeDomain + "', this, true)", 'fa-arrows-rotate', 'indigo', 'Check deployment now') +
+                actLink('/settings#deploy', 'fa-pen-to-square', 'blue', 'View / edit deploy hooks') +
+                (roleAtLeast('admin') ? actIcon("runDeployHooks('" + safeDomain + "')", 'fa-play', 'green', 'Run deploy hooks now') : '') +
                 '</div>' +
                 (safeDomainAlias ? '<button type="button" onclick="checkDnsAliasForCertificate(\'' + safeDomain + '\')" class="mt-2 w-full inline-flex items-center justify-center px-3 py-1.5 text-xs border border-info-line rounded-lg text-info-fg bg-info-surface hover:bg-blue-100 dark:hover:bg-blue-900/50"><i class="fas fa-search mr-1.5"></i>Check DNS-01 Alias</button>' : '') +
                 '<div id="cert_dns_alias_check_result" class="hidden mt-2"></div>' +
                 '</div>' +
-                // Quick actions — consistent icons (label on hover), separated.
-                '<div class="pt-4 border-t border-border">' +
+                '<div>' +
                 '<h4 class="text-xs font-semibold text-muted uppercase tracking-wider mb-3">Actions</h4>' +
                 '<div class="flex flex-wrap items-center gap-2">' +
                 (roleAtLeast('operator')
@@ -1006,8 +1020,9 @@
                 actIcon("downloadCertificate('" + safeDomain + "')", 'fa-download', 'blue', 'Download certificate') +
                 actIcon("copyCurlCommand('" + safeDomain + "')", 'fa-code', 'indigo', 'Show API command') +
                 (roleAtLeast('admin')
-                    ? '<span class="flex-grow"></span>' + actIcon("deleteCertificate('" + safeDomain + "')", 'fa-trash-alt', 'red', 'Delete certificate')
+                    ? actIconDanger("deleteCertificate('" + safeDomain + "')", 'fa-trash-alt', 'Delete certificate')
                     : '') +
+                '</div>' +
                 '</div>' +
                 '</div>' +
                 '</div>';
@@ -1462,7 +1477,9 @@
                 // Re-render through the SAME chip helpers the initial paint uses
                 // so a completed probe updates the icon + colour in place instead
                 // of replacing the chip with stale "Role: Status" text.
-                statusElement.className = deploymentChipClass(display);
+                statusElement.className = (statusElement.getAttribute('data-deployment-variant') === 'square'
+                    ? deploymentSquareClass(display)
+                    : deploymentChipClass(display));
                 statusElement.innerHTML = deploymentChipInner(display);
                 var title = display.text;
                 if (roleResult && roleResult.method) {
@@ -2923,8 +2940,35 @@
         setupCacheSettingsListener();
     });
 
+    // Export every existing certificate in the list as one ZIP (batch-download
+    // web endpoint). Wired to the list-actions icon group.
+    function exportAllCertificates() {
+        var domains = (allCertificates || [])
+            .filter(function (c) { return c && c.exists; })
+            .map(function (c) { return c.domain; });
+        if (!domains.length) { showMessage('No certificates to export', 'info'); return; }
+        fetch('/api/web/certificates/download/batch', {
+            method: 'POST', headers: API_HEADERS, body: JSON.stringify({ domains: domains })
+        }).then(function (response) {
+            if (!response.ok) {
+                return response.json().then(function (e) { throw new Error((e && e.error) || 'Export failed'); });
+            }
+            return response.blob();
+        }).then(function (blob) {
+            var url = window.URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url; a.download = 'certificates.zip';
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+            showMessage('Exported ' + domains.length + ' certificate' + (domains.length === 1 ? '' : 's') + ' as ZIP', 'success');
+        }).catch(function (error) {
+            showMessage((error && error.message) || 'Failed to export certificates', 'error');
+        });
+    }
+
     // Expose functions needed by HTML onclick handlers and SSE
     window.loadCertificates = loadCertificates;
+    window.exportAllCertificates = exportAllCertificates;
     window.openCertDetail = openCertDetail;
     window.certRowKey = certRowKey;
     window.startEditReissue = startEditReissue;
