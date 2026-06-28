@@ -88,7 +88,6 @@
 
     // Clear filters function
     function clearFilters() {
-        document.getElementById('certificateSearch').value = '';
         document.getElementById('statusFilter').value = 'all';
         filterCertificates();
     }
@@ -309,7 +308,6 @@
 
     // Filter and search certificates
     function filterCertificates() {
-        var searchTerm = document.getElementById('certificateSearch').value.toLowerCase();
         var statusFilter = document.getElementById('statusFilter').value;
 
         // Ensure allCertificates is an array
@@ -318,10 +316,7 @@
         }
 
         var filteredCerts = allCertificates.filter(function (cert) {
-            // Search filter
-            var matchesSearch = cert.domain.toLowerCase().indexOf(searchTerm) !== -1;
-
-            // Status filter
+            // Status filter (free-text search now lives in the ⌘K palette)
             var matchesStatus = true;
             if (statusFilter !== 'all') {
                 var isExpired = cert.exists && cert.days_until_expiry !== null && cert.days_until_expiry !== undefined && cert.days_until_expiry <= 0;
@@ -341,7 +336,7 @@
                 }
             }
 
-            return matchesSearch && matchesStatus;
+            return matchesStatus;
         });
 
         displayCertificates(filteredCerts);
@@ -544,8 +539,7 @@
         }
 
         if (certificates.length === 0) {
-            var isFiltered = document.getElementById('certificateSearch').value ||
-                document.getElementById('statusFilter').value !== 'all';
+            var isFiltered = document.getElementById('statusFilter').value !== 'all';
             thead.style.display = 'none';
 
             if (isFiltered) {
@@ -616,7 +610,7 @@
             var domainAlias = cert.domain_alias || '';
 
             if (!cert.exists) {
-                return rowHtml`<tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer" tabindex="0" role="button" aria-label="View details for ${cert.domain}" onclick="openCertDetail('${cert.domain}')" onkeydown="certRowKey(event, '${cert.domain}')">
+                return rowHtml`<tr data-row-domain="${cert.domain}" class="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer" tabindex="0" role="button" aria-label="View details for ${cert.domain}" onclick="openCertDetail('${cert.domain}')" onkeydown="certRowKey(event, '${cert.domain}')">
                     <td class="px-6 py-4 md:max-w-0"><div class="text-sm font-medium text-foreground break-words md:truncate">${cert.domain}</div></td>
                     <td class="px-4 py-4 whitespace-nowrap"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-500/10 text-danger-fg ring-1 ring-inset ring-red-500/20"><i class="fas fa-times-circle mr-1"></i>Not Found</span></td>
                     <td class="px-4 py-4 whitespace-nowrap hidden md:table-cell text-sm text-muted">\u2014</td>
@@ -693,7 +687,7 @@
             // "secure connection" glyph) is a visual paradox there. Show an
             // open padlock for expired so the icon matches the state.
             var lockIcon = isExpired ? 'fa-lock-open' : 'fa-lock';
-            return rowHtml`<tr class="${rowRaw(healthClass)} row-enter hover:bg-blue-50/40 dark:hover:bg-blue-900/10 transition-colors duration-150 cursor-pointer" style="animation-delay:${rowRaw(String(i * 30))}ms" tabindex="0" role="button" aria-label="View details for ${cert.domain}" onclick="openCertDetail('${cert.domain}')" onkeydown="certRowKey(event, '${cert.domain}')">
+            return rowHtml`<tr data-row-domain="${cert.domain}" class="${rowRaw(healthClass)} row-enter hover:bg-blue-50/40 dark:hover:bg-blue-900/10 transition-colors duration-150 cursor-pointer" style="animation-delay:${rowRaw(String(i * 30))}ms" tabindex="0" role="button" aria-label="View details for ${cert.domain}" onclick="openCertDetail('${cert.domain}')" onkeydown="certRowKey(event, '${cert.domain}')">
                 <td class="px-6 py-4 md:max-w-0">
                     <div class="flex items-center min-w-0">
                         <i class="fas ${rowRaw(lockIcon)} ${rowRaw(lockColor)} mr-2 text-sm shrink-0" aria-hidden="true"></i>
@@ -2811,6 +2805,38 @@
         } catch (e) { /* old browser, skip */ }
     }
 
+    // ⌘K jump-and-flash: scroll the named row into view and pulse it. Distinct
+    // from ?cert= (which opens the detail panel) — flashing just locates the row
+    // so the user can act on it. Returns false if the row is absent or hidden
+    // (e.g. the client view is active), so the caller can fall back to a reload.
+    function flashCertRow(domain) {
+        if (!domain) return false;
+        var sel = (window.CSS && CSS.escape) ? CSS.escape(domain) : domain.replace(/"/g, '\\"');
+        var row = document.querySelector('#certificatesList tr[data-row-domain="' + sel + '"]');
+        if (!row || row.offsetParent === null) return false;
+        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        row.classList.remove('cmd-flash');
+        void row.offsetWidth;            // reflow so the animation restarts on repeat jumps
+        row.classList.add('cmd-flash');
+        setTimeout(function () { row.classList.remove('cmd-flash'); }, 1900);
+        return true;
+    }
+
+    // Cross-page jump-and-flash: the palette navigates to /?flash=<domain> when
+    // the user isn't already on the dashboard. Flash once, then strip the param
+    // so a refresh doesn't re-trigger it.
+    function maybeFlashCertFromQuery() {
+        try {
+            var params = new URLSearchParams(window.location.search);
+            var domain = params.get('flash');
+            if (!domain) return;
+            params.delete('flash');
+            var qs = params.toString();
+            history.replaceState(null, '', window.location.pathname + (qs ? '?' + qs : '') + window.location.hash);
+            flashCertRow(domain);
+        } catch (e) { /* old browser, skip */ }
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
         // Paint the stats-card skeleton placeholders before the cert
         // fetch returns, so the surface is never an empty grid — count
@@ -2822,11 +2848,10 @@
         // Resolve the caller's role first so the initial cert list can
         // already render with the right buttons hidden — avoids the
         // viewer briefly seeing admin-only controls before they vanish.
-        refreshCurrentRole().then(function () { loadCertificates().then(maybeOpenCertFromQuery); });
+        refreshCurrentRole().then(function () { loadCertificates().then(function () { maybeOpenCertFromQuery(); maybeFlashCertFromQuery(); }); });
         loadProviderAccounts();
 
-        // Initialize search and filters
-        document.getElementById('certificateSearch').addEventListener('input', filterCertificates);
+        // Initialize the status filter (free-text search moved to the ⌘K palette)
         document.getElementById('statusFilter').addEventListener('change', filterCertificates);
         document.getElementById('domain').addEventListener('input', updateDnsAliasHelp);
         document.getElementById('san_domains').addEventListener('input', updateDnsAliasHelp);
@@ -2909,4 +2934,5 @@
     window.copyAliasValueToClipboard = copyAliasValueToClipboard;
     window.retryCreateJob = retryCreateJob;
     window.dismissPendingJob = dismissPendingJob;
+    window.flashCertRow = flashCertRow;
 })();

@@ -14,13 +14,13 @@
              inline form, no layout jump. -->
         <div class="flex flex-wrap items-center gap-3 mb-6">
             <div class="inline-flex items-center gap-1 rounded-xl border border-border bg-surface-2 p-1" role="group" aria-label="Certificate view and creation">
-                <button type="button" @click="certView = 'server'"
+                <button type="button" id="certViewServerBtn" @click="certView = 'server'"
                         :aria-pressed="certView === 'server' ? 'true' : 'false'"
                         :class="certView === 'server' ? 'bg-surface text-foreground shadow-sm' : 'text-muted hover:text-foreground'"
                         class="inline-flex items-center gap-2 px-3.5 py-2 text-sm font-semibold rounded-lg transition-all">
                     <i class="fas fa-globe" aria-hidden="true"></i>Server
                 </button>
-                <button type="button" @click="certView = 'client'"
+                <button type="button" id="certViewClientBtn" @click="certView = 'client'"
                         :aria-pressed="certView === 'client' ? 'true' : 'false'"
                         :class="certView === 'client' ? 'bg-surface text-foreground shadow-sm' : 'text-muted hover:text-foreground'"
                         class="inline-flex items-center gap-2 px-3.5 py-2 text-sm font-semibold rounded-lg transition-all">
@@ -396,6 +396,18 @@
                 if (d && !d.classList.contains('translate-x-full')) closeCertDrawer();
             }
         });
+        // The ⌘K palette's "New … Certificate" actions, when fired from another
+        // page, stash the desired type here and navigate to the dashboard; open
+        // the drawer once the form markup exists.
+        document.addEventListener('DOMContentLoaded', function () {
+            try {
+                var want = sessionStorage.getItem('cm_open_drawer');
+                if (want) {
+                    sessionStorage.removeItem('cm_open_drawer');
+                    openCertDrawer(want === 'client' ? 'client' : 'server');
+                }
+            } catch (e) { /* storage unavailable */ }
+        });
         </script>
 
         <!-- SERVER CERTIFICATES (stats + table). The creation drawer sits
@@ -413,17 +425,10 @@
                 <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-3 lg:space-y-0">
                     <h3 class="text-lg font-semibold text-foreground">Your Certificates</h3>
                     <div class="flex flex-col sm:flex-row items-stretch sm:items-center space-y-2 sm:space-y-0 sm:space-x-2 lg:space-x-3">
-                        <div class="relative">
-                            <input type="text" id="certificateSearch" placeholder="Search certificates..."
-                                   aria-label="Search certificates"
-                                   class="pl-10 pr-8 py-2 border border-border bg-input dark:text-white rounded-lg focus:ring-2 focus:ring-primary focus:border-primary text-sm shadow-sm transition-shadow duration-200 w-full sm:w-48">
-                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                <i class="fas fa-search text-gray-400"></i>
-                            </div>
-                            <div class="absolute inset-y-0 right-0 pr-2 hidden sm:flex items-center pointer-events-none">
-                                <kbd class="px-1.5 py-0.5 text-[10px] text-gray-400 bg-gray-100 dark:bg-gray-600 rounded border border-border">/</kbd>
-                            </div>
-                        </div>
+                        <!-- Per-page certificate search retired in the redesign:
+                             the global ⌘K / "/" command palette is now the single
+                             search surface (cross-type, jump-and-flash). Status
+                             filtering stays here (becomes chips in a later phase). -->
                         <select id="statusFilter" class="border border-border bg-input text-foreground rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary shadow-sm transition-shadow duration-200">
                             <option value="all">All Status</option>
                             <option value="valid">Valid</option>

@@ -11,7 +11,8 @@
     var resultsEl = null;
     var selectedIndex = 0;
     var currentResults = [];
-    var certCache = null;
+    var certCache = null;        // server certificates (lazy-fetched)
+    var clientCertCache = null;  // client certificates (lazy-fetched)
     var lastFocusedBeforeOpen = null;
 
     // Static searchable items
@@ -33,7 +34,8 @@
         { type: 'settings', icon: 'fa-key', label: 'API Keys', desc: 'Manage API keys and rate limits', url: '/settings#apikeys' },
         { type: 'settings', icon: 'fa-id-badge', label: 'SSO / OIDC', desc: 'Single sign-on configuration', url: '/settings#oidc' },
         { type: 'settings', icon: 'fa-archive', label: 'Backup & Restore', desc: 'Backup configuration and certificates', url: '/settings#backup' },
-        { type: 'action', icon: 'fa-plus-circle', label: 'Create Certificate', desc: 'Issue a new SSL certificate', url: '/', action: 'focusCreate' },
+        { type: 'action', icon: 'fa-plus-circle', label: 'New Server Certificate', desc: 'Issue an SSL/TLS server certificate', action: 'openServerDrawer' },
+        { type: 'action', icon: 'fa-id-card', label: 'New Client Certificate', desc: 'Issue an mTLS / client identity certificate', action: 'openClientDrawer' },
         { type: 'action', icon: 'fa-moon', label: 'Toggle Dark Mode', desc: 'Switch theme', action: 'toggleTheme' },
         { type: 'action', icon: 'fa-bell', label: 'Notifications', desc: 'Check certificate alerts', action: 'toggleNotifs' }
     ];
@@ -95,7 +97,7 @@
         // Delay focus to ensure visible
         setTimeout(function() { inputEl.focus(); }, 50);
         // Prefetch certs if not cached
-        if (!certCache) fetchCerts();
+        if (!certCache || !clientCertCache) fetchCerts();
     }
 
     function closePalette() {
@@ -113,28 +115,47 @@
     }
 
     function fetchCerts() {
+        // Server certificates.
         fetch('/api/certificates', { credentials: 'same-origin' })
             .then(function(r) { return r.ok ? r.json() : []; })
             .then(function(certs) {
-                if (!Array.isArray(certs)) { certCache = []; return; }
-                certCache = certs.map(function(c) {
+                certCache = Array.isArray(certs) ? certs.map(function(c) {
                     return {
                         type: 'cert',
                         icon: 'fa-lock',
                         label: c.domain,
                         desc: (c.exists ? (c.days_until_expiry > 0 ? c.days_until_expiry + ' days left' : 'Expired') : 'Not found'),
-                        url: '/',
                         domain: c.domain
                     };
-                });
+                }) : [];
+                if (isOpen()) onSearch();
             })
             .catch(function() { certCache = []; });
+
+        // Client certificates (cross-type search — closes the D1 "triple search").
+        fetch('/api/client-certs', { credentials: 'same-origin' })
+            .then(function(r) { return r.ok ? r.json() : {}; })
+            .then(function(data) {
+                var list = (data && data.certificates) || [];
+                clientCertCache = Array.isArray(list) ? list.map(function(c) {
+                    return {
+                        type: 'clientcert',
+                        icon: 'fa-id-card',
+                        label: c.common_name || '(no CN)',
+                        desc: (c.revoked ? 'Revoked' : (c.cert_usage || 'Client certificate')) + (c.email ? ' · ' + c.email : ''),
+                        cn: c.common_name
+                    };
+                }) : [];
+                if (isOpen()) onSearch();
+            })
+            .catch(function() { clientCertCache = []; });
     }
 
     function onSearch() {
         var query = (inputEl.value || '').toLowerCase().trim();
         var allItems = staticItems.slice();
         if (certCache) allItems = allItems.concat(certCache);
+        if (clientCertCache) allItems = allItems.concat(clientCertCache);
 
         if (!query) {
             currentResults = allItems.slice(0, 8);
@@ -155,7 +176,7 @@
             return;
         }
 
-        var typeLabels = { nav: 'Navigation', settings: 'Settings', action: 'Actions', cert: 'Certificates' };
+        var typeLabels = { nav: 'Navigation', settings: 'Settings', action: 'Actions', cert: 'Server Certificates', clientcert: 'Client Certificates' };
         var lastType = '';
         var html = '';
 
@@ -200,16 +221,67 @@
             window.location.href = '/notifications';
             return;
         }
-        if (item.action === 'focusCreate') {
-            window.location.href = item.url;
-            setTimeout(function() {
-                var el = document.getElementById('domain');
-                if (el) el.focus();
-            }, 300);
+        // focusCreate kept for back-compat; both open the server creation drawer.
+        if (item.action === 'openServerDrawer' || item.action === 'focusCreate') {
+            openDrawerAction('server');
+            return;
+        }
+        if (item.action === 'openClientDrawer') {
+            openDrawerAction('client');
+            return;
+        }
+        if (item.type === 'cert') {
+            jumpToServerCert(item.domain);
+            return;
+        }
+        if (item.type === 'clientcert') {
+            jumpToClientCert(item.cn);
             return;
         }
         if (item.url) {
             window.location.href = item.url;
+        }
+    }
+
+    // Open the creation drawer to the given type. On the dashboard openCertDrawer
+    // is in scope, so open directly; elsewhere stash the intent and navigate
+    // there (index.html reads cm_open_drawer on load).
+    function openDrawerAction(type) {
+        if (typeof window.openCertDrawer === 'function') {
+            window.openCertDrawer(type);
+        } else {
+            try { sessionStorage.setItem('cm_open_drawer', type); } catch (e) { /* storage off */ }
+            window.location.href = '/';
+        }
+    }
+
+    // Jump-and-flash to a server cert: on the dashboard, ensure the server view
+    // is showing and pulse the row in place; otherwise navigate to the dashboard
+    // with ?flash= so it pulses once the list has loaded.
+    function jumpToServerCert(domain) {
+        if (!domain) return;
+        if (window.location.pathname === '/') {
+            var sBtn = document.getElementById('certViewServerBtn');
+            if (sBtn) sBtn.click();
+            setTimeout(function() {
+                if (!(typeof window.flashCertRow === 'function' && window.flashCertRow(domain))) {
+                    window.location.href = '/?flash=' + encodeURIComponent(domain);
+                }
+            }, 60);
+        } else {
+            window.location.href = '/?flash=' + encodeURIComponent(domain);
+        }
+    }
+
+    // Client certs live in the client view; switch to it. (Row-level flash for
+    // client certs lands with the real client table in a later phase.)
+    function jumpToClientCert(cn) {
+        var cBtn = document.getElementById('certViewClientBtn');
+        if (cBtn) {
+            cBtn.click();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        } else {
+            window.location.href = '/#client';
         }
     }
 

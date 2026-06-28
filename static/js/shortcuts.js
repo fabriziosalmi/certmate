@@ -10,7 +10,7 @@
 
     var shortcuts = [
         { key: '?', desc: 'Show keyboard shortcuts' },
-        { key: '/', desc: 'Focus search / filter' },
+        { key: '/', desc: 'Open command palette' },
         { key: 'n', desc: 'New certificate (focus domain input)' },
         { key: 'r', desc: 'Refresh certificate list' },
         { key: 't', desc: 'Toggle dark mode' },
@@ -145,15 +145,9 @@
 
             case '/':
                 e.preventDefault();
-                // Focus certificate search if on dashboard, otherwise open Cmd+K
-                var searchEl = document.getElementById('certificateSearch');
-                if (searchEl) {
-                    searchEl.focus();
-                    searchEl.select();
-                } else {
-                    // Trigger Cmd+K palette on non-dashboard pages
-                    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }));
-                }
+                // The ⌘K command palette is now the single search surface across
+                // every page (the per-page search boxes were retired).
+                document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }));
                 break;
 
             case 'n':

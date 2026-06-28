@@ -55,10 +55,8 @@
         var submitBatchBtn = document.getElementById('submitBatchBtn');
         if (submitBatchBtn) submitBatchBtn.addEventListener('click', ccHandleBatchSubmit);
 
-        var search = document.getElementById('searchInput');
         var fUsage = document.getElementById('filterUsage');
         var fStatus = document.getElementById('filterStatus');
-        if (search) search.addEventListener('input', ccFilterCertificates);
         if (fUsage) fUsage.addEventListener('change', ccFilterCertificates);
         if (fStatus) fStatus.addEventListener('change', ccFilterCertificates);
     }
@@ -322,20 +320,19 @@
     }
 
     function ccFilterCertificates() {
-        var search = (document.getElementById('searchInput').value || '').toLowerCase();
         var usage = document.getElementById('filterUsage').value;
         var status = document.getElementById('filterStatus').value;
 
-        // Re-fetch original data and filter
+        // Re-fetch original data and filter (free-text CN/email search now lives
+        // in the global ⌘K palette).
         fetch('/api/client-certs')
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 var all = data.certificates || [];
                 certificatesData = all.filter(function(cert) {
-                    var matchSearch = !search || cert.common_name.toLowerCase().indexOf(search) !== -1 || (cert.email || '').toLowerCase().indexOf(search) !== -1;
                     var matchUsage = !usage || cert.cert_usage === usage;
                     var matchStatus = !status || (status === 'active' && !cert.revoked) || (status === 'revoked' && cert.revoked);
-                    return matchSearch && matchUsage && matchStatus;
+                    return matchUsage && matchStatus;
                 });
                 ccRenderCertificates();
             })
