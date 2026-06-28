@@ -147,6 +147,42 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             limit: { type: "integer", description: "Max entries to return (1-500, default 100)" }
           }
         }
+      },
+      {
+        name: "certmate_delete_certificate",
+        description: "Delete a certificate by domain: removes the certificate files from disk and the domain from settings. Destructive and not reversible — confirm intent before calling. Useful to clean up old or renamed certificates during migrations.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            domain: { type: "string", description: "The primary domain of the certificate to delete" }
+          },
+          required: ["domain"]
+        }
+      },
+      {
+        name: "certmate_update_certificate",
+        description: "Edit an existing certificate's coverage in place by reissuing it (no delete-and-recreate): replace its SAN domains and/or change its DNS-01 alias. Omit sans to keep the current SAN set; pass an empty array to drop all SANs. The primary domain is the certificate's identity and cannot be changed here. May return a job_id (HTTP 202) to poll with certmate_get_job.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            domain: { type: "string", description: "The primary domain of the certificate to update" },
+            sans: { type: "array", items: { type: "string" }, description: "The full replacement set of SAN domains (omit to keep the current set; [] drops all SANs)" },
+            domain_alias: { type: "string", description: "The DNS-01 alias FQDN (\"\" clears it)" }
+          },
+          required: ["domain"]
+        }
+      },
+      {
+        name: "certmate_get_certificate_file",
+        description: "Download a single file from a certificate's bundle as raw PEM text (not JSON-wrapped or zipped) — e.g. fullchain.pem, privkey.pem, cert.pem, chain.pem — for direct use by web servers like HAProxy or nginx.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            domain: { type: "string", description: "The domain name" },
+            file: { type: "string", description: "The bundle file to fetch, e.g. fullchain.pem, privkey.pem, cert.pem, chain.pem" }
+          },
+          required: ["domain", "file"]
+        }
       }
     ]
   };
@@ -258,6 +294,29 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case "certmate_get_activity":
         result = await makeRequest("GET", `/api/activity?limit=${encodeURIComponent(args.limit || 100)}`);
         break;
+      case "certmate_delete_certificate":
+        result = await makeRequest("DELETE", `/api/certificates/${encodeURIComponent(args.domain)}`);
+        break;
+      case "certmate_update_certificate": {
+        const body = {};
+        // Omit san_domains entirely when not provided so the reissue keeps the
+        // current SAN set ([] is a deliberate "drop all").
+        if (Array.isArray(args.sans)) body.san_domains = args.sans;
+        if (args.domain_alias !== undefined) body.domain_alias = args.domain_alias;
+        result = await makeRequest("POST", `/api/certificates/${encodeURIComponent(args.domain)}/reissue`, body);
+        break;
+      }
+      case "certmate_get_certificate_file": {
+        const fileUrl = `${baseUrl.replace(/\/$/, '')}/api/certificates/${encodeURIComponent(args.domain)}/download?file=${encodeURIComponent(args.file)}`;
+        const fileResp = await fetch(fileUrl, { method: "GET", headers });
+        if (!fileResp.ok) {
+          let errText = `HTTP error ${fileResp.status}`;
+          try { const e = await fileResp.json(); errText += `: ${e.error || e.message || JSON.stringify(e)}`; } catch (_) {}
+          throw new Error(errText);
+        }
+        // Return the raw PEM text directly (not JSON-wrapped) so it is pasteable.
+        return { content: [{ type: "text", text: await fileResp.text() }] };
+      }
       default:
         throw new Error(`Unknown tool: ${name}`);
     }
