@@ -1,108 +1,62 @@
 <!-- Client Certificates Partial — included in index.html under "Client" tab -->
 
-<!-- Statistics Bar -->
-<!-- Compact single-row stat strip (redesign phase 5) — mirrors the server
-     dashboard strip so the Server↔Client toggle keeps one card vocabulary. -->
-<div class="grid grid-cols-4 gap-2 sm:gap-3 mb-6">
-    <div class="relative overflow-hidden rounded-lg shadow-card hover:shadow-elevated transition-shadow duration-200 bg-surface">
-        <span class="absolute inset-y-0 left-0 w-1 bg-blue-500" aria-hidden="true"></span>
-        <div class="pl-3.5 pr-3 py-2">
-            <div class="flex items-center gap-1.5">
-                <i class="fas fa-certificate text-blue-500 text-xs flex-shrink-0"></i>
-                <p class="text-[10px] font-semibold text-muted uppercase tracking-wider truncate">Total</p>
-            </div>
-            <p class="text-2xl font-bold text-foreground tabular-nums leading-none mt-1" id="totalCount">0</p>
-            <p class="text-[10px] text-muted mt-0.5 truncate hidden sm:block">client certificates</p>
-        </div>
-    </div>
-    <div class="relative overflow-hidden rounded-lg shadow-card hover:shadow-elevated transition-shadow duration-200 bg-surface">
-        <span class="absolute inset-y-0 left-0 w-1 bg-green-500" aria-hidden="true"></span>
-        <div class="pl-3.5 pr-3 py-2">
-            <div class="flex items-center gap-1.5">
-                <i class="fas fa-circle-check text-success-fg text-xs flex-shrink-0"></i>
-                <p class="text-[10px] font-semibold text-muted uppercase tracking-wider truncate">Active</p>
-            </div>
-            <p class="text-2xl font-bold text-success-fg tabular-nums leading-none mt-1" id="activeCount">0</p>
-            <p class="text-[10px] text-muted mt-0.5 truncate hidden sm:block">valid &amp; usable</p>
-        </div>
-    </div>
-    <div class="relative overflow-hidden rounded-lg shadow-card hover:shadow-elevated transition-shadow duration-200 bg-surface">
-        <span class="absolute inset-y-0 left-0 w-1 bg-red-500" aria-hidden="true"></span>
-        <div class="pl-3.5 pr-3 py-2">
-            <div class="flex items-center gap-1.5">
-                <i class="fas fa-ban text-danger-fg text-xs flex-shrink-0"></i>
-                <p class="text-[10px] font-semibold text-muted uppercase tracking-wider truncate">Revoked</p>
-            </div>
-            <p class="text-2xl font-bold text-danger-fg tabular-nums leading-none mt-1" id="revokedCount">0</p>
-            <p class="text-[10px] text-muted mt-0.5 truncate hidden sm:block">no longer trusted</p>
-        </div>
-    </div>
-    <div class="relative overflow-hidden rounded-lg shadow-card hover:shadow-elevated transition-shadow duration-200 bg-surface">
-        <span class="absolute inset-y-0 left-0 w-1 bg-indigo-500" aria-hidden="true"></span>
-        <div class="pl-3.5 pr-3 py-2">
-            <div class="flex items-center gap-1.5">
-                <i class="fas fa-chart-pie text-indigo-500 text-xs flex-shrink-0"></i>
-                <p class="text-[10px] font-semibold text-muted uppercase tracking-wider truncate">By Usage</p>
-            </div>
-            <p class="text-xs font-medium text-foreground leading-none mt-1.5 truncate" id="usageBreakdown">—</p>
-        </div>
-    </div>
-</div>
+<!-- Stat counters moved up to share the toggle's row (top of index.html);
+     ccLoadStatistics() fills #totalCount / #activeCount / #revokedCount there.
+     "By Usage" was dropped to match the server's three-counter strip. -->
 
 <!-- Certificates List -->
-<div class="bg-surface border-border shadow-lg rounded-xl border overflow-hidden">
-    <div class="px-6 py-5 border-b border-border bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-700">
+<div class="bg-surface shadow-card rounded-xl overflow-hidden">
+    <div class="px-6 py-4 border-b border-gray-100 dark:border-white/5">
         <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            <h3 class="text-xl font-bold text-foreground flex items-center">
-                <i class="fas fa-list mr-2 text-primary"></i>
-                Client Certificates
-            </h3>
+            <h3 class="text-lg font-semibold text-foreground">Client Certificates</h3>
             <div class="flex flex-wrap items-center gap-2">
-                <!-- Per-page CN/email search retired: the global ⌘K palette now
-                     searches client certificates too. Usage/status filters stay. -->
-                <select id="filterUsage" aria-label="Filter by usage type"
-                        class="px-4 py-2 text-sm border text-foreground border-border rounded-lg bg-input focus:ring-2 focus:ring-primary focus:border-primary">
-                    <option value="">All Usage Types</option>
-                    <option value="api-mtls">API mTLS</option>
-                    <option value="vpn">VPN</option>
-                    <option value="user-auth">User Auth</option>
-                </select>
-                <select id="filterStatus" aria-label="Filter by status"
-                        class="px-4 py-2 text-sm border text-foreground border-border rounded-lg bg-input focus:ring-2 focus:ring-primary focus:border-primary">
-                    <option value="">All Status</option>
-                    <option value="active">Active</option>
-                    <option value="revoked">Revoked</option>
-                </select>
+                <!-- Status + usage as chips (CN/email search lives in the ⌘K
+                     palette) and an actions icon group — same vocabulary as the
+                     server list header. Counts/filtering are driven by client-certs.js. -->
+                <div class="inline-flex flex-wrap items-center gap-1 rounded-lg border border-border bg-surface-2 p-1" role="group" aria-label="Filter by status">
+                    <button type="button" data-cc-status-chip="" aria-pressed="true" onclick="ccSetStatusFilter('')" class="cm-chip aria-pressed:bg-primary/15 aria-pressed:text-primary aria-pressed:ring-1 aria-pressed:ring-inset aria-pressed:ring-primary/30">All <span class="text-[10px] tabular-nums opacity-70" data-cc-status-count="all"></span></button>
+                    <button type="button" data-cc-status-chip="active" aria-pressed="false" onclick="ccSetStatusFilter('active')" class="cm-chip aria-pressed:bg-green-500/15 aria-pressed:text-success-fg aria-pressed:ring-1 aria-pressed:ring-inset aria-pressed:ring-green-500/30">Active <span class="text-[10px] tabular-nums opacity-70" data-cc-status-count="active"></span></button>
+                    <button type="button" data-cc-status-chip="revoked" aria-pressed="false" onclick="ccSetStatusFilter('revoked')" class="cm-chip aria-pressed:bg-red-500/15 aria-pressed:text-danger-fg aria-pressed:ring-1 aria-pressed:ring-inset aria-pressed:ring-red-500/30">Revoked <span class="text-[10px] tabular-nums opacity-70" data-cc-status-count="revoked"></span></button>
+                </div>
+                <div class="inline-flex flex-wrap items-center gap-1 rounded-lg border border-border bg-surface-2 p-1" role="group" aria-label="Filter by usage type">
+                    <button type="button" data-cc-usage-chip="" aria-pressed="true" onclick="ccSetUsageFilter('')" class="cm-chip aria-pressed:bg-primary/15 aria-pressed:text-primary aria-pressed:ring-1 aria-pressed:ring-inset aria-pressed:ring-primary/30">All</button>
+                    <button type="button" data-cc-usage-chip="api-mtls" aria-pressed="false" onclick="ccSetUsageFilter('api-mtls')" class="cm-chip aria-pressed:bg-primary/15 aria-pressed:text-primary aria-pressed:ring-1 aria-pressed:ring-inset aria-pressed:ring-primary/30">API mTLS</button>
+                    <button type="button" data-cc-usage-chip="vpn" aria-pressed="false" onclick="ccSetUsageFilter('vpn')" class="cm-chip aria-pressed:bg-primary/15 aria-pressed:text-primary aria-pressed:ring-1 aria-pressed:ring-inset aria-pressed:ring-primary/30">VPN</button>
+                    <button type="button" data-cc-usage-chip="user-auth" aria-pressed="false" onclick="ccSetUsageFilter('user-auth')" class="cm-chip aria-pressed:bg-primary/15 aria-pressed:text-primary aria-pressed:ring-1 aria-pressed:ring-inset aria-pressed:ring-primary/30">User Auth</button>
+                </div>
+                <div class="inline-flex items-center gap-1.5" role="group" aria-label="Client list actions">
+                    <button type="button" onclick="ccRefresh()" class="cm-icon-btn" title="Refresh the list" aria-label="Refresh client certificate list"><i class="fas fa-arrows-rotate" aria-hidden="true"></i></button>
+                </div>
             </div>
         </div>
     </div>
 
     <div class="overflow-x-auto">
-        <table class="w-full">
-            <thead class="bg-surface-2 border-border border-b">
+        <table class="min-w-full divide-y divide-border">
+            <thead class="bg-gray-50/80 dark:bg-gray-700/60 backdrop-blur-md sticky top-0 z-10">
                 <tr>
-                    <th id="cc-sort-th-common_name" scope="col" aria-sort="none" class="px-6 py-3 text-left text-xs font-medium text-label uppercase tracking-wider">
+                    <th id="cc-sort-th-common_name" scope="col" aria-sort="none" class="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">
                         <button type="button" onclick="ccSortCertificates('common_name')" class="inline-flex items-center uppercase tracking-wider hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:ring-inset rounded">Common Name <i class="fas fa-sort ml-1 text-gray-400" id="cc-sort-icon-common_name" aria-hidden="true"></i></button>
                     </th>
-                    <th id="cc-sort-th-email" scope="col" aria-sort="none" class="px-6 py-3 text-left text-xs font-medium text-label uppercase tracking-wider hidden md:table-cell">
+                    <th id="cc-sort-th-email" scope="col" aria-sort="none" class="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider hidden md:table-cell">
                         <button type="button" onclick="ccSortCertificates('email')" class="inline-flex items-center uppercase tracking-wider hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:ring-inset rounded">Email <i class="fas fa-sort ml-1 text-gray-400" id="cc-sort-icon-email" aria-hidden="true"></i></button>
                     </th>
-                    <th id="cc-sort-th-cert_usage" scope="col" aria-sort="none" class="px-6 py-3 text-left text-xs font-medium text-label uppercase tracking-wider hidden lg:table-cell">
+                    <th id="cc-sort-th-cert_usage" scope="col" aria-sort="none" class="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider hidden lg:table-cell">
                         <button type="button" onclick="ccSortCertificates('cert_usage')" class="inline-flex items-center uppercase tracking-wider hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:ring-inset rounded">Usage <i class="fas fa-sort ml-1 text-gray-400" id="cc-sort-icon-cert_usage" aria-hidden="true"></i></button>
                     </th>
-                    <th id="cc-sort-th-created_at" scope="col" aria-sort="none" class="px-6 py-3 text-left text-xs font-medium text-label uppercase tracking-wider hidden lg:table-cell">
+                    <th id="cc-sort-th-created_at" scope="col" aria-sort="none" class="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider hidden lg:table-cell">
                         <button type="button" onclick="ccSortCertificates('created_at')" class="inline-flex items-center uppercase tracking-wider hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:ring-inset rounded">Created <i class="fas fa-sort ml-1 text-gray-400" id="cc-sort-icon-created_at" aria-hidden="true"></i></button>
                     </th>
-                    <th id="cc-sort-th-expires_at" scope="col" aria-sort="none" class="px-6 py-3 text-left text-xs font-medium text-label uppercase tracking-wider">
+                    <th id="cc-sort-th-expires_at" scope="col" aria-sort="none" class="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">
                         <button type="button" onclick="ccSortCertificates('expires_at')" class="inline-flex items-center uppercase tracking-wider hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:ring-inset rounded">Expires <i class="fas fa-sort ml-1 text-gray-400" id="cc-sort-icon-expires_at" aria-hidden="true"></i></button>
                     </th>
-                    <th id="cc-sort-th-status" scope="col" aria-sort="none" class="px-6 py-3 text-left text-xs font-medium text-label uppercase tracking-wider">
+                    <th id="cc-sort-th-status" scope="col" aria-sort="none" class="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">
                         <button type="button" onclick="ccSortCertificates('status')" class="inline-flex items-center uppercase tracking-wider hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:ring-inset rounded">Status <i class="fas fa-sort ml-1 text-gray-400" id="cc-sort-icon-status" aria-hidden="true"></i></button>
                     </th>
-                    <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-label uppercase tracking-wider">Actions</th>
+                    <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-muted uppercase tracking-wider">Actions</th>
                 </tr>
             </thead>
-            <tbody id="certTableBody" class="divide-y divide-gray-200 dark:divide-gray-700">
+            <tbody id="certTableBody" class="divide-y divide-border">
                 <tr><td colspan="7" class="px-6 py-8 text-center text-muted">Loading certificates...</td></tr>
             </tbody>
         </table>
