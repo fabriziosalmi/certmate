@@ -180,10 +180,13 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
                                 ip_address=request.remote_addr,
                             )
                         continue
-                    cert_path = certificate_manager.get_certificate_path(
-                        cert_dir.name)
-                    if os.path.exists(cert_path):
-                        zf.write(cert_path, arcname=f"{cert_dir.name}.crt")
+                    # Bundle the full chain (cert + intermediates) as
+                    # <domain>.crt. Cert-only by design — a bulk export must not
+                    # leak private keys. (Fixes a 500: certificate_manager has no
+                    # get_certificate_path(); cert_dir is already the domain dir.)
+                    cert_path = cert_dir / 'fullchain.pem'
+                    if cert_path.exists():
+                        zf.write(str(cert_path), arcname=f"{cert_dir.name}.crt")
 
             @after_this_request
             def cleanup(response):
