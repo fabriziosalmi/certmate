@@ -2851,8 +2851,14 @@
     // (e.g. the client view is active), so the caller can fall back to a reload.
     function flashCertRow(domain) {
         if (!domain) return false;
-        var sel = (window.CSS && CSS.escape) ? CSS.escape(domain) : domain.replace(/"/g, '\\"');
-        var row = document.querySelector('#certificatesList tr[data-row-domain="' + sel + '"]');
+        // Match by reading data-row-domain directly instead of interpolating the
+        // (user-derived) domain into a CSS selector — no escaping subtleties, no
+        // injection surface.
+        var row = null;
+        var rows = document.querySelectorAll('#certificatesList tr[data-row-domain]');
+        for (var i = 0; i < rows.length; i++) {
+            if (rows[i].getAttribute('data-row-domain') === domain) { row = rows[i]; break; }
+        }
         if (!row || row.offsetParent === null) return false;
         row.scrollIntoView({ behavior: 'smooth', block: 'center' });
         row.classList.remove('cmd-flash');
