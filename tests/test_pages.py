@@ -72,7 +72,11 @@ class TestWelcomeBanner:
 
     def test_index_has_certificate_toggle(self, api):
         r = api.get("/", allow_redirects=True)
-        assert "Server Certificates" in r.text
+        # The dashboard header carries the Server/Client view toggle (the
+        # redesign shortened the labels to "Server"/"Client"; pin the stable
+        # button ids instead of the prose).
+        assert 'id="certViewServerBtn"' in r.text
+        assert 'id="certViewClientBtn"' in r.text
 
 
 class TestHelpPage:
