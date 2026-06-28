@@ -1,3 +1,46 @@
+## v2.19.4 (Patch — unified certificate-creation flow, MCP lifecycle tools, dashboard and topbar refinements)
+
+A redesign of the certificate-creation and list surfaces into one consistent flow, driven by hands-on review, plus three new MCP tools toward REST parity and the refinements that followed. No change to the issuance protocol; gated through the full real-cert E2E suite (Let's Encrypt staging via Cloudflare DNS-01).
+
+### MCP server
+
+- **Three certificate-lifecycle tools toward REST parity** ([#358](https://github.com/fabriziosalmi/certmate/issues/358)): `certmate_delete_certificate` (delete a certificate by domain), `certmate_update_certificate` (reissue in place to replace the SAN set and/or change the DNS-01 alias, without delete-and-recreate — omit `sans` to keep the current set), and `certmate_get_certificate_file` (download a single bundle file such as `fullchain.pem` or `privkey.pem` as raw PEM text, for direct use by servers like HAProxy and nginx). The MCP server now exposes 16 tools, covered by an offline behavioural test that pins each tool's HTTP method, path and body. A versions/rollback tool from the same issue was deferred: it needs a backend endpoint for certificate revision history that does not exist yet.
+
+### Certificate creation
+
+- **One creation flow for server and client certificates.** The asymmetric layout (server form behind an inline toggle that pushed the page down; client form always inline) is replaced by a single right-side overlay drawer that holds both types, switched by a `[ Server | Client ]` segment and opened from a `[ Server | Client | + New ]` cluster in the page header. No layout jump, and `+ New` is available from either view.
+- **Async issuance feedback in the list.** A fresh create now posts asynchronously: the drawer closes immediately and an optimistic "Issuing" row appears at the top of the table, polling the job to resolution — it becomes the real certificate on success, or a "Failed" row carrying the reason and a one-click Retry. Falls back to the synchronous path transparently when the async executor is absent.
+
+### Search, filtering, and navigation
+
+- **The Cmd-K command palette is the single search surface.** It now searches both server and client certificates and adds open-the-drawer actions and jump-and-flash (selecting a certificate scrolls to and highlights its row). The redundant per-page search boxes were removed, the topbar search became a plain lens icon, and the stale topbar "Certificates" link was dropped (the logo links home and the Server/Client toggle handles cert navigation). Logout is now icon-only.
+- **Status filter chips** replace the All-Status select on the server list, each with a live count and its status colour; the client list header now matches, with status and usage chips and a Refresh action.
+
+### Detail modal and tables
+
+- **Certificate-detail modal regrouped.** Auto-Renew moved into the status banner; Deployment and Actions became two columns of consistent quick-action buttons on a single row each; the two deployment indicators are now squares matching those buttons; the delete action is danger-red (and still confirms first).
+- **Client certificates table aligned to the server table** — same header chrome and column styling, a status-coloured left border per row (active / expiring / revoked), and the monospace identifier treatment.
+- **List actions are a quick-action icon group** (Check all deployments, Export ZIP, Refresh) in place of the single Check All button.
+
+### Polish
+
+- A compact single-row stat strip (server and client), monospace machine-values (domains and common names), a Tab focus-trap on the creation drawer with focus restore, and a responsive pass down to phone widths.
+
+### Broader UI fixes and polish
+
+A sweep across the rest of the app that landed alongside the creation-flow work:
+
+- **Dashboard**: the certificate table is readable on mobile and tablet, the secondary row actions collapse into an overflow menu, and the stat cards and dark-mode action contrast are clearer.
+- **Settings**: Save stays reachable behind a sticky footer on form tabs, the overflowing tab strip shows a scroll affordance, the active theme segment is visible in dark mode, the General tab gained section hierarchy, and the API-token Generate button reads as a secondary action.
+- **Activity**: corrected the operation filter, labels and empty-state copy; coherent glyph and colour semantics per operation; a compact inline absolute time for touch.
+- **Notifications**: success toasts for snooze/unsnooze, a Snooze disclosure caret, a neutral summary so each row carries its own severity colour, and a tidier empty/error state.
+- **Help**: the endpoint list scrolls instead of clipping, prose is capped to a readable measure, the redundant "What's new" section is removed, and the page gets mobile padding.
+- **Accessibility and setup**: a keyboard focus ring on bare chrome buttons, a clearer non-colour active accent in the nav, and the first-run wizard no longer overlays the setup form.
+
+### Fixes
+
+- **Batch certificate download returned 500.** `POST /api/web/certificates/download/batch` called `certificate_manager.get_certificate_path()`, a method that does not exist, so every batch export raised `AttributeError`. It now bundles each domain's `fullchain.pem` as `<domain>.crt` (cert-only by design — a bulk export must never leak private keys), which is what the new Export ZIP action drives.
+
 ## v2.19.2 (Patch — heavy-use UI/UX, renewal robustness, security hardening, adoption fixes)
 
 A broad pass driven by hands-on review of the most-used surfaces plus an adversarial multi-agent sweep of the backend, API, security posture, and docs. No change to the core issuance protocol; gated through the full real-cert E2E suite (Let's Encrypt via Cloudflare DNS-01).
