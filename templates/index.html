@@ -417,7 +417,7 @@
              DOMContentLoaded; count is driven by STAT_METRICS_COUNT in
              dashboard.js so the placeholder matches whatever number of
              cards updateStats() actually emits). -->
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6" id="statsCards"></div>
+        <div class="grid grid-cols-4 gap-2 sm:gap-3 mb-6" id="statsCards"></div>
 
         <!-- Certificates List -->
         <div class="bg-surface shadow-card rounded-xl overflow-hidden">
@@ -426,15 +426,27 @@
                     <h3 class="text-lg font-semibold text-foreground">Your Certificates</h3>
                     <div class="flex flex-col sm:flex-row items-stretch sm:items-center space-y-2 sm:space-y-0 sm:space-x-2 lg:space-x-3">
                         <!-- Per-page certificate search retired in the redesign:
-                             the global ⌘K / "/" command palette is now the single
-                             search surface (cross-type, jump-and-flash). Status
-                             filtering stays here (becomes chips in a later phase). -->
-                        <select id="statusFilter" class="border border-border bg-input text-foreground rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary shadow-sm transition-shadow duration-200">
-                            <option value="all">All Status</option>
-                            <option value="valid">Valid</option>
-                            <option value="expiring">Expiring Soon</option>
-                            <option value="expired">Expired</option>
-                        </select>
+                             the global ⌘K / "/" command palette is the single search
+                             surface. Status filtering is a row of chips (phase 5)
+                             driving setStatusFilter(); counts come from updateStats. -->
+                        <div class="inline-flex flex-wrap items-center gap-1 rounded-lg border border-border bg-surface-2 p-1" role="group" aria-label="Filter certificates by status">
+                            <button type="button" data-status-chip="all" aria-pressed="true" onclick="setStatusFilter('all')"
+                                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors text-muted hover:text-foreground aria-pressed:bg-primary/15 aria-pressed:text-primary aria-pressed:ring-1 aria-pressed:ring-inset aria-pressed:ring-primary/30">
+                                All <span class="text-[10px] tabular-nums opacity-70" data-status-count="all"></span>
+                            </button>
+                            <button type="button" data-status-chip="valid" aria-pressed="false" onclick="setStatusFilter('valid')"
+                                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors text-muted hover:text-foreground aria-pressed:bg-green-500/15 aria-pressed:text-success-fg aria-pressed:ring-1 aria-pressed:ring-inset aria-pressed:ring-green-500/30">
+                                Valid <span class="text-[10px] tabular-nums opacity-70" data-status-count="valid"></span>
+                            </button>
+                            <button type="button" data-status-chip="expiring" aria-pressed="false" onclick="setStatusFilter('expiring')"
+                                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors text-muted hover:text-foreground aria-pressed:bg-yellow-500/15 aria-pressed:text-warning-fg aria-pressed:ring-1 aria-pressed:ring-inset aria-pressed:ring-yellow-500/30">
+                                Expiring <span class="text-[10px] tabular-nums opacity-70" data-status-count="expiring"></span>
+                            </button>
+                            <button type="button" data-status-chip="expired" aria-pressed="false" onclick="setStatusFilter('expired')"
+                                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors text-muted hover:text-foreground aria-pressed:bg-red-500/15 aria-pressed:text-danger-fg aria-pressed:ring-1 aria-pressed:ring-inset aria-pressed:ring-red-500/30">
+                                Expired <span class="text-[10px] tabular-nums opacity-70" data-status-count="expired"></span>
+                            </button>
+                        </div>
                         <button type="button" onclick="checkAllDeploymentStatuses(event)"
                                 class="inline-flex items-center px-3 py-2 border border-indigo-300 dark:border-indigo-600 shadow-sm text-sm font-medium rounded-lg text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/30 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200 whitespace-nowrap"
                                 title="Re-check deployment status for every certificate in the list. Probes both the backend (TLS handshake from the server) and the browser (this tab), one row at a time."

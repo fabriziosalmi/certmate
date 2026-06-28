@@ -71,7 +71,9 @@
                 if (el('revokedCount')) el('revokedCount').textContent = stats.revoked || 0;
                 var byUsage = stats.by_usage || {};
                 var usageText = Object.entries(byUsage).map(function(e) { return e[1] + ' ' + e[0]; }).join(', ') || 'No certs';
-                if (el('usageBreakdown')) el('usageBreakdown').textContent = usageText;
+                // The strip value truncates to one line; keep the full breakdown
+                // available on hover.
+                if (el('usageBreakdown')) { el('usageBreakdown').textContent = usageText; el('usageBreakdown').title = usageText; }
             })
             .catch(function(e) { console.error('Error loading client cert statistics:', e); });
     }
@@ -90,7 +92,27 @@
         var tbody = document.getElementById('certTableBody');
         if (!tbody) return;
         if (certificatesData.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-8 text-center text-muted">No client certificates found</td></tr>';
+            // Distinguish "none exist yet" (offer a CTA) from "none match the
+            // active usage/status filter" (offer a reorientation hint).
+            var usageSel = document.getElementById('filterUsage');
+            var statusSel = document.getElementById('filterStatus');
+            var isFiltered = (usageSel && usageSel.value) || (statusSel && statusSel.value);
+            if (isFiltered) {
+                tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-12">' +
+                    '<div class="mx-auto max-w-sm text-center">' +
+                    '<div class="mx-auto h-14 w-14 flex items-center justify-center bg-surface-2 rounded-full mb-3"><i class="fas fa-filter text-gray-400 text-xl" aria-hidden="true"></i></div>' +
+                    '<h3 class="text-base font-medium text-foreground mb-1">No matching client certificates</h3>' +
+                    '<p class="text-sm text-muted">Try a different usage or status filter.</p>' +
+                    '</div></td></tr>';
+            } else {
+                tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-12">' +
+                    '<div class="mx-auto max-w-sm text-center">' +
+                    '<div class="mx-auto h-16 w-16 flex items-center justify-center bg-info-surface rounded-full mb-4"><i class="fas fa-id-card text-blue-500 text-2xl" aria-hidden="true"></i></div>' +
+                    '<h3 class="text-lg font-medium text-foreground mb-2">No client certificates yet</h3>' +
+                    '<p class="text-muted mb-6">Issue mTLS / client identity certificates for VPN access, API authentication, or user login.</p>' +
+                    '<button type="button" onclick="openCertDrawer(\'client\')" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary hover:bg-secondary"><i class="fas fa-plus mr-2" aria-hidden="true"></i>New Client Certificate</button>' +
+                    '</div></td></tr>';
+            }
             return;
         }
 

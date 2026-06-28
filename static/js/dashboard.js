@@ -88,7 +88,16 @@
 
     // Clear filters function
     function clearFilters() {
-        document.getElementById('statusFilter').value = 'all';
+        setStatusFilter('all');
+    }
+
+    // Status filter chips (redesign phase 5) — replaced the #statusFilter select.
+    // The clicked chip becomes aria-pressed; the rest reset.
+    function setStatusFilter(value) {
+        currentStatusFilter = value;
+        document.querySelectorAll('[data-status-chip]').forEach(function (chip) {
+            chip.setAttribute('aria-pressed', chip.getAttribute('data-status-chip') === value ? 'true' : 'false');
+        });
         filterCertificates();
     }
 
@@ -143,8 +152,8 @@
         var rows = [];
         for (var i = 0; i < count; i++) {
             rows.push(
-                '<div class="bg-surface rounded-xl px-3 py-2" aria-hidden="true">' +
-                    '<div class="skeleton h-3 w-16 mb-1"></div>' +
+                '<div class="bg-surface rounded-lg shadow-card pl-3.5 pr-3 py-2" aria-hidden="true">' +
+                    '<div class="skeleton h-2.5 w-12 mb-2"></div>' +
                     '<div class="skeleton h-6 w-8"></div>' +
                 '</div>'
             );
@@ -180,15 +189,18 @@
                 danger:   { bar: 'bg-red-500', val: 'text-danger-fg', bg: 'bg-danger-surface' },
                 info:     { bar: 'bg-indigo-500', val: 'text-indigo-600 dark:text-indigo-400', bg: 'bg-surface' }
             })[state] || {};
-            return '<div class="relative overflow-hidden rounded-xl shadow-card hover:shadow-elevated transition-shadow duration-200 ' + S.bg + '">' +
+            // Compact single-row strip tile (redesign phase 5): icon + label on
+            // one line, a tighter hero number, and the subtitle dropped below sm
+            // so four tiles sit in a single row even on phones.
+            return '<div class="relative overflow-hidden rounded-lg shadow-card hover:shadow-elevated transition-shadow duration-200 ' + S.bg + '">' +
                 '<span class="absolute inset-y-0 left-0 w-1 ' + S.bar + '" aria-hidden="true"></span>' +
-                '<div class="pl-4 pr-3 py-3">' +
-                '<div class="flex items-start justify-between gap-2">' +
-                '<p class="text-[11px] font-semibold text-muted uppercase tracking-wider mt-0.5">' + CertMate.escapeHtml(label) + '</p>' +
-                '<i class="fas ' + iconClass + ' text-sm flex-shrink-0"></i>' +
+                '<div class="pl-3.5 pr-3 py-2">' +
+                '<div class="flex items-center gap-1.5">' +
+                '<i class="fas ' + iconClass + ' text-xs flex-shrink-0"></i>' +
+                '<p class="text-[10px] font-semibold text-muted uppercase tracking-wider truncate">' + CertMate.escapeHtml(label) + '</p>' +
                 '</div>' +
-                '<p class="text-3xl font-bold ' + S.val + ' tabular-nums leading-none mt-1.5"' + (valueId ? ' id="' + valueId + '"' : '') + '>' + value + '</p>' +
-                (subtitle ? '<p class="text-xs text-muted mt-1.5">' + CertMate.escapeHtml(subtitle) + '</p>' : '') +
+                '<p class="text-2xl font-bold ' + S.val + ' tabular-nums leading-none mt-1"' + (valueId ? ' id="' + valueId + '"' : '') + '>' + value + '</p>' +
+                (subtitle ? '<p class="text-[10px] text-muted mt-0.5 truncate hidden sm:block">' + CertMate.escapeHtml(subtitle) + '</p>' : '') +
                 '</div></div>';
         }
 
@@ -214,6 +226,13 @@
                 ? statCard('Deployed', '0', 'neutral', 'fa-globe text-muted', null, 'none deployed')
                 : statCard('Deployed', '<span class="text-gray-300 dark:text-gray-600 animate-pulse" aria-label="checking deployments">—</span>', 'info', 'fa-globe text-indigo-500 dark:text-indigo-400', 'deploymentCount', 'reachable'))
         ].join('');
+
+        // Keep the status-filter chip counts in sync with the strip (phase 5).
+        var chipCounts = { all: total, valid: valid, expiring: expiring, expired: expired };
+        Object.keys(chipCounts).forEach(function (k) {
+            var c = document.querySelector('[data-status-count="' + k + '"]');
+            if (c) { c.textContent = chipCounts[k]; }
+        });
     }
 
     // Deployment Status Cache System
@@ -306,9 +325,13 @@
     var pendingJobs = {};        // job_id -> { domain, provider, sanCount, state, error, errorCode, payload, domainsDisplay }
     var pendingPollTimers = {};  // job_id -> setTimeout handle
 
+    // Active status filter (redesign phase 5). The status chips replaced the old
+    // #statusFilter <select>; this is the single source of truth they drive.
+    var currentStatusFilter = 'all';
+
     // Filter and search certificates
     function filterCertificates() {
-        var statusFilter = document.getElementById('statusFilter').value;
+        var statusFilter = currentStatusFilter;
 
         // Ensure allCertificates is an array
         if (!Array.isArray(allCertificates)) {
@@ -539,7 +562,7 @@
         }
 
         if (certificates.length === 0) {
-            var isFiltered = document.getElementById('statusFilter').value !== 'all';
+            var isFiltered = currentStatusFilter !== 'all';
             thead.style.display = 'none';
 
             if (isFiltered) {
@@ -2851,8 +2874,8 @@
         refreshCurrentRole().then(function () { loadCertificates().then(function () { maybeOpenCertFromQuery(); maybeFlashCertFromQuery(); }); });
         loadProviderAccounts();
 
-        // Initialize the status filter (free-text search moved to the ⌘K palette)
-        document.getElementById('statusFilter').addEventListener('change', filterCertificates);
+        // Status filtering is driven by the chips (onclick -> setStatusFilter);
+        // free-text search moved to the ⌘K palette. No select listener needed.
         document.getElementById('domain').addEventListener('input', updateDnsAliasHelp);
         document.getElementById('san_domains').addEventListener('input', updateDnsAliasHelp);
         document.getElementById('wildcard-cert').addEventListener('change', updateDnsAliasHelp);
@@ -2917,6 +2940,7 @@
     window.closeCurlModal = closeCurlModal;
     window.copyFromModal = copyFromModal;
     window.clearFilters = clearFilters;
+    window.setStatusFilter = setStatusFilter;
     window.sortCertificates = sortCertificates;
     window.filterCertificates = filterCertificates;
     window.toggleDebugConsole = toggleDebugConsole;
