@@ -1,3 +1,13 @@
+## v2.19.5 (Patch — create-certificate form presents as a centered modal on desktop)
+
+A presentation refinement to the certificate-creation surface introduced in v2.19.4. No change to the creation flow, fields, focus handling, or issuance protocol.
+
+### Certificate creation
+
+- **Centered modal on desktop.** Creating a certificate is the primary action, so on wider viewports (>= 768px) the creation form now presents as a centered modal — fading and scaling in over the dimmed dashboard — instead of the right-side drawer. On phones and narrow viewports it stays a full-height drawer for one-handed reachability. The change is CSS-only and scoped to the creation container (`#createCertFormContainer`): the open/close state class, fields, Tab focus-trap, and submit handler are unchanged, so behaviour and accessibility carry over untouched.
+
+---
+
 ## v2.19.4 (Patch — unified certificate-creation flow, MCP lifecycle tools, dashboard and topbar refinements)
 
 A redesign of the certificate-creation and list surfaces into one consistent flow, driven by hands-on review, plus three new MCP tools toward REST parity and the refinements that followed. No change to the issuance protocol; gated through the full real-cert E2E suite (Let's Encrypt staging via Cloudflare DNS-01).
