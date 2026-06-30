@@ -26,13 +26,21 @@ on:
 permissions: read-all
 
 concurrency:
-  group: certmate-selfhosted-test-container
-  cancel-in-progress: false
+  group: ui-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   ui:
     name: ui
     runs-on: [self-hosted, Linux, X64]
+    # Same host-global lock ci.yml's `test` job uses: the UI suite binds the
+    # fixed-name test container on port 18888, so it must queue behind (never
+    # run beside) any other test job on the self-hosted host. Putting this
+    # shared group at workflow level instead made a co-triggered workflow cancel
+    # this run at 1s; keep it job-level, cancel-in-progress false so it queues.
+    concurrency:
+      group: certmate-selfhosted-test-container
+      cancel-in-progress: false
     steps:
     - name: Checkout code
       uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
