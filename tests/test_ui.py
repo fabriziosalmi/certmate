@@ -158,9 +158,15 @@ class TestSettingsUI:
     def test_dns_provider_selector(self, browser_page):
         browser_page.goto(f"{BASE_URL}/settings")
         browser_page.wait_for_load_state("networkidle")
-        # Should have DNS provider radio buttons
-        cloudflare_radio = browser_page.locator('input[name="dns_provider"][value="cloudflare"]')
-        expect(cloudflare_radio).to_be_visible()
+        # DNS provider cards live in the DNS tab; the default tab is General,
+        # so open the DNS tab first.
+        browser_page.locator('button[role="tab"][aria-label="DNS"]').click(timeout=10000)
+        browser_page.wait_for_timeout(300)
+        # The radio itself is sr-only (visually hidden); assert its visible
+        # wrapping card instead of the input.
+        cloudflare_card = browser_page.locator(
+            'label:has(input[name="dns_provider"][value="cloudflare"])')
+        expect(cloudflare_card).to_be_visible(timeout=5000)
 
     def test_auth_security_banner_visible(self, browser_page):
         browser_page.goto(f"{BASE_URL}/settings")
@@ -243,7 +249,12 @@ class TestCAAndChallengeToggles:
         browser_page.goto(f"{BASE_URL}/settings")
         browser_page.wait_for_load_state("networkidle")
 
-        # On the DNS tab (default). Select a provider so its config panel shows.
+        # The DNS challenge/provider controls live in the DNS tab; the default
+        # tab is General, so open the DNS tab first.
+        browser_page.locator('button[role="tab"][aria-label="DNS"]').click(timeout=10000)
+        browser_page.wait_for_timeout(300)
+
+        # Select a provider so its config panel shows.
         browser_page.click('label:has(input[name="dns_provider"][value="cloudflare"])')
         browser_page.wait_for_timeout(300)
         expect(browser_page.locator('#cloudflare-config')).to_be_visible(timeout=5000)
