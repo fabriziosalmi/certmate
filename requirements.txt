@@ -3,8 +3,8 @@
 
 # Core Flask dependencies
 Flask==3.1.3
-Flask-CORS==6.0.2
-flask-restx==1.3.0
+Flask-CORS==6.0.5
+flask-restx==1.3.2
 
 # Certificate management
 certbot==2.10.0
@@ -18,14 +18,14 @@ certbot-dns-google==2.10.0
 # certbot-dns-azure has independent versioning. 2.5.0 is the latest in
 # the line that still declares certbot<3.0,>=2.0; 2.6.0+ jumps to
 # certbot 3.x and would conflict with our certbot==2.10.0 pin.
-certbot-dns-azure==2.5.0
+certbot-dns-azure==2.6.1
 
 # DNS provider plugins - Additional providers
 # certbot-dns-powerdns pinned at 0.2.1 (latest) requires dns-lexicon<=3.5.6,
 # which conflicts with newer certbot plugins requiring dns-lexicon>=3.14.
 # Install separately if needed: pip install certbot-dns-powerdns==0.2.1
 certbot-dns-linode==2.10.0
-certbot-dns-gandi==1.6.1
+certbot-dns-gandi==1.6.2
 certbot-dns-ovh==2.10.0
 # certbot-dns-namecheap removed: only v1.0.0 exists on PyPI (alpha,
 # targets Python 2.7-3.8) and is incompatible with certbot 2.x / Python 3.12.
@@ -45,7 +45,7 @@ certbot-acme-dns==0.3.1
 certbot-dns-duckdns==1.8.0
 # Akamai Edge DNS (enterprise) — separate from certbot-dns-linode (Akamai Connected Cloud).
 # Pinned at 0.1.0 because 0.2.0 requires certbot>=5.2.2 (incompatible with our certbot==2.10.0).
-certbot-plugin-edgedns==0.1.0
+certbot-plugin-edgedns==0.2.0
 # deSEC: free German DNSSEC provider. Official plugin, no certbot upper bound, no lexicon dep
 # (verified compatible with certbot==2.10.0). Writes _acme-challenge TXT via the deSEC REST API.
 certbot-dns-desec==1.3.2
@@ -55,20 +55,20 @@ certbot-dns-desec==1.3.2
 #   pip install certbot-dns-scaleway==0.0.7
 
 # Cloud SDK dependencies
-boto3==1.34.144                    # AWS support
-azure-identity==1.17.1             # Azure support
+boto3==1.43.38                    # AWS support
+azure-identity==1.25.3             # Azure support
 azure-mgmt-dns==8.1.0              # Azure DNS support
-google-cloud-dns==0.35.0           # Google Cloud support
+google-cloud-dns==0.37.0           # Google Cloud support
 cloudflare==2.19.4                 # Cloudflare API support
-dns-lexicon==3.25.1                # Provider-neutral DNS API support for alias mode
+dns-lexicon==3.25.2                # Provider-neutral DNS API support for alias mode
 
 # Core application dependencies
 urllib3>=2.6.0,!=2.2.0,<3      # CVE-2025-66418, CVE-2025-66471, CVE-2026-21441 (HIGH)
-requests==2.33.0
+requests==2.34.2
 python-dotenv==1.2.2
-APScheduler==3.10.4
+APScheduler==3.11.3
 cryptography==46.0.7
-pyopenssl==26.0.0                      # Requires cryptography>=46.0.0,<47
+pyopenssl==26.3.0                      # Requires cryptography>=46.0.0,<47
 bcrypt==4.2.0                      # Secure password hashing
 Authlib>=1.3.2,<2.0.0              # OIDC/OAuth2 client (Authorization Code + PKCE) for SSO. Floor at 1.3.2 (CVE GHSA-9c64-2c4r-vf2g fixed there); allow patch + minor pickup, ceiling at 2.0.0 because any major bump warrants an explicit compatibility check.
 
@@ -76,7 +76,7 @@ Authlib>=1.3.2,<2.0.0              # OIDC/OAuth2 client (Authorization Code + PK
 gunicorn==23.0.0
 
 # Monitoring and metrics
-prometheus_client==0.21.0
+prometheus_client==0.25.0
 
 # Testing
 requests_mock==1.12.1
