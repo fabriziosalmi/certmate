@@ -8,6 +8,6 @@
     "css:watch": "npx tailwindcss -i static/css/input.css -o static/css/tailwind.min.css --watch"
   },
   "devDependencies": {
-    "tailwindcss": "^3.4.17"
+    "tailwindcss": "^4.3.2"
   }
 }
