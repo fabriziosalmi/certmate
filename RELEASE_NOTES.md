@@ -1361,7 +1361,7 @@ Domain-scope denials have audited via `log_authz_denied` since v2.4.12; role-lev
 
 ### Certificate download — private-key role split
 
-Escalation of a finding the audit rated INFO/⚠️ in its coverage matrix. `DownloadCertificate.get` required only `viewer` and returned private-key material via four code paths: `?format=json`, `?file=privkey.pem`, `?file=combined.pem`, default ZIP. A scoped viewer key could therefore pull the private key for every certificate in its scope — information disclosure inconsistent with the read-only-monitoring intent of the role.
+Escalation of a finding the audit rated INFO/WARN in its coverage matrix. `DownloadCertificate.get` required only `viewer` and returned private-key material via four code paths: `?format=json`, `?file=privkey.pem`, `?file=combined.pem`, default ZIP. A scoped viewer key could therefore pull the private key for every certificate in its scope — information disclosure inconsistent with the read-only-monitoring intent of the role.
 
 The decorator stays `viewer` so the authn check still fires, and the handler now gates per file:
 
