@@ -55,6 +55,28 @@
              keeps working untouched. -->
         <div id="certDrawerScrim" onclick="closeCertDrawer()" aria-hidden="true"
              class="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm opacity-0 pointer-events-none transition-opacity duration-200 motion-reduce:transition-none"></div>
+        <!-- Creating a certificate is the primary action, so on >=md it presents
+             as a CENTERED MODAL (fade + scale); on mobile it stays a side/full
+             drawer for one-handed reachability. Open/close is still driven by the
+             `translate-x-full` state class (checked in the JS below), so the
+             behaviour wiring is unchanged — only the desktop presentation differs. -->
+        <style>
+        @media (min-width: 768px) {
+            #createCertFormContainer {
+                top: 50%; left: 50%; right: auto; bottom: auto;
+                height: auto; max-height: 88vh; width: calc(100% - 4rem); max-width: 640px;
+                border-radius: 1rem; overflow: hidden;
+                transform: translate(-50%, -50%) scale(1); opacity: 1;
+                transition: opacity .2s ease-out, transform .2s ease-out;
+            }
+            #createCertFormContainer.translate-x-full {
+                transform: translate(-50%, -48%) scale(.96); opacity: 0; pointer-events: none;
+            }
+        }
+        @media (min-width: 768px) and (prefers-reduced-motion: reduce) {
+            #createCertFormContainer { transition: none; }
+        }
+        </style>
         <div id="createCertFormContainer" role="dialog" aria-modal="true" aria-label="New certificate"
              class="fixed top-0 right-0 z-50 h-full w-full max-w-[480px] bg-surface shadow-2xl flex flex-col translate-x-full transition-transform duration-300 ease-out motion-reduce:transition-none">
         <div class="bg-surface flex flex-col h-full overflow-hidden">
