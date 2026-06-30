@@ -1,0 +1,41 @@
+name: Lint (emoji)
+
+# Mechanises the "zero emoji in public artifacts" rule for the most public one:
+# RELEASE_NOTES.md. Arrows and the em-dash are typography, not emoji, and are
+# deliberately allowed. Runs on a GitHub-hosted runner so it never competes for
+# the single self-hosted host.
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+permissions: read-all
+
+jobs:
+  emoji:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+    - name: Scan RELEASE_NOTES.md for emoji
+      run: |
+        python3 - <<'PY'
+        import re, sys, pathlib
+        # True-emoji ranges. Deliberately EXCLUDES arrows (U+2190-21FF) and the
+        # em-dash (U+2014), which the project treats as typography.
+        EMOJI = re.compile(
+            "[\U0001F000-\U0001FAFF\U00002600-\U000026FF"
+            "\U00002700-\U000027BF\U00002B50\U00002B55\U0000FE0F]"
+        )
+        p = pathlib.Path("RELEASE_NOTES.md")
+        bad = []
+        for n, line in enumerate(p.read_text(encoding="utf-8").splitlines(), 1):
+            if EMOJI.search(line):
+                bad.append((n, line.strip()))
+        if bad:
+            for n, line in bad:
+                print(f"::error file=RELEASE_NOTES.md,line={n}::emoji not allowed: {line}")
+            sys.exit(1)
+        print("RELEASE_NOTES.md: no emoji")
+        PY
