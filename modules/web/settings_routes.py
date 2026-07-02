@@ -80,6 +80,17 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
             if not has_users and not has_domains and has_certs:
                 masked['certmate_recovery_suggested'] = True
 
+            # The user roster and API-key inventory have dedicated admin-only
+            # endpoints (/api/users, /api/keys). mask_secrets_in_settings only
+            # redacts secret-named LEAF values, so usernames/roles/emails and
+            # key names/roles/allowed_domains/token_prefix would otherwise leak
+            # to any viewer through this settings view. Strip them for anyone
+            # who is not an admin (kept for admin so the settings UI is
+            # unchanged for the role that already reads them elsewhere).
+            if (user.get('role') != 'admin'):
+                masked.pop('users', None)
+                masked.pop('api_keys', None)
+
             response = jsonify(masked)
             response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, post-check=0, pre-check=0, max-age=0'
             response.headers['Pragma'] = 'no-cache'
