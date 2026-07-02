@@ -35,8 +35,17 @@ class Client:
         headers = {"Accept": "application/json"}
         if token:
             headers["Authorization"] = f"Bearer {token}"
+        # gunicorn closes idle keep-alive connections after ~2s. httpx must not
+        # reuse a connection older than that or it surfaces as a
+        # RemoteProtocolError ("Server disconnected without sending a
+        # response"); expire pooled connections well under that window and
+        # retry connection-level blips.
+        transport = httpx.HTTPTransport(
+            retries=3, verify=verify,
+            limits=httpx.Limits(keepalive_expiry=1.0),
+        )
         self._http = httpx.Client(base_url=base_url, headers=headers,
-                                  timeout=timeout, verify=verify)
+                                  timeout=timeout, transport=transport)
         self.base_url = base_url
 
     # -- lifecycle -----------------------------------------------------------
