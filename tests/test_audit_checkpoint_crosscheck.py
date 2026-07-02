@@ -6,11 +6,15 @@ newest signed checkpoint that verifies under the current key — fail-closed.
 This does NOT bind an operator who holds the signing key (that needs off-box
 anchoring); it closes the gap for anyone WITHOUT the key, and turns the
 previously-dead checkpoint file into a real anchor."""
+from types import SimpleNamespace
+
 import pytest
+from flask import Flask
 
 from modules.core.audit import AuditLogger
 from modules.core.audit_signing import AuditSigner
 from modules.core import audit_chain
+from modules.web.misc_routes import register_misc_routes
 
 
 @pytest.fixture
@@ -133,3 +137,60 @@ def test_verify_intact_reports_no_checkpoint_yet(make_audit, tmp_path):
     assert r['ok'] is True
     assert r['checkpoint_verified'] is False
     assert 'no checkpoints' in r['checkpoint_reason']
+
+
+# --------------------------------------------------------------------------
+# /api/audit/verify HTTP semantics: "no chain yet" (benign) vs broken (tamper)
+# --------------------------------------------------------------------------
+
+def _passthrough(*_a, **_k):
+    def deco(fn):
+        return fn
+    return deco
+
+
+def _verify_route(audit):
+    app = Flask(__name__)
+    register_misc_routes(app, {'audit': audit}, _passthrough,
+                         SimpleNamespace(require_role=_passthrough))
+    return app.test_client().get('/api/audit/verify')
+
+
+def test_verify_endpoint_fresh_instance_is_200_absent(make_audit, tmp_path):
+    """A brand-new instance (nothing audited, no chain file, no checkpoints)
+    must NOT look like a tamper: 200 with state='absent', so a monitoring probe
+    does not false-alarm on a fresh deploy."""
+    audit = make_audit(tmp_path, signer=AuditSigner(tmp_path))
+    r = _verify_route(audit)
+    assert r.status_code == 200
+    body = r.get_json()
+    assert body['ok'] is False and body.get('state') == 'absent'
+
+
+def test_verify_endpoint_intact_is_200(make_audit, tmp_path):
+    audit = make_audit(tmp_path, signer=AuditSigner(tmp_path))
+    _emit(audit, 3)
+    r = _verify_route(audit)
+    assert r.status_code == 200 and r.get_json()['ok'] is True
+
+
+def test_verify_endpoint_tampered_is_409(make_audit, tmp_path):
+    audit = make_audit(tmp_path, signer=AuditSigner(tmp_path))
+    _emit(audit, 3)
+    # Corrupt an interior entry's hash → internal verify fails.
+    lines = _chain_lines(tmp_path)
+    lines[1] = lines[1].replace('"hash":', '"hash":"deadbeef","_x":')
+    _rewrite_chain(tmp_path, lines)
+    r = _verify_route(audit)
+    assert r.status_code == 409 and r.get_json()['ok'] is False
+
+
+def test_verify_endpoint_deleted_chain_with_checkpoints_is_409(make_audit, tmp_path):
+    """A missing chain file is benign ONLY when nothing attested it. If a signed
+    checkpoint exists, a missing chain is a DELETION → 409, not 200 absent."""
+    audit = make_audit(tmp_path, signer=AuditSigner(tmp_path), checkpoint_interval=3)
+    _emit(audit, 3)  # writes a checkpoint at seq 2
+    (tmp_path / audit_chain.CHAIN_FILENAME).unlink()  # delete the chain file
+    r = _verify_route(audit)
+    assert r.status_code == 409
+    assert r.get_json().get('state') != 'absent'

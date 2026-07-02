@@ -52,15 +52,25 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
 
         Returns the verifier result plus HTTP 200 when intact and 409 when the
         chain is broken, so an operator (or a monitoring probe) can alert on a
-        non-2xx without parsing the body. The honest threat-model caveat (a
-        local chain does not bind the operator) is documented in
-        ``modules/core/audit_chain.py`` and ``docs/compliance.md``.
+        non-2xx without parsing the body. A brand-new instance that has not
+        audited anything yet has no chain file — that is NOT a tamper, so it
+        returns 200 with ``state='absent'`` (unless a signed checkpoint attests
+        the chain once existed, in which case a missing file IS a deletion and
+        stays 409). The honest threat-model caveat (a local chain does not bind
+        the operator) is documented in ``modules/core/audit_chain.py`` and
+        ``docs/compliance.md``.
         """
         try:
             audit_logger = managers.get('audit')
             if audit_logger is None or not hasattr(audit_logger, 'verify_chain'):
                 return jsonify({'error': 'Audit chain not available'}), 503
             result = audit_logger.verify_chain()
+            if not result.get('ok') and 'does not exist' in (result.get('reason') or ''):
+                # No chain file. Benign only if nothing ever attested one.
+                has_cp = getattr(audit_logger, 'has_checkpoints', lambda: False)()
+                if not has_cp:
+                    result['state'] = 'absent'
+                    return jsonify(result), 200
             status = 200 if result.get('ok') else 409
             return jsonify(result), status
         except Exception as e:
