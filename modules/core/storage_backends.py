@@ -1781,6 +1781,11 @@ class StorageManager:
         # backend (or its config) is picked up without a process restart.
         self._config_signature = None
         self._lock = threading.RLock()
+        # Set to the configured backend name when init failed and we fell back
+        # to local disk, so /health can surface the split-brain (operator
+        # believes certs are in Azure/Vault/S3; they are on local disk, often
+        # ephemeral). None = the intended backend is active.
+        self._fallback_from = None
 
     def reload(self):
         """Force the next get_backend() to re-read settings and rebuild the
@@ -1830,7 +1835,8 @@ class StorageManager:
 
         try:
             backend_type = storage_config.get('backend', 'local_filesystem')
-            
+            self._fallback_from = None  # reset; set below only if we fall back
+
             if backend_type == 'local_filesystem':
                 # Default local filesystem backend
                 cert_dir = Path(storage_config.get('cert_dir', 'certificates'))
@@ -1860,7 +1866,8 @@ class StorageManager:
                 logger.warning(f"Unknown storage backend: {backend_type}, falling back to local filesystem")
                 cert_dir = Path('certificates')
                 self._backend = LocalFileSystemBackend(cert_dir)
-            
+                self._fallback_from = backend_type
+
             self._initialized = True
             self._config_signature = signature
             logger.info(f"Storage backend initialized: {self._backend.get_backend_name()}")
@@ -1877,6 +1884,17 @@ class StorageManager:
             # Cache the signature even on the fallback path so a subsequent
             # call doesn't keep retrying the broken backend on every get.
             self._config_signature = signature
+            # Persist the split-brain so /health surfaces it (not just a log
+            # line the operator may never read).
+            self._fallback_from = storage_config.get('backend', 'unknown')
+
+    def get_fallback_backend(self) -> Optional[str]:
+        """Return the configured backend name if init failed and CertMate fell
+        back to local disk (so callers/monitoring can detect the split-brain),
+        else None. /health surfaces this as 'degraded'."""
+        with self._lock:
+            self._initialize_backend()
+            return self._fallback_from
 
     def get_backend(self) -> CertificateStorageBackend:
         """Get the current storage backend"""

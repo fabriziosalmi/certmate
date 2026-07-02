@@ -441,3 +441,35 @@ def test_local_backend_store_is_atomic_and_secure(tmp_path):
     assert stat.S_IMODE(os.stat(dom / 'metadata.json').st_mode) == 0o600
     # No temp residue must survive a successful write.
     assert not any(p.name.startswith('.tmp-') for p in dom.iterdir())
+
+
+# --------------------------------------------------------------------------
+# P2: a scheduled renew must not report "renewed" when certbot no-ops
+# --------------------------------------------------------------------------
+
+def test_renew_reports_not_due_without_stamping(tmp_path):
+    """certbot exits 0 with 'not yet due' when the threshold is wider than its
+    own window. That must report renewed=False and NOT stamp renewed_at, or
+    telemetry falsely shows a daily renewal that never happened."""
+    domain = 'notdue.example.com'
+    _prep_existing_cert(tmp_path, domain, metadata={})
+    shell = MockShellExecutor()
+    shell.set_next_result(returncode=0, stdout="Cert is not yet due for renewal; no action taken.")
+    mgr = _make_cert_mgr(tmp_path, shell)
+    with patch.object(CertificateManager, '_write_pfx', return_value=None):
+        res = mgr.renew_certificate(domain)
+    assert res['success'] is True
+    assert res['renewed'] is False
+    meta = json.loads((tmp_path / domain / 'metadata.json').read_text())
+    assert 'renewed_at' not in meta
+
+
+def test_renew_reports_renewed_when_certbot_acts(tmp_path):
+    domain = 'due.example.com'
+    _prep_existing_cert(tmp_path, domain, metadata={})
+    shell = _RenewExecutor(tmp_path, domain)   # stages files, no "not due" text
+    mgr = _make_cert_mgr(tmp_path, shell)
+    with patch.object(CertificateManager, '_write_pfx', return_value=None):
+        res = mgr.renew_certificate(domain)
+    assert res['success'] is True
+    assert res['renewed'] is True
