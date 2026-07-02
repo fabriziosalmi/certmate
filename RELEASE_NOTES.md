@@ -1,3 +1,39 @@
+## v2.20.0 (Security and reliability hardening — audit sweep across renewal, keys, storage, auth, and the audit trail)
+
+A focused hardening pass from an adversarial audit of the certificate engine, deploy hooks, storage/backup, auth/RBAC, and the audit trail. Every change ships with regression tests. Two operator-visible behaviour changes are called out first — read them before upgrading.
+
+### Operator-visible behaviour changes
+
+- **A configured API bearer token is now enforced.** Previously the API served every request as admin until *local auth* was explicitly enabled, so an API-only operator who set `API_BEARER_TOKEN` (documented as required) was left unauthenticated. Now, once `API_BEARER_TOKEN` / `API_BEARER_TOKEN_FILE` is set, the token is required on every gated endpoint even with local auth off. A fresh install with no token is unchanged (open for onboarding); a bearer-token-only deployment locks the web UI, so bootstrap a user via the API. A loud startup warning is logged whenever the instance is running unauthenticated.
+- **Off-site backups now require encryption.** If S3 off-site backup is enabled but `CERTMATE_BACKUP_PASSPHRASE` is not set, the upload is refused instead of shipping every private key in cleartext to third-party object storage.
+
+### Certificate renewal and issuance
+
+- **Renewal certbot calls are bounded (30-minute timeout).** A wedged renewal no longer hangs the serial renewal job forever (which had silently stopped every future automatic renewal) or pins a gunicorn worker.
+- **Batch-created certificates are registered for automatic renewal.** The batch endpoint bypassed the only path that tracks a domain for renewal, so batch certs silently expired about 90 days later; they are now tracked.
+- **Issuance verifies the certificate materialised before reporting success.** certbot exiting 0 without producing files no longer returns success or pushes an empty file set to the disaster-recovery backend.
+- **The renewal scheduler tolerates a missed fire** (`misfire_grace_time` plus `coalesce`), and a **host-local cross-process lock** ensures only one process renews when several share a data directory — no more duplicate ACME orders under multiple workers/containers.
+- **No more false "renewed" telemetry.** When certbot reports "not yet due", the run is recorded as not-due instead of stamping a renewal.
+
+### Keys and secrets
+
+- **Renewed private keys keep mode 0600** (they were left world-readable under a cloud storage backend).
+- **The default local storage backend writes atomically** (temp file, fsync, rename): no truncated key or cert on a crash, and no world-readable window.
+- **DNS credential files are created 0600 atomically** (`O_EXCL`); the **Google service-account key** now gets a per-operation random name (it was a fixed, never-deleted path) and orphaned key files are swept.
+- **API keys cannot escalate.** A key can no longer be minted with a higher role or broader domain scope than its creator, and admin keys can no longer be domain-scoped (a false containment).
+- **`GET /api/settings` no longer exposes the user roster or API-key inventory to non-admins.**
+
+### Audit trail
+
+- **Signed checkpoints are now verified.** `GET /api/audit/verify` cross-checks the chain against the latest signed checkpoint, so a truncation, rewind, or rewrite at or below it fails verification — the checkpoints were previously written but never read back. `docs/compliance.md` states the exact guarantee and its limits.
+
+### Storage and operations
+
+- **A storage-backend fallback is surfaced.** If the configured cloud/remote backend fails to initialise, `/health` reports `degraded` instead of silently using local disk.
+- **Kubernetes and compose docs corrected.** The production example no longer suggests `replicas: 2` or multiple workers; CertMate runs a single in-process renewal writer.
+
+---
+
 ## v2.19.5 (Patch — create-certificate form presents as a centered modal on desktop)
 
 A presentation refinement to the certificate-creation surface introduced in v2.19.4. No change to the creation flow, fields, focus handling, or issuance protocol.
