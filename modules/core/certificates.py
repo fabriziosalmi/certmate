@@ -207,10 +207,20 @@ class CertificateManager:
 
     @staticmethod
     def _atomic_binary_copy(src: Path, dest: Path) -> None:
-        """Copy a binary file atomically via a temp sibling + rename."""
+        """Copy a binary file atomically via a temp sibling + rename,
+        preserving the source's permission bits.
+
+        Without copymode the temp is created under the process umask
+        (typically 0644). The renew path copies certbot's live files with this
+        helper, so a renewed privkey.pem — which certbot writes 0600 — would
+        land world-readable after every renewal. The local storage backend
+        re-chmods afterwards, but a cloud backend never touches the local file,
+        so it would silently stay 0644. The create path already calls
+        shutil.copymode for exactly this reason; mirror it here."""
         tmp = dest.with_suffix('.tmp')
         try:
             tmp.write_bytes(src.read_bytes())
+            shutil.copymode(src, tmp)
             tmp.replace(dest)
         except Exception:
             tmp.unlink(missing_ok=True)
@@ -1309,6 +1319,21 @@ class CertificateManager:
                         logger.info(f"Copied {cert_file} to {dst_file}")
                         cert_files[cert_file] = data
             
+            # certbot exited 0 — but verify a certificate actually materialised
+            # before reporting success. A missing or empty live dir (a suffixed
+            # lineage like <domain>-0001, a cert-name/path mismatch, or a
+            # partially-failed broken-lineage quarantine) would otherwise return
+            # success=True, audit "created", satisfy monitoring, AND push an
+            # empty file set to the external DR backend — all while no usable
+            # certificate exists on disk. Fail loudly instead.
+            required_files = ('cert.pem', 'privkey.pem')
+            missing_files = [f for f in required_files if not cert_files.get(f)]
+            if missing_files and getattr(self.shell_executor, 'produces_artifacts', True):
+                raise RuntimeError(
+                    "certbot reported success but expected certificate files "
+                    f"are missing for {domain}: {', '.join(missing_files)}"
+                )
+
             # Save metadata. 'staging' is kept alongside the new
             # 'ca_provider' key for backward compatibility: external storage
             # backends (Azure KV tags) and pre-#279 readers still understand
@@ -1555,8 +1580,17 @@ class CertificateManager:
                         f"account '{metadata.get('account_id') or 'default'}' is not configured"
                     )
 
-            result = self.shell_executor.run(cmd, capture_output=True, text=True, env=process_env)
-            
+            # 30-minute cap, mirroring the create path (see the timeout on the
+            # create certbot call). Without it a wedged certbot — an
+            # unresponsive ACME server, or a manual-auth / DNS-alias hook that
+            # never returns — blocks this thread forever. Because check_renewals
+            # renews serially under APScheduler max_instances=1, one hung renew
+            # would silently stop EVERY future automatic renewal until the
+            # process is restarted; a synchronous API/web renew would also pin
+            # its gunicorn worker. Fail fast instead.
+            result = self.shell_executor.run(cmd, capture_output=True, text=True,
+                                             timeout=1800, env=process_env)
+
             if result.returncode == 0:
                 # Copy renewed certificates from the correct live directory
                 src_dir = domain_dir / 'live' / domain
@@ -1607,6 +1641,12 @@ class CertificateManager:
                 from .utils import sanitize_certbot_stderr
                 safe_error = sanitize_certbot_stderr(error_msg) if result.stderr else error_msg
                 raise RuntimeError(f"Renewal failed: {safe_error}")
+        except subprocess.TimeoutExpired:
+            # Explicit, clean message before the generic handler below re-wraps
+            # every exception as "Exception: ...". The finally block still runs,
+            # releasing the domain lock and cleaning up credential files.
+            logger.error(f"Certificate renewal timed out for {domain}")
+            raise RuntimeError("Certificate renewal timed out")
         except Exception as e:
             error_msg = str(e)
             logger.error(f"Exception during certificate renewal for {domain}: {error_msg}")

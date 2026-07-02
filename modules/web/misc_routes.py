@@ -238,7 +238,11 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
         returns a 401 JSON error and does not expose the event stream.
         """
         from flask import Response, stream_with_context, request as _req
-        if auth_manager.is_local_auth_enabled() and auth_manager.has_any_users():
+        # Once the instance is configured (local auth + user, OR an operator
+        # bearer token) require a valid session. SSE can't carry a bearer
+        # header, so a bearer-only deployment simply has no live stream — the
+        # web UI it feeds is locked for that deployment anyway.
+        if not auth_manager.is_setup_mode():
             session_id = _req.cookies.get('certmate_session')
             if not session_id or not auth_manager.validate_session(session_id):
                 return jsonify({'error': 'Unauthenticated'}), 401

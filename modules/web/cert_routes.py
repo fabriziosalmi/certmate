@@ -143,6 +143,46 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
                                    str(domain).replace('\n', ' ').replace('\r', ' '),
                                    str(e).replace('\n', ' ').replace('\r', ' '))
                     results.append({'domain': domain, 'success': False, 'message': 'Certificate creation failed'})
+
+            # Register every successfully-created domain for automatic renewal.
+            # This path calls certificate_manager.create_certificate directly
+            # (fast, no per-domain settings write), but that low-level call does
+            # NOT append the domain to settings['domains'] — only
+            # CertificateService does. check_renewals iterates ONLY that list,
+            # so without this, batch-created certs were never renewed and
+            # expired ~90 days later with no warning. One settings.update (not
+            # one per domain) avoids running a full pre-save backup 50 times.
+            created_domains = [r['domain'] for r in results if r.get('success')]
+            if created_domains:
+                account_id = data.get('account_id')
+
+                def _register_batch(s):
+                    domains_list = s.get('domains', []) or []
+                    present = {
+                        (d if isinstance(d, str) else d.get('domain'))
+                        for d in domains_list
+                    }
+                    for d in created_domains:
+                        if d in present:
+                            continue
+                        domains_list.append({
+                            'domain': d,
+                            'dns_provider': dns_provider,
+                            'dns_account_id': account_id,
+                        })
+                        present.add(d)
+                    s['domains'] = domains_list
+
+                try:
+                    settings_manager.update(_register_batch, 'certificate_created')
+                except Exception as e:
+                    # Certs exist but tracking failed — surface it loudly rather
+                    # than let them silently fall out of the renewal loop.
+                    logger.error(
+                        "Batch certs created but domain registration for renewal "
+                        "failed (%d domains may not auto-renew): %s",
+                        len(created_domains), e,
+                    )
             return jsonify(results)
         except Exception as e:
             logger.error(f"Batch creation failed: {e}")

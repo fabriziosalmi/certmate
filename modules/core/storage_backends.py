@@ -204,32 +204,57 @@ class LocalFileSystemBackend(CertificateStorageBackend):
         self.cert_dir.mkdir(parents=True, exist_ok=True)
         logger.info(f"LocalFileSystemBackend initialized with cert_dir: {self.cert_dir}")
     
+    @staticmethod
+    def _atomic_write_bytes(path: Path, content: bytes, mode: int) -> None:
+        """Write bytes atomically at the given mode: create a temp sibling,
+        set its mode, fsync, then rename over the destination.
+
+        The previous open()-write-then-chmod pattern had two defects on the
+        DEFAULT backend: a crash / SIGKILL (OOM) / disk-full mid-write left a
+        truncated, unrecoverable privkey.pem or cert.pem in place; and the file
+        existed under the umask (often 0644) for the window between create and
+        chmod, briefly exposing the private key. mkstemp creates at 0600; the
+        rename is atomic so readers see either the old file or the whole new
+        one, never a partial write."""
+        import tempfile
+        fd, tmp_name = tempfile.mkstemp(dir=str(path.parent), prefix='.tmp-', suffix=path.name)
+        try:
+            os.chmod(tmp_name, mode)
+            with os.fdopen(fd, 'wb') as f:
+                f.write(content)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_name, path)
+        except Exception:
+            try:
+                os.unlink(tmp_name)
+            except OSError:
+                pass
+            raise
+
     def store_certificate(self, domain: str, cert_files: Dict[str, bytes], metadata: Dict[str, Any]) -> bool:
         """Store certificate files and metadata to local filesystem"""
         try:
             domain_dir = self.cert_dir / domain
             domain_dir.mkdir(parents=True, exist_ok=True)
-            
-            # Store certificate files
+
+            # Store certificate files atomically. Private keys are 0600 from
+            # the first byte; the rest 0644.
             for filename, content in cert_files.items():
-                file_path = domain_dir / filename
-                with open(file_path, 'wb') as f:
-                    f.write(content)
-                # Set secure permissions for private keys
-                if 'key' in filename.lower() or filename == 'privkey.pem':
-                    os.chmod(file_path, 0o600)
-                else:
-                    os.chmod(file_path, 0o644)
-            
-            # Store metadata
-            metadata_file = domain_dir / 'metadata.json'
-            with open(metadata_file, 'w') as f:
-                json.dump(metadata, f, indent=2)
-            os.chmod(metadata_file, 0o600)
+                is_key = 'key' in filename.lower() or filename == 'privkey.pem'
+                self._atomic_write_bytes(domain_dir / filename, content,
+                                         0o600 if is_key else 0o644)
+
+            # Store metadata atomically too.
+            self._atomic_write_bytes(
+                domain_dir / 'metadata.json',
+                json.dumps(metadata, indent=2).encode('utf-8'),
+                0o600,
+            )
 
             logger.info(f"Certificate stored successfully for {domain}")
             return True
-            
+
         except Exception as e:
             logger.error(f"Failed to store certificate for {domain}: {e}")
             return False

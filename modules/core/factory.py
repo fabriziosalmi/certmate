@@ -476,12 +476,21 @@ def initialize_managers(container: AppContainer, app):
             'certificate_created': 'Certificate Created',
             'certificate_renewed': 'Certificate Renewed',
             'certificate_failed': 'Certificate Failed',
+            'deploy_hook_failed': 'Deploy Hook Failed',
         }
         title = event_titles.get(event)
         if not title:
             return
         domain = data.get('domain', 'unknown')
         message = f"{title}: {domain}"
+        # Deploy-hook failures carry the hook name and the error; surface both
+        # so the alert is actionable without opening the audit log.
+        hook_name = data.get('hook_name')
+        if hook_name:
+            message += f" (hook: {hook_name})"
+        err = data.get('error')
+        if err:
+            message += f" — {err}"
         notifier.notify(event, title, message, details=data)
 
     event_bus.add_listener(_on_event)
@@ -631,7 +640,21 @@ def setup_scheduler(container: AppContainer):
         jobstores = {
             'default': SQLAlchemyJobStore(engine=_engine)
         }
-        scheduler = BackgroundScheduler(jobstores=jobstores)
+        # Job-default hardening for the renewal cron jobs:
+        #  - misfire_grace_time: APScheduler's default is 1 second, so a fire
+        #    that the scheduler can't service within 1s of its scheduled time
+        #    (thread starvation, a prior run overrunning, brief unavailability)
+        #    is silently DROPPED, not run late. A 6-hour grace lets a delayed
+        #    02:00 renewal check still run instead of skipping the day.
+        #  - coalesce: if several fires were missed while unavailable, run the
+        #    check once on catch-up rather than back-to-back.
+        #  - max_instances: never let two renewal runs overlap.
+        job_defaults = {
+            'coalesce': True,
+            'misfire_grace_time': 21600,  # 6 hours
+            'max_instances': 1,
+        }
+        scheduler = BackgroundScheduler(jobstores=jobstores, job_defaults=job_defaults)
         scheduler.start()
 
         scheduler.add_job(
@@ -981,6 +1004,25 @@ def create_app(test_config=None):
     configure_app(container, app, test_config)
     initialize_managers(container, app)
     app.config['MANAGERS'] = container.managers
+
+    # Loud, once-at-startup warning when the instance will serve every request
+    # as admin because nothing is configured yet. An operator who exposes
+    # CertMate before completing setup — or who never set API_BEARER_TOKEN —
+    # otherwise has no signal that the whole API is wide open.
+    try:
+        _auth = container.managers.get('auth')
+        if _auth is not None and _auth.is_setup_mode():
+            logger.warning(
+                "CertMate is running UNAUTHENTICATED: no local-auth user and no "
+                "operator-provided API bearer token, so EVERY request is served "
+                "as admin. Anyone who can reach this instance has full control "
+                "of all certificates and private keys. Complete setup (create an "
+                "admin and enable local auth) or set API_BEARER_TOKEN before "
+                "exposing it."
+            )
+    except Exception as e:
+        logger.debug(f"Setup-mode startup check failed: {e}")
+
     setup_api(container, app)
     register_web_routes(app, container.managers)
     setup_csrf_protection(app)
