@@ -1,0 +1,23 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "certmate-sdk"
+version = "0.1.0"
+description = "Thin Python client for the CertMate REST API"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Fabrizio Salmi", email = "fabrizio.salmi@gmail.com" }]
+keywords = ["certmate", "acme", "letsencrypt", "tls", "certificates", "sdk"]
+# Deliberately tiny: the SDK is an HTTP client, not the server. No certbot,
+# no DNS plugins, no cloud SDKs — `pip install certmate-sdk` stays light.
+dependencies = ["httpx>=0.24"]
+
+[project.urls]
+Homepage = "https://github.com/fabriziosalmi/certmate"
+Source = "https://github.com/fabriziosalmi/certmate/tree/main/clients/certmate-sdk"
+
+[tool.hatch.build.targets.wheel]
+packages = ["certmate"]

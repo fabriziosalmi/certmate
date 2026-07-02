@@ -1,0 +1,30 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "certmate-cli"
+version = "0.1.0"
+description = "CertMate command-line interface — the SSL certificate lifecycle from your terminal"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Fabrizio Salmi", email = "fabrizio.salmi@gmail.com" }]
+keywords = ["certmate", "acme", "letsencrypt", "tls", "cli"]
+# Built ON the SDK (never the reverse). typer for the command surface, rich
+# for tables/spinners. Still light — no server deps.
+dependencies = [
+    "certmate-sdk>=0.1.0",
+    "typer>=0.9",
+    "rich>=13",
+]
+
+[project.scripts]
+certmate = "certmate_cli.main:app"
+
+[project.urls]
+Homepage = "https://github.com/fabriziosalmi/certmate"
+Source = "https://github.com/fabriziosalmi/certmate/tree/main/clients/certmate-cli"
+
+[tool.hatch.build.targets.wheel]
+packages = ["certmate_cli"]
