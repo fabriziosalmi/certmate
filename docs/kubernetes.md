@@ -68,11 +68,20 @@ kubectl -n certificate-management top pod -l app=certmate
 
 ## Replica Count
 
-Run `replicas: 1` unless all mutable paths (`/app/data`, `/app/certificates`,
-`/app/backups`, `/app/logs`) are backed by storage that is safe for concurrent
-writers and you have validated scheduler/renewal behavior for multiple pods.
-Azure Key Vault can store certificates remotely, but CertMate still keeps local
-settings, metadata, backups, and runtime state.
+Run `replicas: 1`. CertMate runs its certificate-renewal scheduler **in
+process**, so every pod (and every gunicorn worker) fires the renewal check
+independently. With more than one writer this means duplicate ACME orders and
+the CA's duplicate-certificate rate limit — plus races on the local settings,
+metadata, backups, and runtime state that CertMate keeps even when certificates
+live in a remote backend (Azure Key Vault, Vault, S3).
+
+A host-local `flock` (`/app/data/.renewal.lock`) prevents duplicate renewal
+when multiple workers/containers share the **same** data volume on one host,
+but it does **not** coordinate pods on separate volumes/nodes. So only raise
+the replica count if every mutable path (`/app/data`, `/app/certificates`,
+`/app/backups`, `/app/logs`) is a single volume shared by all pods AND you have
+validated renewal behavior — otherwise keep one writer and, for availability,
+front a single active instance rather than scaling this Deployment.
 
 ## Deployment Status Badge Shows "Backend: Unreachable"
 
