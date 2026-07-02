@@ -23,9 +23,13 @@ app = typer.Typer(no_args_is_help=True, add_completion=False,
 cert_app = typer.Typer(no_args_is_help=True, help="Manage certificates.")
 dns_app = typer.Typer(no_args_is_help=True, help="DNS providers and accounts.")
 audit_app = typer.Typer(no_args_is_help=True, help="Tamper-evident audit trail.")
+backup_app = typer.Typer(no_args_is_help=True, help="Backups.")
+deploy_app = typer.Typer(no_args_is_help=True, help="Post-issuance deploy hooks.")
 app.add_typer(cert_app, name="cert")
 app.add_typer(dns_app, name="dns")
 app.add_typer(audit_app, name="audit")
+app.add_typer(backup_app, name="backup")
+app.add_typer(deploy_app, name="deploy")
 
 out = Console()
 err = Console(stderr=True)
@@ -64,6 +68,31 @@ def _run(fn):
         return fn()
     except CertMateError as e:
         _die(str(e))
+
+
+def _records(data) -> List[dict]:
+    """Coerce a list/dict API response into a list of record dicts."""
+    if isinstance(data, list):
+        return [d for d in data if isinstance(d, dict)]
+    if isinstance(data, dict):
+        for key in ("items", "accounts", "backups", "results", "data", "unified"):
+            v = data.get(key)
+            if isinstance(v, list):
+                return [d for d in v if isinstance(d, dict)]
+    return []
+
+
+def _table(records: List[dict], columns: List[str]) -> None:
+    """Print a rich table of ``records`` over ``columns`` (missing keys -> '-')."""
+    if not records:
+        out.print("[dim]nothing to show.[/]")
+        return
+    table = Table(box=None, header_style="bold")
+    for c in columns:
+        table.add_column(c.upper())
+    for r in records:
+        table.add_row(*[str(r.get(c, "-")) for c in columns])
+    out.print(table)
 
 
 # --------------------------------------------------------------------------
@@ -200,6 +229,17 @@ def cert_rm(ctx: typer.Context, domain: str,
     out.print(f"[green]deleted[/] {domain}.")
 
 
+@cert_app.command("reissue")
+def cert_reissue(ctx: typer.Context, domain: str,
+                 san: Optional[str] = typer.Option(None, "--san", help="Comma-separated SAN domains.")):
+    """Reissue a certificate (e.g. to change its SAN list)."""
+    body = {}
+    if san is not None:
+        body["san_domains"] = [s.strip() for s in san.split(",") if s.strip()]
+    _run(lambda: _client(ctx).reissue_certificate(domain, **body))
+    out.print(f"[green]reissued[/] {domain}.")
+
+
 # --------------------------------------------------------------------------
 # dns
 # --------------------------------------------------------------------------
@@ -214,7 +254,8 @@ def dns_providers(ctx: typer.Context):
 def dns_accounts(ctx: typer.Context,
                  provider: Optional[str] = typer.Argument(None, help="Filter by provider.")):
     """List configured DNS accounts."""
-    out.print(_run(lambda: _client(ctx).list_dns_accounts(provider)))
+    data = _run(lambda: _client(ctx).list_dns_accounts(provider))
+    _table(_records(data), ["provider", "account_id", "name", "email"])
 
 
 @dns_app.command("test")
@@ -249,6 +290,42 @@ def audit_verify(ctx: typer.Context):
     if cp is not None:
         out.print(f"  signed checkpoint: {'[green]verified[/]' if cp else '[dim]not cross-checked[/]'}"
                   f"{(' @ seq ' + str(res.get('checkpoint_seq'))) if res.get('checkpoint_seq') is not None else ''}")
+    if not ok:
+        raise typer.Exit(1)
+
+
+# --------------------------------------------------------------------------
+# backup
+# --------------------------------------------------------------------------
+
+@backup_app.command("ls")
+def backup_ls(ctx: typer.Context):
+    """List backups."""
+    data = _run(lambda: _client(ctx).list_backups())
+    # Items are {filename, metadata:{size, created, backup_reason, ...}} — flatten.
+    flat = [{**r, **(r.get("metadata") or {})} for r in _records(data)]
+    _table(flat, ["filename", "backup_reason", "created", "size"])
+
+
+@backup_app.command("create")
+def backup_create(ctx: typer.Context):
+    """Create a backup now."""
+    res = _run(lambda: _client(ctx).create_backup())
+    name = (res or {}).get("filename") or (res or {}).get("backup") or "ok"
+    out.print(f"[green]backup created[/] {name}")
+
+
+# --------------------------------------------------------------------------
+# deploy
+# --------------------------------------------------------------------------
+
+@deploy_app.command("run")
+def deploy_run(ctx: typer.Context, domain: str):
+    """Run the configured deploy hooks for a domain now."""
+    res = _run(lambda: _client(ctx).deploy_certificate(domain))
+    ok = bool((res or {}).get("ok", True))
+    out.print(f"deploy [bold]{domain}[/]: {'[green]ok[/]' if ok else '[red]failed[/]'}"
+              f"{(' — ' + str(res.get('message'))) if isinstance(res, dict) and res.get('message') else ''}")
     if not ok:
         raise typer.Exit(1)
 

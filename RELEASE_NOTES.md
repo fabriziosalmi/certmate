@@ -1,3 +1,17 @@
+## v2.21.0 (Feature — terminal SDK + CLI, and an audit-verify semantics fix)
+
+Adds first-class terminal clients for the CertMate API and fixes a monitoring false-alarm in the audit-verify endpoint.
+
+### Terminal clients (new)
+
+- **`certmate-sdk`** and **`certmate-cli`**, in-repo under `clients/`, layered so the CLI is built on the SDK (never the reverse) and packaged so `pip install certmate-sdk` stays light (httpx only — no server, no certbot). The SDK (`from certmate import Client`) wraps the same `/api/...` surface the MCP server drives; the CLI (`certmate cert create/ls/info/renew/reissue/rm`, `dns`, `backup`, `deploy run`, `audit verify`, `health`) renders tables and adds two things the terminal lacked: `--wait` on create (polls the async job with a spinner) and a client-side `--dry-run` (validate the domain and preflight the DNS provider, issue nothing). A Swagger contract test keeps the SDK's endpoints in lockstep with the API.
+
+### Audit trail
+
+- **`GET /api/audit/verify` no longer reports a brand-new instance as broken.** An instance that has audited nothing yet has no chain file; that returned `409` (identical to a tamper), so a monitoring probe false-alarmed on a fresh deploy. It now returns `200` with `state='absent'` when nothing has ever been audited, and keeps `409` for a genuine break — including a chain file that was deleted after a signed checkpoint attested it existed.
+
+---
+
 ## v2.20.0 (Security and reliability hardening — audit sweep across renewal, keys, storage, auth, and the audit trail)
 
 A focused hardening pass from an adversarial audit of the certificate engine, deploy hooks, storage/backup, auth/RBAC, and the audit trail. Every change ships with regression tests. Two operator-visible behaviour changes are called out first — read them before upgrading.

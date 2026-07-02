@@ -111,8 +111,11 @@ class Client:
         return self.wait_for_job(job.job_id, on_progress=on_progress) if wait else job
 
     def renew_certificate(self, domain: str, *, force: bool = False) -> Dict[str, Any]:
+        # Always send an (empty) JSON body so endpoints that read request.json
+        # don't 415 on a bodyless POST.
         params = {"force": "true"} if force else None
-        return self._request("POST", f"/api/certificates/{domain}/renew", params=params) or {}
+        return self._request("POST", f"/api/certificates/{domain}/renew",
+                             params=params, json={}) or {}
 
     def reissue_certificate(self, domain: str, **body: Any) -> Dict[str, Any]:
         return self._request("POST", f"/api/certificates/{domain}/reissue", json=body) or {}
@@ -131,7 +134,7 @@ class Client:
                              json={"enabled": bool(enabled)}) or {}
 
     def deploy_certificate(self, domain: str) -> Dict[str, Any]:
-        return self._request("POST", f"/api/certificates/{domain}/deploy") or {}
+        return self._request("POST", f"/api/certificates/{domain}/deploy", json={}) or {}
 
     # -- async jobs ----------------------------------------------------------
     def get_job(self, job_id: str) -> Job:
@@ -186,3 +189,10 @@ class Client:
 
     def health(self) -> Dict[str, Any]:
         return self._request("GET", "/health") or {}
+
+    # -- backups -------------------------------------------------------------
+    def list_backups(self) -> Any:
+        return self._request("GET", "/api/web/backups")
+
+    def create_backup(self, *, reason: str = "manual") -> Dict[str, Any]:
+        return self._request("POST", "/api/web/backups/create", json={"reason": reason}) or {}

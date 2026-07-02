@@ -217,6 +217,13 @@ class AuditLogger:
             'bundle_signature': bundle_signature,
         }
 
+    def has_checkpoints(self) -> bool:
+        """True if at least one signed checkpoint has been written. Used to tell
+        a genuinely fresh instance (no chain, no checkpoints — benign) from a
+        chain file that was DELETED after checkpoints attested it existed
+        (tamper)."""
+        return bool(audit_chain.read_checkpoints(self.audit_checkpoint_file))
+
     def verify_chain(self) -> Dict[str, Any]:
         """Verify this instance's hash chain. Wraps
         :func:`audit_chain.verify_chain` (internal consistency) and then, when a
