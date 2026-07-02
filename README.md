@@ -10,6 +10,7 @@
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![Docker](https://img.shields.io/badge/docker-ready-blue)](https://hub.docker.com/)
 [![API Documentation](https://img.shields.io/badge/API-Swagger-green)](#api-usage)
+[![PyPI - certmate-cli](https://img.shields.io/pypi/v/certmate-cli?label=certmate-cli&color=3775A9)](https://pypi.org/project/certmate-cli/)
 [![CI](https://github.com/fabriziosalmi/certmate/actions/workflows/ci.yml/badge.svg)](https://github.com/fabriziosalmi/certmate/actions/workflows/ci.yml)
 [![Build Multi-Platform Docker Images](https://github.com/fabriziosalmi/certmate/actions/workflows/docker-multiplatform.yml/badge.svg)](https://github.com/fabriziosalmi/certmate/actions/workflows/docker-multiplatform.yml)
 [![CodeQL](https://github.com/fabriziosalmi/certmate/actions/workflows/codeql.yml/badge.svg)](https://github.com/fabriziosalmi/certmate/actions/workflows/codeql.yml)
@@ -23,7 +24,7 @@
  
 ![screenshot1](screenshot_1.png)
 
-[Quick Start](#quick-start-with-docker) • [Documentation](#documentation) • [Installation](#installation-methods) • [DNS Providers](#supported-dns-providers) • [CA Providers](docs/ca-providers.md) • [Storage Backends](#certificate-storage-configuration) • [Backup and Recovery](#backup-and-recovery) • [API Reference](#api-usage)
+[Quick Start](#quick-start-with-docker) • [CLI](#command-line-interface) • [Documentation](#documentation) • [Installation](#installation-methods) • [DNS Providers](#supported-dns-providers) • [CA Providers](docs/ca-providers.md) • [Storage Backends](#certificate-storage-configuration) • [Backup and Recovery](#backup-and-recovery) • [API Reference](#api-usage)
 
 </div>
 
@@ -38,6 +39,32 @@ CertMate is the open-source core of a small, focused toolset:
 - **[nis2-public](https://github.com/fabriziosalmi/nis2-public)** — NIS2 continuous posture management & remediation.
 
 **Enterprise / high-scale** — multi-tenant, mTLS, white-label and NIS2-aligned deployments are available through *CertMate-ng* (source-available, BSL 1.1, EU-built). For access or a deployment discussion, email **fabrizio.salmi@gmail.com**.
+
+---
+
+## Command-line interface
+
+The whole certificate lifecycle from your terminal — `pip install certmate-cli`:
+
+![CertMate CLI — the full SSL certificate lifecycle from the terminal](demo/certmate-cli.gif)
+
+```bash
+pip install certmate-cli
+
+export CERTMATE_URL=https://certmate.example.com
+export CERTMATE_TOKEN=...                 # omit on a fresh (setup-mode) instance
+
+certmate health
+certmate cert create app.example.com --dns cloudflare --wait   # issue, block until live
+certmate cert ls
+certmate cert info app.example.com
+certmate audit verify
+```
+
+`certmate-cli` is a thin layer over **`certmate-sdk`** (`pip install certmate-sdk`) — a small,
+`httpx`-based Python client for the same REST API the web UI and MCP server drive. Both are
+first-party, live in [`clients/`](clients/), and are published to PyPI. The clip above is a real
+issuance over DNS-01 (Let's Encrypt staging); see [`demo/`](demo/).
 
 ---
 
