@@ -481,6 +481,37 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
                 return jsonify({'error': 'Key name must be ≤ 64 characters'}), 400
 
             user = getattr(request, 'current_user', {}) or {}
+
+            # Prevent privilege escalation through key creation. require_role
+            # ('admin') gates this endpoint by role LEVEL only — it never checks
+            # the caller's own allowed_domains — so a *scoped* admin key
+            # (role=admin, allowed_domains=[...]) could otherwise mint an
+            # unrestricted admin key and escape its own scope. A minted key must
+            # never exceed its creator's role or domain scope.
+            from ..core.auth import ROLE_HIERARCHY
+            caller_role = user.get('role', 'viewer')
+            caller_scope = user.get('allowed_domains')  # None = unrestricted
+            requested_level = ROLE_HIERARCHY.get(role)
+            if requested_level is not None and requested_level > ROLE_HIERARCHY.get(caller_role, -1):
+                return jsonify({'error': 'Cannot create a key with a role higher than your own'}), 403
+            if caller_scope is not None:
+                # A domain-scoped creator may only mint keys scoped within its
+                # own domains: never an unscoped key, never a domain outside
+                # scope. An empty list (locked-out key) is more restrictive, so
+                # it is allowed.
+                if allowed_domains is None:
+                    return jsonify({'error': 'A domain-scoped key cannot create an unscoped key'}), 403
+                requested_scope = allowed_domains if isinstance(allowed_domains, list) else [allowed_domains]
+                outside = [d for d in requested_scope
+                           if not auth_manager_ref.domain_matches_scope(d, caller_scope)]
+                if outside:
+                    return jsonify({'error': 'Cannot grant domains outside your own key scope'}), 403
+            if role == 'admin' and allowed_domains is not None:
+                # admin bypasses domain scope on every non-per-domain endpoint
+                # (backups, settings, key management), so a "scoped admin" key is
+                # a false containment. Reject it; use operator for scoped access.
+                return jsonify({'error': 'Admin keys cannot be domain-scoped; use the operator role for scoped access'}), 400
+
             success, result_data = auth_manager_ref.create_api_key(
                 name, role=role, expires_at=expires_at,
                 created_by=user.get('username'),
