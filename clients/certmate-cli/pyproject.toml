@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "certmate-cli"
-version = "0.1.0"
+version = "0.1.1"
 description = "CertMate command-line interface — the SSL certificate lifecycle from your terminal"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -31,7 +31,7 @@ classifiers = [
 # Built ON the SDK (never the reverse). typer for the command surface, rich
 # for tables/spinners. Still light — no server deps.
 dependencies = [
-    "certmate-sdk>=0.1.0",
+    "certmate-sdk>=0.1.1",
     "typer>=0.9",
     "rich>=13",
 ]
