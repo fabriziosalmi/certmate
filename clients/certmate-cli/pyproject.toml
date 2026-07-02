@@ -11,6 +11,23 @@ requires-python = ">=3.9"
 license = { text = "MIT" }
 authors = [{ name = "Fabrizio Salmi", email = "fabrizio.salmi@gmail.com" }]
 keywords = ["certmate", "acme", "letsencrypt", "tls", "cli"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Security",
+    "Topic :: System :: Systems Administration",
+    "Topic :: Utilities",
+]
 # Built ON the SDK (never the reverse). typer for the command surface, rich
 # for tables/spinners. Still light — no server deps.
 dependencies = [
