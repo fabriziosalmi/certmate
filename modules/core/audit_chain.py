@@ -247,3 +247,64 @@ def build_manifest(records, *, fingerprint, public_key_pem, exported_at,
 def manifest_signing_bytes(manifest: Dict[str, Any]) -> bytes:
     """Canonical bytes the bundle signature is computed over."""
     return canon_bytes(manifest)
+
+
+def checkpoint_signing_bytes(checkpoint: Dict[str, Any]) -> bytes:
+    """Canonical bytes a checkpoint signature is computed over. MUST match the
+    fields write_checkpoint signs (seq, hash, count, timestamp)."""
+    return canon_bytes({
+        "seq": checkpoint.get("seq"),
+        "hash": checkpoint.get("hash"),
+        "count": checkpoint.get("count"),
+        "timestamp": checkpoint.get("timestamp"),
+    })
+
+
+def read_checkpoints(path):
+    """Read all parseable checkpoint records (oldest first). Stdlib-only;
+    verifying each checkpoint's signature is the caller's job (needs crypto)."""
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            raw_lines = [ln for ln in f.read().splitlines() if ln.strip()]
+    except OSError:
+        return []
+    out = []
+    for raw in raw_lines:
+        try:
+            cp = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(cp, dict) and isinstance(cp.get("seq"), int) and cp.get("hash"):
+            out.append(cp)
+    return out
+
+
+def cross_check_checkpoint(records, checkpoint) -> Dict[str, Any]:
+    """Structural consistency of an internally-verified chain against a signed
+    checkpoint. Returns ``{ok, reason}``.
+
+    Detects tail truncation / rewind / rewrite at or below the checkpoint: the
+    chain hash commits transitively, so rewriting ANY entry in the prefix
+    changes the hash at ``checkpoint['seq']``, and truncating below it removes
+    that seq. An attacker who cannot sign a fresh checkpoint (no signing key)
+    therefore cannot roll the chain back past the last checkpoint undetected.
+
+    NOTE: does NOT verify the checkpoint signature (the caller does, with
+    crypto) and does NOT bind an operator who holds the signing key — full
+    operator binding needs off-box anchoring (see the module docstring)."""
+    cp_seq = checkpoint.get("seq")
+    cp_hash = checkpoint.get("hash")
+    if not isinstance(cp_seq, int) or not cp_hash:
+        return {"ok": True, "reason": "checkpoint has no usable seq/hash"}
+    match = next((r for r in records if r.get("seq") == cp_seq), None)
+    if match is None:
+        return {"ok": False, "reason": (
+            f"chain no longer contains seq {cp_seq}, which a signed checkpoint "
+            f"attests to: the tail was truncated or rewound below the checkpoint"
+        )}
+    if match.get("hash") != cp_hash:
+        return {"ok": False, "reason": (
+            f"chain hash at seq {cp_seq} does not match the signed checkpoint: "
+            f"the chain was rewritten at or before that point"
+        )}
+    return {"ok": True, "reason": f"consistent with signed checkpoint at seq {cp_seq}"}
