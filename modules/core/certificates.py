@@ -207,10 +207,20 @@ class CertificateManager:
 
     @staticmethod
     def _atomic_binary_copy(src: Path, dest: Path) -> None:
-        """Copy a binary file atomically via a temp sibling + rename."""
+        """Copy a binary file atomically via a temp sibling + rename,
+        preserving the source's permission bits.
+
+        Without copymode the temp is created under the process umask
+        (typically 0644). The renew path copies certbot's live files with this
+        helper, so a renewed privkey.pem — which certbot writes 0600 — would
+        land world-readable after every renewal. The local storage backend
+        re-chmods afterwards, but a cloud backend never touches the local file,
+        so it would silently stay 0644. The create path already calls
+        shutil.copymode for exactly this reason; mirror it here."""
         tmp = dest.with_suffix('.tmp')
         try:
             tmp.write_bytes(src.read_bytes())
+            shutil.copymode(src, tmp)
             tmp.replace(dest)
         except Exception:
             tmp.unlink(missing_ok=True)
@@ -1309,6 +1319,21 @@ class CertificateManager:
                         logger.info(f"Copied {cert_file} to {dst_file}")
                         cert_files[cert_file] = data
             
+            # certbot exited 0 — but verify a certificate actually materialised
+            # before reporting success. A missing or empty live dir (a suffixed
+            # lineage like <domain>-0001, a cert-name/path mismatch, or a
+            # partially-failed broken-lineage quarantine) would otherwise return
+            # success=True, audit "created", satisfy monitoring, AND push an
+            # empty file set to the external DR backend — all while no usable
+            # certificate exists on disk. Fail loudly instead.
+            required_files = ('cert.pem', 'privkey.pem')
+            missing_files = [f for f in required_files if not cert_files.get(f)]
+            if missing_files and getattr(self.shell_executor, 'produces_artifacts', True):
+                raise RuntimeError(
+                    "certbot reported success but expected certificate files "
+                    f"are missing for {domain}: {', '.join(missing_files)}"
+                )
+
             # Save metadata. 'staging' is kept alongside the new
             # 'ca_provider' key for backward compatibility: external storage
             # backends (Azure KV tags) and pre-#279 readers still understand
@@ -1555,9 +1580,36 @@ class CertificateManager:
                         f"account '{metadata.get('account_id') or 'default'}' is not configured"
                     )
 
-            result = self.shell_executor.run(cmd, capture_output=True, text=True, env=process_env)
-            
+            # 30-minute cap, mirroring the create path (see the timeout on the
+            # create certbot call). Without it a wedged certbot — an
+            # unresponsive ACME server, or a manual-auth / DNS-alias hook that
+            # never returns — blocks this thread forever. Because check_renewals
+            # renews serially under APScheduler max_instances=1, one hung renew
+            # would silently stop EVERY future automatic renewal until the
+            # process is restarted; a synchronous API/web renew would also pin
+            # its gunicorn worker. Fail fast instead.
+            result = self.shell_executor.run(cmd, capture_output=True, text=True,
+                                             timeout=1800, env=process_env)
+
             if result.returncode == 0:
+                # certbot `renew` exits 0 BOTH when it renews and when nothing
+                # was due. If CertMate's renewal_threshold_days is wider than
+                # certbot's own ~30-day window, check_renewals calls this daily,
+                # certbot no-ops, and stamping renewed_at + reporting a renewal
+                # would be false telemetry that masks a genuinely stuck renewal.
+                # Detect the no-op and report it honestly (renewed=False) without
+                # touching the metadata timestamp.
+                _out = f"{result.stdout or ''}\n{result.stderr or ''}".lower()
+                if 'not yet due for renewal' in _out or 'no renewals were attempted' in _out:
+                    logger.info(f"Certificate for {domain} is not yet due for renewal; no action taken")
+                    self._invalidate_certificate_info_cache(domain)
+                    return {
+                        'success': True,
+                        'renewed': False,
+                        'domain': domain,
+                        'message': 'Certificate not yet due for renewal',
+                    }
+
                 # Copy renewed certificates from the correct live directory
                 src_dir = domain_dir / 'live' / domain
                 dest_dir = domain_dir
@@ -1595,6 +1647,7 @@ class CertificateManager:
                 self._write_pfx(domain)
                 return {
                     'success': True,
+                    'renewed': True,
                     'domain': domain,
                     'message': "Certificate renewed successfully"
                 }
@@ -1607,6 +1660,12 @@ class CertificateManager:
                 from .utils import sanitize_certbot_stderr
                 safe_error = sanitize_certbot_stderr(error_msg) if result.stderr else error_msg
                 raise RuntimeError(f"Renewal failed: {safe_error}")
+        except subprocess.TimeoutExpired:
+            # Explicit, clean message before the generic handler below re-wraps
+            # every exception as "Exception: ...". The finally block still runs,
+            # releasing the domain lock and cleaning up credential files.
+            logger.error(f"Certificate renewal timed out for {domain}")
+            raise RuntimeError("Certificate renewal timed out")
         except Exception as e:
             error_msg = str(e)
             logger.error(f"Exception during certificate renewal for {domain}: {error_msg}")
@@ -1640,7 +1699,7 @@ class CertificateManager:
             logger.info("Automatic renewal is globally disabled; skipping renewal check")
             return {'checked': 0, 'renewed': 0, 'failed': 0,
                     'skipped_disabled': 0, 'skipped_invalid': 0,
-                    'auto_renew_disabled': True}
+                    'skipped_not_due': 0, 'auto_renew_disabled': True}
 
         # Migrate settings format if needed
         settings = self.settings_manager.migrate_domains_format(settings)
@@ -1648,7 +1707,8 @@ class CertificateManager:
         logger.info("Checking for certificates that need renewal")
 
         summary = {'checked': 0, 'renewed': 0, 'failed': 0,
-                   'skipped_disabled': 0, 'skipped_invalid': 0}
+                   'skipped_disabled': 0, 'skipped_invalid': 0,
+                   'skipped_not_due': 0}
 
         for domain_entry in settings.get('domains', []):
             try:
@@ -1691,14 +1751,22 @@ class CertificateManager:
                 if cert_info and cert_info.get('needs_renewal'):
                     logger.info(f"Renewing certificate for {domain}")
                     try:
-                        self.renew_certificate(domain)
-                        summary['renewed'] += 1
-                        logger.info(f"Successfully renewed certificate for {domain}")
-                        self._audit_scheduled_renew(domain, 'success')
-                        # Fire deploy hooks for background renewals too (#329):
-                        # the manual path publishes this via the executor, the
-                        # scheduler must publish it itself.
-                        self._publish_renewed_event(domain)
+                        res = self.renew_certificate(domain)
+                        # certbot can report "not yet due" (renewed=False) when
+                        # the configured threshold is wider than certbot's own
+                        # window. That is NOT a real renewal — don't count it,
+                        # audit it, or fire deploy hooks; it retries next run.
+                        if isinstance(res, dict) and res.get('renewed') is False:
+                            summary['skipped_not_due'] += 1
+                            logger.info(f"{domain} not yet due for renewal per certbot; will retry next run")
+                        else:
+                            summary['renewed'] += 1
+                            logger.info(f"Successfully renewed certificate for {domain}")
+                            self._audit_scheduled_renew(domain, 'success')
+                            # Fire deploy hooks for background renewals too (#329):
+                            # the manual path publishes this via the executor, the
+                            # scheduler must publish it itself.
+                            self._publish_renewed_event(domain)
                     except Exception as e:
                         summary['failed'] += 1
                         logger.error(f"Failed to renew certificate for {domain}: {e}")
@@ -1718,9 +1786,10 @@ class CertificateManager:
             )
         logger.info(
             "Renewal check complete: %d checked, %d renewed, %d failed, "
-            "%d disabled, %d invalid",
+            "%d disabled, %d invalid, %d not-due",
             summary['checked'], summary['renewed'], summary['failed'],
             summary['skipped_disabled'], summary['skipped_invalid'],
+            summary['skipped_not_due'],
         )
         return summary
 

@@ -4,6 +4,7 @@ import sys
 import threading
 import time
 import traceback
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Optional
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -476,12 +477,21 @@ def initialize_managers(container: AppContainer, app):
             'certificate_created': 'Certificate Created',
             'certificate_renewed': 'Certificate Renewed',
             'certificate_failed': 'Certificate Failed',
+            'deploy_hook_failed': 'Deploy Hook Failed',
         }
         title = event_titles.get(event)
         if not title:
             return
         domain = data.get('domain', 'unknown')
         message = f"{title}: {domain}"
+        # Deploy-hook failures carry the hook name and the error; surface both
+        # so the alert is actionable without opening the audit log.
+        hook_name = data.get('hook_name')
+        if hook_name:
+            message += f" (hook: {hook_name})"
+        err = data.get('error')
+        if err:
+            message += f" — {err}"
         notifier.notify(event, title, message, details=data)
 
     event_bus.add_listener(_on_event)
@@ -580,14 +590,72 @@ def _run_manager_job(manager_key: str, method_name: str):
             )
 
 
+@contextmanager
+def _renewal_process_lock():
+    """Best-effort, host-local cross-process lock for scheduled renewal.
+
+    The APScheduler renewal jobs fire in EVERY process. CertMate ships as a
+    single process (Dockerfile: gunicorn --workers 1), but if an operator
+    raises the worker count or runs multiple containers sharing the SAME data
+    dir, each process would run check_renewals concurrently — issuing duplicate
+    ACME orders and burning the CA's duplicate-certificate rate limit. This
+    flock lets exactly one holder proceed; the others skip this tick.
+
+    Advisory + host-local: flock does NOT coordinate replicas on SEPARATE
+    filesystems (e.g. k8s pods without a shared volume) — that needs external
+    coordination; see the deployment docs. Yields True when the caller may run,
+    False when another process already holds the lock. On any error (no data
+    dir, platform without fcntl) it yields True: the single-process default is
+    correct and must never be blocked by the guard itself."""
+    lock_file = None
+    acquired = False
+    try:
+        data_dir = _flask_app.config.get('DATA_DIR') if _flask_app is not None else None
+        if not data_dir:
+            yield True
+            return
+        try:
+            import fcntl
+        except ImportError:
+            yield True  # non-POSIX host; single-process assumption holds
+            return
+        lock_file = open(Path(data_dir) / '.renewal.lock', 'w')
+        try:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            acquired = True
+        except OSError:
+            acquired = False
+        yield acquired
+    finally:
+        if lock_file is not None:
+            try:
+                if acquired:
+                    import fcntl
+                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+            finally:
+                lock_file.close()
+
+
 def _certificate_renewal_job():
-    """Picklable wrapper for certificate renewal check"""
-    _run_manager_job('certificates', 'check_renewals')
+    """Picklable wrapper for certificate renewal check, guarded so only one
+    process runs it when several share a data dir (see _renewal_process_lock)."""
+    with _renewal_process_lock() as may_run:
+        if not may_run:
+            logger.info("Scheduled certificate renewal skipped: another process "
+                        "holds the renewal lock (multiple workers/containers on a "
+                        "shared data dir); one process renews.")
+            return
+        _run_manager_job('certificates', 'check_renewals')
 
 
 def _client_certificate_renewal_job():
-    """Picklable wrapper for client certificate renewal check"""
-    _run_manager_job('client_certificates', 'check_renewals')
+    """Picklable wrapper for client certificate renewal check (same guard)."""
+    with _renewal_process_lock() as may_run:
+        if not may_run:
+            logger.info("Scheduled client-certificate renewal skipped: another "
+                        "process holds the renewal lock.")
+            return
+        _run_manager_job('client_certificates', 'check_renewals')
 
 
 def _weekly_digest_job():
@@ -631,7 +699,21 @@ def setup_scheduler(container: AppContainer):
         jobstores = {
             'default': SQLAlchemyJobStore(engine=_engine)
         }
-        scheduler = BackgroundScheduler(jobstores=jobstores)
+        # Job-default hardening for the renewal cron jobs:
+        #  - misfire_grace_time: APScheduler's default is 1 second, so a fire
+        #    that the scheduler can't service within 1s of its scheduled time
+        #    (thread starvation, a prior run overrunning, brief unavailability)
+        #    is silently DROPPED, not run late. A 6-hour grace lets a delayed
+        #    02:00 renewal check still run instead of skipping the day.
+        #  - coalesce: if several fires were missed while unavailable, run the
+        #    check once on catch-up rather than back-to-back.
+        #  - max_instances: never let two renewal runs overlap.
+        job_defaults = {
+            'coalesce': True,
+            'misfire_grace_time': 21600,  # 6 hours
+            'max_instances': 1,
+        }
+        scheduler = BackgroundScheduler(jobstores=jobstores, job_defaults=job_defaults)
         scheduler.start()
 
         scheduler.add_job(
@@ -981,6 +1063,25 @@ def create_app(test_config=None):
     configure_app(container, app, test_config)
     initialize_managers(container, app)
     app.config['MANAGERS'] = container.managers
+
+    # Loud, once-at-startup warning when the instance will serve every request
+    # as admin because nothing is configured yet. An operator who exposes
+    # CertMate before completing setup — or who never set API_BEARER_TOKEN —
+    # otherwise has no signal that the whole API is wide open.
+    try:
+        _auth = container.managers.get('auth')
+        if _auth is not None and _auth.is_setup_mode():
+            logger.warning(
+                "CertMate is running UNAUTHENTICATED: no local-auth user and no "
+                "operator-provided API bearer token, so EVERY request is served "
+                "as admin. Anyone who can reach this instance has full control "
+                "of all certificates and private keys. Complete setup (create an "
+                "admin and enable local auth) or set API_BEARER_TOKEN before "
+                "exposing it."
+            )
+    except Exception as e:
+        logger.debug(f"Setup-mode startup check failed: {e}")
+
     setup_api(container, app)
     register_web_routes(app, container.managers)
     setup_csrf_protection(app)

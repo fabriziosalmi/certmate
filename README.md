@@ -1864,7 +1864,14 @@ services:
   certmate:
     image: certmate:latest
     deploy:
-      replicas: 2
+      # CertMate runs an in-process renewal scheduler and per-domain locks, so
+      # it must run as a SINGLE writer. Multiple replicas (or >1 gunicorn
+      # worker) each fire the renewal check and would issue duplicate ACME
+      # orders and hit the CA's duplicate-certificate rate limit. A host-local
+      # flock guards multiple workers/containers on a *shared* data volume, but
+      # the safe default is one writer. For HA, front a single active instance
+      # rather than scaling this service.
+      replicas: 1
       resources:
         limits:
           cpus: '1.0'
@@ -1874,8 +1881,8 @@ services:
           memory: 256M
     environment:
       - FLASK_ENV=production
-      - GUNICORN_WORKERS=4
-      - GUNICORN_THREADS=2
+      - GUNICORN_WORKERS=1
+      - GUNICORN_THREADS=8
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s

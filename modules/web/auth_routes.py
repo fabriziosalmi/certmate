@@ -14,7 +14,11 @@ def register_auth_routes(app, managers, require_web_auth, auth_manager,
     @app.route('/login', methods=['GET'])
     def login_page():
         """Login page"""
-        if not auth_manager.is_local_auth_enabled() or not auth_manager.has_any_users():
+        # In setup mode no login is needed (and index is open); bounce there.
+        # Once configured — including a bearer-token-only deployment where the
+        # web UI is locked — render the form instead, so index (now gated) does
+        # not redirect back here in a loop.
+        if auth_manager.is_setup_mode():
             return redirect(url_for('index'))
         # If the visitor already has a valid session cookie, skip rendering
         # the login form entirely and bounce to the dashboard. Doing this
@@ -122,7 +126,7 @@ def register_auth_routes(app, managers, require_web_auth, auth_manager,
         clients don't need to special-case 401 during onboarding.
         """
         try:
-            if not auth_manager.is_local_auth_enabled() or not auth_manager.has_any_users():
+            if auth_manager.is_setup_mode():
                 return jsonify({
                     'user': {'username': 'setup_user', 'role': 'admin'},
                     'auth_mode': 'bypass',

@@ -5,6 +5,7 @@ Supports both API token and local username/password authentication
 """
 
 import logging
+import os
 import secrets
 import hashlib
 import hmac
@@ -25,6 +26,11 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 ROLE_HIERARCHY = {'viewer': 0, 'operator': 1, 'admin': 2}
+
+# Distinct from None/False so the operator-bearer-token detection can be
+# memoised (env/file are fixed for the process lifetime) without a False
+# result being mistaken for "not computed yet".
+_UNSET = object()
 
 
 class AuthManager:
@@ -742,6 +748,60 @@ class AuthManager:
     def has_any_users(self):
         """Check if any users exist"""
         return len(self._get_users()) > 0
+
+    @staticmethod
+    def _detect_operator_bearer_token():
+        """Return True iff the operator explicitly provided a *valid* API
+        bearer token via API_BEARER_TOKEN_FILE or API_BEARER_TOKEN.
+
+        settings.json ALWAYS carries an api_bearer_token (an auto-generated
+        random one when the operator supplied none — see
+        _bearer_token_from_env_or_generate), so the mere presence of a stored
+        token is NOT a usable signal: enforcing the auto-generated one would
+        lock a fresh install out (the operator never sees it). The env/file the
+        operator set is the signal that they configured auth and know the
+        token."""
+        from .utils import validate_api_token
+        token_file = os.getenv('API_BEARER_TOKEN_FILE')
+        if token_file:
+            try:
+                from pathlib import Path
+                token = Path(token_file).read_text().strip()
+            except Exception:
+                return False
+            return bool(token) and validate_api_token(token)[0]
+        env_token = os.getenv('API_BEARER_TOKEN')
+        if env_token:
+            return validate_api_token(env_token)[0]
+        return False
+
+    def has_operator_bearer_token(self):
+        """Memoised wrapper over _detect_operator_bearer_token (env/file are
+        fixed for the process lifetime)."""
+        cached = getattr(self, '_operator_bearer_token', _UNSET)
+        if cached is _UNSET:
+            cached = self._detect_operator_bearer_token()
+            self._operator_bearer_token = cached
+        return cached
+
+    def is_setup_mode(self):
+        """True on a genuinely unconfigured instance, where unauthenticated
+        access is allowed so the operator can bootstrap (reach the UI, create
+        the first admin, enable local auth).
+
+        Becomes False as soon as ANY credential the operator controls exists:
+          * local auth is enabled AND at least one user exists, OR
+          * the operator provided an API bearer token (API_BEARER_TOKEN[_FILE]).
+
+        Once False, every gated surface requires a real credential. This closes
+        the gap where an API-only operator set API_BEARER_TOKEN — which
+        docs/api.md documents as *required on all endpoints* — but the token
+        was never enforced because local auth stayed off, leaving the whole
+        instance world-open. A fresh install with no operator-provided token is
+        unchanged: it stays in setup mode so onboarding works."""
+        if self.has_operator_bearer_token():
+            return False
+        return not (self.is_local_auth_enabled() and self.has_any_users())
     
     def _authenticate_request(self):
         """Resolve the caller's identity for the current Flask request.
@@ -764,9 +824,11 @@ class AuthManager:
         owns it, instead of leaking across two helpers.
         """
         try:
-            # Allow unauthenticated access during initial setup
-            # (matches require_web_auth: bypass if auth disabled OR no users)
-            if not self.is_local_auth_enabled() or not self.has_any_users():
+            # Allow unauthenticated access ONLY during genuine initial setup.
+            # is_setup_mode() is False as soon as the operator configures a
+            # credential (local auth + a user, OR an API bearer token), so a
+            # configured bearer token is always enforced here.
+            if self.is_setup_mode():
                 return {'username': 'setup_user', 'role': 'admin'}, None
 
             # Check for session-based auth first (for web UI)

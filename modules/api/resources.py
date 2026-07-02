@@ -374,6 +374,23 @@ def create_api_resources(api, models, managers):
                 if overall == 'healthy':
                     overall = 'degraded'
 
+            # Surface a storage-backend fallback: if the configured cloud/remote
+            # backend failed to initialise, CertMate silently uses local disk —
+            # the operator thinks certs are in Azure/Vault/S3 but they are not.
+            # Only a log line signalled this before; make monitoring see it.
+            storage = managers.get('storage')
+            if storage is not None and hasattr(storage, 'get_fallback_backend'):
+                try:
+                    fell_back_from = storage.get_fallback_backend()
+                except Exception:
+                    fell_back_from = None
+                if fell_back_from:
+                    checks['storage'] = f'fallback_to_local (configured backend: {fell_back_from})'
+                    if overall == 'healthy':
+                        overall = 'degraded'
+                else:
+                    checks['storage'] = 'ok'
+
             status_code = 200 if overall != 'unhealthy' else 500
             return {'status': overall, 'checks': checks}, status_code
 
