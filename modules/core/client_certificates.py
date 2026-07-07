@@ -411,18 +411,26 @@ class ClientCertificateManager:
 
                 logger.info(f"Revoked certificate: {identifier} (reason: {reason})")
 
-                # Update CRL with ALL revoked serials (not just the current one)
+                # Update CRL with ALL revoked certs (not just the current one).
+                # Pass full records — serial + persisted revoked_at + reason —
+                # not bare serials: otherwise generate_crl would stamp every
+                # entry (including previously-revoked certs) with today's date,
+                # rewriting older entries' revocation_date on each regeneration.
                 all_revoked = self.list_client_certificates(revoked=True)
-                revoked_serials = []
+                revoked_records = []
                 for cert in all_revoked:
                     try:
                         sn = int(cert.get('serial_number', 0))
-                        if sn > 0:
-                            revoked_serials.append(sn)
                     except (ValueError, TypeError):
                         continue
-                if revoked_serials:
-                    self.private_ca.generate_crl(revoked_serials)
+                    if sn > 0:
+                        revoked_records.append({
+                            'serial_number': sn,
+                            'revoked_at': cert.get('revoked_at'),
+                            'reason_revoked': cert.get('reason_revoked'),
+                        })
+                if revoked_records:
+                    self.private_ca.generate_crl(revoked_records)
 
                 return True, None
 
@@ -467,6 +475,11 @@ class ClientCertificateManager:
                 # Update old metadata to mark as superseded
                 old_metadata["superseded_by"] = cert_data["identifier"]
                 old_metadata["superseded_at"] = utc_now().isoformat()
+                # Belt-and-braces against runaway re-renewal: renewal_enabled
+                # gates check_renewals, so disabling it on the superseded cert
+                # guarantees the scheduled sweep can never re-pick this old cert
+                # even if the superseded_by guard were ever weakened.
+                old_metadata["renewal_enabled"] = False
 
                 for metadata_file in self.client_certs_dir.glob(f"*/{identifier}/metadata.json"):
                     with open(metadata_file, 'w') as f:
@@ -522,6 +535,15 @@ class ClientCertificateManager:
             for cert_metadata in certificates:
                 checked_count += 1
 
+                # A superseded certificate has ALREADY been replaced by a newer
+                # cert (renew_certificate set superseded_by on it and left its
+                # expires_at untouched). Renewing it again would supersede the
+                # replacement's ancestor once more every run, issuing a fresh
+                # CA-signed key+cert per tick forever (runaway issuance, disk
+                # fill). It is never a renewal candidate.
+                if cert_metadata.get("superseded_by"):
+                    continue
+
                 # Check if renewal is enabled
                 if not cert_metadata.get("renewal_enabled", False):
                     continue
@@ -535,6 +557,14 @@ class ClientCertificateManager:
                     expires_at = datetime.fromisoformat(expires_at_str)
                 except (ValueError, TypeError):
                     logger.warning(f"Skipping certificate {cert_metadata.get('identifier')}: invalid expires_at format")
+                    continue
+
+                # An already-expired certificate is past the point of renewal:
+                # anything relying on it is already broken, and auto-renewing it
+                # would spawn a replacement whose ancestor stays expired, so the
+                # sweep would re-pick it every run. Skip expired certs; only
+                # within-threshold (not-yet-expired) certs are renewed below.
+                if utc_now() >= expires_at:
                     continue
 
                 # Check expiration date

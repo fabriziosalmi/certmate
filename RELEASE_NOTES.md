@@ -1,3 +1,28 @@
+## v2.21.2 (Hardening — client-certificate lifecycle, private CA and CRL correctness)
+
+The next-layer audit that followed v2.21.1 swept the modules the hardening pass had not touched (client certificates, the private CA, CRL distribution, the deployment-status cache). Every defect below was confirmed by independent reproduction before being fixed.
+
+### Client certificates
+
+- **Scheduled renewal no longer re-renews a superseded certificate forever.** `check_renewals` selected certificates on the `revoked` flag alone, so once a renewal produced a replacement and marked the old certificate `superseded_by`, the old one still matched the renewal window and was re-renewed the next day — and the day after — issuing a fresh CA-signed key and certificate every single day indefinitely. Renewal now skips superseded and already-expired certificates, and a renewed certificate has `renewal_enabled` cleared so it can never be picked up again.
+
+### Renewal locking
+
+- **The TLS-certificate and client-certificate renewal jobs no longer share one lock.** Both jobs used the same `data/.renewal.lock`, so a long TLS-cert renewal run (many domains, DNS propagation waits) held the lock past the client-certificate job's start time and silently made it skip — mTLS certificates could quietly expire unrenewed. Each job now uses its own lock file. The documented fallback contract is also honored correctly: an error *acquiring* the lock (e.g. a read-only data volume) falls back to proceeding (single-process is the default), while genuine contention still skips.
+
+### Private CA and CRL
+
+- **The CA private key is written atomically at mode 0600.** It was created with a default-mode `open()` and `chmod`'d afterward, leaving a window in which another local user could read the root CA private key, and a crash mid-write could corrupt the CA. It is now written via an atomic create-exclusive-0600 path (matching the storage backend). The rest of the CA material — the CA certificate, its metadata and the CRL — is written the same atomic way and kept 0600 as well: certmate serves these over HTTP rather than having other local users read them off disk, so the CA directory no longer needs to be world-readable.
+- **CRL regeneration preserves real revocation dates and reasons.** Every entry's `revocation_date` was rewritten to "now" on each regeneration and no reason code was emitted, so re-revoking any certificate silently backdated/forward-dated all existing entries — breaking date-sensitive validation. Entries now carry each certificate's persisted revocation timestamp and a `CRLReason` where one is known.
+- **A stale CRL is regenerated on read.** `get_crl_pem` never refreshed an on-disk CRL whose `nextUpdate` had passed, so after that moment relying parties received an expired CRL — strict validators reject it outright, soft-fail validators skip revocation entirely and accept a revoked certificate. It now regenerates lazily when the on-disk CRL has expired.
+- **Defense in depth: the CA signer no longer trusts CSR extensions.** `sign_certificate_request` copied every extension from the submitted CSR verbatim; a CSR carrying `BasicConstraints(ca=True)` would have minted a CA-capable certificate under CertMate's root. The signer now pins `BasicConstraints(ca=False)` and a fixed leaf key usage, carrying over only the Subject Alternative Name. (No shipped route passes an untrusted CSR today; this closes the latent hole.)
+
+### Deployment status
+
+- **The deployment-status dashboard no longer shows a stale "deployed and matching" verdict after a renewal.** The status cache was never invalidated when a certificate was issued, renewed or reissued, so for up to the cache lifetime the dashboard could report a certificate as correctly deployed while the load balancer still served the old one (the deploy hook may not have run yet). The cache now evicts a domain's entry on the `certificate_created`/`certificate_renewed` events, covering the API, web and scheduled-renewal paths in one place.
+
+---
+
 ## v2.21.1 (Hardening — truth in reporting, across server, clients and CI)
 
 One theme: every path that could report success while silently not doing the thing now tells the truth. Found by a full-project adversarial review (parallel audit passes over the codebase, the shipped clients, the previously-open P2 tail, GitHub state and CI), and every defect below was hand-verified in code before being fixed.
