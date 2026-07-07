@@ -23,6 +23,17 @@ updates:
         update-types:
           - "minor"
           - "patch"
+    ignore:
+      # The ACME stack is deliberately held (issue #103): certbot 3.x/4.x and
+      # josepy 2.x break the pinned resolver set, so dependabot must not keep
+      # reopening bumps for it. Core packages: ignore ALL updates.
+      - dependency-name: "certbot"
+      - dependency-name: "josepy"
+      - dependency-name: "acme"
+      # DNS plugins version-track certbot majors; block majors only so
+      # compatible minor/patch plugin fixes still arrive.
+      - dependency-name: "certbot-dns-*"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "npm"
     directories:
@@ -44,3 +55,12 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    ignore:
+      # New python interpreter lines are blocked by the held ACME stack
+      # (python 3.14 breaks via josepy — issue #103). The base tag is
+      # `python:3.12-slim-trixie`, so dependabot classifies 3.12 -> 3.14 as
+      # semver-MINOR (major stays 3); CPython's breaking boundary is its
+      # minor number, so both major and minor are ignored here. Patch and
+      # digest updates within 3.12 still flow.
+      - dependency-name: "python"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
