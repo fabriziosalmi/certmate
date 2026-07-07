@@ -265,9 +265,25 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
             if not provider:
                 return jsonify({'error': 'Provider name required'}), 400
 
+            # An explicit config always wins. Without one, test the stored
+            # account (body 'account_id', or the same default-account
+            # resolution issuance uses) so a preflight like
+            # `certmate dns test cloudflare` can succeed against a
+            # configured server instead of always failing on empty config.
+            # No stored account leaves config empty -> the usual 400.
+            used_account = None
+            if not config:
+                stored_config, used_account = dns_manager.get_dns_provider_account_config(
+                    provider, data.get('account_id'))
+                if stored_config:
+                    config = stored_config
+
             success, message = dns_manager.test_provider(provider, config)
             if success:
-                return jsonify({'message': message})
+                response = {'message': message}
+                if used_account:
+                    response['used_account'] = used_account
+                return jsonify(response)
             return jsonify({'error': message}), 400
         except Exception as e:
             logger.error(f"Provider test failed: {e}")
