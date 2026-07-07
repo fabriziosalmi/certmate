@@ -133,3 +133,53 @@ def test_patch_rejects_out_of_range_port(tmp_path):
     )
 
     assert resp.status_code == 400
+
+
+def test_patch_sets_deployment_host(tmp_path):
+    """deployment_host is the supported way to verify a wildcard cert (#381):
+    it is persisted to metadata and echoed back."""
+    saved = {}
+    app = _build_app(_managers(tmp_path, saved))
+
+    resp = app.test_client().patch(
+        '/api/certificates/example.com',
+        json={'deployment_host': 'www.example.com'},
+    )
+
+    assert resp.status_code == 200
+    assert saved.get('deployment_host') == 'www.example.com'
+    assert resp.get_json().get('deployment_host') == 'www.example.com'
+
+
+def test_patch_rejects_bad_deployment_host(tmp_path):
+    """A probe target is a bare hostname: reject scheme/path/whitespace and a
+    wildcard label (you deploy a cert on a concrete name)."""
+    saved = {}
+    app = _build_app(_managers(tmp_path, saved))
+    client = app.test_client()
+    for bad in ('https://www.example.com', 'www.example.com/x', '*.example.com', 'a b'):
+        resp = client.patch(
+            '/api/certificates/example.com',
+            json={'deployment_host': bad},
+        )
+        assert resp.status_code == 400, bad
+        assert 'deployment_host' not in saved
+
+
+def test_patch_null_deletes_deployment_host(tmp_path):
+    saved = {}
+    managers = _managers(tmp_path, saved)
+    # Seed the on-disk metadata with a host, then delete it with a null PATCH.
+    metadata_file = tmp_path / 'example.com' / 'metadata.json'
+    metadata_file.write_text(json.dumps({
+        'dns_provider': 'cloudflare',
+        'deployment_host': 'www.example.com',
+    }))
+    app = _build_app(managers)
+
+    resp = app.test_client().patch(
+        '/api/certificates/example.com',
+        json={'deployment_host': None},
+    )
+    assert resp.status_code == 200
+    assert 'deployment_host' not in saved

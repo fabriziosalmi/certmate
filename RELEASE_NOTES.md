@@ -1,3 +1,17 @@
+## v2.21.3 (Bugfix — wildcard deployment status, rootless-podman / arbitrary-UID support)
+
+Two reported issues from real users.
+
+### Deployment status
+
+- **Wildcard certificates no longer show a false "wrong certificate" error** (#381, recurring from #207). The deployment probe connected to the bare apex for a wildcard — `*.example.com` was probed at `example.com:443` — but a wildcard does not cover its own apex (RFC 6125), so the apex normally serves a different certificate and the fingerprint comparison failed on every wildcard, producing a permanent red "Wrong Cert" that the reporter also could not diagnose. Now: a wildcard without an explicit deployment host is reported as a neutral **"Not Verifiable"** status rather than a mismatch; a new optional per-certificate **`deployment_host`** (settable via `PATCH /api/certificates/<domain>`) lets you point the probe at a covered name (e.g. `www.example.com`) to get a real green check; and every result now carries a diagnostic `mismatch_reason` plus `probe_host`, `served_subject`, `served_fingerprint` and `expected_fingerprint`, wired into the dashboard error-icon tooltip so a mismatch finally explains which host was probed and what did not match. (The domain-alias, suspected in the report, was confirmed to play no role — it only affects DNS-01 validation, not where the certificate is served.)
+
+### Deployment / packaging
+
+- **Rootless podman and arbitrary-UID runtimes are now supported** (#380). The image created its writable directories owner-only (mode 700, UID 1000), so under rootless podman or OpenShift — where the process runs as an arbitrary UID in group 0 — CertMate failed with Permission denied on `/app/data`, `/app/certificates`, and the rest, forcing a manual `chown`. The image now follows the OpenShift arbitrary-UID pattern: the writable trees are group-0 owned and group-writable (setgid), so the app runs correctly as any UID that is a member of group 0, with no host-side chown. The default `USER 1000` is unchanged for normal Docker/Compose, and every secret (CA key, audit signing key, DNS credential files, settings) is still written owner-only 0600. Verified end-to-end running the container as `--user 4711:0` with fresh volumes. New "Rootless podman / OpenShift" section in docs/docker.md covers named-volume (zero-prep), bind-mount, podman-compose and Kubernetes `fsGroup: 0` usage.
+
+---
+
 ## v2.21.2 (Hardening — client-certificate lifecycle, private CA and CRL correctness)
 
 The next-layer audit that followed v2.21.1 swept the modules the hardening pass had not touched (client certificates, the private CA, CRL distribution, the deployment-status cache). Every defect below was confirmed by independent reproduction before being fixed.

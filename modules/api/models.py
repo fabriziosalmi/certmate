@@ -300,6 +300,14 @@ def create_api_models(api):
         # a scoped API key (e.g. 'DOMAIN_OUT_OF_SCOPE'). Without listing it
         # here, @api.marshal_with would silently strip it from the 403 body.
         'code': fields.String(description='Optional machine-readable error code'),
+        # Deployment-probe diagnostics (#381). @api.marshal_with strips any key
+        # not declared here, so these MUST be listed for the UI to receive them.
+        'probe_host': fields.String(description='Host the probe actually connected to / SNI-d'),
+        'probe_status': fields.String(description="Probe outcome: 'match', 'mismatch', 'unreachable', or 'unverifiable' (wildcard with no deployment_host)"),
+        'mismatch_reason': fields.String(description='Human-readable explanation of a mismatch or why the status is inconclusive'),
+        'served_subject': fields.String(description='Subject CN/SAN of the certificate actually served on a mismatch'),
+        'served_fingerprint': fields.String(description='Fingerprint prefix of the served certificate on a mismatch'),
+        'expected_fingerprint': fields.String(description='Fingerprint prefix of the stored certificate on a mismatch'),
         'browser': fields.Nested(browser_deployment_model, description='Browser-reported reachability')
     })
 

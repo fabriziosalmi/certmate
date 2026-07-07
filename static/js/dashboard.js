@@ -455,6 +455,12 @@
         } else {
             if (result && result.error === 'backend-unavailable') {
                 chipClass = 'bg-surface-2 text-muted'; statusIcon = 'fa-exclamation'; statusText = 'Unavailable';
+            } else if (result && result.probe_status === 'unverifiable') {
+                // A wildcard cert with no deployment_host cannot be probed
+                // unambiguously (a wildcard does not cover its apex, #381).
+                // Show a neutral info chip, NOT a red "Wrong Cert" — the
+                // mismatch_reason tooltip explains how to make it verifiable.
+                chipClass = 'bg-info-surface text-info-fg'; statusIcon = 'fa-circle-info'; statusText = 'Not Verifiable';
             } else if (result && result.deployed && result.certificate_match === true) {
                 chipClass = 'bg-success-surface text-success-fg'; statusIcon = 'fa-check'; statusText = 'Deployed';
             } else if (result && result.reachable && result.certificate_match === false) {
@@ -506,6 +512,13 @@
         }
         if (result && result.timestamp) {
             title += ' at ' + result.timestamp;
+        }
+        // Surface WHY a probe reports a problem (#381): which host was probed
+        // and what it served vs expected, or why a wildcard is not verifiable.
+        // Hovering the error icon now explains the mismatch instead of leaving
+        // the operator to guess.
+        if (result && result.mismatch_reason) {
+            title += ' — ' + result.mismatch_reason;
         }
         // Compact icon chip: role glyph + status glyph side by side. The full
         // "Role: Status …" string lives in title (tooltip) and aria-label, and
@@ -1487,6 +1500,11 @@
                     if (roleResult.timestamp) {
                         title += ' at ' + roleResult.timestamp;
                     }
+                }
+                // Keep the diagnostic reason on the post-probe tooltip too, so
+                // the explanation survives a live "Check deployment now" (#381).
+                if (roleResult && roleResult.mismatch_reason) {
+                    title += ' — ' + roleResult.mismatch_reason;
                 }
                 statusElement.title = title;
                 statusElement.setAttribute('aria-label', title);
