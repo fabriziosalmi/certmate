@@ -1,3 +1,40 @@
+## v2.21.1 (Hardening — truth in reporting, across server, clients and CI)
+
+One theme: every path that could report success while silently not doing the thing now tells the truth. Found by a full-project adversarial review (six parallel audit passes over the codebase, the shipped clients, the previously-open P2 tail, GitHub state and CI), and every defect below was hand-verified in code before being fixed.
+
+### Server
+
+- **Renewal no-op detection now works in production.** The v2.20.0 "not yet due" detection matched certbot's notification text, but the renew command ran with `--quiet`, which routes exactly that text to /dev/null in certbot 2.10.0 — so the detection was dead code outside tests: a daily no-op renew stamped `renewed_at`, counted as renewed, audited success and fired deploy hooks. Detection is now artifact-based (the SHA256 of the live `cert.pem` before vs after certbot, with the text sentinel kept as a cross-check), `--quiet` is gone, the renew API and web responses carry a machine-readable `renewed: true/false` field, and the `certificate_renewed` event only fires when something was actually renewed.
+- **Audit verify fails closed on unreadable integrity evidence.** An I/O error reading the checkpoint file was treated as "no checkpoints ever existed", so wiping the chain file while making checkpoints unreadable yielded a benign `200 state='absent'`. Checkpoint read errors are now distinct from absence and verify answers `409` ("checkpoint file unreadable"). The absent-vs-tampered decision also moved from reason-string matching to a structured `chain_file_missing` flag.
+- **Four DNS providers were silently broken; all fixed and now contract-tested.** Porkbun wrote the wrong credential keys (community fix by @cre8ivejp, #363/#364); the same hunt found Vultr (`dns_vultr_key`), ArvanCloud (`dns_arvancloud_api_token`) and Dynu (wrong plugin name `dns-dynudns` — the plugin registers `dns-dynu` — plus wrong credential key) equally dead. A new contract test pins the credential-file key names CertMate writes, the plugin entry-point names and the flag namespaces against what each pinned certbot plugin actually reads, for every provider — a silently dead provider can no longer pass CI.
+- **DNS provider preflight usable from the terminal.** `POST /api/dns/test-provider` with an empty config now falls back to the stored account credentials for that provider (explicit config still wins), which is what a CLI preflight means.
+- **`reset_admin_password.py` actually creates the admin user** (#383). On a fresh settings.json with no `users` key, the script printed "reset successfully" while writing a file with no user at all — the operator stayed locked out of a brand-new install. Regression tests now run the script end-to-end against users-less, empty-users and existing-admin settings files.
+- **Deploy-hook output is redacted before it is stored.** Hook stdout/stderr flowed verbatim into deploy history, the audit log and the append-only hash chain — any secret a hook echoed became unredactable without breaking the chain. Output now passes the secret-pattern sanitizer at the single choke point that feeds all three.
+- **Google service-account keys no longer linger on disk**: the per-operation SA JSON is deleted in the same `finally` that removes the credentials INI (the hourly orphan sweep stays as belt and braces).
+- **Group-writable custom DNS hook scripts are rejected**, not just warned about, matching the existing world-writable rule.
+- **The edit-certificate drawer is titled "Edit Certificate"** instead of presenting as create (#382).
+
+### Terminal clients 0.1.2 (`certmate-sdk`, `certmate-cli`)
+
+0.1.1 shipped several commands that lied; 0.1.2 makes them honest and is the recommended upgrade for anyone scripting against the API.
+
+- **`audit verify` no longer exits 0 on a tampered chain.** The CLI matched the human reason string, which is identical for "fresh instance" (benign) and "chain file deleted after signed checkpoints" (the tamper case the server answers with 409). Benign is now only the server's explicit `state='absent'`; anything else broken exits 1, and the SDK preserves the HTTP status on the result (`_http_status`) so clients cannot lose the distinction.
+- **`cert renew --force` actually forces.** The SDK sent `force` as a query parameter; the server reads the JSON body. It is in the body now.
+- **`cert renew` reports the real outcome** — renewed, "not due" with the server's message, or a neutral "server did not report the outcome" against pre-2.21.1 servers. It never fabricates a green "renewed", and the renew call gets a 600s timeout so real DNS-01 renewals stop dying client-side at 30s.
+- **`--dry-run` and `dns test` work.** The SDK sent a body shape the server never accepted, so the documented preflight failed on every server, including perfectly configured ones. Paired with the server-side stored-credentials fallback above.
+- **No more raw tracebacks.** Transport failures (server down, timeout, keep-alive race) surface as one clean error line via the new `TransportError`; `wait_for_job` tolerates transient poll blips and treats a job evicted after completion as success when the certificate exists.
+- **Smaller truths**: `download` format mapping fixed (json/zip/pem/pfx now request what the server actually serves); staging certificates no longer render `CA: True`; SAN parsing drops empty entries; `--token` on argv warns that `CERTMATE_TOKEN` is preferred (thanks @gitcommit90 for #378/#379, folded in).
+
+### CI and supply chain
+
+- **`:latest` now means released.** The Docker Hub `latest` tag is published only by `v*` tag builds — cut after the release gate that includes real-certificate issuance against Let's Encrypt staging. Pushes to main get branch tags only; previously every merge to main shipped `:latest` with zero real-ACME validation.
+- **The weekly real-ACME e2e can no longer be silently off.** If the scheduled run fires while its gate is disabled, a guard job fails loudly with wiring instructions instead of skipping green forever.
+- **Dependabot stops fighting the pinned ACME stack** (ignore rules for certbot/josepy/acme and plugin majors, referencing #103).
+- **The open `cryptography` CVE alerts are documented, not ignored.** Fixing GHSA-537c-gmf6-5ccf requires cryptography >=48.0.1, which requires pyOpenSSL >=26.2.0, which removed an API that acme 3.3.0 imports — every certbot invocation crashes (verified empirically). SECURITY.md now carries the full constraint chain and the exposure analysis: the vulnerable OpenSSL routine (`PKCS7_verify()`) is unreachable from CertMate's code paths. The real fix is the certbot 5.x migration (#103).
+- **The clients publish workflow is pinned and gated**: `pypa/gh-action-pypi-publish` moved from a mutable branch ref to a commit SHA, and a version-consistency job refuses to publish when the pushed `clients-v*` tag does not match both package versions.
+
+---
+
 ## v2.21.0 (Feature — terminal SDK + CLI, and an audit-verify semantics fix)
 
 Adds first-class terminal clients for the CertMate API and fixes a monitoring false-alarm in the audit-verify endpoint.
