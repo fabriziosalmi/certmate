@@ -71,12 +71,27 @@ ENV PATH="/opt/venv/bin:$PATH"
 # Copy application code
 COPY . .
 
-# Create necessary directories with proper permissions
-RUN mkdir -p certificates data logs backups && \
-    chown -R certmate:certmate /app
-
-# Ensure restrictive permissions for volume mounts (contain private keys/tokens)
-RUN chmod 700 /app/certificates /app/data /app/logs
+# Create the runtime-writable directories and make them arbitrary-UID ready.
+#
+# Under rootless podman (issue #380, Rocky Linux) and OpenShift the container
+# process is remapped and runs as an ARBITRARY UID that is NOT 1000 and is not
+# present in /etc/passwd; that UID is, however, always a member of the root
+# group (GID 0). Follow the OpenShift "arbitrary UID" pattern: give these trees
+# group 0 and make them group-writable + setgid, so ANY such UID can create and
+# rename files here, while the default USER 1000 (plain docker/compose) keeps
+# working exactly as before. A named volume created from this image inherits
+# these perms, so `--user <anyuid>:0` works out of the box.
+#
+# Security: this opens only the DIRECTORIES to the root group (mode 2770 — no
+# world access). Every secret the app writes at runtime (CA private key,
+# audit-signing key, DNS credential files, .secret_key) is created 0600
+# owner-only in code, so directory group-write never exposes a key.
+RUN mkdir -p /app/certificates /app/data /app/logs /app/backups /app/backups/unified && \
+    chown -R certmate:certmate /app && \
+    chgrp -R 0 /app/certificates /app/data /app/logs /app/backups && \
+    chmod -R g=u /app/certificates /app/data /app/logs /app/backups && \
+    chmod -R o-rwx /app/certificates /app/data /app/logs /app/backups && \
+    find /app/certificates /app/data /app/logs /app/backups -type d -exec chmod g+s {} +
 
 # Set environment variables
 ENV FLASK_APP=app.py

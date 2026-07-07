@@ -157,6 +157,100 @@ docker-compose --env-file /path/to/.env up -d
 
 ---
 
+## Rootless podman / OpenShift (arbitrary UID)
+
+The image runs as the non-root user `1000` by default, but it also follows the
+OpenShift **arbitrary-UID** pattern: the runtime-writable directories
+(`/app/data`, `/app/certificates`, `/app/logs`, `/app/backups`) are owned by
+**group 0 (root group)** and are group-writable + setgid. A container process
+running as *any* UID that belongs to group 0 — which is how rootless podman and
+OpenShift launch containers — can therefore create and rename files without a
+manual `chown -R 1000:1000` of the volumes. Secret files the app writes (the CA
+private key, the audit-signing key, DNS credential files, `.secret_key`) are
+always created `0600` owner-only, so the group-writable directories never expose
+a key. (Issue [#380](https://github.com/fabriziosalmi/certmate/issues/380).)
+
+### Named volumes — works out of the box
+
+A fresh **named volume** inherits the image's group-0 permissions, so no host
+preparation is needed regardless of the UID podman assigns:
+
+```bash
+podman run -d --name certmate \
+  -p 8000:8000 \
+  -v certmate_data:/app/data \
+  -v certmate_certificates:/app/certificates \
+  -v certmate_logs:/app/logs \
+  -v certmate_backups:/app/backups \
+  docker.io/fabriziosalmi/certmate:latest
+```
+
+### Bind mounts (host directories)
+
+A bind mount keeps the **host** directory's ownership, which shadows the image's
+permissions. Make the host directories writable by group 0 once, then run:
+
+```bash
+# Create the host dirs group-0 writable (any UID in group 0 can write)
+mkdir -p ./{data,certificates,logs,backups}
+chgrp -R 0 ./{data,certificates,logs,backups}
+chmod -R g+rwX ./{data,certificates,logs,backups}
+
+podman run -d --name certmate \
+  -p 8000:8000 \
+  -v ./data:/app/data \
+  -v ./certificates:/app/certificates \
+  -v ./logs:/app/logs \
+  -v ./backups:/app/backups \
+  docker.io/fabriziosalmi/certmate:latest
+```
+
+Alternatively let podman fix the ownership for you with the `:U` mount option
+(recursively chowns the source to match the container UID/GID):
+
+```bash
+podman run -d --name certmate \
+  -p 8000:8000 \
+  -v ./data:/app/data:U \
+  -v ./certificates:/app/certificates:U \
+  -v ./logs:/app/logs:U \
+  -v ./backups:/app/backups:U \
+  docker.io/fabriziosalmi/certmate:latest
+```
+
+### rootless podman-compose
+
+```yaml
+services:
+  certmate:
+    image: docker.io/fabriziosalmi/certmate:latest
+    ports:
+      - "8000:8000"
+    volumes:
+      - certmate_data:/app/data
+      - certmate_certificates:/app/certificates
+      - certmate_logs:/app/logs
+      - certmate_backups:/app/backups
+    restart: unless-stopped
+
+volumes:
+  certmate_data:
+  certmate_certificates:
+  certmate_logs:
+  certmate_backups:
+```
+
+If startup aborts with *"Required directories are not writable by the CertMate
+process"*, the mount is not group-0 writable — apply the `chgrp 0 … && chmod
+g+rwX …` above, switch to a named volume, or add `:U` to the bind mounts.
+
+> **Kubernetes / OpenShift:** no changes needed. Set
+> `spec.securityContext.fsGroup: 0` (or rely on the default restricted SCC,
+> which already assigns an arbitrary UID in group 0) and the mounted volumes
+> become group-0 writable automatically.
+
+---
+
 ## Upgrading
 
 CertMate keeps all persistent state in the mounted volumes — chiefly `./data`
