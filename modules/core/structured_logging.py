@@ -40,6 +40,18 @@ from functools import wraps
 _log_context: ContextVar[Dict[str, Any]] = ContextVar('log_context', default={})
 
 
+def sanitize_text(s: str) -> str:
+    """Replace PEM blocks and sensitive key=value assignments in unstructured
+    text. Module-level so choke points that PERSIST free-form command output
+    (deploy hooks: history, audit log, immutable hash chain) can redact it
+    before it is stored — the JSON log formatter reuses the same rules."""
+    if not isinstance(s, str):
+        return s
+    s = JSONFormatter.PEM_RE.sub('[PEM REDACTED]', s)
+    s = JSONFormatter.SENSITIVE_KV_RE.sub(r'\1"[REDACTED]"', s)
+    return s
+
+
 class JSONFormatter(logging.Formatter):
     """JSON log formatter for structured logging"""
     
@@ -81,13 +93,7 @@ class JSONFormatter(logging.Formatter):
 
     def _sanitize_string(self, s: str) -> str:
         """Replace PEM blocks and key-value secrets in unstructured text"""
-        if not isinstance(s, str):
-            return s
-        # Redact PEM blocks
-        s = self.PEM_RE.sub('[PEM REDACTED]', s)
-        # Redact inline key-value secrets
-        s = self.SENSITIVE_KV_RE.sub(r'\1"[REDACTED]"', s)
-        return s
+        return sanitize_text(s)
 
     def sanitize_data(self, data: Any, key_context: Optional[str] = None) -> Any:
         """Recursively sanitize keys and values in data structures"""

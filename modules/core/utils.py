@@ -90,8 +90,12 @@ _MULTI_PROVIDER_PLUGIN_FILES = {
 # A data-driven template for building multi-provider config files.
 # Maps the final .ini key to the key from the input config_data dictionary.
 # A tuple value indicates an optional key: (input_key, default_value)
+# The ini key MUST be <entry_point_name with '-'->'_'>_<credential var> as
+# derived by certbot's dns_common (see Authenticator.dest); each mapping is
+# pinned against the plugin source by
+# tests/test_provider_credential_key_contract.py.
 _MULTI_PROVIDER_TEMPLATE_MAP = {
-    'vultr': {'dns_vultr_api_key': 'api_key'},
+    'vultr': {'dns_vultr_key': 'api_key'},
     'dnsmadeeasy': {'dns_dnsmadeeasy_api_key': 'api_key', 'dns_dnsmadeeasy_secret_key': 'secret_key'},
     'nsone': {'dns_nsone_api_key': 'api_key'},
     'rfc2136': {
@@ -105,7 +109,10 @@ _MULTI_PROVIDER_TEMPLATE_MAP = {
     'porkbun': {'dns_porkbun_key': 'api_key', 'dns_porkbun_secret': 'secret_key'},
     'godaddy': {'dns_godaddy_key': 'api_key', 'dns_godaddy_secret': 'secret'},
     'he-ddns': {'dns_he_ddns_username': 'username', 'dns_he_ddns_password': 'password'},
-    'dynudns': {'dns_dynudns_token': 'token'},
+    # certbot-dns-dynudns registers its entry point as 'dns-dynu' with the
+    # credential var 'auth-token', so the ini key prefix is dns_dynu_, not
+    # dns_dynudns_ (see the plugin-name override in GenericMultiProviderStrategy).
+    'dynudns': {'dns_dynu_auth_token': 'token'},
     'desec': {'dns_desec_token': 'api_token'},
     'scaleway': {'dns_scaleway_application_token': 'application_token'},
 }
@@ -586,8 +593,13 @@ def create_azure_config(subscription_id: str, resource_group: str, tenant_id: st
     )
     return _create_config_file("azure", content)
 
-def create_google_config(project_id: str, service_account_key: str) -> Path:
-    """Create Google Cloud DNS credentials file.
+def create_google_config(project_id: str, service_account_key: str) -> Tuple[Path, Path]:
+    """Create Google Cloud DNS credentials files.
+
+    Returns ``(config_file, sa_file)``: the ini handed to certbot AND the
+    service-account JSON it references, so the caller can delete BOTH in its
+    ``finally`` — the ini alone was returned before, leaving the live GCP
+    private key on disk until the orphan sweep (up to an hour later).
 
     The service-account JSON is a live GCP private key. It previously landed at
     a FIXED path (``google-service-account.json``), written 0644-then-chmod, and
@@ -606,7 +618,7 @@ def create_google_config(project_id: str, service_account_key: str) -> Path:
         f.write(service_account_key)
 
     content = f"dns_google_project_id = {project_id}\ndns_google_service_account_key = {str(sa_file)}\n"
-    return _create_config_file("google", content)
+    return _create_config_file("google", content), sa_file
 
 
 def _sweep_orphaned_files(directory: Path, pattern: str, max_age_seconds: int = 3600) -> None:
@@ -679,8 +691,14 @@ def create_namecheap_config(username: str, api_key: str) -> Path:
     return _create_config_file("namecheap", content)
 
 def create_arvancloud_config(api_key: str) -> Path:
-    """Create ArvanCloud DNS credentials file."""
-    content = f"dns_arvancloud_api_key = {api_key}\n"
+    """Create ArvanCloud DNS credentials file.
+
+    certbot-dns-arvancloud (0.1.0) requires the ``dns_arvancloud_api_token``
+    property (certbot_dns_arvancloud/dns_arvancloud.py, _configure_credentials
+    var ``api_token``); the previously written ``dns_arvancloud_api_key`` key
+    made every ArvanCloud issuance fail with "Property not found".
+    """
+    content = f"dns_arvancloud_api_token = {api_key}\n"
     return _create_config_file("arvancloud", content)
 
 def create_infomaniak_config(api_token: str) -> Path:

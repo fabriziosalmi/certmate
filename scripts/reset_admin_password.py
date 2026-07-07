@@ -52,7 +52,11 @@ def main() -> int:
         print(f"ERROR: {settings_path} top-level value is not an object.")
         return 1
 
-    users = data.get("users", {})
+    # setdefault, NOT get: on a fresh install settings.json has no "users"
+    # key at all, and a plain get() hands back an orphan dict that never
+    # lands in the file — the script then reports success while writing no
+    # user at all (issue #383).
+    users = data.setdefault("users", {})
     if not isinstance(users, dict):
         print("WARNING: 'users' key is not a dict; replacing with empty dict.")
         users = {}

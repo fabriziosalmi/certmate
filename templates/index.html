@@ -83,7 +83,10 @@
             <div class="px-6 py-5 border-b border-border bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-700">
                 <div class="flex items-center justify-between">
                     <div>
-                        <h3 class="text-xl font-bold text-foreground flex items-center">
+                        <!-- Title is parameterized by mode: setReissueFormMode
+                             (dashboard.js) swaps it to "Edit Certificate" when
+                             the drawer is opened for an existing cert (#382). -->
+                        <h3 id="drawerTitle" class="text-xl font-bold text-foreground flex items-center">
                             <i class="fas fa-plus-circle mr-2 text-primary"></i>
                             Create New Certificate
                         </h3>

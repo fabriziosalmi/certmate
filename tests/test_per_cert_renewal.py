@@ -210,13 +210,16 @@ def test_renew_pushes_renewed_cert_to_storage_backend(cert_manager):
     live_dir = domain_dir / "live" / domain
     live_dir.mkdir(parents=True)
     (domain_dir / "cert.pem").write_text("old cert")  # existing cert lets renew proceed
-    # The renewed files certbot would have written into live/<domain>/.
-    for name in CERTIFICATE_FILES:
-        (live_dir / name).write_bytes(f"renewed-{name}".encode())
 
-    cert_manager.shell_executor.run = MagicMock(
-        return_value=SimpleNamespace(returncode=0, stdout="", stderr="")
-    )
+    # Stage the renewed files DURING the mocked certbot run, exactly as the
+    # real binary does: no-op detection fingerprints the live cert before and
+    # after the run, so files staged ahead of it would read as "unchanged".
+    def _run(cmd, **kwargs):
+        for name in CERTIFICATE_FILES:
+            (live_dir / name).write_bytes(f"renewed-{name}".encode())
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    cert_manager.shell_executor.run = MagicMock(side_effect=_run)
     cert_manager._write_pfx = MagicMock()  # isolate from the openssl PFX step
 
     storage = MagicMock()
@@ -242,14 +245,19 @@ def test_renew_without_storage_backend_succeeds(cert_manager):
     succeeds — the upload is best-effort, guarded by `if self.storage_manager`."""
     domain = "nostore.example.com"
     domain_dir = cert_manager.cert_dir / domain
-    (domain_dir / "live" / domain).mkdir(parents=True)
+    live_dir = domain_dir / "live" / domain
+    live_dir.mkdir(parents=True)
     (domain_dir / "cert.pem").write_text("old cert")
 
-    cert_manager.shell_executor.run = MagicMock(
-        return_value=SimpleNamespace(returncode=0, stdout="", stderr="")
-    )
+    def _run(cmd, **kwargs):
+        for name in CERTIFICATE_FILES:
+            (live_dir / name).write_bytes(f"renewed-{name}".encode())
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    cert_manager.shell_executor.run = MagicMock(side_effect=_run)
     cert_manager._write_pfx = MagicMock()
 
     assert cert_manager.storage_manager is None
     result = cert_manager.renew_certificate(domain)
     assert result["success"] is True
+    assert result["renewed"] is True

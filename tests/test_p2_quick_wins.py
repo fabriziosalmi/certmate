@@ -7,8 +7,9 @@
    predictable path, no concurrent clobber), 0600, and orphans are swept."""
 import os
 import stat
+from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from flask import Flask, request
@@ -95,3 +96,84 @@ def test_sweep_removes_orphaned_sa_files_only(tmp_path):
     _sweep_orphaned_files(tmp_path, 'google-sa-*.json', max_age_seconds=3600)
     assert not old.exists()      # older than cutoff → swept
     assert fresh.exists()        # recent → kept
+
+
+# --- S1 follow-up: the SA JSON is deleted WITH the operation, not left for
+# the orphan sweep. create_google_config returns both paths, GoogleStrategy
+# records the side file, and the create/renew finally blocks unlink it.
+
+def test_create_google_config_returns_both_secret_paths(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    config_file, sa_file = create_google_config('proj-1', '{"type":"service_account"}')
+    assert config_file.exists() and sa_file.exists()
+    assert sa_file.name.startswith('google-sa-')
+    assert str(sa_file) in config_file.read_text()
+
+
+def test_google_strategy_records_sa_file_for_cleanup(tmp_path, monkeypatch):
+    from modules.core.dns_strategies import GoogleStrategy
+    monkeypatch.chdir(tmp_path)
+    strategy = GoogleStrategy()
+    config_file = strategy.create_config_file(
+        {'project_id': 'p', 'service_account_key': '{"type":"service_account"}'})
+    assert config_file is not None
+    assert [Path(p).name.startswith('google-sa-') for p in strategy.extra_credential_files] == [True]
+
+
+def _google_cert_mgr(tmp_path, shell):
+    from modules.core.certificates import CertificateManager
+    settings_mgr = MagicMock()
+    settings_mgr.load_settings.return_value = {
+        'default_ca': 'letsencrypt', 'challenge_type': 'dns-01',
+        'dns_propagation_seconds': {}, 'default_key_type': 'ecdsa',
+        'default_elliptic_curve': 'secp384r1',
+    }
+    settings_mgr.get_domain_dns_provider.return_value = 'google'
+    dns_mgr = MagicMock()
+    dns_mgr.get_dns_provider_account_config.return_value = (
+        {'project_id': 'p', 'service_account_key': '{"type":"service_account"}'},
+        'default',
+    )
+    return CertificateManager(
+        cert_dir=tmp_path / 'certs', settings_manager=settings_mgr,
+        dns_manager=dns_mgr, storage_manager=None, ca_manager=None,
+        shell_executor=shell,
+    )
+
+
+def test_create_unlinks_google_sa_json_in_finally(tmp_path, monkeypatch):
+    from modules.core.certificates import CertificateManager
+    from modules.core.shell import MockShellExecutor
+    monkeypatch.chdir(tmp_path)
+    shell = MockShellExecutor()
+    shell.set_next_result(returncode=0)
+    mgr = _google_cert_mgr(tmp_path, shell)
+    with patch('modules.core.certificates.check_certbot_plugin_installed',
+               return_value=True), \
+         patch.object(CertificateManager, '_write_pfx', return_value=None):
+        mgr.create_certificate(domain='g.example.com', email='t@example.com',
+                               dns_provider='google', staging=True)
+    cfg = tmp_path / 'letsencrypt' / 'config'
+    assert not list(cfg.glob('google-sa-*.json')), (
+        "the SA JSON (a live GCP private key) must not outlive the operation"
+    )
+    assert not list(cfg.glob('google-*.ini'))
+
+
+def test_renew_unlinks_google_sa_json_in_finally(tmp_path, monkeypatch):
+    import json as _json
+    from modules.core.certificates import CertificateManager
+    from modules.core.shell import MockShellExecutor
+    monkeypatch.chdir(tmp_path)
+    shell = MockShellExecutor()
+    shell.set_next_result(returncode=0, stdout='no renewals were attempted')
+    mgr = _google_cert_mgr(tmp_path, shell)
+    d = tmp_path / 'certs' / 'g.example.com'
+    d.mkdir(parents=True)
+    (d / 'cert.pem').write_bytes(b'existing\n')
+    (d / 'metadata.json').write_text(_json.dumps({'dns_provider': 'google'}))
+    with patch.object(CertificateManager, '_write_pfx', return_value=None):
+        mgr.renew_certificate('g.example.com')
+    cfg = tmp_path / 'letsencrypt' / 'config'
+    assert not list(cfg.glob('google-sa-*.json'))
+    assert not list(cfg.glob('google-*.ini'))

@@ -12,6 +12,8 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from .structured_logging import sanitize_text
+
 logger = logging.getLogger(__name__)
 
 DEFAULT_TIMEOUT = 30
@@ -197,11 +199,17 @@ class DeployManager:
                 env=deploy_env,
             )
             result['exit_code'] = proc.returncode
-            result['stdout'] = (proc.stdout or '')[:4096]
-            result['stderr'] = (proc.stderr or '')[:4096]
+            # Redact secret patterns HERE, at the single point where hook
+            # output enters the result dict: everything downstream (history
+            # file, audit log, the immutable hash chain) stores this dict, so
+            # a hook that echoes a token or key would otherwise persist it
+            # forever. Sanitize before truncating so a PEM block cut by the
+            # size cap cannot dodge the pattern match.
+            result['stdout'] = sanitize_text(proc.stdout or '')[:4096]
+            result['stderr'] = sanitize_text(proc.stderr or '')[:4096]
             result['success'] = proc.returncode == 0
             if proc.returncode != 0:
-                stderr_snippet = (proc.stderr or '').strip()[:200]
+                stderr_snippet = result['stderr'].strip()[:200]
                 if stderr_snippet:
                     result['error'] = f"exit code {proc.returncode}: {stderr_snippet}"
                 else:

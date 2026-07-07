@@ -88,3 +88,32 @@ def test_add_account_buttons_have_modal_field_schema():
         f"providers with an Add-Account button but no getProviderFields schema "
         f"(empty modal): {sorted(missing)}"
     )
+
+
+# ---------------------------------------------------------------------------
+# #382: the unified create/edit certificate drawer must be titled by mode.
+# Static ratchets (no browser): the title node is parameterizable and the
+# edit-mode switch actually swaps it — the drawer used to say "Create New
+# Certificate" while editing an existing certificate.
+# ---------------------------------------------------------------------------
+
+def test_cert_drawer_title_is_parameterizable():
+    html = _read('templates/index.html')
+    m = re.search(r'<h3 id="drawerTitle"[^>]*>.*?</h3>', html, re.S)
+    assert m, "index.html must expose the drawer title as #drawerTitle"
+    assert 'Create New Certificate' in m.group(0), (
+        "the default (create-mode) drawer title must remain the create title"
+    )
+
+
+def test_edit_mode_swaps_drawer_title():
+    js = _read('static/js/dashboard.js')
+    mode_fn = re.search(r'function setReissueFormMode\(.*?\n    \}', js, re.S)
+    assert mode_fn, "setReissueFormMode not found in dashboard.js"
+    body = mode_fn.group(0)
+    assert "getElementById('drawerTitle')" in body, (
+        "edit mode must retitle the drawer (#382), not only swap the submit button"
+    )
+    assert 'Edit Certificate' in body
+    # Leaving edit mode must restore the stashed create-mode markup.
+    assert 'title.dataset.createHtml' in body

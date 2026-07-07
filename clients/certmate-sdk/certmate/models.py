@@ -30,7 +30,11 @@ class Certificate:
             expiry_date=d.get("expiry_date") or d.get("expires") or d.get("not_after"),
             days_until_expiry=d.get("days_until_expiry"),
             needs_renewal=d.get("needs_renewal"),
-            ca_provider=d.get("ca_provider") or d.get("staging"),
+            # Older payloads carry a boolean `staging` flag instead of a CA
+            # name; map it to the staging CA identifier rather than leaking
+            # a bare True into the CA column.
+            ca_provider=d.get("ca_provider")
+            or ("letsencrypt-staging" if d.get("staging") else None),
             dns_provider=d.get("dns_provider"),
             auto_renew=d.get("auto_renew"),
             san_domains=list(d.get("san_domains") or []),

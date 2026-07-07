@@ -69,6 +69,19 @@ class TestIssuanceExecutorLifecycle:
         _wait_terminal(ex, jid)
         bus.publish.assert_called_once_with('certificate_renewed', {'domain': 'a.example.com'})
 
+    def test_noop_renew_does_not_publish_renewed(self):
+        """A renew that no-oped (certbot 'not yet due', renewed=False) replaced
+        nothing — deploy hooks must not fire, mirroring the sync route."""
+        bus = MagicMock()
+        ex = _exec(event_bus=bus)
+        jid = ex.submit('renew', 'a.example.com',
+                        lambda: {'success': True, 'renewed': False,
+                                 'message': 'Certificate not yet due for renewal'})
+        job = _wait_terminal(ex, jid)
+        assert job['status'] == 'succeeded'
+        assert job['result']['renewed'] is False
+        bus.publish.assert_not_called()
+
     def test_get_unknown_returns_none(self):
         assert _exec().get('does-not-exist') is None
 

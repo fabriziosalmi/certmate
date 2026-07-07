@@ -29,6 +29,14 @@ CHAIN_FILENAME = "certificate_audit.chain.jsonl"
 GENESIS_PREV = ""
 
 
+class CheckpointReadError(OSError):
+    """The checkpoint file exists but cannot be read (permissions, I/O).
+    Callers MUST treat this as "verification impossible" and fail closed —
+    an unreadable checkpoint file is NOT the same as no checkpoints ever
+    having been written, and conflating the two turns a tampered box into a
+    clean 'absent' verdict."""
+
+
 def canon_bytes(obj: Any) -> bytes:
     """Byte-stable canonical serialization. MUST be identical on the writer and
     every verifier, across Python versions: sorted keys, no whitespace, UTF-8,
@@ -79,6 +87,9 @@ def verify_chain(path) -> Dict[str, Any]:
             raw_lines = f.read().splitlines()
     except FileNotFoundError:
         result["reason"] = "chain file does not exist"
+        # Structured flag so callers deciding absent-vs-tampered do not have
+        # to substring-match the human-readable reason.
+        result["chain_file_missing"] = True
         return result
     except OSError as e:
         result["reason"] = f"cannot read chain file: {e}"
@@ -262,12 +273,19 @@ def checkpoint_signing_bytes(checkpoint: Dict[str, Any]) -> bytes:
 
 def read_checkpoints(path):
     """Read all parseable checkpoint records (oldest first). Stdlib-only;
-    verifying each checkpoint's signature is the caller's job (needs crypto)."""
+    verifying each checkpoint's signature is the caller's job (needs crypto).
+
+    A missing file means no checkpoints were ever written ([]); any other
+    read failure raises :class:`CheckpointReadError` — it must not be
+    silently treated as "no checkpoints", or an attacker who makes the file
+    unreadable (and deletes the chain) gets a benign 'absent' verdict."""
     try:
         with open(path, "r", encoding="utf-8") as f:
             raw_lines = [ln for ln in f.read().splitlines() if ln.strip()]
-    except OSError:
+    except FileNotFoundError:
         return []
+    except OSError as e:
+        raise CheckpointReadError(f"cannot read checkpoint file: {e}") from e
     out = []
     for raw in raw_lines:
         try:

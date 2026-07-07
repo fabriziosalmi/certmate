@@ -1,4 +1,5 @@
 import logging
+from ..core.audit_chain import CheckpointReadError
 from ..core.metrics import generate_metrics_response
 from flask import request, jsonify, Response, stream_with_context
 
@@ -65,9 +66,20 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
             if audit_logger is None or not hasattr(audit_logger, 'verify_chain'):
                 return jsonify({'error': 'Audit chain not available'}), 503
             result = audit_logger.verify_chain()
-            if not result.get('ok') and 'does not exist' in (result.get('reason') or ''):
-                # No chain file. Benign only if nothing ever attested one.
-                has_cp = getattr(audit_logger, 'has_checkpoints', lambda: False)()
+            # Structured flag from the verifier, not a reason-substring match:
+            # the absent-vs-tampered call must not hinge on message wording.
+            if not result.get('ok') and result.get('chain_file_missing'):
+                # No chain file. Benign only if nothing ever attested one —
+                # and only decidable when the checkpoint file is readable.
+                try:
+                    has_cp = getattr(audit_logger, 'has_checkpoints', lambda: False)()
+                except CheckpointReadError:
+                    # Fail closed: cannot rule out that checkpoints attest a
+                    # deleted chain. 409 (integrity not verifiable), not 200
+                    # 'absent' and not a 500 traceback.
+                    result['checkpoint_unreadable'] = True
+                    result['reason'] = 'checkpoint file unreadable — cannot verify integrity'
+                    return jsonify(result), 409
                 if not has_cp:
                     result['state'] = 'absent'
                     return jsonify(result), 200
