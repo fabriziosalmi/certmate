@@ -6,6 +6,7 @@ newest signed checkpoint that verifies under the current key — fail-closed.
 This does NOT bind an operator who holds the signing key (that needs off-box
 anchoring); it closes the gap for anyone WITHOUT the key, and turns the
 previously-dead checkpoint file into a real anchor."""
+import os
 from types import SimpleNamespace
 
 import pytest
@@ -194,3 +195,78 @@ def test_verify_endpoint_deleted_chain_with_checkpoints_is_409(make_audit, tmp_p
     r = _verify_route(audit)
     assert r.status_code == 409
     assert r.get_json().get('state') != 'absent'
+
+
+# --------------------------------------------------------------------------
+# Fail-closed on an UNREADABLE checkpoint file: it must never read as "no
+# checkpoints ever existed" (which, with a deleted chain, produced a clean
+# 200 state='absent' verdict on a tampered box).
+# --------------------------------------------------------------------------
+
+def _make_unreadable(path):
+    """chmod 000 and verify it took effect; as root (some CI) the file stays
+    readable and the scenario cannot be reproduced — skip, don't false-pass."""
+    os.chmod(path, 0)
+    if os.access(path, os.R_OK):
+        pytest.skip("cannot make the file unreadable (running as root?)")
+
+
+def test_read_checkpoints_missing_file_is_empty(tmp_path):
+    assert audit_chain.read_checkpoints(tmp_path / 'nope.jsonl') == []
+
+
+def test_read_checkpoints_raises_on_unreadable_file(tmp_path):
+    cp_file = tmp_path / audit_chain.CHECKPOINT_FILENAME
+    cp_file.write_text('{"seq": 2, "hash": "abc"}\n')
+    _make_unreadable(cp_file)
+    try:
+        with pytest.raises(audit_chain.CheckpointReadError):
+            audit_chain.read_checkpoints(cp_file)
+    finally:
+        os.chmod(cp_file, 0o600)
+
+
+def test_verify_chain_missing_file_sets_structured_flag(tmp_path):
+    """The absent-vs-tampered decision keys on 'chain_file_missing', not on
+    substring-matching the human-readable reason."""
+    result = audit_chain.verify_chain(tmp_path / 'no-such-chain.jsonl')
+    assert result['ok'] is False
+    assert result['chain_file_missing'] is True
+    assert result['reason'] == 'chain file does not exist'  # wording unchanged
+
+
+def test_verify_endpoint_unreadable_checkpoints_and_deleted_chain_is_409(make_audit, tmp_path):
+    """chmod-000 checkpoint file + deleted chain used to return 200 'absent'
+    (fail-open): the OSError was swallowed as 'no checkpoints'. It must be a
+    409 — integrity cannot be verified — and not a 500 traceback either."""
+    audit = make_audit(tmp_path, signer=AuditSigner(tmp_path), checkpoint_interval=3)
+    _emit(audit, 3)  # writes a checkpoint at seq 2
+    (tmp_path / audit_chain.CHAIN_FILENAME).unlink()
+    cp_file = tmp_path / audit_chain.CHECKPOINT_FILENAME
+    _make_unreadable(cp_file)
+    try:
+        r = _verify_route(audit)
+    finally:
+        os.chmod(cp_file, 0o600)
+    assert r.status_code == 409
+    body = r.get_json()
+    assert body.get('state') != 'absent'
+    assert body.get('checkpoint_unreadable') is True
+    assert 'unreadable' in (body.get('reason') or '')
+
+
+def test_verify_intact_chain_with_unreadable_checkpoints_fails_closed(make_audit, tmp_path):
+    """Even with an intact chain, an unreadable anchor means the cross-check
+    cannot run — report NOT verified (409), never a silent pass."""
+    audit = make_audit(tmp_path, signer=AuditSigner(tmp_path), checkpoint_interval=3)
+    _emit(audit, 3)
+    cp_file = tmp_path / audit_chain.CHECKPOINT_FILENAME
+    _make_unreadable(cp_file)
+    try:
+        r = _verify_route(audit)
+    finally:
+        os.chmod(cp_file, 0o600)
+    assert r.status_code == 409
+    body = r.get_json()
+    assert body['ok'] is False
+    assert body.get('checkpoint_unreadable') is True

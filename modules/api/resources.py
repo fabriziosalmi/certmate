@@ -1943,13 +1943,22 @@ def create_api_resources(api, models, managers):
                     audit_ctx=audit_ctx,
                 )
 
+                # renewed=False is certbot's "not yet due" no-op: nothing was
+                # replaced, so deploy hooks must not fire and the response must
+                # not claim a renewal happened. Default True keeps the frozen
+                # REST contract for older manager results without the flag.
+                renewed = bool(result.get('renewed', True))
+
                 event_bus = current_app.config.get('EVENT_BUS')
-                if event_bus:
+                if event_bus and renewed:
                     event_bus.publish('certificate_renewed', {'domain': domain})
 
                 return {
-                    'message': f'Certificate renewed successfully for {domain}',
+                    'message': (f'Certificate renewed successfully for {domain}'
+                                if renewed
+                                else f'Certificate not yet due for renewal: {domain}'),
                     'domain': domain,
+                    'renewed': renewed,
                     'dns_provider': result.get('dns_provider'),
                     'duration': result.get('duration')
                 }, 200

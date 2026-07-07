@@ -606,3 +606,98 @@ class TestSetDefaultAccount:
         })
         sm.update.side_effect = RuntimeError("boom")
         assert mgr.set_default_account('cloudflare', 'prod') is False
+
+
+# ---------------------------------------------------------------------------
+# POST /api/web/certificates/test-provider — stored-credential fallback.
+# An empty/missing 'config' previously always failed "Missing required
+# credential field(s)", so a preflight against a fully configured server
+# (e.g. `certmate dns test cloudflare`) could never succeed.
+# ---------------------------------------------------------------------------
+
+
+def _passthrough_role(*args, **kwargs):
+    if len(args) == 1 and callable(args[0]) and not kwargs:
+        return args[0]
+
+    def _wrap(fn):
+        return fn
+    return _wrap
+
+
+@pytest.fixture
+def test_provider_client(manager_factory):
+    """Return a callable building a Flask test client whose test-provider
+    route wraps a real DNSManager over the given seed settings."""
+    from flask import Flask
+    from modules.core.constants import CERTIFICATE_FILES
+    from modules.web.cert_routes import register_cert_routes
+
+    def _build(settings):
+        mgr, _ = manager_factory(settings)
+        auth = MagicMock()
+        auth.require_role = MagicMock(side_effect=_passthrough_role)
+        app = Flask(__name__)
+        app.config['TESTING'] = True
+        register_cert_routes(
+            app, {'audit': MagicMock(), 'cert_service': MagicMock()},
+            _passthrough_role, auth, MagicMock(), MagicMock(), MagicMock(),
+            MagicMock(), mgr, CERTIFICATE_FILES,
+        )
+        return app.test_client()
+
+    return _build
+
+
+_CF_STORED = {
+    'dns_providers': {
+        'cloudflare': {
+            'accounts': {
+                'default': {'api_token': 'stored-token'},
+                'secondary': {'api_token': 'other-token'},
+            }
+        }
+    },
+    'default_accounts': {'cloudflare': 'default'},
+}
+
+
+class TestTestProviderStoredCredentialFallback:
+    def test_empty_config_falls_back_to_stored_default_account(self, test_provider_client):
+        client = test_provider_client(_CF_STORED)
+        r = client.post('/api/web/certificates/test-provider',
+                        json={'provider': 'cloudflare'})
+        assert r.status_code == 200, r.get_json()
+        body = r.get_json()
+        assert 'message' in body
+        assert body.get('used_account') == 'default'
+
+    def test_explicit_account_id_selects_that_account(self, test_provider_client):
+        client = test_provider_client(_CF_STORED)
+        r = client.post('/api/web/certificates/test-provider',
+                        json={'provider': 'cloudflare', 'account_id': 'secondary'})
+        assert r.status_code == 200, r.get_json()
+        assert r.get_json().get('used_account') == 'secondary'
+
+    def test_explicit_config_takes_precedence_over_stored(self, test_provider_client):
+        """An explicit (here: incomplete) config must be tested as-is, never
+        silently patched with the stored account."""
+        client = test_provider_client(_CF_STORED)
+        r = client.post('/api/web/certificates/test-provider',
+                        json={'provider': 'cloudflare', 'config': {'api_token': ''}})
+        assert r.status_code == 400
+        assert 'api_token' in r.get_json()['error']
+
+    def test_no_stored_account_keeps_the_400(self, test_provider_client):
+        client = test_provider_client({})
+        r = client.post('/api/web/certificates/test-provider',
+                        json={'provider': 'cloudflare'})
+        assert r.status_code == 400
+        assert 'Missing required credential field' in r.get_json()['error']
+
+    def test_valid_explicit_config_has_no_used_account(self, test_provider_client):
+        client = test_provider_client({})
+        r = client.post('/api/web/certificates/test-provider',
+                        json={'provider': 'cloudflare', 'config': {'api_token': 'tok'}})
+        assert r.status_code == 200
+        assert 'used_account' not in r.get_json()

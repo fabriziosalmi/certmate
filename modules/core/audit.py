@@ -221,7 +221,9 @@ class AuditLogger:
         """True if at least one signed checkpoint has been written. Used to tell
         a genuinely fresh instance (no chain, no checkpoints — benign) from a
         chain file that was DELETED after checkpoints attested it existed
-        (tamper)."""
+        (tamper). Deliberately propagates
+        :class:`audit_chain.CheckpointReadError`: an UNREADABLE checkpoint
+        file must fail closed at the caller, never read as "no checkpoints"."""
         return bool(audit_chain.read_checkpoints(self.audit_checkpoint_file))
 
     def verify_chain(self) -> Dict[str, Any]:
@@ -262,7 +264,16 @@ class AuditLogger:
         if not pubkey:
             result["checkpoint_reason"] = "signer has no public key"
             return
-        checkpoints = audit_chain.read_checkpoints(self.audit_checkpoint_file)
+        try:
+            checkpoints = audit_chain.read_checkpoints(self.audit_checkpoint_file)
+        except audit_chain.CheckpointReadError as e:
+            # Fail closed: an unreadable anchor means the chain CANNOT be
+            # verified against it, which must not read as "intact".
+            result["ok"] = False
+            result["checkpoint_unreadable"] = True
+            result["checkpoint_reason"] = str(e)
+            result["reason"] = "checkpoint file unreadable — cannot verify integrity"
+            return
         if not checkpoints:
             result["checkpoint_reason"] = "no checkpoints written yet"
             return
