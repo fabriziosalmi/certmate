@@ -22,19 +22,18 @@ concurrency:
 
 jobs:
   test:
-    # Host-global serialization. The e2e suite (tests/conftest.py) binds a
-    # FIXED-name container (certmate-test-suite) and port (18888) on the
-    # self-hosted host and `docker rm -f`s it on startup, so two test jobs from
-    # DIFFERENT refs/PRs running at once cycle each other's container mid-run
-    # and the HTTP e2e tests fail with connection-refused (observed when two
-    # PRs were opened together). The per-ref group above cannot see across
-    # refs; this single host-wide group makes every test job — regardless of
-    # branch — queue and run one at a time. cancel-in-progress:false so a
-    # waiting PR's tests are queued, never dropped.
-    concurrency:
-      group: certmate-selfhosted-test-container
-      cancel-in-progress: false
-    runs-on: [self-hosted, Linux, X64]
+    # GitHub-hosted, ephemeral VM per job. The e2e suite (tests/conftest.py)
+    # builds and runs a FIXED-name container (certmate-test-suite) on port
+    # 18888; on a shared self-hosted host, two test jobs from different
+    # refs/PRs clobbered each other's container mid-run, which forced a
+    # host-global concurrency group that serialized every test job one at a
+    # time (a single-point bottleneck: a burst of PRs + Dependabot builds
+    # queued for 10-20 min behind one box). On ubuntu-latest every job gets
+    # its own VM and localhost, so there is no cross-ref collision and no need
+    # to serialize. Docker is preinstalled, so the container e2e tests still
+    # run. The per-ref concurrency group at the top of the file still cancels
+    # a branch's own superseded runs.
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         # 3.12 matches the production Dockerfile. Python 3.14 is temporarily
@@ -117,7 +116,7 @@ jobs:
   # rebuild. This job rebuilds from source and fails if the committed output
   # drifts, forcing `npm run css:build` to be part of every CSS-touching PR.
   frontend-css:
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ubuntu-latest
     steps:
     - name: Checkout code
       uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
