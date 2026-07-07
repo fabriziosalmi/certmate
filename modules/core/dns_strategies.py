@@ -475,6 +475,15 @@ class DuckDNSStrategy(DNSProviderStrategy):
 
 
 class GenericMultiProviderStrategy(DNSProviderStrategy):
+    # CertMate provider name -> certbot entry-point name, where the plugin
+    # does not follow the dns-<provider> convention. Everything keyed on the
+    # plugin name (--authenticator, --<name>-credentials,
+    # --<name>-propagation-seconds, the installed-plugin check, and the
+    # dns_<name>_* ini key prefix in _MULTI_PROVIDER_TEMPLATE_MAP) must use
+    # the entry-point name: certbot-dns-dynudns registers 'dns-dynu'
+    # (setup.py entry_points), so 'dns-dynudns' selects nothing.
+    _PLUGIN_NAME_OVERRIDES = {'dynudns': 'dns-dynu'}
+
     def __init__(self, provider_name: str):
         self.provider_name = provider_name
 
@@ -483,7 +492,8 @@ class GenericMultiProviderStrategy(DNSProviderStrategy):
 
     @property
     def plugin_name(self) -> str:
-        return f'dns-{self.provider_name}'
+        return self._PLUGIN_NAME_OVERRIDES.get(
+            self.provider_name, f'dns-{self.provider_name}')
 
 
 class CustomScriptStrategy(DNSProviderStrategy):
