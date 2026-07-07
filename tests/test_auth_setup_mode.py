@@ -23,12 +23,15 @@ def _valid_token():
     return generate_secure_token(40)
 
 
-def _auth(local_auth=False, users=None):
+def _auth(local_auth=False, users=None, oidc=None):
     sm = MagicMock()
-    sm.load_settings.return_value = {
+    settings = {
         'local_auth_enabled': local_auth,
         'users': users or {},
     }
+    if oidc is not None:
+        settings['oidc'] = oidc
+    sm.load_settings.return_value = settings
     return AuthManager(sm)
 
 
@@ -114,3 +117,44 @@ def test_generated_token_does_not_force_enforcement(monkeypatch):
     a = _auth(local_auth=False, users={})
     assert a.has_operator_bearer_token() is False
     assert a.is_setup_mode() is True
+
+
+# --- OIDC-only deployments --------------------------------------------------
+
+_FULL_OIDC = {
+    'enabled': True,
+    'issuer_url': 'https://idp.example.com',
+    'client_id': 'certmate',
+}
+
+
+def test_setup_mode_false_when_oidc_fully_configured(monkeypatch):
+    """The fix: an SSO-only deployment (OIDC enabled + issuer + client_id, no
+    bearer token, local auth off) must NOT stay world-open. Before the fix
+    is_setup_mode() ignored OIDC and returned True forever, serving every
+    gated endpoint to anonymous callers as admin."""
+    _clear_token_env(monkeypatch)
+    a = _auth(local_auth=False, users={}, oidc=dict(_FULL_OIDC))
+    assert a.is_setup_mode() is False
+
+
+def test_setup_mode_false_oidc_even_after_jit_users(monkeypatch):
+    """JIT-provisioned OIDC users never flip local_auth_enabled, so the
+    local-auth branch stays False; OIDC being configured is what closes it."""
+    _clear_token_env(monkeypatch)
+    a = _auth(local_auth=False,
+              users={'alice': {'role': 'admin', 'oidc_subject': 'sub-1'}},
+              oidc=dict(_FULL_OIDC))
+    assert a.is_setup_mode() is False
+
+
+def test_setup_mode_true_when_oidc_enabled_but_incomplete(monkeypatch):
+    """enabled=True but issuer/client_id blank is NOT a usable credential, so
+    onboarding must still work (mirrors OIDCManager.is_enabled semantics) —
+    the operator can still reach the box to finish configuring it."""
+    _clear_token_env(monkeypatch)
+    for partial in ({'enabled': True, 'issuer_url': '', 'client_id': 'certmate'},
+                    {'enabled': True, 'issuer_url': 'https://idp', 'client_id': ''},
+                    {'enabled': False, 'issuer_url': 'https://idp', 'client_id': 'certmate'}):
+        a = _auth(local_auth=False, users={}, oidc=partial)
+        assert a.is_setup_mode() is True, partial
