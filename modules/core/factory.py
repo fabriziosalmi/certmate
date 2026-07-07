@@ -505,6 +505,13 @@ def initialize_managers(container: AppContainer, app):
         data_dir=str(container.data_dir),
     )
     event_bus.add_listener(deploy_manager.on_certificate_event)
+    # Invalidate a domain's cached deployment-status verdict the moment its
+    # certificate is (re)issued or renewed, so the dashboard re-probes instead
+    # of serving a stale "deployed & matching" result for up to cache_ttl while
+    # the deploy hook may not have run yet (the LB can still serve the OLD
+    # cert). One subscription covers the manual/API, async, web, and scheduled
+    # renewal paths — they all publish certificate_created / certificate_renewed.
+    event_bus.add_listener(cache_manager.on_certificate_event)
     # Let unattended (scheduler-driven) renewals publish 'certificate_renewed'
     # so deploy hooks fire for background renewals, not just manual/API ones
     # (#329). The manual path publishes via the IssuanceExecutor; the scheduler
