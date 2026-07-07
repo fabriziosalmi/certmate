@@ -593,8 +593,13 @@ def create_azure_config(subscription_id: str, resource_group: str, tenant_id: st
     )
     return _create_config_file("azure", content)
 
-def create_google_config(project_id: str, service_account_key: str) -> Path:
-    """Create Google Cloud DNS credentials file.
+def create_google_config(project_id: str, service_account_key: str) -> Tuple[Path, Path]:
+    """Create Google Cloud DNS credentials files.
+
+    Returns ``(config_file, sa_file)``: the ini handed to certbot AND the
+    service-account JSON it references, so the caller can delete BOTH in its
+    ``finally`` — the ini alone was returned before, leaving the live GCP
+    private key on disk until the orphan sweep (up to an hour later).
 
     The service-account JSON is a live GCP private key. It previously landed at
     a FIXED path (``google-service-account.json``), written 0644-then-chmod, and
@@ -613,7 +618,7 @@ def create_google_config(project_id: str, service_account_key: str) -> Path:
         f.write(service_account_key)
 
     content = f"dns_google_project_id = {project_id}\ndns_google_service_account_key = {str(sa_file)}\n"
-    return _create_config_file("google", content)
+    return _create_config_file("google", content), sa_file
 
 
 def _sweep_orphaned_files(directory: Path, pattern: str, max_age_seconds: int = 3600) -> None:

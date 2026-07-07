@@ -927,6 +927,10 @@ class CertificateManager:
         # Track timing for metrics
         start_time = time.time()
         credentials_file = None
+        # Secret files created NEXT TO the credentials file (Google's SA JSON,
+        # which the ini only references): the finally block must delete these
+        # too, or a live cloud private key outlives the operation on disk.
+        extra_credential_files = []
         # Initialized early: the finally block reads ca_extra_env to clean up
         # the REQUESTS_CA_BUNDLE temp file, and an exception raised before the
         # ca_manager.build_certbot_command call (e.g. plugin-not-installed)
@@ -1252,6 +1256,8 @@ class CertificateManager:
                     san_domains=all_domains[1:] if len(all_domains) > 1 else None,
                 )
                 credentials_file = strategy.create_config_file(strategy_config)
+                extra_credential_files = list(
+                    getattr(strategy, 'extra_credential_files', []) or [])
 
                 # Configure Args
                 strategy.configure_certbot_arguments(certbot_cmd, credentials_file, domain_alias=domain_alias)
@@ -1419,12 +1425,15 @@ class CertificateManager:
             raise
         finally:
             domain_lock.release()
-            # Always clean up credential files (even on failure)
-            if credentials_file:
-                try:
-                    os.unlink(credentials_file)
-                except (FileNotFoundError, OSError):
-                    pass
+            # Always clean up credential files (even on failure), including
+            # side files the ini references (Google's SA JSON) — the sweep in
+            # create_google_config only mops up crashed runs, not live ones.
+            for cred_path in [credentials_file, *extra_credential_files]:
+                if cred_path:
+                    try:
+                        os.unlink(cred_path)
+                    except (FileNotFoundError, OSError):
+                        pass
             # Clean up CA bundle temp file if created
             ca_bundle = ca_extra_env.get('REQUESTS_CA_BUNDLE')
             if ca_bundle:
@@ -1451,6 +1460,9 @@ class CertificateManager:
             raise DomainOperationInProgress(domain)
         alias_hook_config = None
         credentials_file = None
+        # Secret side files the credentials ini references (Google's SA
+        # JSON); deleted in the finally alongside the ini.
+        extra_credential_files = []
         try:
             # Use the same config/work/log directories as during creation
             cert_dir = self.cert_dir
@@ -1565,6 +1577,8 @@ class CertificateManager:
                         dns_provider, dns_config, domain, san_domains=renew_sans,
                     )
                     credentials_file = strategy.create_config_file(strategy_config)
+                    extra_credential_files = list(
+                        getattr(strategy, 'extra_credential_files', []) or [])
                     # Pass the authenticator + credentials explicitly at renew
                     # (mirrors the create path) so renewal does not depend on the
                     # credentials path certbot baked into renewal/<domain>.conf at
@@ -1718,11 +1732,13 @@ class CertificateManager:
                     os.unlink(alias_hook_config)
                 except (FileNotFoundError, OSError):
                     pass
-            if credentials_file:
-                try:
-                    os.unlink(credentials_file)
-                except (FileNotFoundError, OSError):
-                    pass
+            # Includes side files the ini references (Google's SA JSON).
+            for cred_path in [credentials_file, *extra_credential_files]:
+                if cred_path:
+                    try:
+                        os.unlink(cred_path)
+                    except (FileNotFoundError, OSError):
+                        pass
             domain_lock.release()
 
     def check_renewals(self):

@@ -152,6 +152,17 @@ def test_world_writable_script_rejected(tmp_path):
         CustomScriptStrategy().create_config_file({'auth_hook': str(script)})
 
 
+def test_group_writable_script_rejected(tmp_path):
+    """Group-writable used to be a log-only warning nobody sees at issuance
+    time; it is the same execute-with-CertMate's-privileges trust boundary as
+    world-writable, so it must refuse just as loudly."""
+    script = tmp_path / 'hook.sh'
+    script.write_text('#!/bin/sh\nexit 0\n')
+    script.chmod(0o775)
+    with pytest.raises(ValueError, match='group-writable'):
+        CustomScriptStrategy().create_config_file({'auth_hook': str(script)})
+
+
 def test_propagation_hint_exported(auth_hook):
     strategy = CustomScriptStrategy()
     env = {}

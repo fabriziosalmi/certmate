@@ -225,11 +225,20 @@ class AzureStrategy(DNSProviderStrategy):
     # can fall through to it unchanged.
 
 class GoogleStrategy(DNSProviderStrategy):
+    def __init__(self):
+        # Extra secret files created alongside the returned credentials ini.
+        # The create/renew finally blocks read this so the SA JSON (a live
+        # GCP private key) is deleted with the ini instead of sitting on
+        # disk until the orphan sweep.
+        self.extra_credential_files: list = []
+
     def create_config_file(self, config_data: Dict[str, Any]) -> Optional[Path]:
-        return create_google_config(
+        config_file, sa_file = create_google_config(
             config_data.get('project_id', ''),
             config_data.get('service_account_key', ''),
         )
+        self.extra_credential_files = [sa_file]
+        return config_file
 
     @property
     def plugin_name(self) -> str:
@@ -559,9 +568,14 @@ class CustomScriptStrategy(DNSProviderStrategy):
                 f"Refusing to execute a script anyone on the host can modify."
             )
         if mode & 0o020:
-            logger.warning(
-                f"custom-script {label} {path} is group-writable "
-                f"({oct(mode & 0o777)}); consider chmod 755 or stricter."
+            # Same trust boundary as the world-writable branch above: the
+            # script runs with CertMate's privileges, and any group member
+            # who can rewrite it gets those privileges. A warning here was
+            # advice nobody reads at issuance time; refuse instead.
+            raise ValueError(
+                f"custom-script {label} is group-writable ({oct(mode & 0o777)}): {path}. "
+                f"Refusing to execute a script other group members can modify; "
+                f"chmod 755 or stricter."
             )
         return str(path)
 

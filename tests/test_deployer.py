@@ -470,3 +470,35 @@ class TestEventListener:
     def test_ignores_missing_domain(self, deploy_manager, shell_executor):
         deploy_manager.on_certificate_event('certificate_created', {})
         assert shell_executor.call_count == 0
+
+
+class TestHookOutputSanitization:
+    """Hook stdout/stderr is persisted verbatim into the history file, the
+    audit log and the immutable hash chain, so secrets a hook echoes must be
+    redacted at the single choke point where the result dict is built."""
+
+    HOOK = {
+        'id': 'h9', 'name': 'Leaky', 'command': 'echo leak',
+        'enabled': True, 'timeout': 10, 'on_events': ['created'],
+    }
+
+    def test_stdout_secret_assignment_redacted(self, deploy_manager, shell_executor):
+        shell_executor.set_next_result(
+            returncode=0, stdout='deploying with api_token = hunter2-secret\n')
+        result = deploy_manager._run_hook(self.HOOK, 'example.com', 'created')
+        assert 'hunter2-secret' not in result['stdout']
+        assert '[REDACTED]' in result['stdout']
+
+    def test_stderr_pem_block_redacted(self, deploy_manager, shell_executor):
+        pem = '-----BEGIN PRIVATE KEY-----\nMIIabc\n-----END PRIVATE KEY-----'
+        shell_executor.set_next_result(returncode=1, stderr=pem)
+        result = deploy_manager._run_hook(self.HOOK, 'example.com', 'created')
+        assert 'MIIabc' not in result['stderr']
+        assert '[PEM REDACTED]' in result['stderr']
+        # The error snippet is derived from the SANITIZED stderr.
+        assert 'MIIabc' not in (result['error'] or '')
+
+    def test_plain_output_untouched(self, deploy_manager, shell_executor):
+        shell_executor.set_next_result(returncode=0, stdout='reloaded nginx\n')
+        result = deploy_manager._run_hook(self.HOOK, 'example.com', 'created')
+        assert result['stdout'] == 'reloaded nginx\n'
