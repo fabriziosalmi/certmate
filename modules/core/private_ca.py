@@ -241,13 +241,16 @@ class PrivateCAGenerator:
             )
             logger.debug("Wrote CA private key at 0600 (atomic)")
 
-            # Save certificate (PEM format). Public artifact, so 0644 is fine,
-            # but write it atomically so a crash never leaves a half CA cert.
+            # Save certificate (PEM format) atomically so a crash never leaves a
+            # half-written CA cert. 0600: the CA cert is served over HTTP by
+            # certmate, not read off disk by other local users, so there is no
+            # reason to make the CA's own directory world-readable (defence in
+            # depth; also unlike leaf certs which a co-located web server reads).
             logger.debug(f"Saving CA certificate to {self.ca_cert_path}")
             self._atomic_write_bytes(
                 self.ca_cert_path,
                 ca_cert.public_bytes(serialization.Encoding.PEM),
-                0o644,
+                0o600,
             )
 
             # Save metadata
@@ -337,12 +340,15 @@ class PrivateCAGenerator:
                 }
             }
 
-            # Public metadata (0644), but written atomically so a crash never
+            # Non-secret metadata, but the whole CA dir is certmate-internal
+            # (certmate is the only on-disk reader; the CA cert is served over
+            # HTTP, not read off disk by other users), so keep it 0600 like the
+            # rest of the CA material. Written atomically so a crash never
             # leaves a truncated / unparseable JSON file behind.
             self._atomic_write_bytes(
                 self.ca_metadata_path,
                 json.dumps(metadata, indent=2).encode("utf-8"),
-                0o644,
+                0o600,
             )
 
             logger.debug(f"Saved CA metadata to {self.ca_metadata_path}")
@@ -645,10 +651,12 @@ class PrivateCAGenerator:
                 backend=default_backend()
             )
 
-            # Save CRL atomically (public artifact, 0644) so a crash mid-write
-            # cannot leave relying parties fetching a truncated CRL.
+            # Save CRL atomically so a crash mid-write cannot leave relying
+            # parties fetching a truncated CRL. 0600: certmate serves the CRL
+            # over HTTP (get_crl_pem reads it as its own user), so the CA dir
+            # stays fully non-world-readable.
             crl_pem = crl.public_bytes(serialization.Encoding.PEM)
-            self._atomic_write_bytes(self.crl_path, crl_pem, 0o644)
+            self._atomic_write_bytes(self.crl_path, crl_pem, 0o600)
 
             logger.info(f"Generated CRL with {count} revoked certificates")
             return crl_pem
