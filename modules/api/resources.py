@@ -77,6 +77,51 @@ def _certificate_fingerprint(cert_bytes):
     return cert.fingerprint(hashes.SHA256()).hex()
 
 
+def _san_dns_names(cert):
+    """Return the dNSName SANs of a parsed x509 cert, or [] if it has none."""
+    from cryptography import x509
+
+    try:
+        san_ext = cert.extensions.get_extension_for_oid(
+            x509.oid.ExtensionOID.SUBJECT_ALTERNATIVE_NAME
+        )
+        return san_ext.value.get_values_for_type(x509.DNSName)
+    except x509.ExtensionNotFound:
+        return []
+
+
+def _certificate_subject_summary(cert_bytes):
+    """Return a short human-readable identity for a served certificate.
+
+    Emits the subject CN plus the first few SAN dNSNames, e.g.
+    ``CN=example.com; SAN=example.com, www.example.com``. Best-effort and
+    purely diagnostic: it feeds the deployment-status mismatch reason so an
+    operator can see WHICH cert a host is actually serving. Never used for a
+    trust decision. Returns '' when the bytes cannot be parsed.
+    """
+    from cryptography import x509
+    from cryptography.x509.oid import NameOID
+
+    if not cert_bytes:
+        return ''
+    try:
+        try:
+            cert = x509.load_pem_x509_certificate(cert_bytes)
+        except ValueError:
+            cert = x509.load_der_x509_certificate(cert_bytes)
+        parts = []
+        cn = cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
+        if cn:
+            parts.append('CN=' + str(cn[0].value))
+        sans = _san_dns_names(cert)
+        if sans:
+            shown = ', '.join(sans[:3]) + (', ...' if len(sans) > 3 else '')
+            parts.append('SAN=' + shown)
+        return '; '.join(parts)
+    except Exception:
+        return ''
+
+
 def _privkey_to_pkcs1(pem_bytes):
     """Re-serialize a PEM private key into the legacy PKCS#1/SEC1
     ("TraditionalOpenSSL") form for stacks that don't accept the PKCS#8
@@ -142,7 +187,8 @@ def _https_proxy_for(host):
     return parts.hostname, parts.port or 8080, headers
 
 
-def _probe_tls_certificate(domain, port=443, protocol='https-tls', timeout=None):
+def _probe_tls_certificate(domain, port=443, protocol='https-tls', timeout=None,
+                           probe_host=None):
     """Return the live TLS certificate for a domain, if reachable.
 
     Supports three protocol modes:
@@ -153,6 +199,13 @@ def _probe_tls_certificate(domain, port=443, protocol='https-tls', timeout=None)
     ``timeout=None`` reads ``CERTMATE_TLS_PROBE_TIMEOUT_SECONDS`` (default 3s,
     clamped [1, 30]). ``port`` defaults to 443 for https-tls/tls, 587 for
     smtp-starttls when left at the sentinel 0.
+
+    ``probe_host`` overrides both the TCP target and the SNI server name. The
+    caller MUST pass it for a wildcard cert (``*.example.com``): a wildcard does
+    NOT cover its own apex per RFC 6125, so the legacy apex-stripping fallback
+    below probes the wrong host and reports a false "wrong cert" (#207/#381).
+    When omitted, a non-wildcard domain probes itself; a wildcard falls back to
+    the (incorrect) apex only for direct/legacy callers.
     """
     if timeout is None:
         timeout = _tls_probe_timeout_seconds()
@@ -164,7 +217,10 @@ def _probe_tls_certificate(domain, port=443, protocol='https-tls', timeout=None)
     if port is None or port == 0:
         port = 587 if protocol == 'smtp-starttls' else 443
 
-    host = domain[2:] if domain.startswith('*.') else domain
+    if probe_host:
+        host = probe_host
+    else:
+        host = domain[2:] if domain.startswith('*.') else domain
     context = ssl.create_default_context()
     # We intentionally disable PKI validation here. The goal is to compare the
     # served certificate fingerprint against the stored certificate, even when
@@ -1249,12 +1305,16 @@ def create_api_resources(api, models, managers):
             certificate (issue #129 + deployment probe extension).
 
             DNS changes: ``dns_provider``, ``account_id``, ``alias_dns_provider``.
-            Probe changes: ``deployment_port`` (int, 1-65535) and/or
-            ``deployment_protocol`` ("https-tls" | "tls" | "smtp-starttls").
-            Either category can be used alone or together.
+            Probe changes: ``deployment_port`` (int, 1-65535),
+            ``deployment_protocol`` ("https-tls" | "tls" | "smtp-starttls")
+            and/or ``deployment_host`` (the hostname the deployment-status
+            probe should connect to and SNI). A ``deployment_host`` is the
+            supported way to verify a wildcard cert: point it at a name the
+            wildcard actually covers, e.g. www.example.com for *.example.com
+            (#381). Either category can be used alone or together.
 
             Body: {"dns_provider": "route53", "deployment_protocol": "smtp-starttls",
-                   "deployment_port": 587}
+                   "deployment_port": 587, "deployment_host": "mail.example.com"}
             """
             scope_err = _check_domain_scope(domain, 'update_dns_provider')
             if scope_err:
@@ -1271,17 +1331,23 @@ def create_api_resources(api, models, managers):
             new_alias_dns_provider = data.get('alias_dns_provider')
             new_deploy_port = data.get('deployment_port')
             new_deploy_protocol = data.get('deployment_protocol')
+            new_deploy_host = data.get('deployment_host')
 
             # Allow requests that only set deployment probe fields
-            # (deployment_port / deployment_protocol) without requiring
-            # a DNS provider change.
+            # (deployment_port / deployment_protocol / deployment_host) without
+            # requiring a DNS provider change.
             has_dns_changes = bool(new_dns_provider or new_alias_dns_provider)
-            has_probe_changes = 'deployment_port' in data or 'deployment_protocol' in data
+            has_probe_changes = (
+                'deployment_port' in data
+                or 'deployment_protocol' in data
+                or 'deployment_host' in data
+            )
 
             if not has_dns_changes and not has_probe_changes:
                 return {
                     'error': 'At least one of dns_provider, alias_dns_provider, '
-                             'deployment_port, or deployment_protocol is required',
+                             'deployment_port, deployment_protocol, or '
+                             'deployment_host is required',
                 }, 400
 
             # Validate the new provider has credentials configured
@@ -1363,6 +1429,25 @@ def create_api_resources(api, models, managers):
                     else:
                         metadata.pop('deployment_protocol', None)
 
+                if 'deployment_host' in data:
+                    if new_deploy_host is not None:
+                        if not isinstance(new_deploy_host, str):
+                            return {'error': 'deployment_host must be a string'}, 400
+                        host = new_deploy_host.strip()
+                        # A probe target is a bare hostname: no scheme, no path,
+                        # no whitespace, and no wildcard label (you deploy a
+                        # cert on a concrete name, not on "*.").
+                        if (not host or len(host) > 253 or host.startswith('*.')
+                                or any(c in host for c in ' \t/\\')
+                                or '://' in host):
+                            return {
+                                'error': 'deployment_host must be a bare hostname '
+                                         '(no scheme, path, whitespace, or wildcard)'
+                            }, 400
+                        metadata['deployment_host'] = host
+                    else:
+                        metadata.pop('deployment_host', None)
+
                 if not certificate_manager._save_metadata(domain, metadata):
                     return {'error': f'Failed to update metadata for domain: {domain}'}, 500
                 logger.info(
@@ -1389,9 +1474,10 @@ def create_api_resources(api, models, managers):
                     'alias_dns_provider': metadata.get('alias_dns_provider'),
                     'account_id': metadata.get('account_id'),
                 }
-                if new_deploy_port is not None or new_deploy_protocol is not None:
+                if has_probe_changes:
                     response['deployment_port'] = metadata.get('deployment_port')
                     response['deployment_protocol'] = metadata.get('deployment_protocol')
+                    response['deployment_host'] = metadata.get('deployment_host')
                 return response, 200
 
             except Exception as e:
@@ -1521,11 +1607,17 @@ def create_api_resources(api, models, managers):
 
             # Read per-cert deployment config from metadata, fall back to
             # defaults. Stored via PATCH /api/certificates/<domain> as
-            # ``deployment_port`` and ``deployment_protocol``.
+            # ``deployment_port``, ``deployment_protocol`` and (optional)
+            # ``deployment_host``.
             metadata = certificate_manager._load_metadata(domain) if hasattr(certificate_manager, '_load_metadata') else {}
             raw_port = metadata.get('deployment_port')
             deploy_port = raw_port if raw_port is not None else 0
             deploy_protocol = metadata.get('deployment_protocol') or 'https-tls'
+            deploy_host = metadata.get('deployment_host')
+            if isinstance(deploy_host, str):
+                deploy_host = deploy_host.strip() or None
+
+            is_wildcard = domain.startswith('*.')
 
             result = {
                 'domain': domain,
@@ -1536,23 +1628,87 @@ def create_api_resources(api, models, managers):
                 'port': deploy_port if deploy_port is not None else None,
                 'protocol': deploy_protocol,
                 'timestamp': utc_now_iso(),
+                # Diagnostic fields (additive, #381): tell the operator WHICH
+                # host was probed and, on a mismatch, WHAT was actually served
+                # vs expected — so the dashboard error icon can explain itself.
+                'probe_host': None,
+                'probe_status': None,
+                'mismatch_reason': None,
             }
+
+            if is_wildcard and not deploy_host:
+                # A wildcard (*.example.com) does NOT cover its own apex
+                # (example.com) per RFC 6125, and there is no single covered
+                # name we can safely assume is deployed. Probing the apex here
+                # produced a permanent false "wrong cert" for every wildcard
+                # (#207/#381). With no explicit deployment_host we cannot verify
+                # unambiguously, so report a distinct, non-alarming status
+                # instead of a red mismatch — and tell the operator how to fix
+                # it. certificate_match stays False but the UI keys off
+                # probe_status to render a neutral "not verifiable" chip.
+                apex = domain[2:]
+                result['probe_status'] = 'unverifiable'
+                result['mismatch_reason'] = (
+                    f"Wildcard certificate {domain} cannot be verified "
+                    f"automatically: a wildcard does not cover its apex "
+                    f"({apex}), so probing {apex} would compare against the "
+                    f"wrong host. Set a deployment_host that this wildcard "
+                    f"covers (for example www.{apex}) via "
+                    f"PATCH /api/certificates/{domain} to enable the check."
+                )
+                persisted_status = certificate_manager.get_deployment_status_record(domain)
+                if isinstance(persisted_status, dict) and persisted_status.get('browser'):
+                    result['browser'] = persisted_status.get('browser')
+                certificate_manager.record_backend_deployment_status(domain, result)
+                cache_manager.set_deployment_status(domain, result)
+                return result, 200
+
+            # Probe target: an explicit deployment_host wins for any cert;
+            # otherwise a non-wildcard probes itself. (A wildcard without a
+            # deployment_host is handled above and never reaches here.)
+            effective_host = deploy_host or domain
+            result['probe_host'] = effective_host
 
             try:
                 probe = _probe_tls_certificate(
                     domain,
                     port=int(deploy_port) if deploy_port else 0,
                     protocol=deploy_protocol,
+                    probe_host=deploy_host or None,
                 )
                 result['reachable'] = True
                 result['deployed'] = True
                 result['port'] = probe.get('port')
                 result['protocol'] = probe.get('protocol')
-                result['certificate_match'] = (
-                    _certificate_fingerprint(probe.get('certificate_bytes')) == expected_fingerprint
-                )
+                served_bytes = probe.get('certificate_bytes')
+                served_fingerprint = _certificate_fingerprint(served_bytes)
+                match = served_fingerprint == expected_fingerprint
+                result['certificate_match'] = match
+                if match:
+                    result['probe_status'] = 'match'
+                else:
+                    # Real mismatch: surface exactly what differs so the
+                    # operator can troubleshoot from the dashboard tooltip.
+                    result['probe_status'] = 'mismatch'
+                    served_subject = _certificate_subject_summary(served_bytes)
+                    served_fp_prefix = (served_fingerprint or '')[:16]
+                    expected_fp_prefix = expected_fingerprint[:16]
+                    result['served_subject'] = served_subject
+                    result['served_fingerprint'] = served_fp_prefix
+                    result['expected_fingerprint'] = expected_fp_prefix
+                    served_desc = served_subject or 'an unrecognised certificate'
+                    result['mismatch_reason'] = (
+                        f"{effective_host}:{result['port']} is serving "
+                        f"{served_desc} (fingerprint {served_fp_prefix or 'n/a'}...), "
+                        f"which does not match the certificate stored for "
+                        f"{domain} (fingerprint {expected_fp_prefix}...)."
+                    )
             except Exception as e:
                 result['error'] = str(e)
+                result['probe_status'] = 'unreachable'
+                result['mismatch_reason'] = (
+                    f"Could not probe {effective_host}: {e}"
+                )
 
             persisted_status = certificate_manager.get_deployment_status_record(domain)
             if isinstance(persisted_status, dict) and persisted_status.get('browser'):
