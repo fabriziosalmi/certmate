@@ -358,20 +358,29 @@ class FileOperations:
             enc_tag = 'encrypted' if passphrase else 'cleartext'
             logger.info(f"Unified backup created: {backup_filename} (contains {len(domains)} domains; secrets={mode_tag}; at-rest={enc_tag})")
             self._prune_unified_backups()
-            self._upload_backup_offsite(backup_path, backup_filename, settings_data)
+            self._upload_backup_offsite(backup_path, backup_filename, settings_data,
+                                        encrypted=bool(passphrase))
             return backup_filename
 
         except Exception as e:
             logger.error(f"Error creating unified backup: {e}")
             return None
 
-    def _upload_backup_offsite(self, backup_path, backup_filename, settings_data):
+    def _upload_backup_offsite(self, backup_path, backup_filename, settings_data,
+                               encrypted=False):
         """Best-effort off-site copy of the unified backup to an S3-compatible
         target. NEVER raises: the local backup is authoritative; the S3 copy is
         a disaster-recovery convenience. Enabled via settings
         ``backup_storage`` = {'backend': 's3_compatible', 's3_compatible': {...}}.
         Works with any S3 endpoint (Hetzner, Contabo, OVHcloud, Scaleway, Wasabi,
         MinIO, AWS); boto3 is already a core dependency.
+
+        ``encrypted`` MUST be True for the upload to proceed: the unified backup
+        contains every domain's private key, and at-rest encryption is only
+        applied when CERTMATE_BACKUP_PASSPHRASE is set. Off-site upload and
+        encryption are independent settings, so refusing here is what prevents
+        an operator who enabled S3 without a passphrase from silently
+        exfiltrating cleartext private keys to third-party storage.
         """
         try:
             cfg = (settings_data or {}).get('backup_storage') or {}
@@ -384,6 +393,29 @@ class FileOperations:
             secret_key = (s3.get('secret_access_key') or '').strip()
             if not all([endpoint, bucket, access_key, secret_key]):
                 return
+
+            # Refuse to ship cleartext private keys off-box. This is the guard
+            # that couples off-site upload to encryption (they are otherwise
+            # unrelated settings). Fail-safe: default False, so a caller that
+            # forgets to pass the flag never leaks.
+            if not encrypted:
+                logger.error(
+                    "Off-site backup upload SKIPPED: the backup is NOT encrypted "
+                    "(CERTMATE_BACKUP_PASSPHRASE is not set) and contains every "
+                    "domain's private key. Refusing to upload cleartext keys to "
+                    "external storage. Set CERTMATE_BACKUP_PASSPHRASE to enable "
+                    "off-site backups."
+                )
+                return
+            if not endpoint.lower().startswith('https://'):
+                # The payload is encrypted at rest, so this is not a key-leak,
+                # but plaintext transport is still worth flagging. Log the
+                # scheme only — never the endpoint host/credentials.
+                logger.warning(
+                    "Off-site backup endpoint is not HTTPS (scheme=%s); prefer "
+                    "an HTTPS endpoint for transport security.",
+                    (endpoint.split('://', 1)[0] or 'unknown'),
+                )
             prefix = (s3.get('prefix') or 'certmate/backups').strip().strip('/')
             region = (s3.get('region') or 'us-east-1').strip()
 

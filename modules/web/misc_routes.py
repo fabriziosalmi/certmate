@@ -52,15 +52,25 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
 
         Returns the verifier result plus HTTP 200 when intact and 409 when the
         chain is broken, so an operator (or a monitoring probe) can alert on a
-        non-2xx without parsing the body. The honest threat-model caveat (a
-        local chain does not bind the operator) is documented in
-        ``modules/core/audit_chain.py`` and ``docs/compliance.md``.
+        non-2xx without parsing the body. A brand-new instance that has not
+        audited anything yet has no chain file — that is NOT a tamper, so it
+        returns 200 with ``state='absent'`` (unless a signed checkpoint attests
+        the chain once existed, in which case a missing file IS a deletion and
+        stays 409). The honest threat-model caveat (a local chain does not bind
+        the operator) is documented in ``modules/core/audit_chain.py`` and
+        ``docs/compliance.md``.
         """
         try:
             audit_logger = managers.get('audit')
             if audit_logger is None or not hasattr(audit_logger, 'verify_chain'):
                 return jsonify({'error': 'Audit chain not available'}), 503
             result = audit_logger.verify_chain()
+            if not result.get('ok') and 'does not exist' in (result.get('reason') or ''):
+                # No chain file. Benign only if nothing ever attested one.
+                has_cp = getattr(audit_logger, 'has_checkpoints', lambda: False)()
+                if not has_cp:
+                    result['state'] = 'absent'
+                    return jsonify(result), 200
             status = 200 if result.get('ok') else 409
             return jsonify(result), status
         except Exception as e:
@@ -238,7 +248,11 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
         returns a 401 JSON error and does not expose the event stream.
         """
         from flask import Response, stream_with_context, request as _req
-        if auth_manager.is_local_auth_enabled() and auth_manager.has_any_users():
+        # Once the instance is configured (local auth + user, OR an operator
+        # bearer token) require a valid session. SSE can't carry a bearer
+        # header, so a bearer-only deployment simply has no live stream — the
+        # web UI it feeds is locked for that deployment anyway.
+        if not auth_manager.is_setup_mode():
             session_id = _req.cookies.get('certmate_session')
             if not session_id or not auth_manager.validate_session(session_id):
                 return jsonify({'error': 'Unauthenticated'}), 401

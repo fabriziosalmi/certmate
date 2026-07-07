@@ -8,7 +8,7 @@ def register_ui_routes(app, managers, require_web_auth, auth_manager):
     @app.route('/')
     def index():
         """Main dashboard UI"""
-        if not auth_manager.is_local_auth_enabled() or not auth_manager.has_any_users():
+        if auth_manager.is_setup_mode():
             return render_template('setup.html')
 
         session_id = request.cookies.get('certmate_session')

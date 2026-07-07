@@ -217,15 +217,82 @@ class AuditLogger:
             'bundle_signature': bundle_signature,
         }
 
+    def has_checkpoints(self) -> bool:
+        """True if at least one signed checkpoint has been written. Used to tell
+        a genuinely fresh instance (no chain, no checkpoints — benign) from a
+        chain file that was DELETED after checkpoints attested it existed
+        (tamper)."""
+        return bool(audit_chain.read_checkpoints(self.audit_checkpoint_file))
+
     def verify_chain(self) -> Dict[str, Any]:
-        """Verify this instance's hash chain. Thin wrapper over
-        :func:`audit_chain.verify_chain` for in-process callers and tests.
+        """Verify this instance's hash chain. Wraps
+        :func:`audit_chain.verify_chain` (internal consistency) and then, when a
+        signer is wired, cross-checks the chain against the latest signed
+        checkpoint — a fail-closed anchor.
+
+        The bare hash chain cannot, on its own, detect a tail truncation or a
+        wholesale rewrite (anyone who can write the file can recompute it). The
+        signed checkpoints were being WRITTEN but never READ, so that gap stood
+        open. Reading them back here means an attacker WITHOUT the signing key
+        can no longer roll the chain back to, or rewrite it at/below, the last
+        checkpoint without detection: they cannot forge a matching signed
+        checkpoint. (Binding an operator who HOLDS the key still needs off-box
+        anchoring — see the audit_chain / audit_signing docstrings; this does
+        not claim to provide that.)
 
         Takes the append lock so a verify that races an in-flight append does
         not observe a half-written final line and report a spurious truncation
         (the standalone CLI verifier cannot take the lock and accepts that)."""
         with self._chain_lock:
-            return audit_chain.verify_chain(self.audit_chain_file)
+            result = audit_chain.verify_chain(self.audit_chain_file)
+            if result.get("ok"):
+                self._cross_check_latest_checkpoint(result)
+            return result
+
+    def _cross_check_latest_checkpoint(self, result: Dict[str, Any]) -> None:
+        """Cross-check an internally-consistent chain against the newest signed
+        checkpoint that verifies under the current key. Mutates *result*:
+        always sets ``checkpoint_verified`` / ``checkpoint_reason``, and flips
+        ``ok`` to False if the chain diverges from the checkpoint."""
+        result["checkpoint_verified"] = False
+        if self._signer is None or not getattr(self._signer, "available", False):
+            result["checkpoint_reason"] = "no signer; checkpoints not cross-checked"
+            return
+        pubkey = self._signer.public_key_pem()
+        if not pubkey:
+            result["checkpoint_reason"] = "signer has no public key"
+            return
+        checkpoints = audit_chain.read_checkpoints(self.audit_checkpoint_file)
+        if not checkpoints:
+            result["checkpoint_reason"] = "no checkpoints written yet"
+            return
+        # Newest checkpoint whose signature verifies under the current key. A
+        # checkpoint that does not verify is ignored (e.g. key rotation, or a
+        # chain imported from another instance) rather than treated as tamper,
+        # to avoid false positives; the newest VERIFIED one is the anchor.
+        latest = None
+        for cp in reversed(checkpoints):
+            sig = cp.get("signature")
+            if sig and audit_signing.verify_signature(
+                pubkey, sig, audit_chain.checkpoint_signing_bytes(cp)
+            ):
+                latest = cp
+                break
+        if latest is None:
+            result["checkpoint_reason"] = (
+                "no checkpoint signature verifies under the current key "
+                "(key rotated, or checkpoints from another instance)"
+            )
+            return
+        records = audit_chain.load_records(self.audit_chain_file)
+        check = audit_chain.cross_check_checkpoint(records, latest)
+        result["checkpoint_verified"] = bool(check.get("ok"))
+        result["checkpoint_seq"] = latest.get("seq")
+        result["checkpoint_reason"] = check.get("reason")
+        if not check.get("ok"):
+            result["ok"] = False
+            result["reason"] = check.get("reason")
+            result["error_seq"] = latest.get("seq")
 
     def log_operation(
         self,

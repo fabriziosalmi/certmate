@@ -28,7 +28,10 @@ operate certificates on a schedule.
 - **Independent verification.** A standalone verifier
   (`python -m modules.core.audit_verify`) recomputes the chain and returns
   PASS/FAIL without needing to run or trust CertMate; `GET /api/audit/verify`
-  exposes the same check over the API.
+  exposes the same check over the API and, when signing is enabled, also
+  cross-checks the chain against the latest signed checkpoint — so a tail
+  truncation or rewrite at or below that checkpoint fails verification (see
+  "tail truncation" under Honest limits).
 - **Signed, third-party-verifiable export.** The instance signs the chain head
   (periodic checkpoints) and `GET /api/audit/export` produces an Ed25519-signed
   bundle. An auditor verifies it off the box, pinning the instance's public key
@@ -86,14 +89,17 @@ operate certificates on a schedule.
   block a certificate operation; the chain proves the recorded entries are
   authentic and ordered, and a missing interior `seq` proves a deletion, but a
   write that failed before it was recorded leaves no entry to verify.
-- **Tail truncation needs an external reference.** Removing entries from the
-  **end** of a single chain leaves a shorter-but-internally-consistent chain
-  that still verifies as intact. The signed checkpoints and export bundles are
-  the anchors for catching this: a later signed export with fewer entries than
-  an earlier one (or than a checkpoint an auditor holds) reveals the truncation.
-  A single in-place export cannot, on its own, prove nothing was removed from the
-  end — keep successive signed exports, or wait for opt-in external anchoring, if
-  you need that guarantee.
+- **Tail truncation is caught down to the last signed checkpoint.** Removing
+  entries from the **end** of the chain leaves a shorter-but-internally-
+  consistent chain. `GET /api/audit/verify` now cross-checks the chain against
+  the newest signed checkpoint that verifies under the instance key, so any
+  truncation, rewind, or rewrite **at or below** that checkpoint fails
+  verification — the previously write-only checkpoints are now read back. Two
+  gaps remain: (a) entries written **after** the last checkpoint can still be
+  dropped undetected until the next checkpoint seals them, and (b) an operator
+  who holds the signing key can re-sign a fresh checkpoint over a rewritten
+  chain. Keep successive signed exports, or wait for opt-in external anchoring,
+  if you need to close those.
 - **The agent-session header is a claim.** It is recorded for correlation but is
   client-supplied; the trustworthy identity is the authenticated API key.
 - **History boundary.** The chain starts when the feature is first enabled;

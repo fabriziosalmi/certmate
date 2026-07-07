@@ -7,6 +7,7 @@ depend on the Flask application context or global configuration variables.
 """
 import dataclasses
 import json
+import os
 import re
 import secrets
 import string
@@ -515,10 +516,13 @@ def _create_config_file(plugin_name: str, content: str) -> Path:
     config_dir.mkdir(parents=True, exist_ok=True)
 
     config_file = config_dir / f"{plugin_name}-{secrets.token_hex(8)}.ini"
-    with open(config_file, 'w', encoding='utf-8') as f:
+    # Create the file 0600 ATOMICALLY: O_EXCL never follows a pre-planted
+    # symlink at this (world-writable-dir) path, and the mode is set at open()
+    # so the DNS-provider secret is never briefly world-readable under the
+    # process umask (the old open()+chmod left a 0644 window).
+    fd = os.open(str(config_file), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, 'w', encoding='utf-8') as f:
         f.write(content)
-
-    config_file.chmod(0o600)
     return config_file
 
 def create_cloudflare_config(token: str) -> Path:
@@ -583,17 +587,42 @@ def create_azure_config(subscription_id: str, resource_group: str, tenant_id: st
     return _create_config_file("azure", content)
 
 def create_google_config(project_id: str, service_account_key: str) -> Path:
-    """Create Google Cloud DNS credentials file."""
+    """Create Google Cloud DNS credentials file.
+
+    The service-account JSON is a live GCP private key. It previously landed at
+    a FIXED path (``google-service-account.json``), written 0644-then-chmod, and
+    was NEVER deleted — so a full cloud credential sat on disk indefinitely at a
+    predictable location, and two concurrent Google issuances clobbered each
+    other's key. Now: a per-operation random name, created 0600 atomically
+    (O_EXCL), plus a best-effort sweep of orphaned key files from crashed or
+    older runs (anything older than the certbot timeout is dead)."""
     config_dir = Path("letsencrypt/config")
     config_dir.mkdir(parents=True, exist_ok=True)
-    
-    sa_file = config_dir / "google-service-account.json"
-    with open(sa_file, 'w', encoding='utf-8') as f:
+    _sweep_orphaned_files(config_dir, "google-sa-*.json")
+
+    sa_file = config_dir / f"google-sa-{secrets.token_hex(8)}.json"
+    fd = os.open(str(sa_file), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, 'w', encoding='utf-8') as f:
         f.write(service_account_key)
-    sa_file.chmod(0o600)
-    
+
     content = f"dns_google_project_id = {project_id}\ndns_google_service_account_key = {str(sa_file)}\n"
     return _create_config_file("google", content)
+
+
+def _sweep_orphaned_files(directory: Path, pattern: str, max_age_seconds: int = 3600) -> None:
+    """Best-effort deletion of files matching *pattern* older than
+    *max_age_seconds*. A live issuance cannot outlast the 1800s certbot timeout,
+    so anything older is an orphan (crashed run, killed worker). Never raises."""
+    try:
+        cutoff = time.time() - max_age_seconds
+        for p in directory.glob(pattern):
+            try:
+                if p.stat().st_mtime < cutoff:
+                    p.unlink()
+            except OSError:
+                pass
+    except OSError:
+        pass
 
 def create_powerdns_config(api_url: str, api_key: str) -> Path:
     """Create PowerDNS credentials file."""

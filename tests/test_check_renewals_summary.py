@@ -54,6 +54,7 @@ def test_summary_counts_every_kind_of_entry(tmp_path):
         'failed': 0,
         'skipped_disabled': 1,  # disabled.com
         'skipped_invalid': 3,   # empty, dict-without-domain, int
+        'skipped_not_due': 0,   # certbot didn't report any "not yet due" no-op
     }
     mgr.renew_certificate.assert_called_once_with('good.com')
 

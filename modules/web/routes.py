@@ -184,7 +184,7 @@ def register_web_routes(app, managers):
         """Decorator for web pages: redirect to /login if not authenticated"""
         @wraps(f)
         def decorated(*args, **kwargs):
-            if not auth_manager.is_local_auth_enabled() or not auth_manager.has_any_users():
+            if auth_manager.is_setup_mode():
                 return f(*args, **kwargs)
             session_id = request.cookies.get('certmate_session')
             if session_id:

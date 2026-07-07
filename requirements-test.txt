@@ -9,3 +9,8 @@ coverage
 requests-mock
 freezegun
 playwright
+# In-repo terminal clients (SDK + CLI), installed editable so the e2e gate can
+# exercise them against the test container and keep them in lockstep with the
+# server they wrap. Order matters: the SDK first (the CLI depends on it).
+-e ./clients/certmate-sdk
+-e ./clients/certmate-cli

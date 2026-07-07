@@ -49,6 +49,7 @@ def test_me_returns_admin_when_auth_disabled():
     auth_manager = MagicMock()
     auth_manager.is_local_auth_enabled.return_value = False
     auth_manager.has_any_users.return_value = False
+    auth_manager.is_setup_mode.return_value = True
     app = _build_app(auth_manager)
     client = app.test_client()
 
@@ -66,6 +67,7 @@ def test_me_returns_admin_when_no_users_yet():
     auth_manager = MagicMock()
     auth_manager.is_local_auth_enabled.return_value = True
     auth_manager.has_any_users.return_value = False
+    auth_manager.is_setup_mode.return_value = True
     app = _build_app(auth_manager)
     client = app.test_client()
 
@@ -80,6 +82,7 @@ def test_me_returns_401_when_authed_with_no_session():
     auth_manager = MagicMock()
     auth_manager.is_local_auth_enabled.return_value = True
     auth_manager.has_any_users.return_value = True
+    auth_manager.is_setup_mode.return_value = False
     auth_manager.validate_session.return_value = None
     app = _build_app(auth_manager)
     client = app.test_client()
@@ -92,6 +95,7 @@ def test_me_returns_session_user_when_authed():
     auth_manager = MagicMock()
     auth_manager.is_local_auth_enabled.return_value = True
     auth_manager.has_any_users.return_value = True
+    auth_manager.is_setup_mode.return_value = False
     auth_manager.validate_session.return_value = {
         'username': 'alice', 'role': 'operator'
     }

@@ -239,6 +239,21 @@ class DeployManager:
             'duration_ms': result['duration_ms'],
         })
 
+        # A failed deploy hook is the "silent deploy" trap: create/renew has
+        # already returned success and the operator sees green, but the service
+        # may still be serving the OLD certificate. Publish a dedicated failure
+        # event so the notifier actively alerts (email/webhook/etc.) instead of
+        # leaving the only trace in logs, the audit trail, and deploy_history.
+        # Skipped for dry runs, which are expected to "not deploy".
+        if not result['success'] and not dry_run:
+            self.event_bus.publish('deploy_hook_failed', {
+                'hook_id': hook_id,
+                'hook_name': hook_name,
+                'domain': domain,
+                'exit_code': result['exit_code'],
+                'error': result.get('error'),
+            })
+
         self._log_history(result)
         return result
 
