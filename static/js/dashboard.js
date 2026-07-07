@@ -2032,6 +2032,25 @@
         if (!form) return;
         var submitBtn = form.querySelector('button[type="submit"]');
         var banner = document.getElementById('reissue-edit-banner');
+        // The drawer header must state the actual operation (#382): opened
+        // for an existing certificate it edits, it does not create. The
+        // create markup is stashed on the node (same pattern as the submit
+        // button below) so leaving edit mode restores it exactly.
+        var title = document.getElementById('drawerTitle');
+        var dialog = document.getElementById('createCertFormContainer');
+        if (title) {
+            if (editing) {
+                if (!title.dataset.createHtml) {
+                    title.dataset.createHtml = title.innerHTML;
+                }
+                title.innerHTML = '<i class="fas fa-pen mr-2 text-primary"></i>Edit Certificate';
+            } else if (title.dataset.createHtml) {
+                title.innerHTML = title.dataset.createHtml;
+            }
+        }
+        if (dialog) {
+            dialog.setAttribute('aria-label', editing ? 'Edit certificate' : 'New certificate');
+        }
         if (editing) {
             if (!banner) {
                 banner = document.createElement('div');
