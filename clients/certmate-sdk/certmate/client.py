@@ -11,11 +11,25 @@ from typing import Any, Callable, Dict, List, Optional
 
 import httpx
 
-from .errors import (APIError, AuthError, ConflictError, JobFailed, JobTimeout,
-                     NotFoundError)
+from .errors import (APIError, AuthError, CertMateError, ConflictError,
+                     JobFailed, JobTimeout, NotFoundError, TransportError)
 from .models import Certificate, Job
 
 _DEFAULT_URL = "http://localhost:8000"
+
+# Real DNS-01 renewals block on propagation and can take minutes; the client
+# default (30s) would kill the call while the server keeps renewing.
+_RENEW_TIMEOUT = 600.0
+
+# Fallback text for httpx exceptions whose str() is empty (timeouts often are).
+_TRANSPORT_DETAIL = {
+    "ConnectError": "connection failed",
+    "ConnectTimeout": "connection timed out",
+    "ReadTimeout": "server did not respond in time",
+    "WriteTimeout": "sending the request timed out",
+    "PoolTimeout": "no free connection in the pool",
+    "RemoteProtocolError": "server closed the connection unexpectedly",
+}
 
 
 class Client:
@@ -60,7 +74,15 @@ class Client:
 
     # -- low level -----------------------------------------------------------
     def _request(self, method: str, path: str, **kw) -> Any:
-        resp = self._http.request(method, path, **kw)
+        try:
+            resp = self._http.request(method, path, **kw)
+        except httpx.HTTPError as e:
+            # Network-level failures become one clean SDK exception instead of
+            # a raw httpx traceback (connection refused, DNS, timeout, ...).
+            detail = str(e).strip() or _TRANSPORT_DETAIL.get(
+                type(e).__name__, type(e).__name__)
+            raise TransportError(
+                f"cannot reach server at {self.base_url}: {detail}") from e
         if resp.status_code // 100 == 2:
             if not resp.content:
                 return None
@@ -120,11 +142,13 @@ class Client:
         return self.wait_for_job(job.job_id, on_progress=on_progress) if wait else job
 
     def renew_certificate(self, domain: str, *, force: bool = False) -> Dict[str, Any]:
-        # Always send an (empty) JSON body so endpoints that read request.json
-        # don't 415 on a bodyless POST.
-        params = {"force": "true"} if force else None
+        # The server reads force from the JSON body (payload.get('force')),
+        # never from the query string. Always send a body — even when force is
+        # False — so endpoints that read request.json don't 415 on a bodyless
+        # POST. The per-request timeout covers multi-minute DNS-01 renewals.
         return self._request("POST", f"/api/certificates/{domain}/renew",
-                             params=params, json={}) or {}
+                             json={"force": bool(force)},
+                             timeout=_RENEW_TIMEOUT) or {}
 
     def reissue_certificate(self, domain: str, **body: Any) -> Dict[str, Any]:
         return self._request("POST", f"/api/certificates/{domain}/reissue", json=body) or {}
@@ -134,9 +158,28 @@ class Client:
 
     def download_certificate(self, domain: str, fmt: str = "json") -> Any:
         """Download the bundle. ``fmt`` is one of json/pem/zip/pfx (json returns
-        a dict, the binary formats return bytes)."""
+        a dict, the binary formats return bytes).
+
+        The endpoint only accepts ``?format=json``; the other shapes are the
+        bare default (zip) or selected via ``?file=``, so each fmt maps to the
+        exact query the API understands:
+
+        - ``json`` -> ``?format=json`` (dict, PEM strings inline)
+        - ``zip``  -> no params (the endpoint's default bundle)
+        - ``pem``  -> ``?file=fullchain.pem``
+        - ``pfx``  -> ``?file=cert.pfx``
+        """
+        params_by_fmt: Dict[str, Optional[Dict[str, str]]] = {
+            "json": {"format": "json"},
+            "zip": None,
+            "pem": {"file": "fullchain.pem"},
+            "pfx": {"file": "cert.pfx"},
+        }
+        if fmt not in params_by_fmt:
+            raise ValueError(
+                f"unknown download format {fmt!r}; use one of json/pem/zip/pfx")
         return self._request("GET", f"/api/certificates/{domain}/download",
-                             params={"format": fmt})
+                             params=params_by_fmt[fmt])
 
     def set_auto_renew(self, domain: str, enabled: bool) -> Dict[str, Any]:
         return self._request("PUT", f"/api/certificates/{domain}/auto-renew",
@@ -151,10 +194,40 @@ class Client:
 
     def wait_for_job(self, job_id: str, *, interval: float = 2.0, timeout: float = 600.0,
                      on_progress: Optional[Callable[[Job], None]] = None) -> Job:
-        deadline = None  # computed lazily to avoid importing time at module import
         start = time.monotonic()
+        last: Optional[Job] = None       # last successfully polled state
+        transient = 0                    # consecutive transport failures
         while True:
-            job = self.get_job(job_id)
+            try:
+                job = self.get_job(job_id)
+            except TransportError:
+                # A blip mid-poll (server restart, proxy hiccup) must not
+                # abort a multi-minute issuance; only a sustained outage —
+                # three consecutive failed polls — gives up.
+                transient += 1
+                if transient >= 3:
+                    raise
+                if time.monotonic() - start > timeout:
+                    raise JobTimeout(
+                        f"job {job_id} did not finish within {timeout:.0f}s")
+                time.sleep(interval)
+                continue
+            except NotFoundError:
+                # Finished jobs can be evicted from the server's job table
+                # between polls. If the job was seen at least once and its
+                # certificate now exists, the eviction means "completed" —
+                # confirm against the certificate before declaring failure.
+                if last is not None and last.domain:
+                    try:
+                        self.get_certificate(last.domain)
+                    except CertMateError:
+                        pass
+                    else:
+                        last.status = "succeeded"
+                        return last
+                raise
+            transient = 0
+            last = job
             if on_progress:
                 on_progress(job)
             if job.is_terminal:
@@ -174,23 +247,39 @@ class Client:
         return self._request("GET", path)
 
     def test_dns_provider(self, provider: str, **config: Any) -> Dict[str, Any]:
-        """Preflight a DNS provider without issuing. Backs the CLI ``--dry-run``."""
-        body = {"provider": provider}
-        body.update(config)
+        """Preflight a DNS provider without issuing. Backs the CLI ``--dry-run``.
+
+        The endpoint expects ``{"provider": ..., "config": {...}}`` — the
+        credentials nested under ``config``, never flattened into the top
+        level. An empty config asks the server (v2.21.1+) to fall back to the
+        provider's stored account credentials."""
+        body = {"provider": provider, "config": config or {}}
         return self._request("POST", "/api/web/certificates/test-provider", json=body) or {}
 
     # -- audit / misc --------------------------------------------------------
     def audit_verify(self) -> Dict[str, Any]:
-        """Verify the audit chain. The endpoint returns 200 when intact and
-        409 (WITH the full result body) when the chain is broken/absent — both
-        are valid verification results, so return the dict in either case and
+        """Verify the audit chain. The endpoint returns 200 when intact (or
+        when a fresh instance has no chain yet — ``state == 'absent'``) and
+        409 (WITH the full result body) when the chain is broken — both are
+        valid verification results, so return the dict in either case and
         only raise on a genuine transport/auth error. Inspect ``result['ok']``.
+
+        The returned dict always carries ``_http_status`` (int: 200 or 409) so
+        callers never lose the intact-vs-broken distinction: the body reason
+        can read the same in both cases ("chain file does not exist" is benign
+        on a 200 with ``state='absent'`` but tampering on a 409 — a chain
+        deleted after signed checkpoints attested it existed).
         """
         try:
-            return self._request("GET", "/api/audit/verify") or {}
+            res = self._request("GET", "/api/audit/verify") or {}
+            if isinstance(res, dict):
+                res["_http_status"] = 200
+            return res
         except ConflictError as e:
             if isinstance(e.payload, dict):
-                return e.payload
+                res = dict(e.payload)
+                res["_http_status"] = e.status
+                return res
             raise
 
     def activity(self, limit: int = 100) -> Any:

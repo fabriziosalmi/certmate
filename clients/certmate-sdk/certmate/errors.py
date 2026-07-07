@@ -8,6 +8,15 @@ class CertMateError(Exception):
     """Base class for every SDK error."""
 
 
+class TransportError(CertMateError):
+    """The server could not be reached or the connection died mid-request
+    (DNS failure, connection refused, timeout, protocol error).
+
+    Wraps ``httpx.HTTPError`` so callers — the CLI in particular — can catch
+    one SDK exception type and print a clean message instead of surfacing a
+    raw httpx traceback."""
+
+
 class APIError(CertMateError):
     """The API returned a non-2xx response.
 

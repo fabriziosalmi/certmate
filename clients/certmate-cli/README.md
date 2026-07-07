@@ -17,3 +17,5 @@ certmate audit verify
 ```
 
 Connection comes from `--url`/`--token` or `CERTMATE_URL`/`CERTMATE_TOKEN`.
+Prefer the `CERTMATE_TOKEN` environment variable over `--token`: command-line
+arguments are visible to other local processes (`ps`) and shell history.

@@ -21,13 +21,59 @@ on:
 permissions:
   contents: read
 
+# NOTE on environment names: they are asymmetric BY CONFIGURATION on PyPI's
+# side — the SDK's trusted publishers are registered against 'testpypi-sdk' /
+# 'pypi-sdk', the CLI's against plain 'testpypi' / 'pypi'. PyPI forbids two
+# pending trusted publishers sharing the same (repo, workflow, environment)
+# tuple, so the names cannot be "normalized" to match each other without
+# re-registering both publishers. Do not tidy them.
+
 jobs:
+  check-versions:
+    name: tag matches package versions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      - name: Fail unless both package versions equal the pushed tag
+        # PyPI uploads are write-once: publishing a clients-vX.Y.Z tag whose
+        # pyproject versions disagree would irrevocably ship the wrong
+        # version. workflow_dispatch runs carry no tag, but the two packages
+        # must still agree with each other (they release as a pair).
+        run: |
+          python3 - <<'EOF'
+          import os
+          import sys
+          import tomllib
+
+          def version(path):
+              with open(path, "rb") as f:
+                  return tomllib.load(f)["project"]["version"]
+
+          sdk = version("clients/certmate-sdk/pyproject.toml")
+          cli = version("clients/certmate-cli/pyproject.toml")
+          problems = []
+          if sdk != cli:
+              problems.append(f"certmate-sdk {sdk} != certmate-cli {cli}")
+          ref = os.environ.get("GITHUB_REF", "")
+          if ref.startswith("refs/tags/clients-v"):
+              tag_version = ref[len("refs/tags/clients-v"):]
+              if sdk != tag_version:
+                  problems.append(f"tag says {tag_version}, certmate-sdk says {sdk}")
+              if cli != tag_version:
+                  problems.append(f"tag says {tag_version}, certmate-cli says {cli}")
+          if problems:
+              sys.exit("version gate failed: " + "; ".join(problems))
+          print(f"version gate OK: sdk={sdk} cli={cli} ref={ref or '(manual dispatch)'}")
+          EOF
+
   publish-sdk:
     name: publish certmate-sdk
+    needs: check-versions
     runs-on: ubuntu-latest
     # Per-package environment names: PyPI forbids two pending trusted publishers
     # sharing the same (repo, workflow, environment), so each package gets its
-    # own. Must match the PyPI/TestPyPI Trusted Publisher config.
+    # own. Must match the PyPI/TestPyPI Trusted Publisher config (see the
+    # asymmetry note above the jobs block).
     environment: ${{ (github.event_name == 'workflow_dispatch' && inputs.target == 'testpypi') && 'testpypi-sdk' || 'pypi-sdk' }}
     permissions:
       id-token: write   # OIDC — the only credential trusted publishing needs
@@ -40,7 +86,7 @@ jobs:
       - run: python -m build clients/certmate-sdk --outdir dist
       - run: twine check dist/*
       - name: Publish certmate-sdk
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b  # v1.14.0
         with:
           packages-dir: dist
           repository-url: ${{ (github.event_name == 'workflow_dispatch' && inputs.target == 'testpypi') && 'https://test.pypi.org/legacy/' || '' }}
@@ -49,6 +95,8 @@ jobs:
     name: publish certmate-cli
     needs: publish-sdk   # SDK must land on the index first (the CLI depends on it)
     runs-on: ubuntu-latest
+    # Plain 'testpypi' / 'pypi' here vs 'testpypi-sdk' / 'pypi-sdk' above is
+    # intentional — see the asymmetry note above the jobs block.
     environment: ${{ (github.event_name == 'workflow_dispatch' && inputs.target) || 'pypi' }}
     permissions:
       id-token: write
@@ -61,7 +109,7 @@ jobs:
       - run: python -m build clients/certmate-cli --outdir dist
       - run: twine check dist/*
       - name: Publish certmate-cli
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b  # v1.14.0
         with:
           packages-dir: dist
           repository-url: ${{ (github.event_name == 'workflow_dispatch' && inputs.target == 'testpypi') && 'https://test.pypi.org/legacy/' || '' }}

@@ -10,6 +10,7 @@ Connection comes from --url/--token or CERTMATE_URL/CERTMATE_TOKEN.
 from __future__ import annotations
 
 import re
+import sys
 from typing import List, Optional
 
 import typer
@@ -41,14 +42,38 @@ _DOMAIN_RE = re.compile(
     r"^(\*\.)?([a-zA-Z0-9_](-*[a-zA-Z0-9_])*\.)+[a-zA-Z]{2,}$")
 
 
+def _token_on_argv() -> bool:
+    """True when the token was passed as a command-line flag (as opposed to
+    the CERTMATE_TOKEN environment variable). argv is what leaks to `ps`
+    output and shell history, so it is exactly the thing to check."""
+    return any(a == "--token" or a.startswith("--token=") for a in sys.argv)
+
+
+def _stderr_isatty() -> bool:
+    # Indirection so tests can stub interactivity; CliRunner's captured
+    # stderr never reports a TTY.
+    try:
+        return sys.stderr.isatty()
+    except Exception:
+        return False
+
+
 @app.callback()
 def _main(
     ctx: typer.Context,
     url: Optional[str] = typer.Option(None, "--url", envvar="CERTMATE_URL",
                                       help="CertMate base URL (default http://localhost:8000)."),
     token: Optional[str] = typer.Option(None, "--token", envvar="CERTMATE_TOKEN",
-                                        help="API bearer token."),
+                                        help="API bearer token. Prefer the CERTMATE_TOKEN "
+                                             "environment variable: --token is visible to other "
+                                             "local processes (ps) and shell history."),
 ):
+    # Kept for compatibility, but discourage --token interactively: argv is
+    # world-readable via ps and lands in shell history. Warn only on a TTY so
+    # scripts and pipelines stay quiet.
+    if token and _token_on_argv() and _stderr_isatty():
+        err.print("[yellow]warning[/]: --token is visible in ps output and shell history; "
+                  "prefer the CERTMATE_TOKEN environment variable.")
     ctx.obj = {"url": url, "token": token}
 
 
@@ -156,7 +181,9 @@ def cert_create(
                                  help="Validate inputs and preflight the DNS provider WITHOUT issuing."),
 ):
     """Issue a certificate (async; waits for completion by default)."""
-    sans: List[str] = [s.strip() for s in san.split(",")] if san else []
+    # Drop empties so a trailing comma ("a.com,b.com,") never produces a
+    # bogus "" SAN entry — mirrors cert_reissue.
+    sans: List[str] = [s.strip() for s in san.split(",") if s.strip()] if san else []
     client = _client(ctx)
 
     if dry_run:
@@ -213,10 +240,18 @@ def cert_renew(ctx: typer.Context, domain: str,
                force: bool = typer.Option(False, "--force", help="Force renewal even if not due.")):
     """Renew a certificate."""
     res = _run(lambda: _client(ctx).renew_certificate(domain, force=force))
-    if res.get("renewed") is False:
-        out.print(f"[yellow]not due[/] — {domain} was not yet due for renewal.")
-    else:
+    renewed = res.get("renewed")
+    # Only servers v2.21.1+ report the outcome (`renewed: true/false`). Green
+    # requires an explicit true — an absent key means the server did not say,
+    # and claiming success would be a lie.
+    if renewed is True:
         out.print(f"[green]renewed[/] {domain}.")
+    elif renewed is False:
+        msg = res.get("message") or f"{domain} was not yet due for renewal."
+        out.print(f"[yellow]not due[/] — {msg}")
+    else:
+        out.print(f"renew requested for [bold]{domain}[/] — server did not report "
+                  "the outcome (server v2.21.1+ reports it).")
 
 
 @cert_app.command("rm")
@@ -280,10 +315,13 @@ def audit_verify(ctx: typer.Context):
     ok = bool(res.get("ok"))
     reason = res.get("reason") or ""
     cp = res.get("checkpoint_verified")
-    # "chain file does not exist" / "empty chain" is a fresh instance that has
-    # not audited anything yet — benign, not a tamper alarm. Show it neutrally.
-    if not ok and any(k in reason.lower() for k in ("does not exist", "empty")):
-        out.print(f"audit chain: [dim]none yet[/] — {reason}")
+    # Benign ONLY when the server says state='absent' (200: fresh instance,
+    # nothing audited yet). The reason wording is NOT a signal: a chain file
+    # DELETED after signed checkpoints attested it existed comes back as a 409
+    # with the very same "chain file does not exist" text — that is tampering
+    # and must exit non-zero, like every other not-ok result.
+    if not ok and res.get("state") == "absent":
+        out.print(f"audit chain: [dim]none yet[/] — {reason or 'nothing audited yet'}")
         return
     detail = (
         f" — {reason}"
