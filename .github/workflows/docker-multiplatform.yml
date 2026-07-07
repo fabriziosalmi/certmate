@@ -82,6 +82,9 @@ jobs:
       uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051  # v5
       with:
         images: ${{ env.REGISTRY }}/${{ steps.ns.outputs.namespace }}/${{ env.IMAGE_NAME }}
+        # latest = released: only v* tag builds (cut after the release.sh
+        # real-cert e2e gate) may publish :latest; pushes to main get branch
+        # tags only (e.g. :main), because CI performs no real-ACME validation.
         tags: |
           type=ref,event=branch
           type=ref,event=pr
@@ -90,7 +93,7 @@ jobs:
           type=semver,pattern={{major}}
           type=semver,pattern=v{{version}}
           type=semver,pattern=v{{major}}.{{minor}}
-          type=raw,value=latest,enable={{is_default_branch}}
+          type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
         flavor: |
           latest=auto
           

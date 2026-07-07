@@ -10,6 +10,9 @@ name: E2E (staging)
 # NOT a required PR check. It runs only when EXPLICITLY enabled, and when it is
 # not enabled the job is SKIPPED (neutral) rather than reporting a green no-op —
 # a gate must never claim success without actually issuing a certificate.
+# The flip side: on SCHEDULED runs a disabled gate must not skip silently
+# either, or the weekly coverage dies unnoticed — the `gate-disabled` job
+# below fails loudly in that case so disablement shows as a red X.
 #
 # The authoritative real-cert gate is run LOCALLY before each release, with
 # credentials kept in .env (never in CI):
@@ -93,3 +96,18 @@ jobs:
           tests/test_health_ready_e2e.py \
           tests/test_cert_lifecycle.py \
           tests/test_async_issuance_e2e.py
+
+  gate-disabled:
+    name: gate-disabled
+    # Visibility guard: with E2E_STAGING_ENABLED unset/false, the e2e-staging
+    # job above skips (neutral) on every weekly cron — dead real-cert coverage
+    # that never surfaces anywhere. Fail loudly on scheduled runs instead so
+    # disablement produces a visible red X each week. Manual dispatch is
+    # unaffected: this job never runs for workflow_dispatch.
+    if: ${{ github.event_name == 'schedule' && vars.E2E_STAGING_ENABLED != 'true' }}
+    runs-on: [self-hosted, Linux, X64]
+    steps:
+    - name: Fail - scheduled real-cert e2e is disabled
+      run: |
+        echo "::error::Scheduled real-cert e2e is disabled: set repo variable E2E_STAGING_ENABLED=true and secrets CLOUDFLARE_API_TOKEN (token scoped ONLY to the test zone) + CERTMATE_TEST_DOMAIN, or remove the cron trigger."
+        exit 1
