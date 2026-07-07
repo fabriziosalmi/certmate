@@ -361,7 +361,9 @@ def test_wildcard_without_deployment_host_is_not_a_hard_mismatch(tmp_path, monke
     assert body['probe_status'] == 'unverifiable'
     assert body['mismatch_reason']
     assert 'deployment_host' in body['mismatch_reason']
-    assert 'example.com' in body['mismatch_reason']
+    # Assert the wildcard form (with the *. label) rather than a bare host, so
+    # the static analyzer does not read this as URL-substring sanitization.
+    assert '*.example.com' in body['mismatch_reason']
 
 
 def test_wildcard_with_deployment_host_probes_that_host(tmp_path, monkeypatch):
@@ -458,7 +460,10 @@ def test_mismatch_includes_diagnostic_reason(tmp_path, monkeypatch):
     assert body['expected_fingerprint'] == 'expectedfingerprint00'[:16]
     reason = body['mismatch_reason']
     assert domain in reason
-    assert 'intruder.example.net' in reason
+    # Assert the CN-qualified subject (as the reason renders it) rather than a
+    # bare host, so the static analyzer does not read this as URL-substring
+    # sanitization; served_subject is verified structurally above.
+    assert 'CN=intruder.example.net' in reason
 
 
 def test_non_wildcard_match_is_unchanged(tmp_path, monkeypatch):
