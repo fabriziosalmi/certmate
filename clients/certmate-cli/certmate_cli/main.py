@@ -285,8 +285,14 @@ def audit_verify(ctx: typer.Context):
     if not ok and any(k in reason.lower() for k in ("does not exist", "empty")):
         out.print(f"audit chain: [dim]none yet[/] — {reason}")
         return
-    out.print(f"audit chain: {'[green]intact[/]' if ok else '[red]BROKEN[/]'}"
-              f"{(' — ' + reason) if reason else ''}")
+    detail = (
+        f" — {reason}"
+        if reason and not (ok and reason.lower() == "intact")
+        else ""
+    )
+    out.print(
+        f"audit chain: {'[green]intact[/]' if ok else '[red]BROKEN[/]'}{detail}"
+    )
     if cp is not None:
         out.print(f"  signed checkpoint: {'[green]verified[/]' if cp else '[dim]not cross-checked[/]'}"
                   f"{(' @ seq ' + str(res.get('checkpoint_seq'))) if res.get('checkpoint_seq') is not None else ''}")
