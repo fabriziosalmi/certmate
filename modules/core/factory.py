@@ -591,7 +591,7 @@ def _run_manager_job(manager_key: str, method_name: str):
 
 
 @contextmanager
-def _renewal_process_lock():
+def _renewal_process_lock(lock_name: str = '.renewal.lock'):
     """Best-effort, host-local cross-process lock for scheduled renewal.
 
     The APScheduler renewal jobs fire in EVERY process. CertMate ships as a
@@ -601,12 +601,20 @@ def _renewal_process_lock():
     ACME orders and burning the CA's duplicate-certificate rate limit. This
     flock lets exactly one holder proceed; the others skip this tick.
 
+    ``lock_name`` names the lock file so INDEPENDENT jobs get INDEPENDENT locks
+    (TLS renewal and client-cert renewal must never contend — a long TLS run
+    would otherwise suppress the client-cert sweep and let mTLS certs expire
+    unrenewed). It defaults to '.renewal.lock' for back-compat; callers pass a
+    distinct name per job. Only multiple processes running the SAME job should
+    ever contend on the SAME lock.
+
     Advisory + host-local: flock does NOT coordinate replicas on SEPARATE
     filesystems (e.g. k8s pods without a shared volume) — that needs external
     coordination; see the deployment docs. Yields True when the caller may run,
-    False when another process already holds the lock. On any error (no data
-    dir, platform without fcntl) it yields True: the single-process default is
-    correct and must never be blocked by the guard itself."""
+    False when another process already holds this lock. On ANY error acquiring
+    the lock (no data dir, platform without fcntl, the lock file cannot even be
+    opened) it yields True and never raises: single-process is the default and
+    must never be blocked by the guard itself."""
     lock_file = None
     acquired = False
     try:
@@ -619,11 +627,24 @@ def _renewal_process_lock():
         except ImportError:
             yield True  # non-POSIX host; single-process assumption holds
             return
-        lock_file = open(Path(data_dir) / '.renewal.lock', 'w')
+        try:
+            lock_file = open(Path(data_dir) / lock_name, 'w')
+        except OSError as e:
+            # Cannot open the lock file at all (read-only FS, perms, ...). The
+            # guard must never block the single-process default: proceed.
+            logger.warning(
+                "Renewal lock file could not be opened; proceeding without it",
+                lock_name=lock_name, error=str(e),
+            )
+            yield True
+            return
         try:
             fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
             acquired = True
         except OSError:
+            # LOCK_NB contended: another process already holds THIS lock. This
+            # is the designed "another holder runs, we skip" signal, not a
+            # failure — yield False so exactly one process renews.
             acquired = False
         yield acquired
     finally:
@@ -638,8 +659,9 @@ def _renewal_process_lock():
 
 def _certificate_renewal_job():
     """Picklable wrapper for certificate renewal check, guarded so only one
-    process runs it when several share a data dir (see _renewal_process_lock)."""
-    with _renewal_process_lock() as may_run:
+    process runs it when several share a data dir (see _renewal_process_lock).
+    Uses its OWN lock so it never contends with the client-cert sweep."""
+    with _renewal_process_lock('.renewal.lock') as may_run:
         if not may_run:
             logger.info("Scheduled certificate renewal skipped: another process "
                         "holds the renewal lock (multiple workers/containers on a "
@@ -649,11 +671,13 @@ def _certificate_renewal_job():
 
 
 def _client_certificate_renewal_job():
-    """Picklable wrapper for client certificate renewal check (same guard)."""
-    with _renewal_process_lock() as may_run:
+    """Picklable wrapper for client certificate renewal check. Uses a SEPARATE
+    lock from the TLS renewal job so a long TLS run can never suppress it and
+    let mTLS certs expire unrenewed."""
+    with _renewal_process_lock('.client-renewal.lock') as may_run:
         if not may_run:
             logger.info("Scheduled client-certificate renewal skipped: another "
-                        "process holds the renewal lock.")
+                        "process holds the client-renewal lock.")
             return
         _run_manager_job('client_certificates', 'check_renewals')
 
