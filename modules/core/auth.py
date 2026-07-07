@@ -784,6 +784,22 @@ class AuthManager:
             self._operator_bearer_token = cached
         return cached
 
+    def _is_oidc_configured(self):
+        """True iff the operator fully configured OIDC (enabled + issuer_url +
+        client_id). That is an operator-controlled credential exactly like
+        API_BEARER_TOKEN or local-auth-plus-a-user, so it must turn setup mode
+        OFF. Otherwise an SSO-only deployment (no bearer token, local auth left
+        disabled) stays in setup mode forever and serves every gated endpoint
+        to anonymous callers as admin — local_auth_enabled defaults False and
+        OIDC JIT provisioning never flips it, so the local-auth branch below
+        can never become True on such a box. Mirrors OIDCManager.is_enabled()
+        without importing it (settings is the single source of truth)."""
+        try:
+            cfg = self.settings_manager.load_settings().get('oidc', {}) or {}
+        except (OSError, ValueError, KeyError, AttributeError):
+            return False
+        return bool(cfg.get('enabled') and cfg.get('issuer_url') and cfg.get('client_id'))
+
     def is_setup_mode(self):
         """True on a genuinely unconfigured instance, where unauthenticated
         access is allowed so the operator can bootstrap (reach the UI, create
@@ -791,15 +807,17 @@ class AuthManager:
 
         Becomes False as soon as ANY credential the operator controls exists:
           * local auth is enabled AND at least one user exists, OR
-          * the operator provided an API bearer token (API_BEARER_TOKEN[_FILE]).
+          * the operator provided an API bearer token (API_BEARER_TOKEN[_FILE]), OR
+          * OIDC is fully configured (enabled + issuer_url + client_id).
 
         Once False, every gated surface requires a real credential. This closes
-        the gap where an API-only operator set API_BEARER_TOKEN — which
-        docs/api.md documents as *required on all endpoints* — but the token
-        was never enforced because local auth stayed off, leaving the whole
-        instance world-open. A fresh install with no operator-provided token is
-        unchanged: it stays in setup mode so onboarding works."""
+        the gap where an operator configured auth — API_BEARER_TOKEN, or an
+        OIDC/SSO-only deployment — but the instance stayed world-open because
+        local auth was never enabled. A fresh install with no operator-provided
+        credential is unchanged: it stays in setup mode so onboarding works."""
         if self.has_operator_bearer_token():
+            return False
+        if self._is_oidc_configured():
             return False
         return not (self.is_local_auth_enabled() and self.has_any_users())
     

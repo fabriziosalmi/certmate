@@ -1,6 +1,10 @@
 ## v2.21.1 (Hardening — truth in reporting, across server, clients and CI)
 
-One theme: every path that could report success while silently not doing the thing now tells the truth. Found by a full-project adversarial review (six parallel audit passes over the codebase, the shipped clients, the previously-open P2 tail, GitHub state and CI), and every defect below was hand-verified in code before being fixed.
+One theme: every path that could report success while silently not doing the thing now tells the truth. Found by a full-project adversarial review (parallel audit passes over the codebase, the shipped clients, the previously-open P2 tail, GitHub state and CI), and every defect below was hand-verified in code before being fixed.
+
+### Security
+
+- **OIDC/SSO-only deployments are no longer world-open (critical, pre-existing).** `is_setup_mode()` decided whether to allow unauthenticated bootstrap access from two operator-credential sources — local-auth-plus-a-user, or an `API_BEARER_TOKEN` — but never consulted OIDC. On an SSO-only box (OIDC enabled, no bearer token, local password auth left disabled) the local-auth branch can never become true (OIDC's just-in-time user provisioning never enables local auth), so the instance stayed in setup mode permanently and served every gated endpoint — read settings, download private keys, issue and delete certificates — to anonymous callers as admin. Setup mode now also turns off when OIDC is fully configured (enabled + issuer_url + client_id), matching how a configured bearer token already behaves; a partially-configured OIDC box still allows bootstrap so the operator can finish setup.
 
 ### Server
 
