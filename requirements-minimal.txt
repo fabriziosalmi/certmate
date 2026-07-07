@@ -20,8 +20,8 @@ urllib3>=2.6.0,!=2.2.0,<3      # CVE-2025-66418, CVE-2025-66471, CVE-2026-21441 
 requests==2.33.0
 python-dotenv==1.2.2
 APScheduler==3.10.4
-cryptography==46.0.7
-pyopenssl==26.0.0
+cryptography==46.0.7               # GHSA-537c-gmf6-5ccf (HIGH) open by choice; blocked by acme 3.3.0 (see SECURITY.md "Known dependency constraint")
+pyopenssl==26.0.0                  # Do not bump to 26.2.0+: removes X509Extension, breaks acme 3.3.0 at import (see SECURITY.md)
 
 # Production server
 gunicorn==23.0.0

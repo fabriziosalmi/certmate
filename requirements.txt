@@ -67,8 +67,8 @@ urllib3>=2.6.0,!=2.2.0,<3      # CVE-2025-66418, CVE-2025-66471, CVE-2026-21441 
 requests==2.33.0
 python-dotenv==1.2.2
 APScheduler==3.10.4
-cryptography==46.0.7
-pyopenssl==26.0.0                      # Requires cryptography>=46.0.0,<47
+cryptography==46.0.7               # GHSA-537c-gmf6-5ccf (HIGH) is open by choice: 48.0.1 needs pyopenssl>=26.2.0, which breaks acme 3.3.0 at import. See SECURITY.md "Known dependency constraint"; unblocked by the certbot 5.x epic (#103).
+pyopenssl==26.0.0                  # Requires cryptography>=46.0.0,<47. Do not bump to 26.2.0+: it removes OpenSSL.crypto.X509Extension, which acme==3.3.0 evaluates at import time (certbot crashes). See SECURITY.md.
 bcrypt==4.2.0                      # Secure password hashing
 Authlib>=1.3.2,<2.0.0              # OIDC/OAuth2 client (Authorization Code + PKCE) for SSO. Floor at 1.3.2 (CVE GHSA-9c64-2c4r-vf2g fixed there); allow patch + minor pickup, ceiling at 2.0.0 because any major bump warrants an explicit compatibility check.
 
