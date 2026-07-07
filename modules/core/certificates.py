@@ -5,6 +5,7 @@ Handles certificate creation, renewal, and information retrieval
 
 import os
 import copy
+import hashlib
 import json
 import shlex
 import subprocess
@@ -1432,6 +1433,17 @@ class CertificateManager:
                 except (FileNotFoundError, OSError):
                     pass
 
+    @staticmethod
+    def _cert_fingerprint(cert_path):
+        """SHA256 of the certificate file bytes, or None when unreadable.
+        Used to detect whether a certbot run actually replaced the live
+        certificate — the artifact is the only renewal signal certbot
+        cannot suppress (its "not yet due" text vanishes under --quiet)."""
+        try:
+            return hashlib.sha256(Path(cert_path).read_bytes()).hexdigest()
+        except OSError:
+            return None
+
     def renew_certificate(self, domain, force=False):
         """Renew a certificate"""
         domain_lock = self._get_domain_lock(domain)
@@ -1460,7 +1472,13 @@ class CertificateManager:
             cmd = [
                 'certbot', 'renew',
                 '--cert-name', domain,
-                '--quiet',
+                # No --quiet: under --quiet certbot routes its "not yet due
+                # for renewal" notification to /dev/null, so a no-op renew
+                # exits 0 with EMPTY output and becomes indistinguishable
+                # from a real renewal by output alone. Output is captured
+                # programmatically (never emailed), so verbosity costs
+                # nothing; the no-op sentinel below needs it as a secondary
+                # signal next to the primary cert-fingerprint comparison.
                 # certbot's default `renew` injects a random sleep of up
                 # to ~8 minutes before contacting the ACME server, to
                 # avoid stampeding Let's Encrypt when run from a flock
@@ -1580,6 +1598,19 @@ class CertificateManager:
                         f"account '{metadata.get('account_id') or 'default'}' is not configured"
                     )
 
+            # certbot `renew` exits 0 BOTH when it renews and when nothing is
+            # due, and its "not yet due" messages are display-channel output
+            # certbot may suppress (it does under --quiet). The only signal
+            # that cannot lie is the artifact itself: fingerprint the live
+            # cert before the run and compare after. Skipped for
+            # non-artifact-producing doubles (MockShellExecutor), which stage
+            # no real files — those fall back to the output sentinel below.
+            live_cert_file = domain_dir / 'live' / domain / 'cert.pem'
+            fingerprint_check = getattr(self.shell_executor, 'produces_artifacts', True)
+            pre_renew_fingerprint = None
+            if fingerprint_check:
+                pre_renew_fingerprint = self._cert_fingerprint(live_cert_file)
+
             # 30-minute cap, mirroring the create path (see the timeout on the
             # create certbot call). Without it a wedged certbot — an
             # unresponsive ACME server, or a manual-auth / DNS-alias hook that
@@ -1592,15 +1623,26 @@ class CertificateManager:
                                              timeout=1800, env=process_env)
 
             if result.returncode == 0:
-                # certbot `renew` exits 0 BOTH when it renews and when nothing
-                # was due. If CertMate's renewal_threshold_days is wider than
-                # certbot's own ~30-day window, check_renewals calls this daily,
-                # certbot no-ops, and stamping renewed_at + reporting a renewal
-                # would be false telemetry that masks a genuinely stuck renewal.
-                # Detect the no-op and report it honestly (renewed=False) without
-                # touching the metadata timestamp.
+                # If CertMate's renewal_threshold_days is wider than certbot's
+                # own ~30-day window, check_renewals calls this daily, certbot
+                # no-ops, and stamping renewed_at + reporting a renewal would
+                # be false telemetry that masks a genuinely stuck renewal.
+                # Primary no-op detection: the live cert bytes are unchanged
+                # (or still absent) after an exit-0 run. The output sentinel
+                # is the fallback for non-artifact-producing executors and a
+                # belt-and-braces cross-check; it MUST NOT be the primary
+                # signal because certbot suppresses it under --quiet.
                 _out = f"{result.stdout or ''}\n{result.stderr or ''}".lower()
-                if 'not yet due for renewal' in _out or 'no renewals were attempted' in _out:
+                sentinel_no_op = ('not yet due for renewal' in _out
+                                  or 'no renewals were attempted' in _out)
+                if fingerprint_check:
+                    post_renew_fingerprint = self._cert_fingerprint(live_cert_file)
+                    renewed = (post_renew_fingerprint is not None
+                               and post_renew_fingerprint != pre_renew_fingerprint)
+                else:
+                    renewed = not sentinel_no_op
+
+                if not renewed:
                     logger.info(f"Certificate for {domain} is not yet due for renewal; no action taken")
                     self._invalidate_certificate_info_cache(domain)
                     return {

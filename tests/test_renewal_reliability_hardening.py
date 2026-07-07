@@ -473,3 +473,262 @@ def test_renew_reports_renewed_when_certbot_acts(tmp_path):
         res = mgr.renew_certificate(domain)
     assert res['success'] is True
     assert res['renewed'] is True
+
+
+# --------------------------------------------------------------------------
+# No-op renewal detection must be output-independent (fingerprint-based).
+# certbot 2.x under --quiet sends "not yet due for renewal" to /dev/null, so
+# a production no-op renew exits 0 with EMPTY output; the artifact (live
+# cert bytes) is the only signal certbot cannot suppress.
+# --------------------------------------------------------------------------
+
+class _SilentNoOpExecutor(MockShellExecutor):
+    """certbot exits 0 with EMPTY output and touches NO files — the exact
+    production shape of a --quiet no-op renew. produces_artifacts=True marks
+    this as a real execution so the fingerprint comparison is active."""
+    produces_artifacts = True
+
+    def __init__(self):
+        super().__init__()
+        self.set_next_result(returncode=0)
+
+
+class _SilentRenewExecutor(_RenewExecutor):
+    """Real-execution semantics (fingerprint comparison active) AND stages
+    changed live files, with empty output either way."""
+    produces_artifacts = True
+
+
+def _prep_live_cert(tmp_path, domain, content=b'live-cert-v1\n'):
+    live = tmp_path / domain / 'live' / domain
+    live.mkdir(parents=True, exist_ok=True)
+    for cert_file in CERTIFICATE_FILES:
+        (live / cert_file).write_bytes(content)
+    return live
+
+
+def test_renew_noop_detected_with_empty_output(tmp_path):
+    """rc=0 + empty stdout/stderr + unchanged live cert -> renewed=False and
+    renewed_at NOT stamped. The old sentinel-only check reported this as a
+    successful renewal because the sentinel text never appears under --quiet."""
+    domain = 'silent-noop.example.com'
+    _prep_existing_cert(tmp_path, domain, metadata={})
+    _prep_live_cert(tmp_path, domain)
+    mgr = _make_cert_mgr(tmp_path, _SilentNoOpExecutor())
+    with patch.object(CertificateManager, '_write_pfx', return_value=None):
+        res = mgr.renew_certificate(domain)
+    assert res['success'] is True
+    assert res['renewed'] is False
+    meta = json.loads((tmp_path / domain / 'metadata.json').read_text())
+    assert 'renewed_at' not in meta
+
+
+def test_renew_detected_when_cert_bytes_change(tmp_path):
+    """rc=0 + empty output + CHANGED live cert bytes -> renewed=True with
+    renewed_at stamped (a real renewal says nothing under --quiet either)."""
+    domain = 'silent-renew.example.com'
+    _prep_existing_cert(tmp_path, domain, metadata={})
+    _prep_live_cert(tmp_path, domain)  # executor overwrites with new bytes
+    mgr = _make_cert_mgr(tmp_path, _SilentRenewExecutor(tmp_path, domain))
+    with patch.object(CertificateManager, '_write_pfx', return_value=None):
+        res = mgr.renew_certificate(domain)
+    assert res['success'] is True
+    assert res['renewed'] is True
+    meta = json.loads((tmp_path / domain / 'metadata.json').read_text())
+    assert 'renewed_at' in meta
+
+
+def test_renew_detected_when_live_cert_appears(tmp_path):
+    """Missing-before but present-after live cert counts as a renewal."""
+    domain = 'fresh-live.example.com'
+    _prep_existing_cert(tmp_path, domain, metadata={})
+    # No pre-existing live dir: the executor materialises it.
+    mgr = _make_cert_mgr(tmp_path, _SilentRenewExecutor(tmp_path, domain))
+    with patch.object(CertificateManager, '_write_pfx', return_value=None):
+        res = mgr.renew_certificate(domain)
+    assert res['renewed'] is True
+
+
+def test_renew_sentinel_still_detected_for_mock_executors(tmp_path):
+    """Non-artifact-producing doubles keep sentinel-based detection: the
+    fingerprint would always read 'unchanged' for them and falsely no-op."""
+    domain = 'mock-sentinel.example.com'
+    _prep_existing_cert(tmp_path, domain, metadata={})
+    shell = MockShellExecutor()
+    shell.set_next_result(returncode=0, stdout='no renewals were attempted')
+    mgr = _make_cert_mgr(tmp_path, shell)
+    with patch.object(CertificateManager, '_write_pfx', return_value=None):
+        res = mgr.renew_certificate(domain)
+    assert res['renewed'] is False
+
+
+def test_check_renewals_routes_silent_noop_to_skipped_not_due(tmp_path):
+    """A silent no-op renew must be counted as skipped_not_due — never as
+    renewed — and must fire NO deploy hook event and NO success audit."""
+    domain = 'sched-noop.example.com'
+    _prep_existing_cert(tmp_path, domain, metadata={})
+    _prep_live_cert(tmp_path, domain)
+    mgr = _make_cert_mgr(tmp_path, _SilentNoOpExecutor())
+    mgr.settings_manager.load_settings.return_value = {
+        'auto_renew': True, 'domains': [{'domain': domain}],
+    }
+    mgr.settings_manager.migrate_domains_format.side_effect = lambda s: s
+    mgr._publish_renewed_event = MagicMock()
+    mgr._audit_scheduled_renew = MagicMock()
+    with patch.object(CertificateManager, 'get_certificate_info',
+                      return_value={'needs_renewal': True}), \
+         patch.object(CertificateManager, '_write_pfx', return_value=None):
+        summary = mgr.check_renewals()
+    assert summary['skipped_not_due'] == 1
+    assert summary['renewed'] == 0
+    mgr._publish_renewed_event.assert_not_called()
+    mgr._audit_scheduled_renew.assert_not_called()
+
+
+def test_check_renewals_counts_real_renewal_and_fires_hook(tmp_path):
+    domain = 'sched-renew.example.com'
+    _prep_existing_cert(tmp_path, domain, metadata={})
+    _prep_live_cert(tmp_path, domain)
+    mgr = _make_cert_mgr(tmp_path, _SilentRenewExecutor(tmp_path, domain))
+    mgr.settings_manager.load_settings.return_value = {
+        'auto_renew': True, 'domains': [{'domain': domain}],
+    }
+    mgr.settings_manager.migrate_domains_format.side_effect = lambda s: s
+    mgr._publish_renewed_event = MagicMock()
+    mgr._audit_scheduled_renew = MagicMock()
+    with patch.object(CertificateManager, 'get_certificate_info',
+                      return_value={'needs_renewal': True}), \
+         patch.object(CertificateManager, '_write_pfx', return_value=None):
+        summary = mgr.check_renewals()
+    assert summary['renewed'] == 1
+    assert summary['skipped_not_due'] == 0
+    mgr._publish_renewed_event.assert_called_once_with(domain)
+
+
+# --------------------------------------------------------------------------
+# API/web honesty: the renew responses must carry 'renewed' and must not
+# claim (or event-broadcast) a renewal that certbot no-oped.
+# --------------------------------------------------------------------------
+
+def _build_api_app(tmp_path, renew_result):
+    from flask_restx import Api, Namespace
+    from modules.api.models import create_api_models
+    from modules.api.resources import create_api_resources
+
+    auth = MagicMock()
+    auth.require_role = MagicMock(side_effect=_passthrough_decorator)
+    auth.user_can_access_domain.return_value = True
+
+    certs = MagicMock(cert_dir=Path(tmp_path))
+    certs.renew_certificate.return_value = renew_result
+
+    settings = MagicMock()
+    settings.load_settings.return_value = {
+        'email': 'ops@example.com', 'dns_provider': 'cloudflare',
+        'default_ca': 'letsencrypt', 'challenge_type': 'dns-01'}
+
+    managers = {
+        'auth': auth, 'settings': settings, 'certificates': certs,
+        'file_ops': MagicMock(cert_dir=Path(tmp_path)), 'cache': MagicMock(),
+        'dns': MagicMock(), 'audit': None, 'cert_executor': None,
+    }
+
+    app = Flask(__name__)
+    app.config['TESTING'] = True
+    app.config['EVENT_BUS'] = MagicMock()
+    api = Api(app, prefix='/api')
+    models = create_api_models(api)
+    resources = create_api_resources(api, models, managers)
+    ns = Namespace('certificates', description='certs')
+    api.add_namespace(ns)
+    ns.add_resource(resources['RenewCertificate'], '/<string:domain>/renew')
+
+    @app.before_request
+    def _attach_user():
+        request.current_user = {'username': 'op', 'role': 'operator', 'allowed_domains': None}
+
+    return app
+
+
+def test_api_renew_response_reports_noop_honestly(tmp_path):
+    app = _build_api_app(tmp_path, {
+        'success': True, 'renewed': False, 'domain': 'x.example.com',
+        'message': 'Certificate not yet due for renewal'})
+    r = app.test_client().post('/api/certificates/x.example.com/renew')
+    assert r.status_code == 200
+    body = r.get_json()
+    assert body['renewed'] is False
+    assert 'not yet due' in body['message']
+    assert 'renewed successfully' not in body['message']
+    # Nothing was replaced: deploy hooks must not fire.
+    app.config['EVENT_BUS'].publish.assert_not_called()
+
+
+def test_api_renew_response_reports_real_renewal(tmp_path):
+    app = _build_api_app(tmp_path, {
+        'success': True, 'renewed': True, 'domain': 'x.example.com',
+        'message': 'Certificate renewed successfully'})
+    r = app.test_client().post('/api/certificates/x.example.com/renew')
+    assert r.status_code == 200
+    body = r.get_json()
+    assert body['renewed'] is True
+    assert 'renewed successfully' in body['message']
+    app.config['EVENT_BUS'].publish.assert_called_once_with(
+        'certificate_renewed', {'domain': 'x.example.com'})
+
+
+def test_api_renew_defaults_renewed_true_for_legacy_results(tmp_path):
+    """Frozen compat contract: a manager result without the 'renewed' key
+    (older shape) must keep reporting a successful renewal."""
+    app = _build_api_app(tmp_path, {'success': True, 'domain': 'x.example.com'})
+    r = app.test_client().post('/api/certificates/x.example.com/renew')
+    assert r.status_code == 200
+    assert r.get_json()['renewed'] is True
+
+
+def _build_web_app(tmp_path, renew_result):
+    app = Flask(__name__)
+    app.config['TESTING'] = True
+
+    certificate_manager = MagicMock(cert_dir=Path(tmp_path))
+    certificate_manager.renew_certificate.return_value = renew_result
+    auth_manager = MagicMock()
+    auth_manager.require_role = MagicMock(side_effect=_passthrough_decorator)
+    auth_manager.domain_matches_scope.return_value = True
+    settings_manager = MagicMock()
+    settings_manager.load_settings.return_value = {'email': 'ops@example.com'}
+
+    register_cert_routes(
+        app, {'audit': MagicMock(), 'cert_service': None}, _passthrough_decorator,
+        auth_manager, certificate_manager,
+        lambda d, cert_dir: (Path(cert_dir) / d, None), MagicMock(cert_dir=Path(tmp_path)),
+        settings_manager, MagicMock(), CERTIFICATE_FILES,
+    )
+
+    @app.before_request
+    def _attach_user():
+        request.current_user = {'username': 'op', 'role': 'operator', 'allowed_domains': None}
+
+    return app
+
+
+def test_web_renew_response_reports_noop_honestly(tmp_path):
+    app = _build_web_app(tmp_path, {
+        'success': True, 'renewed': False, 'domain': 'x.example.com',
+        'message': 'Certificate not yet due for renewal'})
+    r = app.test_client().post('/api/web/certificates/x.example.com/renew')
+    assert r.status_code == 200
+    body = r.get_json()
+    assert body['renewed'] is False
+    assert body['message'] == 'Certificate not yet due for renewal'
+
+
+def test_web_renew_response_reports_real_renewal(tmp_path):
+    app = _build_web_app(tmp_path, {
+        'success': True, 'renewed': True, 'domain': 'x.example.com',
+        'message': 'Certificate renewed successfully'})
+    r = app.test_client().post('/api/web/certificates/x.example.com/renew')
+    assert r.status_code == 200
+    body = r.get_json()
+    assert body['renewed'] is True
+    assert body['message'] == 'Certificate renewed successfully'

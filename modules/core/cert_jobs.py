@@ -122,7 +122,11 @@ class IssuanceExecutor:
             sanitized = self._sanitize_result(result)
             # Publish the completion event BEFORE marking the job terminal, so a
             # poller that observes 'succeeded' is guaranteed the event has fired.
-            self._publish(_SUCCESS_EVENT.get(kind), {'domain': domain})
+            # Exception: a renew that no-oped (renewed=False, certbot "not yet
+            # due") replaced nothing, so deploy hooks must not fire for it —
+            # mirrors the synchronous renew route.
+            if not (isinstance(result, dict) and result.get('renewed') is False):
+                self._publish(_SUCCESS_EVENT.get(kind), {'domain': domain})
             self._set(job_id, status='succeeded', finished_at=utc_now_iso(),
                       result=sanitized)
         except Exception as e:  # record every failure on the job, never crash the worker

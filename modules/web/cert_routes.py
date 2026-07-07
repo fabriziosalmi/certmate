@@ -291,7 +291,13 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
                 user=user, ip_address=request.remote_addr,
                 audit_ctx=audit_context_from_request(),
             )
-            return jsonify({'message': result.get('message', 'Certificate renewed successfully')})
+            # 'renewed' distinguishes a real renewal from certbot's "not yet
+            # due" no-op; the manager's message already states which happened.
+            # Default True preserves the response contract for older results.
+            return jsonify({
+                'message': result.get('message', 'Certificate renewed successfully'),
+                'renewed': bool(result.get('renewed', True)),
+            })
         except DomainOutOfScope:
             return jsonify({'error': 'API key not authorized for this domain', 'code': 'DOMAIN_OUT_OF_SCOPE'}), 403
         except FileNotFoundError as e:
