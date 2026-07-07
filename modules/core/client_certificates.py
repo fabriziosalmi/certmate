@@ -411,18 +411,26 @@ class ClientCertificateManager:
 
                 logger.info(f"Revoked certificate: {identifier} (reason: {reason})")
 
-                # Update CRL with ALL revoked serials (not just the current one)
+                # Update CRL with ALL revoked certs (not just the current one).
+                # Pass full records — serial + persisted revoked_at + reason —
+                # not bare serials: otherwise generate_crl would stamp every
+                # entry (including previously-revoked certs) with today's date,
+                # rewriting older entries' revocation_date on each regeneration.
                 all_revoked = self.list_client_certificates(revoked=True)
-                revoked_serials = []
+                revoked_records = []
                 for cert in all_revoked:
                     try:
                         sn = int(cert.get('serial_number', 0))
-                        if sn > 0:
-                            revoked_serials.append(sn)
                     except (ValueError, TypeError):
                         continue
-                if revoked_serials:
-                    self.private_ca.generate_crl(revoked_serials)
+                    if sn > 0:
+                        revoked_records.append({
+                            'serial_number': sn,
+                            'revoked_at': cert.get('revoked_at'),
+                            'reason_revoked': cert.get('reason_revoked'),
+                        })
+                if revoked_records:
+                    self.private_ca.generate_crl(revoked_records)
 
                 return True, None
 

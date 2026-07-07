@@ -5,7 +5,7 @@ Handles OCSP responses and Certificate Revocation List generation/distribution
 
 import logging
 from pathlib import Path
-from datetime import datetime
+from datetime import timezone
 from .utils import utc_now
 from typing import Optional, List
 
@@ -159,6 +159,42 @@ class CRLManager:
             logger.error(f"Error getting revoked serials: {str(e)}")
             return []
 
+    def get_revoked_records(self) -> List[dict]:
+        """
+        Get the full revocation records (serial + persisted revoked_at +
+        reason) for every revoked certificate.
+
+        Unlike get_revoked_serials(), this preserves each cert's persisted
+        revocation date and reason so the CRL keeps stable per-entry dates
+        across regenerations instead of resetting them all to "now".
+
+        Returns:
+            List of dicts consumable by PrivateCAGenerator.generate_crl.
+        """
+        try:
+            certificates = self.client_cert_manager.list_client_certificates(revoked=True)
+            records = []
+
+            for cert in certificates:
+                try:
+                    serial = int(cert.get('serial_number', 0))
+                except (ValueError, TypeError):
+                    continue
+                if serial <= 0:
+                    continue
+                records.append({
+                    'serial_number': serial,
+                    'revoked_at': cert.get('revoked_at'),
+                    'reason_revoked': cert.get('reason_revoked'),
+                })
+
+            logger.debug(f"Found {len(records)} revoked certificate records for CRL")
+            return records
+
+        except Exception as e:
+            logger.error(f"Error getting revoked records: {str(e)}")
+            return []
+
     def update_crl(self) -> Optional[bytes]:
         """
         Update and generate CRL.
@@ -167,11 +203,11 @@ class CRLManager:
             CRL as PEM bytes or None if error
         """
         try:
-            revoked_serials = self.get_revoked_serials()
-            crl_pem = self.private_ca.generate_crl(revoked_serials)
+            revoked_records = self.get_revoked_records()
+            crl_pem = self.private_ca.generate_crl(revoked_records)
 
             if crl_pem:
-                logger.info(f"Updated CRL with {len(revoked_serials)} revoked certificates")
+                logger.info(f"Updated CRL with {len(revoked_records)} revoked certificates")
                 return crl_pem
             else:
                 logger.warning("Failed to generate CRL")
@@ -181,9 +217,35 @@ class CRLManager:
             logger.error(f"Error updating CRL: {str(e)}")
             return None
 
+    @staticmethod
+    def _crl_is_expired(crl_pem: bytes) -> bool:
+        """Return True when the on-disk CRL's next_update has passed.
+
+        A CRL served past next_update is stale: strict relying parties reject
+        it outright, while soft-fail validators skip revocation checking
+        entirely and thus ACCEPT an already-revoked certificate. Either way the
+        CRL must be regenerated before it is served. A missing/None next_update
+        or an unparseable CRL is treated as "not expired" so we fall back to
+        serving what we have rather than churning."""
+        try:
+            from cryptography import x509
+
+            crl = x509.load_pem_x509_crl(crl_pem)
+            next_update = crl.next_update_utc
+            if next_update is None:
+                return False
+            return utc_now().replace(tzinfo=timezone.utc) >= next_update
+        except Exception as e:
+            logger.warning(f"Could not determine CRL expiry: {str(e)}")
+            return False
+
     def get_crl_pem(self) -> Optional[bytes]:
         """
         Get current CRL in PEM format.
+
+        Regenerates the CRL lazily-on-read when the on-disk copy has expired
+        (next_update in the past). This is simpler than a scheduled job and
+        enough to guarantee relying parties never receive a stale CRL.
 
         Returns:
             CRL as PEM bytes or None
@@ -191,6 +253,12 @@ class CRLManager:
         try:
             crl_pem = self.private_ca.get_crl_pem()
             if crl_pem:
+                if self._crl_is_expired(crl_pem):
+                    logger.info("On-disk CRL past next_update; regenerating before serving")
+                    refreshed = self.update_crl()
+                    # Fall back to the stale CRL only if regeneration fails —
+                    # a stale CRL still beats serving nothing.
+                    return refreshed if refreshed else crl_pem
                 return crl_pem
 
             # If no CRL exists, generate one

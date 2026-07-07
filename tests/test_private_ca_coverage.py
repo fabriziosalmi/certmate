@@ -379,6 +379,165 @@ class TestGenerateCRL:
 
 
 # ---------------------------------------------------------------------------
+# FIX 1 — CA private key must be 0600 from the first byte on disk, and the
+# write must be crash-safe (atomic rename). The old open()+chmod pattern left
+# the root CA key world-readable under the umask for a window, and a crash
+# mid-write left a corrupt CA. These pin both properties.
+# ---------------------------------------------------------------------------
+
+
+class TestCAKeyFilePermissions:
+    def test_ca_key_final_mode_is_0600(self, empty_ca_dir):
+        ca = PrivateCAGenerator(ca_dir=empty_ca_dir)
+        assert ca.initialize() is True
+        mode = stat.S_IMODE(os.stat(ca.ca_key_path).st_mode)
+        assert mode == 0o600, f"CA key mode must be 0600, got {oct(mode)}"
+        assert not (mode & 0o077), "CA private key must not be group/other accessible"
+
+    def test_ca_key_is_0600_at_the_instant_it_goes_live(self, empty_ca_dir, monkeypatch):
+        """Spy on os.replace: capture the mode of the temp file at the exact
+        instant it is renamed over ca.key. Because the temp is created 0600 by
+        mkstemp and never widened, the key is provably never world-readable at
+        any point — not merely 0600 after the fact."""
+        captured = {}
+        real_replace = os.replace
+
+        def spy_replace(src, dst):
+            if str(dst).endswith("ca.key"):
+                captured["mode"] = stat.S_IMODE(os.stat(src).st_mode)
+            return real_replace(src, dst)
+
+        monkeypatch.setattr(os, "replace", spy_replace)
+        ca = PrivateCAGenerator(ca_dir=empty_ca_dir)
+        assert ca.initialize() is True
+        assert captured.get("mode") == 0o600, (
+            "the file that becomes ca.key must be 0600 at rename time, never 0644"
+        )
+
+    def test_ca_cert_is_public_and_atomic(self, empty_ca_dir):
+        ca = PrivateCAGenerator(ca_dir=empty_ca_dir)
+        assert ca.initialize() is True
+        # Public artifact — 0644 is fine, but no stray .tmp- files must remain
+        # (atomic rename cleans up its temp on success).
+        cert_mode = stat.S_IMODE(os.stat(ca.ca_cert_path).st_mode)
+        assert cert_mode == 0o644
+        leftovers = list(empty_ca_dir.glob(".tmp-*"))
+        assert not leftovers, f"atomic write left temp files behind: {leftovers}"
+
+
+# ---------------------------------------------------------------------------
+# FIX 2 — CRL must preserve each entry's persisted revocation date across
+# regenerations (not stamp them all with now()) and carry a CRLReason.
+# ---------------------------------------------------------------------------
+
+
+class TestCRLRevocationDateAndReason:
+    def test_crl_preserves_revoked_at_and_reason_across_regeneration(self, shared_ca):
+        from cryptography.x509.oid import CRLEntryExtensionOID
+
+        fixed = datetime(2026, 1, 2, 3, 4, 5, tzinfo=timezone.utc)
+        record = {
+            "serial_number": 424242,
+            "revoked_at": "2026-01-02T03:04:05",  # naive == UTC
+            "reason_revoked": "keyCompromise",
+        }
+
+        # First regeneration.
+        pem1 = shared_ca.generate_crl([record])
+        crl1 = x509.load_pem_x509_crl(pem1)
+        entry1 = crl1.get_revoked_certificate_by_serial_number(424242)
+        assert entry1 is not None
+        assert entry1.revocation_date_utc == fixed
+        reason1 = entry1.extensions.get_extension_for_oid(CRLEntryExtensionOID.CRL_REASON)
+        assert reason1.value.reason == x509.ReasonFlags.key_compromise
+
+        # Second regeneration with the original record PLUS a newer revocation.
+        # The bug was that generate_crl stamped EVERY entry with now(), so the
+        # older entry's date silently moved forward on each regen.
+        pem2 = shared_ca.generate_crl([
+            record,
+            {"serial_number": 999, "revoked_at": None, "reason_revoked": None},
+        ])
+        crl2 = x509.load_pem_x509_crl(pem2)
+        entry2 = crl2.get_revoked_certificate_by_serial_number(424242)
+        assert entry2.revocation_date_utc == fixed, (
+            "regeneration must NOT rewrite an older entry's revocation_date"
+        )
+
+    def test_int_serial_entry_has_no_crl_reason(self, shared_ca):
+        """Legacy bare-int entries stay supported: they revoke at 'now' with
+        no CRLReason (RFC 5280 unspecified SHOULD be absent)."""
+        from cryptography import x509 as _x
+
+        pem = shared_ca.generate_crl([778899])
+        crl = _x.load_pem_x509_crl(pem)
+        entry = crl.get_revoked_certificate_by_serial_number(778899)
+        assert entry is not None
+        assert not list(entry.extensions), "int entry must carry no CRL entry extensions"
+
+    def test_unspecified_reason_adds_no_crl_reason_extension(self, shared_ca):
+        pem = shared_ca.generate_crl([
+            {"serial_number": 5150, "revoked_at": None, "reason_revoked": "unspecified"},
+        ])
+        crl = x509.load_pem_x509_crl(pem)
+        entry = crl.get_revoked_certificate_by_serial_number(5150)
+        assert not list(entry.extensions), "'unspecified' must not emit a CRLReason"
+
+
+# ---------------------------------------------------------------------------
+# FIX 4 — signing must NOT copy BasicConstraints / KeyUsage from an untrusted
+# CSR. A CSR asking for ca=True + keyCertSign must yield a pinned leaf.
+# ---------------------------------------------------------------------------
+
+
+class TestSignRejectsCAEscalation:
+    @staticmethod
+    def _malicious_csr():
+        key = rsa.generate_private_key(public_exponent=65537, key_size=2048,
+                                       backend=default_backend())
+        name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "evil.example.com")])
+        builder = (
+            x509.CertificateSigningRequestBuilder()
+            .subject_name(name)
+            .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
+            .add_extension(
+                x509.KeyUsage(
+                    digital_signature=True, content_commitment=False,
+                    key_encipherment=False, data_encipherment=False,
+                    key_agreement=False, key_cert_sign=True, crl_sign=True,
+                    encipher_only=False, decipher_only=False,
+                ),
+                critical=True,
+            )
+            .add_extension(
+                x509.SubjectAlternativeName([x509.DNSName("evil.example.com")]),
+                critical=False,
+            )
+        )
+        return builder.sign(key, hashes.SHA256(), backend=default_backend())
+
+    def test_ca_true_csr_yields_leaf_basic_constraints_false(self, shared_ca):
+        cert = shared_ca.sign_certificate_request(self._malicious_csr())
+        bc = cert.extensions.get_extension_for_oid(ExtensionOID.BASIC_CONSTRAINTS)
+        assert bc.value.ca is False, "signer must force BasicConstraints ca=False"
+        assert bc.critical is True
+
+    def test_key_cert_sign_from_csr_is_stripped(self, shared_ca):
+        cert = shared_ca.sign_certificate_request(self._malicious_csr())
+        ku = cert.extensions.get_extension_for_oid(ExtensionOID.KEY_USAGE)
+        assert ku.value.key_cert_sign is False, "leaf must not be able to sign certs"
+        assert ku.value.crl_sign is False, "leaf must not be able to sign CRLs"
+        assert ku.value.digital_signature is True
+
+    def test_san_still_carried_over_from_csr(self, shared_ca):
+        """Hardening must not throw the baby out: SAN is the one extension we
+        still honor from the CSR."""
+        cert = shared_ca.sign_certificate_request(self._malicious_csr())
+        san = cert.extensions.get_extension_for_oid(ExtensionOID.SUBJECT_ALTERNATIVE_NAME)
+        assert "evil.example.com" in san.value.get_values_for_type(x509.DNSName)
+
+
+# ---------------------------------------------------------------------------
 # Metadata round-trip.
 # ---------------------------------------------------------------------------
 
