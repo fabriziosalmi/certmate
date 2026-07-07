@@ -207,6 +207,47 @@ def _verify_dir_writable(directory: Path) -> Optional[str]:
     return None
 
 
+def _make_dir_arbitrary_uid_ready(directory: Path):
+    """Create *directory* and make it usable under an arbitrary UID.
+
+    Rootless podman (issue #380) and OpenShift run the container as a UID that
+    is not 1000 and not in /etc/passwd, but is always a member of the root group
+    (GID 0). A directory this process creates at runtime must therefore be
+    group-writable and carry setgid so children inherit the group — otherwise a
+    later boot (or the certbot subprocess) as a same-group UID cannot write here.
+
+    Only touches directories we actually create this boot: a pre-existing mount
+    point owned by another UID keeps whatever perms the host/volume gave it (we
+    are not the owner, so the chmod is a harmless no-op that we ignore).
+    """
+    import stat as _stat
+    try:
+        directory.mkdir()
+        _created = True
+    except FileExistsError:
+        _created = False
+    except OSError as e:
+        logger.error(f"Failed to create {directory}: {e}")
+        return
+
+    if not _created:
+        return
+    # Only relax group perms inside a container (the rootless-podman / OpenShift
+    # arbitrary-UID case). On a bare-metal install we keep the umask default so a
+    # freshly created ./data is not made group-writable unexpectedly.
+    if not (Path('/.dockerenv').exists() or os.getenv('container')):
+        return
+    try:
+        mode = directory.stat().st_mode
+        # Add group rwx + setgid; leave owner/other bits and any secret files
+        # (created 0600 in code) untouched.
+        directory.chmod(mode | _stat.S_ISGID | _stat.S_IRWXG)
+    except OSError:
+        # Not the owner (mount owned elsewhere) — perms already come from the
+        # host/volume; nothing we can or need to do.
+        pass
+
+
 def setup_directories(container: AppContainer, test_config=None):
     _base = Path(__file__).resolve().parent.parent.parent
     container.cert_dir = (_base / "certificates").resolve()
@@ -224,15 +265,9 @@ def setup_directories(container: AppContainer, test_config=None):
     # Best-effort create. If the parent is read-only this raises;
     # we'd rather hit the writable probe below for a single clean error.
     for _, directory in required:
-        try:
-            directory.mkdir(exist_ok=True)
-        except OSError as e:
-            logger.error(f"Failed to create {directory}: {e}")
+        _make_dir_arbitrary_uid_ready(directory)
 
-    try:
-        (container.backup_dir / "unified").mkdir(exist_ok=True)
-    except OSError as e:
-        logger.error(f"Failed to create {container.backup_dir / 'unified'}: {e}")
+    _make_dir_arbitrary_uid_ready(container.backup_dir / "unified")
 
     # Boot-time writeability check (#121). Surface a clear error so the
     # operator knows exactly which host mount is wrong instead of having
@@ -246,8 +281,11 @@ def setup_directories(container: AppContainer, test_config=None):
     if failures:
         msg = (
             "Required directories are not writable by the CertMate process. "
-            "Fix host-mount permissions (the container runs as UID/GID 1000:1000) "
-            "and restart:\n" + "\n".join(failures)
+            "Fix host-mount permissions and restart. The default image runs as "
+            "UID/GID 1000:1000; under rootless podman / OpenShift it runs as an "
+            "arbitrary UID in group 0, so the mounts must be group-0 writable "
+            "(chown :0 and chmod g+rwX, or use a named volume / the ':U' mount "
+            "option). See issue #380:\n" + "\n".join(failures)
         )
         logger.error(msg)
         raise RuntimeError(msg)
