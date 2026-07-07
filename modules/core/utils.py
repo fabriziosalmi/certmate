@@ -102,7 +102,7 @@ _MULTI_PROVIDER_TEMPLATE_MAP = {
     },
     'hetzner': {'dns_hetzner_api_token': 'api_token'},
     'hetzner-cloud': {'dns_hetzner_cloud_api_token': 'api_token'},
-    'porkbun': {'dns_porkbun_api_key': 'api_key', 'dns_porkbun_secret_key': 'secret_key'},
+    'porkbun': {'dns_porkbun_key': 'api_key', 'dns_porkbun_secret': 'secret_key'},
     'godaddy': {'dns_godaddy_key': 'api_key', 'dns_godaddy_secret': 'secret'},
     'he-ddns': {'dns_he_ddns_username': 'username', 'dns_he_ddns_password': 'password'},
     'dynudns': {'dns_dynudns_token': 'token'},
