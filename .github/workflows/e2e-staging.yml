@@ -54,7 +54,7 @@ jobs:
     runs-on: [self-hosted, Linux, X64]
     steps:
     - name: Checkout code
-      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
 
     - name: Preflight - require Cloudflare secret
       env:
@@ -66,12 +66,12 @@ jobs:
         fi
 
     - name: Set up Python 3.12
-      uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
+      uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6.3.0
       with:
         python-version: '3.12'
 
     - name: Cache pip dependencies
-      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
       with:
         path: ~/.cache/pip
         key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
