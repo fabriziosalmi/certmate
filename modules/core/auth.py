@@ -825,7 +825,8 @@ class AuthManager:
         """RESTRICTED (never world-open) bootstrap signal for the web UI only.
 
         True iff the operator configured an API bearer token but local auth is
-        not yet provisioned (no admin user + local auth enabled). In this state
+        not yet provisioned — local auth is disabled, or no admin user exists
+        yet (the predicate returns False only once BOTH hold). In this state
         ``is_setup_mode()`` is ALREADY False, so ``_authenticate_request()``
         still demands the bearer token on every gated surface — this predicate
         does NOT grant access and is deliberately kept out of the auth gate. It

@@ -14,10 +14,11 @@ def register_auth_routes(app, managers, require_web_auth, auth_manager,
     @app.route('/login', methods=['GET'])
     def login_page():
         """Login page"""
-        # In setup mode no login is needed (and index is open); bounce there.
-        # Once configured — including a bearer-token-only deployment where the
-        # web UI is locked — render the form instead, so index (now gated) does
-        # not redirect back here in a loop.
+        # Bounce to index in two cases: genuine setup mode (index is open), and
+        # the bearer-only bootstrap state (index re-surfaces the create-admin
+        # form). In both, /login has nothing to show — local auth is off — and
+        # index owns the onboarding UI, so redirecting avoids a loop. A fully
+        # configured deployment falls through and renders the login form below.
         if auth_manager.is_setup_mode() or auth_manager.needs_credentialed_bootstrap():
             return redirect(url_for('index'))
         # If the visitor already has a valid session cookie, skip rendering
