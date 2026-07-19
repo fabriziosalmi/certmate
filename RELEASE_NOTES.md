@@ -1,3 +1,27 @@
+## v2.21.4 (Security and onboarding fixes)
+
+Two security fixes and one onboarding fix, plus base-image and CI dependency updates. Surfaced by a triage of the project's 375 open code-scanning alerts and by a reported first-run lockout; every fix below was hand-verified against the source and, for the auth changes, across two adversarial review passes.
+
+### Security
+
+- **The password-hashing fallback no longer uses fast SHA-256** (#402). When bcrypt cannot be imported, `_hash_password` fell back to a raw salted SHA-256 — a fast, GPU/ASIC-parallelizable hash — to store and verify login passwords. It now falls back to `hashlib.scrypt`, a slow, memory-hard KDF from the standard library. bcrypt remains the preferred path, and verification stays backward-compatible with the legacy `sha256:salt:hash` formats so operators hashed under the old fallback still log in after upgrade. The stored scrypt parameters are bounds-checked before use, so a corrupted settings file cannot turn each login into expensive KDF work.
+- **Open redirect on the login page is closed** (#402). `safeNextUrl()` rejected protocol-relative `//host` but not the backslash variant `/\host`, which browsers normalize to `//host`, so a crafted `?next=/\evil.com` link bounced a user off-site after they authenticated. It now rejects any `next` whose second character is `/` or `\`.
+
+### Onboarding
+
+- **The Docker quick-start no longer locks new operators out** (#397, reported by two users). Setting `API_BEARER_TOKEN` — which the quick-start documented as required — pushed the instance past `is_setup_mode()`, so the setup wizard never ran, no admin could be created from the web UI, and local auth stayed off, leaving the operator locked out with "Local auth disabled". A bearer-only instance now re-surfaces the create-admin form, and the form authenticates its two bootstrap calls with the operator's own bearer token: creating the first admin requires proof-of-possession of the token the operator configured. The world-open gate hardened in v2.21.1 (`is_setup_mode` / `_authenticate_request`) is left byte-for-byte unchanged; the new signal is a separate, OIDC-guarded predicate consumed only by two UI-routing surfaces, so an OIDC+bearer instance still routes its first user to SSO. `reset_admin_password.py` now also enables local auth (closing the second half of the recovery lockout) and writes settings atomically at mode 0600. The docs — README, `docs/docker.md` and its it/de/fr/es copies, and the getting-started guide — now describe `API_BEARER_TOKEN` as recommended for any network-exposed deployment rather than required, and document the one-time first-run token paste.
+
+### Packaging and dependencies
+
+- **The base image was rebuilt on a current `python:3.12-slim-trixie` digest** (#386), picking up Debian security updates and clearing base-image package CVEs.
+- **GitHub Actions were bumped** (#368, 16 updates across all workflows), now SHA-pinned.
+
+### Under the hood
+
+- **Code-scanning triage.** The 375 open code-scanning alerts were triaged with adversarial verification: 225 systematic false-positives or accept-by-policy findings were dismissed with a per-category reason, the two real bugs above were fixed, and the remaining 146 container/dependency CVEs — not reachable from CertMate's runtime — are tracked (#403) rather than dismissed. The adversarial pass is what caught the two real bugs before they were dismissed with the rest.
+
+---
+
 ## v2.21.3 (Bugfix — wildcard deployment status, rootless-podman / arbitrary-UID support)
 
 Two reported issues from real users.
