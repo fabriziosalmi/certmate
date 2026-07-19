@@ -96,7 +96,7 @@ docker run -d --name certmate \
 |----------|--------|-------------|
 | `SECRET_KEY` | Non | Clé secrète Flask pour les sessions (auto-générée si non définie) |
 | `SECRET_KEY_FILE` | Non | Chemin vers un fichier contenant la clé secrète Flask (prioritaire sur `SECRET_KEY`) |
-| `API_BEARER_TOKEN` | Non | Token d'authentification pour l'accès API (auto-généré si non défini) |
+| `API_BEARER_TOKEN` | Non (auto-généré) | Token d'authentification de l'API. Auto-généré si non défini, mais définissez-le avant d'exposer sur un réseau une instance pas encore configurée ; une fois défini, collez-le une fois sur l'écran de premier démarrage pour créer l'administrateur |
 | `API_BEARER_TOKEN_FILE` | Non | Chemin vers un fichier contenant le token bearer API (prioritaire sur `API_BEARER_TOKEN`) |
 | `LOG_LEVEL` | Non | `INFO` (défaut), `DEBUG`, `WARNING`, `ERROR` |
 | `CERTMATE_BACKUP_PASSPHRASE` | Non | Quand défini, sauvegardes chiffrées au repos (`.zip.enc`, PBKDF2-SHA256 + Fernet) |

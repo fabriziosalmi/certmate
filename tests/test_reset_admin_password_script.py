@@ -39,6 +39,12 @@ def _assert_admin_written(settings_path: Path):
 
     assert bcrypt.checkpw(PASSWORD.encode(), admin["password_hash"].encode())
 
+    # The reset must also enable local auth, otherwise login still returns
+    # 403 "Local auth disabled" even though the admin now exists (issue #397).
+    assert data.get("local_auth_enabled") is True, (
+        "reset must enable local auth so the restored admin can actually log in"
+    )
+
 
 def test_creates_admin_when_users_key_is_absent(tmp_path):
     """Fresh-install shape: no 'users' key at all (the #383 scenario)."""
@@ -62,6 +68,24 @@ def test_creates_admin_when_users_dict_is_empty(tmp_path):
 
     assert result.returncode == 0, result.stderr
     _assert_admin_written(settings_path)
+
+
+def test_reset_keeps_settings_file_0600(tmp_path):
+    """The reset must NOT widen settings.json permissions — it holds password,
+    token and API-key hashes plus DNS creds. The atomic temp+replace chmods the
+    temp to 0600 before the swap so os.replace can't transfer a 0644 umask mode."""
+    import stat
+    settings_path = tmp_path / "settings.json"
+    settings_path.write_text(json.dumps({"users": {}}))
+    settings_path.chmod(0o600)
+
+    result = _run_script(settings_path)
+
+    assert result.returncode == 0, result.stderr
+    mode = stat.S_IMODE(settings_path.stat().st_mode)
+    assert mode == 0o600, f"settings.json mode is {oct(mode)}, expected 0o600"
+    # No temp file left behind after a successful write.
+    assert not (tmp_path / "settings.json.reset_tmp").exists()
 
 
 def test_resets_existing_admin_password(tmp_path):

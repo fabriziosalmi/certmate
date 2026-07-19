@@ -96,20 +96,43 @@ def main() -> int:
         import datetime
         admin_user["created_at"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
+    # Without this, login still returns 403 "Local auth disabled" even though
+    # the admin user now exists (issue #397): local_auth_enabled defaults to
+    # False. Enabling it reproduces the exact end-state the setup wizard
+    # reaches. The change is monotonic — writing a user AND local_auth=True
+    # only ever drives is_setup_mode() False, never into the world-open bypass.
+    data["local_auth_enabled"] = True
+
     # Preserve a pre-write backup of the original file
     backup_path = settings_path.with_suffix(".json.reset_backup")
     try:
         backup_path.write_bytes(settings_path.read_bytes())
+        os.chmod(backup_path, 0o600)  # the backup mirrors settings.json's secrets
         print(f"Original settings backed up to: {backup_path}")
     except OSError as exc:
         print(f"WARNING: could not create backup: {exc}")
 
+    # Atomic write: dump to a temp file in the same directory, then os.replace
+    # onto settings.json so an interruption can't leave a truncated/corrupt
+    # file. This path is the recovery escape hatch, so its robustness matters.
+    tmp_path = settings_path.with_suffix(".json.reset_tmp")
     try:
-        with settings_path.open("w", encoding="utf-8") as f:
+        with tmp_path.open("w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
             f.write("\n")
+        # settings.json holds password/token/API-key hashes and DNS creds and
+        # is kept 0600 by the app. os.replace transfers the temp file's mode
+        # onto the target, so tighten the temp to 0600 BEFORE the swap —
+        # otherwise the umask default (typically 0644) would make the reset
+        # file, and every secret in it, world-readable to other local users.
+        os.chmod(tmp_path, 0o600)
+        os.replace(tmp_path, settings_path)
     except OSError as exc:
         print(f"ERROR: failed to write settings: {exc}")
+        try:
+            tmp_path.unlink(missing_ok=True)  # don't leave a 0600 partial behind
+        except OSError:
+            pass
         return 1
 
     print(f"Admin password reset successfully in {settings_path}")

@@ -130,6 +130,43 @@ class TestPasswordHashing:
         assert mgr._verify_password('anything', 'not-a-real-hash-at-all') is False
         assert mgr._verify_password('anything', '') is False
 
+    def test_scrypt_fallback_round_trip(self, auth_manager_factory, monkeypatch):
+        """When bcrypt is unavailable, _hash_password must fall back to scrypt
+        (a slow KDF), not raw SHA-256, and the round-trip must still work."""
+        import modules.core.auth as auth_mod
+        monkeypatch.setattr(auth_mod, 'BCRYPT_AVAILABLE', False)
+        mgr, _ = auth_manager_factory()
+        hashed = mgr._hash_password('CorrectHorseBatteryStaple')
+        assert hashed.startswith('scrypt:')
+        assert mgr._verify_password('CorrectHorseBatteryStaple', hashed) is True
+        assert mgr._verify_password('wrong', hashed) is False
+
+    def test_scrypt_fallback_is_not_raw_sha256(self, auth_manager_factory, monkeypatch):
+        """Regression guard for the weak-hashing finding: the fallback digest
+        must NOT equal a bare SHA-256 of salt+password."""
+        import modules.core.auth as auth_mod
+        import hashlib
+        monkeypatch.setattr(auth_mod, 'BCRYPT_AVAILABLE', False)
+        mgr, _ = auth_manager_factory()
+        hashed = mgr._hash_password('pw-12345678!')
+        parts = hashed.split(':')
+        assert parts[0] == 'scrypt'
+        salt = parts[4]
+        raw_sha = hashlib.sha256((salt + 'pw-12345678!').encode()).hexdigest()
+        assert parts[5] != raw_sha
+
+    def test_scrypt_verify_rejects_out_of_range_params(self, auth_manager_factory):
+        """Defense-in-depth: a corrupted scrypt hash with absurd KDF params is
+        rejected by the bounds check, without launching the costly scrypt work."""
+        mgr, _ = auth_manager_factory()
+        salt, digest = "ab" * 16, "cd" * 32
+        # n far above the cap -> reject before scrypt
+        assert mgr._verify_password('x', f"scrypt:99999999:8:1:{salt}:{digest}") is False
+        # non-power-of-two n
+        assert mgr._verify_password('x', f"scrypt:12345:8:1:{salt}:{digest}") is False
+        # non-hex digest
+        assert mgr._verify_password('x', f"scrypt:16384:8:1:{salt}:zzzz") is False
+
 
 # ---------------------------------------------------------------------------
 # _normalize_allowed_domains — input validation for scoped API keys
