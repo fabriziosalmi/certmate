@@ -820,6 +820,33 @@ class AuthManager:
         if self._is_oidc_configured():
             return False
         return not (self.is_local_auth_enabled() and self.has_any_users())
+
+    def needs_credentialed_bootstrap(self):
+        """RESTRICTED (never world-open) bootstrap signal for the web UI only.
+
+        True iff the operator configured an API bearer token but local auth is
+        not yet provisioned (no admin user + local auth enabled). In this state
+        ``is_setup_mode()`` is ALREADY False, so ``_authenticate_request()``
+        still demands the bearer token on every gated surface — this predicate
+        does NOT grant access and is deliberately kept out of the auth gate. It
+        only tells the UI to render the create-admin form instead of a
+        dead-end login page (local auth is off, so ``/api/auth/login`` 403s).
+        The form authenticates its two bootstrap POSTs with the operator's
+        bearer token, so creating the first admin requires proof-of-possession
+        of the token the operator configured — nothing is granted for free.
+
+        Returns False on a fresh no-token install (``has_operator_bearer_token``
+        is False there), keeping it disjoint from genuine setup mode and from
+        OIDC-only deployments. See issue #397."""
+        if self.is_local_auth_enabled() and self.has_any_users():
+            return False
+        # OIDC-capable boxes bootstrap their first user through SSO (JIT
+        # provisioning), not this local-admin form. Mirror is_setup_mode()'s
+        # OIDC branch so the SSO login page stays reachable instead of being
+        # hidden behind the create-admin form on an OIDC+bearer deployment.
+        if self._is_oidc_configured():
+            return False
+        return self.has_operator_bearer_token()
     
     def _authenticate_request(self):
         """Resolve the caller's identity for the current Flask request.

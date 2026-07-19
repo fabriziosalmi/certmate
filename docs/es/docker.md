@@ -98,7 +98,7 @@ docker run -d --name certmate \
 |----------|-----------|-------------|
 | `SECRET_KEY` | No | Clave secreta de Flask para las sesiones (se genera automáticamente si no se define) |
 | `SECRET_KEY_FILE` | No | Ruta a un archivo que contiene la clave secreta de Flask (tiene prioridad sobre `SECRET_KEY`) |
-| `API_BEARER_TOKEN` | No | Token de autenticación para el acceso a la API (se genera automáticamente si no se define) |
+| `API_BEARER_TOKEN` | No (autogenerado) | Token de autenticación de la API. Se genera automáticamente si no se define, pero defínelo antes de exponer en red una instancia aún sin configurar; cuando está definido, pégalo una vez en la pantalla de primer inicio para crear el admin |
 | `API_BEARER_TOKEN_FILE` | No | Ruta a un archivo que contiene el bearer token de la API (tiene prioridad sobre `API_BEARER_TOKEN`) |
 | `LOG_LEVEL` | No | `INFO` (por defecto), `DEBUG`, `WARNING`, `ERROR` |
 | `CERTMATE_BACKUP_PASSPHRASE` | No | Cuando se define, las copias de seguridad unificadas se cifran en reposo (`.zip.enc`, PBKDF2-SHA256 + Fernet). Se requiere la misma frase de contraseña para restaurarlas. Sin definir = copias de seguridad en texto claro `.zip` (comportamiento heredado) |
