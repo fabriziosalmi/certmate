@@ -52,7 +52,8 @@ class AuthManager:
         _timeout_hours = int(os.getenv('SESSION_TIMEOUT_HOURS', '8'))
         self._session_timeout = max(1, _timeout_hours) * 60 * 60
         if not BCRYPT_AVAILABLE:
-            logger.warning("bcrypt not available, falling back to SHA-256 (less secure)")
+            logger.warning("bcrypt not available; using the scrypt KDF fallback. "
+                           "Install bcrypt for the preferred password hashing.")
 
     def set_audit_logger(self, audit_logger):
         """Inject the AuditLogger so authorization denials emit a real audit
@@ -78,33 +79,59 @@ class AuthManager:
         return role if role in ROLE_HIERARCHY else 'viewer'
 
     def _hash_password(self, password, salt=None):
-        """Hash password using bcrypt (preferred) or SHA-256 with salt (fallback)
-        
-        bcrypt is the industry standard for password hashing as it's designed
-        to be slow and resistant to GPU/ASIC attacks.
+        """Hash a password with bcrypt (preferred) or scrypt (fallback).
+
+        bcrypt is the industry standard — slow and GPU/ASIC-resistant. If bcrypt
+        cannot be imported, fall back to scrypt (a slow, memory-hard KDF from the
+        stdlib) rather than a fast hash: a bare SHA-256 of salt+password would be
+        trivially GPU-crackable for low-entropy passwords.
         """
         if BCRYPT_AVAILABLE:
             # bcrypt handles salt internally, rounds=12 provides good security
             return bcrypt.hashpw(password.encode(), bcrypt.gensalt(rounds=12)).decode()
-        else:
-            # Fallback to SHA-256 with salt (less secure but functional)
-            if salt is None:
-                salt = secrets.token_hex(16)
-            hashed = hashlib.sha256((salt + password).encode()).hexdigest()
-            return f"sha256:{salt}:{hashed}"
-    
+        # bcrypt import failed — scrypt KDF fallback (NOT a fast hash).
+        # Format: "scrypt:<n>:<r>:<p>:<salt_hex>:<hash_hex>".
+        if salt is None:
+            salt = secrets.token_hex(16)
+        n, r, p = 2 ** 14, 8, 1  # ~16 MiB work factor, under scrypt's default maxmem
+        dk = hashlib.scrypt(password.encode(), salt=salt.encode(),
+                            n=n, r=r, p=p, dklen=32)
+        return f"scrypt:{n}:{r}:{p}:{salt}:{dk.hex()}"
+
     def _verify_password(self, password, stored_hash):
-        """Verify password against stored hash (supports bcrypt and legacy SHA-256)"""
+        """Verify a password against a stored hash.
+
+        Supports bcrypt, the scrypt fallback, and the pre-existing legacy
+        SHA-256 formats ("sha256:salt:hash" and bare "salt:hash") so operators
+        hashed under the old fallback can still log in after upgrade.
+        """
         try:
-            # Check if it's a bcrypt hash (starts with $2b$ or $2a$)
+            # bcrypt hash (starts with $2b$ / $2a$)
             if stored_hash.startswith('$2'):
                 if BCRYPT_AVAILABLE:
                     return bcrypt.checkpw(password.encode(), stored_hash.encode())
-                else:
-                    logger.error("bcrypt hash found but bcrypt not available")
+                logger.error("bcrypt hash found but bcrypt not available")
+                return False
+
+            # scrypt fallback: "scrypt:<n>:<r>:<p>:<salt>:<hash>"
+            if stored_hash.startswith('scrypt:'):
+                _, n_s, r_s, p_s, salt, expected_hash = stored_hash.split(':', 5)
+                n, r, p = int(n_s), int(r_s), int(p_s)
+                # Bounds-check the stored KDF params BEFORE the (costly) work so a
+                # corrupted settings.json can't turn each login into an expensive
+                # scrypt run. These bracket what _hash_password writes
+                # (n=2**14, r=8, p=1); scrypt's own maxmem is the hard backstop.
+                if not (2 ** 12 <= n <= 2 ** 17 and (n & (n - 1)) == 0
+                        and 1 <= r <= 16 and 1 <= p <= 8
+                        and 0 < len(expected_hash) <= 256
+                        and all(c in '0123456789abcdefABCDEF' for c in expected_hash)):
                     return False
-            
-            # Legacy SHA-256 format: "sha256:salt:hash" or "salt:hash"
+                dk = hashlib.scrypt(password.encode(), salt=salt.encode(),
+                                    n=n, r=r, p=p, dklen=len(expected_hash) // 2)
+                return secrets.compare_digest(dk.hex(), expected_hash)
+
+            # Legacy SHA-256 formats (verify-only, for pre-upgrade hashes):
+            # "sha256:salt:hash" or the older bare "salt:hash".
             if stored_hash.startswith('sha256:'):
                 parts = stored_hash.split(':', 2)
                 if len(parts) == 3:
@@ -112,9 +139,8 @@ class AuthManager:
                 else:
                     return False
             else:
-                # Old format without prefix
                 salt, expected_hash = stored_hash.split(':', 1)
-            
+
             actual_hash = hashlib.sha256((salt + password).encode()).hexdigest()
             return secrets.compare_digest(actual_hash, expected_hash)
         except (ValueError, AttributeError) as e:
