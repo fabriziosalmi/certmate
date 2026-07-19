@@ -155,7 +155,12 @@
             try {
                 var raw = new URLSearchParams(window.location.search).get('next');
                 if (!raw || typeof raw !== 'string') return '/';
-                if (!raw.startsWith('/') || raw.startsWith('//')) return '/';
+                // Must be a same-origin absolute path. Reject protocol-relative
+                // ("//host") AND backslash variants ("/\host", "\\host") that
+                // browsers normalize to "//host" and would bounce the user to an
+                // external origin after login.
+                if (!raw.startsWith('/')) return '/';
+                if (raw.length > 1 && (raw[1] === '/' || raw[1] === '\\')) return '/';
                 return raw;
             } catch (e) { return '/'; }
         }

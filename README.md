@@ -257,7 +257,11 @@ cp .env.example .env
 Edit `.env` file with your credentials:
 
 ```bash
-# Required: API Security
+# Recommended for any network-exposed deployment: API Security.
+# Auto-generated if unset, but a not-yet-onboarded instance serves the
+# first-run setup bypass to anyone who can reach it — set this (or bind to
+# localhost) before exposing CertMate. When set, the first-run screen asks
+# you to paste this same token once to create the initial admin.
 API_BEARER_TOKEN=your_super_secure_api_token_here_change_this
 
 # DNS Provider Configuration (choose one or multiple)

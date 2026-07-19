@@ -9,7 +9,15 @@ def register_ui_routes(app, managers, require_web_auth, auth_manager):
     def index():
         """Main dashboard UI"""
         if auth_manager.is_setup_mode():
-            return render_template('setup.html')
+            return render_template('setup.html', bootstrap_requires_token=False)
+        # Bearer-only box: is_setup_mode() is False (the bearer token is
+        # enforced on every gated surface), but local auth is not yet
+        # provisioned, so a login redirect would dead-end at a 403 "Local auth
+        # disabled". Surface the create-admin form instead; its two writes are
+        # still bearer-gated (@require_role('admin')), so this grants nothing
+        # to an anonymous caller. #397
+        if auth_manager.needs_credentialed_bootstrap():
+            return render_template('setup.html', bootstrap_requires_token=True)
 
         session_id = request.cookies.get('certmate_session')
         user_info = auth_manager.validate_session(session_id)
