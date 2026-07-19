@@ -61,6 +61,10 @@ Create a `.env` file on your host (not in the Docker image):
 ```bash
 SECRET_KEY=your-super-secret-key-here
 # SECRET_KEY_FILE=/run/secrets/secret_key  # Alternative: takes precedence over SECRET_KEY
+# Set API_BEARER_TOKEN before exposing a not-yet-onboarded instance to a
+# network: until the first admin exists, an instance with no token serves the
+# setup bypass to anyone who can reach it. When set, paste it once on the
+# first-run screen to create the admin.
 API_BEARER_TOKEN=your-api-bearer-token-here
 # API_BEARER_TOKEN_FILE=/run/secrets/api_bearer_token  # Alternative: takes precedence over API_BEARER_TOKEN
 CLOUDFLARE_API_TOKEN=your-cloudflare-api-token
@@ -98,7 +102,7 @@ docker run -d --name certmate \
 |----------|----------|-------------|
 | `SECRET_KEY` | No | Flask secret key for sessions (auto-generated if unset) |
 | `SECRET_KEY_FILE` | No | Path to a file containing the Flask secret key (takes precedence over `SECRET_KEY`) |
-| `API_BEARER_TOKEN` | No | Authentication token for API access (auto-generated if unset) |
+| `API_BEARER_TOKEN` | No (auto-generated) | API auth token. Auto-generated if unset, but set it before exposing a not-yet-onboarded instance to a network; when set, paste it once on the first-run screen to create the admin |
 | `API_BEARER_TOKEN_FILE` | No | Path to a file containing the API bearer token (takes precedence over `API_BEARER_TOKEN`) |
 | `LOG_LEVEL` | No | `INFO` (default), `DEBUG`, `WARNING`, `ERROR` |
 | `CERTMATE_BACKUP_PASSPHRASE` | No | When set, unified backups are encrypted at rest (`.zip.enc`, PBKDF2-SHA256 + Fernet). The same passphrase is required to restore them. Unset = legacy cleartext `.zip` backups |

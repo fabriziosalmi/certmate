@@ -23,7 +23,7 @@
         </div>
 
         <div class="px-6 py-8 sm:p-10">
-            <form id="setupForm" class="space-y-6">
+            <form id="setupForm" method="post" action="#" class="space-y-6">
                 <div>
                     <label for="username" class="block text-sm font-semibold text-label">
                         Admin Username
@@ -56,6 +56,26 @@
                     </p>
                 </div>
 
+                {% if bootstrap_requires_token %}
+                <div>
+                    <label for="operatorToken" class="block text-sm font-semibold text-label">
+                        API Bearer Token
+                    </label>
+                    <div class="mt-1 relative rounded-md shadow-sm">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <i class="fas fa-key text-gray-400"></i>
+                        </div>
+                        <input type="password" name="operatorToken" id="operatorToken" required autocomplete="off"
+                            class="block w-full border border-border bg-input text-foreground rounded-lg pl-10 py-3 focus:outline-none focus:ring-2 focus:ring-primary transition-colors duration-200"
+                            placeholder="Paste your API_BEARER_TOKEN">
+                    </div>
+                    <p class="mt-2 text-xs text-muted">
+                        <i class="fas fa-info-circle mr-1"></i>
+                        Paste the <code>API_BEARER_TOKEN</code> you configured, to authorize creating the first admin.
+                    </p>
+                </div>
+                {% endif %}
+
                 <div class="pt-4">
                     <button type="submit"
                         class="w-full flex justify-center py-4 px-4 border border-transparent rounded-xl shadow-lg text-lg font-bold text-white bg-brand-500 hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 btn-press transition-all duration-200">
@@ -80,25 +100,64 @@
         const username = document.getElementById('username').value;
         const password = document.getElementById('password').value;
 
+        // On a bearer-only box the create-admin POSTs are gated by
+        // @require_role('admin'); the operator authorizes them by proving
+        // possession of the API bearer token they configured. In genuine
+        // setup mode no token is needed and the setup-mode bypass authorizes
+        // both calls exactly as before. #397
+        const requiresToken = {{ 'true' if bootstrap_requires_token else 'false' }};
+        const token = requiresToken ? document.getElementById('operatorToken').value.trim() : null;
+        if (requiresToken && !token) { alert('API bearer token is required'); return; }
+        const authHeaders = token ? { 'Authorization': 'Bearer ' + token } : {};
+
         try {
             const response = await fetch('/api/web/settings/users', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders),
                 body: JSON.stringify({ username, password, role: 'admin' })
             });
 
-            const data = await response.json();
-            if (response.ok) {
-                // Enable local auth automatically if it's the first user
-                await fetch('/api/auth/config', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + btoa(username + ':' + password) },
-                    body: JSON.stringify({ local_auth_enabled: true })
-                });
-                window.location.href = '/login';
-            } else {
-                alert(data.error || 'Setup failed');
+            // Divergent-token lockout: the box enforces the STORED bearer token,
+            // which can differ from the env token if it was added/rotated after
+            // the first start. Point the operator at the recovery script rather
+            // than the generic "invalid token" message. #397
+            if (requiresToken && (response.status === 401 || response.status === 403)) {
+                alert('The pasted API bearer token was not accepted. If you added or '
+                    + 'rotated API_BEARER_TOKEN after the first start, the token this '
+                    + 'instance stored differs — reset with scripts/reset_admin_password.py.');
+                return;
             }
+
+            const created = response.ok;              // 201 Created
+            const alreadyExists = response.status === 409;
+            if (!created && !alreadyExists) {
+                let msg = 'Setup failed';
+                try { msg = (await response.json()).error || msg; } catch (_) { /* non-JSON */ }
+                alert(msg);
+                return;
+            }
+
+            // Enable local auth so the admin can actually log in.
+            const cfg = await fetch('/api/auth/config', {
+                method: 'POST',
+                headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders),
+                body: JSON.stringify({ local_auth_enabled: true })
+            });
+            if (!cfg.ok) {
+                let msg = 'Admin created, but enabling local login failed';
+                try { msg = (await cfg.json()).error || msg; } catch (_) { /* non-JSON */ }
+                alert(msg + ' — enable local auth from Settings, then sign in.');
+                return;
+            }
+
+            // 409: an admin already existed (half-finished prior run). Local
+            // login is now on; the just-typed password did NOT overwrite the
+            // existing admin, so tell the operator which credentials to use.
+            if (alreadyExists) {
+                alert('An admin already exists; local login is enabled. Sign in with the '
+                    + 'existing admin credentials, or reset with scripts/reset_admin_password.py.');
+            }
+            window.location.href = '/login';
         } catch (err) {
             alert('Network error during setup');
         }
