@@ -115,10 +115,19 @@ class AuthManager:
 
             # scrypt fallback: "scrypt:<n>:<r>:<p>:<salt>:<hash>"
             if stored_hash.startswith('scrypt:'):
-                _, n, r, p, salt, expected_hash = stored_hash.split(':', 5)
+                _, n_s, r_s, p_s, salt, expected_hash = stored_hash.split(':', 5)
+                n, r, p = int(n_s), int(r_s), int(p_s)
+                # Bounds-check the stored KDF params BEFORE the (costly) work so a
+                # corrupted settings.json can't turn each login into an expensive
+                # scrypt run. These bracket what _hash_password writes
+                # (n=2**14, r=8, p=1); scrypt's own maxmem is the hard backstop.
+                if not (2 ** 12 <= n <= 2 ** 17 and (n & (n - 1)) == 0
+                        and 1 <= r <= 16 and 1 <= p <= 8
+                        and 0 < len(expected_hash) <= 256
+                        and all(c in '0123456789abcdefABCDEF' for c in expected_hash)):
+                    return False
                 dk = hashlib.scrypt(password.encode(), salt=salt.encode(),
-                                    n=int(n), r=int(r), p=int(p),
-                                    dklen=len(expected_hash) // 2)
+                                    n=n, r=r, p=p, dklen=len(expected_hash) // 2)
                 return secrets.compare_digest(dk.hex(), expected_hash)
 
             # Legacy SHA-256 formats (verify-only, for pre-upgrade hashes):

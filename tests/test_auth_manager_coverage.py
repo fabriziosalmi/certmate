@@ -155,6 +155,18 @@ class TestPasswordHashing:
         raw_sha = hashlib.sha256((salt + 'pw-12345678!').encode()).hexdigest()
         assert parts[5] != raw_sha
 
+    def test_scrypt_verify_rejects_out_of_range_params(self, auth_manager_factory):
+        """Defense-in-depth: a corrupted scrypt hash with absurd KDF params is
+        rejected by the bounds check, without launching the costly scrypt work."""
+        mgr, _ = auth_manager_factory()
+        salt, digest = "ab" * 16, "cd" * 32
+        # n far above the cap -> reject before scrypt
+        assert mgr._verify_password('x', f"scrypt:99999999:8:1:{salt}:{digest}") is False
+        # non-power-of-two n
+        assert mgr._verify_password('x', f"scrypt:12345:8:1:{salt}:{digest}") is False
+        # non-hex digest
+        assert mgr._verify_password('x', f"scrypt:16384:8:1:{salt}:zzzz") is False
+
 
 # ---------------------------------------------------------------------------
 # _normalize_allowed_domains — input validation for scoped API keys
