@@ -6,6 +6,7 @@
 
 **CertMate** is an SSL certificate management system designed for modern infrastructure. Built with multi-DNS provider support, Docker containerization, and a comprehensive REST API, it handles certificates across multiple datacenters and cloud environments.
 
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-try%20it%20now-2563eb?logo=probot&logoColor=white)](https://demo.certmate.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![Docker](https://img.shields.io/badge/docker-ready-blue)](https://hub.docker.com/)
