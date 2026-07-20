@@ -2541,6 +2541,12 @@ We welcome contributions! Areas where we need help:
 - **Integrations** - New DNS providers, monitoring tools
 - **Features** - UI improvements, API enhancements
 
+## Commercial Support & Consulting
+
+Running CertMate in production? I offer paid support, custom development, and
+security consulting — certificate/TLS automation, hardening, WAF, and cloud
+detection & alerting. Reach out: **[fabrizio.salmi@gmail.com](mailto:fabrizio.salmi@gmail.com)**.
+
 ## Contributing
 
 We love contributions! CertMate is an open-source project and we welcome:
