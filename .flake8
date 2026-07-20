@@ -1,0 +1,6 @@
+[flake8]
+# Third-party code and build artifacts are not ours to lint. The release gate
+# (scripts/release.sh) runs `flake8 .` from the repo root; without this it would
+# scan the local .venv and any agent worktrees under .claude/ and fail on
+# library code. Project code is linted normally (modules/, app.py, scripts/, tests/).
+extend-exclude = .venv,venv,.venv-clients,.claude,node_modules,build,dist

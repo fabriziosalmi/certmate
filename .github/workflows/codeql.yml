@@ -12,19 +12,17 @@ on:
 
 permissions: read-all
 
-# CodeQL runs on the same self-hosted host as CI. Two analysis runs from
-# different PRs overlapping there collide on the shared per-host CodeQL state
-# and one fails fast (observed: one PR's "CodeQL" check passing while a
-# concurrent PR's failed in ~1s). Serialize host-wide and queue rather than
-# cancel so each PR's analysis still completes.
+# GitHub-hosted runners give each run an ephemeral VM, so the per-host CodeQL
+# state collisions that forced a serialized self-hosted group no longer apply.
+# Scope concurrency per ref and cancel superseded runs (standard PR CI).
 concurrency:
-  group: certmate-selfhosted-codeql
-  cancel-in-progress: false
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   analyze:
     name: Analyze ${{ matrix.language }}
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ubuntu-latest
     permissions:
       # Required to upload results to the Security tab.
       security-events: write
