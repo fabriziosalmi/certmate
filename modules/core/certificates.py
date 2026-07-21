@@ -129,6 +129,28 @@ class CertificateManager:
                 "Failed to publish certificate_renewed for %s", domain
             )
 
+    def _publish_failed_event(self, domain, error):
+        """Publish 'certificate_failed' for an unattended renewal failure (#417).
+
+        The manual/API path (resources.py) and the async executor
+        (cert_jobs.py) both emit this; the scheduler did not, so a nightly
+        renewal that failed for 30 days straight produced audit records and
+        log lines but never an email or a Slack message — the two channels
+        the operator actually watches.
+
+        Same contract as _publish_renewed_event: no-op without an event bus,
+        never raises."""
+        if self._event_bus is None:
+            return
+        try:
+            self._event_bus.publish(
+                'certificate_failed', {'domain': domain, 'error': str(error)}
+            )
+        except Exception:  # pragma: no cover - defensive
+            logger.exception(
+                "Failed to publish certificate_failed for %s", domain
+            )
+
     def _audit_scheduled_renew(self, domain, status, error=None):
         """Emit an attributed audit record for an unattended renewal. No-op
         when no audit logger is wired; never raises."""
@@ -1788,6 +1810,10 @@ class CertificateManager:
                    'skipped_not_due': 0}
 
         for domain_entry in settings.get('domains', []):
+            # Reset per iteration: the outer except reads `domain` to publish
+            # certificate_failed, and a leftover value from the previous entry
+            # would attribute the failure to the wrong certificate.
+            domain = None
             try:
                 # Handle both old and new domain formats
                 if isinstance(domain_entry, str):
@@ -1848,10 +1874,18 @@ class CertificateManager:
                         summary['failed'] += 1
                         logger.error(f"Failed to renew certificate for {domain}: {e}")
                         self._audit_scheduled_renew(domain, 'failure', error=e)
+                        # Notify (#417): without this the operator's configured
+                        # email/Slack channels stay silent while the cert
+                        # marches to expiry.
+                        self._publish_failed_event(domain, e)
 
             except Exception as e:
                 summary['failed'] += 1
                 logger.error(f"Error checking renewal for domain entry {domain_entry}: {e}")
+                # A failure while *checking* (unreadable metadata, bad entry)
+                # is just as invisible to the operator as a failed renewal.
+                if domain:
+                    self._publish_failed_event(domain, e)
 
         if summary['skipped_invalid']:
             logger.warning(
