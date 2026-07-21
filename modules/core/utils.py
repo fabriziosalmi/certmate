@@ -886,3 +886,116 @@ class DeploymentStatusCache:
                 self._default_ttl = int(ttl)
             return True
         return False
+
+# certbot lays out each lineage as live/<domain>/<name>.pem -> a relative
+# symlink into archive/<domain>/<name><N>.pem. A ZIP archive cannot preserve
+# that: zipfile.write() dereferences symlinks, so a backup restore writes
+# plain files into live/. certbot then reports a parsefail and SKIPS the
+# lineage, which is why, after a restore, every scheduled renewal used to
+# fail (or exit 0 reporting "renewed: False") forever — silently, until the
+# certificates expired (#410).
+_CERTBOT_LINEAGE_FILES = ('cert.pem', 'chain.pem', 'fullchain.pem', 'privkey.pem')
+_ARCHIVE_VERSION_RE = re.compile(r'^(?P<stem>cert|chain|fullchain|privkey)(?P<n>\d+)\.pem$')
+
+
+def repair_certbot_lineage_symlinks(domain_dir: Union[str, Path], domain: str) -> bool:
+    """Rebuild live/<domain>/*.pem as symlinks into archive/<domain>/.
+
+    Returns True when a repair was performed. A no-op (and False) when the
+    lineage is absent, already healthy, or when archive/ holds nothing to
+    point at — the caller then still has the flat PEMs CertMate serves from,
+    which are untouched either way.
+
+    Only the *newest* archive generation is linked, which is what certbot's
+    own ``live`` symlinks mean.
+    """
+    # `domain` reaches the restore caller from ZIP entry names, so treat it as
+    # untrusted here rather than relying on the caller: validate its shape,
+    # then confirm every path we touch resolves inside domain_dir. The
+    # ZIP-slip guard in the restore path is the first line of defence; this is
+    # the second, and it makes the helper safe for any future caller.
+    if not validate_domain(domain):
+        return False
+
+    domain_dir = Path(domain_dir)
+    try:
+        base = domain_dir.resolve()
+    except OSError:
+        return False
+
+    def _inside(path: Path) -> Optional[Path]:
+        try:
+            resolved = (base / path).resolve()
+            resolved.relative_to(base)
+        except (OSError, ValueError):
+            return None
+        return base / path
+
+    live_dir = _inside(Path('live') / domain)
+    archive_dir = _inside(Path('archive') / domain)
+    conf = _inside(Path('renewal') / f'{domain}.conf')
+    if live_dir is None or archive_dir is None or conf is None:
+        return False
+
+    if not conf.exists() or not archive_dir.is_dir():
+        return False
+
+    live_cert = live_dir / 'cert.pem'
+    # Healthy lineage: live/cert.pem is a symlink that resolves.
+    if live_cert.is_symlink() and live_cert.exists():
+        return False
+    # Nothing restored into live/ at all is a different failure mode
+    # (handled by _quarantine_broken_lineage on the reissue path).
+    if not live_cert.exists():
+        return False
+
+    # Highest generation present for every one of the four members.
+    generations = {}
+    for entry in archive_dir.iterdir():
+        m = _ARCHIVE_VERSION_RE.match(entry.name)
+        if m:
+            generations.setdefault(m.group('stem'), set()).add(int(m.group('n')))
+    if len(generations) != len(_CERTBOT_LINEAGE_FILES):
+        return False
+
+    # The newest generation present for EVERY member, not min(max(...)): a
+    # lineage where privkey jumps 2 -> 4 while cert runs 1..3 has a max-of-
+    # maxes intersection that is empty at 3, and linking per-member would
+    # leave a half-relinked live/ (cert as a symlink, privkey still a flat
+    # file) — a state certbot handles no better than the one we started in.
+    common = set.intersection(*generations.values())
+    if not common:
+        return False
+    version = max(common)
+
+    # All four targets must exist before we touch live/, so the repair is
+    # all-or-nothing.
+    targets = {name: archive_dir / f"{name[:-len('.pem')]}{version}.pem"
+               for name in _CERTBOT_LINEAGE_FILES}
+    if not all(t.exists() for t in targets.values()):
+        return False
+
+    repaired = False
+    for name in _CERTBOT_LINEAGE_FILES:
+        target = targets[name]
+        link = live_dir / name
+        # Build the symlink under a temp name and rename it into place, so a
+        # filesystem that refuses symlinks (or a permission error) leaves the
+        # restored flat PEM intact instead of deleting it first and failing.
+        tmp_link = live_dir / f'.{name}.relink'
+        try:
+            if tmp_link.is_symlink() or tmp_link.exists():
+                tmp_link.unlink()
+            # Relative, exactly as certbot writes it, so the lineage keeps
+            # working if the data dir is moved again.
+            tmp_link.symlink_to(os.path.relpath(target, live_dir))
+            os.replace(tmp_link, link)
+            repaired = True
+        except OSError:
+            try:
+                if tmp_link.is_symlink() or tmp_link.exists():
+                    tmp_link.unlink()
+            except OSError:
+                pass
+            return repaired
+    return repaired

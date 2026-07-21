@@ -16,7 +16,7 @@ from pathlib import Path
 import fcntl
 import logging
 
-from .utils import utc_now, utc_now_iso
+from .utils import utc_now, utc_now_iso, repair_certbot_lineage_symlinks
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +43,26 @@ _PRIVATE_KEY_FILE_RE = re.compile(
     r'(?:^|[._-])privkey\d*\.pem$|^private_key\.json$|\.key$',
     re.IGNORECASE,
 )
+
+# Subtrees of data_dir that a unified backup carries under the "data/" arc
+# prefix. Without these the archive holds no PKI state at all: the private
+# CA signing key, every client certificate, the CRL and the audit chain all
+# live here, so a "restore" left an operator unable to issue, renew or
+# revoke a single client cert (#409).
+#
+# This is also the RESTORE allowlist, and it deliberately excludes
+# settings.json: settings are restored from the archive's own settings.json
+# entry, which passes the deploy-hook revalidation gate. Honouring a
+# "data/settings.json" member would let a tampered archive write settings
+# straight to disk around that gate.
+_BACKUP_DATA_SUBTREES = ('certs', 'audit')
+
+# Per-entry ceiling when restoring the data/ subtrees. Deliberately far above
+# the 10 MB used for PEM files: certificate_audit.log is append-only and grows
+# with every operation, and an audit chain restored with a hole in it is
+# unverifiable. Entries are streamed in chunks, so this is a bound on disk
+# use, not on memory.
+_MAX_DATA_ENTRY_BYTES = 512 * 1024 * 1024
 
 # --- Backup encryption at rest --------------------------------------------
 # Unified backups embed every certificate private key (privkey.pem). With
@@ -287,6 +307,16 @@ class FileOperations:
                         domain_dirs.append(domain_dir)
             domains = [d.name for d in domain_dirs]
 
+            # PKI + audit state that lives outside cert_dir (#409). Collected
+            # here, before the metadata dict is built, so the count is
+            # identical in settings.json and backup_metadata.json.
+            data_files = []
+            for subtree in _BACKUP_DATA_SUBTREES:
+                subtree_dir = self.data_dir / subtree
+                if not subtree_dir.is_dir():
+                    continue
+                data_files.extend(f for f in subtree_dir.rglob("*") if f.is_file())
+
             settings_to_write = settings_data if include_secrets else self._mask_settings_secrets(settings_data)
 
             metadata = {
@@ -298,6 +328,9 @@ class FileOperations:
                 "domains": domains,
                 "settings_domains": [d.get('domain') if isinstance(d, dict) else d for d in settings_data.get('domains', [])],
                 "total_domains": len(domains),
+                # Count of PKI/audit files carried under the "data/" prefix
+                # (private CA, client certs, CRL, audit chain) — #409.
+                "data_files": len(data_files),
                 # Pin the secret-handling mode on the backup itself so an
                 # operator inspecting an old archive can see whether it's
                 # a share-safe (masked) snapshot or a full-restore one.
@@ -335,6 +368,14 @@ class FileOperations:
                         # Add file to zip with relative path under certificates/
                         arc_path = f"certificates/{cert_file.relative_to(self.cert_dir)}"
                         zipf.write(cert_file, arc_path)
+
+                # PKI + audit state (#409). certificates/ only covers the
+                # ACME server certs; the private CA key, the client certs it
+                # signed, the CRL and the audit chain live under data_dir and
+                # were previously absent from every backup — silently, since
+                # total_domains still looked right.
+                for data_file in data_files:
+                    zipf.write(data_file, f"data/{data_file.relative_to(self.data_dir)}")
 
                 # Add unified metadata
                 zipf.writestr("backup_metadata.json", json.dumps(metadata, indent=2))
@@ -697,6 +738,8 @@ class FileOperations:
                 
                 # Then, restore certificates
                 cert_dir_resolved = self.cert_dir.resolve()
+                data_dir_resolved = self.data_dir.resolve()
+                restored_data_files = 0
                 for file_info in zipf.infolist():
                     if file_info.filename.startswith("certificates/") and file_info.filename != "certificates/":
                         # Remove "certificates/" prefix from the path.
@@ -762,10 +805,110 @@ class FileOperations:
                             if domain and domain not in restored_domains:
                                 logger.info(f"Found domain in unified backup: {domain}")
                                 restored_domains.append(domain)
+
+                    # Then, restore the PKI + audit subtrees (#409). Same
+                    # ZIP-slip / size / permission handling as certificates,
+                    # but the first path segment is checked against
+                    # _BACKUP_DATA_SUBTREES so a tampered archive cannot use
+                    # this branch to drop a settings.json (or anything else)
+                    # into data_dir behind the deploy-hook validation gate.
+                    elif file_info.filename.startswith("data/") and file_info.filename != "data/":
+                        relative_path = file_info.filename[len("data/"):]
+
+                        if '..' in relative_path or relative_path.startswith('/'):
+                            logger.warning(f"Skipping suspicious ZIP entry: {file_info.filename}")
+                            continue
+
+                        top_level = relative_path.split('/')[0]
+                        if top_level not in _BACKUP_DATA_SUBTREES:
+                            logger.warning(
+                                f"Skipping non-allowlisted data entry: {file_info.filename}"
+                            )
+                            continue
+
+                        target_path = self.data_dir / relative_path
+
+                        try:
+                            target_resolved = target_path.resolve()
+                            target_resolved.relative_to(data_dir_resolved)
+                        except ValueError:
+                            logger.warning(f"ZIP Slip blocked: {file_info.filename} -> {target_path}")
+                            continue
+                        except OSError:
+                            logger.warning(f"Invalid path in ZIP: {file_info.filename}")
+                            continue
+
+                        # The 10 MB per-entry cap that suits PEM files would
+                        # silently truncate DR here: certificate_audit.log is
+                        # append-only and routinely outgrows it on a
+                        # long-lived instance. Skipping it would leave the
+                        # audit chain unverifiable while the restore still
+                        # reported success. Larger cap, chunked write (never
+                        # hold the file in memory), and an ERROR — not a
+                        # warning — when even that is exceeded, because the
+                        # result is an incomplete restore.
+                        if file_info.file_size > _MAX_DATA_ENTRY_BYTES:
+                            logger.error(
+                                f"Restore incomplete: {file_info.filename} is "
+                                f"{file_info.file_size} bytes, above the "
+                                f"{_MAX_DATA_ENTRY_BYTES}-byte limit for data/ entries"
+                            )
+                            continue
+
+                        target_path.parent.mkdir(parents=True, exist_ok=True)
+
+                        try:
+                            written = 0
+                            with zipf.open(file_info) as source, open(target_path, 'wb') as target:
+                                while True:
+                                    chunk = source.read(1024 * 1024)
+                                    if not chunk:
+                                        break
+                                    written += len(chunk)
+                                    if written > _MAX_DATA_ENTRY_BYTES:
+                                        raise ValueError(
+                                            'declared size understated the real size'
+                                        )
+                                    target.write(chunk)
+                        except Exception as e:
+                            logger.error(f"Error extracting {file_info.filename}: {e}")
+                            # Never leave a half-written PKI/audit file behind:
+                            # a truncated ca.key or audit chain is worse than
+                            # an absent one, because it looks restored.
+                            try:
+                                target_path.unlink(missing_ok=True)
+                            except OSError:
+                                pass
+                            continue
+
+                        # The CA signing key, the audit signing key and every
+                        # client private key land here. Unlike certificates/,
+                        # which operators bind-mount and read from other
+                        # containers, nothing outside the app process reads
+                        # data/ — so everything restored here is 0600. That
+                        # includes the CA cert and the CRL: they are public
+                        # information, but publishing them is the server's
+                        # job (/api/crl/download), not the filesystem's.
+                        os.chmod(target_path, 0o600)
+
+                        restored_data_files += 1
             
+            # A ZIP cannot carry symlinks, so certbot's live/<domain>/*.pem
+            # came back as flat files and certbot would parsefail the lineage
+            # and skip it — making every future renewal a silent no-op (#410).
+            # Rebuild the links from the archive/ generation we restored.
+            for domain in restored_domains:
+                try:
+                    if repair_certbot_lineage_symlinks(self.cert_dir / domain, domain):
+                        logger.info(f"Rebuilt certbot lineage symlinks for {domain}")
+                except OSError as e:
+                    logger.warning(f"Could not rebuild lineage symlinks for {domain}: {e}")
+
             logger.info(f"Unified backup restored successfully from: {backup_path.name}")
             if restored_domains:
                 logger.info(f"Restored {len(restored_domains)} domains: {', '.join(restored_domains)}")
+            if restored_data_files:
+                logger.info(f"Restored {restored_data_files} PKI/audit files under data/")
             return True
             
         except Exception as e:

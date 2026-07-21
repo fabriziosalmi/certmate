@@ -411,7 +411,7 @@ after first start.
 ### Using Gunicorn
 
 ```bash
-gunicorn --bind 0.0.0.0:8000 --workers 4 app:app
+gunicorn --bind 0.0.0.0:8000 --workers 1 --threads 8 app:app
 ```
 
 ### Using systemd
@@ -428,7 +428,7 @@ Type=simple
 User=certmate
 WorkingDirectory=/opt/certmate
 Environment=PATH=/opt/certmate/venv/bin
-ExecStart=/opt/certmate/venv/bin/gunicorn --bind 0.0.0.0:8000 --workers 4 app:app
+ExecStart=/opt/certmate/venv/bin/gunicorn --bind 0.0.0.0:8000 --workers 1 --threads 8 app:app
 Restart=always
 
 [Install]

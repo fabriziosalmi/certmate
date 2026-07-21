@@ -24,7 +24,10 @@ from cryptography import x509
 from .shell import ShellExecutor
 from .dns_strategies import DNSStrategyFactory, HTTP01Strategy, acme_webroot_dir, check_certbot_plugin_installed
 from .constants import CERTIFICATE_FILES, get_domain_name
-from .utils import DeploymentStatusCache, validate_domain, utc_now, utc_now_iso, validate_key_options
+from .utils import (
+    DeploymentStatusCache, validate_domain, utc_now, utc_now_iso, validate_key_options,
+    repair_certbot_lineage_symlinks,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1469,6 +1472,22 @@ class CertificateManager:
             domain_dir = cert_dir / domain
             if not domain_dir.exists() or not (domain_dir / 'cert.pem').exists():
                 raise FileNotFoundError(f"No certificate found for domain: {domain}")
+
+            # Self-heal a lineage flattened by a backup restore (#410) before
+            # certbot sees it. Without this, `certbot renew` parsefails and
+            # skips the lineage, so every scheduled renewal reports
+            # "renewed: False" forever while the certificate marches to
+            # expiry. Repairing here (not only on the reissue path) is what
+            # makes an unattended instance recover on its own.
+            try:
+                if repair_certbot_lineage_symlinks(domain_dir, domain):
+                    logger.warning(
+                        f"Rebuilt broken certbot lineage symlinks for {domain} "
+                        "(flattened by a backup restore) before renewal"
+                    )
+            except OSError as e:
+                logger.warning(f"Could not rebuild lineage symlinks for {domain}: {e}")
+
             work_dir = domain_dir / 'work'
             logs_dir = domain_dir / 'logs'
 

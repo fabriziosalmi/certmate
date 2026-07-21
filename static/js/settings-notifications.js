@@ -62,8 +62,25 @@
                     credentials: 'same-origin',
                     body: JSON.stringify(self.config)
                 })
-                    .then(function (r) { return r.json(); })
-                    .then(function () { CertMate.toast('Notification settings saved', 'success'); })
+                    // r.ok must gate the toast: /api/notifications/config is
+                    // admin-only and answers JSON on 403/400/503, so reading
+                    // the body alone made every failure render as a green
+                    // "saved" — the operator closed the tab believing SMTP
+                    // was configured and no alert ever fired (#415).
+                    .then(function (r) {
+                        return r.json()
+                            .catch(function () { return {}; })
+                            .then(function (data) { return { ok: r.ok, status: r.status, data: data }; });
+                    })
+                    .then(function (res) {
+                        if (!res.ok) {
+                            var msg = (res.data && (res.data.error || res.data.message))
+                                || ('Failed to save (HTTP ' + res.status + ')');
+                            CertMate.toast(msg, 'error');
+                            return;
+                        }
+                        CertMate.toast('Notification settings saved', 'success');
+                    })
                     .catch(function () { CertMate.toast('Failed to save', 'error'); })
                     .then(function () {
                         if (btn) {

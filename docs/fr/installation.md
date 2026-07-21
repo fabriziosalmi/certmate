@@ -281,7 +281,7 @@ Gardez `BEHIND_PROXY=true` sur le service CertMate : Zion ajoute `X-Forwarded-Fo
 
 ```bash
 pip install gunicorn
-gunicorn --bind 0.0.0.0:8000 --workers 4 --threads 8 app:app
+gunicorn --bind 0.0.0.0:8000 --workers 1 --threads 8 app:app
 ```
 
 ### Utiliser systemd
@@ -298,7 +298,7 @@ Type=simple
 User=certmate
 WorkingDirectory=/opt/certmate
 Environment=PATH=/opt/certmate/venv/bin
-ExecStart=/opt/certmate/venv/bin/gunicorn --bind 0.0.0.0:8000 --workers 4 app:app
+ExecStart=/opt/certmate/venv/bin/gunicorn --bind 0.0.0.0:8000 --workers 1 --threads 8 app:app
 Restart=always
 
 [Install]
@@ -410,7 +410,7 @@ Si NFS est inévitable, montez avec `soft,timeo=30,retrans=3` (ou l'équivalent 
 ### Utiliser Gunicorn
 
 ```bash
-gunicorn --bind 0.0.0.0:8000 --workers 4 app:app
+gunicorn --bind 0.0.0.0:8000 --workers 1 --threads 8 app:app
 ```
 
 ### Utiliser systemd
@@ -427,7 +427,7 @@ Type=simple
 User=certmate
 WorkingDirectory=/opt/certmate
 Environment=PATH=/opt/certmate/venv/bin
-ExecStart=/opt/certmate/venv/bin/gunicorn --bind 0.0.0.0:8000 --workers 4 app:app
+ExecStart=/opt/certmate/venv/bin/gunicorn --bind 0.0.0.0:8000 --workers 1 --threads 8 app:app
 Restart=always
 
 [Install]
