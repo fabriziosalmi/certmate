@@ -125,10 +125,25 @@ def verify_chain(path) -> Dict[str, Any]:
     return verify_records(records)
 
 
-def verify_records(records) -> Dict[str, Any]:
+def verify_records(records, anchor_prev_hash: str = GENESIS_PREV,
+                   anchor_seq: Optional[int] = None) -> Dict[str, Any]:
     """Verify a list of parsed chain records ``[{seq, entry, prev_hash, hash}, ...]``.
     Returns the same result dict as :func:`verify_chain`. Shared by the file
-    verifier and the export-bundle verifier."""
+    verifier and the export-bundle verifier.
+
+    By default the records must start at the genesis, i.e. the first record's
+    ``prev_hash`` must be ``""``. That default is load-bearing: it is why
+    removing entries from the *head* of a full chain is detected.
+
+    A **fragment** that legitimately starts mid-chain — an incremental export
+    slice (#441), and the seam of any future segmentation — passes the
+    predecessor hash it continues from as *anchor_prev_hash*, optionally with
+    the ``seq`` that hash is supposed to precede. The caller is responsible for
+    making that anchor trustworthy: in a bundle it lives in the signed manifest,
+    so the instance attests where the slice starts. Verification against an
+    anchor proves the records from the anchor forward are authentic and ordered
+    — it proves nothing at all about the prefix, and callers must not report it
+    as if it did."""
     result: Dict[str, Any] = {
         "ok": False, "count": 0, "first_seq": None, "last_seq": None,
         "head_hash": None, "error_seq": None, "reason": None,
@@ -136,14 +151,15 @@ def verify_records(records) -> Dict[str, Any]:
     if not records:
         result["ok"] = True
         result["reason"] = "empty chain"
-        # The head of an empty chain is the genesis prev_hash, matching what
-        # build_manifest records for an empty slice (so an empty signed bundle
-        # verifies consistently).
-        result["head_hash"] = GENESIS_PREV
+        # The head of an empty slice is whatever it was anchored to (the
+        # genesis prev_hash for a full chain), matching what build_manifest
+        # records for an empty slice — so an empty signed bundle verifies
+        # consistently.
+        result["head_hash"] = anchor_prev_hash
         return result
 
-    prev_hash = GENESIS_PREV
-    expected_seq: Optional[int] = None
+    prev_hash = anchor_prev_hash
+    expected_seq: Optional[int] = anchor_seq
     count = 0
 
     for idx, rec in enumerate(records):
@@ -162,9 +178,10 @@ def verify_records(records) -> Dict[str, Any]:
             result["reason"] = f"malformed record at position {idx} (missing fields)"
             return result
 
+        if idx == 0:
+            result["first_seq"] = seq
         if expected_seq is None:
             expected_seq = seq
-            result["first_seq"] = seq
         elif seq != expected_seq:
             result["error_seq"] = expected_seq
             result["reason"] = (
@@ -201,7 +218,16 @@ def verify_records(records) -> Dict[str, Any]:
 # --- Phase 3: signed export bundle + checkpoints --------------------------
 
 CHECKPOINT_FILENAME = "certificate_audit.checkpoints.jsonl"
+# v1: the slice starts at the genesis (a full export). Byte-identical to what
+#     every previously shipped version produced, so old verifiers keep working.
+# v2: the slice is ANCHORED — it starts mid-chain, and the manifest carries the
+#     predecessor hash it continues from (#441). Deliberately a new version
+#     rather than an optional field on v1: a verifier that does not understand
+#     anchoring must say "unsupported format", never mistake a legitimate
+#     fragment for a broken chain.
 BUNDLE_FORMAT_VERSION = 1
+ANCHORED_BUNDLE_FORMAT_VERSION = 2
+SUPPORTED_BUNDLE_FORMAT_VERSIONS = (BUNDLE_FORMAT_VERSION, ANCHORED_BUNDLE_FORMAT_VERSION)
 
 
 def load_records(path, from_seq: Optional[int] = None, to_seq: Optional[int] = None):
@@ -234,16 +260,27 @@ def build_manifest(records, *, fingerprint, public_key_pem, exported_at,
                    algorithm) -> Dict[str, Any]:
     """Build the export-bundle manifest. The ``head_hash`` transitively commits
     to every record via the chain, so signing the manifest commits to the whole
-    exported slice without per-entry signatures."""
+    exported slice without per-entry signatures.
+
+    A slice that does not start at the genesis is marked as anchored: the
+    manifest records the ``prev_hash`` its first entry continues from, and the
+    signature therefore covers the anchor too (#441). Without that, the entries
+    are internally consistent but the first link has nothing to check against,
+    and the verifier — correctly — rejects them."""
+    anchor_prev_hash = GENESIS_PREV
     if records:
         seq_first = records[0]["seq"]
         seq_last = records[-1]["seq"]
         head_hash = records[-1]["hash"]
+        anchor_prev_hash = records[0].get("prev_hash") or GENESIS_PREV
     else:
         seq_first = seq_last = None
         head_hash = GENESIS_PREV
-    return {
-        "format_version": BUNDLE_FORMAT_VERSION,
+    anchored = anchor_prev_hash != GENESIS_PREV
+    manifest = {
+        "format_version": (
+            ANCHORED_BUNDLE_FORMAT_VERSION if anchored else BUNDLE_FORMAT_VERSION
+        ),
         "algorithm": algorithm,
         "instance_fingerprint": fingerprint,
         "public_key_pem": public_key_pem,
@@ -253,6 +290,10 @@ def build_manifest(records, *, fingerprint, public_key_pem, exported_at,
         "head_hash": head_hash,
         "exported_at": exported_at,
     }
+    if anchored:
+        manifest["anchor_prev_hash"] = anchor_prev_hash
+        manifest["anchor_seq"] = seq_first
+    return manifest
 
 
 def manifest_signing_bytes(manifest: Dict[str, Any]) -> bytes:

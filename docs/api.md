@@ -779,6 +779,18 @@ The verifier checks the chain structure, that the manifest matches the entries,
 the Ed25519 signature, and that the fingerprint matches the (optionally pinned)
 public key.
 
+**Partial slices.** A full export starts at the genesis and is
+`format_version: 1`. A slice that starts mid-chain (`?from_seq=N` past the first
+entry) is `format_version: 2` and additionally carries `anchor_prev_hash` /
+`anchor_seq` in the manifest — the predecessor hash its first entry continues
+from — so the fragment can be verified even though it has no genesis. The anchor
+is inside the signed manifest, so the signature attests it. The verifier reports
+such a bundle as a **partial slice** and names the anchor seq: it proves the
+entries from the anchor forward are authentic and ordered, and proves nothing
+about what came before. Verifiers older than v2.23.0 report `unsupported bundle
+format_version 2` for an anchored slice; full exports remain byte-compatible
+with them.
+
 > **Threat-model honesty.** The chain + signature detect any interior
 > modification, deletion, or reorder, and tie an export to this instance's
 > public key — for anyone who does not hold the signing key. They do **not**
