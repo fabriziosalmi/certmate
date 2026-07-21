@@ -166,11 +166,20 @@ def test_no_file_under_tests_is_silently_gitignored():
     a rule that reads as if it applies to one place and quietly applies
     everywhere.
     """
+    import shutil
     import subprocess
 
-    out = subprocess.run(
+    # Only meaningful inside a git checkout: from a source archive (sdist,
+    # vendored copy) there is nothing to ask.
+    if shutil.which("git") is None or not (ROOT / ".git").exists():
+        pytest.skip("not a git checkout — nothing to verify")
+
+    result = subprocess.run(
         ["git", "ls-files", "-o", "-i", "--exclude-standard", "tests/"],
         cwd=ROOT, capture_output=True, text=True,
-    ).stdout.split()
+    )
+    if result.returncode != 0:
+        pytest.skip(f"git could not read the checkout: {result.stderr.strip()}")
+    out = result.stdout.split()
     swallowed = [f for f in out if f.endswith(".py")]
     assert not swallowed, f"gitignore is hiding test files: {swallowed}"

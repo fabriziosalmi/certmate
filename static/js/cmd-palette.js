@@ -266,7 +266,11 @@
         if (samePage && target.hash === window.location.hash) {
             // Already exactly where the entry points: nothing to navigate,
             // but the panel must still reflect it (the user asked for it).
-            window.dispatchEvent(new HashChangeEvent('hashchange'));
+            // A plain Event, not new HashChangeEvent(): the constructor is
+            // unsupported in some engines and would throw here, and the
+            // listeners read location.hash rather than the event's
+            // oldURL/newURL, so the generic type carries everything needed.
+            window.dispatchEvent(new Event('hashchange'));
             return;
         }
         window.location.href = url;
