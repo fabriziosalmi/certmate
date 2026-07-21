@@ -78,6 +78,19 @@ class DomainOperationInProgress(RuntimeError):
         super().__init__(f"A certificate operation for {domain} is already in progress")
 
 
+# Metadata keys a reissue (create_certificate(replace=True)) is authoritative
+# for: they are rebuilt from the issuance parameters on every reissue, and the
+# alias pair must be *cleared* when the reissue drops the alias. Every other
+# key on disk — the deployment probe config written by PATCH, deployment_status,
+# renewed_at, and anything a future version adds — belongs to the certificate,
+# not to this issuance, and survives (#421).
+_REISSUE_OWNED_METADATA_KEYS = frozenset({
+    'domain', 'san_domains', 'dns_provider', 'challenge_type', 'created_at',
+    'email', 'staging', 'account_id', 'ca_provider', 'ca_account_id',
+    'domain_alias', 'alias_dns_provider', 'storage_warning',
+})
+
+
 class CertificateManager:
     """Class to handle certificate operations"""
     
@@ -127,6 +140,28 @@ class CertificateManager:
         except Exception:  # pragma: no cover - defensive
             logger.exception(
                 "Failed to publish certificate_renewed for %s", domain
+            )
+
+    def _publish_failed_event(self, domain, error):
+        """Publish 'certificate_failed' for an unattended renewal failure (#417).
+
+        The manual/API path (resources.py) and the async executor
+        (cert_jobs.py) both emit this; the scheduler did not, so a nightly
+        renewal that failed for 30 days straight produced audit records and
+        log lines but never an email or a Slack message — the two channels
+        the operator actually watches.
+
+        Same contract as _publish_renewed_event: no-op without an event bus,
+        never raises."""
+        if self._event_bus is None:
+            return
+        try:
+            self._event_bus.publish(
+                'certificate_failed', {'domain': domain, 'error': str(error)}
+            )
+        except Exception:  # pragma: no cover - defensive
+            logger.exception(
+                "Failed to publish certificate_failed for %s", domain
             )
 
     def _audit_scheduled_renew(self, domain, status, error=None):
@@ -251,6 +286,92 @@ class CertificateManager:
 
     def _metadata_path(self, domain: str) -> Path:
         return self.cert_dir / domain / 'metadata.json'
+
+    def _store_in_backend(self, domain, cert_files, metadata):
+        """Push the bundle to the configured storage backend.
+
+        Returns a human-readable warning when the external copy did NOT land,
+        None when it did (or when no backend is configured). Shared by the
+        create and renew paths so they cannot drift again (#423): the create
+        path recorded this warning in metadata while the renew path only
+        logged it, so a Vault token expiring mid-life meant nightly renewals
+        kept succeeding locally while the DR copy silently went stale, with
+        nothing in the API or the UI to show it.
+
+        The message deliberately carries no raw exception text — backend
+        errors can embed credentials and URLs.
+        """
+        if not self.storage_manager:
+            return None
+        try:
+            backend_name = self.storage_manager.get_backend_name()
+        except Exception:
+            backend_name = 'external'
+        try:
+            stored = self.storage_manager.store_certificate(domain, cert_files, metadata)
+        except Exception as e:
+            # Class name only at ERROR: a backend exception can embed a token
+            # or a signed URL, and application logs are readable by any admin
+            # (and streamable over /api/web/logs/stream). The detail is
+            # available to whoever explicitly turns on DEBUG.
+            logger.error(
+                "Error storing certificate in storage backend for %s: %s",
+                domain, type(e).__name__,
+            )
+            logger.debug("Storage backend error detail for %s", domain, exc_info=True)
+            return (
+                f"Certificate issued but saving it to the {backend_name} storage backend "
+                f"failed — the external copy is missing or stale. See server logs for details."
+            )
+        if stored:
+            logger.info(f"Certificate stored in {backend_name} backend for {domain}")
+            return None
+        logger.warning(f"Failed to store certificate in {backend_name} backend for {domain}")
+        return (
+            f"Certificate issued but NOT saved to the {backend_name} storage "
+            f"backend — the external copy is missing or stale. Check the backend "
+            f"credentials and connectivity."
+        )
+
+    @staticmethod
+    def _apply_storage_warning(metadata, storage_warning):
+        """Set or CLEAR metadata['storage_warning'] (#423).
+
+        Clearing matters as much as setting: one failed store used to leave the
+        warning in metadata forever, so the dashboard kept warning long after
+        the backend recovered — and an operator who learns to ignore a stale
+        warning will ignore the real one.
+        """
+        if storage_warning:
+            metadata['storage_warning'] = storage_warning
+        else:
+            metadata.pop('storage_warning', None)
+        return metadata
+
+    def _merge_reissue_metadata(self, domain: str, issuance: dict) -> dict:
+        """Carry forward the metadata a reissue does not own (#421).
+
+        `create_certificate` builds `issuance` from the issuance parameters
+        and used to write metadata.json wholesale, so `replace=True` (Edit &
+        Reissue) silently dropped every key the PATCH endpoint had stored
+        there: deployment_protocol / deployment_port / deployment_host (which
+        resources.py goes out of its way to preserve on a *partial* PATCH),
+        plus deployment_status and renewed_at. Adding a SAN to a mail server's
+        certificate therefore reverted its probe to https-tls:443, and the
+        dashboard reported it "not deployed".
+
+        Everything not in `_REISSUE_OWNED_METADATA_KEYS` is preserved,
+        including keys a future version adds. The alias pair IS owned, so a
+        reissue that drops the alias clears it rather than inheriting the old
+        value from disk.
+        """
+        preserved = {
+            k: v for k, v in self._load_metadata(domain).items()
+            if k not in _REISSUE_OWNED_METADATA_KEYS
+        }
+        if not preserved:
+            return issuance
+        return {**preserved, **issuance}
 
     def _load_metadata(self, domain: str) -> dict:
         metadata_file = self._metadata_path(domain)
@@ -1371,32 +1492,11 @@ class CertificateManager:
             # operator had no signal their backup never landed. Capture a
             # generic warning (no raw exception text — it can carry backend
             # credentials/URLs) and surface it on the result and in metadata.
-            storage_warning = None
-            if self.storage_manager:
-                try:
-                    backend_name = self.storage_manager.get_backend_name()
-                except Exception:
-                    backend_name = 'external'
-                try:
-                    storage_success = self.storage_manager.store_certificate(domain, cert_files, metadata)
-                    if storage_success:
-                        logger.info(f"Certificate stored in {backend_name} backend for {domain}")
-                    else:
-                        storage_warning = (
-                            f"Certificate issued but NOT saved to the {backend_name} storage "
-                            f"backend — the external copy is missing or stale. Check the backend "
-                            f"credentials and connectivity."
-                        )
-                        logger.warning(f"Failed to store certificate in {backend_name} backend for {domain}")
-                except Exception as e:
-                    storage_warning = (
-                        f"Certificate issued but saving it to the {backend_name} storage backend "
-                        f"failed — the external copy is missing or stale. See server logs for details."
-                    )
-                    logger.error(f"Error storing certificate in storage backend for {domain}: {e}")
+            storage_warning = self._store_in_backend(domain, cert_files, metadata)
+            self._apply_storage_warning(metadata, storage_warning)
 
-            if storage_warning:
-                metadata['storage_warning'] = storage_warning
+            if replace:
+                metadata = self._merge_reissue_metadata(domain, metadata)
 
             if self._save_metadata(domain, metadata):
                 logger.info(f"Saved certificate metadata to {self._metadata_path(domain)}")
@@ -1698,34 +1798,35 @@ class CertificateManager:
                         with open(dest_file, 'rb') as f:
                             cert_files[file_name] = f.read()
                 
-                # Update metadata with renewal timestamp
-                if metadata_file.exists():
+                # Stamp the renewal BEFORE storing, so the external copy
+                # carries the same renewed_at as the local one; then persist
+                # metadata once, with the resulting storage state (#423).
+                metadata['renewed_at'] = utc_now_iso()
+                storage_warning = self._store_in_backend(domain, cert_files, metadata)
+
+                # Persist when there is metadata to update OR a warning to
+                # record: a domain with no metadata.json would otherwise lose
+                # the only signal that its external copy is stale.
+                if metadata_file.exists() or storage_warning:
                     try:
-                        metadata['renewed_at'] = utc_now_iso()
+                        self._apply_storage_warning(metadata, storage_warning)
                         self._save_metadata(domain, metadata)
                         logger.info(f"Updated renewal timestamp in metadata for {domain}")
                     except Exception as e:
                         logger.warning(f"Failed to update metadata for {domain}: {e}")
-                
-                if self.storage_manager:
-                    try:
-                        storage_success = self.storage_manager.store_certificate(domain, cert_files, metadata)
-                        if storage_success:
-                            logger.info(f"Certificate stored in {self.storage_manager.get_backend_name()} backend for {domain}")
-                        else:
-                            logger.warning(f"Failed to store certificate in {self.storage_manager.get_backend_name()} backend for {domain}")
-                    except Exception as e:
-                        logger.error(f"Error storing certificate in storage backend for {domain}: {e}")
-                
+
                 logger.info(f"Certificate renewed successfully for {domain}")
                 self._invalidate_certificate_info_cache(domain)
                 self._write_pfx(domain)
-                return {
+                renew_result = {
                     'success': True,
                     'renewed': True,
                     'domain': domain,
                     'message': "Certificate renewed successfully"
                 }
+                if storage_warning:
+                    renew_result['storage_warning'] = storage_warning
+                return renew_result
             else:
                 # Mirror the create-path sanitisation: log raw stderr,
                 # surface a redacted copy. See sanitize_certbot_stderr
@@ -1788,6 +1889,10 @@ class CertificateManager:
                    'skipped_not_due': 0}
 
         for domain_entry in settings.get('domains', []):
+            # Reset per iteration: the outer except reads `domain` to publish
+            # certificate_failed, and a leftover value from the previous entry
+            # would attribute the failure to the wrong certificate.
+            domain = None
             try:
                 # Handle both old and new domain formats
                 if isinstance(domain_entry, str):
@@ -1848,10 +1953,18 @@ class CertificateManager:
                         summary['failed'] += 1
                         logger.error(f"Failed to renew certificate for {domain}: {e}")
                         self._audit_scheduled_renew(domain, 'failure', error=e)
+                        # Notify (#417): without this the operator's configured
+                        # email/Slack channels stay silent while the cert
+                        # marches to expiry.
+                        self._publish_failed_event(domain, e)
 
             except Exception as e:
                 summary['failed'] += 1
                 logger.error(f"Error checking renewal for domain entry {domain_entry}: {e}")
+                # A failure while *checking* (unreadable metadata, bad entry)
+                # is just as invisible to the operator as a failed renewal.
+                if domain:
+                    self._publish_failed_event(domain, e)
 
         if summary['skipped_invalid']:
             logger.warning(
@@ -1967,7 +2080,16 @@ class CertificateManager:
         return True
 
     def delete_certificate(self, domain: str) -> bool:
-        """Delete a certificate directory, blocking if a create/renew is in progress."""
+        """Delete a certificate directory, blocking if a create/renew is in progress.
+
+        Also deletes the copy held by the configured storage backend (#419).
+        Without that, `DELETE /api/certificates/<domain>` returned 200 and the
+        UI showed the certificate gone while the full PEM bundle — private key
+        included — stayed in Vault / AWS / Azure Key Vault / Infisical
+        indefinitely, and a later storage migration or restore resurrected it.
+        An explicit user-initiated deletion must destroy the key material
+        everywhere CertMate put it.
+        """
         domain_lock = self._get_domain_lock(domain)
         # Acquire lock to ensure no create/renew is in progress (non-blocking)
         if not domain_lock.acquire(blocking=False):
@@ -1975,14 +2097,66 @@ class CertificateManager:
         try:
             import shutil
             domain_dir = self.cert_dir / domain
+            local_deleted = False
             if domain_dir.exists():
                 shutil.rmtree(domain_dir)
                 logger.info(f"Certificate deleted for {domain}")
                 self._invalidate_certificate_info_cache(domain)
-                return True
-            return False
+                local_deleted = True
+
+            remote_deleted = self._delete_from_storage_backend(domain)
+            # A certificate that exists ONLY in the remote backend (local dir
+            # already gone, e.g. after a partial restore) still counts as
+            # deleted — reporting 404 there would leave the key unreachable
+            # AND undeletable through the API.
+            return local_deleted or remote_deleted
         finally:
             domain_lock.release()
+
+    def _delete_from_storage_backend(self, domain: str) -> bool:
+        """Remove the domain's bundle from the external storage backend.
+
+        Returns True only when the backend confirms a deletion. Never raises:
+        a backend outage must not turn a successful local deletion into a 500,
+        but it MUST be loud — an operator who believes a key was destroyed and
+        finds it in Vault later has been misled by us.
+        """
+        if not self.storage_manager:
+            return False
+        try:
+            # The local filesystem backend points at the same directory the
+            # rmtree above already removed; calling it again is a no-op that
+            # only muddies the log.
+            backend_name = self.storage_manager.get_backend_name()
+            if backend_name in ('local_filesystem', 'local'):
+                return False
+        except Exception:  # pragma: no cover - defensive
+            backend_name = 'unknown'
+        try:
+            deleted = self.storage_manager.delete_certificate(domain)
+            if deleted:
+                logger.info(
+                    "Certificate for %s deleted from storage backend %s",
+                    domain, backend_name,
+                )
+            else:
+                logger.warning(
+                    "Storage backend %s reported no certificate to delete for "
+                    "%s — verify by hand that no private key remains there",
+                    backend_name, domain,
+                )
+            return bool(deleted)
+        except Exception as e:
+            # Class name only — see _store_in_backend: backend errors can carry
+            # credentials, and this line lands in the admin-readable log.
+            logger.error(
+                "Certificate for %s was deleted locally but the storage "
+                "backend %s could not delete its copy (%s) — the private key "
+                "may still be stored there; remove it manually",
+                domain, backend_name, type(e).__name__,
+            )
+            logger.debug("Storage backend delete error for %s", domain, exc_info=True)
+            return False
 
     def _infer_dns_provider(self, domain, settings):
         """Infer the DNS provider for a domain, preferring its explicit

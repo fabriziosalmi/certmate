@@ -41,8 +41,11 @@ API endpoints have rate limits to prevent abuse:
 | Batch Operations   | 10    | minute |
 | OCSP Status        | 200   | minute |
 | CRL Download       | 60    | minute |
+| Per-IP ceiling     | 600   | minute |
 
-The bucket is per API key (requests authenticated with the same bearer key share one limit) and per IP for session/anonymous requests, so several clients behind one NAT or proxy do not share — and abuse — a single bucket.
+The working bucket is per API key (requests authenticated with the same bearer key share one limit) and per IP for session/anonymous requests, so several clients behind one NAT or proxy do not share — and abuse — a single bucket.
+
+Every `/api/` request is **also** counted against a coarse per-IP ceiling, checked first. It sits far above the working limits, so a normal client never meets it; it exists because a bucket keyed only on the caller-supplied bearer token can be reset at will by changing the token, which previously made the per-key limits — and the protection on the unauthenticated OCSP and CRL endpoints — bypassable.
 
 ### Configuring rate limits
 
@@ -578,6 +581,28 @@ curl -X POST http://localhost:5000/api/certificates/example.com/reissue \
  -H "Content-Type: application/json" \
  -d '{"san_domains": ["www.example.com", "api.example.com"]}'
 ```
+
+---
+
+### Log stream (admin, debugging)
+
+```
+GET /api/web/logs/stream
+```
+
+Server-Sent Events tail of `logs/certmate.log`, for watching an issuance or a
+deployment live from a terminal:
+
+```bash
+curl -N -H "Authorization: Bearer TOKEN" \
+ https://certmate.example.com/api/web/logs/stream
+```
+
+Admin-only, because application logs can contain credentials. Only lines
+written *after* the connection opens are sent — this is a tail, not a history
+download. The stream emits a `: keepalive` comment while idle and closes after
+30 idle minutes; an `EventSource` client reconnects on its own, a `curl`
+session has to be restarted.
 
 ---
 

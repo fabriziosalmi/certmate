@@ -666,7 +666,8 @@ For a Keycloak realm that exposes a `groups` claim, the configuration block in `
   ],
   "default_role": "viewer",
   "auto_create_users": true,
-  "link_by_email": true
+  "link_by_email": true,
+  "sync_role_on_login": true
 }
 ```
 
@@ -675,6 +676,8 @@ For a Keycloak realm that exposes a `groups` claim, the configuration block in `
 - **Just-in-time provisioning** (`auto_create_users`) creates a CertMate user row on first login. The row has an empty password hash so JIT-provisioned SSO accounts cannot fall back to local login.
 - **Email linking** (`link_by_email`) detects collisions with existing local users and merges identities — the user keeps their existing role and **their existing password hash**, so a local-then-linked account can still log in either way during a rollout. Disable `link_by_email` if you want JIT-only provisioning with no local-password fallback.
 - Subject (`sub` + `iss`) lookup always wins over email matching, so an already-linked SSO user is never accidentally re-merged when their IdP email changes.
+- **Role sync** (`sync_role_on_login`, default `true`) re-derives the role from the current claims on every login, so removing someone from an admin group in the IdP demotes them in CertMate too. Set it to `false` when the IdP only authenticates and roles are managed inside CertMate — an admin promoting someone by hand then survives their next login.
+- A **disabled** CertMate user is refused at SSO login exactly as at local login: disabling an account locks it out regardless of how it authenticates.
 
 ### Security
 

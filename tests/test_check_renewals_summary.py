@@ -108,7 +108,14 @@ def test_successful_scheduled_renewal_publishes_certificate_renewed(tmp_path):
     )
 
 
-def test_failed_scheduled_renewal_does_not_publish(tmp_path):
+def test_failed_scheduled_renewal_does_not_publish_renewed(tmp_path):
+    """A failure must not fire deploy hooks (#329) — but must notify (#417).
+
+    This test originally asserted publish() was never called at all. That
+    over-specified the rule: the point is that `certificate_renewed`, which
+    the deployer listens for, must not fire on a failure. `certificate_failed`
+    firing is exactly what reaches the operator's email/Slack.
+    """
     settings = {'auto_renew': True, 'domains': ['boom.com']}
     mgr = _manager(tmp_path, settings)
     mgr.get_certificate_info = MagicMock(return_value={'needs_renewal': True})
@@ -119,7 +126,9 @@ def test_failed_scheduled_renewal_does_not_publish(tmp_path):
     summary = mgr.check_renewals()
 
     assert summary['failed'] == 1
-    bus.publish.assert_not_called()
+    published = [c.args[0] for c in bus.publish.call_args_list]
+    assert 'certificate_renewed' not in published
+    assert published == ['certificate_failed']
 
 
 def test_scheduled_renewal_without_event_bus_does_not_crash(tmp_path):

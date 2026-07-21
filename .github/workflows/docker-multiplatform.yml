@@ -225,6 +225,12 @@ jobs:
 
     - name: Upload Trivy scan results to GitHub Security tab
       uses: github/codeql-action/upload-sarif@54f647b7e1bb85c95cddabcd46b0c578ec92bc1a  # v3
-      if: always()
+      # Push/tag only. On a pull request the SARIF lands on the PR ref, so the
+      # image's long tail of unfixable base-image CVEs (tracked in #403) shows
+      # up as new code-scanning alerts and blocks the merge — the
+      # always-red-gate failure mode this scan was fixed to avoid (#412). On a
+      # PR the *gate* is the "Fail on a fixable CRITICAL" step above, which is
+      # actionable; the Security-tab inventory belongs to main.
+      if: always() && github.event_name != 'pull_request'
       with:
         sarif_file: 'trivy-results.sarif'

@@ -1,7 +1,67 @@
 import logging
+import time
+
 from ..core.audit_chain import CheckpointReadError
 from ..core.metrics import generate_metrics_response
 from flask import request, jsonify, Response, stream_with_context
+
+# Log-stream pacing (#418). The poll interval bounds how long a new line
+# waits; the idle ceiling bounds how long an abandoned tab can hold a worker
+# thread. 30 minutes is long enough that a human watching a deployment is
+# never cut off mid-session, short enough that a forgotten tab frees the
+# thread the same day.
+_LOG_STREAM_POLL_SECONDS = 0.5
+_LOG_STREAM_MAX_IDLE_SECONDS = 30 * 60
+
+
+def _stream_log_file(log_file, poll_seconds=None, max_idle_seconds=None):
+    """Tail ``log_file`` as SSE events, bounded in CPU and in lifetime (#418).
+
+    Extracted from the route so the pacing is testable without a Flask app.
+
+    The original was ``while True: f.readline()`` with no sleep and no exit
+    condition. At EOF readline() returns '' immediately, so the loop never
+    yielded and never blocked: one gunicorn thread pinned at 100% CPU
+    forever, and — since nothing was ever written to the socket — a client
+    disconnect was never noticed. Opening the Logs page eight times wedged
+    the single-worker container (8 threads).
+
+    Yields SSE frames. Emits a ``: keepalive`` comment on every idle poll,
+    which is both a client-liveness probe (writing to a dead socket raises
+    here and ends the generator) and what keeps proxies from timing out.
+    Stops after ``max_idle_seconds`` without a new line so an abandoned tab
+    cannot hold a worker thread indefinitely.
+    """
+    poll = _LOG_STREAM_POLL_SECONDS if poll_seconds is None else poll_seconds
+    max_idle = (_LOG_STREAM_MAX_IDLE_SECONDS if max_idle_seconds is None
+                else max_idle_seconds)
+
+    if not log_file.exists():
+        yield "data: Log file not found\n\n"
+        return
+
+    # errors='replace': a single non-UTF8 byte in the log (a mangled
+    # subprocess message, a truncated write) must not raise UnicodeDecodeError
+    # and kill the stream mid-session.
+    with open(log_file, 'r', encoding='utf-8', errors='replace') as f:
+        f.seek(0, 2)
+        idle = 0.0
+        while idle < max_idle:
+            line = f.readline()
+            if line:
+                idle = 0.0
+                # rstrip the line terminator the file already carries (CRLF
+                # included): 'data: x\n' + '\n\n' produced a trailing blank
+                # line, i.e. an extra empty SSE dispatch per log line, and a
+                # stray '\r' would ride along inside the frame.
+                yield f"data: {line.rstrip(chr(13) + chr(10))}\n\n"
+                # Never sleep while there is backlog: a burst of log lines
+                # must drain at full speed, not one line per poll interval.
+                continue
+            time.sleep(poll)
+            idle += poll
+            yield ": keepalive\n\n"
+    yield "data: [stream idle, reconnect to continue]\n\n"
 
 
 logger = logging.getLogger(__name__)
@@ -282,20 +342,12 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
     @auth_manager.require_role('admin')
     def stream_logs():
         """Stream application logs — admin only (logs may contain credentials)"""
-        def generate():
-            log_file = managers['file_ops'].logs_dir / 'certmate.log'
-            if log_file.exists():
-                with open(log_file, 'r') as f:
-                    f.seek(0, 2)
-                    while True:
-                        line = f.readline()
-                        if line:
-                            yield f"data: {line}\n\n"
-            else:
-                yield "data: Log file not found\n\n"
+        log_file = managers['file_ops'].logs_dir / 'certmate.log'
 
-        return Response(stream_with_context(generate()),
-                        mimetype='text/event-stream')
+        return Response(stream_with_context(_stream_log_file(log_file)),
+                        mimetype='text/event-stream',
+                        headers={'Cache-Control': 'no-cache',
+                                 'X-Accel-Buffering': 'no'})
 
     # ------------------------------------------------------------------ #
     # Notifications + digest + webhook deliveries (#114)                  #
