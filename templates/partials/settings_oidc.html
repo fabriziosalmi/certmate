@@ -29,12 +29,12 @@
                  form — saving the blank defaults would wipe a working SSO
                  configuration (#424). -->
             <template x-if="!loading && loadFailed">
-                <div class="rounded-md border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-4">
-                    <p class="text-sm text-red-800 dark:text-red-300 flex items-center">
+                <div class="rounded-md border border-danger-line bg-danger-surface p-4">
+                    <p class="text-sm text-danger-strong flex items-center">
                         <i class="fas fa-exclamation-triangle mr-2"></i>
                         Could not load the SSO configuration: <span class="font-mono ml-1" x-text="loadError"></span>
                     </p>
-                    <p class="text-xs text-red-700 dark:text-red-400 mt-2">
+                    <p class="text-xs text-danger-fg mt-2">
                         The form is hidden on purpose: saving now would overwrite your current SSO settings with empty values.
                     </p>
                     <button type="button" @click="load()"
