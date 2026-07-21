@@ -75,6 +75,11 @@ def _normalize_oidc_config(raw: dict) -> dict:
         cfg['default_role'] = 'viewer'
     cfg.setdefault('auto_create_users', True)
     cfg.setdefault('link_by_email', True)
+    # Re-derive the role from the IdP claims on EVERY login, not just at JIT
+    # provisioning (#408): otherwise removing someone from an admin group in
+    # the IdP never demotes them here. Flip off when roles are managed inside
+    # CertMate and the IdP only authenticates.
+    cfg.setdefault('sync_role_on_login', True)
     # Refuse to link an IdP identity onto an existing local user unless
     # the IdP attests that the user controls the email. Defaults to True
     # because the alternative is an account-takeover vector on any IdP
@@ -441,6 +446,30 @@ class OIDCManager:
             existing_by_sub = self._find_by_subject(users, sub, iss)
             if existing_by_sub:
                 username = existing_by_sub
+                # An SSO row is still a CertMate user: honour the same
+                # `enabled` gate the local-password path applies (auth.py).
+                # Without this, disabling a user was a no-op against anyone
+                # who logs in through the IdP — they simply logged back in
+                # and got a fresh session with their old role (#408).
+                if not users[username].get('enabled', True):
+                    outcome['error'] = 'user_disabled'
+                    outcome['audit'] = (
+                        'oidc_login_refused', username, 'failure',
+                        {'issuer': iss, 'reason': 'user disabled'},
+                    )
+                    return
+                # Re-derive the role from the CURRENT claims on every login,
+                # so removing someone from an admin group in the IdP actually
+                # demotes them here. Opt out with sync_role_on_login=false
+                # when roles are managed locally instead.
+                if cfg.get('sync_role_on_login', True):
+                    previous_role = users[username].get('role')
+                    if role != previous_role:
+                        users[username]['role'] = role
+                        outcome['audit'] = (
+                            'oidc_user_role_synced', username, 'success',
+                            {'issuer': iss, 'from': previous_role, 'to': role},
+                        )
                 users[username]['last_login'] = utc_now().isoformat()
                 outcome['username'] = username
                 return
@@ -467,6 +496,15 @@ class OIDCManager:
                         )
                         return
                     username = existing_by_email
+                    # Same gate as the subject-match branch: linking must not
+                    # be a way back in for a disabled account (#408).
+                    if not users[username].get('enabled', True):
+                        outcome['error'] = 'user_disabled'
+                        outcome['audit'] = (
+                            'oidc_user_link_refused', username, 'failure',
+                            {'email': email, 'issuer': iss, 'reason': 'user disabled'},
+                        )
+                        return
                     users[username]['oidc_subject'] = sub
                     users[username]['oidc_issuer'] = iss
                     users[username]['last_login'] = utc_now().isoformat()

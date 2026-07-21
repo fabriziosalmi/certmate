@@ -11,7 +11,13 @@ Group=certmate
 WorkingDirectory=/opt/certmate
 Environment=PATH=/opt/certmate/venv/bin
 Environment=API_BEARER_TOKEN=change-this-secure-token
-ExecStart=/opt/certmate/venv/bin/gunicorn --bind 0.0.0.0:8000 --workers 4 app:app
+# Single worker + threads, matching the Dockerfile (#411). Sessions, session
+# revocation and the login rate limiter are per-process in-memory state: with
+# 4 workers, revoking a compromised admin's session only took effect on the
+# worker that handled the request (so ~3 requests in 4 still validated), the
+# login rate limit was multiplied by the worker count, and APScheduler ran a
+# duplicate renewal job per worker.
+ExecStart=/opt/certmate/venv/bin/gunicorn --bind 0.0.0.0:8000 --workers 1 --threads 8 app:app
 ExecReload=/bin/kill -s HUP $MAINPID
 Restart=always
 RestartSec=10
