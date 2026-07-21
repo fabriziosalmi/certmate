@@ -134,9 +134,11 @@ def test_restore_round_trips_the_ca_key_with_locked_down_permissions(file_ops, t
     assert (data_dir / "certs" / "crl" / "ca.crl").exists()
     assert (data_dir / "audit" / "certificate_audit.log").exists()
 
-    # Private key material must not come back group/world readable.
+    # Nothing under data/ is readable outside the app process: the key
+    # material obviously, but the CA cert and CRL too — publishing those is
+    # the server's job, not the filesystem's.
     assert stat.S_IMODE(ca_key.stat().st_mode) == 0o600
-    assert stat.S_IMODE((data_dir / "certs" / "ca" / "ca.crt").stat().st_mode) == 0o640
+    assert stat.S_IMODE((data_dir / "certs" / "ca" / "ca.crt").stat().st_mode) == 0o600
 
 
 def test_restore_refuses_non_allowlisted_data_entries(file_ops, tmp_path):

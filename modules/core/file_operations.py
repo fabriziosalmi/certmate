@@ -855,13 +855,12 @@ class FileOperations:
                         # The CA signing key, the audit signing key and every
                         # client private key land here. Unlike certificates/,
                         # which operators bind-mount and read from other
-                        # containers, nothing outside the app needs data/ —
-                        # so private material is 0600 and the rest 0640,
-                        # never world-readable.
-                        if _PRIVATE_KEY_FILE_RE.search(target_path.name):
-                            os.chmod(target_path, 0o600)
-                        else:
-                            os.chmod(target_path, 0o640)
+                        # containers, nothing outside the app process reads
+                        # data/ — so everything restored here is 0600. That
+                        # includes the CA cert and the CRL: they are public
+                        # information, but publishing them is the server's
+                        # job (/api/crl/download), not the filesystem's.
+                        os.chmod(target_path, 0o600)
 
                         restored_data_files += 1
             
