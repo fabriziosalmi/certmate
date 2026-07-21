@@ -15,11 +15,6 @@ import os
 
 import pytest
 
-# Reuse the container + logged-in browser fixture rather than standing up a
-# second one: it builds the image, seeds an admin and injects the session
-# cookie. Importing a fixture is how pytest shares it across modules.
-from tests.test_ui import browser_page  # noqa: F401
-
 
 pytestmark = [pytest.mark.e2e, pytest.mark.ui]
 
