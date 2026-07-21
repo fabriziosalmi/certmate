@@ -80,8 +80,13 @@ def verify_bundle(bundle, expected_pubkey_pem=None):
             return result
         result["anchored"] = True
         result["anchor_seq"] = anchor_seq
-    elif manifest.get("anchor_prev_hash") is not None:
-        result["reason"] = "unanchored bundle declares an anchor_prev_hash"
+    elif any(manifest.get(k) is not None for k in ("anchor_prev_hash", "anchor_seq")):
+        # Reject EVERY anchor field on a v1 bundle, not just anchor_prev_hash:
+        # a v2 slice downgraded by deleting one of the two fields would
+        # otherwise fall through to the link check and be reported as a broken
+        # chain — a tamper verdict on an intact record. Say what is actually
+        # wrong with it.
+        result["reason"] = "unanchored bundle declares anchor fields"
         return result
 
     # A bundle must carry either both a signature and a public key, or neither.

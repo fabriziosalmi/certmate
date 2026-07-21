@@ -125,16 +125,22 @@ def test_a_wrong_anchor_seq_is_caught(audit):
     assert "sequence break" in result["reason"]
 
 
-def test_a_slice_cannot_be_downgraded_to_look_complete(audit):
+@pytest.mark.parametrize("dropped", [None, "anchor_prev_hash", "anchor_seq"])
+def test_a_slice_cannot_be_downgraded_to_look_complete(audit, dropped):
     """Stripping the version off a fragment must not turn it into a full chain
-    — nor produce a misleading 'broken chain' verdict."""
+    — nor produce a misleading 'broken chain' verdict. Dropping either anchor
+    field on the way down does not help: every anchor field is rejected on a v1
+    bundle, so the verdict names the real problem instead of blaming the
+    entries."""
     bundle = audit.export_bundle(from_seq=3)
     bundle["manifest"]["format_version"] = audit_chain.BUNDLE_FORMAT_VERSION
+    if dropped:
+        del bundle["manifest"][dropped]
 
     result = audit_verify.verify_bundle(bundle)
 
     assert not result["ok"]
-    assert "declares an anchor" in result["reason"]
+    assert "declares anchor fields" in result["reason"]
 
 
 def test_an_anchored_bundle_without_an_anchor_is_rejected(audit):
