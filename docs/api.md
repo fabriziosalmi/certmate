@@ -590,8 +590,14 @@ curl -X POST http://localhost:5000/api/certificates/example.com/reissue \
 GET /api/web/logs/stream
 ```
 
-Server-Sent Events tail of `logs/certmate.log`, for watching an issuance or a
-deployment live from a terminal:
+Server-Sent Events tail of the application log file, for watching an issuance
+or a deployment live from a terminal.
+
+**Requires file logging to be on.** By default CertMate logs to stdout only —
+what `docker logs` and every log shipper expect — so this endpoint reports
+"Log file not found" until you set `CERTMATE_LOG_FILE`
+(e.g. `CERTMATE_LOG_FILE=/app/logs/certmate.log`). The file is rotated
+automatically; see the environment table in the README.
 
 ```bash
 curl -N -H "Authorization: Bearer TOKEN" \

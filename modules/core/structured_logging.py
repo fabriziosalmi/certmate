@@ -31,6 +31,8 @@ import threading
 import os
 import re
 from datetime import datetime
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
 from .utils import utc_now
 from typing import Any, Dict, Optional
 from contextvars import ContextVar
@@ -269,18 +271,34 @@ def timed(logger: StructuredLogger, operation: str):
     return decorator
 
 
+# File-logging defaults (#431). Rotation is not optional: the only way to
+# enable a log file is through this function, and it always rotates. An
+# unbounded log on a mounted volume is a slow outage — and the audit chain,
+# which must NOT be rotated naively, lives in the same directory, so the app
+# log filling the volume takes the tamper-evident record down with it.
+DEFAULT_LOG_MAX_BYTES = 10 * 1024 * 1024   # 10 MB per file
+DEFAULT_LOG_BACKUP_COUNT = 5               # ~60 MB ceiling for the app log
+
+
 def configure_structured_logging(
     level: int = logging.INFO,
     json_output: bool = True,
-    log_file: Optional[str] = None
+    log_file: Optional[str] = None,
+    max_bytes: int = DEFAULT_LOG_MAX_BYTES,
+    backup_count: int = DEFAULT_LOG_BACKUP_COUNT,
 ):
     """
     Configure structured logging for the application.
-    
+
     Args:
         level: Logging level (default: INFO)
         json_output: Use JSON format (default: True)
-        log_file: Optional file path for log output
+        log_file: Optional file path for log output. Off by default: the
+            container logs to stdout, which is what `docker logs` and every
+            log shipper expect. Set it when you want a file on the mounted
+            volume as well — the web UI's log stream reads it.
+        max_bytes: Rotate once the active file reaches this size (#431).
+        backup_count: How many rotated files to keep.
     """
     root_logger = logging.getLogger()
     root_logger.setLevel(level)
@@ -303,11 +321,28 @@ def configure_structured_logging(
     console_handler.setFormatter(formatter)
     root_logger.addHandler(console_handler)
     
-    # File handler (optional)
+    # File handler (optional) — always rotating, never plain (#431).
     if log_file:
-        file_handler = logging.FileHandler(log_file)
-        file_handler.setFormatter(formatter)
-        root_logger.addHandler(file_handler)
+        path = Path(log_file)
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            file_handler = RotatingFileHandler(
+                str(path),
+                maxBytes=max_bytes,
+                backupCount=backup_count,
+                encoding='utf-8',
+            )
+            file_handler.setFormatter(formatter)
+            root_logger.addHandler(file_handler)
+        except OSError as e:
+            # Never let an unwritable log path stop the application from
+            # starting: stdout logging is already configured above, and a
+            # certificate manager that refuses to boot because it cannot
+            # write a *log* has failed at the wrong thing.
+            root_logger.warning(
+                "Could not open log file %s (%s); continuing with console "
+                "logging only", log_file, e,
+            )
     
     # Reduce noise from third-party libraries
     logging.getLogger('werkzeug').setLevel(logging.WARNING)

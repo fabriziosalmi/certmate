@@ -1410,6 +1410,11 @@ main "$@"
 | `SECRET_KEY_FILE`       |          | -              | Path to a file containing the Flask secret key (takes precedence over `SECRET_KEY`) |
 | `PORT`             |          | `8000`         | Server port (honoured by the container entrypoint) |
 | `FLASK_ENV`        |          | `production`   | Flask environment. `production` refuses `--debug`  |
+| `CERTMATE_LOG_FILE` |         | -              | Also write logs to this path. Off by default: the container logs to stdout, which is what `docker logs` and log shippers expect. Set it (e.g. `/app/logs/certmate.log`) to keep a file on the mounted volume — it is what the web UI's log stream reads |
+| `CERTMATE_LOG_MAX_BYTES` |    | `10485760`     | Rotate the log file at this size (10 MB). File logging is always rotated — there is no way to configure an unbounded one |
+| `CERTMATE_LOG_BACKUP_COUNT` | | `5`            | How many rotated files to keep (~60 MB ceiling with the default size) |
+| `CERTMATE_LOG_LEVEL` |        | `INFO`         | DEBUG / INFO / WARNING / ERROR |
+| `CERTMATE_LOG_JSON` |         | `true`         | JSON log lines (set `false` for human-readable) |
 
 > **Bind address is not an environment variable.** The container always binds
 > `0.0.0.0` inside its own network namespace; to expose it only on loopback,

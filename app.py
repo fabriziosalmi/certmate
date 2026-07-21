@@ -9,13 +9,37 @@ from modules import __version__
 
 # Import new modular components
 from modules.core import configure_structured_logging, get_certmate_logger
+from modules.core.structured_logging import (
+    DEFAULT_LOG_BACKUP_COUNT,
+    DEFAULT_LOG_MAX_BYTES,
+)
 from modules.core.factory import create_app
 
-# Configure structured JSON logging
+# Configure structured JSON logging.
+# CERTMATE_LOG_FILE is opt-in (#431): the container logs to stdout, which is
+# what `docker logs` and every shipper expect. Set it to also write a file on
+# the mounted volume — it is rotated by construction, and it is the file the
+# web UI's log stream reads.
 json_logging = os.getenv('CERTMATE_LOG_JSON', 'true').lower() == 'true'
 log_level_name = os.getenv('CERTMATE_LOG_LEVEL', 'INFO').upper()
 log_level = getattr(logging, log_level_name, logging.INFO)
-configure_structured_logging(level=log_level, json_output=json_logging)
+
+
+def _int_env(name, default):
+    try:
+        value = int(os.getenv(name, ''))
+    except ValueError:
+        return default
+    return value if value > 0 else default
+
+
+configure_structured_logging(
+    level=log_level,
+    json_output=json_logging,
+    log_file=os.getenv('CERTMATE_LOG_FILE') or None,
+    max_bytes=_int_env('CERTMATE_LOG_MAX_BYTES', DEFAULT_LOG_MAX_BYTES),
+    backup_count=_int_env('CERTMATE_LOG_BACKUP_COUNT', DEFAULT_LOG_BACKUP_COUNT),
+)
 logger = get_certmate_logger('app')
 
 # Global app instance for WSGI servers
