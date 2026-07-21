@@ -1790,8 +1790,10 @@ class CertificateManager:
                         with open(dest_file, 'rb') as f:
                             cert_files[file_name] = f.read()
                 
-                # Store first, then persist metadata ONCE with both the
-                # renewal timestamp and the current storage state (#423).
+                # Stamp the renewal BEFORE storing, so the external copy
+                # carries the same renewed_at as the local one; then persist
+                # metadata once, with the resulting storage state (#423).
+                metadata['renewed_at'] = utc_now_iso()
                 storage_warning = self._store_in_backend(domain, cert_files, metadata)
 
                 # Persist when there is metadata to update OR a warning to
@@ -1799,7 +1801,6 @@ class CertificateManager:
                 # the only signal that its external copy is stale.
                 if metadata_file.exists() or storage_warning:
                     try:
-                        metadata['renewed_at'] = utc_now_iso()
                         self._apply_storage_warning(metadata, storage_warning)
                         self._save_metadata(domain, metadata)
                         logger.info(f"Updated renewal timestamp in metadata for {domain}")

@@ -41,8 +41,11 @@ API endpoints have rate limits to prevent abuse:
 | Batch Operations   | 10    | minute |
 | OCSP Status        | 200   | minute |
 | CRL Download       | 60    | minute |
+| Per-IP ceiling     | 600   | minute |
 
-The bucket is per API key (requests authenticated with the same bearer key share one limit) and per IP for session/anonymous requests, so several clients behind one NAT or proxy do not share — and abuse — a single bucket.
+The working bucket is per API key (requests authenticated with the same bearer key share one limit) and per IP for session/anonymous requests, so several clients behind one NAT or proxy do not share — and abuse — a single bucket.
+
+Every `/api/` request is **also** counted against a coarse per-IP ceiling, checked first. It sits far above the working limits, so a normal client never meets it; it exists because a bucket keyed only on the caller-supplied bearer token can be reset at will by changing the token, which previously made the per-key limits — and the protection on the unauthenticated OCSP and CRL endpoints — bypassable.
 
 ### Configuring rate limits
 
