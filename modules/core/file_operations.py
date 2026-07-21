@@ -57,6 +57,13 @@ _PRIVATE_KEY_FILE_RE = re.compile(
 # straight to disk around that gate.
 _BACKUP_DATA_SUBTREES = ('certs', 'audit')
 
+# Per-entry ceiling when restoring the data/ subtrees. Deliberately far above
+# the 10 MB used for PEM files: certificate_audit.log is append-only and grows
+# with every operation, and an audit chain restored with a hole in it is
+# unverifiable. Entries are streamed in chunks, so this is a bound on disk
+# use, not on memory.
+_MAX_DATA_ENTRY_BYTES = 512 * 1024 * 1024
+
 # --- Backup encryption at rest --------------------------------------------
 # Unified backups embed every certificate private key (privkey.pem). With
 # CERTMATE_BACKUP_PASSPHRASE set, the whole zip is encrypted (Fernet:
@@ -831,25 +838,47 @@ class FileOperations:
                             logger.warning(f"Invalid path in ZIP: {file_info.filename}")
                             continue
 
-                        max_entry_size = 10 * 1024 * 1024  # 10 MB per file
-                        if file_info.file_size > max_entry_size:
-                            logger.warning(
-                                f"Skipping oversized ZIP entry: {file_info.filename} "
-                                f"({file_info.file_size} bytes)"
+                        # The 10 MB per-entry cap that suits PEM files would
+                        # silently truncate DR here: certificate_audit.log is
+                        # append-only and routinely outgrows it on a
+                        # long-lived instance. Skipping it would leave the
+                        # audit chain unverifiable while the restore still
+                        # reported success. Larger cap, chunked write (never
+                        # hold the file in memory), and an ERROR — not a
+                        # warning — when even that is exceeded, because the
+                        # result is an incomplete restore.
+                        if file_info.file_size > _MAX_DATA_ENTRY_BYTES:
+                            logger.error(
+                                f"Restore incomplete: {file_info.filename} is "
+                                f"{file_info.file_size} bytes, above the "
+                                f"{_MAX_DATA_ENTRY_BYTES}-byte limit for data/ entries"
                             )
                             continue
 
                         target_path.parent.mkdir(parents=True, exist_ok=True)
 
                         try:
+                            written = 0
                             with zipf.open(file_info) as source, open(target_path, 'wb') as target:
-                                data = source.read(max_entry_size + 1)
-                                if len(data) > max_entry_size:
-                                    logger.warning(f"ZIP entry exceeds size limit: {file_info.filename}")
-                                    continue
-                                target.write(data)
+                                while True:
+                                    chunk = source.read(1024 * 1024)
+                                    if not chunk:
+                                        break
+                                    written += len(chunk)
+                                    if written > _MAX_DATA_ENTRY_BYTES:
+                                        raise ValueError(
+                                            'declared size understated the real size'
+                                        )
+                                    target.write(chunk)
                         except Exception as e:
                             logger.error(f"Error extracting {file_info.filename}: {e}")
+                            # Never leave a half-written PKI/audit file behind:
+                            # a truncated ca.key or audit chain is worse than
+                            # an absent one, because it looks restored.
+                            try:
+                                target_path.unlink(missing_ok=True)
+                            except OSError:
+                                pass
                             continue
 
                         # The CA signing key, the audit signing key and every

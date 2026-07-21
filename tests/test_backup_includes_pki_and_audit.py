@@ -170,3 +170,31 @@ def test_restore_refuses_non_allowlisted_data_entries(file_ops, tmp_path):
     # ...while the smuggled entries did not overwrite settings or escape data_dir.
     assert '"rm -rf /"' not in (data_dir / "settings.json").read_text()
     assert not (dest / "escaped.txt").exists()
+
+
+def test_restore_carries_an_audit_log_larger_than_the_pem_size_limit(file_ops, tmp_path):
+    """A big audit chain must survive DR, not be silently skipped.
+
+    The 10 MB per-entry cap that suits PEM files applied to data/ entries too,
+    so an append-only certificate_audit.log that outgrew it was dropped with a
+    warning while the restore still returned True — leaving the chain
+    unverifiable on an instance that believed it was restored.
+    """
+    _seed_pki_and_audit(file_ops.data_dir)
+    big = "x" * (12 * 1024 * 1024)  # 12 MB, over the PEM-entry limit
+    (file_ops.data_dir / "audit" / "certificate_audit.log").write_text(big)
+
+    filename = file_ops.create_unified_backup({"domains": []}, "test")
+    backup_path = file_ops.backup_dir / "unified" / filename
+
+    dest = tmp_path / "restored_big"
+    dirs = [dest / n for n in ("certificates", "data", "backups", "logs")]
+    for d in dirs:
+        d.mkdir(parents=True)
+    restored = FileOperations(*dirs)
+
+    assert restored.restore_unified_backup(str(backup_path)) is True
+
+    log = dirs[1] / "audit" / "certificate_audit.log"
+    assert log.exists(), "the audit log was skipped by the size limit"
+    assert log.stat().st_size == len(big), "the audit log came back truncated"
