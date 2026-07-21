@@ -328,29 +328,35 @@ class AuthManager:
         return parsed.isoformat(), None
 
     @staticmethod
-    def _api_key_expired(key_data, now=None):
+    def _api_key_expired(key_data, now=None, key_id=None):
         """Has this key expired? Compared as a datetime, never as a string.
 
         Fails CLOSED: a value that cannot be parsed is treated as expired.
         A key whose expiry we cannot understand is a key we cannot vouch for,
         and the alternative — the previous behaviour — was that a malformed
         expiry meant *never expires*.
+
+        ``key_id`` is only for the log line. It is passed in rather than read
+        from ``key_data`` on purpose: that dict also holds the token hash and
+        prefix, and logging anything read out of it is how credential material
+        ends up in an application log.
         """
         raw = key_data.get('expires_at')
         if raw in (None, ''):
             return False
+        label = key_id or '<unknown>'
         if not isinstance(raw, str):
             logger.warning(
-                "API key %r has a non-string expires_at (%s); treating it as "
-                "expired", key_data.get('name'), type(raw).__name__,
+                "API key %s has a non-string expires_at (%s); treating it as "
+                "expired", label, type(raw).__name__,
             )
             return True
         try:
             expires = datetime.fromisoformat(raw.replace('Z', '+00:00'))
         except ValueError:
             logger.warning(
-                "API key %r has an unparseable expires_at; treating it as "
-                "expired", key_data.get('name'),
+                "API key %s has an unparseable expires_at; treating it as "
+                "expired", label,
             )
             return True
         if expires.tzinfo is not None:
@@ -450,7 +456,7 @@ class AuthManager:
             # Same datetime comparison the auth path uses (#432): the string
             # compare here made the UI's "expired" badge disagree with whether
             # the key actually still worked.
-            is_expired = self._api_key_expired(data, now)
+            is_expired = self._api_key_expired(data, now, key_id=key_id)
             result[key_id] = {
                 'name': data.get('name'),
                 'role': data.get('role'),
@@ -533,7 +539,7 @@ class AuthManager:
             for key_id, key_data in api_keys.items():
                 if key_data.get('revoked'):
                     continue
-                if self._api_key_expired(key_data, now):
+                if self._api_key_expired(key_data, now, key_id=key_id):
                     continue
                 if self._verify_api_token(token, key_data.get('token_hash', '')):
                     # Update last_used_at via settings_manager.update so a
