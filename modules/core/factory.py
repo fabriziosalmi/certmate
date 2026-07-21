@@ -1068,18 +1068,26 @@ def setup_rate_limiting(app, container: AppContainer):
             return None
 
         client_ip = flask_request.remote_addr or '0.0.0.0'  # nosec B104
-        # Rate-limit bucket: prefer a per-API-key bucket so many clients behind
-        # one NAT/proxy IP don't share a single limit (false positives), and an
-        # abusive key is throttled independently of its source IP. The bearer
-        # token is hashed so it is never used as a cleartext bucket key.
-        # Cookie/session and anonymous requests fall back to the IP bucket.
+        # Bucketing (#420). The per-API-key bucket exists so that many clients
+        # behind one NAT/proxy IP don't share a single limit, and so an abusive
+        # key is throttled independently of its source IP. But keying ONLY on
+        # the caller-supplied token — hashed before it is validated — meant a
+        # fresh bucket per request: `curl -H "Authorization: Bearer $RANDOM"`
+        # in a loop was never limited, which also left the deliberately
+        # unauthenticated OCSP and CRL endpoints unprotected, and flooded the
+        # limiter towards MAX_KEYS until it evicted legitimate IP buckets.
+        #
+        # So: a coarse per-IP ceiling is ALWAYS checked, and checked first, so
+        # a token-varying caller is cut off (and stops minting buckets) before
+        # the per-key bucket is ever touched. The per-key bucket is then an
+        # additional, tighter limit, not a replacement.
         auth_header = flask_request.headers.get('Authorization', '')
+        key_identifier = None
         if auth_header.startswith('Bearer '):
             import hashlib
             token = auth_header[7:].strip()
-            identifier = 'key:' + hashlib.sha256(token.encode()).hexdigest()[:32]
-        else:
-            identifier = 'ip:' + client_ip
+            key_identifier = 'key:' + hashlib.sha256(token.encode()).hexdigest()[:32]
+        identifier = 'ip:' + client_ip
         endpoint = 'default'
         if 'certificates' in path and 'create' in path:
             endpoint = 'certificate_create'
@@ -1096,12 +1104,23 @@ def setup_rate_limiting(app, container: AppContainer):
         elif 'crl' in path:
             endpoint = 'crl_download'
 
-        if not rate_limiter.is_allowed(identifier, endpoint):
+        def _rate_limited():
             return flask_jsonify({
                 'error': 'Rate limit exceeded',
                 'message': 'Too many requests.',
                 'retry_after': 60
             }), 429
+
+        # Order matters: the IP ceiling first, so an abusive caller is
+        # rejected without ever allocating a per-key bucket.
+        if not rate_limiter.is_allowed(identifier, 'ip_ceiling'):
+            return _rate_limited()
+
+        # Then the working limit, per key when a bearer token is presented,
+        # per IP otherwise (cookie/session and anonymous callers).
+        bucket = key_identifier if key_identifier is not None else identifier
+        if not rate_limiter.is_allowed(bucket, endpoint):
+            return _rate_limited()
 
 
 def create_app(test_config=None):

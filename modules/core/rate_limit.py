@@ -26,6 +26,13 @@ class RateLimitConfig:
         'certificate_renew': 30,
         'ocsp_status': 200,  # OCSP should be high
         'crl_download': 60,
+        # Per-IP ceiling applied to EVERY /api/ request regardless of the
+        # bearer token presented (#420). Deliberately far above the
+        # per-endpoint limits: it is not the working limit, it is the backstop
+        # that makes the per-key buckets un-bypassable. A caller that varies
+        # the Authorization header on each request used to mint a fresh bucket
+        # every time and was therefore never limited at all.
+        'ip_ceiling': 600,
     }
 
     def __init__(self, custom_limits: Optional[Dict[str, int]] = None,
