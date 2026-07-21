@@ -78,6 +78,19 @@ class DomainOperationInProgress(RuntimeError):
         super().__init__(f"A certificate operation for {domain} is already in progress")
 
 
+# Metadata keys a reissue (create_certificate(replace=True)) is authoritative
+# for: they are rebuilt from the issuance parameters on every reissue, and the
+# alias pair must be *cleared* when the reissue drops the alias. Every other
+# key on disk — the deployment probe config written by PATCH, deployment_status,
+# renewed_at, and anything a future version adds — belongs to the certificate,
+# not to this issuance, and survives (#421).
+_REISSUE_OWNED_METADATA_KEYS = frozenset({
+    'domain', 'san_domains', 'dns_provider', 'challenge_type', 'created_at',
+    'email', 'staging', 'account_id', 'ca_provider', 'ca_account_id',
+    'domain_alias', 'alias_dns_provider', 'storage_warning',
+})
+
+
 class CertificateManager:
     """Class to handle certificate operations"""
     
@@ -273,6 +286,31 @@ class CertificateManager:
 
     def _metadata_path(self, domain: str) -> Path:
         return self.cert_dir / domain / 'metadata.json'
+
+    def _merge_reissue_metadata(self, domain: str, issuance: dict) -> dict:
+        """Carry forward the metadata a reissue does not own (#421).
+
+        `create_certificate` builds `issuance` from the issuance parameters
+        and used to write metadata.json wholesale, so `replace=True` (Edit &
+        Reissue) silently dropped every key the PATCH endpoint had stored
+        there: deployment_protocol / deployment_port / deployment_host (which
+        resources.py goes out of its way to preserve on a *partial* PATCH),
+        plus deployment_status and renewed_at. Adding a SAN to a mail server's
+        certificate therefore reverted its probe to https-tls:443, and the
+        dashboard reported it "not deployed".
+
+        Everything not in `_REISSUE_OWNED_METADATA_KEYS` is preserved,
+        including keys a future version adds. The alias pair IS owned, so a
+        reissue that drops the alias clears it rather than inheriting the old
+        value from disk.
+        """
+        preserved = {
+            k: v for k, v in self._load_metadata(domain).items()
+            if k not in _REISSUE_OWNED_METADATA_KEYS
+        }
+        if not preserved:
+            return issuance
+        return {**preserved, **issuance}
 
     def _load_metadata(self, domain: str) -> dict:
         metadata_file = self._metadata_path(domain)
@@ -1419,6 +1457,9 @@ class CertificateManager:
 
             if storage_warning:
                 metadata['storage_warning'] = storage_warning
+
+            if replace:
+                metadata = self._merge_reissue_metadata(domain, metadata)
 
             if self._save_metadata(domain, metadata):
                 logger.info(f"Saved certificate metadata to {self._metadata_path(domain)}")
