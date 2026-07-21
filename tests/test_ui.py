@@ -16,8 +16,31 @@ import os
 import re
 import pytest
 
-# Skip entire module if playwright is not installed
-pytest.importorskip("playwright")
+# Skip the module if playwright is not installed — unless the environment
+# declares that a browser MUST be available (#414). CI sets
+# CERTMATE_UI_REQUIRE_BROWSER=1, so a runner missing playwright or its system
+# libraries fails the job instead of skipping every test and reporting green.
+_REQUIRE_BROWSER = os.environ.get("CERTMATE_UI_REQUIRE_BROWSER") == "1"
+
+
+def _no_browser(reason):
+    """Fail when a browser is mandatory, skip when it is merely unavailable."""
+    if _REQUIRE_BROWSER:
+        pytest.fail(
+            f"{reason} — CERTMATE_UI_REQUIRE_BROWSER=1 means this must not be "
+            "skipped (install with `playwright install --with-deps chromium`)"
+        )
+    pytest.skip(reason)
+
+
+if _REQUIRE_BROWSER:
+    import importlib.util
+    if importlib.util.find_spec("playwright") is None:
+        raise RuntimeError(
+            "playwright is not installed but CERTMATE_UI_REQUIRE_BROWSER=1"
+        )
+else:
+    pytest.importorskip("playwright")
 
 from playwright.sync_api import Page, expect
 
@@ -66,7 +89,7 @@ def browser_page(docker_container):
         browser = pw.chromium.launch(headless=True)
     except Exception as e:
         pw.stop()
-        pytest.skip(f"Chromium not available: {e}")
+        _no_browser(f"Chromium not available: {e}")
     context = browser.new_context(ignore_https_errors=True)
 
     # Inject session cookie into Playwright browser context

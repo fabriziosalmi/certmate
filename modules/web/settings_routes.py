@@ -208,7 +208,6 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
         # Password policy: 12 chars minimum with at least one digit and one
         # non-alphanumeric character. Aligns with the OWASP ASVS L1 guidance
         # for shared-credential apps.
-        import re
         if (len(password) < 12
                 or not re.search(r'\d', password)
                 or not re.search(r'[^A-Za-z0-9]', password)):
@@ -275,7 +274,6 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
         if password is not None:
             if len(password) > 256:
                 return jsonify({'error': 'Password must be ≤ 256 chars'}), 400
-            import re
             if (len(password) < 12
                     or not re.search(r'\d', password)
                     or not re.search(r'[^A-Za-z0-9]', password)):

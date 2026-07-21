@@ -216,7 +216,6 @@ class LocalFileSystemBackend(CertificateStorageBackend):
         chmod, briefly exposing the private key. mkstemp creates at 0600; the
         rename is atomic so readers see either the old file or the whole new
         one, never a partial write."""
-        import tempfile
         fd, tmp_name = tempfile.mkstemp(dir=str(path.parent), prefix='.tmp-', suffix=path.name)
         try:
             os.chmod(tmp_name, mode)

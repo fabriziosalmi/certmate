@@ -90,7 +90,7 @@ test-integration: $(VENV)/bin/activate
 	$(PYTEST) -v --tb=short -m "integration"
 
 test-coverage: $(VENV)/bin/activate
-	$(PYTEST) -v --tb=short --cov=. --cov-report=html --cov-report=term-missing --cov-report=xml -m "not ui and not e2e"
+	$(PYTEST) -v --tb=short --cov=modules --cov-report=html --cov-report=term-missing --cov-report=xml -m "not ui and not e2e"
 
 test-watch: $(VENV)/bin/activate
 	$(PIP) install -q pytest-watch
@@ -99,7 +99,7 @@ test-watch: $(VENV)/bin/activate
 # ── Code Quality ───────────────────────────────────────────────────────
 
 lint: $(VENV)/bin/activate
-	$(VENV)/bin/flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+	$(VENV)/bin/flake8 . --count --select=E9,F63,F7,F82,F811,F632,E711,E712,E713,E714 --show-source --statistics
 	$(VENV)/bin/flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
 
 format: $(VENV)/bin/activate
