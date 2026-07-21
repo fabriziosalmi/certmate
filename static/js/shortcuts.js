@@ -124,7 +124,15 @@
             e.preventDefault();
             switch (e.key) {
                 case 'h': window.location.href = '/'; break;
-                case 'c': window.location.href = '/#client'; break;
+                // Fragment-only navigation does not reload; the dashboard
+                // listens for hashchange (#425).
+                case 'c':
+                    if (window.location.pathname === '/') {
+                        window.location.hash = '#client';
+                    } else {
+                        window.location.href = '/#client';
+                    }
+                    break;
                 case 's': window.location.href = '/settings'; break;
                 case 'a': window.location.href = '/activity'; break;
                 case 'd': window.location.href = '/redoc'; break;

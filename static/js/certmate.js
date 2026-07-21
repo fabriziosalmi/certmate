@@ -603,6 +603,48 @@
         });
     }
 
+
+    /**
+     * Copy text to the clipboard, with a fallback for non-secure contexts.
+     *
+     * navigator.clipboard is undefined over plain HTTP, which is how CertMate
+     * is commonly run on a LAN. Callers that only used the async API silently
+     * did nothing there — and for a one-time API key that means the token is
+     * gone for good (#427).
+     *
+     * Returns a Promise<boolean>: true when the text reached the clipboard.
+     * Never rejects, so callers can decide what to tell the user.
+     */
+    CM.copyText = function(text) {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            return navigator.clipboard.writeText(text)
+                .then(function() { return true; })
+                .catch(function() { return CM._copyTextFallback(text); });
+        }
+        return Promise.resolve(CM._copyTextFallback(text));
+    };
+
+    CM._copyTextFallback = function(text) {
+        var textarea = document.createElement('textarea');
+        textarea.value = text;
+        // Off-screen but focusable: execCommand needs a real selection.
+        textarea.style.position = 'fixed';
+        textarea.style.top = '0';
+        textarea.style.left = '0';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        var ok = false;
+        try {
+            ok = document.execCommand('copy');
+        } catch (err) {
+            ok = false;
+        }
+        document.body.removeChild(textarea);
+        return ok;
+    };
+
     CM.copyDiagnosticsSnapshot = function(buttonEl) {
         var originalText = buttonEl ? buttonEl.innerHTML : '';
         if (buttonEl) {
@@ -612,27 +654,13 @@
         return CM.api('GET', '/api/diagnostics/snapshot')
             .then(function(data) {
                 var text = JSON.stringify(data, null, 2);
-                if (navigator.clipboard && navigator.clipboard.writeText) {
-                    return navigator.clipboard.writeText(text).then(function() {
+                return CM.copyText(text).then(function(ok) {
+                    if (ok) {
                         CM.toast('Diagnostic snapshot copied to clipboard!', 'success');
-                    });
-                } else {
-                    // Fallback using temporary textarea
-                    var textarea = document.createElement('textarea');
-                    textarea.value = text;
-                    textarea.style.position = 'fixed';
-                    textarea.style.opacity = '0';
-                    document.body.appendChild(textarea);
-                    textarea.select();
-                    try {
-                        document.execCommand('copy');
-                        CM.toast('Diagnostic snapshot copied to clipboard!', 'success');
-                    } catch (err) {
-                        CM.toast('Failed to copy snapshot. Copy it manually from the console.', 'error');
-                        console.info('[CertMate] clipboard fallback used — snapshot text available in variable');
+                    } else {
+                        CM.toast('Could not copy the snapshot — your browser blocked clipboard access.', 'error');
                     }
-                    document.body.removeChild(textarea);
-                }
+                });
             })
             .catch(function(err) {
                 CM.toast('Failed to retrieve diagnostic snapshot: ' + (err.message || err), 'error');

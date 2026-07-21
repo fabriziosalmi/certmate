@@ -5,7 +5,8 @@
     <!-- Main Content -->
     <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8"
          x-data="{ certView: (location.hash === '#client' ? 'client' : 'server') }"
-         x-init="$watch('certView', v => { history.replaceState(null, '', v === 'client' ? '#client' : '#'); if (v === 'client') initClientCerts(); })">
+         x-init="$watch('certView', v => { history.replaceState(null, '', v === 'client' ? '#client' : '#'); if (v === 'client') initClientCerts(); });
+                 window.addEventListener('hashchange', () => { certView = (location.hash === '#client' ? 'client' : 'server') })">
 
         <!-- Page-header cluster: [ Server | Client | New ]. The Server/Client
              segments are state toggles (ghost); "New" is an imperative action

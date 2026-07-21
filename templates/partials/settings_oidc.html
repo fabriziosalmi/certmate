@@ -25,7 +25,26 @@
                 </div>
             </template>
 
-            <template x-if="!loading">
+            <!-- Load failed: show the reason and a retry, never the empty
+                 form — saving the blank defaults would wipe a working SSO
+                 configuration (#424). -->
+            <template x-if="!loading && loadFailed">
+                <div class="rounded-md border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-4">
+                    <p class="text-sm text-red-800 dark:text-red-300 flex items-center">
+                        <i class="fas fa-exclamation-triangle mr-2"></i>
+                        Could not load the SSO configuration: <span class="font-mono ml-1" x-text="loadError"></span>
+                    </p>
+                    <p class="text-xs text-red-700 dark:text-red-400 mt-2">
+                        The form is hidden on purpose: saving now would overwrite your current SSO settings with empty values.
+                    </p>
+                    <button type="button" @click="load()"
+                            class="mt-3 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold rounded-md">
+                        <i class="fas fa-rotate-right mr-1"></i> Retry
+                    </button>
+                </div>
+            </template>
+
+            <template x-if="!loading && !loadFailed">
                 <div class="space-y-6">
 
                     <!-- Enable toggle + provider name -->
