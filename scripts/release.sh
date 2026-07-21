@@ -196,7 +196,11 @@ cmd_publish() {
   # is what publishes :latest.
   info "CI status on the release commit"
   local sha; sha="$(git rev-parse HEAD)"
-  local runs; runs="$(gh run list --commit "$sha" --json name,conclusion,status,workflowName 2>/dev/null || echo '')"
+  # --limit 100: the default page size is 20, and reruns plus the
+  # non-required workflows can push a required one off the first page —
+  # which would read as MISSING and block a perfectly good release.
+  local runs; runs="$(gh run list --commit "$sha" --limit 100 \
+    --json name,conclusion,status,workflowName,createdAt 2>/dev/null || echo '')"
   [ -n "$runs" ] || die "could not read CI status for $sha (is gh authenticated?)"
   local verdict; verdict="$(printf '%s' "$runs" | "$PY" -c '
 import json, sys
@@ -207,6 +211,14 @@ import json, sys
 # forever, and a release must not hang on it. They are still reported.
 REQUIRED = {"CI", "Build Multi-Platform Docker Images", "CodeQL", "Lint (emoji)"}
 runs = json.load(sys.stdin)
+
+# Keep only the most recent run per workflow: a rerun creates a second run,
+# and judging the older attempt would fail a release whose rerun is green.
+latest = {}
+for r in sorted(runs, key=lambda r: r.get("createdAt") or ""):
+    latest[r.get("workflowName")] = r
+runs = list(latest.values())
+
 pending, bad, other = set(), set(), []
 for r in runs:
     name = r.get("workflowName", "?")
