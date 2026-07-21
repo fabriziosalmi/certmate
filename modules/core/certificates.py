@@ -287,6 +287,59 @@ class CertificateManager:
     def _metadata_path(self, domain: str) -> Path:
         return self.cert_dir / domain / 'metadata.json'
 
+    def _store_in_backend(self, domain, cert_files, metadata):
+        """Push the bundle to the configured storage backend.
+
+        Returns a human-readable warning when the external copy did NOT land,
+        None when it did (or when no backend is configured). Shared by the
+        create and renew paths so they cannot drift again (#423): the create
+        path recorded this warning in metadata while the renew path only
+        logged it, so a Vault token expiring mid-life meant nightly renewals
+        kept succeeding locally while the DR copy silently went stale, with
+        nothing in the API or the UI to show it.
+
+        The message deliberately carries no raw exception text — backend
+        errors can embed credentials and URLs.
+        """
+        if not self.storage_manager:
+            return None
+        try:
+            backend_name = self.storage_manager.get_backend_name()
+        except Exception:
+            backend_name = 'external'
+        try:
+            stored = self.storage_manager.store_certificate(domain, cert_files, metadata)
+        except Exception as e:
+            logger.error(f"Error storing certificate in storage backend for {domain}: {e}")
+            return (
+                f"Certificate issued but saving it to the {backend_name} storage backend "
+                f"failed — the external copy is missing or stale. See server logs for details."
+            )
+        if stored:
+            logger.info(f"Certificate stored in {backend_name} backend for {domain}")
+            return None
+        logger.warning(f"Failed to store certificate in {backend_name} backend for {domain}")
+        return (
+            f"Certificate issued but NOT saved to the {backend_name} storage "
+            f"backend — the external copy is missing or stale. Check the backend "
+            f"credentials and connectivity."
+        )
+
+    @staticmethod
+    def _apply_storage_warning(metadata, storage_warning):
+        """Set or CLEAR metadata['storage_warning'] (#423).
+
+        Clearing matters as much as setting: one failed store used to leave the
+        warning in metadata forever, so the dashboard kept warning long after
+        the backend recovered — and an operator who learns to ignore a stale
+        warning will ignore the real one.
+        """
+        if storage_warning:
+            metadata['storage_warning'] = storage_warning
+        else:
+            metadata.pop('storage_warning', None)
+        return metadata
+
     def _merge_reissue_metadata(self, domain: str, issuance: dict) -> dict:
         """Carry forward the metadata a reissue does not own (#421).
 
@@ -1431,32 +1484,8 @@ class CertificateManager:
             # operator had no signal their backup never landed. Capture a
             # generic warning (no raw exception text — it can carry backend
             # credentials/URLs) and surface it on the result and in metadata.
-            storage_warning = None
-            if self.storage_manager:
-                try:
-                    backend_name = self.storage_manager.get_backend_name()
-                except Exception:
-                    backend_name = 'external'
-                try:
-                    storage_success = self.storage_manager.store_certificate(domain, cert_files, metadata)
-                    if storage_success:
-                        logger.info(f"Certificate stored in {backend_name} backend for {domain}")
-                    else:
-                        storage_warning = (
-                            f"Certificate issued but NOT saved to the {backend_name} storage "
-                            f"backend — the external copy is missing or stale. Check the backend "
-                            f"credentials and connectivity."
-                        )
-                        logger.warning(f"Failed to store certificate in {backend_name} backend for {domain}")
-                except Exception as e:
-                    storage_warning = (
-                        f"Certificate issued but saving it to the {backend_name} storage backend "
-                        f"failed — the external copy is missing or stale. See server logs for details."
-                    )
-                    logger.error(f"Error storing certificate in storage backend for {domain}: {e}")
-
-            if storage_warning:
-                metadata['storage_warning'] = storage_warning
+            storage_warning = self._store_in_backend(domain, cert_files, metadata)
+            self._apply_storage_warning(metadata, storage_warning)
 
             if replace:
                 metadata = self._merge_reissue_metadata(domain, metadata)
@@ -1761,34 +1790,34 @@ class CertificateManager:
                         with open(dest_file, 'rb') as f:
                             cert_files[file_name] = f.read()
                 
-                # Update metadata with renewal timestamp
-                if metadata_file.exists():
+                # Store first, then persist metadata ONCE with both the
+                # renewal timestamp and the current storage state (#423).
+                storage_warning = self._store_in_backend(domain, cert_files, metadata)
+
+                # Persist when there is metadata to update OR a warning to
+                # record: a domain with no metadata.json would otherwise lose
+                # the only signal that its external copy is stale.
+                if metadata_file.exists() or storage_warning:
                     try:
                         metadata['renewed_at'] = utc_now_iso()
+                        self._apply_storage_warning(metadata, storage_warning)
                         self._save_metadata(domain, metadata)
                         logger.info(f"Updated renewal timestamp in metadata for {domain}")
                     except Exception as e:
                         logger.warning(f"Failed to update metadata for {domain}: {e}")
-                
-                if self.storage_manager:
-                    try:
-                        storage_success = self.storage_manager.store_certificate(domain, cert_files, metadata)
-                        if storage_success:
-                            logger.info(f"Certificate stored in {self.storage_manager.get_backend_name()} backend for {domain}")
-                        else:
-                            logger.warning(f"Failed to store certificate in {self.storage_manager.get_backend_name()} backend for {domain}")
-                    except Exception as e:
-                        logger.error(f"Error storing certificate in storage backend for {domain}: {e}")
-                
+
                 logger.info(f"Certificate renewed successfully for {domain}")
                 self._invalidate_certificate_info_cache(domain)
                 self._write_pfx(domain)
-                return {
+                renew_result = {
                     'success': True,
                     'renewed': True,
                     'domain': domain,
                     'message': "Certificate renewed successfully"
                 }
+                if storage_warning:
+                    renew_result['storage_warning'] = storage_warning
+                return renew_result
             else:
                 # Mirror the create-path sanitisation: log raw stderr,
                 # surface a redacted copy. See sanitize_certbot_stderr
