@@ -2001,7 +2001,16 @@ class CertificateManager:
         return True
 
     def delete_certificate(self, domain: str) -> bool:
-        """Delete a certificate directory, blocking if a create/renew is in progress."""
+        """Delete a certificate directory, blocking if a create/renew is in progress.
+
+        Also deletes the copy held by the configured storage backend (#419).
+        Without that, `DELETE /api/certificates/<domain>` returned 200 and the
+        UI showed the certificate gone while the full PEM bundle — private key
+        included — stayed in Vault / AWS / Azure Key Vault / Infisical
+        indefinitely, and a later storage migration or restore resurrected it.
+        An explicit user-initiated deletion must destroy the key material
+        everywhere CertMate put it.
+        """
         domain_lock = self._get_domain_lock(domain)
         # Acquire lock to ensure no create/renew is in progress (non-blocking)
         if not domain_lock.acquire(blocking=False):
@@ -2009,14 +2018,63 @@ class CertificateManager:
         try:
             import shutil
             domain_dir = self.cert_dir / domain
+            local_deleted = False
             if domain_dir.exists():
                 shutil.rmtree(domain_dir)
                 logger.info(f"Certificate deleted for {domain}")
                 self._invalidate_certificate_info_cache(domain)
-                return True
-            return False
+                local_deleted = True
+
+            remote_deleted = self._delete_from_storage_backend(domain)
+            # A certificate that exists ONLY in the remote backend (local dir
+            # already gone, e.g. after a partial restore) still counts as
+            # deleted — reporting 404 there would leave the key unreachable
+            # AND undeletable through the API.
+            return local_deleted or remote_deleted
         finally:
             domain_lock.release()
+
+    def _delete_from_storage_backend(self, domain: str) -> bool:
+        """Remove the domain's bundle from the external storage backend.
+
+        Returns True only when the backend confirms a deletion. Never raises:
+        a backend outage must not turn a successful local deletion into a 500,
+        but it MUST be loud — an operator who believes a key was destroyed and
+        finds it in Vault later has been misled by us.
+        """
+        if not self.storage_manager:
+            return False
+        try:
+            # The local filesystem backend points at the same directory the
+            # rmtree above already removed; calling it again is a no-op that
+            # only muddies the log.
+            backend_name = self.storage_manager.get_backend_name()
+            if backend_name in ('local_filesystem', 'local'):
+                return False
+        except Exception:  # pragma: no cover - defensive
+            backend_name = 'unknown'
+        try:
+            deleted = self.storage_manager.delete_certificate(domain)
+            if deleted:
+                logger.info(
+                    "Certificate for %s deleted from storage backend %s",
+                    domain, backend_name,
+                )
+            else:
+                logger.warning(
+                    "Storage backend %s reported no certificate to delete for "
+                    "%s — verify by hand that no private key remains there",
+                    backend_name, domain,
+                )
+            return bool(deleted)
+        except Exception as e:
+            logger.error(
+                "Certificate for %s was deleted locally but the storage "
+                "backend %s could not delete its copy (%s) — the private key "
+                "may still be stored there; remove it manually",
+                domain, backend_name, e,
+            )
+            return False
 
     def _infer_dns_provider(self, domain, settings):
         """Infer the DNS provider for a domain, preferring its explicit
