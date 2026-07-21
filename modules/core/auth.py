@@ -14,7 +14,7 @@ import uuid
 import time
 from functools import wraps
 from flask import request, jsonify, session
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from .utils import utc_now
 
 try:
@@ -302,6 +302,61 @@ class AuthManager:
             return secrets.compare_digest(actual, expected)
         return False
 
+    @staticmethod
+    def _normalize_expires_at(expires_at):
+        """Validate an API-key expiry on write (#432).
+
+        The value used to be stored verbatim and compared as a STRING, so
+        "31/12/2026" sorted after every ISO timestamp and never expired, while
+        a JSON *number* raised an uncaught TypeError inside
+        authenticate_api_token — which 401s every bearer token on the instance.
+
+        Returns (normalised_iso_or_None, error_message_or_None).
+        """
+        if expires_at in (None, ''):
+            return None, None
+        if not isinstance(expires_at, str):
+            return None, "expires_at must be an ISO-8601 timestamp string"
+        try:
+            parsed = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
+        except ValueError:
+            return None, ("expires_at must be an ISO-8601 timestamp "
+                          "(e.g. 2027-01-31T23:59:59)")
+        # Store naive UTC, matching utc_now() and every other timestamp on disk.
+        if parsed.tzinfo is not None:
+            parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
+        return parsed.isoformat(), None
+
+    @staticmethod
+    def _api_key_expired(key_data, now=None):
+        """Has this key expired? Compared as a datetime, never as a string.
+
+        Fails CLOSED: a value that cannot be parsed is treated as expired.
+        A key whose expiry we cannot understand is a key we cannot vouch for,
+        and the alternative — the previous behaviour — was that a malformed
+        expiry meant *never expires*.
+        """
+        raw = key_data.get('expires_at')
+        if raw in (None, ''):
+            return False
+        if not isinstance(raw, str):
+            logger.warning(
+                "API key %r has a non-string expires_at (%s); treating it as "
+                "expired", key_data.get('name'), type(raw).__name__,
+            )
+            return True
+        try:
+            expires = datetime.fromisoformat(raw.replace('Z', '+00:00'))
+        except ValueError:
+            logger.warning(
+                "API key %r has an unparseable expires_at; treating it as "
+                "expired", key_data.get('name'),
+            )
+            return True
+        if expires.tzinfo is not None:
+            expires = expires.astimezone(timezone.utc).replace(tzinfo=None)
+        return expires <= (now or utc_now())
+
     def create_api_key(self, name, role='viewer', expires_at=None, created_by=None,
                        allowed_domains=None, is_agent=False):
         """Create a new scoped API key.
@@ -337,6 +392,10 @@ class AuthManager:
             if scope_err:
                 return False, scope_err
 
+            normalized_expiry, expiry_err = self._normalize_expires_at(expires_at)
+            if expiry_err:
+                return False, expiry_err
+
             api_keys = self._get_api_keys()
 
             # Check name uniqueness among active keys
@@ -354,7 +413,7 @@ class AuthManager:
                 'token_prefix': plaintext[:7],
                 'created_at': utc_now().isoformat(),
                 'created_by': created_by,
-                'expires_at': expires_at,
+                'expires_at': normalized_expiry,
                 'last_used_at': None,
                 'revoked': False,
                 'allowed_domains': scoped_domains,
@@ -385,18 +444,20 @@ class AuthManager:
     def list_api_keys(self):
         """List all API keys without token hashes."""
         api_keys = self._get_api_keys()
-        now = utc_now().isoformat()
+        now = utc_now()
         result = {}
         for key_id, data in api_keys.items():
-            exp = data.get('expires_at')
-            is_expired = bool(exp and exp < now)
+            # Same datetime comparison the auth path uses (#432): the string
+            # compare here made the UI's "expired" badge disagree with whether
+            # the key actually still worked.
+            is_expired = self._api_key_expired(data, now)
             result[key_id] = {
                 'name': data.get('name'),
                 'role': data.get('role'),
                 'token_prefix': data.get('token_prefix'),
                 'created_at': data.get('created_at'),
                 'created_by': data.get('created_by'),
-                'expires_at': exp,
+                'expires_at': data.get('expires_at'),
                 'last_used_at': data.get('last_used_at'),
                 'revoked': data.get('revoked', False),
                 'is_expired': is_expired,
@@ -467,13 +528,12 @@ class AuthManager:
                 return {'username': 'api_user', 'role': 'admin'}
 
             # 2. Check scoped API keys
-            now = utc_now().isoformat()
+            now = utc_now()
             api_keys = settings.get('api_keys', {})
             for key_id, key_data in api_keys.items():
                 if key_data.get('revoked'):
                     continue
-                exp = key_data.get('expires_at')
-                if exp and exp < now:
+                if self._api_key_expired(key_data, now):
                     continue
                 if self._verify_api_token(token, key_data.get('token_hash', '')):
                     # Update last_used_at via settings_manager.update so a

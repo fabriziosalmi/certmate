@@ -1,15 +1,25 @@
 from flask_restx import fields
 
+from ..core.settings import SECRET_MASK_SENTINEL
+
 
 class MaskedString(fields.String):
-    """Custom field that masks sensitive string values"""
+    """Field that masks a secret completely in API responses.
+
+    It used to reveal the first four and last four characters (#432). That is
+    a meaningful head start on a DNS API token — and `GET /api/settings`,
+    where these fields live, is readable by the **viewer** role: the role you
+    hand to people you do not fully trust. The web settings route already
+    masked the same values as a flat sentinel, so the API was the weaker of
+    two answers about identical data.
+
+    Uses the same sentinel as the settings path, so a client can recognise
+    "this is masked, not the value" one way everywhere.
+    """
     def format(self, value):
         if not value:
             return value
-        s = str(value)
-        if len(s) > 8:
-            return f"{s[:4]}...{s[-4:]}"
-        return "***"
+        return SECRET_MASK_SENTINEL
 
 
 def create_api_models(api):
