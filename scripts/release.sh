@@ -150,6 +150,14 @@ init.write_text(re.sub(r"__version__ = '[^']+'", f"__version__ = '{v}'", init.re
 pkg = pathlib.Path("package.json"); d = json.loads(pkg.read_text())
 d["version"] = v
 pkg.write_text(json.dumps(d, indent=2) + "\n", encoding="utf-8")
+# The /health example in the Docker Hub README prints a version. Bump it here
+# rather than by hand: an example that has to be remembered is an example that
+# goes stale, and test_version_consistency pins it.
+dh = pathlib.Path("README.dockerhub.md")
+dh.write_text(
+    re.sub(r'("version": ")[0-9]+\.[0-9]+\.[0-9]+(")', rf"\g<1>{v}\g<2>", dh.read_text()),
+    encoding="utf-8",
+)
 PY
   [ "$("$PY" -c 'import json;from modules import __version__;print(json.load(open("package.json"))["version"]==__version__)')" = "True" ] \
     || die "version files disagree after bump"
