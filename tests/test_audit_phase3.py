@@ -199,9 +199,10 @@ def test_half_signed_bundle_is_rejected(make_audit, tmp_path):
 
 
 def test_unsupported_format_is_rejected(make_audit, tmp_path):
+    # 2 is the anchored-slice format (#441); 99 is nobody's format.
     bundle, _ = _signed_bundle(make_audit, tmp_path)
     bad = copy.deepcopy(bundle)
-    bad['manifest']['format_version'] = 2
+    bad['manifest']['format_version'] = 99
     r = audit_verify.verify_bundle(bad)
     assert not r['ok'] and 'format_version' in r['reason']
 
