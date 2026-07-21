@@ -584,6 +584,28 @@ curl -X POST http://localhost:5000/api/certificates/example.com/reissue \
 
 ---
 
+### Log stream (admin, debugging)
+
+```
+GET /api/web/logs/stream
+```
+
+Server-Sent Events tail of `logs/certmate.log`, for watching an issuance or a
+deployment live from a terminal:
+
+```bash
+curl -N -H "Authorization: Bearer TOKEN" \
+ https://certmate.example.com/api/web/logs/stream
+```
+
+Admin-only, because application logs can contain credentials. Only lines
+written *after* the connection opens are sent — this is a tail, not a history
+download. The stream emits a `: keepalive` comment while idle and closes after
+30 idle minutes; an `EventSource` client reconnects on its own, a `curl`
+session has to be restarted.
+
+---
+
 ## Error Handling
 
 ### Error Response Format
