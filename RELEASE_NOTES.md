@@ -1,8 +1,8 @@
 ## v2.22.0 (Audit release — silent failures, gates that did not gate)
 
-A 360-degree read-only audit of the codebase produced 25 findings; 24 are fixed here, and the twenty-fifth (rotating the tamper-evident audit chain) is tracked as a design issue rather than rushed (#437). Every fix below carries a regression test that was written failing first — the suite went from 1,770 to 1,974 tests.
+A 360-degree read-only audit of the codebase produced 25 findings, all of them addressed here. One was split: log rotation covered both the application log, fixed below, and the tamper-evident audit chain, which cannot be rotated by the same means and is tracked as a design issue rather than rushed (#437). Every fix below carries a regression test that was written failing first — the suite went from 1,770 to 1,974 tests.
 
-The common thread is worth stating plainly: almost every defect in this release **failed silently, or reported the opposite of what happened**. A backup that omitted the CA key still reported success. A renewal that failed every night sent no alert. A save that was rejected showed a green "saved". Three CI gates were incapable of failing.
+The common thread is worth stating plainly: almost every defect in this release **failed silently, or reported the opposite of what happened**. A backup that omitted the CA key still reported success. A renewal that failed every night sent no alert. A save that was rejected showed a green "saved". Four CI gates were incapable of failing at all.
 
 ### Data loss and disaster recovery
 
