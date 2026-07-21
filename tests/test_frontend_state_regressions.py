@@ -97,3 +97,25 @@ def test_there_is_one_clipboard_implementation_not_three():
     dashboard = _read("static/js/dashboard.js")
     assert "fallbackCopyTextToClipboard" not in dashboard
     assert "CertMate.copyText(commandText)" in dashboard
+
+
+# --- #426 ------------------------------------------------------------------
+# Not frontend, but the same class of defect: a rule that reads as if it
+# applies everywhere and silently applies only at the root.
+
+def test_dockerignore_patterns_are_recursive():
+    """A .dockerignore pattern without '**' matches the context root ONLY.
+
+    `__pycache__/`, `*.pyc` and `node_modules/` therefore left every nested
+    match in the published image, and `tests/`, `docs/` and `.claude/` were
+    not listed at all — so `COPY . .` shipped the test suite (whose conftest
+    shells out to docker) and the agent worktrees, which are full copies of
+    the repository (#426).
+    """
+    ignore = _read(".dockerignore")
+    for pattern in ("**/__pycache__", "**/*.py[cod]", "**/node_modules",
+                    "**/test_*.py", "tests/", "docs/", ".claude/"):
+        assert pattern in ignore, f"{pattern} missing from .dockerignore"
+    # The non-recursive forms must be gone, not merely supplemented.
+    for stale in ("\n__pycache__/", "\n*.pyc", "\nnode_modules/", "\ntest_*.py"):
+        assert stale not in ignore, f"{stale.strip()} still matches root only"
