@@ -119,3 +119,38 @@ def test_dockerignore_patterns_are_recursive():
     # The non-recursive forms must be gone, not merely supplemented.
     for stale in ("\n__pycache__/", "\n*.pyc", "\nnode_modules/", "\ntest_*.py"):
         assert stale not in ignore, f"{stale.strip()} still matches root only"
+
+
+# --- #416 / #429 / #430 ----------------------------------------------------
+# Documentation that contradicts the code is a defect with a longer half-life
+# than most bugs: every reader acts on it.
+
+def test_no_doc_points_at_the_old_dns_accounts_prefix():
+    """The multi-account API lives at /api/dns/<provider>/accounts (#416)."""
+    for path in [ROOT / "README.md", *(ROOT / "docs").rglob("*.md")]:
+        text = path.read_text(encoding="utf-8")
+        assert "/api/settings/dns-providers/" not in text, \
+            f"{path.relative_to(ROOT)} documents a prefix that 404s"
+
+
+def test_no_doc_promises_the_default_account_endpoint():
+    """It has never existed; the default travels as set_as_default (#416)."""
+    for path in [ROOT / "README.md", *(ROOT / "docs").rglob("*.md")]:
+        assert "default-account" not in path.read_text(encoding="utf-8"), \
+            f"{path.relative_to(ROOT)} documents a route with no handler"
+
+
+def test_no_doc_presents_host_or_flask_debug_as_working_env_vars():
+    """Neither is read anywhere, and HOST reads as a security control (#429)."""
+    for path in (ROOT / "README.md", ROOT / "README.dockerhub.md"):
+        for line in path.read_text(encoding="utf-8").splitlines():
+            stripped = line.strip()
+            if stripped.startswith(("HOST=", "FLASK_DEBUG=")):
+                pytest.fail(f"{path.name}: '{stripped}' has no effect")
+
+
+def test_the_documented_batch_limit_matches_the_code():
+    code = _read("modules/api/client_certificates.py")
+    assert "max_batch = 100" in code, "the cap moved; update the docs with it"
+    for path in (ROOT / "docs/README.md", ROOT / "docs/index.md"):
+        assert "30,000" not in path.read_text(encoding="utf-8")

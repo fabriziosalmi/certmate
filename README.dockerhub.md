@@ -153,7 +153,7 @@ curl "http://localhost:8000/api/certificates" \
 - `SECRET_KEY` - Flask secret key (auto-generated if not set)
 - `SECRET_KEY_FILE` - Path to a file containing the Flask secret key (takes precedence over `SECRET_KEY`)
 - `FLASK_ENV` - Environment mode (default: production)
-- `HOST` - Bind address (default: 0.0.0.0)
+- The bind address is fixed to `0.0.0.0` inside the container; publish it as `-p 127.0.0.1:8000:8000` to reach it on loopback only
 - `PORT` - Listen port (default: 8000)
 
 ## Security Best Practices
@@ -212,10 +212,13 @@ curl http://localhost:8000/health
 # Response
 {
  "status": "healthy",
- "version": "2.1.0",
- "uptime": "24h 15m",
- "certificates": 42,
- "storage": "local_filesystem"
+ "version": "2.21.4",
+ "checks": {
+  "cert_dir": "ok",
+  "disk_space": "ok",
+  "disk_free_mb": 94504,
+  "scheduler": "running"
+ }
 }
 ```
 
