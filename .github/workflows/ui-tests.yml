@@ -66,10 +66,18 @@ jobs:
 
     - name: Install Playwright Chromium
       # --with-deps installs the system libraries (libnss3, libasound2, ...)
-      # Chromium needs. Without them chromium.launch() throws, and the suite
-      # used to turn that into a skip — i.e. a green job that ran zero
-      # assertions (#414).
-      run: python -m playwright install --with-deps chromium
+      # Chromium needs, but it shells out to sudo — which this self-hosted
+      # host does not grant passwordlessly. Use it when it is available and
+      # fall back to the plain install otherwise; either way the launch check
+      # below is what decides, so a host missing those libraries fails the
+      # job instead of skipping every test and reporting green (#414).
+      run: |
+        if sudo -n true 2>/dev/null; then
+          python -m playwright install --with-deps chromium
+        else
+          echo "passwordless sudo unavailable; installing browser only"
+          python -m playwright install chromium
+        fi
 
     - name: Verify Chromium actually launches
       # Fail here, loudly and in one line, rather than inside 17 fixtures.
