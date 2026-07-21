@@ -852,12 +852,16 @@ class FileOperations:
                             logger.error(f"Error extracting {file_info.filename}: {e}")
                             continue
 
-                        # The CA signing key and every client private key
-                        # land here — never leave them group/world-readable.
+                        # The CA signing key, the audit signing key and every
+                        # client private key land here. Unlike certificates/,
+                        # which operators bind-mount and read from other
+                        # containers, nothing outside the app needs data/ —
+                        # so private material is 0600 and the rest 0640,
+                        # never world-readable.
                         if _PRIVATE_KEY_FILE_RE.search(target_path.name):
                             os.chmod(target_path, 0o600)
                         else:
-                            os.chmod(target_path, 0o644)
+                            os.chmod(target_path, 0o640)
 
                         restored_data_files += 1
             

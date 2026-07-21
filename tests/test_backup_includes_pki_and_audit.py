@@ -136,7 +136,7 @@ def test_restore_round_trips_the_ca_key_with_locked_down_permissions(file_ops, t
 
     # Private key material must not come back group/world readable.
     assert stat.S_IMODE(ca_key.stat().st_mode) == 0o600
-    assert stat.S_IMODE((data_dir / "certs" / "ca" / "ca.crt").stat().st_mode) == 0o644
+    assert stat.S_IMODE((data_dir / "certs" / "ca" / "ca.crt").stat().st_mode) == 0o640
 
 
 def test_restore_refuses_non_allowlisted_data_entries(file_ops, tmp_path):

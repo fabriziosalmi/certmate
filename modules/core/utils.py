@@ -909,10 +909,33 @@ def repair_certbot_lineage_symlinks(domain_dir: Union[str, Path], domain: str) -
     Only the *newest* archive generation is linked, which is what certbot's
     own ``live`` symlinks mean.
     """
+    # `domain` reaches the restore caller from ZIP entry names, so treat it as
+    # untrusted here rather than relying on the caller: validate its shape,
+    # then confirm every path we touch resolves inside domain_dir. The
+    # ZIP-slip guard in the restore path is the first line of defence; this is
+    # the second, and it makes the helper safe for any future caller.
+    if not validate_domain(domain):
+        return False
+
     domain_dir = Path(domain_dir)
-    live_dir = domain_dir / 'live' / domain
-    archive_dir = domain_dir / 'archive' / domain
-    conf = domain_dir / 'renewal' / f'{domain}.conf'
+    try:
+        base = domain_dir.resolve()
+    except OSError:
+        return False
+
+    def _inside(path: Path) -> Optional[Path]:
+        try:
+            resolved = (base / path).resolve()
+            resolved.relative_to(base)
+        except (OSError, ValueError):
+            return None
+        return base / path
+
+    live_dir = _inside(Path('live') / domain)
+    archive_dir = _inside(Path('archive') / domain)
+    conf = _inside(Path('renewal') / f'{domain}.conf')
+    if live_dir is None or archive_dir is None or conf is None:
+        return False
 
     if not conf.exists() or not archive_dir.is_dir():
         return False
