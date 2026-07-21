@@ -256,6 +256,11 @@ class ClientCertificateManager:
                 "extended_key_usage": ["clientAuth"],
                 "created_at": utc_now().isoformat(),
                 "expires_at": (utc_now() + timedelta(days=days_valid)).isoformat(),
+                # Persisted so a renewal can inherit the operator's chosen
+                # validity instead of silently resetting it to the 365-day
+                # default (#422). Certificates issued before this field
+                # existed fall back to deriving it from created_at/expires_at.
+                "days_valid": days_valid,
                 "serial_number": str(signed_cert.serial_number),
                 "renewal_enabled": True,
                 "renewal_threshold_days": 30,
@@ -440,6 +445,28 @@ class ClientCertificateManager:
             logger.error(f"Error revoking certificate: {str(e)}")
             return False, "An internal error occurred while revoking the certificate"
 
+    @staticmethod
+    def _inherited_days_valid(old_metadata: Dict[str, Any], default: int = 365) -> int:
+        """The validity a renewal should reuse (#422).
+
+        Prefers the persisted ``days_valid``; for certificates issued before
+        that field existed, derives it from created_at/expires_at. Falls back
+        to the default only when neither is usable, and never returns a
+        non-positive value (which would produce an already-expired cert).
+        """
+        raw = old_metadata.get("days_valid")
+        if isinstance(raw, bool):  # bool is an int subclass — not a duration
+            raw = None
+        if isinstance(raw, (int, float)) and raw > 0:
+            return int(raw)
+        try:
+            created = datetime.fromisoformat(old_metadata["created_at"])
+            expires = datetime.fromisoformat(old_metadata["expires_at"])
+        except (KeyError, TypeError, ValueError):
+            return default
+        days = round((expires - created).total_seconds() / 86400)
+        return days if days > 0 else default
+
     def renew_certificate(self, identifier: str) -> Tuple[bool, Optional[str], Optional[Dict[str, Any]]]:
         """
         Renew a client certificate (create new one with same identity).
@@ -460,13 +487,33 @@ class ClientCertificateManager:
             if old_metadata.get("revoked"):
                 return False, "Cannot renew a revoked certificate", None
 
-            # Create new certificate with same parameters
+            # A CSR-issued identity cannot be renewed server-side (#422).
+            # The client holds the private key; CertMate never had it. Issuing
+            # a new CertMate-generated keypair produces a certificate the
+            # client cannot use, while stamping the original superseded and
+            # renewal_enabled=False — so the working mTLS identity silently
+            # expires with no further renewal. Refuse, and say what is needed.
+            if old_metadata.get("csr_required"):
+                return (
+                    False,
+                    "This certificate was issued from a client-supplied CSR, so "
+                    "it cannot be renewed server-side: CertMate does not hold "
+                    "the private key. Ask the holder for a fresh CSR and issue "
+                    "a new certificate from it.",
+                    None,
+                )
+
+            # Create new certificate with same parameters, INCLUDING the
+            # validity the operator chose (#422): renewal used to fall back to
+            # the 365-day default, so a 730-day certificate quietly halved its
+            # lifetime on every renewal.
             success, error, cert_data = self.create_client_certificate(
                 common_name=old_metadata.get("common_name", ""),
                 email=old_metadata.get("email", ""),
                 organization=old_metadata.get("organization", "CertMate"),
                 organizational_unit=old_metadata.get("organizational_unit", "Users"),
                 cert_usage=old_metadata.get("cert_usage", "api-mtls"),
+                days_valid=self._inherited_days_valid(old_metadata),
                 generate_key=True,  # Always generate new key on renewal
                 notes=f"Renewal of {identifier}"
             )
@@ -573,6 +620,21 @@ class ClientCertificateManager:
 
                 if utc_now() >= renewal_date:
                     identifier = cert_metadata.get("identifier")
+
+                    # CSR-issued identities cannot be renewed server-side
+                    # (#422). Attempting it every tick would write an identical
+                    # audit failure nightly and drown the trail; the operator
+                    # needs a fresh CSR from the holder, and the certificate
+                    # stays visible as expiring in the UI meanwhile.
+                    if cert_metadata.get("csr_required"):
+                        logger.warning(
+                            "Client certificate %s expires on %s and was issued "
+                            "from a client-supplied CSR: it cannot be auto-renewed. "
+                            "Collect a fresh CSR from the holder and issue a new "
+                            "certificate.", identifier, expires_at_str,
+                        )
+                        continue
+
                     success, error, _ = self.renew_certificate(identifier)
 
                     if success:
