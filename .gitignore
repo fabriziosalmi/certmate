@@ -64,9 +64,11 @@ Thumbs.db
 # Logs
 *.log
 
-# Backup files
-*_old.*
-*_backup.*
+# Backup files. Anchored to the repository root: unanchored, `*_backup.*`
+# also matched tests/test_backup.py, which therefore existed on disk for
+# months without ever being committed or run in CI.
+/*_old.*
+/*_backup.*
 
 # Planning and development documents
 NEXT_FEATURES.md
@@ -88,12 +90,15 @@ app.py.backup
 .claude/
 test_screenshots/
 
-# Test files with sensitive data
-test_real_cert_*.py
-test_api_*.py
-test_certificate_creation_*.py
-real_world_test_*.py
-integration_test_*.py
+# Ad-hoc test scripts with real credentials, written at the repository root.
+# Anchored (leading /) on purpose: unanchored, `test_api_*.py` swallowed
+# tests/test_api_key_expiry_and_masking.py — a committed-looking test file
+# that git silently refused to track, so it protected nothing in CI.
+/test_real_cert_*.py
+/test_api_*.py
+/test_certificate_creation_*.py
+/real_world_test_*.py
+/integration_test_*.py
 github_response.md
 
 # local

@@ -154,3 +154,23 @@ def test_the_documented_batch_limit_matches_the_code():
     assert "max_batch = 100" in code, "the cap moved; update the docs with it"
     for path in (ROOT / "docs/README.md", ROOT / "docs/index.md"):
         assert "30,000" not in path.read_text(encoding="utf-8")
+
+
+def test_no_file_under_tests_is_silently_gitignored():
+    """An ignore rule that swallows a test file is worse than no test.
+
+    `.gitignore` carried unanchored patterns meant for ad-hoc scripts at the
+    repository root — `test_api_*.py`, `*_backup.*` — which also matched files
+    under tests/. Two real test files sat on disk looking committed, tracked by
+    nothing and run by no CI. Same defect class as the .dockerignore one above:
+    a rule that reads as if it applies to one place and quietly applies
+    everywhere.
+    """
+    import subprocess
+
+    out = subprocess.run(
+        ["git", "ls-files", "-o", "-i", "--exclude-standard", "tests/"],
+        cwd=ROOT, capture_output=True, text=True,
+    ).stdout.split()
+    swallowed = [f for f in out if f.endswith(".py")]
+    assert not swallowed, f"gitignore is hiding test files: {swallowed}"
