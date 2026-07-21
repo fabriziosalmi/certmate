@@ -1,5 +1,5 @@
 # AWS/Route53 specific requirements
 # Install this in addition to requirements-minimal.txt for AWS support
 
-boto3==1.34.144
-certbot-dns-route53==2.11.0
+boto3==1.43.53
+certbot-dns-route53==2.11.1
