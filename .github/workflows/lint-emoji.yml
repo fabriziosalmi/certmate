@@ -6,6 +6,12 @@ name: Lint (emoji)
 # the single self-hosted host.
 
 on:
+  # Also on push (#428): PR-only meant a direct push or an admin merge could
+  # land emoji unchecked, and — since release.sh now gates on the required
+  # workflows having run for the release commit — that the check was simply
+  # absent from every commit on main.
+  push:
+    branches: [ main, develop ]
   pull_request:
     branches: [ main, develop ]
   workflow_dispatch:

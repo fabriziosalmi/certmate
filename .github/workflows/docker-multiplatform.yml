@@ -127,6 +127,7 @@ jobs:
         fi
         
     - name: Build and push Docker image
+      id: build
       uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a  # v7.3.0
       with:
         context: .
@@ -157,7 +158,12 @@ jobs:
   security-scan:
     runs-on: ubuntu-latest
     needs: build
-    if: github.event_name != 'pull_request'
+    # Runs on pull requests too (#412). It used to be skipped there, and on
+    # pushes it scanned the floating `:latest` tag — which, on a push to main,
+    # is still the PREVIOUS release's image (see the tag policy above). So a
+    # CRITICAL introduced by the current change was never scanned by anyone.
+    # The image under test is now rebuilt here from the same buildx cache and
+    # loaded locally, so what is scanned is what was just built.
     # Job-level permission override: the workflow default is read-all
     # (set at the top of this file in v2.6.2), but the Trivy SARIF
     # upload step needs to write into the Security > Code scanning
@@ -167,53 +173,56 @@ jobs:
       contents: read
 
     steps:
-    - name: Ensure Trivy is installed
-      # aquasecurity/trivy-action internally invokes setup-trivy, which
-      # on this self-hosted runner reports "Cache restored successfully"
-      # but does not leave a working binary on PATH — the next
-      # entrypoint.sh step fails with `trivy: command not found`
-      # (exit 127, run 26595913239). Install the versioned release
-      # tarball directly into a user-writable PATH entry and tell
-      # trivy-action to skip its own setup. Pin matches the version
-      # setup-trivy was trying to cache.
-      run: |
-        set -euo pipefail
-        if command -v trivy >/dev/null 2>&1; then
-          echo "trivy already on PATH: $(command -v trivy)"
-          exit 0
-        fi
-        TRIVY_VERSION=0.70.0
-        case "$(uname -m)" in
-          x86_64) BIN_ARCH=64bit ;;
-          aarch64|arm64) BIN_ARCH=ARM64 ;;
-          *) echo "Unsupported arch: $(uname -m)" >&2; exit 1 ;;
-        esac
-        tmp=$(mktemp -d)
-        trap 'rm -rf "$tmp"' EXIT
-        curl -fsSL \
-          "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-${BIN_ARCH}.tar.gz" \
-          -o "$tmp/trivy.tgz"
-        tar -xzf "$tmp/trivy.tgz" -C "$tmp" trivy
-        install -d "$HOME/.local/bin"
-        install -m 0755 "$tmp/trivy" "$HOME/.local/bin/trivy"
-        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-        echo "Installed trivy ${TRIVY_VERSION} at $HOME/.local/bin/trivy"
+    - name: Checkout code
+      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
 
-    - name: Run Trivy vulnerability scanner
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c  # v4.2.0
+
+    - name: Build the image under test (amd64, loaded locally)
+      # Reuses the buildx cache the build job just populated, so this is a
+      # cache hit rather than a second full build.
+      uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a  # v7.3.0
+      with:
+        context: .
+        platforms: linux/amd64
+        load: true
+        push: false
+        tags: certmate:scan
+        cache-from: type=gha
+        build-args: |
+          REQUIREMENTS_FILE=requirements.txt
+
+    - name: Run Trivy vulnerability scanner (report)
       # Pinned to v0.36.0 (was @master — never pin to a mutable branch
       # in CI; upstream HEAD changes silently bring new behaviour or
       # become an attack surface if compromised).
       uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
       with:
-        # Use the trivy installed by the previous step. setup-trivy's
-        # cache hit on this self-hosted runner was reporting success
-        # without producing a usable binary.
-        skip-setup-trivy: true
-        image-ref: ${{ env.REGISTRY }}/${{ secrets.DOCKERHUB_USER }}/${{ env.IMAGE_NAME }}:latest
+        image-ref: 'certmate:scan'
         format: 'sarif'
         output: 'trivy-results.sarif'
         severity: 'HIGH,CRITICAL'
-        
+
+    - name: Fail on a fixable CRITICAL
+      # The reporting step above deliberately does not gate: the image
+      # carries a long tail of unfixable base-image findings tracked in #403,
+      # and a gate that is always red is a gate nobody reads. This one has
+      # teeth precisely where action is possible — a CRITICAL with a fix
+      # available means a base-image or dependency bump is due.
+      uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
+      with:
+        image-ref: 'certmate:scan'
+        format: 'table'
+        # Vulnerabilities only. The secret scanner flags a .pyc inside the
+        # third-party certbot_dns_google package as a GCP service account —
+        # a false positive that would make this gate permanently red. Secret
+        # findings still reach the Security tab via the SARIF above.
+        scanners: 'vuln'
+        severity: 'CRITICAL'
+        ignore-unfixed: true
+        exit-code: '1'
+
     - name: Upload Trivy scan results to GitHub Security tab
       uses: github/codeql-action/upload-sarif@54f647b7e1bb85c95cddabcd46b0c578ec92bc1a  # v3
       if: always()

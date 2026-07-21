@@ -65,7 +65,59 @@ jobs:
         pip install -r requirements-test.txt
 
     - name: Install Playwright Chromium
-      run: python -m playwright install chromium
+      # --with-deps installs the system libraries (libnss3, libasound2, ...)
+      # Chromium needs, but it shells out to sudo — which this self-hosted
+      # host does not grant passwordlessly. Use it when it is available and
+      # fall back to the plain install otherwise; either way the launch check
+      # below is what decides, so a host missing those libraries fails the
+      # job instead of skipping every test and reporting green (#414).
+      run: |
+        if sudo -n true 2>/dev/null; then
+          python -m playwright install --with-deps chromium
+        else
+          echo "passwordless sudo unavailable; installing browser only"
+          python -m playwright install chromium
+        fi
+
+    - name: Verify Chromium actually launches
+      # Fail here, loudly and in one line, rather than inside 17 fixtures.
+      run: |
+        python - <<'PY'
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as p:
+            b = p.chromium.launch(headless=True)
+            print("chromium", b.version)
+            b.close()
+        PY
 
     - name: UI tests
-      run: python -m pytest -v -m ui
+      # CERTMATE_UI_REQUIRE_BROWSER=1 turns "browser unavailable" from a skip
+      # into a failure, so this job can no longer report success without
+      # having driven a browser.
+      env:
+        CERTMATE_UI_REQUIRE_BROWSER: '1'
+      run: python -m pytest -v -m ui --junitxml=ui-results.xml
+
+    - name: Refuse a green run that asserted nothing
+      if: always()
+      # The last line of defence: if every collected UI test skipped (or none
+      # were collected at all), the job fails. A suite that runs zero tests is
+      # not a passing suite.
+      run: |
+        python - <<'PY'
+        import sys, xml.etree.ElementTree as ET
+        try:
+            root = ET.parse("ui-results.xml").getroot()
+        except Exception as e:
+            sys.exit(f"no UI test results to check: {e}")
+        suites = root.iter("testsuite")
+        total = skipped = 0
+        for s in suites:
+            total += int(s.get("tests", 0))
+            skipped += int(s.get("skipped", 0))
+        print(f"collected={total} skipped={skipped}")
+        if total == 0:
+            sys.exit("UI suite collected 0 tests")
+        if skipped == total:
+            sys.exit("every UI test skipped - the suite proved nothing")
+        PY

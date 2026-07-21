@@ -118,7 +118,7 @@ $(echo "$changed" | grep -E "$SENSITIVE_RE" | sed 's/^/  /')"
   export FLASK_ENV=testing TESTING=true
 
   gate "flake8 (syntax / undefined names)" bash -c '
-    "'"$PY"'" -m flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics'
+    "'"$PY"'" -m flake8 . --count --select=E9,F63,F7,F82,F811,F632,E711,E712,E713,E714 --show-source --statistics'
   gate "bandit (medium+)" bash -c '"'"$PY"'" -m bandit -r modules/ app.py --severity-level medium -q'
   gate "unit + integration suite (incl. version + marker-coverage guards)" \
     "$PY" -m pytest -q -m "not ui and not e2e" -p no:cacheprovider
@@ -188,6 +188,67 @@ cmd_publish() {
   local notes; notes="$(notes_section "$version")"
   [ -n "$notes" ] || die "no RELEASE_NOTES section for v$version"
   local title; title="$(echo "$notes" | head -1 | sed 's/^## //')"
+
+  # CI status on the exact commit being released (#413). Every other gate
+  # here checks the *contents* of the release; none checked whether main
+  # actually builds. A Dependabot bump landing between `prepare` and
+  # `publish` was enough to tag and push a broken tree — and the tag push
+  # is what publishes :latest.
+  info "CI status on the release commit"
+  local sha; sha="$(git rev-parse HEAD)"
+  # --limit 100: the default page size is 20, and reruns plus the
+  # non-required workflows can push a required one off the first page —
+  # which would read as MISSING and block a perfectly good release.
+  local runs; runs="$(gh run list --commit "$sha" --limit 100 \
+    --json name,conclusion,status,workflowName,createdAt 2>/dev/null || echo '')"
+  [ -n "$runs" ] || die "could not read CI status for $sha (is gh authenticated?)"
+  local verdict; verdict="$(printf '%s' "$runs" | "$PY" -c '
+import json, sys
+
+# Only the workflows behind the REQUIRED branch-protection checks gate the
+# release. UI tests and E2E (staging) run on the self-hosted runner and are
+# deliberately not required: if that box is offline their runs sit queued
+# forever, and a release must not hang on it. They are still reported.
+REQUIRED = {"CI", "Build Multi-Platform Docker Images", "CodeQL", "Lint (emoji)"}
+runs = json.load(sys.stdin)
+
+# Keep only the most recent run per workflow: a rerun creates a second run,
+# and judging the older attempt would fail a release whose rerun is green.
+latest = {}
+for r in sorted(runs, key=lambda r: r.get("createdAt") or ""):
+    latest[r.get("workflowName")] = r
+runs = list(latest.values())
+
+pending, bad, other = set(), set(), []
+for r in runs:
+    name = r.get("workflowName", "?")
+    state = r.get("conclusion") or r.get("status")
+    if name not in REQUIRED:
+        other.append(name + "=" + str(state))
+        continue
+    if r.get("status") != "completed":
+        pending.add(name)
+    # cancelled counts as failed: a cancelled required check is exactly how
+    # a broken build slipped through before (see the v2.21.4 release).
+    elif r.get("conclusion") not in ("success", "skipped", "neutral"):
+        bad.add(name + "=" + str(r.get("conclusion")))
+missing = REQUIRED - {r.get("workflowName") for r in runs}
+if pending:
+    print("PENDING " + ", ".join(sorted(pending)))
+elif bad:
+    print("FAILED " + ", ".join(sorted(bad)))
+elif missing:
+    print("MISSING " + ", ".join(sorted(missing)))
+else:
+    print("OK " + ("; not-required: " + ", ".join(sorted(other)) if other else ""))')"
+  case "$verdict" in
+    OK*)      info "  ${verdict}" ;;
+    PENDING*) die "CI still running on $sha (${verdict#PENDING }) - wait for it" ;;
+    FAILED*)  die "CI is not green on $sha: ${verdict#FAILED }" ;;
+    MISSING*) die "no CI run found on $sha for: ${verdict#MISSING } - push the commit and let CI run" ;;
+    *)        die "could not interpret CI status for $sha: $verdict" ;;
+  esac
+
   info "Tag + push v$version"
   git tag -a "v$version" -m "$title" HEAD
   git push origin "v$version" --quiet

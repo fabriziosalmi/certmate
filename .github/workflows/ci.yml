@@ -72,7 +72,12 @@ jobs:
         # Pinned-Dependencies flags bare, unversioned pip installs).
         pip install flake8==7.3.0
         # stop the build if there are Python syntax errors or undefined names
-        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        # Fails the build. E9/F63/F7/F82 are syntax errors and undefined
+        # names; the rest are bug classes that are already clean in this
+        # codebase and must stay that way — F811 (a redefinition that silently
+        # shadows an import), F632 (is-comparison against a literal), E711/E712
+        # (== None / == True), E713/E714 (not ... in / not ... is). #428
+        flake8 . --count --select=E9,F63,F7,F82,F811,F632,E711,E712,E713,E714 --show-source --statistics
         # exit-zero treats all errors as warnings
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
 
@@ -89,7 +94,12 @@ jobs:
         # Measure the application package (modules/), not the whole repo: a
         # bare --cov=. folds the tests/ and scripts/ trees (which run at ~100%)
         # into the number, inflating it and hiding the real app coverage.
-        pytest -v --tb=short --cov=modules --cov-report=xml --cov-report=html -m "not ui"
+        # --cov-fail-under is a FLOOR, not a target (#428): before it, project
+        # and patch statuses were both informational and fail_ci_if_error was
+        # false, so coverage could fall to zero with CI still green. 65 is
+        # comfortably below the current number; raise it as a ratchet, never
+        # lower it to make a red build pass.
+        pytest -v --tb=short --cov=modules --cov-report=xml --cov-report=html --cov-fail-under=65 -m "not ui"
 
     - name: Upload coverage reports
       if: matrix.python-version == '3.12'
