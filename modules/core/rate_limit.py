@@ -124,6 +124,15 @@ class SimpleRateLimiter:
     # Maximum number of unique keys to track (prevents memory exhaustion under attack)
     MAX_KEYS = 10000
 
+    # Decisions look at a 60s window, so anything older cannot influence one.
+    # Retention used to be an hour, which meant a caller varying its bearer
+    # token could leave ~ip_ceiling * 60 dead buckets per hour lying around and
+    # push the table to MAX_KEYS, whose eviction then discards *live* buckets
+    # (#420 review). The grace factor keeps a little history for debugging
+    # without letting dead keys accumulate.
+    WINDOW_SECONDS = 60
+    RETENTION_SECONDS = WINDOW_SECONDS * 2
+
     def __init__(self, config: RateLimitConfig):
         """
         Initialize Rate Limiter.
@@ -148,7 +157,7 @@ class SimpleRateLimiter:
         """
         limit = self.config.get_limit(endpoint)
         current_time = time()
-        window_start = current_time - 60  # 1 minute window
+        window_start = current_time - self.WINDOW_SECONDS
 
         # Periodic cleanup (every 5 minutes)
         if current_time - self._last_cleanup > 300:
@@ -184,7 +193,7 @@ class SimpleRateLimiter:
         """Clean up old request records (call periodically)."""
         try:
             current_time = time()
-            window_start = current_time - 3600  # Keep 1 hour of data
+            window_start = current_time - self.RETENTION_SECONDS
 
             for key in list(self.requests.keys()):
                 self.requests[key] = [

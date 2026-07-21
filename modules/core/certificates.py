@@ -310,7 +310,15 @@ class CertificateManager:
         try:
             stored = self.storage_manager.store_certificate(domain, cert_files, metadata)
         except Exception as e:
-            logger.error(f"Error storing certificate in storage backend for {domain}: {e}")
+            # Class name only at ERROR: a backend exception can embed a token
+            # or a signed URL, and application logs are readable by any admin
+            # (and streamable over /api/web/logs/stream). The detail is
+            # available to whoever explicitly turns on DEBUG.
+            logger.error(
+                "Error storing certificate in storage backend for %s: %s",
+                domain, type(e).__name__,
+            )
+            logger.debug("Storage backend error detail for %s", domain, exc_info=True)
             return (
                 f"Certificate issued but saving it to the {backend_name} storage backend "
                 f"failed — the external copy is missing or stale. See server logs for details."
@@ -2139,12 +2147,15 @@ class CertificateManager:
                 )
             return bool(deleted)
         except Exception as e:
+            # Class name only — see _store_in_backend: backend errors can carry
+            # credentials, and this line lands in the admin-readable log.
             logger.error(
                 "Certificate for %s was deleted locally but the storage "
                 "backend %s could not delete its copy (%s) — the private key "
                 "may still be stored there; remove it manually",
-                domain, backend_name, e,
+                domain, backend_name, type(e).__name__,
             )
+            logger.debug("Storage backend delete error for %s", domain, exc_info=True)
             return False
 
     def _infer_dns_provider(self, domain, settings):

@@ -123,3 +123,48 @@ def test_a_burst_of_lines_drains_without_sleeping_between_them(tmp_path):
     assert data_frames[-1] == "data: line 19\n\n"
     # 20 lines at one 0.5s poll each would be 10s.
     assert elapsed < 1.0, f"the backlog was paced by the poll interval ({elapsed:.1f}s)"
+
+
+def test_crlf_lines_do_not_leak_a_carriage_return_into_the_frame(tmp_path):
+    log = tmp_path / "certmate.log"
+    log.write_text("")
+
+    gen = _stream_log_file(log, poll_seconds=0.01, max_idle_seconds=5)
+    next(gen)
+    with open(log, "a", newline="") as f:
+        f.write("windows line\r\n")
+        f.flush()
+
+    frames = []
+    for _ in range(20):
+        frame = next(gen)
+        frames.append(frame)
+        if frame.startswith("data:"):
+            break
+    gen.close()
+
+    assert "data: windows line\n\n" in frames
+
+
+def test_a_non_utf8_byte_does_not_kill_the_stream(tmp_path):
+    """A mangled subprocess message must not end an admin's log session."""
+    log = tmp_path / "certmate.log"
+    log.write_bytes(b"")
+
+    gen = _stream_log_file(log, poll_seconds=0.01, max_idle_seconds=5)
+    next(gen)
+    with open(log, "ab") as f:
+        f.write(b"bad \xff byte\n")
+        f.flush()
+
+    frames = []
+    for _ in range(20):
+        frame = next(gen)
+        frames.append(frame)
+        if frame.startswith("data:"):
+            break
+    gen.close()
+
+    data = [f for f in frames if f.startswith("data:")]
+    assert data, "the stream died on a non-UTF8 byte"
+    assert "bad" in data[0] and "byte" in data[0]

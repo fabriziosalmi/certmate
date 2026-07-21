@@ -40,17 +40,21 @@ def _stream_log_file(log_file, poll_seconds=None, max_idle_seconds=None):
         yield "data: Log file not found\n\n"
         return
 
-    with open(log_file, 'r') as f:
+    # errors='replace': a single non-UTF8 byte in the log (a mangled
+    # subprocess message, a truncated write) must not raise UnicodeDecodeError
+    # and kill the stream mid-session.
+    with open(log_file, 'r', encoding='utf-8', errors='replace') as f:
         f.seek(0, 2)
         idle = 0.0
         while idle < max_idle:
             line = f.readline()
             if line:
                 idle = 0.0
-                # rstrip the newline the file already carries: 'data: x\n' +
-                # '\n\n' produced a trailing blank line, i.e. an extra empty
-                # SSE dispatch on the client for every log line.
-                yield f"data: {line.rstrip(chr(10))}\n\n"
+                # rstrip the line terminator the file already carries (CRLF
+                # included): 'data: x\n' + '\n\n' produced a trailing blank
+                # line, i.e. an extra empty SSE dispatch per log line, and a
+                # stray '\r' would ride along inside the frame.
+                yield f"data: {line.rstrip(chr(13) + chr(10))}\n\n"
                 # Never sleep while there is backlog: a burst of log lines
                 # must drain at full speed, not one line per poll interval.
                 continue

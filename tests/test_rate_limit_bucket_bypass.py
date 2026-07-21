@@ -88,3 +88,21 @@ def test_anonymous_callers_are_limited_per_ip():
     assert limiter.is_allowed('ip:198.51.100.4', 'ocsp_status') is False
     # A different source IP is unaffected.
     assert limiter.is_allowed('ip:198.51.100.5', 'ocsp_status') is True
+
+
+def test_dead_buckets_are_pruned_to_the_decision_window():
+    """Retention used to be an hour while decisions look at 60s, so a
+    token-varying caller could leave tens of thousands of dead buckets behind
+    and push the table to MAX_KEYS — whose eviction then discards LIVE ones."""
+    limiter = _limiter(ip_ceiling=1000, default=100)
+    assert limiter.RETENTION_SECONDS <= 5 * limiter.WINDOW_SECONDS
+
+    now = __import__('time').time()
+    for i in range(50):
+        limiter.requests[f'key:dead-{i}'] = [now - (limiter.RETENTION_SECONDS + 10)]
+    limiter.requests['key:live'] = [now]
+
+    limiter.cleanup_old_entries()
+
+    assert 'key:live' in limiter.requests
+    assert not [k for k in limiter.requests if k.startswith('key:dead-')]
