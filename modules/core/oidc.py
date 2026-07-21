@@ -381,11 +381,19 @@ class OIDCManager:
 
         Resolution order:
           1. Existing user with matching ``oidc_subject`` + ``oidc_issuer``
-             → reuse, refresh ``last_login``, do NOT change role (an admin
-             may have promoted them manually since first login).
+             → refused when the row is disabled (the same gate the local
+             password path applies — otherwise disabling an SSO user is a
+             no-op), otherwise reuse and refresh ``last_login``. The role
+             is re-derived from the current claims unless
+             ``sync_role_on_login`` is false: an IdP group change must be
+             able to demote, and CertMate is not the source of truth for
+             roles while SSO is on. Set ``sync_role_on_login: false`` to
+             keep roles managed locally (an admin promoting someone by
+             hand then survives the next login).
           2. ``link_by_email`` enabled AND existing local user with
-             matching email → link by writing ``oidc_subject`` +
-             ``oidc_issuer`` onto the existing row, preserve their role.
+             matching email → refused when that row is disabled, else link
+             by writing ``oidc_subject`` + ``oidc_issuer`` onto the
+             existing row, preserving their role.
              Gated on ``require_verified_email`` (default True): an IdP
              that does NOT attest ``email_verified=True`` for the
              authenticated subject cannot link onto an existing row.

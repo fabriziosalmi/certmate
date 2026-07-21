@@ -124,6 +124,30 @@ def test_repair_leaves_flat_files_intact_when_archive_is_incomplete(file_ops):
     assert live_cert.read_text() == "cert gen 3"
 
 
+def test_repair_is_all_or_nothing_when_generations_do_not_overlap(file_ops):
+    """privkey exists only as gen 4 while cert runs 1..3: no common generation.
+
+    Relinking per-member here would leave live/ half symlink, half flat file
+    — a state certbot handles no better than the one we started in.
+    """
+    dom = _seed_certbot_lineage(file_ops.cert_dir)
+    for stem in ("cert", "chain", "fullchain", "privkey"):
+        link = dom / "live" / DOMAIN / f"{stem}.pem"
+        data = link.read_text()
+        link.unlink()
+        link.write_text(data)
+
+    archive = dom / "archive" / DOMAIN
+    for n in (1, 2, 3):
+        (archive / f"privkey{n}.pem").unlink()
+    (archive / "privkey4.pem").write_text("privkey gen 4")
+
+    assert repair_certbot_lineage_symlinks(dom, DOMAIN) is False
+    for stem in ("cert", "chain", "fullchain", "privkey"):
+        link = dom / "live" / DOMAIN / f"{stem}.pem"
+        assert not link.is_symlink(), f"{stem}.pem was relinked in a partial repair"
+
+
 def test_repair_picks_the_generation_present_for_every_member(file_ops):
     """privkey lags a generation (mid-renewal snapshot) -> link the common one."""
     dom = _seed_certbot_lineage(file_ops.cert_dir)

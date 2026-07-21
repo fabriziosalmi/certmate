@@ -954,18 +954,31 @@ def repair_certbot_lineage_symlinks(domain_dir: Union[str, Path], domain: str) -
     for entry in archive_dir.iterdir():
         m = _ARCHIVE_VERSION_RE.match(entry.name)
         if m:
-            generations.setdefault(m.group('stem'), []).append(int(m.group('n')))
+            generations.setdefault(m.group('stem'), set()).add(int(m.group('n')))
     if len(generations) != len(_CERTBOT_LINEAGE_FILES):
         return False
-    version = min(max(v) for v in generations.values())
+
+    # The newest generation present for EVERY member, not min(max(...)): a
+    # lineage where privkey jumps 2 -> 4 while cert runs 1..3 has a max-of-
+    # maxes intersection that is empty at 3, and linking per-member would
+    # leave a half-relinked live/ (cert as a symlink, privkey still a flat
+    # file) — a state certbot handles no better than the one we started in.
+    common = set.intersection(*generations.values())
+    if not common:
+        return False
+    version = max(common)
+
+    # All four targets must exist before we touch live/, so the repair is
+    # all-or-nothing.
+    targets = {name: archive_dir / f"{name[:-len('.pem')]}{version}.pem"
+               for name in _CERTBOT_LINEAGE_FILES}
+    if not all(t.exists() for t in targets.values()):
+        return False
 
     repaired = False
     for name in _CERTBOT_LINEAGE_FILES:
-        stem = name[:-len('.pem')]
-        target = archive_dir / f'{stem}{version}.pem'
+        target = targets[name]
         link = live_dir / name
-        if not target.exists():
-            continue
         # Build the symlink under a temp name and rename it into place, so a
         # filesystem that refuses symlinks (or a permission error) leaves the
         # restored flat PEM intact instead of deleting it first and failing.
