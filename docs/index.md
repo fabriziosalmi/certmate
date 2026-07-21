@@ -22,7 +22,7 @@ CertMate Client Certificates is a comprehensive, production-ready solution for m
 - **OCSP & CRL** - Real-time certificate status and revocation lists
 - **Web Dashboard** - Intuitive UI for certificate management
 - **REST API** - Complete API for automation
-- **Batch Operations** - Import 100-30,000 certificates via CSV
+- **Batch Operations** - Import client certificates in bulk via CSV (up to 100 rows per request)
 - **Audit Logging** - Track all operations for compliance
 - **Rate Limiting** - Built-in protection against abuse
 

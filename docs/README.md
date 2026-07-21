@@ -65,7 +65,7 @@ Welcome to the CertMate documentation. This folder contains comprehensive guides
 - **Full lifecycle management** — create, renew, revoke, monitor
 - **OCSP & CRL** — real-time status and revocation lists
 - **Web dashboard** at `/client-certificates`
-- **Batch operations** — import 100-30,000 certificates via CSV
+- **Batch operations** — import client certificates in bulk via CSV (up to 100 rows per request)
 - **Audit logging** and **rate limiting**
 
 ---

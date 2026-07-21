@@ -297,7 +297,7 @@ CertMate supports multi-platform Docker images for both ARM and AMD64 architectu
 |----------|-------------|------------------|
 | `linux/amd64` | Intel/AMD 64-bit | Most cloud servers, desktops |
 | `linux/arm64` | ARM 64-bit | Apple Silicon, ARM cloud instances |
-| `linux/arm/v7` | ARM 32-bit v7 | Raspberry Pi 3+ |
+| `linux/arm/v7` | ARM 32-bit v7 | Raspberry Pi 3+ — **not published**: buildable on request (see below), the release images are amd64 + arm64 |
 | `linux/arm/v6` | ARM 32-bit v6 | Raspberry Pi 1, Zero |
 
 ### Build Scripts

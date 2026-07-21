@@ -293,9 +293,10 @@ CLOUDFLARE_TOKEN=your_cloudflare_api_token_here
 # Optional: Application Settings
 SECRET_KEY=your_flask_secret_key_here
 FLASK_ENV=production
-# Bind to localhost by default; front it with a reverse proxy for external access.
-HOST=127.0.0.1
 PORT=8000
+# Note: there is no HOST variable. The container binds 0.0.0.0 in its own
+# namespace — publish it as 127.0.0.1:8000:8000 to reach it on loopback only,
+# and front it with a reverse proxy for external access.
 ```
 
 > **Storage Backends**: By default, certificates are stored locally. For enterprise deployments, you can configure Azure Key Vault, AWS Secrets Manager, HashiCorp Vault, Infisical, or any S3-compatible object storage via the web interface after startup. See [Storage Backends](#certificate-storage-configuration) for details.
@@ -515,12 +516,9 @@ sudo tee /opt/certmate/.env > /dev/null <<EOF
 # SECURITY: Change this token!
 API_BEARER_TOKEN=your_super_secure_api_token_here_change_this
 
-# Optional: Set specific host/port
-HOST=127.0.0.1
+# Optional: Set the port (the bind address is not configurable here —
+# publish the container on 127.0.0.1 if you want loopback only)
 PORT=8000
-
-# Optional: Enable debug mode (not recommended for production)
-FLASK_DEBUG=false
 EOF
 
 # Set proper permissions
@@ -830,7 +828,7 @@ Authorization: Bearer your_token_here
 #### Multi-Account Management
 ```bash
 # Add multiple accounts for a provider
-POST /api/settings/dns-providers/cloudflare/accounts
+POST /api/dns/cloudflare/accounts
 Authorization: Bearer your_token_here
 Content-Type: application/json
 
@@ -844,20 +842,21 @@ Content-Type: application/json
 }
 
 # List all accounts for a provider
-GET /api/settings/dns-providers/cloudflare/accounts
+GET /api/dns/cloudflare/accounts
 Authorization: Bearer your_token_here
 
-# Set default account for a provider
-PUT /api/settings/dns-providers/cloudflare/default-account
+# Set default account for a provider — there is no dedicated endpoint:
+# "set_as_default" travels with the account payload.
+PUT /api/dns/cloudflare/accounts/production
 Authorization: Bearer your_token_here
 Content-Type: application/json
 
 {
- "account_id": "production"
+ "set_as_default": true
 }
 
 # Update account configuration
-PUT /api/settings/dns-providers/cloudflare/accounts/staging
+PUT /api/dns/cloudflare/accounts/staging
 Authorization: Bearer your_token_here
 Content-Type: application/json
 
@@ -1203,7 +1202,7 @@ main "$@"
  tasks:
  - name: Configure Cloudflare accounts
  uri:
- url: "{{ certmate_url }}/api/settings/dns-providers/cloudflare/accounts"
+ url: "{{ certmate_url }}/api/dns/cloudflare/accounts"
  method: POST
  headers:
  Authorization: "Bearer {{ certmate_token }}"
@@ -1409,10 +1408,15 @@ main "$@"
 | `API_BEARER_TOKEN_FILE` |          | -              | Path to a file containing the API bearer token (takes precedence over `API_BEARER_TOKEN`) |
 | `SECRET_KEY`            |          | auto-generated | Flask secret key for sessions       |
 | `SECRET_KEY_FILE`       |          | -              | Path to a file containing the Flask secret key (takes precedence over `SECRET_KEY`) |
-| `HOST`             |          | `127.0.0.1`    | Server bind address                 |
-| `PORT`             |          | `8000`         | Server port                         |
-| `FLASK_ENV`        |          | `production`   | Flask environment                   |
-| `FLASK_DEBUG`      |          | `false`        | Enable debug mode                   |
+| `PORT`             |          | `8000`         | Server port (honoured by the container entrypoint) |
+| `FLASK_ENV`        |          | `production`   | Flask environment. `production` refuses `--debug`  |
+
+> **Bind address is not an environment variable.** The container always binds
+> `0.0.0.0` inside its own network namespace; to expose it only on loopback,
+> publish it that way — `-p 127.0.0.1:8000:8000`. Running `app.py` directly
+> (development only) takes `--host` / `--port` / `--debug` as CLI flags.
+> `HOST` and `FLASK_DEBUG` are read by nothing, and setting them has never
+> had any effect (#429).
 
 ### DNS Provider Configuration
 
@@ -2439,8 +2443,10 @@ az network dns zone list
 Enable debug logging for troubleshooting:
 
 ```bash
-# Environment variable
-FLASK_DEBUG=true
+# Development server: debug and log level are CLI flags, not env vars
+python app.py --debug --log-level DEBUG
+
+# FLASK_ENV=production makes --debug refuse to start, by design
 FLASK_ENV=development
 
 # Or in Docker Compose

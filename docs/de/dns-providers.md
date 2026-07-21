@@ -480,7 +480,7 @@ CertMate unterstützt mehrere Konten pro DNS-Anbieter für Enterprise-Umgebungen
 
 ```bash
 # Produktionskonto hinzufügen
-curl -X POST http://localhost:8000/api/settings/dns-providers/cloudflare/accounts \
+curl -X POST http://localhost:8000/api/dns/cloudflare/accounts \
   -H "Authorization: Bearer YOUR_API_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -493,7 +493,7 @@ curl -X POST http://localhost:8000/api/settings/dns-providers/cloudflare/account
   }'
 
 # Staging-Konto hinzufügen
-curl -X POST http://localhost:8000/api/settings/dns-providers/cloudflare/accounts \
+curl -X POST http://localhost:8000/api/dns/cloudflare/accounts \
   -H "Authorization: Bearer YOUR_API_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -505,22 +505,23 @@ curl -X POST http://localhost:8000/api/settings/dns-providers/cloudflare/account
     }
   }'
 
-# Produktion als Standardkonto festlegen
-curl -X PUT http://localhost:8000/api/settings/dns-providers/cloudflare/default-account \
+# Produktion als Standardkonto festlegen (kein eigener Endpunkt:
+# "set_as_default" wird mit den Kontodaten gesendet)
+curl -X PUT http://localhost:8000/api/dns/cloudflare/accounts/production \
   -H "Authorization: Bearer YOUR_API_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"account_id": "production"}'
+  -d '{"set_as_default": true}'
 ```
 
 ### Konten verwalten
 
 ```bash
 # Alle Konten eines Anbieters auflisten
-curl -X GET http://localhost:8000/api/settings/dns-providers/cloudflare/accounts \
+curl -X GET http://localhost:8000/api/dns/cloudflare/accounts \
   -H "Authorization: Bearer YOUR_API_TOKEN"
 
 # Ein Konto aktualisieren
-curl -X PUT http://localhost:8000/api/settings/dns-providers/cloudflare/accounts/staging \
+curl -X PUT http://localhost:8000/api/dns/cloudflare/accounts/staging \
   -H "Authorization: Bearer YOUR_API_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -531,7 +532,7 @@ curl -X PUT http://localhost:8000/api/settings/dns-providers/cloudflare/accounts
   }'
 
 # Ein Konto löschen
-curl -X DELETE http://localhost:8000/api/settings/dns-providers/cloudflare/accounts/old-account \
+curl -X DELETE http://localhost:8000/api/dns/cloudflare/accounts/old-account \
   -H "Authorization: Bearer YOUR_API_TOKEN"
 ```
 

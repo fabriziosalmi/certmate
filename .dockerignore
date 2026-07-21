@@ -16,8 +16,12 @@ env/
 .github
 .vscode
 .idea
-node_modules/
+**/node_modules
 package.json
+# Agent worktrees are full copies of the repository (tens of MB) plus any
+# local tool configuration — never ship them (#426).
+.claude/
+docs/
 package-lock.json
 tailwind.config.js
 
@@ -29,13 +33,13 @@ CODE_OF_CONDUCT.md
 CONTRIBUTING.md
 LICENSE
 
-# Exclude Python cache and temporary files
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
+# Exclude Python cache and temporary files.
+# '**/' is load-bearing: the bare forms below only matched the context root,
+# so every modules/**/__pycache__ shipped in the image (#426).
+**/__pycache__
+**/*.py[cod]
 .Python
-*.so
+**/*.so
 .pytest_cache
 .coverage
 .tox
@@ -52,10 +56,14 @@ docker-compose.yml
 Dockerfile
 .dockerignore
 
-# Exclude test and debug files
-test_*.py
-*_test.py
-debug_*.py
+# Exclude test and debug files.
+# NOTE: a pattern without '**' matches at the CONTEXT ROOT ONLY (#426) — the
+# entries below used to leave every nested match in the image.
+**/test_*.py
+**/*_test.py
+**/debug_*.py
+tests/
+scratch/
 
 # Exclude setup and validation scripts
 setup.sh

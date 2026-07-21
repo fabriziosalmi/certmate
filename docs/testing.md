@@ -142,24 +142,25 @@ This script:
 - Tests all endpoint categories
 - Provides clear pass/fail output
 
-### Full API Test Suite
+### Running the test suite
+
+The suite is pytest, split by marker (see `pytest.ini`): `unit`,
+`integration`, `api`, `dns`, `e2e` (needs a running server), `ui`
+(Playwright, needs a browser and a container).
 
 ```bash
-# Auto-load token from settings
-python3 test_all_endpoints.py --auto-token
+make test                # unit + integration
+make test-unit
+make test-coverage       # --cov=modules, HTML + XML reports
 
-# With custom server URL
-python3 test_all_endpoints.py --url http://192.168.1.100:8000
-
-# With manual API token
-python3 test_all_endpoints.py --token your-api-bearer-token
-
-# Quick test of essentials only
-python3 test_all_endpoints.py --quick --auto-token
-
-# Public endpoints only (no auth needed)
-python3 test_all_endpoints.py --public-only
+# Or directly, e.g. everything that does not need a browser:
+pytest -m "not ui"
+pytest -m "not ui and not e2e" -q
 ```
+
+CI runs `pytest -m "not ui"` on Python 3.12 with a coverage floor; the UI
+suite runs in its own workflow, and the real-certificate end-to-end gate runs
+against Let's Encrypt staging before a release.
 
 ### Tested Endpoints
 
@@ -169,7 +170,7 @@ python3 test_all_endpoints.py --public-only
 | **Settings** | `GET /api/settings`, `GET /api/settings/dns-providers`, `POST /api/settings` |
 | **Certificates** | `GET /api/certificates`, `POST /api/certificates/create`, download, renew |
 | **Cache** | `GET /api/cache/stats`, `POST /api/cache/clear` |
-| **Backup** | `GET /api/backups`, `POST /api/backups/create`, `POST /api/backups/cleanup` |
+| **Backup** | `GET /api/backups`, `POST /api/backups/create` |
 | **Web Interface** | `/`, `/settings`, `/help`, `/docs/`, `/api/swagger.json` |
 
 ### Expected Status Codes
@@ -247,33 +248,28 @@ The CI pipeline runs on every push and pull request:
 5. **Docker**: Test Docker build
 6. **Coverage**: Upload to Codecov
 
-### Pre-Commit Hook
+### Before pushing
+
+There is no pre-commit configuration in this repository; run the same gates CI
+runs:
 
 ```bash
-pip install pre-commit
-pre-commit install
+make lint                # flake8, failing set only
+pytest -m "not ui" -q    # what CI runs
 ```
 
-Hooks include: code formatting (black, isort), linting (flake8), security checks (bandit).
-
-### CI/CD API Testing
-
-```yaml
-# GitHub Actions example
-- name: Test API Endpoints
-  run: |
-    python app.py &
-    sleep 5
-    python3 test_all_endpoints.py --auto-token
-```
+A release runs considerably more — see `scripts/release.sh`, which gates on
+flake8, bandit, the unit and integration suites, the Playwright UI suite, a
+real certificate issued against Let's Encrypt staging, and a Docker build.
 
 ---
 
 ## Coverage Requirements
 
-- Minimum **80%** overall code coverage
-- Critical paths must have **95%+** coverage
-- All new features must include tests
+- CI enforces a floor of **65%** over `modules/` (`--cov-fail-under`, a ratchet
+  — raise it, never lower it to make a build pass). The number today is
+  comfortably above it.
+- All new features must include tests.
 
 ---
 

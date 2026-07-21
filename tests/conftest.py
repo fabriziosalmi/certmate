@@ -188,3 +188,82 @@ def cloudflare_token():
     if not token:
         pytest.skip("CLOUDFLARE_API_TOKEN not set — skipping real DNS tests")
     return token
+
+
+# ---------------------------------------------------------------------------
+# Playwright / UI
+# ---------------------------------------------------------------------------
+# Shared by every UI module. Keeping the fixture here rather than importing it
+# from test_ui.py matters: an imported fixture is shadowed by the test's own
+# parameter of the same name, which flake8 reports as F811 — correctly, since
+# the import is genuinely unused at that point.
+
+_REQUIRE_BROWSER = os.environ.get("CERTMATE_UI_REQUIRE_BROWSER") == "1"
+
+
+def _no_browser(reason):
+    """Fail when a browser is mandatory, skip when it is merely unavailable."""
+    if _REQUIRE_BROWSER:
+        pytest.fail(
+            f"{reason} — CERTMATE_UI_REQUIRE_BROWSER=1 means this must not be "
+            "skipped (install with `playwright install --with-deps chromium`)"
+        )
+    pytest.skip(reason)
+
+
+@pytest.fixture(scope="module")
+def browser_page(docker_container):
+    """Provide a Playwright browser page."""
+    import requests
+
+    session_cookie = None
+    try:
+        # Step 1: Create admin user (no auth required in setup mode)
+        requests.post(f"{BASE_URL}/api/web/settings/users", json={
+            "username": "admin", "password": "Password123!", "role": "admin"
+        })
+
+        # Step 2: Enable local auth (still bypassed -- auth not enabled yet)
+        requests.post(f"{BASE_URL}/api/auth/config", json={
+            "local_auth_enabled": True
+        })
+
+        # Step 3: Login to get session cookie (auth is now enabled)
+        login_r = requests.post(f"{BASE_URL}/api/auth/login", json={
+            "username": "admin", "password": "Password123!"
+        })
+        session_cookie = login_r.cookies.get("certmate_session")
+
+        # Step 4: Mark setup as completed (using session cookie)
+        s = requests.Session()
+        s.cookies.set("certmate_session", session_cookie)
+        r = s.get(f"{BASE_URL}/api/web/settings")
+        if r.status_code == 200:
+            data = r.json()
+            data["setup_completed"] = True
+            s.post(f"{BASE_URL}/api/web/settings", json=data)
+    except Exception as e:
+        print(f"Warning: could not complete setup via API: {e}")
+
+    from playwright.sync_api import sync_playwright
+    pw = sync_playwright().start()
+    try:
+        browser = pw.chromium.launch(headless=True)
+    except Exception as e:
+        pw.stop()
+        _no_browser(f"Chromium not available: {e}")
+    context = browser.new_context(ignore_https_errors=True)
+
+    # Inject session cookie into Playwright browser context
+    if session_cookie:
+        context.add_cookies([{
+            "name": "certmate_session",
+            "value": session_cookie,
+            "url": BASE_URL
+        }])
+
+    page = context.new_page()
+    yield page
+    context.close()
+    browser.close()
+    pw.stop()

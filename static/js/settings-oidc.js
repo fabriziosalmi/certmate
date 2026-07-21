@@ -41,6 +41,11 @@
     function oidcSettings() {
         return {
             loading: true,
+            // Set when load() failed. The form stays hidden while it is true:
+            // rendering the blank defaults let an admin "save" them over a
+            // working SSO configuration (#424).
+            loadFailed: false,
+            loadError: '',
             saving: false,
             cfg: defaultCfg(),
             scopesString: 'openid email profile groups',
@@ -58,6 +63,8 @@
             load: function () {
                 var self = this;
                 self.loading = true;
+                self.loadFailed = false;
+                self.loadError = '';
                 fetch('/api/auth/oidc/settings', { credentials: 'same-origin' })
                     .then(function (r) {
                         if (r.status === 403) {
@@ -83,7 +90,13 @@
                     })
                     .catch(function (err) {
                         self.loading = false;
-                        showMessage('Failed to load SSO settings: ' + (err && err.message ? err.message : err), 'error');
+                        // Do NOT leave cfg at defaultCfg() and render the form:
+                        // the tab would paint as "SSO not configured" and a
+                        // Save would write that blank config over a live one,
+                        // disabling SSO for the whole organisation (#424).
+                        self.loadFailed = true;
+                        self.loadError = (err && err.message) ? err.message : String(err);
+                        showMessage('Failed to load SSO settings: ' + self.loadError, 'error');
                     });
             },
 

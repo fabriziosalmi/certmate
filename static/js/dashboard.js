@@ -2777,42 +2777,12 @@
 
     function copyFromModal() {
         var commandText = document.getElementById('curlCommandText').textContent;
-
-        if (navigator.clipboard) {
-            navigator.clipboard.writeText(commandText).then(function () {
-                showMessage('Curl command copied to clipboard!', 'success');
-            }).catch(function (err) {
-                console.error('Failed to copy: ', err);
-                fallbackCopyTextToClipboard(commandText);
-            });
-        } else {
-            fallbackCopyTextToClipboard(commandText);
-        }
-    }
-
-    function fallbackCopyTextToClipboard(text) {
-        var textArea = document.createElement('textarea');
-        textArea.value = text;
-        textArea.style.top = '0';
-        textArea.style.left = '0';
-        textArea.style.position = 'fixed';
-
-        document.body.appendChild(textArea);
-        textArea.focus();
-        textArea.select();
-
-        try {
-            var successful = document.execCommand('copy');
-            if (successful) {
-                showMessage('Curl command copied to clipboard!', 'success');
-            } else {
-                showMessage('Failed to copy command', 'error');
-            }
-        } catch (err) {
-            showMessage('Failed to copy command', 'error');
-        }
-
-        document.body.removeChild(textArea);
+        // Shared helper (#427): one implementation of the non-secure-context
+        // fallback instead of three that could drift apart.
+        CertMate.copyText(commandText).then(function (ok) {
+            showMessage(ok ? 'Curl command copied to clipboard!' : 'Failed to copy command',
+                        ok ? 'success' : 'error');
+        });
     }
 
     function aliasCopyButtonHtml(value) {

@@ -173,11 +173,19 @@
 
             copyToken: function () {
                 var self = this;
-                if (navigator.clipboard && self.createdToken) {
-                    navigator.clipboard.writeText(self.createdToken).then(function () {
+                if (!self.createdToken) return;
+                // Shared helper with a non-secure-context fallback (#427).
+                // navigator.clipboard is undefined over plain HTTP, which is
+                // how CertMate is commonly run on a LAN: this used to do
+                // nothing at all, silently, and the token is shown exactly
+                // once — so it was gone for good.
+                CertMate.copyText(self.createdToken).then(function (ok) {
+                    if (ok) {
                         showMessage('Token copied to clipboard', 'success');
-                    });
-                }
+                    } else {
+                        showMessage('Could not copy automatically — select the token above and copy it now, it is shown only once.', 'error');
+                    }
+                });
             }
         };
     }

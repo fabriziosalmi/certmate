@@ -523,7 +523,7 @@ CertMate supports multiple accounts per DNS provider for enterprise environments
 
 ```bash
 # Add production account
-curl -X POST http://localhost:8000/api/settings/dns-providers/cloudflare/accounts \
+curl -X POST http://localhost:8000/api/dns/cloudflare/accounts \
   -H "Authorization: Bearer YOUR_API_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -536,7 +536,7 @@ curl -X POST http://localhost:8000/api/settings/dns-providers/cloudflare/account
   }'
 
 # Add staging account
-curl -X POST http://localhost:8000/api/settings/dns-providers/cloudflare/accounts \
+curl -X POST http://localhost:8000/api/dns/cloudflare/accounts \
   -H "Authorization: Bearer YOUR_API_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -548,22 +548,23 @@ curl -X POST http://localhost:8000/api/settings/dns-providers/cloudflare/account
     }
   }'
 
-# Set production as default
-curl -X PUT http://localhost:8000/api/settings/dns-providers/cloudflare/default-account \
+# Set production as default (there is no separate endpoint:
+# "set_as_default" travels with the account payload)
+curl -X PUT http://localhost:8000/api/dns/cloudflare/accounts/production \
   -H "Authorization: Bearer YOUR_API_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"account_id": "production"}'
+  -d '{"set_as_default": true}'
 ```
 
 ### Managing Accounts
 
 ```bash
 # List all accounts for a provider
-curl -X GET http://localhost:8000/api/settings/dns-providers/cloudflare/accounts \
+curl -X GET http://localhost:8000/api/dns/cloudflare/accounts \
   -H "Authorization: Bearer YOUR_API_TOKEN"
 
 # Update an account
-curl -X PUT http://localhost:8000/api/settings/dns-providers/cloudflare/accounts/staging \
+curl -X PUT http://localhost:8000/api/dns/cloudflare/accounts/staging \
   -H "Authorization: Bearer YOUR_API_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -574,7 +575,7 @@ curl -X PUT http://localhost:8000/api/settings/dns-providers/cloudflare/accounts
   }'
 
 # Delete an account
-curl -X DELETE http://localhost:8000/api/settings/dns-providers/cloudflare/accounts/old-account \
+curl -X DELETE http://localhost:8000/api/dns/cloudflare/accounts/old-account \
   -H "Authorization: Bearer YOUR_API_TOKEN"
 ```
 

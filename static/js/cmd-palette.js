@@ -239,8 +239,41 @@
             return;
         }
         if (item.url) {
-            window.location.href = item.url;
+            navigateTo(item.url);
         }
+    }
+
+    /**
+     * Navigate to a URL that may be same-page-with-a-different-hash (#425).
+     *
+     * Eleven of the palette's settings entries point at '/settings#<tab>'.
+     * Assigning location.href to a fragment-only change does NOT reload the
+     * page, and settings.html/index.html read location.hash exactly once in
+     * x-data — so choosing "API Keys" while already on /settings changed the
+     * URL and then visibly did nothing.
+     *
+     * Same-page hash changes are dispatched as a hashchange event, which the
+     * pages now listen for; cross-page navigation is unchanged.
+     */
+    function navigateTo(url) {
+        var target = new URL(url, window.location.href);
+        var samePage = target.pathname === window.location.pathname
+            && target.search === window.location.search;
+        if (samePage && target.hash && target.hash !== window.location.hash) {
+            window.location.hash = target.hash;   // fires hashchange
+            return;
+        }
+        if (samePage && target.hash === window.location.hash) {
+            // Already exactly where the entry points: nothing to navigate,
+            // but the panel must still reflect it (the user asked for it).
+            // A plain Event, not new HashChangeEvent(): the constructor is
+            // unsupported in some engines and would throw here, and the
+            // listeners read location.hash rather than the event's
+            // oldURL/newURL, so the generic type carries everything needed.
+            window.dispatchEvent(new Event('hashchange'));
+            return;
+        }
+        window.location.href = url;
     }
 
     // Open the creation drawer to the given type. On the dashboard openCertDrawer
@@ -281,7 +314,7 @@
             cBtn.click();
             window.scrollTo({ top: 0, behavior: 'smooth' });
         } else {
-            window.location.href = '/#client';
+            navigateTo('/#client');
         }
     }
 
