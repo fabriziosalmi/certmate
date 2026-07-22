@@ -583,7 +583,6 @@ log_certificate_downloaded() # Journaliser les téléchargements
 log_batch_operation() # Journaliser les opérations par lots
 log_api_request() # Journaliser les requêtes API
 get_recent_entries() # Obtenir les dernières entrées d'audit
-get_entries_by_resource() # Obtenir les entrées pour une ressource
 ```
 
 ---

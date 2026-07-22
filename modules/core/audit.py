@@ -7,6 +7,7 @@ import os
 import logging
 import json
 import threading
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from datetime import datetime
 from collections import deque
@@ -17,13 +18,39 @@ from typing import Optional, Dict, Any
 
 logger = logging.getLogger(__name__)
 
+# Rotation defaults for the human-readable audit .log (#443). Same shape as the
+# application log's (#431), and deliberately NOT applied to the hash chain:
+# `certificate_audit.chain.jsonl` is append-only and tamper-evident, and naive
+# rotation breaks the property it exists for (see #437).
+DEFAULT_AUDIT_LOG_MAX_BYTES = 10 * 1024 * 1024   # 10 MB per file
+DEFAULT_AUDIT_LOG_BACKUP_COUNT = 5               # ~60 MB ceiling
+
+
+def _int_env(name: str, default: int) -> int:
+    """Read a positive int from the environment, ignoring anything unusable.
+    A typo in a log-rotation setting must not take the application down."""
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        logger.warning("Ignoring %s=%r (not an integer); using %d", name, raw, default)
+        return default
+    if value < 0:
+        logger.warning("Ignoring %s=%r (negative); using %d", name, raw, default)
+        return default
+    return value
+
 
 class AuditLogger:
     """Centralized audit logging for certificate operations."""
 
     def __init__(self, audit_log_dir: Path, chain_dir: Optional[Path] = None,
                  enable_chain: bool = True, signer=None,
-                 checkpoint_interval: int = 100):
+                 checkpoint_interval: int = 100,
+                 max_bytes: Optional[int] = None,
+                 backup_count: Optional[int] = None):
         """
         Initialize Audit Logger.
 
@@ -36,23 +63,64 @@ class AuditLogger:
                 under the (backup-excluded) ``logs`` tree.
             enable_chain: write the hash chain (default True). Disable via the
                 ``CERTMATE_AUDIT_CHAIN=0`` environment variable as a kill switch.
+            max_bytes / backup_count: rotation of the human-readable ``.log``
+                (#443). Default to ``CERTMATE_AUDIT_LOG_MAX_BYTES`` /
+                ``CERTMATE_AUDIT_LOG_BACKUP_COUNT``, then to 10 MB × 5.
+                ``max_bytes=0`` disables rotation, which is how ``logging`` spells
+                it and the only way to get an unbounded file back.
         """
         self.audit_log_dir = Path(audit_log_dir)
-        self.audit_log_dir.mkdir(parents=True, exist_ok=True)
         self.audit_log_file = self.audit_log_dir / "certificate_audit.log"
 
-        # Configure audit file handler
-        self.file_handler = logging.FileHandler(self.audit_log_file)
-        self.file_handler.setFormatter(
-            logging.Formatter(
-                '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                datefmt='%Y-%m-%d %H:%M:%S'
+        if max_bytes is None:
+            max_bytes = _int_env('CERTMATE_AUDIT_LOG_MAX_BYTES',
+                                 DEFAULT_AUDIT_LOG_MAX_BYTES)
+        if backup_count is None:
+            backup_count = _int_env('CERTMATE_AUDIT_LOG_BACKUP_COUNT',
+                                    DEFAULT_AUDIT_LOG_BACKUP_COUNT)
+
+        # Configure the audit file handler. Rotating, not plain (#443): this
+        # file grew without bound, and #431's fix covered only the application
+        # log — this handler is built here and was never reached by it.
+        #
+        # Safe to rotate because it carries no integrity property: it is
+        # human-readable text, not hashed, not chained, and the `logs/` tree is
+        # excluded from backups. The verifiable artifact is the hash chain in
+        # `data/audit/`, which is emphatically NOT rotated (see #437).
+        #
+        # RotatingFileHandler is not multi-process safe; the container runs
+        # gunicorn with `--workers 1 --threads 8`, one process, which is the
+        # same single-writer assumption the hash chain already depends on.
+        self.file_handler = None
+        try:
+            self.audit_log_dir.mkdir(parents=True, exist_ok=True)
+            self.file_handler = RotatingFileHandler(
+                str(self.audit_log_file),
+                maxBytes=max_bytes,
+                backupCount=backup_count,
+                encoding='utf-8',
             )
-        )
+            self.file_handler.setFormatter(
+                logging.Formatter(
+                    '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                    datefmt='%Y-%m-%d %H:%M:%S'
+                )
+            )
+        except OSError as e:
+            # Previously this raised out of __init__, which the factory calls
+            # unguarded — an unwritable logs directory took the whole
+            # application down over a *log file*. The hash chain below is the
+            # record that matters and is written elsewhere; keep going.
+            logger.error(
+                "Could not open audit log file %s (%s); the human-readable "
+                "audit log is disabled. The tamper-evident chain is unaffected.",
+                self.audit_log_file, e,
+            )
 
         # Create audit logger
         self.audit_logger = logging.getLogger('certmate.audit')
-        self.audit_logger.addHandler(self.file_handler)
+        if self.file_handler is not None:
+            self.audit_logger.addHandler(self.file_handler)
         self.audit_logger.setLevel(logging.INFO)
 
         # Tamper-evident hash chain (Phase 2). One writer, one local file; the
@@ -799,34 +867,9 @@ class AuditLogger:
             logger.error(f"Error reading audit logs: {e}")
             return []
 
-    def get_entries_by_resource(self, resource_id: str) -> list:
-        """
-        Get all audit entries for a specific resource.
-
-        Args:
-            resource_id: Resource identifier
-
-        Returns:
-            List of matching audit entries
-        """
-        try:
-            entries = []
-            if not self.audit_log_file.exists():
-                return entries
-
-            with open(self.audit_log_file, 'r') as f:
-                for line in f:
-                    try:
-                        if ' - INFO - ' in line:
-                            json_str = line.split(' - INFO - ', 1)[1].strip()
-                            entry = json.loads(json_str)
-                            if entry.get('resource_id') == resource_id:
-                                entries.append(entry)
-                    except (json.JSONDecodeError, IndexError):
-                        continue
-
-            return entries
-
-        except Exception as e:
-            logger.error(f"Error reading audit logs: {e}")
-            return []
+    # ``get_entries_by_resource`` was removed with #443. It read the entire
+    # audit log to filter by resource_id and had no callers anywhere in the
+    # codebase. Leaving a whole-file reader behind a rotating handler is how a
+    # "why is the history missing" bug gets born: it would have silently
+    # reported only what survived in the active file. Per-resource history
+    # belongs on the hash chain, which is complete and verifiable.

@@ -583,7 +583,6 @@ log_certificate_downloaded() # Registrare i download
 log_batch_operation() # Registrare le operazioni in batch
 log_api_request() # Registrare le richieste API
 get_recent_entries() # Ottenere le ultime voci di audit
-get_entries_by_resource() # Ottenere le voci per una risorsa
 ```
 
 ---
