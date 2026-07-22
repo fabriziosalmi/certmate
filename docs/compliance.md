@@ -104,6 +104,64 @@ operate certificates on a schedule.
   client-supplied; the trustworthy identity is the authenticated API key.
 - **History boundary.** The chain starts when the feature is first enabled;
   earlier `.log` history is not part of the verifiable chain.
+- **A pruned chain proves less, and says so.** If you have run
+  `audit_prune` (below), verification covers the entries from the anchor
+  forward. The archived prefix is attested by the signed anchor and by the
+  exported bundle you hold off the box — not by the chain file. `verify` reports
+  `anchored` and the anchor seq for exactly this reason; treat a bare "intact"
+  claim about a pruned instance as an overstatement.
+
+## Retention: archiving part of the chain
+
+The chain grows by one line per audited operation — of the order of hundreds of
+kilobytes per year on a busy instance — so most operators never need this. It
+exists for the case where a retention policy requires older records to leave the
+machine.
+
+There is no automatic pruning, and there is no API endpoint for it. Deleting
+audit history is exactly what someone who has just compromised an administrator
+account would want to do, and an operator with a legitimate retention obligation
+has shell access anyway — they have to put the archive somewhere. So it is one
+explicit command, run with CertMate stopped:
+
+```bash
+# 1. Export the prefix you intend to archive (admin token).
+curl -H "Authorization: Bearer $TOKEN" \
+     "https://certmate.example.com/api/audit/export?to_seq=1199" > archive-0-1199.json
+
+# 2. Verify it OFF this box, pinning the instance key.
+python -m modules.core.audit_verify --bundle archive-0-1199.json --pubkey instance.pem
+
+# 3. Store it wherever your policy says. Then, with CertMate stopped:
+python -m modules.core.audit_prune --bundle archive-0-1199.json --data-dir data/audit
+python -m modules.core.audit_prune --bundle archive-0-1199.json --data-dir data/audit --yes
+```
+
+The command without `--yes` is a dry run. It refuses, and removes nothing, if
+the bundle does not verify, is unsigned, is not a prefix of *this* chain, or
+disagrees with the chain at any seq — you never delete records whose only
+remaining copy is unverified.
+
+What it then does is the part that matters for compliance:
+
+- **The deletion is recorded in the chain that survives it.** An `archive` entry
+  is appended naming the seq range, the number of entries, their head hash and
+  the SHA-256 of the archive file. A reader of the pruned chain can see that
+  entries were removed, when, and which archive holds them.
+- **The remainder verifies from a signed anchor.** `certificate_audit.anchor.json`
+  states where the chain now starts and what it continues from, signed with the
+  instance key, so a chain that was simply truncated cannot be passed off as a
+  pruned one — the anchor cannot be forged without the key.
+- **It stays honest afterwards.** Verification of a pruned chain never reports a
+  plain "intact": both the API and the standalone verifier say which seq the
+  guarantee starts at.
+
+Two limits worth stating. The anchor describes the **most recent** archive; the
+complete history is the sequence of exported bundles, which is why they must be
+kept and why each one's digest is recorded in the chain. And, as everywhere else
+on this page, the instance key does not bind the operator: someone holding it can
+sign an anchor over a chain they rewrote. Prune only as far back as your archives
+genuinely reach.
 
 Signed exports that an external auditor pins to a published key are available
 today. If your obligations require binding the operator *themselves* — so that

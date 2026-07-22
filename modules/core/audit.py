@@ -327,9 +327,44 @@ class AuditLogger:
         (the standalone CLI verifier cannot take the lock and accepts that)."""
         with self._chain_lock:
             result = audit_chain.verify_chain(self.audit_chain_file)
+            if result.get("ok") and result.get("anchored"):
+                self._verify_anchor_signature(result)
             if result.get("ok"):
                 self._cross_check_latest_checkpoint(result)
             return result
+
+    def _verify_anchor_signature(self, result: Dict[str, Any]) -> None:
+        """An anchored chain is only as good as the anchor's signature (#445).
+
+        The structural check in audit_chain proved the chain continues from the
+        hash the anchor states. This proves the *instance* said so: without it,
+        anyone able to write two files could delete history and hand the
+        verifier a matching anchor, and verification would pass."""
+        if self._signer is None or not getattr(self._signer, 'available', False):
+            result["ok"] = False
+            result["reason"] = (
+                "the chain is anchored (entries were pruned) but this instance "
+                "has no signing key, so the anchor cannot be verified")
+            return
+        pubkey = self._signer.public_key_pem()
+        anchor_path = audit_chain.anchor_path_for(self.audit_chain_file)
+        try:
+            anchor = audit_chain.read_anchor(anchor_path)
+        except audit_chain.AnchorReadError as e:
+            result["ok"] = False
+            result["reason"] = str(e)
+            return
+        signature = (anchor or {}).get("signature")
+        if not signature or not pubkey or not audit_signing.verify_signature(
+            pubkey, signature, audit_chain.anchor_signing_bytes(anchor)
+        ):
+            result["ok"] = False
+            result["reason"] = (
+                f"the anchor at seq {anchor.get('anchor_seq')} is not signed by "
+                f"this instance: entries were removed without a valid archive "
+                f"attestation")
+            return
+        result["anchor_signature_ok"] = True
 
     def _cross_check_latest_checkpoint(self, result: Dict[str, Any]) -> None:
         """Cross-check an internally-consistent chain against the newest signed
@@ -357,6 +392,21 @@ class AuditLogger:
         if not checkpoints:
             result["checkpoint_reason"] = "no checkpoints written yet"
             return
+        # A prune (#445) removes entries that older checkpoints attest to, and
+        # those checkpoints are kept as evidence — but cross-checking against
+        # one of them would report the archived prefix as a truncation. That is
+        # the failure this whole design exists to avoid: routine maintenance
+        # raising a tamper alert. Checkpoints below the anchor are attested by
+        # the archive instead, so only those at or above it are usable here.
+        anchor_seq = result.get("anchor_seq")
+        if anchor_seq is not None:
+            usable = [cp for cp in checkpoints if cp.get("seq", -1) >= anchor_seq]
+            if not usable:
+                result["checkpoint_reason"] = (
+                    f"every checkpoint predates the archived prefix (seq < "
+                    f"{anchor_seq}); the archive attests those entries")
+                return
+            checkpoints = usable
         # Newest checkpoint whose signature verifies under the current key. A
         # checkpoint that does not verify is ignored (e.g. key rotation, or a
         # chain imported from another instance) rather than treated as tamper,
