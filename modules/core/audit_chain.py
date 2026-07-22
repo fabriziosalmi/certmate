@@ -296,7 +296,14 @@ def iter_records(path, from_seq: Optional[int] = None,
     cross-check, for one — never holds more than a single record.
 
     A truncated trailing line is skipped. Optional inclusive ``from_seq`` /
-    ``to_seq`` slice. Best-effort: yields nothing if the file is missing."""
+    ``to_seq`` slice. Best-effort: yields nothing if the file is missing.
+
+    The slice filters rather than stopping at ``to_seq``, deliberately: this
+    reads a file that may have been tampered with, and monotonic ``seq`` is
+    what the verifier *proves*, not something a reader may presume. Skipping
+    the tail on that assumption would let a reordered chain export as a
+    quietly-shorter slice. The scan it saves is linear over a file that grows
+    in hundreds of KB per year."""
     try:
         f = open(path, "r", encoding="utf-8")
     except OSError:
@@ -429,7 +436,20 @@ def cross_check_checkpoint(records, checkpoint) -> Dict[str, Any]:
     cp_hash = checkpoint.get("hash")
     if not isinstance(cp_seq, int) or not cp_hash:
         return {"ok": True, "reason": "checkpoint has no usable seq/hash"}
-    match = next((r for r in records if r.get("seq") == cp_seq), None)
+    # Close the iterable when we stop early: iter_records holds an open file,
+    # and abandoning a suspended generator leaves that descriptor to whenever
+    # the interpreter gets round to collecting it — immediately on CPython,
+    # not on every implementation.
+    match = None
+    try:
+        for rec in records:
+            if rec.get("seq") == cp_seq:
+                match = rec
+                break
+    finally:
+        close = getattr(records, "close", None)
+        if callable(close):
+            close()
     if match is None:
         return {"ok": False, "reason": (
             f"chain no longer contains seq {cp_seq}, which a signed checkpoint "

@@ -198,3 +198,30 @@ def test_the_checkpoint_cross_check_accepts_a_generator(tmp_path):
 
     assert ok["ok"]
     assert not diverged["ok"]
+
+
+def test_the_cross_check_closes_the_generator_it_abandons(tmp_path):
+    """It stops at the checkpointed seq; the file handle behind the generator
+    must not be left to whenever the interpreter collects it."""
+    path = tmp_path / "chain.jsonl"
+    records = _write_chain(path, 10)
+    it = audit_chain.iter_records(path)
+
+    audit_chain.cross_check_checkpoint(it, {"seq": 2, "hash": records[2]["hash"]})
+
+    with pytest.raises(StopIteration):
+        next(it)
+
+
+def test_a_reordered_tail_is_not_silently_dropped_from_a_slice(tmp_path):
+    """iter_records filters rather than stopping at to_seq: monotonic seq is
+    what the verifier proves, not what this reader may presume."""
+    path = tmp_path / "chain.jsonl"
+    _write_chain(path, 6)
+    lines = path.read_text(encoding="utf-8").splitlines()
+    lines = [lines[0], lines[5], *lines[1:5]]  # a record from beyond to_seq, early
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    got = [r["seq"] for r in audit_chain.iter_records(path, to_seq=3)]
+
+    assert got == [0, 1, 2, 3], "a record past to_seq truncated the scan"
