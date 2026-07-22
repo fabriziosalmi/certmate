@@ -27,8 +27,9 @@ DEFAULT_AUDIT_LOG_BACKUP_COUNT = 5               # ~60 MB ceiling
 
 
 def _int_env(name: str, default: int) -> int:
-    """Read a positive int from the environment, ignoring anything unusable.
-    A typo in a log-rotation setting must not take the application down."""
+    """Read a non-negative int from the environment, ignoring anything
+    unusable (0 is meaningful: it is how ``logging`` spells "never roll"). A
+    typo in a log-rotation setting must not take the application down."""
     raw = os.environ.get(name)
     if raw is None:
         return default
@@ -117,7 +118,12 @@ class AuditLogger:
                 self.audit_log_file, e,
             )
 
-        # Create audit logger
+        # Create audit logger. `propagate` is deliberately left on: audit lines
+        # also reach the root handlers, i.e. stdout, which is what `docker logs`
+        # and every log shipper read. That is not duplication to be silenced —
+        # it is the reason the unwritable-directory case above is survivable,
+        # and turning it off would remove audit entries from the stream some
+        # operators collect them from.
         self.audit_logger = logging.getLogger('certmate.audit')
         if self.file_handler is not None:
             self.audit_logger.addHandler(self.file_handler)
