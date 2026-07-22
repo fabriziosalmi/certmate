@@ -1,3 +1,31 @@
+## v2.23.0 (Audit retention: deleting history, on the record)
+
+One feature, and it is the last open half of the audit design tracked in #437: an operator can now archive and remove an old prefix of the tamper-evident audit chain.
+
+Retention on a tamper-evident record is a policy question, not a disk question. You cannot make deletion impossible on a file the operator owns — what you can do is make it **non-deniable**. Nothing here happens on a schedule, nothing happens over the API, and nothing happens to an instance that does not run the command.
+
+### Archiving part of the audit chain
+
+- **`python -m modules.core.audit_prune`** removes a prefix of the chain that has already been exported and independently verified. Without `--yes` it is a dry run. The full procedure — export the slice, verify it off the box against the pinned instance key, store it, then prune — is in `docs/compliance.md`.
+- **It refuses more than it accepts.** Nothing is deleted unless the archive bundle verifies, is signed by this instance, starts exactly where the chain currently starts, and agrees with the chain hash-for-hash at every entry it claims. It also refuses to empty the chain: a chain with no live records cannot be verified at all, only asserted. A refusal leaves the file byte-identical.
+- **The deletion is recorded in the chain that survives it.** An `archive` entry is appended naming the seq range, the number of entries, their head hash and the SHA-256 of the archive file — so a reader of the pruned chain can see that entries were removed, when, and which archive holds them.
+- **The remainder verifies from a signed anchor.** `certificate_audit.anchor.json` states where the chain now starts and what it continues from, signed with the instance key, so a chain that was merely truncated cannot be passed off as a pruned one. Forging it requires the signing key.
+- **Verification stops saying "intact" once it means less.** `GET /api/audit/verify` reports `anchored` and the anchor seq; the standalone verifier prints that the chain was pruned, which entries are not in the file, and whether the anchor signature was actually checked — it is not, unless you pass `--pubkey`, and it says so rather than implying otherwise.
+- **Deliberately CLI-only.** There is no API endpoint for this and there should not be one: an authenticated request that deletes audit history is precisely what someone who has just compromised an administrator account wants, and an operator with a real retention obligation already has shell access. CertMate must be stopped while it runs.
+
+Two failure modes shaped the implementation more than the feature did, both of them the same one this design exists to prevent — routine maintenance reporting tampering:
+
+- Signed checkpoints below the anchor attest entries that were just archived, so cross-checking against one would report an archive as a truncation. Only checkpoints at or above the anchor are used, and a prune past all of them says so instead of failing.
+- An interrupted prune must not look like an attack. The anchor is written before the chain is replaced, so a crash between the two loses nothing and reports an interrupted prune. The second-order case is subtler and was caught in review: an interrupted *second* prune leaves the chain starting at the previous anchor, whose file has just been overwritten. An anchor therefore records — and signs — the one it supersedes.
+
+### Notes for operators
+
+- Nothing changes for an instance that never prunes. There is no new default, no scheduler entry, and no new file until the command is run.
+- The anchor describes only the **most recent** archive. The complete history is the sequence of exported bundles, which is why each one's digest is written into the chain and why they must be kept.
+- As everywhere else in `docs/compliance.md`: the instance key does not bind the operator. Someone holding it can sign an anchor over a chain they rewrote. Prune only as far back as your archives genuinely reach.
+
+---
+
 ## v2.22.1 (Audit chain: a false tamper verdict, an unrotated file, a verifier that read everything)
 
 Three defects in the audit trail, plus a startup hardening that came with one of them. All of it was found by taking #437 — "rotating the tamper-evident chain needs its own design" — seriously enough to read the code before writing any. The issue turned out to name the wrong file, and the design question turned out to rest on a primitive that was missing and already broken in production. Full analysis on #437; the remaining half, retention, is #445.
