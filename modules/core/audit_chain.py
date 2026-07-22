@@ -275,15 +275,19 @@ def _verify_anchored_chain(path, anchor) -> Dict[str, Any]:
 
     1. The chain starts at ``anchor_seq`` — the completed state. It is verified
        from the anchor's ``prev_hash``.
-    2. The chain still starts at the genesis — the interrupted state, where
-       nothing was actually deleted. It is verified from the genesis, and the
-       anchor is then cross-checked against it: the record before
-       ``anchor_seq`` must hash to the anchor's ``prev_hash``. An anchor that
-       does not match the history it claims to summarise is a failure, not a
-       detail — that is exactly what a planted anchor would look like.
+    2. The chain still starts where it started before this prune — the
+       interrupted state, where nothing was actually deleted. That is the
+       genesis on a first prune, and the *superseded* anchor on a later one,
+       which is why an anchor records the one it replaced. Either way the chain
+       is verified from that earlier start and the new anchor is then
+       cross-checked against it: the record before ``anchor_seq`` must hash to
+       the anchor's ``prev_hash``. An anchor that does not match the history it
+       claims to summarise is a failure, not a detail — that is exactly what a
+       planted anchor would look like.
     """
     anchor_seq = anchor["anchor_seq"]
     anchor_prev = anchor["prev_hash"]
+    superseded = anchor.get("supersedes") or None
 
     first_seq = _first_record_seq(path)
     if first_seq is None:
@@ -309,8 +313,33 @@ def _verify_anchored_chain(path, anchor) -> Dict[str, Any]:
                 f"({anchor['archived_count']} earlier entries archived)")
         return result
 
-    # The chain still holds the prefix the anchor claims was archived.
-    verifier = _ChainVerifier(remember_hash_at=anchor_seq - 1)
+    # The chain still holds the prefix the anchor claims was archived. Verify
+    # it from wherever it legitimately started before this prune.
+    start_prev, start_seq = GENESIS_PREV, None
+    if superseded:
+        if first_seq != superseded.get("anchor_seq"):
+            result = _blank_result()
+            result["anchored"] = True
+            result["anchor_seq"] = anchor_seq
+            result["error_seq"] = first_seq
+            result["reason"] = (
+                f"the chain starts at seq {first_seq}, which is neither the "
+                f"anchor at seq {anchor_seq} nor the anchor it superseded at "
+                f"seq {superseded.get('anchor_seq')}")
+            return result
+        start_prev = superseded.get("prev_hash") or GENESIS_PREV
+        start_seq = superseded.get("anchor_seq")
+    elif first_seq != 0:
+        result = _blank_result()
+        result["anchored"] = True
+        result["anchor_seq"] = anchor_seq
+        result["error_seq"] = first_seq
+        result["reason"] = (
+            f"the chain starts at seq {first_seq}, which is neither the genesis "
+            f"nor the anchor at seq {anchor_seq}")
+        return result
+    verifier = _ChainVerifier(start_prev, start_seq,
+                              remember_hash_at=anchor_seq - 1)
     result = _verify_stream(path, verifier)
     result["anchored"] = True
     result["anchor_seq"] = anchor_seq
@@ -325,8 +354,9 @@ def _verify_anchored_chain(path, anchor) -> Dict[str, Any]:
             f"different predecessor hash than the chain's own record at seq "
             f"{anchor_seq - 1}: the anchor does not describe this chain")
         return result
+    start = "the genesis" if not superseded else f"seq {superseded['anchor_seq']}"
     result["reason"] = (
-        f"intact from the genesis; an anchor for seq {anchor_seq} is present and "
+        f"intact from {start}; an anchor for seq {anchor_seq} is present and "
         f"consistent, but the archived prefix is still in the chain (an "
         f"interrupted prune — re-run it or remove the anchor)")
     return result
@@ -548,12 +578,19 @@ ANCHOR_REQUIRED_FIELDS = (
     "archived_count", "bundle_sha256", "pruned_at",
 )
 
+# The anchor an anchor replaced, ``{anchor_seq, prev_hash}`` or None on the
+# first prune. Signed like the rest: without it, a prune of an already-pruned
+# chain that is interrupted before the chain is replaced would leave a file
+# starting at the PREVIOUS anchor with no way left to verify it — the old
+# anchor having been overwritten — and the chain would read as tampered.
+ANCHOR_SIGNED_FIELDS = ANCHOR_REQUIRED_FIELDS + ("supersedes",)
+
 
 def anchor_signing_bytes(anchor: Dict[str, Any]) -> bytes:
     """Canonical bytes an anchor's signature is computed over: every field that
     describes what was archived, so re-pointing an anchor at a different prefix
     invalidates the signature."""
-    return canon_bytes({k: anchor.get(k) for k in ANCHOR_REQUIRED_FIELDS})
+    return canon_bytes({k: anchor.get(k) for k in ANCHOR_SIGNED_FIELDS})
 
 
 def read_anchor(path) -> Optional[Dict[str, Any]]:

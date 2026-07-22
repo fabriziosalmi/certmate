@@ -137,6 +137,16 @@ def plan_prune(chain_path, bundle, bundle_sha256):
             f"the chain jumps from seq {last_seq} to seq {remaining}; refusing "
             f"to prune a chain that is already broken")
 
+    # What this prune replaces, if the chain was pruned before. Recorded (and
+    # signed) so that an interrupted second prune can still be verified: the
+    # chain would then start at the previous anchor, whose file this one is
+    # about to overwrite.
+    previous = audit_chain.read_anchor(audit_chain.anchor_path_for(chain_path))
+    supersedes = None
+    if previous is not None:
+        supersedes = {"anchor_seq": previous["anchor_seq"],
+                      "prev_hash": previous["prev_hash"]}
+
     return {
         "anchor_seq": last_seq + 1,
         "prev_hash": head_at_last,
@@ -144,6 +154,7 @@ def plan_prune(chain_path, bundle, bundle_sha256):
         "archived_last_seq": last_seq,
         "archived_count": verdict["count"],
         "bundle_sha256": bundle_sha256,
+        "supersedes": supersedes,
     }
 
 

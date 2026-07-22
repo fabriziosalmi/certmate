@@ -354,7 +354,16 @@ class AuditLogger:
             result["ok"] = False
             result["reason"] = str(e)
             return
-        signature = (anchor or {}).get("signature")
+        if anchor is None:
+            # It was there a moment ago (verify_chain read it) and is not now.
+            # Fail closed rather than raise: a chain that has just lost the file
+            # attesting its own prune is not a chain to call intact.
+            result["ok"] = False
+            result["reason"] = (
+                "the chain anchor disappeared while verifying: integrity cannot "
+                "be established")
+            return
+        signature = anchor.get("signature")
         if not signature or not pubkey or not audit_signing.verify_signature(
             pubkey, signature, audit_chain.anchor_signing_bytes(anchor)
         ):

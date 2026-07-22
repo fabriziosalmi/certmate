@@ -408,3 +408,65 @@ def test_an_exported_bundle_from_a_pruned_chain_is_anchored(instance, tmp_path):
         audit_chain.ANCHORED_BUNDLE_FORMAT_VERSION
     verdict = audit_verify.verify_bundle(bundle)
     assert verdict["ok"] and verdict["anchored"]
+
+
+def test_an_interrupted_second_prune_still_verifies(instance, tmp_path):
+    """The case that made the anchor record what it supersedes. After a first
+    prune the chain starts at seq 6, not at the genesis; a second prune that
+    dies before replacing the chain would otherwise leave a file whose only
+    description — the old anchor — has just been overwritten, and it would read
+    as tampered."""
+    _prune(instance, tmp_path, _archive(instance, tmp_path, to_seq=5))
+    resumed = _reopen(instance, tmp_path)
+    second = tmp_path / "second.json"
+    second.write_text(json.dumps(resumed.export_bundle(to_seq=9)))
+    plan = plan_prune(instance.audit_chain_file, json.loads(second.read_text()),
+                      sha256_file(second))
+    assert plan["supersedes"] == {"anchor_seq": 6, "prev_hash": plan["supersedes"]["prev_hash"]}
+    anchor = dict(plan)
+    anchor["pruned_at"] = "2026-07-22T00:00:00"
+    anchor["signature"] = instance._signer.sign(
+        audit_chain.anchor_signing_bytes(anchor))
+    open(audit_chain.anchor_path_for(instance.audit_chain_file), "w").write(
+        json.dumps(anchor))
+
+    result = _reopen(instance, tmp_path).verify_chain()
+
+    assert result["ok"], result["reason"]
+    assert result["anchor_pending"] is True
+    assert "intact from seq 6" in result["reason"]
+    assert result["first_seq"] == 6, "nothing was removed"
+
+
+def test_a_chain_starting_at_neither_the_anchor_nor_its_predecessor_fails(
+        instance, tmp_path):
+    _prune(instance, tmp_path, _archive(instance, tmp_path, to_seq=5))
+    anchor_path = audit_chain.anchor_path_for(instance.audit_chain_file)
+    anchor = json.loads(open(anchor_path).read())
+    anchor["anchor_seq"] = 9  # claims a prune the chain does not reflect
+    open(anchor_path, "w").write(json.dumps(anchor))
+
+    result = audit_chain.verify_chain(instance.audit_chain_file)
+
+    assert not result["ok"]
+    assert "neither the genesis nor the anchor" in result["reason"]
+
+
+def test_an_anchor_that_vanishes_mid_verification_fails_closed(instance, tmp_path,
+                                                               monkeypatch):
+    """verify_chain reads the anchor, then the signature check reads it again.
+    A file that disappears in between must not raise — nor pass."""
+    _prune(instance, tmp_path, _archive(instance, tmp_path))
+    audit = _reopen(instance, tmp_path)
+    real = audit_chain.read_anchor
+    calls = {"n": 0}
+
+    def vanishing(path):
+        calls["n"] += 1
+        return real(path) if calls["n"] == 1 else None
+
+    monkeypatch.setattr(audit_chain, "read_anchor", vanishing)
+    result = audit.verify_chain()
+
+    assert not result["ok"]
+    assert "disappeared" in result["reason"]
