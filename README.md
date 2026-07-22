@@ -1413,6 +1413,8 @@ main "$@"
 | `CERTMATE_LOG_FILE` |         | -              | Also write logs to this path. Off by default: the container logs to stdout, which is what `docker logs` and log shippers expect. Set it (e.g. `/app/logs/certmate.log`) to keep a file on the mounted volume — it is what the web UI's log stream reads |
 | `CERTMATE_LOG_MAX_BYTES` |    | `10485760`     | Rotate the log file at this size (10 MB). File logging is always rotated — there is no way to configure an unbounded one |
 | `CERTMATE_LOG_BACKUP_COUNT` | | `5`            | How many rotated files to keep (~60 MB ceiling with the default size) |
+| `CERTMATE_AUDIT_LOG_MAX_BYTES` | | `10485760`  | Rotate the human-readable audit log (`logs/audit/certificate_audit.log`) at this size. `0` disables rotation. Does **not** apply to the tamper-evident hash chain in `data/audit/`, which is never rotated |
+| `CERTMATE_AUDIT_LOG_BACKUP_COUNT` | | `5`       | How many rotated audit logs to keep. Note the Activity page tails only the active file, so it shows fewer entries immediately after a roll |
 | `CERTMATE_LOG_LEVEL` |        | `INFO`         | DEBUG / INFO / WARNING / ERROR |
 | `CERTMATE_LOG_JSON` |         | `true`         | JSON log lines (set `false` for human-readable) |
 

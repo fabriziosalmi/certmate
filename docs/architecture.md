@@ -605,7 +605,6 @@ log_certificate_downloaded() # Log downloads
 log_batch_operation() # Log batch operations
 log_api_request() # Log API requests
 get_recent_entries() # Get latest audit entries
-get_entries_by_resource() # Get entries for a resource
 ```
 
 ---
