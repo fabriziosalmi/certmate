@@ -269,7 +269,13 @@ class AuditLogger:
         instance fingerprint, public key, seq range and head hash; the signature
         is over the canonical manifest, which (via head_hash) transitively
         commits to every entry. ``bundle_signature`` is None when no signer is
-        wired (the entries + chain are still verifiable, just not attributed)."""
+        wired (the entries + chain are still verifiable, just not attributed).
+
+        This one legitimately holds the slice in memory: the bundle *is* the
+        entries, and the manifest's head_hash is only known after the last of
+        them. ``from_seq`` / ``to_seq`` are how a caller bounds it — an
+        anchored slice verifies on its own (#441), so exporting a large chain
+        in pieces is a supported workflow rather than a workaround."""
         with self._chain_lock:
             records = audit_chain.load_records(self.audit_chain_file, from_seq, to_seq)
         signed = self._signer is not None and getattr(self._signer, 'available', False)
@@ -369,7 +375,9 @@ class AuditLogger:
                 "(key rotated, or checkpoints from another instance)"
             )
             return
-        records = audit_chain.load_records(self.audit_chain_file)
+        # Streamed: cross_check_checkpoint scans for one seq and stops, so the
+        # cross-check costs one record of memory, not the whole chain (#444).
+        records = audit_chain.iter_records(self.audit_chain_file)
         check = audit_chain.cross_check_checkpoint(records, latest)
         result["checkpoint_verified"] = bool(check.get("ok"))
         result["checkpoint_seq"] = latest.get("seq")

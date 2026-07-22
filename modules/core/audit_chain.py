@@ -65,6 +65,97 @@ def make_line(seq: int, entry: Dict[str, Any], prev_hash: str) -> Dict[str, Any]
     }
 
 
+def _blank_result() -> Dict[str, Any]:
+    """The result dict every verifier entry point returns, in its initial
+    (nothing verified yet) state."""
+    return {
+        "ok": False, "count": 0, "first_seq": None, "last_seq": None,
+        "head_hash": None, "error_seq": None, "reason": None,
+    }
+
+
+class _ChainVerifier:
+    """Incremental verifier: fed one record at a time, holding only the running
+    ``prev_hash`` / ``seq`` / count. Shared by the streaming file verifier and
+    the in-memory record verifier so the two can never drift apart (#444)."""
+
+    def __init__(self, anchor_prev_hash: str = GENESIS_PREV,
+                 anchor_seq: Optional[int] = None):
+        self._prev_hash = anchor_prev_hash
+        self._expected_seq = anchor_seq
+        self._anchor_prev_hash = anchor_prev_hash
+        self._first_seq: Optional[int] = None
+        self._count = 0
+        self._seen = False
+
+    def _fail(self, reason: str, error_seq) -> Dict[str, Any]:
+        result = _blank_result()
+        result["first_seq"] = self._first_seq
+        result["error_seq"] = error_seq
+        result["reason"] = reason
+        return result
+
+    def feed(self, rec, position: int) -> Optional[Dict[str, Any]]:
+        """Verify one record against the running state. Returns a failure
+        result dict, or None if the record was accepted."""
+        if not isinstance(rec, dict):
+            return self._fail(
+                f"malformed (non-object) record at position {position}",
+                self._expected_seq)
+
+        seq = rec.get("seq")
+        entry = rec.get("entry")
+        rec_prev = rec.get("prev_hash")
+        rec_hash = rec.get("hash")
+
+        if not isinstance(seq, int) or entry is None or rec_hash is None:
+            return self._fail(
+                f"malformed record at position {position} (missing fields)",
+                self._expected_seq)
+
+        if not self._seen:
+            self._seen = True
+            self._first_seq = seq
+        if self._expected_seq is None:
+            self._expected_seq = seq
+        elif seq != self._expected_seq:
+            return self._fail(
+                f"sequence break: expected seq {self._expected_seq}, found "
+                f"{seq} (a deletion or reorder)", self._expected_seq)
+
+        if rec_prev != self._prev_hash:
+            return self._fail(
+                f"broken link at seq {seq}: prev_hash does not match the "
+                f"previous record's hash", seq)
+
+        if entry_hash(seq, entry, rec_prev) != rec_hash:
+            return self._fail(
+                f"hash mismatch at seq {seq}: entry was modified", seq)
+
+        self._prev_hash = rec_hash
+        self._expected_seq += 1
+        self._count += 1
+        return None
+
+    def finish(self) -> Dict[str, Any]:
+        result = _blank_result()
+        result["ok"] = True
+        if not self._seen:
+            result["reason"] = "empty chain"
+            # The head of an empty slice is whatever it was anchored to (the
+            # genesis prev_hash for a full chain), matching what build_manifest
+            # records for an empty slice — so an empty signed bundle verifies
+            # consistently.
+            result["head_hash"] = self._anchor_prev_hash
+            return result
+        result["count"] = self._count
+        result["first_seq"] = self._first_seq
+        result["last_seq"] = self._expected_seq - 1
+        result["head_hash"] = self._prev_hash
+        result["reason"] = "intact"
+        return result
+
+
 def verify_chain(path) -> Dict[str, Any]:
     """Verify a chain file end to end.
 
@@ -76,53 +167,84 @@ def verify_chain(path) -> Dict[str, Any]:
     first record, every ``prev_hash`` links to the prior ``hash``, and every
     ``hash`` recomputes. On the first failure, ``ok`` is False and ``reason`` /
     ``error_seq`` localize it.
+
+    Reads the file **one line at a time** (#444): the chain is append-only and
+    never truncated, so it is the one file here that only ever grows, and a
+    verifier that must first fit the whole history in memory puts a ceiling on
+    how much history an instance can keep. Peak memory is now one line,
+    whatever the file's size.
+
+    One consequence of streaming, deliberate: when a file contains more than one
+    fault, the reported one is the **earliest in the file**. The previous
+    implementation parsed every line before checking any structure, so an
+    unparseable line late in the file masked a hash mismatch early in it.
+    Localizing the first fault is the more useful answer.
     """
-    result: Dict[str, Any] = {
-        "ok": False, "count": 0, "first_seq": None, "last_seq": None,
-        "head_hash": None, "error_seq": None, "reason": None,
-    }
+    verifier = _ChainVerifier()
+    # A corrupt or non-object FINAL line is most likely a truncated trailing
+    # write, not tampering, and gets its own wording — so a line is only
+    # judged once the next one proves it was not the last.
+    pending: Optional[str] = None
+    position = -1
 
     try:
         with open(path, "r", encoding="utf-8") as f:
-            raw_lines = f.read().splitlines()
+            for raw in f:
+                raw = raw.strip()
+                if not raw:  # ignore blank lines, including a trailing one
+                    continue
+                if pending is not None:
+                    position += 1
+                    failure = _feed_raw(verifier, pending, position, is_last=False)
+                    if failure is not None:
+                        return failure
+                pending = raw
     except FileNotFoundError:
-        result["reason"] = "chain file does not exist"
-        # Structured flag so callers deciding absent-vs-tampered do not have
-        # to substring-match the human-readable reason.
-        result["chain_file_missing"] = True
+        result: Dict[str, Any] = {
+            "ok": False, "count": 0, "first_seq": None, "last_seq": None,
+            "head_hash": None, "error_seq": None,
+            "reason": "chain file does not exist",
+            # Structured flag so callers deciding absent-vs-tampered do not
+            # have to substring-match the human-readable reason.
+            "chain_file_missing": True,
+        }
         return result
     except OSError as e:
-        result["reason"] = f"cannot read chain file: {e}"
-        return result
+        return {
+            "ok": False, "count": 0, "first_seq": None, "last_seq": None,
+            "head_hash": None, "error_seq": None,
+            "reason": f"cannot read chain file: {e}",
+        }
 
-    # Ignore a trailing blank line; flag a genuinely empty chain as ok/empty.
-    lines = [ln for ln in raw_lines if ln.strip()]
-    if not lines:
-        result["ok"] = True
-        result["reason"] = "empty chain"
-        return result
+    if pending is not None:
+        position += 1
+        failure = _feed_raw(verifier, pending, position, is_last=True)
+        if failure is not None:
+            return failure
 
-    # Parse each line into a record, with file-specific tolerance: a corrupt or
-    # non-object FINAL line is most likely a truncated trailing write, not
-    # tampering. The structural checks are delegated to verify_records.
-    records = []
-    for idx, raw in enumerate(lines):
-        is_last = idx == len(lines) - 1
-        try:
-            rec = json.loads(raw)
-            ok_obj = isinstance(rec, dict)
-        except json.JSONDecodeError:
-            ok_obj = False
-        if not ok_obj:
-            result["error_seq"] = None
-            result["reason"] = (
-                "truncated or unparseable trailing line (likely an interrupted "
-                "write)" if is_last else f"unparseable line at position {idx}"
-            )
-            return result
-        records.append(rec)
+    return verifier.finish()
 
-    return verify_records(records)
+
+def _feed_raw(verifier, raw: str, position: int,
+              is_last: bool) -> Optional[Dict[str, Any]]:
+    """Parse one raw chain line and feed it to *verifier*. Returns a failure
+    result dict, or None if the line was accepted."""
+    try:
+        rec = json.loads(raw)
+        ok_obj = isinstance(rec, dict)
+    except json.JSONDecodeError:
+        ok_obj = False
+    if not ok_obj:
+        # A fresh result, not the verifier's partial state: an unparseable line
+        # says nothing trustworthy about what the prefix contained.
+        failure = _blank_result()
+        failure["error_seq"] = None
+        failure["reason"] = (
+            "truncated or unparseable trailing line (likely an interrupted "
+            "write)" if is_last else f"unparseable line at position {position}"
+        )
+        return failure
+    return verifier.feed(rec, position)
 
 
 def verify_records(records, anchor_prev_hash: str = GENESIS_PREV,
@@ -144,75 +266,12 @@ def verify_records(records, anchor_prev_hash: str = GENESIS_PREV,
     anchor proves the records from the anchor forward are authentic and ordered
     — it proves nothing at all about the prefix, and callers must not report it
     as if it did."""
-    result: Dict[str, Any] = {
-        "ok": False, "count": 0, "first_seq": None, "last_seq": None,
-        "head_hash": None, "error_seq": None, "reason": None,
-    }
-    if not records:
-        result["ok"] = True
-        result["reason"] = "empty chain"
-        # The head of an empty slice is whatever it was anchored to (the
-        # genesis prev_hash for a full chain), matching what build_manifest
-        # records for an empty slice — so an empty signed bundle verifies
-        # consistently.
-        result["head_hash"] = anchor_prev_hash
-        return result
-
-    prev_hash = anchor_prev_hash
-    expected_seq: Optional[int] = anchor_seq
-    count = 0
-
-    for idx, rec in enumerate(records):
-        if not isinstance(rec, dict):
-            result["error_seq"] = expected_seq
-            result["reason"] = f"malformed (non-object) record at position {idx}"
-            return result
-
-        seq = rec.get("seq")
-        entry = rec.get("entry")
-        rec_prev = rec.get("prev_hash")
-        rec_hash = rec.get("hash")
-
-        if not isinstance(seq, int) or entry is None or rec_hash is None:
-            result["error_seq"] = expected_seq
-            result["reason"] = f"malformed record at position {idx} (missing fields)"
-            return result
-
-        if idx == 0:
-            result["first_seq"] = seq
-        if expected_seq is None:
-            expected_seq = seq
-        elif seq != expected_seq:
-            result["error_seq"] = expected_seq
-            result["reason"] = (
-                f"sequence break: expected seq {expected_seq}, found {seq} "
-                f"(a deletion or reorder)"
-            )
-            return result
-
-        if rec_prev != prev_hash:
-            result["error_seq"] = seq
-            result["reason"] = (
-                f"broken link at seq {seq}: prev_hash does not match the "
-                f"previous record's hash"
-            )
-            return result
-
-        if entry_hash(seq, entry, rec_prev) != rec_hash:
-            result["error_seq"] = seq
-            result["reason"] = f"hash mismatch at seq {seq}: entry was modified"
-            return result
-
-        prev_hash = rec_hash
-        expected_seq += 1
-        count += 1
-
-    result["ok"] = True
-    result["count"] = count
-    result["last_seq"] = expected_seq - 1 if expected_seq is not None else None
-    result["head_hash"] = prev_hash
-    result["reason"] = "intact"
-    return result
+    verifier = _ChainVerifier(anchor_prev_hash, anchor_seq)
+    for position, rec in enumerate(records):
+        failure = verifier.feed(rec, position)
+        if failure is not None:
+            return failure
+    return verifier.finish()
 
 
 # --- Phase 3: signed export bundle + checkpoints --------------------------
@@ -230,30 +289,49 @@ ANCHORED_BUNDLE_FORMAT_VERSION = 2
 SUPPORTED_BUNDLE_FORMAT_VERSIONS = (BUNDLE_FORMAT_VERSION, ANCHORED_BUNDLE_FORMAT_VERSION)
 
 
-def load_records(path, from_seq: Optional[int] = None, to_seq: Optional[int] = None):
-    """Read the chain file into a list of valid record dicts (a truncated
-    trailing line is skipped). Optional inclusive ``from_seq`` / ``to_seq``
-    slice. Best-effort: returns [] if the file is missing."""
+def iter_records(path, from_seq: Optional[int] = None,
+                 to_seq: Optional[int] = None):
+    """Yield valid record dicts from the chain file, one line at a time (#444),
+    so a caller that only needs to *scan* the chain — the checkpoint
+    cross-check, for one — never holds more than a single record.
+
+    A truncated trailing line is skipped. Optional inclusive ``from_seq`` /
+    ``to_seq`` slice. Best-effort: yields nothing if the file is missing.
+
+    The slice filters rather than stopping at ``to_seq``, deliberately: this
+    reads a file that may have been tampered with, and monotonic ``seq`` is
+    what the verifier *proves*, not something a reader may presume. Skipping
+    the tail on that assumption would let a reordered chain export as a
+    quietly-shorter slice. The scan it saves is linear over a file that grows
+    in hundreds of KB per year."""
     try:
-        with open(path, "r", encoding="utf-8") as f:
-            raw_lines = [ln for ln in f.read().splitlines() if ln.strip()]
+        f = open(path, "r", encoding="utf-8")
     except OSError:
-        return []
-    records = []
-    for raw in raw_lines:
-        try:
-            rec = json.loads(raw)
-        except json.JSONDecodeError:
-            continue
-        if not isinstance(rec, dict) or not isinstance(rec.get("seq"), int):
-            continue
-        seq = rec["seq"]
-        if from_seq is not None and seq < from_seq:
-            continue
-        if to_seq is not None and seq > to_seq:
-            continue
-        records.append(rec)
-    return records
+        return
+    with f:
+        for raw in f:
+            raw = raw.strip()
+            if not raw:
+                continue
+            try:
+                rec = json.loads(raw)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(rec, dict) or not isinstance(rec.get("seq"), int):
+                continue
+            seq = rec["seq"]
+            if from_seq is not None and seq < from_seq:
+                continue
+            if to_seq is not None and seq > to_seq:
+                continue
+            yield rec
+
+
+def load_records(path, from_seq: Optional[int] = None, to_seq: Optional[int] = None):
+    """Read the chain file into a **list** of valid record dicts. Use
+    :func:`iter_records` unless the whole slice genuinely has to be held at once
+    (building an export bundle does; scanning does not)."""
+    return list(iter_records(path, from_seq, to_seq))
 
 
 def build_manifest(records, *, fingerprint, public_key_pem, exported_at,
@@ -350,12 +428,28 @@ def cross_check_checkpoint(records, checkpoint) -> Dict[str, Any]:
 
     NOTE: does NOT verify the checkpoint signature (the caller does, with
     crypto) and does NOT bind an operator who holds the signing key — full
-    operator binding needs off-box anchoring (see the module docstring)."""
+    operator binding needs off-box anchoring (see the module docstring).
+
+    *records* may be any iterable, including the :func:`iter_records`
+    generator: it is consumed once and only up to the checkpointed seq."""
     cp_seq = checkpoint.get("seq")
     cp_hash = checkpoint.get("hash")
     if not isinstance(cp_seq, int) or not cp_hash:
         return {"ok": True, "reason": "checkpoint has no usable seq/hash"}
-    match = next((r for r in records if r.get("seq") == cp_seq), None)
+    # Close the iterable when we stop early: iter_records holds an open file,
+    # and abandoning a suspended generator leaves that descriptor to whenever
+    # the interpreter gets round to collecting it — immediately on CPython,
+    # not on every implementation.
+    match = None
+    try:
+        for rec in records:
+            if rec.get("seq") == cp_seq:
+                match = rec
+                break
+    finally:
+        close = getattr(records, "close", None)
+        if callable(close):
+            close()
     if match is None:
         return {"ok": False, "reason": (
             f"chain no longer contains seq {cp_seq}, which a signed checkpoint "
