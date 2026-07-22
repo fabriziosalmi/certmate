@@ -165,7 +165,11 @@ PY
   [ "$run_real_cert" = 0 ] && body="$body
 
 real-cert E2E skipped (non-issuance change): $skip_reason"
-  git add modules/__init__.py package.json
+  # README.dockerhub.md too: the bump above rewrites it, and leaving it out of
+  # the commit produced a release PR whose own CI failed on the version-
+  # consistency test — a gate the local run cannot catch, because the bump
+  # happens after the gates.
+  git add modules/__init__.py package.json README.dockerhub.md
   git commit -q -m "$body
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
