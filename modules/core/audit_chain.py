@@ -28,6 +28,19 @@ from typing import Any, Dict, Optional
 CHAIN_FILENAME = "certificate_audit.chain.jsonl"
 GENESIS_PREV = ""
 
+# Written only by an explicit operator prune (#445). Its presence means the
+# chain no longer starts at the genesis: the entries before ``anchor_seq`` were
+# exported, verified off the box and archived, and this file is the signed
+# statement of what they were. Absent on every instance that has never pruned,
+# which is the default and the expectation.
+ANCHOR_FILENAME = "certificate_audit.anchor.json"
+
+
+class AnchorReadError(OSError):
+    """The prune anchor exists but cannot be read or understood. Callers MUST
+    fail closed: treating it as "no anchor" would silently re-interpret a
+    pruned chain as one that should start at the genesis."""
+
 
 class CheckpointReadError(OSError):
     """The checkpoint file exists but cannot be read (permissions, I/O).
@@ -80,13 +93,19 @@ class _ChainVerifier:
     the in-memory record verifier so the two can never drift apart (#444)."""
 
     def __init__(self, anchor_prev_hash: str = GENESIS_PREV,
-                 anchor_seq: Optional[int] = None):
+                 anchor_seq: Optional[int] = None,
+                 remember_hash_at: Optional[int] = None):
         self._prev_hash = anchor_prev_hash
         self._expected_seq = anchor_seq
         self._anchor_prev_hash = anchor_prev_hash
         self._first_seq: Optional[int] = None
         self._count = 0
         self._seen = False
+        # Used to cross-check an anchor against a chain that still contains the
+        # entries it claims were archived (a prune interrupted between writing
+        # the anchor and replacing the chain).
+        self._remember_hash_at = remember_hash_at
+        self.remembered_hash: Optional[str] = None
 
     def _fail(self, reason: str, error_seq) -> Dict[str, Any]:
         result = _blank_result()
@@ -132,6 +151,8 @@ class _ChainVerifier:
             return self._fail(
                 f"hash mismatch at seq {seq}: entry was modified", seq)
 
+        if seq == self._remember_hash_at:
+            self.remembered_hash = rec_hash
         self._prev_hash = rec_hash
         self._expected_seq += 1
         self._count += 1
@@ -179,8 +200,34 @@ def verify_chain(path) -> Dict[str, Any]:
     implementation parsed every line before checking any structure, so an
     unparseable line late in the file masked a hash mismatch early in it.
     Localizing the first fault is the more useful answer.
+
+    If an anchor file sits next to the chain (#445), the chain no longer starts
+    at the genesis and is verified from the anchor instead. The result then
+    carries ``anchored`` / ``anchor_seq``, and callers MUST NOT report it as
+    plain "intact": it attests the entries from the anchor forward, and the
+    archived prefix is attested only by the anchor and the exported bundle an
+    operator holds off the box. Verifying the anchor's *signature* needs crypto
+    and is the caller's job (:meth:`AuditLogger.verify_chain` and the CLI do it)
+    — this stdlib-only function checks that the chain and the anchor agree.
     """
-    verifier = _ChainVerifier()
+    try:
+        anchor = read_anchor(anchor_path_for(path))
+    except AnchorReadError as e:
+        # Fail closed. An unreadable anchor is not "no anchor": the difference
+        # between the two is the difference between a pruned chain and a
+        # chain that should start at the genesis.
+        result = _blank_result()
+        result["anchor_unreadable"] = True
+        result["reason"] = str(e)
+        return result
+    if anchor is not None:
+        return _verify_anchored_chain(path, anchor)
+    return _verify_stream(path, _ChainVerifier())
+
+
+def _verify_stream(path, verifier) -> Dict[str, Any]:
+    """Feed every record in *path* to *verifier*, one line at a time, and
+    return its verdict (or the first failure)."""
     # A corrupt or non-object FINAL line is most likely a truncated trailing
     # write, not tampering, and gets its own wording — so a line is only
     # judged once the next one proves it was not the last.
@@ -200,21 +247,16 @@ def verify_chain(path) -> Dict[str, Any]:
                         return failure
                 pending = raw
     except FileNotFoundError:
-        result: Dict[str, Any] = {
-            "ok": False, "count": 0, "first_seq": None, "last_seq": None,
-            "head_hash": None, "error_seq": None,
-            "reason": "chain file does not exist",
-            # Structured flag so callers deciding absent-vs-tampered do not
-            # have to substring-match the human-readable reason.
-            "chain_file_missing": True,
-        }
+        result = _blank_result()
+        result["reason"] = "chain file does not exist"
+        # Structured flag so callers deciding absent-vs-tampered do not have
+        # to substring-match the human-readable reason.
+        result["chain_file_missing"] = True
         return result
     except OSError as e:
-        return {
-            "ok": False, "count": 0, "first_seq": None, "last_seq": None,
-            "head_hash": None, "error_seq": None,
-            "reason": f"cannot read chain file: {e}",
-        }
+        result = _blank_result()
+        result["reason"] = f"cannot read chain file: {e}"
+        return result
 
     if pending is not None:
         position += 1
@@ -223,6 +265,115 @@ def verify_chain(path) -> Dict[str, Any]:
             return failure
 
     return verifier.finish()
+
+
+def _verify_anchored_chain(path, anchor) -> Dict[str, Any]:
+    """Verify a chain that an operator prune left starting at ``anchor_seq``.
+
+    Two on-disk states are legitimate, because a prune writes the anchor before
+    it replaces the chain and can be interrupted between the two:
+
+    1. The chain starts at ``anchor_seq`` — the completed state. It is verified
+       from the anchor's ``prev_hash``.
+    2. The chain still starts where it started before this prune — the
+       interrupted state, where nothing was actually deleted. That is the
+       genesis on a first prune, and the *superseded* anchor on a later one,
+       which is why an anchor records the one it replaced. Either way the chain
+       is verified from that earlier start and the new anchor is then
+       cross-checked against it: the record before ``anchor_seq`` must hash to
+       the anchor's ``prev_hash``. An anchor that does not match the history it
+       claims to summarise is a failure, not a detail — that is exactly what a
+       planted anchor would look like.
+    """
+    anchor_seq = anchor["anchor_seq"]
+    anchor_prev = anchor["prev_hash"]
+    superseded = anchor.get("supersedes") or None
+
+    first_seq = _first_record_seq(path)
+    if first_seq is None:
+        # No chain to verify. An anchor without a chain is not benign: it
+        # attests that entries existed.
+        result = _verify_stream(path, _ChainVerifier(anchor_prev, anchor_seq))
+        if result.get("ok"):
+            result["ok"] = False
+            result["reason"] = (
+                f"the chain is empty but an anchor attests {anchor['archived_count']} "
+                f"archived entries and a continuation from seq {anchor_seq}")
+        result["anchored"] = True
+        result["anchor_seq"] = anchor_seq
+        return result
+
+    if first_seq == anchor_seq:
+        result = _verify_stream(path, _ChainVerifier(anchor_prev, anchor_seq))
+        result["anchored"] = True
+        result["anchor_seq"] = anchor_seq
+        if result.get("ok"):
+            result["reason"] = (
+                f"intact from the anchor at seq {anchor_seq} "
+                f"({anchor['archived_count']} earlier entries archived)")
+        return result
+
+    # The chain still holds the prefix the anchor claims was archived. Verify
+    # it from wherever it legitimately started before this prune.
+    start_prev, start_seq = GENESIS_PREV, None
+    if superseded:
+        if first_seq != superseded.get("anchor_seq"):
+            result = _blank_result()
+            result["anchored"] = True
+            result["anchor_seq"] = anchor_seq
+            result["error_seq"] = first_seq
+            result["reason"] = (
+                f"the chain starts at seq {first_seq}, which is neither the "
+                f"anchor at seq {anchor_seq} nor the anchor it superseded at "
+                f"seq {superseded.get('anchor_seq')}")
+            return result
+        start_prev = superseded.get("prev_hash") or GENESIS_PREV
+        start_seq = superseded.get("anchor_seq")
+    elif first_seq != 0:
+        result = _blank_result()
+        result["anchored"] = True
+        result["anchor_seq"] = anchor_seq
+        result["error_seq"] = first_seq
+        result["reason"] = (
+            f"the chain starts at seq {first_seq}, which is neither the genesis "
+            f"nor the anchor at seq {anchor_seq}")
+        return result
+    verifier = _ChainVerifier(start_prev, start_seq,
+                              remember_hash_at=anchor_seq - 1)
+    result = _verify_stream(path, verifier)
+    result["anchored"] = True
+    result["anchor_seq"] = anchor_seq
+    result["anchor_pending"] = True
+    if not result.get("ok"):
+        return result
+    if verifier.remembered_hash != anchor_prev:
+        result["ok"] = False
+        result["error_seq"] = anchor_seq - 1
+        result["reason"] = (
+            f"the anchor claims the chain continues from seq {anchor_seq} with a "
+            f"different predecessor hash than the chain's own record at seq "
+            f"{anchor_seq - 1}: the anchor does not describe this chain")
+        return result
+    start = "the genesis" if not superseded else f"seq {superseded['anchor_seq']}"
+    result["reason"] = (
+        f"intact from {start}; an anchor for seq {anchor_seq} is present and "
+        f"consistent, but the archived prefix is still in the chain (an "
+        f"interrupted prune — re-run it or remove the anchor)")
+    return result
+
+
+def _first_record_seq(path) -> Optional[int]:
+    """The ``seq`` of the first parseable record, or None."""
+    for rec in iter_records(path):
+        return rec["seq"]
+    return None
+
+
+def _first_record_seq_after(path, seq: int) -> Optional[int]:
+    """The ``seq`` of the first record after *seq*, or None if there is none."""
+    for rec in iter_records(path, from_seq=seq + 1):
+        return rec["seq"]
+    return None
 
 
 def _feed_raw(verifier, raw: str, position: int,
@@ -414,6 +565,63 @@ def read_checkpoints(path):
         if isinstance(cp, dict) and isinstance(cp.get("seq"), int) and cp.get("hash"):
             out.append(cp)
     return out
+
+
+def anchor_path_for(chain_path):
+    """The anchor file that belongs to *chain_path* (same directory)."""
+    import os
+    return os.path.join(os.path.dirname(str(chain_path)) or ".", ANCHOR_FILENAME)
+
+
+ANCHOR_REQUIRED_FIELDS = (
+    "anchor_seq", "prev_hash", "archived_first_seq", "archived_last_seq",
+    "archived_count", "bundle_sha256", "pruned_at",
+)
+
+# The anchor an anchor replaced, ``{anchor_seq, prev_hash}`` or None on the
+# first prune. Signed like the rest: without it, a prune of an already-pruned
+# chain that is interrupted before the chain is replaced would leave a file
+# starting at the PREVIOUS anchor with no way left to verify it — the old
+# anchor having been overwritten — and the chain would read as tampered.
+ANCHOR_SIGNED_FIELDS = ANCHOR_REQUIRED_FIELDS + ("supersedes",)
+
+
+def anchor_signing_bytes(anchor: Dict[str, Any]) -> bytes:
+    """Canonical bytes an anchor's signature is computed over: every field that
+    describes what was archived, so re-pointing an anchor at a different prefix
+    invalidates the signature."""
+    return canon_bytes({k: anchor.get(k) for k in ANCHOR_SIGNED_FIELDS})
+
+
+def read_anchor(path) -> Optional[Dict[str, Any]]:
+    """Read the prune anchor, or None when there is none (the normal case).
+
+    A malformed anchor raises :class:`AnchorReadError` rather than reading as
+    absent: "no anchor" means "this chain starts at the genesis", and quietly
+    concluding that about a chain whose anchor file is corrupt would turn a
+    pruned chain into a chain that fails verification for the wrong reason —
+    or, worse, let someone hide a prune by mangling one file."""
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            raw = f.read()
+    except FileNotFoundError:
+        return None
+    except OSError as e:
+        raise AnchorReadError(f"cannot read anchor file: {e}") from e
+    try:
+        anchor = json.loads(raw)
+    except json.JSONDecodeError as e:
+        raise AnchorReadError(f"anchor file is not valid JSON: {e}") from e
+    if not isinstance(anchor, dict):
+        raise AnchorReadError("anchor file is not an object")
+    missing = [k for k in ANCHOR_REQUIRED_FIELDS if anchor.get(k) is None]
+    if missing:
+        raise AnchorReadError(f"anchor file is missing {', '.join(missing)}")
+    if not isinstance(anchor["anchor_seq"], int) or anchor["anchor_seq"] < 1:
+        raise AnchorReadError("anchor_seq is not a positive integer")
+    if not anchor["prev_hash"]:
+        raise AnchorReadError("anchor prev_hash is empty (that is the genesis)")
+    return anchor
 
 
 def cross_check_checkpoint(records, checkpoint) -> Dict[str, Any]:

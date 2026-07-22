@@ -152,6 +152,38 @@ def verify_bundle(bundle, expected_pubkey_pem=None):
     return result
 
 
+def _check_anchor_signature(result, chain_path, pubkey_path) -> None:
+    """Verify a pruned chain's anchor against a PEM public key, when one was
+    supplied. Without a key the chain is still structurally verified, but the
+    anchor is an unverified claim and the output has to say so — an anchored
+    chain that reports a bare "intact" is exactly the overclaim #445 is about."""
+    if not pubkey_path:
+        return
+    try:
+        anchor = audit_chain.read_anchor(audit_chain.anchor_path_for(chain_path))
+    except audit_chain.AnchorReadError as e:
+        result["ok"] = False
+        result["reason"] = str(e)
+        return
+    try:
+        pem = open(pubkey_path, "r", encoding="utf-8").read()
+    except OSError as e:
+        result["ok"] = False
+        result["reason"] = f"cannot read --pubkey: {e}"
+        return
+    signing = _import_signing()
+    signature = (anchor or {}).get("signature")
+    if not signature or not signing.verify_signature(
+        pem, signature, audit_chain.anchor_signing_bytes(anchor)
+    ):
+        result["ok"] = False
+        result["reason"] = (
+            f"the anchor at seq {result.get('anchor_seq')} is not signed by the "
+            f"pinned key: entries were removed without a valid attestation")
+        return
+    result["anchor_signature_ok"] = True
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(
         description="Verify a CertMate audit hash chain or signed export bundle.")
@@ -199,11 +231,25 @@ def main(argv=None) -> int:
 
     # Chain mode (Phase 2).
     result = audit_chain.verify_chain(args.path)
+    if result["ok"] and result.get("anchored"):
+        # The structural check passed, but an anchored chain has had entries
+        # removed. Verify the anchor's signature if the operator supplied a key,
+        # and say plainly what is and is not covered either way (#445).
+        _check_anchor_signature(result, args.path, args.pubkey)
     if args.json:
         print(json.dumps(result, indent=2))
     elif result["ok"]:
-        print(f"OK: audit chain intact "
+        scope = ("intact" if not result.get("anchored")
+                 else f"intact from the anchor at seq {result['anchor_seq']}")
+        print(f"OK: audit chain {scope} "
               f"({result['count']} entries, seq {result['first_seq']}..{result['last_seq']})")
+        if result.get("anchored"):
+            print(f"note: this chain was PRUNED. Entries before seq "
+                  f"{result['anchor_seq']} are not in this file; they are attested "
+                  f"by the anchor and live only in the exported archive bundle. "
+                  f"Anchor signature: "
+                  f"{'verified' if result.get('anchor_signature_ok') else 'NOT verified (pass --pubkey)'}.",
+                  file=sys.stderr)
         if result.get("head_hash"):
             print(f"head_hash: {result['head_hash']}")
     else:
