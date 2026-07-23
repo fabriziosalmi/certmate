@@ -4,14 +4,14 @@
 # Azure Key Vault
 azure-keyvault-secrets>=4.7.0
 azure-keyvault-certificates>=4.7.0
-azure-identity>=1.12.0
+azure-identity>=1.25.3
 
 # Needed by the Azure KV Certificate-object code path
 # (`load_pem_x509_certificates` + PKCS12 builder).
 cryptography>=41.0.0
 
 # AWS Secrets Manager
-boto3>=1.26.0
+boto3>=1.43.53
 
 # HashiCorp Vault
 hvac>=1.1.0

@@ -3,17 +3,17 @@
 
 # Self-hosted and enterprise DNS
 certbot-dns-powerdns==0.2.1
-certbot-dns-rfc2136==2.11.0
+certbot-dns-rfc2136==2.11.1
 
 # Popular hosting providers
-certbot-dns-linode==2.11.0
+certbot-dns-linode==2.11.1
 certbot-dns-vultr==1.1.0
 certbot-dns-hetzner==3.0.0
 certbot-dns-hetzner-cloud==1.0.5
 
 # Domain registrars with DNS
-certbot-dns-gandi==1.6.1
-certbot-dns-ovh==2.11.0
+certbot-dns-gandi==1.6.2
+certbot-dns-ovh==2.11.1
 # certbot-dns-namecheap removed: only v1.0.0 exists on PyPI (alpha,
 # targets Python 2.7-3.8) and is incompatible with certbot 2.x / Python 3.12.
 # Namecheap users should use acme-dns or manual DNS challenge instead.
@@ -21,8 +21,8 @@ certbot-dns-porkbun==0.11.0
 certbot-dns-godaddy==2.8.0
 
 # Specialized DNS services
-certbot-dns-dnsmadeeasy==2.11.0
-certbot-dns-nsone==2.11.0
+certbot-dns-dnsmadeeasy==2.11.1
+certbot-dns-nsone==2.11.1
 certbot-dns-he-ddns==0.1.0
 certbot-dns-dynudns==0.0.6
 
