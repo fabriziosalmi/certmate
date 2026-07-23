@@ -24,4 +24,4 @@ cryptography==46.0.7               # GHSA-537c-gmf6-5ccf (HIGH) open by choice; 
 pyopenssl==26.0.0                  # Do not bump to 26.2.0+: removes X509Extension, breaks acme 3.3.0 at import (see SECURITY.md)
 
 # Production server
-gunicorn==23.0.0
+gunicorn==26.0.0
