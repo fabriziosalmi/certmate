@@ -42,6 +42,8 @@ const timeout = setTimeout(() => {
   fail("timed out waiting for tools/list response");
 }, 8000);
 
+let initialized = false;
+
 child.stdout.on("data", (d) => {
   buf += d.toString();
   let idx;
@@ -55,6 +57,14 @@ child.stdout.on("data", (d) => {
     } catch (e) {
       continue;
     }
+    // Track successful initialize response
+    if (msg.id === 1 && msg.result) {
+      initialized = true;
+      // Now send notifications/initialized and tools/list only after initialize succeeded
+      child.stdin.write(JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }) + "\n");
+      child.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} }) + "\n");
+    }
+    // Handle tools/list response
     if (msg.id === 2 && msg.result && msg.result.tools) {
       clearTimeout(timeout);
       const names = msg.result.tools.map((t) => t.name);
@@ -81,7 +91,3 @@ const init = {
   params: { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "smoke", version: "0" } },
 };
 child.stdin.write(JSON.stringify(init) + "\n");
-setTimeout(() => {
-  child.stdin.write(JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }) + "\n");
-  child.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} }) + "\n");
-}, 400);
