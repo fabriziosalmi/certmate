@@ -100,7 +100,9 @@ KEY_RULES = {
 
 
 def _classify_signature(sig_algo):
-    text = (sig_algo or '').lower()
+    # Normalise separators so hyphenated/underscored renderings ("sha-256",
+    # "ecdsa_with_sha384") still match the substring rules.
+    text = (sig_algo or '').lower().replace('-', '').replace('_', '')
     for needle, cls in SIGNATURE_RULES:
         if needle in text:
             return cls
@@ -149,7 +151,13 @@ def build_crypto_report(records, generated_at=None):
         # participates.
         if sig:
             sig_class = _classify_signature(sig)
-            overall = _worst(classification, sig_class)
+            # An UNKNOWN (present but unrecognised) signature must not dominate a
+            # known-good key: only a concretely-classified signature (notably a
+            # WEAK one like SHA-1) participates in the worst-of aggregation.
+            if sig_class == CLASS_UNKNOWN:
+                overall = classification
+            else:
+                overall = _worst(classification, sig_class)
         else:
             sig_class = None
             overall = classification
@@ -202,11 +210,25 @@ _CSV_COLUMNS = (
 )
 
 
+def _csv_safe(value):
+    """Neutralise spreadsheet formula injection in a CSV cell.
+
+    Inventory fields (subject CN, SAN-derived labels, signature algorithm) come
+    from probed / CT-log certificates — i.e. attacker-influenced strings. A cell
+    beginning with ``= + - @`` (or a tab/CR that some apps also treat as a
+    formula lead) is executed by Excel/LibreOffice/Sheets on open, so prefix a
+    single quote to force literal text. Applied only to string cells.
+    """
+    if isinstance(value, str) and value and value[0] in ('=', '+', '-', '@', '\t', '\r'):
+        return "'" + value
+    return value
+
+
 def report_to_csv(report):
-    """Render the report's per-asset table as a CSV string."""
+    """Render the report's per-asset table as a CSV string (formula-injection safe)."""
     buf = io.StringIO()
     writer = csv.DictWriter(buf, fieldnames=_CSV_COLUMNS, extrasaction='ignore')
     writer.writeheader()
     for asset in report.get('assets', []):
-        writer.writerow(asset)
+        writer.writerow({k: _csv_safe(asset.get(k)) for k in _CSV_COLUMNS})
     return buf.getvalue()

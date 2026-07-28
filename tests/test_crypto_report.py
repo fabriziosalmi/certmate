@@ -138,3 +138,32 @@ def test_csv_export():
 def test_csv_empty_is_header_only():
     csv_text = report_to_csv(build_crypto_report([]))
     assert len(csv_text.strip().splitlines()) == 1
+
+
+def test_csv_formula_injection_is_neutralised():
+    # A cert whose subject CN is attacker-controlled (probed/CT) and starts with
+    # a formula lead must be prefixed with a quote in the CSV export.
+    rep = build_crypto_report([
+        _rec('a', {'type': 'RSA', 'size': 2048}, 'sha256'),
+    ])
+    rep['assets'][0]['subject_cn'] = '=HYPERLINK("http://evil","x")'
+    rep['assets'][0]['signature_algorithm'] = '+SUM(A1:A9)'
+    csv_text = report_to_csv(rep)
+    data_line = csv_text.strip().splitlines()[1]
+    assert data_line.startswith("'=HYPERLINK") or '"\'=HYPERLINK' in data_line
+    assert "'+SUM(A1:A9)" in csv_text
+
+
+def test_hyphenated_signature_still_classified():
+    # RSASSA-PSS / hyphenated renderings like 'sha-256' must not fall to unknown.
+    a = _one(_rec('a', {'type': 'RSA', 'size': 2048}, 'RSASSA-PSS-sha-256'))
+    assert a['signature_classification'] == CLASS_ACCEPTABLE
+    assert a['classification'] == CLASS_ACCEPTABLE
+
+
+def test_unrecognised_signature_does_not_downgrade_good_key():
+    # A present-but-unrecognised signature keeps the key's classification rather
+    # than dragging a strong key to 'unknown'.
+    a = _one(_rec('a', {'type': 'RSA', 'size': 2048}, 'totally-bespoke-algo'))
+    assert a['signature_classification'] == CLASS_UNKNOWN
+    assert a['classification'] == CLASS_ACCEPTABLE

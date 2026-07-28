@@ -200,3 +200,31 @@ def test_crashing_probe_is_isolated(inv):
 def test_empty_endpoint_list(inv):
     assert discover_endpoints([], inv, probe=_FakeProbe({})) == []
     assert inv.count() == 0
+
+
+def test_inventory_write_error_is_isolated(inv):
+    # If the inventory write raises for one endpoint, the sweep must continue
+    # and report that endpoint as failed — not abort the whole run.
+    class _BoomInventory:
+        def __init__(self, real):
+            self.real = real
+            self.calls = 0
+
+        def record_probe_result(self, *a, **k):
+            self.calls += 1
+            if self.calls == 1:
+                raise RuntimeError('disk full')
+            return self.real.record_probe_result(*a, **k)
+
+    boom = _BoomInventory(inv)
+    probe = _FakeProbe({
+        'a.example.com': _ok('a.example.com', 443, 'fpA'),
+        'b.example.com': _ok('b.example.com', 443, 'fpB'),
+    })
+    results = discover_endpoints(['a.example.com', 'b.example.com'], boom, probe=probe)
+    by = {r['endpoint']: r for r in results}
+    assert by['a.example.com']['status'] == 'unreachable'
+    assert 'inventory write failed' in by['a.example.com']['error']
+    # The second endpoint was still recorded despite the first's failure.
+    assert by['b.example.com']['status'] == 'ok'
+    assert inv.get('fpB') is not None

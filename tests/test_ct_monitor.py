@@ -235,6 +235,38 @@ def test_search_error_isolated(settings_manager, inventory):
     assert inventory.get(fp) is not None
 
 
+def test_tz_aware_not_after_does_not_abort_poll(settings_manager, inventory):
+    # A Z-suffixed / tz-aware not_after must not raise TypeError and abort the
+    # poll (regression: fromisoformat returns an aware datetime).
+    der, entry, fp = _make_cert(0xF1, cn='good.example.com')
+    entry_z = dict(entry, not_after=entry['not_after'] + 'Z', serial_number='f2', id=0xF2)
+    entry_off = dict(entry, not_after=entry['not_after'] + '+00:00',
+                     serial_number='f3', id=0xF3)
+    der2, _, _ = _make_cert(0xF2, cn='good.example.com')
+    der3, _, _ = _make_cert(0xF3, cn='good.example.com')
+    client = _FakeClient(
+        {'example.com': [entry_z, entry_off, entry]},
+        {entry['id']: der, 0xF2: der2, 0xF3: der3},
+    )
+    mgr = CTMonitorManager(settings_manager, inventory, client=client)
+    _enable(mgr)
+    out = mgr.run_poll()
+    assert out['skipped'] is False
+    assert out['new'] >= 1          # the poll completed instead of raising
+
+
+def test_non_dict_entry_is_isolated(settings_manager, inventory):
+    der, entry, fp = _make_cert(0xD1, cn='good.example.com')
+    client = _FakeClient({'example.com': ['not-a-dict', None, entry]},
+                         {entry['id']: der})
+    mgr = CTMonitorManager(settings_manager, inventory, client=client)
+    _enable(mgr)
+    out = mgr.run_poll()
+    # The valid entry was ingested despite the junk ones.
+    assert out['new'] == 1
+    assert inventory.get(fp) is not None
+
+
 def test_fetch_error_isolated(settings_manager, inventory):
     der_ok, e_ok, fp_ok = _make_cert(0x88, cn='ok.example.com')
     _, e_bad, _ = _make_cert(0x99, cn='bad.example.com')

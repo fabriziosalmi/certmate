@@ -72,7 +72,10 @@
         // Only unmanaged (discovered) certificates can be adopted, and only by
         // an operator+. Managed certs and viewers get no button.
         if (r.managed || !roleAtLeast('operator')) { return ''; }
-        return '<button type="button" onclick="InventoryPage.adopt(\'' + escapeHtml(r.fingerprint) + '\')" '
+        // Pass the fingerprint via a data attribute (read in adoptFromEl) rather
+        // than interpolating it into an inline onclick JS-string.
+        return '<button type="button" data-fp="' + escapeHtml(r.fingerprint) + '" '
+            + 'onclick="InventoryPage.adoptFromEl(this)" '
             + 'class="px-2 py-1 text-xs bg-surface-2 text-primary rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition" '
             + 'title="Take over issuance/renewal of this certificate">'
             + '<i class="fas fa-hand-holding-medical mr-1"></i>Adopt</button>';
@@ -266,9 +269,14 @@
             .catch(function () { /* stay read-only */ });
     }
 
+    function adoptFromEl(elm) {
+        var fp = elm && elm.getAttribute('data-fp');
+        if (fp) { adopt(fp); }
+    }
+
     window.InventoryPage = {
         load: load, render: render, saveConfig: saveConfig,
-        runScan: runScan, adopt: adopt
+        runScan: runScan, adopt: adopt, adoptFromEl: adoptFromEl
     };
 
     document.addEventListener('DOMContentLoaded', function () {

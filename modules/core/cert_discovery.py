@@ -148,15 +148,22 @@ def discover_endpoints(
             'error': probe_result.get('error'),
         }
         if probe_result.get('status') == STATUS_OK:
-            fingerprint = inventory.record_probe_result(
-                probe_result,
-                source='issued' if is_managed else 'probed',
-                managed=is_managed,
-                managed_domain=managed_domain,
-                observed_at=observed_at,
-            )
-            entry['fingerprint'] = fingerprint
-            entry['error'] = None
+            # The inventory write is inside the isolation boundary: a storage
+            # error for one endpoint must not abort the whole sweep.
+            try:
+                fingerprint = inventory.record_probe_result(
+                    probe_result,
+                    source='issued' if is_managed else 'probed',
+                    managed=is_managed,
+                    managed_domain=managed_domain,
+                    observed_at=observed_at,
+                )
+                entry['fingerprint'] = fingerprint
+                entry['error'] = None
+            except Exception as e:
+                logger.warning("Discovery could not record %s:%s: %s", host, port, e)
+                entry['status'] = 'unreachable'
+                entry['error'] = f'inventory write failed: {e}'
         results.append(entry)
 
     return results

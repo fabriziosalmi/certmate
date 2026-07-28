@@ -30,7 +30,7 @@ import json
 import logging
 import urllib.parse
 import urllib.request
-from datetime import datetime
+from datetime import datetime, timezone
 
 from .cert_probe import parse_certificate
 
@@ -119,14 +119,26 @@ def _serial_to_decimal(serial_hex):
 
 
 def _is_currently_valid(entry, now):
-    """True if the crt.sh entry's not_after is in the future (or unparseable)."""
+    """True if the crt.sh entry's not_after is in the future (or unparseable).
+
+    crt.sh usually emits a naive timestamp, but a tz-aware/``Z``-suffixed value
+    would otherwise make ``fromisoformat`` return an aware datetime and blow up
+    the comparison against the naive ``now`` — so normalise to naive UTC and
+    treat anything unparseable as "keep it" rather than raising.
+    """
     not_after = entry.get('not_after')
     if not not_after:
         return True
+    text = str(not_after).strip()
+    if text.endswith('Z'):
+        text = text[:-1]
     try:
-        return datetime.fromisoformat(not_after) >= now
-    except ValueError:
+        parsed = datetime.fromisoformat(text)
+    except (ValueError, TypeError):
         return True
+    if parsed.tzinfo is not None:
+        parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
+    return parsed >= now
 
 
 def _managed_domains(settings):
@@ -210,7 +222,12 @@ class CTMonitorManager:
         now = now or datetime.utcnow()
         client = self._resolve_client(config)
         only_valid = config.get('only_valid', True)
-        cap = config.get('max_new_per_run', 100)
+        # Coerce defensively: config comes from raw settings, which a hand-edit
+        # could leave non-numeric.
+        try:
+            cap = int(config.get('max_new_per_run', 100))
+        except (TypeError, ValueError):
+            cap = 100
 
         new_count = known_count = 0
         errors = []
@@ -225,18 +242,27 @@ class CTMonitorManager:
                 continue
 
             for entry in entries:
-                if only_valid and not _is_currently_valid(entry, now):
-                    continue
-                serial = _serial_to_decimal(entry.get('serial_number'))
-                if serial and self.inventory.find_by_serial(serial):
-                    known_count += 1
-                    continue
-                # Unknown certificate: fetch its DER for the true fingerprint.
-                if new_count >= cap:
-                    truncated = True
-                    continue
-                if self._ingest_new(client, entry, now):
-                    new_count += 1
+                # Per-entry isolation: a malformed entry (non-dict, bad date,
+                # inventory hiccup) must never abort the poll and strand every
+                # remaining domain.
+                try:
+                    if not isinstance(entry, dict):
+                        continue
+                    if only_valid and not _is_currently_valid(entry, now):
+                        continue
+                    serial = _serial_to_decimal(entry.get('serial_number'))
+                    if serial and self.inventory.find_by_serial(serial):
+                        known_count += 1
+                        continue
+                    # Unknown certificate: fetch its DER for the true fingerprint.
+                    if new_count >= cap:
+                        truncated = True
+                        continue
+                    if self._ingest_new(client, entry, now):
+                        new_count += 1
+                except Exception as e:
+                    logger.warning("CT-log: skipping a bad entry for %s: %s", domain, e)
+                    errors.append({'domain': domain, 'error': f'entry error: {e}'})
 
             if truncated:
                 logger.warning(
@@ -270,11 +296,11 @@ class CTMonitorManager:
         try:
             der = client.fetch_certificate(crtsh_id)
             parsed = parse_certificate(der)
+            fingerprint = self.inventory.record_certificate(
+                parsed['certificate'], source='ct-log', managed=False,
+                observed_at=now.replace(microsecond=0).isoformat() + 'Z',
+            )
         except (CrtShError, ValueError) as e:
             logger.warning("CT-log: could not ingest crt.sh id %s: %s", crtsh_id, e)
             return False
-        fingerprint = self.inventory.record_certificate(
-            parsed['certificate'], source='ct-log', managed=False,
-            observed_at=now.replace(microsecond=0).isoformat() + 'Z',
-        )
         return fingerprint is not None

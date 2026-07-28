@@ -31,6 +31,7 @@ single committed transaction, so concurrent Flask worker threads are safe.
 import json
 import logging
 import sqlite3
+from contextlib import contextmanager
 from pathlib import Path
 
 from .utils import utc_now_iso
@@ -109,9 +110,35 @@ class CertInventory:
         conn.execute('PRAGMA foreign_keys = ON')
         return conn
 
+    @contextmanager
+    def _read_conn(self):
+        """A short-lived connection for reads, always closed on exit.
+
+        ``sqlite3``'s own ``with conn`` context manages the transaction but does
+        NOT close the connection; wrapping it here honours the "short-lived
+        connection per operation" contract on every interpreter (not just
+        CPython's prompt refcounting).
+        """
+        conn = self._connect()
+        try:
+            yield conn
+        finally:
+            conn.close()
+
+    @contextmanager
+    def _write_conn(self):
+        """A short-lived connection for writes: one committed transaction,
+        always closed on exit (rolled back if the body raises)."""
+        conn = self._connect()
+        try:
+            with conn:
+                yield conn
+        finally:
+            conn.close()
+
     def _migrate(self):
         """Create/upgrade the schema, tracked by ``PRAGMA user_version``."""
-        with self._connect() as conn:
+        with self._write_conn() as conn:
             version = conn.execute('PRAGMA user_version').fetchone()[0]
             if version >= SCHEMA_VERSION:
                 return
@@ -178,7 +205,7 @@ class CertInventory:
         san_json = json.dumps(list(san_dns or []))
         managed_int = 1 if managed else 0
 
-        with self._connect() as conn:
+        with self._write_conn() as conn:
             conn.execute(
                 """
                 INSERT INTO certificates (
@@ -276,7 +303,7 @@ class CertInventory:
 
     def get(self, fingerprint):
         """Return the full record for *fingerprint* (cert + endpoints), or None."""
-        with self._connect() as conn:
+        with self._read_conn() as conn:
             row = conn.execute(
                 "SELECT * FROM certificates WHERE fingerprint = ?", (fingerprint,)
             ).fetchone()
@@ -308,7 +335,7 @@ class CertInventory:
             sql += " LIMIT ? OFFSET ?"
             params.extend([int(limit), int(offset)])
 
-        with self._connect() as conn:
+        with self._read_conn() as conn:
             cert_rows = conn.execute(sql, params).fetchall()
             records = []
             for row in cert_rows:
@@ -322,7 +349,7 @@ class CertInventory:
 
     def find_by_endpoint(self, host, port):
         """Return every record observed at *host*:*port* (usually one)."""
-        with self._connect() as conn:
+        with self._read_conn() as conn:
             rows = conn.execute(
                 "SELECT fingerprint FROM endpoints WHERE host = ? AND port = ?",
                 (host, int(port)),
@@ -337,7 +364,7 @@ class CertInventory:
         a request to fetch its DER: a real certificate's serial is effectively
         unique, so a serial hit means we already have this cert.
         """
-        with self._connect() as conn:
+        with self._read_conn() as conn:
             rows = conn.execute(
                 "SELECT fingerprint FROM certificates WHERE serial = ?",
                 (str(serial),),
@@ -349,7 +376,7 @@ class CertInventory:
 
         Returns True if the record existed and was updated.
         """
-        with self._connect() as conn:
+        with self._write_conn() as conn:
             cur = conn.execute(
                 "UPDATE certificates SET managed = 1, managed_domain = ? "
                 "WHERE fingerprint = ?",
@@ -359,7 +386,7 @@ class CertInventory:
 
     def count(self):
         """Return the number of distinct certificates in the inventory."""
-        with self._connect() as conn:
+        with self._read_conn() as conn:
             return conn.execute("SELECT COUNT(*) FROM certificates").fetchone()[0]
 
 

@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 import pytest
 
 from modules.core.inventory_view import (
-    build_inventory_view, days_until_expiry, expiry_status,
+    build_inventory_view, days_until_expiry, expiry_status, record_in_scope,
     EXPIRY_EXPIRED, EXPIRY_CRITICAL, EXPIRY_WARNING, EXPIRY_OK,
 )
 
@@ -122,3 +122,55 @@ def test_empty():
     view = build_inventory_view([], NOW)
     assert view['certificates'] == []
     assert view['summary']['total'] == 0
+
+
+# --- record_in_scope (API-key domain scoping of inventory) ----------------- #
+
+def _unrestricted(_domain):
+    return True
+
+
+def _only(*allowed):
+    allowed = set(allowed)
+    return lambda d: d in allowed
+
+
+def test_scope_unrestricted_sees_everything():
+    assert record_in_scope(_rec(subject_cn='x.example.com'), _unrestricted) is True
+
+
+def test_scope_matches_on_subject_cn():
+    rec = _rec(subject_cn='a.example.com', san_dns=[])
+    assert record_in_scope(rec, _only('a.example.com')) is True
+    assert record_in_scope(rec, _only('b.example.com')) is False
+
+
+def test_scope_matches_on_any_san():
+    rec = _rec(subject_cn='a.example.com', san_dns=['a.example.com', 'b.example.com'])
+    # Scoped to b only: still visible because a SAN matches.
+    assert record_in_scope(rec, _only('b.example.com')) is True
+
+
+def test_scope_out_of_scope_record_hidden():
+    rec = _rec(subject_cn='secret.internal', san_dns=['secret.internal'])
+    assert record_in_scope(rec, _only('a.example.com')) is False
+
+
+def test_scope_nameless_record_only_unrestricted():
+    rec = _rec(subject_cn=None, san_dns=[])
+    assert record_in_scope(rec, _unrestricted) is True   # '' matches unrestricted
+    assert record_in_scope(rec, _only('a.example.com')) is False
+
+
+def test_scope_wiring_matches_certificatelist_semantics():
+    # Regression guard: the endpoint wires domain_matches_scope(domain, scope)
+    # (NOT user_can_access_domain), so an unrestricted caller (scope None) sees
+    # EVERY record — including a nameless one — instead of an empty inventory.
+    from modules.core.auth import AuthManager
+    dms = AuthManager.domain_matches_scope
+    unrestricted = lambda d: dms(d, None)                     # noqa: E731
+    assert record_in_scope(_rec(subject_cn='x.example.com'), unrestricted) is True
+    assert record_in_scope(_rec(subject_cn=None, san_dns=[]), unrestricted) is True
+    scoped = lambda d: dms(d, ['a.example.com'])              # noqa: E731
+    assert record_in_scope(_rec(subject_cn='a.example.com', san_dns=[]), scoped) is True
+    assert record_in_scope(_rec(subject_cn='b.example.com', san_dns=[]), scoped) is False

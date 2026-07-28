@@ -111,6 +111,15 @@ def test_key_options_ecdsa():
     assert plan['key_size'] is None
 
 
+def test_key_options_ecdsa_openssl_curve_alias():
+    # An observed OpenSSL-style 'prime256v1' must map to the create form's
+    # canonical 'secp256r1' rather than being dropped.
+    plan = build_adoption_plan(
+        _rec(key={'type': 'ECDSA', 'curve': 'prime256v1'}), _FakeDNS(),
+        settings={'email': 'a@b.com'})
+    assert plan['elliptic_curve'] == 'secp256r1'
+
+
 def test_key_options_unusual_size_falls_back():
     # A 1024-bit RSA key isn't offered by the create form -> size dropped.
     plan = build_adoption_plan(

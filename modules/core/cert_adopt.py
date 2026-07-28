@@ -18,6 +18,9 @@ nothing, so it is safe to call for a live "can I adopt this?" affordance.
 # cert falls back to the configured defaults rather than being forced through.
 _RSA_SIZES = {2048, 3072, 4096}
 _EC_CURVES = {'secp256r1', 'secp384r1'}
+# OpenSSL-style curve aliases mapped to the create form's canonical names, so an
+# observed 'prime256v1' still pre-fills as 'secp256r1' instead of being dropped.
+_EC_CURVE_ALIASES = {'prime256v1': 'secp256r1', 'prime384v1': 'secp384r1'}
 
 
 def _derive_names(record):
@@ -45,6 +48,7 @@ def _derive_key_options(record):
         return 'rsa', (size if size in _RSA_SIZES else None), None
     if ktype == 'ECDSA':
         curve = key.get('curve')
+        curve = _EC_CURVE_ALIASES.get(curve, curve)
         return 'ecdsa', None, (curve if curve in _EC_CURVES else None)
     return None, None, None
 

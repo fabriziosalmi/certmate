@@ -27,7 +27,7 @@ from ..core.utils import utc_now_iso, classify_renewal_error
 from ..core.certificates import DomainOperationInProgress
 from ..core.cert_service import CertificateService, DomainOutOfScope
 from ..core.audit_context import audit_context_from_request
-from ..core.inventory_view import build_inventory_view
+from ..core.inventory_view import build_inventory_view, record_in_scope
 
 _DOMAIN_RE = re.compile(r'^(\*\.)?([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$')
 
@@ -407,6 +407,29 @@ def create_api_resources(api, models, managers):
             'error': f'API key not authorized for domain {domain}',
             'code': 'DOMAIN_OUT_OF_SCOPE',
         }, 403
+
+    def _record_in_scope(record):
+        """True if the caller's API-key scope covers any domain the inventory
+        *record* names (subject CN or a SAN). Unrestricted callers (sessions,
+        legacy tokens, unscoped keys) always pass; a scoped key only sees
+        discovered/managed certs within its allowed_domains, matching the
+        boundary CertificateList already enforces. A record with no names is
+        visible only to unrestricted callers.
+
+        Matches CertificateList exactly: scope comes from the user's
+        allowed_domains and is fed to domain_matches_scope, so an unrestricted
+        caller (scope None — including a request whose current_user is unset)
+        sees everything. Using user_can_access_domain here instead would be a
+        regression: it returns False for an empty user dict and would hide the
+        WHOLE inventory from a legitimate unrestricted caller."""
+        user = getattr(request, 'current_user', None) or {}
+        scope = user.get('allowed_domains')
+        return record_in_scope(
+            record, lambda d: auth_manager.domain_matches_scope(d, scope)
+        )
+
+    def _scope_filter_records(records):
+        return [r for r in records if _record_in_scope(r)]
 
     # Health check endpoint
     class HealthCheck(Resource):
@@ -1040,7 +1063,7 @@ def create_api_resources(api, models, managers):
                     managed_filter = managed.strip().lower() in ('1', 'true', 'yes', 'on')
                 source = request.args.get('source') or None
                 records = inventory.list_all(managed=managed_filter, source=source)
-                return build_inventory_view(records)
+                return build_inventory_view(_scope_filter_records(records))
             except Exception as e:
                 logger.error(f"Error listing inventory: {e}")
                 return {'error': 'Failed to list inventory'}, 500
@@ -1120,7 +1143,7 @@ def create_api_resources(api, models, managers):
             if inventory is None:
                 return {'error': 'Certificate inventory not available'}, 503
             try:
-                records = inventory.list_all()
+                records = _scope_filter_records(inventory.list_all())
                 report = build_crypto_report(records, generated_at=utc_now_iso())
             except Exception as e:
                 logger.error(f"Error building crypto report: {e}")
@@ -1147,7 +1170,7 @@ def create_api_resources(api, models, managers):
             if inventory is None or dns_mgr is None:
                 return {'error': 'Certificate inventory not available'}, 503
             record = inventory.get(fingerprint)
-            if record is None:
+            if record is None or not _record_in_scope(record):
                 return {'error': 'Certificate not found in inventory'}, 404
             return build_adoption_plan(record, dns_mgr)
 
@@ -1165,7 +1188,7 @@ def create_api_resources(api, models, managers):
                 return {'error': 'Certificate adoption not available'}, 503
 
             record = inventory.get(fingerprint)
-            if record is None:
+            if record is None or not _record_in_scope(record):
                 return {'error': 'Certificate not found in inventory'}, 404
 
             plan = build_adoption_plan(record, dns_mgr)

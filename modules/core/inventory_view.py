@@ -22,6 +22,28 @@ WARNING_DAYS = 30
 FORECAST_BUCKETS = (7, 30, 90)
 
 
+def record_in_scope(record, can_access):
+    """True if an API-key scope covers any domain an inventory *record* names.
+
+    *can_access* is ``callable(domain) -> bool`` (the endpoint wires in
+    ``auth_manager.user_can_access_domain`` bound to the current user, which
+    returns True for every domain when the caller is unrestricted). A record is
+    visible if the caller can access its subject CN or any SAN; a record with no
+    names is visible only to an unrestricted caller (tested via the empty
+    domain, which an unrestricted scope matches and a scoped one does not).
+
+    Kept here, pure and auth-free, so the discovered-cert visibility boundary is
+    unit-testable without standing up the auth stack.
+    """
+    names = []
+    if record.get('subject_cn'):
+        names.append(record['subject_cn'])
+    names.extend(record.get('san_dns') or [])
+    if not names:
+        return can_access('')
+    return any(can_access(n) for n in names)
+
+
 def _parse_iso(value):
     """Parse an inventory ISO timestamp (``...Z`` or offset) to naive UTC.
 

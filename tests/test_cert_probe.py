@@ -267,6 +267,14 @@ def test_hostname_ip_san_match():
     assert v['hostname_match'] is True
 
 
+def test_hostname_ipv6_san_match_canonicalises():
+    # An expanded target must match a compressed IPv6 SAN and vice-versa.
+    cert, _ = _build_cert(subject_cn='v6.example.com', san_ip=['2001:db8::1'])
+    v = parse_certificate(_der(cert),
+                          server_name='2001:db8:0:0:0:0:0:1')['validation']
+    assert v['hostname_match'] is True
+
+
 def test_hostname_none_when_not_requested():
     cert, _ = _build_cert(san_dns=['host.example.com'])
     v = parse_certificate(_der(cert))['validation']
@@ -285,6 +293,9 @@ def test_hostname_none_when_not_requested():
     '0.0.0.0', '::',                    # unspecified
     '::ffff:10.0.0.1',                  # IPv4-mapped private
     '224.0.0.1',                        # multicast
+    '100.64.0.1',                       # RFC 6598 CGNAT / Tailscale
+    '100.127.255.255',                  # CGNAT upper bound
+    '192.0.2.5',                        # TEST-NET-1 (non-global)
 ])
 def test_ip_is_blocked_rejects_sensitive(addr):
     assert ip_is_blocked(addr) is not None
@@ -428,6 +439,19 @@ def test_probe_expired_cert_still_described(tls_server):
                                allow_private=True, server_name='localhost')
     assert result['status'] == STATUS_OK
     assert result['validation']['is_expired'] is True
+
+
+def test_probe_invalid_server_name_does_not_raise(tls_server):
+    # A malformed SNI makes wrap_socket raise ValueError/UnicodeError/TypeError
+    # (none are OSError) — the probe must still return a status, never raise, so
+    # one bad target can't abort an inventory sweep.
+    cert, key = _build_cert(subject_cn='localhost', san_dns=['localhost'])
+    srv = tls_server(cert, key=key)
+    for bad in ('.bad.example.com', 'bad_label\x00', 'a' * 300):
+        result = probe_certificate('127.0.0.1', port=srv.port, allow_private=True,
+                                   server_name=bad, timeout=3)
+        assert result['status'] == STATUS_UNREACHABLE
+        assert result['error_class'] == 'tls_error'
 
 
 def test_probe_connection_refused_is_unreachable():

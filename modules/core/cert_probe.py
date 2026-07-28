@@ -131,6 +131,13 @@ def ip_is_blocked(ip_str):
     for label, hit in checks:
         if hit:
             return f'{label} address {ip}'
+    # Catch-all: refuse anything not globally routable. The category checks
+    # above give precise labels, but they miss ranges like RFC 6598 shared /
+    # CGNAT space (100.64.0.0/10, used by carriers and Tailscale) and various
+    # special-purpose blocks. A probe is meant for public endpoints; anything
+    # non-global is an SSRF risk unless the operator explicitly opts in.
+    if not ip.is_global:
+        return f'non-global address {ip}'
     return None
 
 
@@ -316,12 +323,21 @@ def _hostname_matches(server_name, subject_cn, dns_names, ip_names):
     if not name:
         return None
 
-    # Literal IP target: only a SAN IPAddress entry counts.
+    # Literal IP target: only a SAN IPAddress entry counts. Compare parsed
+    # addresses so an expanded target matches a compressed SAN (and vice versa),
+    # e.g. 2001:db8:0:0:0:0:0:1 == 2001:db8::1.
     try:
-        ipaddress.ip_address(name)
-        return name in {ip.lower() for ip in ip_names}
+        target_ip = ipaddress.ip_address(name)
     except ValueError:
-        pass
+        target_ip = None
+    if target_ip is not None:
+        san_ips = set()
+        for ip in ip_names:
+            try:
+                san_ips.add(ipaddress.ip_address(ip))
+            except ValueError:
+                continue
+        return target_ip in san_ips
 
     candidates = list(dns_names)
     # CN is only consulted when the certificate carries no dNSName SANs, which
@@ -476,6 +492,12 @@ def probe_certificate(host, port=443, timeout=None, allow_private=None,
         return _unreachable_result(host, port, connect_ip, ERR_TLS, str(e))
     except (ConnectionError, OSError) as e:
         return _unreachable_result(host, port, connect_ip, ERR_CONNECTION, str(e))
+    except (ValueError, TypeError) as e:
+        # An invalid SNI / server_name (empty or over-long label, embedded NUL)
+        # makes wrap_socket raise ValueError/UnicodeError/TypeError — none are
+        # OSError, so without this a single malformed target would escape the
+        # "never raises" contract and abort a whole inventory sweep.
+        return _unreachable_result(host, port, connect_ip, ERR_TLS, str(e))
 
     if not cert_bytes:
         return _unreachable_result(
