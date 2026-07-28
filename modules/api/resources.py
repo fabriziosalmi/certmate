@@ -27,6 +27,7 @@ from ..core.utils import utc_now_iso, classify_renewal_error
 from ..core.certificates import DomainOperationInProgress
 from ..core.cert_service import CertificateService, DomainOutOfScope
 from ..core.audit_context import audit_context_from_request
+from ..core.inventory_view import build_inventory_view
 
 _DOMAIN_RE = re.compile(r'^(\*\.)?([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$')
 
@@ -1016,6 +1017,96 @@ def create_api_resources(api, models, managers):
             except Exception as e:
                 logger.error(f"Error listing certificates: {e}")
                 return {'error': 'Failed to list certificates'}, 500
+
+    # --- Certificate inventory (discovery) -------------------------------- #
+    # The inventory is populated by the deep TLS probe (#467), scheduled
+    # endpoint discovery (#469) and CT-log monitoring (#470). These endpoints
+    # expose it to the dashboard (#471). cert_inventory / cert_discovery /
+    # ct_monitor are optional managers (absent in minimal-manager unit setups),
+    # so every handler guards for their absence with a 503.
+    class InventoryList(Resource):
+        @api.doc(security='Bearer')
+        @auth_manager.require_role('viewer')
+        def get(self):
+            """List the certificate inventory (issued + discovered) with an
+            expiry forecast. Optional filters: ?managed=true/false, ?source=."""
+            inventory = managers.get('cert_inventory')
+            if inventory is None:
+                return {'error': 'Certificate inventory not available'}, 503
+            try:
+                managed = request.args.get('managed')
+                managed_filter = None
+                if managed is not None and managed != '':
+                    managed_filter = managed.strip().lower() in ('1', 'true', 'yes', 'on')
+                source = request.args.get('source') or None
+                records = inventory.list_all(managed=managed_filter, source=source)
+                return build_inventory_view(records)
+            except Exception as e:
+                logger.error(f"Error listing inventory: {e}")
+                return {'error': 'Failed to list inventory'}, 500
+
+    class InventoryConfig(Resource):
+        @api.doc(security='Bearer')
+        @auth_manager.require_role('viewer')
+        def get(self):
+            """Return discovery + CT-log monitoring configuration."""
+            discovery = managers.get('cert_discovery')
+            ct_monitor = managers.get('ct_monitor')
+            if discovery is None or ct_monitor is None:
+                return {'error': 'Certificate discovery not available'}, 503
+            return {
+                'discovery': discovery.get_config(),
+                'ct_monitoring': ct_monitor.get_config(),
+            }
+
+        @api.doc(security='Bearer')
+        @auth_manager.require_role('admin')
+        def post(self):
+            """Update discovery and/or CT-log monitoring configuration.
+
+            Body may carry a ``discovery`` and/or ``ct_monitoring`` object; each
+            is validated and persisted by its manager (a bad endpoint spec is a
+            400). Returns the effective configuration after the update.
+            """
+            discovery = managers.get('cert_discovery')
+            ct_monitor = managers.get('ct_monitor')
+            if discovery is None or ct_monitor is None:
+                return {'error': 'Certificate discovery not available'}, 503
+            payload = request.get_json(silent=True) or {}
+            try:
+                if isinstance(payload.get('discovery'), dict):
+                    discovery.save_config(payload['discovery'])
+                if isinstance(payload.get('ct_monitoring'), dict):
+                    ct_monitor.save_config(payload['ct_monitoring'])
+            except ValueError as e:
+                return {'error': str(e)}, 400
+            return {
+                'discovery': discovery.get_config(),
+                'ct_monitoring': ct_monitor.get_config(),
+            }
+
+    class InventoryScan(Resource):
+        @api.doc(security='Bearer')
+        @auth_manager.require_role('admin')
+        def post(self):
+            """Run a discovery sweep and a CT-log poll now, returning their
+            summaries. Both are failure-isolated and no-ops when disabled."""
+            discovery = managers.get('cert_discovery')
+            ct_monitor = managers.get('ct_monitor')
+            if discovery is None or ct_monitor is None:
+                return {'error': 'Certificate discovery not available'}, 503
+            result = {}
+            try:
+                result['discovery'] = discovery.run_discovery()
+            except Exception as e:
+                logger.error(f"Discovery scan failed: {e}")
+                result['discovery'] = {'error': 'discovery failed'}
+            try:
+                result['ct_monitoring'] = ct_monitor.run_poll()
+            except Exception as e:
+                logger.error(f"CT-log poll failed: {e}")
+                result['ct_monitoring'] = {'error': 'ct poll failed'}
+            return result
 
     class CreateCertificate(Resource):
         @api.doc(security='Bearer')
@@ -3631,6 +3722,9 @@ def create_api_resources(api, models, managers):
         'CacheStats': CacheStats,
         'CacheClear': CacheClear,
         'CertificateList': CertificateList,
+        'InventoryList': InventoryList,
+        'InventoryConfig': InventoryConfig,
+        'InventoryScan': InventoryScan,
         'CreateCertificate': CreateCertificate,
         'ZombieScan': ZombieScan,
         'CheckDNSAlias': CheckDNSAlias,

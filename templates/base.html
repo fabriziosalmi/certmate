@@ -67,6 +67,9 @@
                     </button>
                     <!-- Primary operations — icon-only on desktop (label via tooltip +
                          aria-label); on mobile they live in the bottom tab bar. -->
+                    <a href="/inventory" {% if request.path == '/inventory' %}aria-current="page"{% endif %} class="hidden md:inline-flex items-center px-2 py-2 rounded-md border-b-2 hover:bg-hover {% if request.path == '/inventory' %}text-primary border-primary{% else %}text-muted border-transparent{% endif %}" title="Inventory" aria-label="Certificate inventory">
+                        <i class="fas fa-boxes-stacked"></i>
+                    </a>
                     <a href="/activity" {% if request.path == '/activity' %}aria-current="page"{% endif %} class="hidden md:inline-flex items-center px-2 py-2 rounded-md border-b-2 hover:bg-hover {% if request.path == '/activity' %}text-primary border-primary{% else %}text-muted border-transparent{% endif %}" title="Activity" aria-label="Activity">
                         <i class="fas fa-history"></i>
                     </a>

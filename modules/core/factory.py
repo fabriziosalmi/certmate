@@ -901,10 +901,12 @@ def setup_api(container: AppContainer, app):
     ns_cache = Namespace('cache', description='Cache management operations')
     ns_metrics = Namespace('metrics', description='Prometheus metrics and monitoring')
     ns_diagnostics = Namespace('diagnostics', description='Sanitized diagnostic snapshot for bug reports')
+    ns_inventory = Namespace('inventory', description='Certificate inventory (issued + discovered)')
 
     namespaces = [
         ns_certificates, ns_client_certs, ns_ocsp, ns_crl, ns_settings,
-        ns_health, ns_backups, ns_cache, ns_metrics, ns_diagnostics
+        ns_health, ns_backups, ns_cache, ns_metrics, ns_diagnostics,
+        ns_inventory
     ]
     for ns in namespaces:
         api.add_namespace(ns)
@@ -950,6 +952,10 @@ def setup_api(container: AppContainer, app):
 
     ns_ocsp.add_resource(api_resources['OCSPStatus'], '/status/<int:serial_number>')
     ns_crl.add_resource(api_resources['CRLDistribution'], '/download/<string:format_type>')
+
+    ns_inventory.add_resource(api_resources['InventoryList'], '')
+    ns_inventory.add_resource(api_resources['InventoryConfig'], '/config')
+    ns_inventory.add_resource(api_resources['InventoryScan'], '/scan')
 
     container.api = api
 
