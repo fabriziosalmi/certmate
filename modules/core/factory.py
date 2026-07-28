@@ -575,8 +575,10 @@ def initialize_managers(container: AppContainer, app):
     # monitored endpoints into it on a schedule.
     from .cert_inventory import CertInventory
     from .cert_discovery import CertDiscoveryManager
+    from .ct_monitor import CTMonitorManager
     cert_inventory = CertInventory(container.data_dir)
     cert_discovery = CertDiscoveryManager(settings_manager, cert_inventory)
+    ct_monitor = CTMonitorManager(settings_manager, cert_inventory)
 
     container.managers = {
         'file_ops': file_ops,
@@ -607,6 +609,7 @@ def initialize_managers(container: AppContainer, app):
         'oidc': oidc_manager,
         'cert_inventory': cert_inventory,
         'cert_discovery': cert_discovery,
+        'ct_monitor': ct_monitor,
     }
 
 
@@ -754,6 +757,17 @@ def _certificate_discovery_job():
         _run_manager_job('cert_discovery', 'run_discovery')
 
 
+def _ct_monitor_job():
+    """Picklable wrapper for the CT-log poll (#470). Own lock so multiple
+    workers don't hammer crt.sh in parallel; ingestion is idempotent anyway."""
+    with _renewal_process_lock('.ct-monitor.lock') as may_run:
+        if not may_run:
+            logger.info("Scheduled CT-log poll skipped: another process holds "
+                        "the ct-monitor lock.")
+            return
+        _run_manager_job('ct_monitor', 'run_poll')
+
+
 def setup_scheduler(container: AppContainer):
     """Set up APScheduler for background tasks with persistent store."""
     assert _flask_app is not None, "setup_scheduler called before _flask_app was set"
@@ -830,6 +844,13 @@ def setup_scheduler(container: AppContainer):
             func=_certificate_discovery_job,
             trigger="cron", hour=4, minute=0,
             id='certificate_discovery', replace_existing=True
+        )
+        # CT-log poll (#470): once a day at 05:00. A no-op unless the operator
+        # enabled ct_monitoring and configured domains.
+        scheduler.add_job(
+            func=_ct_monitor_job,
+            trigger="cron", hour=5, minute=0,
+            id='ct_log_monitor', replace_existing=True
         )
         container.scheduler = scheduler
         container.managers['scheduler'] = scheduler

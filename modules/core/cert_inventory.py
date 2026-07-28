@@ -153,6 +153,11 @@ class CertInventory:
         ``managed``). The endpoint is upserted independently, so one certificate
         seen on N hosts yields one certificate row with N endpoint rows.
 
+        ``host``/``port`` may both be omitted for an endpoint-less observation
+        (e.g. a certificate discovered in a CT log, which has no served
+        ``host:port``); the certificate row is still created/updated. Supplying
+        only one of the two is an error.
+
         The certificate's cryptographic metadata is immutable for a given
         fingerprint (the fingerprint *is* the hash of the whole cert), so it is
         written only on first insert and never rewritten. ``source`` is likewise
@@ -165,8 +170,8 @@ class CertInventory:
             raise ValueError("fingerprint is required")
         if source not in SOURCES:
             raise ValueError(f"unknown source {source!r}; use one of {SOURCES}")
-        if host is None or port is None:
-            raise ValueError("host and port are required")
+        if (host is None) != (port is None):
+            raise ValueError("host and port must be provided together")
 
         now = observed_at or utc_now_iso()
         key = key or {}
@@ -199,16 +204,52 @@ class CertInventory:
                     managed_int, managed_domain, now, now,
                 ),
             )
-            conn.execute(
-                """
-                INSERT INTO endpoints (fingerprint, host, port, first_seen, last_seen)
-                VALUES (?,?,?,?,?)
-                ON CONFLICT(fingerprint, host, port) DO UPDATE SET
-                    last_seen = excluded.last_seen
-                """,
-                (fingerprint, host, int(port), now, now),
-            )
+            if host is not None:
+                conn.execute(
+                    """
+                    INSERT INTO endpoints (fingerprint, host, port, first_seen, last_seen)
+                    VALUES (?,?,?,?,?)
+                    ON CONFLICT(fingerprint, host, port) DO UPDATE SET
+                        last_seen = excluded.last_seen
+                    """,
+                    (fingerprint, host, int(port), now, now),
+                )
         return fingerprint
+
+    def record_certificate(self, certificate, *, source, managed=False,
+                           managed_domain=None, observed_at=None,
+                           host=None, port=None):
+        """Record a parsed certificate metadata dict (see
+        :func:`cert_probe.parse_certificate`'s ``certificate`` block).
+
+        The bridge used by every source: pass the parsed metadata plus a
+        ``source``, and optionally a ``host``/``port`` for a served observation.
+        Returns the fingerprint, or ``None`` if the metadata has none.
+        """
+        if not isinstance(certificate, dict):
+            return None
+        fingerprint = certificate.get('fingerprint_sha256')
+        if not fingerprint:
+            return None
+        return self.record_observation(
+            fingerprint=fingerprint,
+            host=host,
+            port=port,
+            subject_cn=certificate.get('subject_cn'),
+            subject=certificate.get('subject'),
+            issuer_cn=certificate.get('issuer_cn'),
+            issuer=certificate.get('issuer'),
+            serial=certificate.get('serial_number'),
+            not_before=certificate.get('not_before'),
+            not_after=certificate.get('not_after'),
+            key=certificate.get('key'),
+            signature_algorithm=certificate.get('signature_algorithm'),
+            san_dns=certificate.get('san_dns'),
+            source=source,
+            managed=managed,
+            managed_domain=managed_domain,
+            observed_at=observed_at,
+        )
 
     def record_probe_result(self, probe_result, *, source='probed',
                             managed=False, managed_domain=None, observed_at=None):
@@ -221,24 +262,10 @@ class CertInventory:
         """
         if not isinstance(probe_result, dict) or probe_result.get('status') != 'ok':
             return None
-        cert = probe_result.get('certificate') or {}
-        fingerprint = cert.get('fingerprint_sha256')
-        if not fingerprint:
-            return None
-        return self.record_observation(
-            fingerprint=fingerprint,
+        return self.record_certificate(
+            probe_result.get('certificate') or {},
             host=probe_result.get('host'),
             port=probe_result.get('port'),
-            subject_cn=cert.get('subject_cn'),
-            subject=cert.get('subject'),
-            issuer_cn=cert.get('issuer_cn'),
-            issuer=cert.get('issuer'),
-            serial=cert.get('serial_number'),
-            not_before=cert.get('not_before'),
-            not_after=cert.get('not_after'),
-            key=cert.get('key'),
-            signature_algorithm=cert.get('signature_algorithm'),
-            san_dns=cert.get('san_dns'),
             source=source,
             managed=managed,
             managed_domain=managed_domain,
@@ -299,6 +326,21 @@ class CertInventory:
             rows = conn.execute(
                 "SELECT fingerprint FROM endpoints WHERE host = ? AND port = ?",
                 (host, int(port)),
+            ).fetchall()
+        return [self.get(r['fingerprint']) for r in rows]
+
+    def find_by_serial(self, serial):
+        """Return every record whose certificate serial equals *serial*.
+
+        Used to dedup a CT-log entry (which carries an issuer+serial but not the
+        SHA-256 fingerprint) against already-known certificates before spending
+        a request to fetch its DER: a real certificate's serial is effectively
+        unique, so a serial hit means we already have this cert.
+        """
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT fingerprint FROM certificates WHERE serial = ?",
+                (str(serial),),
             ).fetchall()
         return [self.get(r['fingerprint']) for r in rows]
 
