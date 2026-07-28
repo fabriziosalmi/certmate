@@ -17,8 +17,13 @@
 
     var ROLE_LEVELS = { viewer: 0, operator: 1, admin: 2 };
     var records = [];
+    var currentRole = 'viewer';
 
     function el(id) { return document.getElementById(id); }
+
+    function roleAtLeast(name) {
+        return (ROLE_LEVELS[currentRole] || 0) >= (ROLE_LEVELS[name] || 0);
+    }
 
     function statusBadge(status, days) {
         var map = {
@@ -63,6 +68,16 @@
         return '<span class="text-xs font-mono">' + escapeHtml(first) + '</span>' + more;
     }
 
+    function actionsCell(r) {
+        // Only unmanaged (discovered) certificates can be adopted, and only by
+        // an operator+. Managed certs and viewers get no button.
+        if (r.managed || !roleAtLeast('operator')) { return ''; }
+        return '<button type="button" onclick="InventoryPage.adopt(\'' + escapeHtml(r.fingerprint) + '\')" '
+            + 'class="px-2 py-1 text-xs bg-surface-2 text-primary rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition" '
+            + 'title="Take over issuance/renewal of this certificate">'
+            + '<i class="fas fa-hand-holding-medical mr-1"></i>Adopt</button>';
+    }
+
     function passesFilters(r) {
         var group = el('invGroup').value;
         var source = el('invSource').value;
@@ -84,7 +99,7 @@
         var rows = records.filter(passesFilters);
         el('invCount').textContent = rows.length + ' of ' + records.length;
         if (!rows.length) {
-            body.innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-muted">'
+            body.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-muted">'
                 + (records.length ? 'No certificates match the filters.' : 'Inventory is empty. Configure discovery or CT-log monitoring, then Scan now.')
                 + '</td></tr>';
             return;
@@ -97,8 +112,42 @@
                 + '<td class="px-4 py-2 text-xs">' + keyLabel(r.key) + '</td>'
                 + '<td class="px-4 py-2">' + sourceBadge(r.source, r.managed) + '</td>'
                 + '<td class="px-4 py-2">' + endpointsCell(r) + '</td>'
+                + '<td class="px-4 py-2 text-right">' + actionsCell(r) + '</td>'
                 + '</tr>';
         }).join('');
+    }
+
+    function adopt(fingerprint) {
+        // Fetch the adoption plan (pre-filled from the observed cert), confirm
+        // the values with the operator, then issue.
+        fetch('/api/inventory/' + encodeURIComponent(fingerprint) + '/adopt',
+            { headers: API_HEADERS, credentials: 'same-origin' })
+            .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+            .then(function (plan) {
+                if (!plan.available) {
+                    window.alert('Cannot adopt this certificate:\n\n' + (plan.reason || 'Not available.'));
+                    return;
+                }
+                var sans = (plan.san_domains || []).join(', ') || '(none)';
+                var key = plan.key_type
+                    ? (plan.key_type + (plan.elliptic_curve ? ' ' + plan.elliptic_curve : (plan.key_size ? ' ' + plan.key_size : '')))
+                    : 'default';
+                var summary = 'Adopt and manage this certificate?\n\n'
+                    + 'Domain: ' + plan.domain + '\n'
+                    + 'SANs: ' + sans + '\n'
+                    + 'Key: ' + key + '\n'
+                    + 'DNS provider: ' + (plan.dns_provider || 'default') + '\n\n'
+                    + 'CertMate will issue the certificate and take over its renewal.';
+                if (!window.confirm(summary)) { return; }
+                return fetch('/api/inventory/' + encodeURIComponent(fingerprint) + '/adopt',
+                    { method: 'POST', headers: API_HEADERS, credentials: 'same-origin' })
+                    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+                    .then(function (res) {
+                        if (res.ok) { load(); }
+                        else { window.alert('Adoption failed: ' + (res.j.error || 'unknown error')); }
+                    });
+            })
+            .catch(function (err) { window.alert('Could not load adoption plan (' + err + ').'); });
     }
 
     function setSummary(s) {
@@ -192,17 +241,22 @@
         fetch('/api/auth/me', { credentials: 'same-origin' })
             .then(function (r) { return r.ok ? r.json() : null; })
             .then(function (me) {
-                var role = (me && (me.role || (me.user && me.user.role))) || 'viewer';
-                if ((ROLE_LEVELS[role] || 0) >= ROLE_LEVELS.admin) {
+                currentRole = (me && (me.role || (me.user && me.user.role))) || 'viewer';
+                if (roleAtLeast('admin')) {
                     el('configPanel').classList.remove('hidden');
                     el('scanNowBtn').classList.remove('hidden');
                     loadConfig();
                 }
+                // Re-render so operator+ get the Adopt buttons now the role is known.
+                if (records.length) { render(); }
             })
             .catch(function () { /* stay read-only */ });
     }
 
-    window.InventoryPage = { load: load, render: render, saveConfig: saveConfig, runScan: runScan };
+    window.InventoryPage = {
+        load: load, render: render, saveConfig: saveConfig,
+        runScan: runScan, adopt: adopt
+    };
 
     document.addEventListener('DOMContentLoaded', function () {
         load();

@@ -1108,6 +1108,74 @@ def create_api_resources(api, models, managers):
                 result['ct_monitoring'] = {'error': 'ct poll failed'}
             return result
 
+    class InventoryAdopt(Resource):
+        @api.doc(security='Bearer')
+        @auth_manager.require_role('viewer')
+        def get(self, fingerprint):
+            """Return the adoption plan for a discovered certificate: the
+            pre-filled create parameters and whether adoption is possible."""
+            from ..core.cert_adopt import build_adoption_plan
+            inventory = managers.get('cert_inventory')
+            dns_mgr = managers.get('dns')
+            if inventory is None or dns_mgr is None:
+                return {'error': 'Certificate inventory not available'}, 503
+            record = inventory.get(fingerprint)
+            if record is None:
+                return {'error': 'Certificate not found in inventory'}, 404
+            return build_adoption_plan(record, dns_mgr)
+
+        @api.doc(security='Bearer')
+        @auth_manager.require_role('operator')
+        def post(self, fingerprint):
+            """Adopt a discovered certificate: issue/manage it from the observed
+            metadata, then flag the inventory record managed. Refuses (400) when
+            the domain cannot be validated (no DNS credentials / no email)."""
+            from ..core.cert_adopt import build_adoption_plan
+            inventory = managers.get('cert_inventory')
+            dns_mgr = managers.get('dns')
+            svc = managers.get('cert_service')
+            if inventory is None or dns_mgr is None or svc is None:
+                return {'error': 'Certificate adoption not available'}, 503
+
+            record = inventory.get(fingerprint)
+            if record is None:
+                return {'error': 'Certificate not found in inventory'}, 404
+
+            plan = build_adoption_plan(record, dns_mgr)
+            if not plan['available']:
+                return {'error': plan['reason'], 'code': 'ADOPTION_UNAVAILABLE'}, 400
+
+            # Scope check: the caller's API key must cover the adopted domain.
+            denied = _check_domain_scope(plan['domain'], 'adopt')
+            if denied is not None:
+                return denied
+
+            try:
+                svc.create(
+                    domain=plan['domain'],
+                    san_domains=plan['san_domains'],
+                    dns_provider=plan['dns_provider'],
+                    key_type=plan['key_type'],
+                    key_size=plan['key_size'],
+                    elliptic_curve=plan['elliptic_curve'],
+                    user=getattr(request, 'current_user', None),
+                    ip_address=request.remote_addr,
+                    audit_ctx=audit_context_from_request(),
+                )
+            except DomainOutOfScope as e:
+                return {'error': str(e), 'code': 'DOMAIN_OUT_OF_SCOPE'}, 403
+            except DomainOperationInProgress:
+                return {'error': 'An operation is already in progress for this domain'}, 409
+            except ValueError as e:
+                return {'error': str(e)}, 400
+            except Exception as e:
+                logger.error(f"Adoption issuance failed for {plan['domain']}: {e}")
+                return {'error': 'Adoption failed during issuance'}, 500
+
+            inventory.mark_managed(fingerprint, plan['domain'])
+            return {'status': 'adopted', 'domain': plan['domain'],
+                    'managed': True}, 201
+
     class CreateCertificate(Resource):
         @api.doc(security='Bearer')
         @api.expect(models['create_cert_model'])
@@ -3725,6 +3793,7 @@ def create_api_resources(api, models, managers):
         'InventoryList': InventoryList,
         'InventoryConfig': InventoryConfig,
         'InventoryScan': InventoryScan,
+        'InventoryAdopt': InventoryAdopt,
         'CreateCertificate': CreateCertificate,
         'ZombieScan': ZombieScan,
         'CheckDNSAlias': CheckDNSAlias,

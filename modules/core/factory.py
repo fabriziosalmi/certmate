@@ -956,6 +956,7 @@ def setup_api(container: AppContainer, app):
     ns_inventory.add_resource(api_resources['InventoryList'], '')
     ns_inventory.add_resource(api_resources['InventoryConfig'], '/config')
     ns_inventory.add_resource(api_resources['InventoryScan'], '/scan')
+    ns_inventory.add_resource(api_resources['InventoryAdopt'], '/<string:fingerprint>/adopt')
 
     container.api = api
 

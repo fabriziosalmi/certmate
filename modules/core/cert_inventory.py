@@ -344,6 +344,19 @@ class CertInventory:
             ).fetchall()
         return [self.get(r['fingerprint']) for r in rows]
 
+    def mark_managed(self, fingerprint, managed_domain):
+        """Flag a record managed and link it to *managed_domain* (adoption, #472).
+
+        Returns True if the record existed and was updated.
+        """
+        with self._connect() as conn:
+            cur = conn.execute(
+                "UPDATE certificates SET managed = 1, managed_domain = ? "
+                "WHERE fingerprint = ?",
+                (managed_domain, fingerprint),
+            )
+            return cur.rowcount > 0
+
     def count(self):
         """Return the number of distinct certificates in the inventory."""
         with self._connect() as conn:
