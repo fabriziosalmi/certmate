@@ -9,8 +9,6 @@ import json
 import threading
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from datetime import datetime
-from collections import deque
 from .utils import utc_now
 from . import audit_chain
 from . import audit_signing
