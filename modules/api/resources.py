@@ -17,7 +17,7 @@ import zipfile
 import os
 import io
 from pathlib import Path
-from flask import send_file, after_this_request, current_app, request, jsonify
+from flask import send_file, after_this_request, current_app, request, jsonify, Response
 from flask_restx import Resource, fields
 
 from ..core.metrics import get_metrics_summary, is_prometheus_available
@@ -1107,6 +1107,33 @@ def create_api_resources(api, models, managers):
                 logger.error(f"CT-log poll failed: {e}")
                 result['ct_monitoring'] = {'error': 'ct poll failed'}
             return result
+
+    class InventoryCryptoReport(Resource):
+        @api.doc(security='Bearer')
+        @auth_manager.require_role('viewer')
+        def get(self):
+            """Cryptographic algorithm inventory & readiness report over every
+            managed + discovered certificate. ``?format=csv`` downloads a CSV;
+            otherwise JSON is returned."""
+            from ..core.crypto_report import build_crypto_report, report_to_csv
+            inventory = managers.get('cert_inventory')
+            if inventory is None:
+                return {'error': 'Certificate inventory not available'}, 503
+            try:
+                records = inventory.list_all()
+                report = build_crypto_report(records, generated_at=utc_now_iso())
+            except Exception as e:
+                logger.error(f"Error building crypto report: {e}")
+                return {'error': 'Failed to build crypto report'}, 500
+
+            if request.args.get('format', '').strip().lower() == 'csv':
+                return Response(
+                    report_to_csv(report),
+                    mimetype='text/csv',
+                    headers={'Content-Disposition':
+                             'attachment; filename=crypto-readiness-report.csv'},
+                )
+            return report
 
     class InventoryAdopt(Resource):
         @api.doc(security='Bearer')
@@ -3793,6 +3820,7 @@ def create_api_resources(api, models, managers):
         'InventoryList': InventoryList,
         'InventoryConfig': InventoryConfig,
         'InventoryScan': InventoryScan,
+        'InventoryCryptoReport': InventoryCryptoReport,
         'InventoryAdopt': InventoryAdopt,
         'CreateCertificate': CreateCertificate,
         'ZombieScan': ZombieScan,

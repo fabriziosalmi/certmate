@@ -35,6 +35,24 @@
         </div>
     </div>
 
+    <!-- Crypto readiness summary (#473) -->
+    <div class="bg-surface shadow-card rounded-xl overflow-hidden mb-4">
+        <div class="px-6 py-3 border-b border-gray-100 dark:border-white/5 flex items-center justify-between flex-wrap gap-2">
+            <span class="text-sm font-medium text-foreground"><i class="fas fa-shield-halved mr-2 text-muted"></i>Cryptographic readiness</span>
+            <div class="flex items-center gap-2">
+                <a href="/api/inventory/crypto-report?format=csv" class="px-2.5 py-1.5 text-xs bg-surface-2 text-muted rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition" title="Download CSV"><i class="fas fa-file-csv mr-1"></i>CSV</a>
+                <a href="/api/inventory/crypto-report" target="_blank" rel="noopener" class="px-2.5 py-1.5 text-xs bg-surface-2 text-muted rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition" title="View JSON"><i class="fas fa-file-code mr-1"></i>JSON</a>
+                <a href="/inventory/crypto-report" target="_blank" rel="noopener" class="px-2.5 py-1.5 text-xs bg-surface-2 text-primary rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition" title="Open the printable readiness report"><i class="fas fa-file-pdf mr-1"></i>Report</a>
+            </div>
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-px bg-gray-100 dark:bg-white/5">
+            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">Weak</div><div class="text-xl font-semibold text-red-600 dark:text-red-400" id="cryptoWeak">–</div></div>
+            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">Acceptable</div><div class="text-xl font-semibold text-foreground" id="cryptoAcceptable">–</div></div>
+            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">Modern</div><div class="text-xl font-semibold text-green-600 dark:text-green-400" id="cryptoModern">–</div></div>
+            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted" title="Classically strong but quantum-vulnerable">Quantum-vulnerable</div><div class="text-xl font-semibold text-amber-600 dark:text-amber-400" id="cryptoQuantum">–</div></div>
+        </div>
+    </div>
+
     <!-- Config panel (admin only; revealed by JS when role >= admin) -->
     <div class="bg-surface shadow-card rounded-xl overflow-hidden mb-4 hidden" id="configPanel">
         <details class="group">

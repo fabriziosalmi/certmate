@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block title %}CertMate - Crypto Readiness Report{% endblock %}
+{% block head %}
+<style>
+    /* Print-to-PDF: drop the app chrome and colour backgrounds so the report
+       prints as a clean standalone document. */
+    @media print {
+        nav, #bottomTabBar, .no-print { display: none !important; }
+        body { background: #fff !important; }
+        main { padding: 0 !important; }
+    }
+</style>
+{% endblock %}
+{% block content %}
+<div class="max-w-5xl mx-auto py-6 px-4 sm:px-6 lg:px-8" id="reportRoot">
+
+    <div class="flex items-center justify-between flex-wrap gap-2 mb-4">
+        <div>
+            <h1 class="text-xl font-semibold text-foreground">Cryptographic Readiness Report</h1>
+            <p class="text-xs text-muted" id="reportMeta">Generating…</p>
+        </div>
+        <div class="flex items-center gap-2 no-print">
+            <a href="/api/inventory/crypto-report?format=csv" class="px-3 py-1.5 text-xs bg-surface-2 text-muted rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition"><i class="fas fa-file-csv mr-1"></i>CSV</a>
+            <a href="/api/inventory/crypto-report" target="_blank" rel="noopener" class="px-3 py-1.5 text-xs bg-surface-2 text-muted rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition"><i class="fas fa-file-code mr-1"></i>JSON</a>
+            <button type="button" onclick="window.print()" class="px-3 py-1.5 text-xs bg-primary text-white rounded-lg hover:opacity-90 transition"><i class="fas fa-print mr-1"></i>Print / Save as PDF</button>
+        </div>
+    </div>
+
+    <p class="text-xs text-muted mb-4">
+        Inventory of every managed and discovered certificate by public-key and
+        signature algorithm, classified for crypto-agility planning. Informational
+        only — this does not change certificate issuance.
+    </p>
+
+    <!-- Summary -->
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6" id="reportSummary"></div>
+
+    <!-- Breakdown tables -->
+    <div class="grid md:grid-cols-2 gap-6 mb-6">
+        <div>
+            <h2 class="text-sm font-semibold text-foreground mb-2">By key algorithm</h2>
+            <table class="w-full text-sm border border-border rounded"><tbody id="byKey"></tbody></table>
+        </div>
+        <div>
+            <h2 class="text-sm font-semibold text-foreground mb-2">By signature algorithm</h2>
+            <table class="w-full text-sm border border-border rounded"><tbody id="bySig"></tbody></table>
+        </div>
+    </div>
+
+    <!-- Assets -->
+    <h2 class="text-sm font-semibold text-foreground mb-2">Certificates</h2>
+    <div class="overflow-x-auto">
+        <table class="w-full text-sm border border-border">
+            <thead class="bg-surface-2 text-muted text-xs uppercase">
+                <tr>
+                    <th class="text-left font-medium px-3 py-2">Subject</th>
+                    <th class="text-left font-medium px-3 py-2">Key</th>
+                    <th class="text-left font-medium px-3 py-2">Signature</th>
+                    <th class="text-left font-medium px-3 py-2">Class</th>
+                    <th class="text-left font-medium px-3 py-2">Managed</th>
+                    <th class="text-left font-medium px-3 py-2">Note</th>
+                </tr>
+            </thead>
+            <tbody id="reportAssets"></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+(function () {
+    'use strict';
+    var esc = (window.CertMate && CertMate.escapeHtml) || function (s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+    };
+    function el(id) { return document.getElementById(id); }
+    var CLASS_COLOR = {
+        weak: 'text-red-600 dark:text-red-400',
+        acceptable: 'text-amber-600 dark:text-amber-400',
+        modern: 'text-green-600 dark:text-green-400',
+        pqc: 'text-indigo-600 dark:text-indigo-400',
+        unknown: 'text-muted'
+    };
+    function card(label, value, cls) {
+        return '<div class="bg-surface border border-border rounded-lg px-4 py-3">'
+            + '<div class="text-xs text-muted">' + esc(label) + '</div>'
+            + '<div class="text-2xl font-semibold ' + (cls || 'text-foreground') + '">' + esc(value) + '</div></div>';
+    }
+    function kvRows(obj) {
+        var keys = Object.keys(obj || {});
+        if (!keys.length) { return '<tr><td class="px-3 py-2 text-muted">None</td></tr>'; }
+        return keys.sort().map(function (k) {
+            return '<tr class="border-t border-border"><td class="px-3 py-1.5">' + esc(k)
+                + '</td><td class="px-3 py-1.5 text-right font-medium">' + esc(obj[k]) + '</td></tr>';
+        }).join('');
+    }
+    fetch('/api/inventory/crypto-report', { headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin' })
+        .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+        .then(function (rep) {
+            el('reportMeta').textContent = 'Generated ' + (rep.generated_at || '') + ' · ' + rep.total + ' certificates';
+            var c = rep.by_classification || {};
+            el('reportSummary').innerHTML =
+                card('Total', rep.total || 0)
+                + card('Weak', c.weak || 0, CLASS_COLOR.weak)
+                + card('Acceptable', c.acceptable || 0, CLASS_COLOR.acceptable)
+                + card('Modern', c.modern || 0, CLASS_COLOR.modern)
+                + card('Quantum-vulnerable', rep.quantum_vulnerable || 0, 'text-amber-600 dark:text-amber-400');
+            el('byKey').innerHTML = kvRows(rep.by_key_algorithm);
+            el('bySig').innerHTML = kvRows(rep.by_signature_algorithm);
+            var assets = rep.assets || [];
+            el('reportAssets').innerHTML = assets.length ? assets.map(function (a) {
+                var key = (a.key_algorithm || '?') + (a.key_curve ? ' ' + a.key_curve : (a.key_size ? ' ' + a.key_size : ''));
+                return '<tr class="border-t border-border">'
+                    + '<td class="px-3 py-1.5">' + esc(a.subject_cn || '(no CN)') + '</td>'
+                    + '<td class="px-3 py-1.5">' + esc(key) + '</td>'
+                    + '<td class="px-3 py-1.5 text-xs">' + esc(a.signature_algorithm || '—') + '</td>'
+                    + '<td class="px-3 py-1.5 font-medium ' + (CLASS_COLOR[a.classification] || '') + '">' + esc(a.classification) + '</td>'
+                    + '<td class="px-3 py-1.5">' + (a.managed ? 'Yes' : 'No') + '</td>'
+                    + '<td class="px-3 py-1.5 text-xs text-muted">' + esc(a.detail || '') + '</td>'
+                    + '</tr>';
+            }).join('') : '<tr><td colspan="6" class="px-3 py-6 text-center text-muted">Inventory is empty.</td></tr>';
+        })
+        .catch(function (err) { el('reportMeta').textContent = 'Failed to load report (' + esc(err) + ').'; });
+}());
+</script>
+{% endblock %}

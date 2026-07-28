@@ -175,6 +175,19 @@
             });
     }
 
+    function loadCryptoSummary() {
+        fetch('/api/inventory/crypto-report', { headers: API_HEADERS, credentials: 'same-origin' })
+            .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+            .then(function (rep) {
+                var c = rep.by_classification || {};
+                el('cryptoWeak').textContent = c.weak || 0;
+                el('cryptoAcceptable').textContent = c.acceptable || 0;
+                el('cryptoModern').textContent = c.modern || 0;
+                el('cryptoQuantum').textContent = rep.quantum_vulnerable || 0;
+            })
+            .catch(function () { /* leave placeholders */ });
+    }
+
     function loadConfig() {
         fetch('/api/inventory/config', { headers: API_HEADERS, credentials: 'same-origin' })
             .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
@@ -260,6 +273,7 @@
 
     document.addEventListener('DOMContentLoaded', function () {
         load();
+        loadCryptoSummary();
         gateAdminControls();
     });
 }());
