@@ -43,6 +43,14 @@ def test_days_until_expiry_unparseable():
     assert days_until_expiry(None, NOW) is None
 
 
+def test_days_until_expiry_offset_form_normalises_to_utc():
+    # A tz-aware (+00:00) timestamp must normalise to UTC, not local time, so it
+    # agrees with the 'Z' form and with datetime.utcnow()-based math.
+    assert days_until_expiry('2026-08-27T12:00:00+00:00', NOW) == 30
+    assert (days_until_expiry('2026-08-27T12:00:00Z', NOW)
+            == days_until_expiry('2026-08-27T12:00:00+00:00', NOW))
+
+
 @pytest.mark.parametrize('days,expected', [
     (-1, EXPIRY_EXPIRED),
     (0, EXPIRY_CRITICAL),

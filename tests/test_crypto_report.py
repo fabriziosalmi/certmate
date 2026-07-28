@@ -76,6 +76,15 @@ def test_overall_is_acceptable_when_both_acceptable():
     assert a['classification'] == CLASS_ACCEPTABLE
 
 
+def test_missing_signature_does_not_downgrade_good_key():
+    # A record with no signature_algorithm (e.g. a CT entry that only carried
+    # subject + fingerprint) must not be dragged to 'unknown' — the key drives it.
+    a = _one(_rec('a', {'type': 'RSA', 'size': 2048}, sig=None))
+    assert a['key_classification'] == CLASS_ACCEPTABLE
+    assert a['signature_classification'] is None
+    assert a['classification'] == CLASS_ACCEPTABLE
+
+
 def test_deprecation_note_present():
     a = _one(_rec('a', {'type': 'RSA', 'size': 2048}, 'sha256'))
     assert a['deprecation'] == DEPRECATION_NOTES[CLASS_ACCEPTABLE]

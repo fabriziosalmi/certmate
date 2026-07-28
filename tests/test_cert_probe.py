@@ -406,6 +406,16 @@ def test_probe_live_server_serves_chain(tls_server):
         assert len(result['chain']) == 1
 
 
+def test_probe_bare_ip_target(tls_server):
+    # No server_name -> SNI defaults to the IP literal; the handshake must still
+    # succeed and the IP SAN must satisfy the hostname check.
+    cert, key = _build_cert(subject_cn='127.0.0.1', san_ip=['127.0.0.1'])
+    srv = tls_server(cert, key=key)
+    result = probe_certificate('127.0.0.1', port=srv.port, allow_private=True)
+    assert result['status'] == STATUS_OK
+    assert result['validation']['hostname_match'] is True
+
+
 def test_probe_expired_cert_still_described(tls_server):
     now = datetime.now(timezone.utc)
     cert, key = _build_cert(

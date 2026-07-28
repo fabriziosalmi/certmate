@@ -143,9 +143,16 @@ def build_crypto_report(records, generated_at=None):
             key.get('type'), key.get('size'), key.get('curve')
         )
         sig = record.get('signature_algorithm')
-        sig_class = _classify_signature(sig)
-        # An asset's overall classification is the worse of key and signature.
-        overall = _worst(classification, sig_class)
+        # An asset's overall classification is the worse of key and signature —
+        # but a MISSING signature must not drag a known-good key down to
+        # "unknown"; only a present (and possibly weak/unrecognised) signature
+        # participates.
+        if sig:
+            sig_class = _classify_signature(sig)
+            overall = _worst(classification, sig_class)
+        else:
+            sig_class = None
+            overall = classification
 
         key_label = _key_label(key)
         report['total'] += 1

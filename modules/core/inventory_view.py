@@ -8,7 +8,7 @@ and SQLite so it is trivially testable and reusable by the API layer and the
 readiness report.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 # Expiry status thresholds (days). Ordered most-severe first.
 EXPIRY_EXPIRED = 'expired'
@@ -38,7 +38,8 @@ def _parse_iso(value):
     except ValueError:
         return None
     if dt.tzinfo is not None:
-        dt = dt.astimezone().replace(tzinfo=None)
+        # Normalise to naive UTC (NOT local time) to match datetime.utcnow().
+        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
     return dt
 
 
