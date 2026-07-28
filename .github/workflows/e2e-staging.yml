@@ -5,14 +5,19 @@ name: E2E (staging)
 # regression net for the DNS / provider / ACME wiring that the mocked unit
 # suite cannot exercise (the class of bug behind most recent cert churn).
 #
-# HONEST GATING (see the job-level `if` below). Real ACME + DNS propagation are
-# slow, externally flaky, and need a Cloudflare token, so this is opt-in and is
-# NOT a required PR check. It runs only when EXPLICITLY enabled, and when it is
-# not enabled the job is SKIPPED (neutral) rather than reporting a green no-op —
-# a gate must never claim success without actually issuing a certificate.
-# The flip side: on SCHEDULED runs a disabled gate must not skip silently
-# either, or the weekly coverage dies unnoticed — the `gate-disabled` job
-# below fails loudly in that case so disablement shows as a red X.
+# ON-DEMAND, never a required PR check. Real ACME + DNS propagation are slow,
+# externally flaky, and need a Cloudflare token, so this runs only when a
+# maintainer dispatches it. If the Cloudflare secret is absent the preflight
+# fails loudly rather than passing a no-op — a gate must never claim success
+# without actually issuing a certificate.
+#
+# There is deliberately NO scheduled trigger. A weekly cron used to run here and
+# fail every Monday by design ("disabled coverage should be a visible red X"),
+# but a red that never changes is noise a maintainer learns to ignore — the
+# same alarm-fatigue failure this project spent the audit season removing. The
+# authoritative real-cert coverage is the LOCAL gate below, run before every
+# release, so scheduled drift detection was buying a weekly red X for coverage
+# the release already guarantees.
 #
 # The authoritative real-cert gate is run LOCALLY before each release, with
 # credentials kept in .env (never in CI):
@@ -21,19 +26,15 @@ name: E2E (staging)
 #     tests/test_health_ready_e2e.py tests/test_cert_lifecycle.py \
 #     tests/test_async_issuance_e2e.py
 #
-# To ALSO run it in CI (optional drift detection), set BOTH:
-#   - repository variable E2E_STAGING_ENABLED = true   (enables the scheduled run)
-#   - repository secrets:
-#       CLOUDFLARE_API_TOKEN  - token with Zone:DNS:Edit on the test zone (required)
-#       CERTMATE_TEST_DOMAIN  - the Cloudflare-managed zone, e.g. example.org (required)
-#       CERTMATE_TEST_EMAIL   - ACME account email (optional; a default is used)
+# To run it here on demand, dispatch this workflow with these repository secrets:
+#   CLOUDFLARE_API_TOKEN  - token with Zone:DNS:Edit on the test zone (required)
+#   CERTMATE_TEST_DOMAIN  - the Cloudflare-managed zone, e.g. example.org (required)
+#   CERTMATE_TEST_EMAIL   - ACME account email (optional; a default is used)
 # Issuance defaults to Let's Encrypt STAGING (tests/e2e_support.py), so a run
 # never consumes a production rate limit or mints a publicly trusted cert.
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '37 4 * * 1'  # Mondays 04:37 UTC
 
 permissions: read-all
 
@@ -47,10 +48,9 @@ concurrency:
 jobs:
   e2e-staging:
     name: e2e-staging
-    # Run only when explicitly enabled (scheduled drift detection) or on a
-    # manual dispatch. Otherwise the job is SKIPPED, not falsely green. `vars`
-    # is used for the switch because `secrets` is not available in job `if`.
-    if: ${{ vars.E2E_STAGING_ENABLED == 'true' || github.event_name == 'workflow_dispatch' }}
+    # Only ever runs on an explicit dispatch (the sole trigger). The preflight
+    # step below fails loudly if the Cloudflare secret is missing, so a
+    # dispatch without credentials reports a real failure, never a green no-op.
     runs-on: [self-hosted, Linux, X64]
     steps:
     - name: Checkout code
@@ -96,18 +96,3 @@ jobs:
           tests/test_health_ready_e2e.py \
           tests/test_cert_lifecycle.py \
           tests/test_async_issuance_e2e.py
-
-  gate-disabled:
-    name: gate-disabled
-    # Visibility guard: with E2E_STAGING_ENABLED unset/false, the e2e-staging
-    # job above skips (neutral) on every weekly cron — dead real-cert coverage
-    # that never surfaces anywhere. Fail loudly on scheduled runs instead so
-    # disablement produces a visible red X each week. Manual dispatch is
-    # unaffected: this job never runs for workflow_dispatch.
-    if: ${{ github.event_name == 'schedule' && vars.E2E_STAGING_ENABLED != 'true' }}
-    runs-on: [self-hosted, Linux, X64]
-    steps:
-    - name: Fail - scheduled real-cert e2e is disabled
-      run: |
-        echo "::error::Scheduled real-cert e2e is disabled: set repo variable E2E_STAGING_ENABLED=true and secrets CLOUDFLARE_API_TOKEN (token scoped ONLY to the test zone) + CERTMATE_TEST_DOMAIN, or remove the cron trigger."
-        exit 1
