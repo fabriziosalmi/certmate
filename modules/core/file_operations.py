@@ -48,14 +48,16 @@ _PRIVATE_KEY_FILE_RE = re.compile(
 # prefix. Without these the archive holds no PKI state at all: the private
 # CA signing key, every client certificate, the CRL and the audit chain all
 # live here, so a "restore" left an operator unable to issue, renew or
-# revoke a single client cert (#409).
+# revoke a single client cert (#409). 'inventory' carries the certificate
+# inventory SQLite DB so a restore does not silently lose discovered-cert
+# history (a missing subtree is skipped, so this is a no-op until first use).
 #
 # This is also the RESTORE allowlist, and it deliberately excludes
 # settings.json: settings are restored from the archive's own settings.json
 # entry, which passes the deploy-hook revalidation gate. Honouring a
 # "data/settings.json" member would let a tampered archive write settings
 # straight to disk around that gate.
-_BACKUP_DATA_SUBTREES = ('certs', 'audit')
+_BACKUP_DATA_SUBTREES = ('certs', 'audit', 'inventory')
 
 # Per-entry ceiling when restoring the data/ subtrees. Deliberately far above
 # the 10 MB used for PEM files: certificate_audit.log is append-only and grows
