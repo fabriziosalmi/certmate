@@ -570,6 +570,16 @@ def initialize_managers(container: AppContainer, app):
     from .cert_jobs import IssuanceExecutor
     cert_executor = IssuanceExecutor(app, event_bus=event_bus)
 
+    # Certificate inventory + discovery (#468/#469). The inventory is a SQLite
+    # store under data_dir; the discovery manager probes the configured
+    # monitored endpoints into it on a schedule.
+    from .cert_inventory import CertInventory
+    from .cert_discovery import CertDiscoveryManager
+    from .ct_monitor import CTMonitorManager
+    cert_inventory = CertInventory(container.data_dir)
+    cert_discovery = CertDiscoveryManager(settings_manager, cert_inventory)
+    ct_monitor = CTMonitorManager(settings_manager, cert_inventory)
+
     container.managers = {
         'file_ops': file_ops,
         'settings': settings_manager,
@@ -597,6 +607,9 @@ def initialize_managers(container: AppContainer, app):
         ),
         'deployer': deploy_manager,
         'oidc': oidc_manager,
+        'cert_inventory': cert_inventory,
+        'cert_discovery': cert_discovery,
+        'ct_monitor': ct_monitor,
     }
 
 
@@ -732,6 +745,29 @@ def _weekly_digest_job():
     _run_manager_job('digest', 'send')
 
 
+def _certificate_discovery_job():
+    """Picklable wrapper for the certificate discovery sweep (#469). Uses its
+    own lock so multiple workers on a shared data dir don't redundantly probe
+    external endpoints; the inventory upsert is idempotent regardless."""
+    with _renewal_process_lock('.discovery.lock') as may_run:
+        if not may_run:
+            logger.info("Scheduled certificate discovery skipped: another "
+                        "process holds the discovery lock.")
+            return
+        _run_manager_job('cert_discovery', 'run_discovery')
+
+
+def _ct_monitor_job():
+    """Picklable wrapper for the CT-log poll (#470). Own lock so multiple
+    workers don't hammer crt.sh in parallel; ingestion is idempotent anyway."""
+    with _renewal_process_lock('.ct-monitor.lock') as may_run:
+        if not may_run:
+            logger.info("Scheduled CT-log poll skipped: another process holds "
+                        "the ct-monitor lock.")
+            return
+        _run_manager_job('ct_monitor', 'run_poll')
+
+
 def setup_scheduler(container: AppContainer):
     """Set up APScheduler for background tasks with persistent store."""
     assert _flask_app is not None, "setup_scheduler called before _flask_app was set"
@@ -800,6 +836,22 @@ def setup_scheduler(container: AppContainer):
             trigger="cron", day_of_week='sun', hour=0, minute=0,
             id='weekly_digest', replace_existing=True
         )
+        # Certificate discovery sweep (#469): probe monitored endpoints into the
+        # inventory once a day, after the renewal jobs. It is a no-op unless the
+        # operator enabled monitored_endpoints, so scheduling it unconditionally
+        # is safe.
+        scheduler.add_job(
+            func=_certificate_discovery_job,
+            trigger="cron", hour=4, minute=0,
+            id='certificate_discovery', replace_existing=True
+        )
+        # CT-log poll (#470): once a day at 05:00. A no-op unless the operator
+        # enabled ct_monitoring and configured domains.
+        scheduler.add_job(
+            func=_ct_monitor_job,
+            trigger="cron", hour=5, minute=0,
+            id='ct_log_monitor', replace_existing=True
+        )
         container.scheduler = scheduler
         container.managers['scheduler'] = scheduler
         from .utils import utc_now_iso
@@ -849,10 +901,12 @@ def setup_api(container: AppContainer, app):
     ns_cache = Namespace('cache', description='Cache management operations')
     ns_metrics = Namespace('metrics', description='Prometheus metrics and monitoring')
     ns_diagnostics = Namespace('diagnostics', description='Sanitized diagnostic snapshot for bug reports')
+    ns_inventory = Namespace('inventory', description='Certificate inventory (issued + discovered)')
 
     namespaces = [
         ns_certificates, ns_client_certs, ns_ocsp, ns_crl, ns_settings,
-        ns_health, ns_backups, ns_cache, ns_metrics, ns_diagnostics
+        ns_health, ns_backups, ns_cache, ns_metrics, ns_diagnostics,
+        ns_inventory
     ]
     for ns in namespaces:
         api.add_namespace(ns)
@@ -898,6 +952,12 @@ def setup_api(container: AppContainer, app):
 
     ns_ocsp.add_resource(api_resources['OCSPStatus'], '/status/<int:serial_number>')
     ns_crl.add_resource(api_resources['CRLDistribution'], '/download/<string:format_type>')
+
+    ns_inventory.add_resource(api_resources['InventoryList'], '')
+    ns_inventory.add_resource(api_resources['InventoryConfig'], '/config')
+    ns_inventory.add_resource(api_resources['InventoryScan'], '/scan')
+    ns_inventory.add_resource(api_resources['InventoryCryptoReport'], '/crypto-report')
+    ns_inventory.add_resource(api_resources['InventoryAdopt'], '/<string:fingerprint>/adopt')
 
     container.api = api
 

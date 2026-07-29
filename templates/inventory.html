@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block title %}CertMate - Inventory{% endblock %}
+{% block content %}
+<div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8" id="inventoryApp">
+
+    <!-- Header -->
+    <div class="bg-surface shadow-card rounded-xl overflow-hidden mb-4">
+        <div class="px-6 py-3 border-b border-gray-100 dark:border-white/5 flex items-center justify-between flex-wrap gap-2">
+            <nav class="flex items-center text-sm" aria-label="Breadcrumb">
+                <a href="/" aria-label="Home" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"><i class="fas fa-home"></i></a>
+                <i class="fas fa-chevron-right text-[10px] text-gray-300 dark:text-gray-600 mx-2"></i>
+                <span class="text-gray-700 dark:text-gray-200 font-medium">Inventory</span>
+            </nav>
+            <div class="flex items-center gap-2 flex-wrap">
+                <button type="button" id="scanNowBtn" onclick="InventoryPage.runScan()"
+                        class="hidden px-2.5 py-1.5 text-xs bg-primary text-white rounded-lg hover:opacity-90 transition"
+                        title="Run a discovery sweep and CT-log poll now">
+                    <i class="fas fa-magnifying-glass-chart mr-1"></i>Scan now
+                </button>
+                <button type="button" onclick="InventoryPage.load()" class="px-2.5 py-1.5 text-xs bg-surface-2 text-muted rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition" title="Refresh" aria-label="Refresh inventory">
+                    <i class="fas fa-sync"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Summary cards -->
+        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-px bg-gray-100 dark:bg-white/5" id="summaryCards">
+            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">Total</div><div class="text-xl font-semibold text-foreground" id="sumTotal">–</div></div>
+            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">Issued</div><div class="text-xl font-semibold text-foreground" id="sumIssued">–</div></div>
+            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">Discovered</div><div class="text-xl font-semibold text-foreground" id="sumDiscovered">–</div></div>
+            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">Expired</div><div class="text-xl font-semibold text-danger-fg" id="sumExpired">–</div></div>
+            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">≤ 7 days</div><div class="text-xl font-semibold text-orange-600 dark:text-orange-400" id="sum7">–</div></div>
+            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">≤ 30 days</div><div class="text-xl font-semibold text-warning-fg" id="sum30">–</div></div>
+            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">≤ 90 days</div><div class="text-xl font-semibold text-foreground" id="sum90">–</div></div>
+        </div>
+    </div>
+
+    <!-- Crypto readiness summary (#473) -->
+    <div class="bg-surface shadow-card rounded-xl overflow-hidden mb-4">
+        <div class="px-6 py-3 border-b border-gray-100 dark:border-white/5 flex items-center justify-between flex-wrap gap-2">
+            <span class="text-sm font-medium text-foreground"><i class="fas fa-shield-halved mr-2 text-muted"></i>Cryptographic readiness</span>
+            <div class="flex items-center gap-2">
+                <a href="/api/inventory/crypto-report?format=csv" class="px-2.5 py-1.5 text-xs bg-surface-2 text-muted rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition" title="Download CSV"><i class="fas fa-file-csv mr-1"></i>CSV</a>
+                <a href="/api/inventory/crypto-report" target="_blank" rel="noopener" class="px-2.5 py-1.5 text-xs bg-surface-2 text-muted rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition" title="View JSON"><i class="fas fa-file-code mr-1"></i>JSON</a>
+                <a href="/inventory/crypto-report" target="_blank" rel="noopener" class="px-2.5 py-1.5 text-xs bg-surface-2 text-primary rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition" title="Open the printable readiness report"><i class="fas fa-file-pdf mr-1"></i>Report</a>
+            </div>
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-px bg-gray-100 dark:bg-white/5">
+            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">Weak</div><div class="text-xl font-semibold text-danger-fg" id="cryptoWeak">–</div></div>
+            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">Acceptable</div><div class="text-xl font-semibold text-foreground" id="cryptoAcceptable">–</div></div>
+            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted">Modern</div><div class="text-xl font-semibold text-success-fg" id="cryptoModern">–</div></div>
+            <div class="bg-surface px-4 py-3"><div class="text-xs text-muted" title="Classically strong but quantum-vulnerable">Quantum-vulnerable</div><div class="text-xl font-semibold text-warning-fg" id="cryptoQuantum">–</div></div>
+        </div>
+    </div>
+
+    <!-- Config panel (admin only; revealed by JS when role >= admin) -->
+    <div class="bg-surface shadow-card rounded-xl overflow-hidden mb-4 hidden" id="configPanel">
+        <details class="group">
+            <summary class="px-6 py-3 border-b border-gray-100 dark:border-white/5 cursor-pointer flex items-center justify-between">
+                <span class="text-sm font-medium text-foreground"><i class="fas fa-sliders mr-2 text-muted"></i>Discovery configuration</span>
+                <i class="fas fa-chevron-down text-xs text-muted group-open:rotate-180 transition"></i>
+            </summary>
+            <div class="px-6 py-4 grid md:grid-cols-2 gap-6">
+                <div>
+                    <h3 class="text-sm font-semibold text-foreground mb-2">Endpoint probing</h3>
+                    <label class="flex items-center gap-2 text-sm text-muted mb-2">
+                        <input type="checkbox" id="cfgDiscEnabled" class="rounded border-border"> Enabled
+                    </label>
+                    <label class="flex items-center gap-2 text-sm text-muted mb-2">
+                        <input type="checkbox" id="cfgIncludeManaged" class="rounded border-border"> Also probe managed domains
+                    </label>
+                    <label class="flex items-center gap-2 text-sm text-muted mb-2">
+                        <input type="checkbox" id="cfgAllowPrivate" class="rounded border-border"> Allow private/loopback targets
+                    </label>
+                    <label class="block text-xs text-muted mb-1">Endpoints (one <code>host</code> or <code>host:port</code> per line)</label>
+                    <textarea id="cfgEndpoints" rows="5" class="w-full text-xs font-mono border text-foreground border-border rounded-lg bg-input p-2 focus:ring-2 focus:ring-primary" placeholder="example.com&#10;api.example.com:8443"></textarea>
+                </div>
+                <div>
+                    <h3 class="text-sm font-semibold text-foreground mb-2">CT-log monitoring (crt.sh)</h3>
+                    <label class="flex items-center gap-2 text-sm text-muted mb-2">
+                        <input type="checkbox" id="cfgCtEnabled" class="rounded border-border"> Enabled
+                    </label>
+                    <label class="flex items-center gap-2 text-sm text-muted mb-2">
+                        <input type="checkbox" id="cfgCtIncludeManaged" class="rounded border-border"> Also monitor managed domains
+                    </label>
+                    <label class="block text-xs text-muted mb-1">Domains to monitor (one per line)</label>
+                    <textarea id="cfgCtDomains" rows="5" class="w-full text-xs font-mono border text-foreground border-border rounded-lg bg-input p-2 focus:ring-2 focus:ring-primary" placeholder="example.com&#10;example.org"></textarea>
+                </div>
+            </div>
+            <div class="px-6 py-3 border-t border-gray-100 dark:border-white/5 flex items-center justify-end gap-2">
+                <span id="cfgMsg" class="text-xs text-muted mr-auto"></span>
+                <button type="button" onclick="InventoryPage.saveConfig()" class="px-3 py-1.5 text-xs bg-primary text-white rounded-lg hover:opacity-90 transition">Save configuration</button>
+            </div>
+        </details>
+    </div>
+
+    <!-- Filters -->
+    <div class="bg-surface shadow-card rounded-xl overflow-hidden">
+        <div class="px-6 py-3 border-b border-gray-100 dark:border-white/5 flex items-center gap-2 flex-wrap">
+            <input type="search" id="invSearch" oninput="InventoryPage.render()" aria-label="Search inventory"
+                   placeholder="Search subject, SAN, issuer…"
+                   class="px-3 py-1.5 text-xs border text-foreground border-border rounded-lg bg-input placeholder-gray-400 focus:ring-2 focus:ring-primary w-44 sm:w-64">
+            <select id="invGroup" onchange="InventoryPage.render()" aria-label="Filter by group" class="px-3 py-1.5 text-xs border text-foreground border-border rounded-lg bg-input focus:ring-2 focus:ring-primary">
+                <option value="">All certificates</option>
+                <option value="issued">Issued by CertMate</option>
+                <option value="discovered">Discovered / unmanaged</option>
+            </select>
+            <select id="invSource" onchange="InventoryPage.render()" aria-label="Filter by source" class="px-3 py-1.5 text-xs border text-foreground border-border rounded-lg bg-input focus:ring-2 focus:ring-primary">
+                <option value="">All sources</option>
+                <option value="issued">issued</option>
+                <option value="probed">probed</option>
+                <option value="ct-log">ct-log</option>
+                <option value="imported">imported</option>
+            </select>
+            <select id="invExpiry" onchange="InventoryPage.render()" aria-label="Filter by expiry" class="px-3 py-1.5 text-xs border text-foreground border-border rounded-lg bg-input focus:ring-2 focus:ring-primary">
+                <option value="">Any expiry</option>
+                <option value="expired">Expired</option>
+                <option value="critical">≤ 7 days</option>
+                <option value="warning">≤ 30 days</option>
+                <option value="ok">Healthy</option>
+            </select>
+            <span class="text-xs text-muted ml-auto" id="invCount"></span>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="bg-surface-2 text-muted text-xs uppercase tracking-wide">
+                    <tr>
+                        <th class="text-left font-medium px-4 py-2">Subject / SAN</th>
+                        <th class="text-left font-medium px-4 py-2">Issuer</th>
+                        <th class="text-left font-medium px-4 py-2">Expiry</th>
+                        <th class="text-left font-medium px-4 py-2">Key</th>
+                        <th class="text-left font-medium px-4 py-2">Source</th>
+                        <th class="text-left font-medium px-4 py-2">Endpoints</th>
+                        <th class="text-right font-medium px-4 py-2"><span class="sr-only">Actions</span></th>
+                    </tr>
+                </thead>
+                <tbody id="inventoryBody" class="divide-y divide-gray-100 dark:divide-gray-700/50">
+                    <tr><td colspan="7" class="px-4 py-8 text-center text-muted" id="invPlaceholder">Loading inventory…</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script src="/static/js/inventory.js"></script>
+{% endblock %}

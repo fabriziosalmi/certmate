@@ -67,6 +67,18 @@ def register_ui_routes(app, managers, require_web_auth, auth_manager):
         """Activity page"""
         return render_template('activity.html')
 
+    @app.route('/inventory')
+    @auth_manager.require_role('viewer')
+    def inventory_page():
+        """Certificate inventory page — issued + discovered certificates."""
+        return render_template('inventory.html')
+
+    @app.route('/inventory/crypto-report')
+    @auth_manager.require_role('viewer')
+    def crypto_report_page():
+        """Print-friendly cryptographic algorithm readiness report."""
+        return render_template('crypto_report.html')
+
     @app.route('/notifications')
     @auth_manager.require_role('viewer')
     def notifications_page():

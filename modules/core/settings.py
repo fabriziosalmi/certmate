@@ -43,6 +43,13 @@ PUBLIC_SETTINGS_WRITABLE_KEYS = frozenset({
     'backup_storage',          # off-site backup target (S3-compatible)
     'notifications',
     'rate_limits',             # configurable API rate limits (#319); no side-effects
+    # Endpoints the operator wants watched for certificate discovery (#469).
+    # Pure config (host[:port] list + toggles); the sweep runs as a scheduled
+    # job, so writing this has no immediate side effects.
+    'monitored_endpoints',
+    # Domains to watch in Certificate Transparency logs (#470). Pure config;
+    # the crt.sh poll runs as a scheduled job.
+    'ct_monitoring',
     'setup_completed',
     # Per-install "stop nagging me with the first-run wizard" flag. Distinct
     # from setup_completed, which must stay truthful for recovery/downgrade

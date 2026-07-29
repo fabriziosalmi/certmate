@@ -66,6 +66,34 @@ def _wait_healthy(timeout=60, base_url=BASE_URL):
     raise TimeoutError(f"Container not healthy after {timeout}s")
 
 
+def _disable_rate_limiting(base_url=BASE_URL):
+    """Turn off API rate limiting for the whole test session.
+
+    All non-specific /api/* paths share one per-IP 'default' bucket (100 req /
+    60s). A full browser suite drives many pages that each fan out several API
+    calls from one IP, so the shared bucket trips a 429 mid-suite — a pure test
+    volume artifact, unrelated to what the functional tests verify (test_ui.py
+    already filters 429 out of its JS-error checks). Content-rendering tests
+    need the API to actually respond, so disable the limiter once, here, while
+    the bucket is still empty (a later POST could itself be throttled). The
+    fresh container is in setup-mode auth bypass, so this settings write is
+    accepted. Best-effort: a failure just restores the old flaky-under-load
+    behaviour, never blocks the run.
+    """
+    try:
+        resp = requests.post(
+            f"{base_url}/api/settings",
+            json={"rate_limits": {"enabled": False}},
+            timeout=10,
+        )
+        if resp.status_code != 200:
+            print(f"[tests] Could not disable rate limiting (HTTP {resp.status_code}); "
+                  "browser suite may see transient 429s under load.")
+    except requests.RequestException as e:
+        print(f"[tests] Could not disable rate limiting ({e}); "
+              "browser suite may see transient 429s under load.")
+
+
 # ---------------------------------------------------------------------------
 # Session-scoped: one Docker container for the entire test run
 # ---------------------------------------------------------------------------
@@ -107,6 +135,7 @@ def docker_container():
     try:
         _wait_healthy()
         print("[tests] Container is healthy.")
+        _disable_rate_limiting()
         yield BASE_URL
     finally:
         # Dump logs for debugging on failure
