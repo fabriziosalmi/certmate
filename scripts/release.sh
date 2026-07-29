@@ -158,6 +158,21 @@ dh.write_text(
     re.sub(r'("version": ")[0-9]+\.[0-9]+\.[0-9]+(")', rf"\g<1>{v}\g<2>", dh.read_text()),
     encoding="utf-8",
 )
+# Same reasoning for the "Current Version" line on every docs landing page, in
+# every language. These were bumped by hand for v2.24.0 and then AGAIN for
+# v2.24.1 (#483, #487) because the script did not own them. Globbed, so a
+# translation added later is picked up without editing this script;
+# test_version_consistency fails the build if one is ever missed.
+docs = sorted(pathlib.Path("docs").glob("index.md")) + sorted(pathlib.Path("docs").glob("*/index.md"))
+for page in docs:
+    text = page.read_text(encoding="utf-8")
+    bumped = re.sub(
+        r"(?m)^(\*\*[^*]+\*\*\s*:?[ \t]*)[0-9]+\.[0-9]+\.[0-9]+[ \t]*$",
+        rf"\g<1>{v}",
+        text,
+    )
+    if bumped != text:
+        page.write_text(bumped, encoding="utf-8")
 PY
   [ "$("$PY" -c 'import json;from modules import __version__;print(json.load(open("package.json"))["version"]==__version__)')" = "True" ] \
     || die "version files disagree after bump"
@@ -169,7 +184,7 @@ real-cert E2E skipped (non-issuance change): $skip_reason"
   # the commit produced a release PR whose own CI failed on the version-
   # consistency test — a gate the local run cannot catch, because the bump
   # happens after the gates.
-  git add modules/__init__.py package.json README.dockerhub.md
+  git add modules/__init__.py package.json README.dockerhub.md docs/index.md docs/*/index.md
   git commit -q -m "$body
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -179,7 +194,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 $( [ "$run_real_cert" = 1 ] && echo "Gates: unit+integration, UI, real-cert E2E (LE staging), Docker build - all green locally." \
      || echo "Gates: unit+integration, UI, Docker build - all green locally. Real-cert E2E skipped (non-issuance): $skip_reason." )"
   gh pr create --base main --head "$branch" \
-    --title "v$version - $(notes_section "$version" | head -1 | sed 's/^## v[0-9.]* (\?//; s/)\?$//')" \
+    --title "v$version - $(notes_section "$version" | head -1 | sed -E 's/^## v[0-9.]+ \(?//; s/\)?$//')" \
     --body "$pr_body"
   echo; info "PR opened. When CI is green and it is merged, run: scripts/release.sh publish $version"
 }
