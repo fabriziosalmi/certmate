@@ -166,8 +166,10 @@ def test_run_discovery_includes_managed_domains(settings_manager, inventory):
     assert rec['managed_domain'] == 'managed.example.com'
     # The wildcard domain was never probed.
     probed_hosts = {c[0] for c in probe.calls}
-    assert '*.wild.example.com' not in probed_hosts
-    assert 'wild.example.com' not in probed_hosts
+    # Explicit inequality (not `not in`) to avoid CodeQL's URL-substring
+    # sanitization false positive on a test set-membership check.
+    assert all(h != '*.wild.example.com' for h in probed_hosts)
+    assert all(h != 'wild.example.com' for h in probed_hosts)
 
 
 def test_run_discovery_allow_private_propagates(settings_manager, inventory):

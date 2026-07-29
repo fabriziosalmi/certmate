@@ -302,8 +302,10 @@ def test_include_managed_polls_managed_domains(settings_manager, inventory):
     mgr.save_config({'enabled': True, 'domains': [], 'include_managed': True})
 
     out = mgr.run_poll()
-    assert 'managed.example.com' in client.search_calls
-    assert '*.wild.example.com' not in client.search_calls
+    # Explicit equality (not `in`) so CodeQL's URL-substring-sanitization query
+    # doesn't misread a test list-membership check as unsafe URL handling.
+    assert any(c == 'managed.example.com' for c in client.search_calls)
+    assert all(c != '*.wild.example.com' for c in client.search_calls)
     assert inventory.get(fp)['source'] == 'ct-log'
     assert out['new'] == 1
 

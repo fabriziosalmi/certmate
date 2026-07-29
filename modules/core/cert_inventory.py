@@ -329,8 +329,13 @@ class CertInventory:
         if source is not None:
             clauses.append("source = ?")
             params.append(source)
+        # The WHERE clause is assembled only from fixed literal fragments
+        # ("managed = ?" / "source = ?") — every user-supplied value travels as a
+        # bound "?" parameter in `params`, never interpolated. So the f-string
+        # carries no untrusted data and is injection-safe (bandit B608 false
+        # positive on the interpolated-but-constant fragment).
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
-        sql = f"SELECT * FROM certificates {where} ORDER BY last_seen DESC, fingerprint"
+        sql = f"SELECT * FROM certificates {where} ORDER BY last_seen DESC, fingerprint"  # nosec B608
         if limit is not None:
             sql += " LIMIT ? OFFSET ?"
             params.extend([int(limit), int(offset)])
