@@ -223,7 +223,8 @@ def test_inventory_write_error_is_isolated(inv):
     })
     results = discover_endpoints(['a.example.com', 'b.example.com'], boom, probe=probe)
     by = {r['endpoint']: r for r in results}
-    assert by['a.example.com']['status'] == 'unreachable'
+    # Reachable target, but the write failed -> a distinct 'record_failed' status.
+    assert by['a.example.com']['status'] == 'record_failed'
     assert 'inventory write failed' in by['a.example.com']['error']
     # The second endpoint was still recorded despite the first's failure.
     assert by['b.example.com']['status'] == 'ok'

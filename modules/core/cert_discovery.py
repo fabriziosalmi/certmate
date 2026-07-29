@@ -161,8 +161,10 @@ def discover_endpoints(
                 entry['fingerprint'] = fingerprint
                 entry['error'] = None
             except Exception as e:
+                # The endpoint WAS reachable; only the inventory write failed —
+                # report a distinct status so telemetry doesn't blame the target.
                 logger.warning("Discovery could not record %s:%s: %s", host, port, e)
-                entry['status'] = 'unreachable'
+                entry['status'] = 'record_failed'
                 entry['error'] = f'inventory write failed: {e}'
         results.append(entry)
 

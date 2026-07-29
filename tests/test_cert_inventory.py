@@ -335,3 +335,40 @@ def test_backup_includes_inventory_db(tmp_path):
         names = zf.namelist()
     assert any(n.startswith('data/inventory/') and n.endswith('inventory.db')
                for n in names), names
+
+
+def test_backup_restore_round_trips_inventory(tmp_path):
+    from modules.core.file_operations import FileOperations
+
+    src = tmp_path / 'src'
+    cert_dir = src / 'certificates'
+    data_dir = src / 'data'
+    backup_dir = src / 'backups'
+    logs_dir = src / 'logs'
+    for d in (cert_dir, data_dir, backup_dir, logs_dir):
+        d.mkdir(parents=True)
+    (cert_dir / 'example.com').mkdir()
+    (cert_dir / 'example.com' / 'cert.pem').write_bytes(_self_signed_pem())
+
+    CertInventory(data_dir).record_observation(
+        fingerprint='fp-restore', host='example.com', port=443,
+        source='issued', managed=True, subject_cn='example.com')
+
+    file_ops = FileOperations(cert_dir, data_dir, backup_dir, logs_dir)
+    filename = file_ops.create_unified_backup({"domains": []}, "test")
+    backup_path = backup_dir / "unified" / filename
+
+    # Restore into a pristine instance and re-open the inventory.
+    dest = tmp_path / 'restored'
+    r_cert, r_data, r_backup, r_logs = (
+        dest / 'certificates', dest / 'data', dest / 'backups', dest / 'logs')
+    for d in (r_cert, r_data, r_backup, r_logs):
+        d.mkdir(parents=True)
+    restored = FileOperations(r_cert, r_data, r_backup, r_logs)
+    assert restored.restore_unified_backup(str(backup_path)) is True
+
+    inv = CertInventory(r_data)
+    rec = inv.get('fp-restore')
+    assert rec is not None
+    assert rec['managed'] is True
+    assert rec['subject_cn'] == 'example.com'
