@@ -10,6 +10,7 @@
 * and that the SQLite DB is carried by (and restored from) a unified backup.
 """
 
+import threading
 import zipfile
 from datetime import datetime, timedelta, timezone
 
@@ -234,6 +235,59 @@ def test_find_by_endpoint(inv):
 
 def test_get_missing_returns_none(inv):
     assert inv.get('nope') is None
+
+
+# --------------------------------------------------------------------------- #
+# concurrency (the store claims thread-safety via connection-per-operation)
+# --------------------------------------------------------------------------- #
+
+def test_concurrent_distinct_writes(inv):
+    # Many threads (Flask workers) writing distinct fingerprints must all land,
+    # with no lost writes or "database is locked" escaping.
+    threads_n, per_thread = 8, 25
+    errors = []
+
+    def worker(t):
+        try:
+            for i in range(per_thread):
+                inv.record_observation(
+                    fingerprint=f'fp-{t}-{i}', host=f'h{t}.example.com',
+                    port=443, source='probed')
+        except Exception as e:  # pragma: no cover - failure path
+            errors.append(e)
+
+    threads = [threading.Thread(target=worker, args=(t,)) for t in range(threads_n)]
+    for th in threads:
+        th.start()
+    for th in threads:
+        th.join()
+
+    assert errors == [], errors
+    assert inv.count() == threads_n * per_thread
+
+
+def test_concurrent_same_fingerprint_merges_endpoints(inv):
+    # Concurrent observations of the SAME cert on different endpoints must
+    # collapse to one record whose endpoints are all merged intact.
+    threads_n = 10
+    errors = []
+
+    def worker(t):
+        try:
+            inv.record_observation(fingerprint='shared', host=f'h{t}.example.com',
+                                   port=443, source='probed')
+        except Exception as e:  # pragma: no cover
+            errors.append(e)
+
+    threads = [threading.Thread(target=worker, args=(t,)) for t in range(threads_n)]
+    for th in threads:
+        th.start()
+    for th in threads:
+        th.join()
+
+    assert errors == [], errors
+    assert inv.count() == 1
+    assert len(inv.get('shared')['endpoints']) == threads_n
 
 
 # --------------------------------------------------------------------------- #
