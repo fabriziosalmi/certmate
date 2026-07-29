@@ -435,15 +435,21 @@ class AcmeDNSStrategy(DNSProviderStrategy):
         return 30
 
     def configure_certbot_arguments(self, cmd: list, credentials_file: Optional[Path], domain_alias: Optional[str] = None) -> None:
-        cmd.extend(['--authenticator', 'acme-dns'])
-        if credentials_file:
-            cmd.extend(['--acme-dns-credentials', str(credentials_file)])
-
-        if domain_alias:
-            logger.info(
-                f"DNS alias '{domain_alias}' requested for ACME-DNS — ensure a CNAME "
-                f"from _acme-challenge.<domain> to _acme-challenge.{domain_alias} exists."
-            )
+        # Unreachable by design. There is no working certbot authenticator for
+        # acme-dns: the published ``certbot-acme-dns`` package exposes only
+        # --acme-dns-server / --acme-dns-propagation-seconds / --acme-dns-is-trusted
+        # and never implements a credentials-file option, so the
+        # ``--acme-dns-credentials`` this method used to emit was rejected by
+        # certbot's argument parser and acme-dns issuance always failed
+        # (issue #466). CertificateManager routes acme-dns through the native
+        # hook instead — see CertificateManager._acme_dns_native_alias. Failing
+        # loudly here keeps a future refactor from silently restoring the
+        # broken flags.
+        raise RuntimeError(
+            "acme-dns does not use a certbot authenticator; it is driven by "
+            "CertMate's native DNS hook. This is a bug in the caller: issuance "
+            "and renewal must route through _acme_dns_native_alias."
+        )
 
 class DuckDNSStrategy(DNSProviderStrategy):
     """DuckDNS free DDNS provider via certbot-dns-duckdns plugin.
