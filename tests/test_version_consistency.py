@@ -61,7 +61,9 @@ def test_dockerhub_readme_health_example_matches_module_version():
 
 def test_there_are_docs_landing_pages_to_check():
     """Guard the guard: an empty glob would make the test below vacuously pass."""
-    assert DOCS_LANDING_PAGES, "no docs/**/index.md found - has the layout moved?"
+    assert DOCS_LANDING_PAGES, (
+        "neither docs/index.md nor docs/*/index.md matched - has the layout moved?"
+    )
 
 
 @pytest.mark.parametrize(
@@ -92,8 +94,14 @@ def test_release_notes_document_the_current_version():
     same rule hold in CI, for any path that reaches main.
     """
     text = (REPO_ROOT / "RELEASE_NOTES.md").read_text(encoding="utf-8")
-    assert re.search(rf"^## v{re.escape(__version__)}\b", text, re.M), (
-        f"RELEASE_NOTES.md has no '## v{__version__}' section. Every released "
-        f"version needs one - scripts/release.sh builds the GitHub release body "
-        f"from it."
+    # The trailing space is part of the contract, not sloppiness: notes_section()
+    # in scripts/release.sh matches with `awk -v v="## v$1 "` and index($0,v)==1,
+    # so a bare "## v2.24.1" heading with no title extracts an EMPTY section and
+    # the release dies there. Asserting the looser form would let CI go green on
+    # notes the release script cannot read.
+    assert re.search(rf"^## v{re.escape(__version__)} \S", text, re.M), (
+        f"RELEASE_NOTES.md has no '## v{__version__} <title>' section. Every "
+        f"released version needs one, and the heading must carry a title after "
+        f"the version - scripts/release.sh extracts the GitHub release body by "
+        f"matching the literal prefix '## v{__version__} '."
     )
