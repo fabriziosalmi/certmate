@@ -487,7 +487,12 @@ def initialize_managers(container: AppContainer, app):
     # hash chain still works.
     from .audit_signing import AuditSigner
     audit_signer = AuditSigner(container.data_dir)
-    audit_logger = AuditLogger(audit_dir, chain_dir=audit_chain_dir, signer=audit_signer)
+    # SIEM audit sink (#474): stream every audit entry to a configured collector
+    # (syslog/CEF/HTTP), sanitized + failure-isolated. Reads its config live.
+    from .audit_sink import AuditSink
+    audit_sink = AuditSink(settings_manager)
+    audit_logger = AuditLogger(audit_dir, chain_dir=audit_chain_dir,
+                               signer=audit_signer, audit_sink=audit_sink)
     # Let AuthManager emit RBAC + scope denials through the same audit
     # surface the rest of the app uses (2026-05-12 API auth audit, F-2).
     auth_manager.set_audit_logger(audit_logger)
@@ -515,6 +520,8 @@ def initialize_managers(container: AppContainer, app):
             'certificate_created': 'Certificate Created',
             'certificate_renewed': 'Certificate Renewed',
             'certificate_failed': 'Certificate Failed',
+            'certificate_revoked': 'Certificate Revoked',
+            'certificate_deployed': 'Certificate Deployed',
             'deploy_hook_failed': 'Deploy Hook Failed',
         }
         title = event_titles.get(event)

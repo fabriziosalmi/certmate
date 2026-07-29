@@ -565,6 +565,37 @@ class ClientCertificateManager:
             logger.error(f"Error getting certificate file: {str(e)}")
             return None
 
+    def build_pfx(self, identifier: str, password: bytes) -> Optional[bytes]:
+        """Build an encrypted PKCS#12 (.pfx) bundle for a client certificate.
+
+        Bundles the leaf certificate + private key, plus the issuing CA cert as
+        the chain, into a password-encrypted PFX — generated on demand from the
+        on-disk PEMs (client certs, where a .pfx for import into Windows/mobile
+        keystores is most useful, #465). Returns None if the cert or key is
+        missing, or if *password* is empty (an unencrypted PFX carrying a
+        private key is never produced — mirrors the server-side policy).
+        """
+        if not password:
+            return None
+        for cert_dir in self.client_certs_dir.glob(f"*/{identifier}"):
+            crt_path = cert_dir / f"{identifier}.crt"
+            key_path = cert_dir / f"{identifier}.key"
+            if not (crt_path.exists() and key_path.exists()):
+                # A partial / wrong-usage directory: keep looking for a complete
+                # one rather than declaring the whole identifier unexportable.
+                continue
+            chain_pem = None
+            try:
+                ca_path = getattr(self.private_ca, 'ca_cert_path', None)
+                if ca_path and Path(ca_path).exists():
+                    chain_pem = Path(ca_path).read_bytes()
+            except Exception:  # pragma: no cover - chain is best-effort
+                chain_pem = None
+            from .storage_backends import _build_pfx
+            return _build_pfx(
+                crt_path.read_bytes(), chain_pem, key_path.read_bytes(), password)
+        return None
+
     def check_renewals(self) -> Tuple[int, int, List[str]]:
         """
         Check for certificates that need renewal.

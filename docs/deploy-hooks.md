@@ -277,9 +277,63 @@ Every hook run writes an `operation: deploy_hook` entry to the audit log with st
 
 ---
 
+## Typed deploy targets
+
+A **typed deploy target** is a declarative alternative to a shell hook for a
+common destination, so you don't hand-roll `kubectl` + credentials. Targets live
+under `deploy_hooks.targets` and fire from the same lifecycle points as hooks
+(issuance + every renewal, and manual deploy), with the same failure isolation —
+a target that fails logs, audits, and raises the `deploy_hook_failed` alert, but
+never blocks the certificate operation.
+
+The first typed target is **Kubernetes Secret**: it writes the renewed
+`fullchain.pem` / `privkey.pem` into a `kubernetes.io/tls` Secret via
+Server-Side Apply (one idempotent create-or-update).
+
+```jsonc
+{
+  "deploy_hooks": {
+    "enabled": true,
+    "targets": [
+      {
+        "id": "prod-web-tls",
+        "name": "Publish to prod web Secret",
+        "type": "kubernetes-secret",
+        "enabled": true,
+        "on_events": ["created", "renewed"],
+        "domains": ["example.com"],          // empty/omitted = all managed domains
+        "config": {
+          "secret_name": "example-tls",
+          "namespace": "web",
+          // Option A — talk to the API server directly:
+          "api_server": "https://10.0.0.1:6443",
+          "token": "<service-account bearer token>",
+          "ca_cert": "-----BEGIN CERTIFICATE-----\n…",  // optional; else system CAs
+          "verify_ssl": true
+          // Option B — running inside the cluster: set "in_cluster": true instead,
+          // and the API server, token, CA and default namespace are read from the
+          // mounted service account.
+        }
+      }
+    ]
+  }
+}
+```
+
+Configure it via `POST /api/deploy/config` (the same admin-only endpoint as
+shell hooks). The service-account token used should be scoped to
+`patch`/`create` on Secrets in the target namespace.
+
+> **Security:** the deploy config is admin-only, and — like a secret embedded in
+> a shell hook — the Kubernetes `token` is stored in settings and returned to
+> admins on `GET /api/deploy/config`. Keep the token minimally scoped.
+
+---
+
 ## See also
 
 - [`modules/core/deployer.py`](../modules/core/deployer.py) — implementation
+- [`modules/core/deploy_targets.py`](../modules/core/deploy_targets.py) — typed deploy targets
 - [`modules/web/settings_routes.py`](../modules/web/settings_routes.py) — `/api/deploy/*` endpoints
 - [`templates/partials/settings_deploy.html`](../templates/partials/settings_deploy.html) — UI partial
 - [`static/js/settings-deploy.js`](../static/js/settings-deploy.js) — Alpine component

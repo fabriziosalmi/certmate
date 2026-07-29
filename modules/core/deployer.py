@@ -12,13 +12,20 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from .structured_logging import sanitize_text
+from .structured_logging import sanitize_text, JSONFormatter
+from .utils import utc_now_iso
+from .deploy_targets import run_targets, target_applies, TARGET_TYPES
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_TIMEOUT = 30
 MAX_TIMEOUT = 300
 MAX_HISTORY_ENTRIES = 500
+
+# Redacts sensitive-keyed fields recursively before a deploy result is persisted
+# to the history JSONL — a deploy hook command / target config can carry a
+# credential, and the history file is not the place for it.
+_HISTORY_SANITIZER = JSONFormatter(include_hostname=False, include_pid=False)
 
 
 class DeployManager:
@@ -50,7 +57,15 @@ class DeployManager:
         if not domain:
             return
         try:
-            self._execute_hooks(domain, event_type)
+            results = self._execute_hooks(domain, event_type)
+            # A successful deploy is a lifecycle event in its own right (#474):
+            # surface it so notifications/SIEM see "the new cert is live",
+            # distinct from the per-hook completion events.
+            succeeded = sum(1 for r in results if r.get('success'))
+            if succeeded:
+                self.event_bus.publish('certificate_deployed', {
+                    'domain': domain, 'event': event_type, 'count': succeeded,
+                })
         except Exception as e:
             logger.error(f"Deploy hooks failed for {domain}: {e}")
 
@@ -88,18 +103,22 @@ class DeployManager:
             if hook.get('enabled'):
                 hooks.append(hook)
 
-        if not hooks:
+        targets = [t for t in config.get('targets', [])
+                   if target_applies(t, domain, 'manual')]
+
+        if not hooks and not targets:
             return {
                 'ok': False,
                 'total': 0, 'succeeded': 0, 'failed': 0,
                 'results': [],
                 'error': (
-                    f'No enabled hooks configured for {domain}. Add a '
-                    'global or domain-specific hook in Settings → Deploy.'
+                    f'No enabled hooks or deploy targets configured for {domain}. '
+                    'Add a global/domain hook or a typed target in Settings → Deploy.'
                 ),
             }
 
         results = [self._run_hook(h, domain, 'manual') for h in hooks]
+        results.extend(self._execute_targets(domain, 'manual', config))
         succeeded = sum(1 for r in results if r.get('success'))
         failed = len(results) - succeeded
         return {
@@ -130,7 +149,82 @@ class DeployManager:
         for hook in hooks:
             result = self._run_hook(hook, domain, event_type)
             results.append(result)
+        # Typed deploy targets fire from the same lifecycle points (#475).
+        results.extend(self._execute_targets(domain, event_type, config))
         return results
+
+    def _execute_targets(self, domain, event_type, config=None):
+        """Run every applicable typed deploy target for a domain/event.
+
+        Failure-isolated (like shell hooks): reads the current fullchain +
+        private key from disk and applies them via each configured target,
+        recording audit + history per target. Never raises into the caller.
+        """
+        config = config if config is not None else self.get_config()
+        targets = config.get('targets') or []
+        if not any(target_applies(t, domain, event_type) for t in targets):
+            return []
+
+        cert_path = self.cert_dir / domain / 'fullchain.pem'
+        key_path = self.cert_dir / domain / 'privkey.pem'
+        try:
+            cert_pem = cert_path.read_bytes()
+            key_pem = key_path.read_bytes()
+        except OSError as e:
+            logger.error("Deploy targets: cannot read cert files for %s: %s", domain, e)
+            # An unreadable cert is an operational failure that affects deploy —
+            # record it (audit + history + failure alert), don't swallow it.
+            failure = {'success': False, 'target': None, 'type': None,
+                       'domain': domain, 'status_code': None,
+                       'message': f'certificate files unreadable: {e}'}
+            self._record_target(failure, domain, event_type)
+            return [failure]
+
+        results = run_targets(targets, domain, cert_pem, key_pem, event_type)
+        for result in results:
+            self._record_target(result, domain, event_type)
+        return results
+
+    def _record_target(self, result, domain, event_type):
+        """Audit + history + failure-event for one typed-target result."""
+        status = 'success' if result.get('success') else 'failure'
+        try:
+            self.audit_logger.log_operation(
+                operation='deploy_target',
+                resource_type='certificate',
+                resource_id=domain,
+                status=status,
+                details={
+                    'target': result.get('target'),
+                    'type': result.get('type'),
+                    'event': event_type,
+                    'status_code': result.get('status_code'),
+                    'message': result.get('message') or '',
+                },
+                error=None if result.get('success') else result.get('message'),
+            )
+        except Exception:  # pragma: no cover - audit must never break deploy
+            logger.debug("Audit emit failed for deploy_target on %s", domain)
+
+        if not result.get('success'):
+            # Same "silent deploy" alerting path as a failed shell hook.
+            self.event_bus.publish('deploy_hook_failed', {
+                'hook_name': result.get('target'),
+                'domain': domain,
+                'error': result.get('message'),
+            })
+
+        self._log_history({
+            'kind': 'target',
+            'success': result.get('success'),
+            'target': result.get('target'),
+            'type': result.get('type'),
+            'domain': domain,
+            'event': event_type,
+            'status_code': result.get('status_code'),
+            'message': result.get('message'),
+            'timestamp': utc_now_iso(),
+        })
 
     def _run_hook(self, hook, domain, event_type, dry_run=False):
         """Execute a single deploy hook."""
@@ -273,8 +367,9 @@ class DeployManager:
         """Append a deploy result to the JSONL history file."""
         try:
             self._history_path.parent.mkdir(parents=True, exist_ok=True)
+            safe_result = _HISTORY_SANITIZER.sanitize_data(result)
             with open(self._history_path, 'a') as f:
-                f.write(json.dumps(result) + '\n')
+                f.write(json.dumps(safe_result) + '\n')
             self._truncate_history()
         except OSError as e:
             # Surface write failures at warning level so the "history is
@@ -374,11 +469,15 @@ class DeployManager:
     def get_config(self):
         """Return deploy_hooks config with defaults."""
         settings = self.settings_manager.load_settings()
-        return settings.get('deploy_hooks', {
+        config = settings.get('deploy_hooks', {
             'enabled': False,
             'global_hooks': [],
             'domain_hooks': {},
         })
+        # Typed deploy targets (#475) live alongside the shell hooks; default to
+        # an empty list so older configs keep working.
+        config.setdefault('targets', [])
+        return config
 
     def save_config(self, config):
         """Validate and save deploy_hooks config.
@@ -405,12 +504,42 @@ class DeployManager:
                 if not ok:
                     return False, f"Hook for domain '{domain}' rejected: {err}"
 
+        if 'targets' in config:
+            if not isinstance(config['targets'], list):
+                return False, "targets must be a list"
+            for target in config['targets']:
+                ok, err = self._validate_target(target)
+                if not ok:
+                    return False, f"Deploy target rejected: {err}"
+
         # Atomic via settings_manager.update so two concurrent admin saves
         # (e.g. one editing deploy hooks, another editing DNS providers)
         # cannot lose each other's changes.
         def _mutate(settings):
             settings['deploy_hooks'] = config
         self.settings_manager.update(_mutate, "deploy_hooks_save")
+        return True, None
+
+    @staticmethod
+    def _validate_target(target):
+        """Validate one typed deploy target. Returns (ok, error|None)."""
+        if not isinstance(target, dict):
+            return False, "target must be an object"
+        ttype = target.get('type')
+        if ttype not in TARGET_TYPES:
+            return False, f"unknown target type {ttype!r} (expected one of {TARGET_TYPES})"
+        cfg = target.get('config') or {}
+        if not isinstance(cfg, dict):
+            return False, "target.config must be an object"
+        if ttype == 'kubernetes-secret':
+            if not cfg.get('secret_name'):
+                return False, "kubernetes-secret needs config.secret_name"
+            if cfg.get('in_cluster'):
+                return True, None
+            if not cfg.get('api_server') or not cfg.get('token'):
+                return False, "kubernetes-secret needs config.api_server + config.token (or in_cluster)"
+            if not cfg.get('namespace'):
+                return False, "kubernetes-secret needs config.namespace"
         return True, None
 
     @staticmethod

@@ -252,7 +252,7 @@ Download certificate, private key, or CSR file.
 
 **Parameters**:
 - `identifier` - Certificate ID
-- `type` - File type: `crt`, `key`, or `csr`
+- `type` - File type: `crt`, `key`, `csr`, or `pfx` (encrypted PKCS#12; requires a PFX password set in Settings, operator role)
 
 **Response** (200 OK):
 - Content-Type: `application/octet-stream`

@@ -49,7 +49,8 @@ class AuditLogger:
                  enable_chain: bool = True, signer=None,
                  checkpoint_interval: int = 100,
                  max_bytes: Optional[int] = None,
-                 backup_count: Optional[int] = None):
+                 backup_count: Optional[int] = None,
+                 audit_sink=None):
         """
         Initialize Audit Logger.
 
@@ -70,6 +71,9 @@ class AuditLogger:
         """
         self.audit_log_dir = Path(audit_log_dir)
         self.audit_log_file = self.audit_log_dir / "certificate_audit.log"
+        # Optional SIEM sink (#474): each audit entry is also streamed to an
+        # external collector. Failure-isolated; may be wired after construction.
+        self.audit_sink = audit_sink
 
         if max_bytes is None:
             max_bytes = _int_env('CERTMATE_AUDIT_LOG_MAX_BYTES',
@@ -505,6 +509,14 @@ class AuditLogger:
             # Mirror into the tamper-evident hash chain. Isolated: a chain
             # failure must never break audit logging or the audited operation.
             self._chain_append(audit_entry)
+            # Stream to the SIEM sink (#474), if configured. The sink is itself
+            # failure-isolated, but guard here too so a sink bug can never break
+            # audit logging.
+            if self.audit_sink is not None:
+                try:
+                    self.audit_sink.send(audit_entry)
+                except Exception as sink_err:  # pragma: no cover - defensive
+                    logger.warning("Audit sink error (isolated): %s", sink_err)
 
         except Exception as e:
             logger.error(f"Failed to write audit log: {e}")

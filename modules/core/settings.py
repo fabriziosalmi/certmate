@@ -50,6 +50,9 @@ PUBLIC_SETTINGS_WRITABLE_KEYS = frozenset({
     # Domains to watch in Certificate Transparency logs (#470). Pure config;
     # the crt.sh poll runs as a scheduled job.
     'ct_monitoring',
+    # SIEM audit sink (#474): collector host/port/format for streaming audit
+    # events. No secrets; the sink reads it live.
+    'audit_sink',
     'setup_completed',
     # Per-install "stop nagging me with the first-run wizard" flag. Distinct
     # from setup_completed, which must stay truthful for recovery/downgrade
