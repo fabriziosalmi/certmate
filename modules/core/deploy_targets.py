@@ -163,7 +163,7 @@ class KubernetesSecretTarget:
             resp = patch(url, json=manifest, headers=headers, verify=verify, timeout=15)
         except Exception as e:
             return {'success': False, 'status_code': None,
-                    'message': f'Kubernetes API request failed: {e}'}
+                    'message': f'Kubernetes API request failed: {_scrub(str(e), token)}'}
         finally:
             if ca_tempfile:
                 try:
@@ -175,7 +175,7 @@ class KubernetesSecretTarget:
         if status is not None and 200 <= status < 300:
             return {'success': True, 'status_code': status,
                     'message': f'Applied Secret {namespace}/{secret_name}'}
-        body = _safe_body(resp)
+        body = _scrub(_safe_body(resp), token)
         return {'success': False, 'status_code': status,
                 'message': f'Kubernetes API returned {status}: {body}'}
 
@@ -198,6 +198,16 @@ def _materialize_verify(spec):
 def _default_patch(url, timeout=15, **kwargs):
     import requests
     return requests.patch(url, timeout=timeout, **kwargs)
+
+
+def _scrub(text, secret):
+    """Remove *secret* (the bearer token) from a diagnostic string before it is
+    returned/stored. The Kubernetes API never echoes the token, but scrubbing it
+    guarantees a token can never reach the deploy history/audit through an error
+    message or response body (and satisfies clear-text-storage analysis)."""
+    if secret and text:
+        return text.replace(secret, '[REDACTED]')
+    return text
 
 
 def _safe_body(resp):

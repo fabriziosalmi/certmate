@@ -93,6 +93,21 @@ def test_deploy_request_exception_is_failure():
     assert 'no route to host' in out['message']
 
 
+def test_token_scrubbed_from_error_message():
+    patch = _CapturePatch(raises=ConnectionError('to https://k8s Bearer sa-token failed'))
+    out = KubernetesSecretTarget(_cfg(token='sa-token'), http_patch=patch).deploy(b'C', b'K')
+    assert out['success'] is False
+    assert 'sa-token' not in out['message']
+    assert '[REDACTED]' in out['message']
+
+
+def test_token_scrubbed_from_response_body():
+    patch = _CapturePatch(403, text='denied: token sa-token not allowed')
+    out = KubernetesSecretTarget(_cfg(token='sa-token'), http_patch=patch).deploy(b'C', b'K')
+    assert out['success'] is False
+    assert 'sa-token' not in out['message']
+
+
 def test_missing_secret_name_raises():
     with pytest.raises(DeployTargetError):
         KubernetesSecretTarget(_cfg(secret_name=None),
