@@ -1,3 +1,30 @@
+## v2.24.1 (ACME-DNS, which had never worked)
+
+A patch release with one fix that matters to anyone who tried to use ACME-DNS, and one image hygiene change.
+
+The honest framing first: **ACME-DNS issuance has never worked in any CertMate release.** It was listed as a supported provider, documented, and present in the settings UI, and every certificate request through it failed. If you tried it, gave up, and assumed you had misconfigured something, you had not. This release makes it work.
+
+### ACME-DNS issuance and renewal
+
+- **ACME-DNS now issues certificates** (#466). Every request previously died with `certbot: error: unrecognized arguments: --acme-dns-credentials`. The cause was the bundled `certbot-acme-dns` plugin: it registers with certbot, which is why the failure reads like a typo, but it implements no credentials-file option at all — it exposes only `--acme-dns-server`, `--acme-dns-propagation-seconds` and `--acme-dns-is-trusted`. The command line CertMate built could therefore never parse. That plugin was also the wrong shape for CertMate: it expects to register the ACME-DNS account itself through interactive prompts, while CertMate stores an account you registered beforehand.
+
+  Publishing an ACME-DNS TXT record is a single authenticated POST, which CertMate already performed in its own DNS hook for alias-mode validation. Both issuance and renewal now go through that hook, and `certbot-acme-dns` is no longer installed in the image at all.
+
+- **Existing ACME-DNS certificates renew with no action from you.** Renewal routes on the provider rather than on stored metadata, so certificates whose metadata predates this release are handled without any migration.
+
+- **A missing Subdomain is now reported as a configuration error.** An ACME-DNS account saved without its subdomain previously produced an internal error naming the wrong culprit. It now names the field to fill in, and fails before certbot is invoked.
+
+### Image
+
+- **The runtime image ships a current pip** (part of #403). The build stage upgraded pip for itself, but the runtime stage carried the base image's bundled pip 25.0.1, which is what vulnerability scanners reported (CVE-2026-8643, CVE-2026-6357, CVE-2026-3219). It is now pinned to 26.1.2 via a `PIP_VERSION` build argument. CertMate runs from its own virtualenv and never used this pip; the change exists so the image stops shipping a known-vulnerable copy.
+
+### Notes for operators
+
+- If you use ACME-DNS, confirm the **Subdomain** field is set on the account. It is the subdomain ACME-DNS returned at registration, and the value your `_acme-challenge` CNAME points at. The provider documentation table previously omitted it.
+- Nothing else changes. There is no configuration migration, no new default, and no change to any other DNS provider.
+
+---
+
 ## v2.24.0 (Discovery and inventory: from what you issued to what is actually served)
 
 Two milestones. The first is the larger story: CertMate has only ever known about the certificates it issued. It now also records the ones it merely observes — served on a host, or logged in Certificate Transparency — in one inventory that answers "what exists across the estate, who issued it, when does it expire, and which cryptography does it use?". The second is the integrations around that record: a PKCS#12 export where it was missing, a typed deploy target for Kubernetes, and a push of the audit trail to a SIEM.
