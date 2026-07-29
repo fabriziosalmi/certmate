@@ -591,6 +591,47 @@ class CertificateManager:
         return {**dns_config, '_zone_domain': zone_domain}
 
     @staticmethod
+    def _acme_dns_native_alias(dns_provider, dns_config):
+        """Return the acme-dns subdomain to drive CertMate's native hook with.
+
+        acme-dns has no usable certbot authenticator. The published
+        ``certbot-acme-dns`` package registers fine but exposes only
+        ``--acme-dns-server`` / ``--acme-dns-propagation-seconds`` /
+        ``--acme-dns-is-trusted`` — it never implements a credentials-file
+        option, so the ``--acme-dns-credentials`` CertMate used to pass was
+        rejected by certbot's own argument parser and acme-dns issuance could
+        never succeed (issue #466). That plugin also expects to register the
+        account itself through interactive zope prompts, which is the opposite
+        of CertMate's model (the account already exists in settings).
+
+        Publishing an acme-dns TXT record is a single authenticated POST, which
+        ``dns_alias_hook._acme_dns_change`` already performs. So every acme-dns
+        issuance is routed through that hook instead of through certbot. The
+        alias target is inherently the configured subdomain: acme-dns *is*
+        CNAME-based delegation, so the user's CNAME already points the
+        challenge name at that subdomain whether or not alias mode was asked
+        for explicitly.
+
+        Returns '' for every other provider, so callers can use it as a plain
+        "should this take the native path?" switch.
+
+        Raises ValueError when an acme-dns account has no subdomain. Returning
+        '' there would silently drop the request back onto the plugin path,
+        where AcmeDNSStrategy raises a "bug in the caller" RuntimeError — a
+        misleading message for what is really a missing settings field.
+        """
+        if dns_provider != 'acme-dns':
+            return ''
+        subdomain = str((dns_config or {}).get('subdomain') or '').strip().rstrip('.')
+        if not subdomain:
+            raise ValueError(
+                "The acme-dns account is missing its Subdomain. Set it to the "
+                "subdomain acme-dns returned when the account was registered — "
+                "the same value the _acme-challenge CNAME points at."
+            )
+        return subdomain
+
+    @staticmethod
     def _create_dns_alias_hook_config(dns_provider, dns_config, domain_alias, propagation_seconds):
         """Write temporary config consumed by the DNS alias hook."""
         if dns_provider not in DNS_ALIAS_SUPPORTED_PROVIDERS:
@@ -1175,8 +1216,11 @@ class CertificateManager:
                 # provider certbot authenticator, so the plugin is only needed
                 # for the normal non-alias DNS-01 flow. 'manual' is a certbot
                 # core feature (custom-script provider), never an installable
-                # plugin — skip the preflight for it.
-                if not domain_alias and strategy.plugin_name != 'manual':
+                # plugin — skip the preflight for it. acme-dns always takes the
+                # native hook (see _acme_dns_native_alias) and has no certbot
+                # plugin to check for either.
+                if (not domain_alias and strategy.plugin_name != 'manual'
+                        and dns_provider != 'acme-dns'):
                     plugin = strategy.plugin_name
                     if not check_certbot_plugin_installed(plugin):
                         pkg = f"certbot-{plugin}"
@@ -1346,9 +1390,15 @@ class CertificateManager:
                     process_env.setdefault('CERTMATE_DNS_PROPAGATION_SECONDS', str(propagation_time))
 
             alias_hook_provider = alias_dns_provider or dns_provider
+            # acme-dns is always driven by the native hook, with the configured
+            # subdomain standing in as the alias target when the caller did not
+            # ask for alias mode explicitly (issue #466).
+            effective_domain_alias = domain_alias or self._acme_dns_native_alias(
+                dns_provider, dns_config
+            )
             use_dns_alias_hook = (
                 challenge_type != 'http-01'
-                and domain_alias
+                and effective_domain_alias
                 and alias_hook_provider in DNS_ALIAS_SUPPORTED_PROVIDERS
             )
 
@@ -1364,11 +1414,12 @@ class CertificateManager:
                             f"Alias DNS provider '{alias_hook_provider}' is not configured"
                         )
                 logger.info(
-                    f"DNS alias '{domain_alias}' requested for {domain}; "
+                    f"DNS alias '{effective_domain_alias}' requested for {domain}; "
                     f"using {alias_hook_provider} manual hook to create TXT records on the alias zone."
                 )
                 credentials_file = self._create_dns_alias_hook_config(
-                    alias_hook_provider, alias_hook_config, domain_alias, propagation_time or strategy.default_propagation_seconds
+                    alias_hook_provider, alias_hook_config, effective_domain_alias,
+                    propagation_time or strategy.default_propagation_seconds
                 )
                 self._configure_dns_alias_arguments(certbot_cmd, credentials_file)
             else:
@@ -1683,7 +1734,34 @@ class CertificateManager:
                     metadata.get('account_id'),
                     settings,
                 )
-                if dns_config:
+                acme_dns_alias = self._acme_dns_native_alias(dns_provider, dns_config)
+                if dns_config and acme_dns_alias:
+                    # Mirror the create path: acme-dns renews through CertMate's
+                    # native hook, never through a certbot plugin (issue #466).
+                    # Certs issued before this fix carry no domain_alias in
+                    # metadata, so they land here rather than in the alias
+                    # branch above — routing on the provider keeps them renewable
+                    # without a metadata migration.
+                    strategy = DNSStrategyFactory.get_strategy(dns_provider)
+                    strategy.prepare_environment(process_env, dns_config)
+                    propagation_map = settings.get('dns_propagation_seconds', {}) or {}
+                    try:
+                        renew_propagation = int(propagation_map.get(
+                            dns_provider, strategy.default_propagation_seconds))
+                    except (ValueError, TypeError):
+                        renew_propagation = strategy.default_propagation_seconds
+                    alias_hook_config = self._create_dns_alias_hook_config(
+                        dns_provider,
+                        dns_config,
+                        acme_dns_alias,
+                        max(1, min(3600, renew_propagation)),
+                    )
+                    self._configure_dns_alias_arguments(cmd, alias_hook_config)
+                    # Strip CR/LF so a crafted domain cannot forge log entries
+                    # (CodeQL py/log-injection), matching modules/web/cert_routes.py.
+                    safe_domain = str(domain).replace('\r', ' ').replace('\n', ' ')
+                    logger.info(f"Renewing {safe_domain} with the native acme-dns hook.")
+                elif dns_config:
                     strategy = DNSStrategyFactory.get_strategy(dns_provider)
                     strategy.prepare_environment(process_env, dns_config)
                     # Create credentials file for providers that need one.

@@ -29,7 +29,7 @@ CertMate unterstützt eine breite Palette von DNS-Anbietern für Let's Encrypt D
 | **Infomaniak** | `certbot-dns-infomaniak` | API-Token | Regional |
 | **ArvanCloud** | `certbot-dns-arvancloud` | API-Schlüssel | Regional |
 | **RFC2136** | `certbot-dns-rfc2136` | Nameserver, TSIG-Schlüssel | Standardprotokoll |
-| **ACME-DNS** | `certbot-acme-dns` | API-URL, Benutzername, Passwort | Spezialisiert |
+| **ACME-DNS** | _integriert_ (kein Plugin) | API-URL, Benutzername, Passwort, Subdomain | Spezialisiert |
 | **Hurricane Electric** | `certbot-dns-he-ddns` | Benutzername, Passwort | Kostenloses DNS |
 | **Dynu** | `certbot-dns-dynudns` | API-Token | Dynamisches DNS |
 | **DuckDNS** | `certbot-dns-duckdns` | Konto-Token | Kostenloses DDNS (ohne eigene Domain) |

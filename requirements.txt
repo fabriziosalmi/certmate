@@ -39,7 +39,13 @@ certbot-dns-hetzner-cloud==1.0.5
 certbot-dns-porkbun==0.11.0
 certbot-dns-godaddy==2.8.0
 certbot-dns-arvancloud==0.1.0
-certbot-acme-dns==0.3.1
+# acme-dns needs NO certbot plugin. certbot-acme-dns==0.3.1 was pinned here
+# until v2.24.0 but never worked: it exposes no --acme-dns-credentials option,
+# so certbot rejected the command line CertMate built and every acme-dns
+# issuance failed (issue #466). It also drags in zope.component/zope.interface
+# and drives interactive registration prompts, neither of which fits a
+# headless subprocess. CertMate now publishes acme-dns TXT records itself via
+# modules/core/dns_alias_hook.py (a single authenticated POST).
 # DuckDNS: free DDNS subdomain provider. Enables "no-domain" cert issuance
 # for homelabs / self-hosted services via *.duckdns.org.
 certbot-dns-duckdns==1.8.0
