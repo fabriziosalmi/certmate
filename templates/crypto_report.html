@@ -76,9 +76,9 @@
     };
     function el(id) { return document.getElementById(id); }
     var CLASS_COLOR = {
-        weak: 'text-red-600 dark:text-red-400',
-        acceptable: 'text-amber-600 dark:text-amber-400',
-        modern: 'text-green-600 dark:text-green-400',
+        weak: 'text-danger-fg',
+        acceptable: 'text-warning-fg',
+        modern: 'text-success-fg',
         pqc: 'text-indigo-600 dark:text-indigo-400',
         unknown: 'text-muted'
     };
@@ -105,7 +105,7 @@
                 + card('Weak', c.weak || 0, CLASS_COLOR.weak)
                 + card('Acceptable', c.acceptable || 0, CLASS_COLOR.acceptable)
                 + card('Modern', c.modern || 0, CLASS_COLOR.modern)
-                + card('Quantum-vulnerable', rep.quantum_vulnerable || 0, 'text-amber-600 dark:text-amber-400');
+                + card('Quantum-vulnerable', rep.quantum_vulnerable || 0, 'text-warning-fg');
             el('byKey').innerHTML = kvRows(rep.by_key_algorithm);
             el('bySig').innerHTML = kvRows(rep.by_signature_algorithm);
             var assets = rep.assets || [];
