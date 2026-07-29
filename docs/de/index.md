@@ -246,7 +246,7 @@ Siehe LICENSE-Datei im Repository
 
 ## Version
 
-**Aktuelle Version**: 2.24.0
+**Aktuelle Version**: 2.24.1
 **Status**: Produktionsbereit
 
 ---
