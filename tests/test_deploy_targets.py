@@ -8,8 +8,11 @@ disk) — the K8s API is mocked throughout.
 """
 
 import base64
+import glob
 import json
+import os
 import re
+import tempfile
 from unittest.mock import MagicMock
 
 import pytest
@@ -119,6 +122,18 @@ def test_ca_cert_written_to_tempfile_and_cleaned_up(tmp_path):
     assert isinstance(ca_path, str) and 'certmate-k8s-ca-' in ca_path
     import os
     assert not os.path.exists(ca_path)  # removed after the request
+
+
+def test_no_temp_ca_leak_on_validation_error():
+    # A validation error (missing namespace) must raise BEFORE the CA temp file
+    # is materialized — no leaked certmate-k8s-ca-* file.
+    pattern = os.path.join(tempfile.gettempdir(), 'certmate-k8s-ca-*')
+    before = set(glob.glob(pattern))
+    cfg = _cfg(ca_cert='-----BEGIN CERTIFICATE-----\nx\n')
+    cfg.pop('namespace')
+    with pytest.raises(DeployTargetError):
+        KubernetesSecretTarget(cfg, http_patch=_CapturePatch()).deploy(b'C', b'K')
+    assert set(glob.glob(pattern)) == before
 
 
 def test_verify_ssl_false_disables_verification():
@@ -286,6 +301,22 @@ def test_no_deployed_event_when_target_fails(tmp_path, requests_mock):
     mgr.on_certificate_event('certificate_renewed', {'domain': 'example.com'})
     published = [c.args[0] for c in mgr.event_bus.publish.call_args_list]
     assert 'certificate_deployed' not in published
+
+
+def test_read_failure_is_recorded(tmp_path):
+    # A target applicable to a domain whose cert files are missing must be
+    # recorded (audit + failure alert), not silently dropped.
+    target = _k8s_target()
+    target['domains'] = ['nofiles.example.com']
+    settings = {'deploy_hooks': {'enabled': True, 'global_hooks': [],
+                                 'domain_hooks': {}, 'targets': [target]}}
+    mgr = _deploy_manager(tmp_path, settings)
+    results = mgr._execute_targets('nofiles.example.com', 'renewed', mgr.get_config())
+    assert results and results[0]['success'] is False
+    assert 'unreadable' in results[0]['message']
+    assert mgr.audit_logger.log_operation.called
+    published = [c.args[0] for c in mgr.event_bus.publish.call_args_list]
+    assert 'deploy_hook_failed' in published
 
 
 def test_missing_cert_files_is_isolated(tmp_path):

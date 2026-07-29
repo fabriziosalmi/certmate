@@ -12,7 +12,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from .structured_logging import sanitize_text
+from .structured_logging import sanitize_text, JSONFormatter
 from .utils import utc_now_iso
 from .deploy_targets import run_targets, target_applies, TARGET_TYPES
 
@@ -21,6 +21,11 @@ logger = logging.getLogger(__name__)
 DEFAULT_TIMEOUT = 30
 MAX_TIMEOUT = 300
 MAX_HISTORY_ENTRIES = 500
+
+# Redacts sensitive-keyed fields recursively before a deploy result is persisted
+# to the history JSONL — a deploy hook command / target config can carry a
+# credential, and the history file is not the place for it.
+_HISTORY_SANITIZER = JSONFormatter(include_hostname=False, include_pid=False)
 
 
 class DeployManager:
@@ -167,8 +172,13 @@ class DeployManager:
             key_pem = key_path.read_bytes()
         except OSError as e:
             logger.error("Deploy targets: cannot read cert files for %s: %s", domain, e)
-            return [{'success': False, 'target': None, 'type': None,
-                     'domain': domain, 'message': f'certificate files unreadable: {e}'}]
+            # An unreadable cert is an operational failure that affects deploy —
+            # record it (audit + history + failure alert), don't swallow it.
+            failure = {'success': False, 'target': None, 'type': None,
+                       'domain': domain, 'status_code': None,
+                       'message': f'certificate files unreadable: {e}'}
+            self._record_target(failure, domain, event_type)
+            return [failure]
 
         results = run_targets(targets, domain, cert_pem, key_pem, event_type)
         for result in results:
@@ -357,8 +367,9 @@ class DeployManager:
         """Append a deploy result to the JSONL history file."""
         try:
             self._history_path.parent.mkdir(parents=True, exist_ok=True)
+            safe_result = _HISTORY_SANITIZER.sanitize_data(result)
             with open(self._history_path, 'a') as f:
-                f.write(json.dumps(result) + '\n')
+                f.write(json.dumps(safe_result) + '\n')
             self._truncate_history()
         except OSError as e:
             # Surface write failures at warning level so the "history is

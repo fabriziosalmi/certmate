@@ -95,14 +95,15 @@ class KubernetesSecretTarget:
         return api_server, token, verify, cfg.get('namespace')
 
     def _resolve_verify(self):
-        """Return a CA path / True / False for TLS verification."""
+        """Return the TLS-verify spec: a CA PEM string, False, or True.
+
+        Returns the PEM *content* (not a temp file). Materialization is deferred
+        to :func:`_materialize_verify`, called only after every config check
+        passes, so a validation error can't leak a temp CA bundle.
+        """
         ca_pem = self.config.get('ca_cert')
         if ca_pem:
-            # requests needs a file path for a custom CA bundle.
-            fd, path = tempfile.mkstemp(suffix='.crt', prefix='certmate-k8s-ca-')
-            with os.fdopen(fd, 'w') as f:
-                f.write(ca_pem)
-            return path
+            return ca_pem
         if self.config.get('verify_ssl', True) is False:
             return False
         return True
@@ -141,7 +142,7 @@ class KubernetesSecretTarget:
         if not secret_name:
             raise DeployTargetError('kubernetes-secret target needs secret_name')
 
-        api_server, token, verify, namespace = self._resolve_connection()
+        api_server, token, verify_spec, namespace = self._resolve_connection()
         if not namespace:
             raise DeployTargetError('kubernetes-secret target needs a namespace')
 
@@ -155,7 +156,9 @@ class KubernetesSecretTarget:
         }
 
         patch = self._http_patch or _default_patch
-        ca_tempfile = verify if isinstance(verify, str) and 'certmate-k8s-ca-' in str(verify) else None
+        # Materialize the CA bundle only now — after every validation above —
+        # inside the try/finally, so a config error can never leak a temp file.
+        verify, ca_tempfile = _materialize_verify(verify_spec)
         try:
             resp = patch(url, json=manifest, headers=headers, verify=verify, timeout=15)
         except Exception as e:
@@ -175,6 +178,21 @@ class KubernetesSecretTarget:
         body = _safe_body(resp)
         return {'success': False, 'status_code': status,
                 'message': f'Kubernetes API returned {status}: {body}'}
+
+
+def _materialize_verify(spec):
+    """Turn a verify spec into a value the HTTP client accepts.
+
+    A CA PEM string is written to a short-lived temp file (its path is returned
+    as the second element so the caller can delete it); a file path (in-cluster
+    SA CA) or a bool passes through with no temp file to clean up.
+    """
+    if isinstance(spec, str) and '-----BEGIN' in spec:
+        fd, path = tempfile.mkstemp(suffix='.crt', prefix='certmate-k8s-ca-')
+        with os.fdopen(fd, 'w') as f:
+            f.write(spec)
+        return path, path
+    return spec, None
 
 
 def _default_patch(url, timeout=15, **kwargs):

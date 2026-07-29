@@ -86,6 +86,17 @@ def test_build_pfx_unknown_identifier_returns_none(manager):
     assert manager.build_pfx('nobody', b'pw') is None
 
 
+def test_build_pfx_skips_incomplete_candidate(manager):
+    # An incomplete dir (crt, no key) under one usage folder must not shadow a
+    # complete cert under another — build_pfx keeps looking.
+    incomplete = manager.client_certs_dir / 'vpn' / 'dup'
+    incomplete.mkdir(parents=True)
+    cert_pem, _ = _cert_and_key('dup')
+    (incomplete / 'dup.crt').write_bytes(cert_pem)   # crt only, no key
+    _place_cert(manager, 'dup', usage='api')          # complete
+    assert manager.build_pfx('dup', b'pw') is not None
+
+
 def test_build_pfx_without_ca_still_works(tmp_path):
     # No CA cert available -> chain is empty but the PFX still builds.
     private_ca = SimpleNamespace(ca_cert_path=None)

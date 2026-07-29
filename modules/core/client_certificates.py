@@ -581,7 +581,9 @@ class ClientCertificateManager:
             crt_path = cert_dir / f"{identifier}.crt"
             key_path = cert_dir / f"{identifier}.key"
             if not (crt_path.exists() and key_path.exists()):
-                return None
+                # A partial / wrong-usage directory: keep looking for a complete
+                # one rather than declaring the whole identifier unexportable.
+                continue
             chain_pem = None
             try:
                 ca_path = getattr(self.private_ca, 'ca_cert_path', None)
