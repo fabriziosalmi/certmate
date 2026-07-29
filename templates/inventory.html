@@ -15,7 +15,7 @@
                 <button type="button" id="scanNowBtn" onclick="InventoryPage.runScan()"
                         class="hidden px-2.5 py-1.5 text-xs bg-primary text-white rounded-lg hover:opacity-90 transition"
                         title="Run a discovery sweep and CT-log poll now">
-                    <i class="fas fa-magnifying-glass-chart mr-1"></i>Scan now
+                    <i class="fas fa-magnifying-glass mr-1"></i>Scan now
                 </button>
                 <button type="button" onclick="InventoryPage.load()" class="px-2.5 py-1.5 text-xs bg-surface-2 text-muted rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition" title="Refresh" aria-label="Refresh inventory">
                     <i class="fas fa-sync"></i>
@@ -38,7 +38,7 @@
     <!-- Crypto readiness summary (#473) -->
     <div class="bg-surface shadow-card rounded-xl overflow-hidden mb-4">
         <div class="px-6 py-3 border-b border-gray-100 dark:border-white/5 flex items-center justify-between flex-wrap gap-2">
-            <span class="text-sm font-medium text-foreground"><i class="fas fa-shield-halved mr-2 text-muted"></i>Cryptographic readiness</span>
+            <span class="text-sm font-medium text-foreground"><i class="fas fa-shield mr-2 text-muted"></i>Cryptographic readiness</span>
             <div class="flex items-center gap-2">
                 <a href="/api/inventory/crypto-report?format=csv" class="px-2.5 py-1.5 text-xs bg-surface-2 text-muted rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition" title="Download CSV"><i class="fas fa-file-csv mr-1"></i>CSV</a>
                 <a href="/api/inventory/crypto-report" target="_blank" rel="noopener" class="px-2.5 py-1.5 text-xs bg-surface-2 text-muted rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition" title="View JSON"><i class="fas fa-file-code mr-1"></i>JSON</a>
