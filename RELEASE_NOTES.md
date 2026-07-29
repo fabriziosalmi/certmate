@@ -1,3 +1,34 @@
+## v2.24.0 (Discovery and inventory: from what you issued to what is actually served)
+
+Two milestones. The first is the larger story: CertMate has only ever known about the certificates it issued. It now also records the ones it merely observes — served on a host, or logged in Certificate Transparency — in one inventory that answers "what exists across the estate, who issued it, when does it expire, and which cryptography does it use?". The second is the integrations around that record: a PKCS#12 export where it was missing, a typed deploy target for Kubernetes, and a push of the audit trail to a SIEM.
+
+Everything new here is opt-in. An upgrade issues, renews and serves exactly as before until you turn a feature on; nothing probes an external host or polls a log on its own, and there is no new default, scheduler behaviour or on-disk file for an instance that leaves it off.
+
+### Certificate discovery and inventory
+
+- **A deep TLS probe** (#467) inspects the certificate served at a host:port and returns it as structured data — the full SAN list, serial, SHA-256 fingerprint, validity window, issuer DN, public-key algorithm and size, signature algorithm, and the served chain — rather than the fingerprint-only comparison the deployment badge used. It does not validate PKI trust, so it still describes an expired, self-signed or hostname-mismatched certificate instead of erroring. An SSRF guard resolves the target first and refuses private, loopback, link-local, reserved, CGNAT and other non-globally-routable addresses unless explicitly allowed, then pins the validated IP for the handshake so a DNS rebind between the check and the connection cannot redirect it inward.
+- **A fingerprint-keyed inventory** (#468) stores every certificate CertMate has seen in a SQLite database keyed by SHA-256 fingerprint: one certificate served on many hosts is a single record with many endpoints, re-observation is idempotent, and the store is carried by (and restored from) the unified backup alongside the PKI and audit chain.
+- **Scheduled endpoint discovery** (#469) probes a configured list of endpoints — and, by default, the hosts of managed domains — into the inventory once a day, so "what we issued" and "what is actually served" can be compared. A renewed certificate that was never deployed shows up as a served fingerprint that differs from the issued one.
+- **CT-log monitoring** (#470) polls crt.sh for configured domains and adds newly-seen certificates as unmanaged — the shadow-issuance signal. It deduplicates by serial against the inventory and only downloads a certificate's DER for the ones it has never seen, so known certificates cost no extra requests; polling is rate-limited and failure-isolated per domain and per entry.
+- **An inventory dashboard** (#471) at /inventory shows issued and discovered certificates in two groups, with an expiry forecast across everything rather than only what CertMate issued, filters by group, source, expiry and algorithm, and a cryptographic-readiness summary.
+- **Adopt a discovered certificate** (#472): from a discovered, unmanaged record whose domain CertMate can validate — DNS credentials and an ACME account email present — one action pre-fills the create form from the observed certificate and brings it under the normal renewal schedule. Where the domain cannot be validated the action explains why instead of offering a dead end.
+- **A cryptographic readiness report** (#473) enumerates every managed and discovered certificate by public-key and signature algorithm, classifies each as weak, acceptable or modern, flags everything classically quantum-vulnerable, and exports as JSON, CSV or a print-friendly page. It is framed strictly as inventory and readiness: it does not change issuance and says nothing about issuing post-quantum certificates. The classification table is data-driven so new algorithms can be added without touching code.
+
+### Operations and integrations
+
+- **PKCS#12 (.pfx) for client certificates** (#465). The encrypted .pfx was generated only for server certificates and, even there, was absent from the "download all" ZIP. It is now included in the server private ZIP, and client certificates — where a .pfx for import into Windows and mobile keystores is most useful — gain a gated download/pfx, generated on demand from the on-disk PEMs and encrypted with the configured PFX password. Without a password it is refused rather than emitting an unencrypted private-key bundle.
+- **A typed deploy target: write to a Kubernetes Secret** (#475). Deploy hooks were raw shell commands only. A typed target is a declarative alternative for the common case: the Kubernetes Secret target writes the renewed fullchain and private key into a kubernetes.io/tls Secret via Server-Side Apply — one idempotent create-or-update — using configured credentials (API server, bearer token, CA) or the in-cluster service account. It fires from the same lifecycle points as hooks, is equally failure-isolated, and is audited and history-logged.
+- **A SIEM audit sink** (#474). The signed, hash-chained audit trail could only be read from the on-disk file or the signed export bundle; SOC integration expects a push. Each audit entry can now be streamed live to a collector as syslog (RFC 5424) or CEF over UDP/TCP, or as generic HTTP/JSON. Entries pass through the existing credential sanitizer before they leave the process, and the sink is failure-isolated with a short timeout, exactly like the hash chain: a dead or slow collector never blocks or breaks a certificate operation. Two lifecycle events were added along the way, certificate_deployed and certificate_revoked; the scheduled renewal-and-expiry digest already existed.
+
+### Notes for operators
+
+- The discovery features (monitored_endpoints, ct_monitoring) and the audit sink (audit_sink) all default to off. The daily discovery sweep and CT poll are registered as scheduler jobs but do nothing until enabled.
+- The certificate inventory lives at data/inventory/inventory.db and is included in backups. Populate it from the scheduled sweeps or the dashboard's "Scan now".
+- A scoped API key sees only inventory records within its allowed_domains, the same boundary the certificate API already enforces.
+- The Kubernetes deploy target's bearer token and the SIEM sink configuration live in settings; the deploy configuration is admin-only. Keep the token minimally scoped to patch or create Secrets in its namespace.
+
+---
+
 ## v2.23.0 (Audit retention: deleting history, on the record)
 
 One feature, and it is the last open half of the audit design tracked in #437: an operator can now archive and remove an old prefix of the tamper-evident audit chain.
