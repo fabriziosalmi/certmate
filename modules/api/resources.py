@@ -2155,6 +2155,11 @@ def create_api_resources(api, models, managers):
                     CERTIFICATE_FILES if include_private
                     else tuple(f for f in CERTIFICATE_FILES if f not in _PRIVATE_KEY_FILES)
                 )
+                # The encrypted PKCS#12 bundle (only present when a PFX password
+                # is configured, #230/#465) is key-bearing, so it rides only in
+                # the private ZIP. The loop below writes it only if it exists.
+                if include_private:
+                    files_to_zip = files_to_zip + ('cert.pfx',)
                 zip_suffix = 'certificates' if include_private else 'certificates_public'
 
                 # Create temporary ZIP file

@@ -164,7 +164,7 @@ python -m pytest tests/ -v
 | `POST` | `/api/client-certs/create`               | Create new certificate         |
 | `GET`  | `/api/client-certs`                      | List certificates with filters |
 | `GET`  | `/api/client-certs/<id>`                 | Get certificate metadata       |
-| `GET`  | `/api/client-certs/<id>/download/<type>` | Download cert/key/csr          |
+| `GET`  | `/api/client-certs/<id>/download/<type>` | Download cert/key/csr/pfx      |
 | `POST` | `/api/client-certs/<id>/revoke`          | Revoke certificate             |
 | `POST` | `/api/client-certs/<id>/renew`           | Renew certificate              |
 | `GET`  | `/api/client-certs/stats`                | Get statistics                 |

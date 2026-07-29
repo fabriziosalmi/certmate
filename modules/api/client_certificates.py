@@ -63,6 +63,7 @@ def create_client_certificate_resources(api, managers):
     auth_manager = managers.get('auth')
     ocsp_responder = managers.get('ocsp')
     crl_manager = managers.get('crl')
+    settings_manager = managers.get('settings')
 
     if not client_cert_manager:
         logger.error("ClientCertificateManager not available")
@@ -194,25 +195,45 @@ def create_client_certificate_resources(api, managers):
         # hold operator+ regardless of which Resource entry point they
         # use (path-style or otherwise). Mirrors `_PRIVATE_KEY_FILES` on
         # the TLS cert side (modules/api/resources.py).
-        _PRIVATE_FILE_TYPES = frozenset({'key'})
+        # 'pfx' bundles the private key, so it is gated like 'key'.
+        _PRIVATE_FILE_TYPES = frozenset({'key', 'pfx'})
 
         def get(self, identifier, file_type):
-            """Download certificate, key, or CSR."""
+            """Download certificate, key, CSR, or a PKCS#12 (.pfx) bundle."""
             try:
                 if not _validate_identifier(identifier):
                     abort(400, "Invalid certificate identifier")
-                if file_type not in ['crt', 'key', 'csr']:
-                    abort(400, "Invalid file type. Must be 'crt', 'key', or 'csr'")
+                if file_type not in ['crt', 'key', 'csr', 'pfx']:
+                    abort(400, "Invalid file type. Must be 'crt', 'key', 'csr', or 'pfx'")
 
                 # Per-file role gate: viewer reads public material only;
-                # private key needs operator+. Mirrors the TLS cert
-                # DownloadCertificate / DownloadCertificateFile pattern.
+                # private key (and the key-bearing .pfx) needs operator+.
+                # Mirrors the TLS cert DownloadCertificate pattern.
                 if file_type in self._PRIVATE_FILE_TYPES:
                     user = getattr(request, 'current_user', None) or {}
                     role = user.get('role')
                     from ..core.auth import ROLE_HIERARCHY
                     if ROLE_HIERARCHY.get(role, -1) < ROLE_HIERARCHY.get('operator', 999):
                         abort(403, "operator role required to download client certificate private key")
+
+                # PKCS#12 is generated on demand and encrypted with the
+                # configured PFX password (same setting as the server-side
+                # export). Without a password we refuse rather than emit an
+                # unencrypted private key bundle.
+                if file_type == 'pfx':
+                    settings = settings_manager.load_settings() if settings_manager else {}
+                    password = (settings.get('pfx_password') or '').strip()
+                    if not password:
+                        abort(400, "Set a PFX password in Settings to enable PKCS#12 export")
+                    pfx_bytes = client_cert_manager.build_pfx(identifier, password.encode())
+                    if not pfx_bytes:
+                        abort(404, f"Client certificate not found: {identifier}")
+                    return send_file(
+                        BytesIO(pfx_bytes),
+                        mimetype='application/x-pkcs12',
+                        as_attachment=True,
+                        download_name=f"{identifier}.pfx"
+                    )
 
                 # Get file
                 file_content = client_cert_manager.get_certificate_file(
