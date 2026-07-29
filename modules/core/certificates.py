@@ -614,10 +614,22 @@ class CertificateManager:
 
         Returns '' for every other provider, so callers can use it as a plain
         "should this take the native path?" switch.
+
+        Raises ValueError when an acme-dns account has no subdomain. Returning
+        '' there would silently drop the request back onto the plugin path,
+        where AcmeDNSStrategy raises a "bug in the caller" RuntimeError — a
+        misleading message for what is really a missing settings field.
         """
         if dns_provider != 'acme-dns':
             return ''
-        return str((dns_config or {}).get('subdomain') or '').strip().rstrip('.')
+        subdomain = str((dns_config or {}).get('subdomain') or '').strip().rstrip('.')
+        if not subdomain:
+            raise ValueError(
+                "The acme-dns account is missing its Subdomain. Set it to the "
+                "subdomain acme-dns returned when the account was registered — "
+                "the same value the _acme-challenge CNAME points at."
+            )
+        return subdomain
 
     @staticmethod
     def _create_dns_alias_hook_config(dns_provider, dns_config, domain_alias, propagation_seconds):
@@ -1745,7 +1757,10 @@ class CertificateManager:
                         max(1, min(3600, renew_propagation)),
                     )
                     self._configure_dns_alias_arguments(cmd, alias_hook_config)
-                    logger.info(f"Renewing {domain} with the native acme-dns hook.")
+                    # Strip CR/LF so a crafted domain cannot forge log entries
+                    # (CodeQL py/log-injection), matching modules/web/cert_routes.py.
+                    safe_domain = str(domain).replace('\r', ' ').replace('\n', ' ')
+                    logger.info(f"Renewing {safe_domain} with the native acme-dns hook.")
                 elif dns_config:
                     strategy = DNSStrategyFactory.get_strategy(dns_provider)
                     strategy.prepare_environment(process_env, dns_config)

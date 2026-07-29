@@ -147,10 +147,42 @@ def test_acme_dns_native_alias_only_applies_to_acme_dns():
         'acme-dns', _provider_config('acme-dns')) == ACME_DNS_SUBDOMAIN
     assert CertificateManager._acme_dns_native_alias(
         'cloudflare', _provider_config('cloudflare')) == ''
-    # Trailing dots are normalised; a missing/blank subdomain yields no alias,
-    # so the caller reports the usual "not configured" error instead of
-    # silently building a hook payload with an empty target.
+    # Trailing dots are normalised.
     assert CertificateManager._acme_dns_native_alias(
         'acme-dns', {'subdomain': 'sub.example.net.'}) == 'sub.example.net'
-    assert CertificateManager._acme_dns_native_alias('acme-dns', {}) == ''
-    assert CertificateManager._acme_dns_native_alias('acme-dns', None) == ''
+
+
+@pytest.mark.parametrize('config', [{}, None, {'subdomain': '   '}])
+def test_acme_dns_without_a_subdomain_reports_a_config_error(config):
+    """A blank subdomain is a settings problem, and must say so.
+
+    Returning '' here would drop the request back onto the plugin path, where
+    AcmeDNSStrategy raises "this is a bug in the caller" — true of the code
+    path, useless to the person who just left a field empty.
+    """
+    with pytest.raises(ValueError, match='missing its Subdomain'):
+        CertificateManager._acme_dns_native_alias('acme-dns', config)
+
+
+def test_acme_dns_missing_subdomain_surfaces_through_create(tmp_path):
+    """Issuance fails with the config error, not with "bug in the caller".
+
+    ValueError is how create_certificate reports every other validation
+    problem (bad SAN, unknown provider); the API layer turns it into a 4xx.
+    """
+    mgr, shell = _manager(tmp_path, provider='acme-dns')
+    mgr.dns_manager.get_dns_provider_account_config.return_value = (
+        {'api_url': 'https://auth.acme-dns.io', 'username': 'u', 'password': 'p'},
+        'production',
+    )
+
+    with pytest.raises(ValueError, match='missing its Subdomain'):
+        mgr.create_certificate(
+            domain='app.certmate.example',
+            email='test@example.com',
+            dns_provider='acme-dns',
+            staging=True,
+        )
+
+    # It must fail before certbot is ever invoked.
+    assert shell.commands_executed == []
