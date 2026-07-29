@@ -240,7 +240,7 @@ Consulte el archivo LICENSE en el repositorio
 
 ## Versión
 
-**Versión actual**: 2.3.0
+**Versión actual**: 2.24.0
 **Estado**: Listo para producción
 
 ---
