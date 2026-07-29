@@ -247,7 +247,7 @@ See LICENSE file in the repository
 
 ## Version
 
-**Current Version**: 2.3.0
+**Current Version**: 2.24.0
 **Status**: Production Ready
 
 ---
