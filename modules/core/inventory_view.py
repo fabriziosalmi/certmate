@@ -26,8 +26,8 @@ def record_in_scope(record, can_access):
     """True if an API-key scope covers any domain an inventory *record* names.
 
     *can_access* is ``callable(domain) -> bool`` (the endpoint wires in
-    ``auth_manager.user_can_access_domain`` bound to the current user, which
-    returns True for every domain when the caller is unrestricted). A record is
+    ``auth_manager.domain_matches_scope`` bound to the current user's scope,
+    which returns True for every domain when the caller is unrestricted). A record is
     visible if the caller can access its subject CN or any SAN; a record with no
     names is visible only to an unrestricted caller (tested via the empty
     domain, which an unrestricted scope matches and a scoped one does not).

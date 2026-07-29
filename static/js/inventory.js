@@ -174,7 +174,7 @@
                 render();
             })
             .catch(function (err) {
-                el('inventoryBody').innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-red-500">Failed to load inventory (' + escapeHtml(err) + ').</td></tr>';
+                el('inventoryBody').innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-red-500">Failed to load inventory (' + escapeHtml(err) + ').</td></tr>';
             });
     }
 
