@@ -21,8 +21,11 @@ from cryptography.x509.oid import NameOID
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 
+from modules.core import ct_monitor as ct_mod
 from modules.core.cert_inventory import CertInventory
-from modules.core.ct_monitor import CTMonitorManager, CrtShError, DEFAULT_CT_CONFIG
+from modules.core.ct_monitor import (
+    CTMonitorManager, CrtShClient, CrtShError, DEFAULT_CT_CONFIG,
+)
 from modules.core.file_operations import FileOperations
 from modules.core.settings import SettingsManager, PUBLIC_SETTINGS_WRITABLE_KEYS
 
@@ -308,3 +311,94 @@ def test_include_managed_polls_managed_domains(settings_manager, inventory):
 def test_ct_job_registered_in_factory():
     from modules.core import factory
     assert callable(getattr(factory, '_ct_monitor_job', None))
+
+
+# --------------------------------------------------------------------------- #
+# CrtShClient (the real HTTP client, with urlopen mocked)
+# --------------------------------------------------------------------------- #
+
+class _FakeResp:
+    def __init__(self, payload):
+        self._payload = payload
+
+    def read(self):
+        return self._payload
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+
+def _patch_urlopen(monkeypatch, handler):
+    """Patch ct_monitor's urlopen; handler(url) -> bytes (or raises)."""
+    calls = []
+
+    def fake_urlopen(req, timeout=None):
+        url = req.full_url if hasattr(req, 'full_url') else req
+        calls.append(url)
+        return _FakeResp(handler(url))
+
+    monkeypatch.setattr(ct_mod.urllib.request, 'urlopen', fake_urlopen)
+    return calls
+
+
+def test_crtsh_search_builds_url_and_parses(monkeypatch):
+    calls = _patch_urlopen(
+        monkeypatch, lambda url: b'[{"id": 1, "serial_number": "ab"}]')
+    client = CrtShClient(min_interval=0)
+    out = client.search('example.com')
+    assert out == [{'id': 1, 'serial_number': 'ab'}]
+    assert 'q=example.com' in calls[0] and 'output=json' in calls[0]
+
+
+def test_crtsh_search_non_list_returns_empty(monkeypatch):
+    _patch_urlopen(monkeypatch, lambda url: b'{"not": "a list"}')
+    assert CrtShClient(min_interval=0).search('example.com') == []
+
+
+def test_crtsh_search_bad_json_raises(monkeypatch):
+    _patch_urlopen(monkeypatch, lambda url: b'<html>not json</html>')
+    with pytest.raises(CrtShError):
+        CrtShClient(min_interval=0).search('example.com')
+
+
+def test_crtsh_fetch_certificate(monkeypatch):
+    calls = _patch_urlopen(monkeypatch, lambda url: b'DER-BYTES')
+    der = CrtShClient(min_interval=0).fetch_certificate(4242)
+    assert der == b'DER-BYTES'
+    assert 'd=4242' in calls[0]
+
+
+def test_crtsh_network_error_is_crtsherror(monkeypatch):
+    def boom(url):
+        raise OSError('connection reset')
+    _patch_urlopen(monkeypatch, boom)
+    with pytest.raises(CrtShError):
+        CrtShClient(min_interval=0).search('example.com')
+
+
+def test_crtsh_throttle_sleeps_between_requests(monkeypatch):
+    _patch_urlopen(monkeypatch, lambda url: b'[]')
+    now = [100.0]
+    slept = []
+    client = CrtShClient(min_interval=2.0, sleeper=slept.append,
+                         clock=lambda: now[0])
+    client.search('a.com')          # first call: no sleep, seeds timestamp
+    assert slept == []
+    now[0] = 100.5                  # only 0.5s elapsed
+    client.search('b.com')          # must sleep the remaining ~1.5s
+    assert slept and abs(slept[0] - 1.5) < 1e-6
+
+
+def test_crtsh_throttle_no_sleep_when_interval_elapsed(monkeypatch):
+    _patch_urlopen(monkeypatch, lambda url: b'[]')
+    now = [0.0]
+    slept = []
+    client = CrtShClient(min_interval=2.0, sleeper=slept.append,
+                         clock=lambda: now[0])
+    client.search('a.com')
+    now[0] = 10.0                   # plenty of time passed
+    client.search('b.com')
+    assert slept == []

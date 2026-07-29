@@ -54,6 +54,16 @@ def test_ed25519_modern():
     assert a['quantum_vulnerable'] is True
 
 
+def test_ed448_modern():
+    a = _one(_rec('a', {'type': 'Ed448'}, 'ed448'))
+    assert a['key_classification'] == CLASS_MODERN
+
+
+def test_dsa_weak():
+    a = _one(_rec('a', {'type': 'DSA', 'size': 2048}, 'sha256'))
+    assert a['key_classification'] == CLASS_WEAK
+
+
 def test_unknown_key():
     a = _one(_rec('a', {'type': 'Frobnicate'}, 'sha256'))
     assert a['key_classification'] == CLASS_UNKNOWN
