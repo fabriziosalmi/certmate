@@ -268,6 +268,26 @@ def test_manual_deploy_with_only_a_target(tmp_path, requests_mock):
     assert m.called
 
 
+def test_certificate_deployed_event_on_success(tmp_path, requests_mock):
+    requests_mock.patch(re.compile(r'/secrets/tls-web'), status_code=200, json={})
+    settings = {'deploy_hooks': {'enabled': True, 'global_hooks': [],
+                                 'domain_hooks': {}, 'targets': [_k8s_target()]}}
+    mgr = _deploy_manager(tmp_path, settings)
+    mgr.on_certificate_event('certificate_renewed', {'domain': 'example.com'})
+    published = [c.args[0] for c in mgr.event_bus.publish.call_args_list]
+    assert 'certificate_deployed' in published
+
+
+def test_no_deployed_event_when_target_fails(tmp_path, requests_mock):
+    requests_mock.patch(re.compile(r'/secrets/tls-web'), status_code=500, json={})
+    settings = {'deploy_hooks': {'enabled': True, 'global_hooks': [],
+                                 'domain_hooks': {}, 'targets': [_k8s_target()]}}
+    mgr = _deploy_manager(tmp_path, settings)
+    mgr.on_certificate_event('certificate_renewed', {'domain': 'example.com'})
+    published = [c.args[0] for c in mgr.event_bus.publish.call_args_list]
+    assert 'certificate_deployed' not in published
+
+
 def test_missing_cert_files_is_isolated(tmp_path):
     settings = {'deploy_hooks': {'enabled': True, 'global_hooks': [],
                                  'domain_hooks': {}, 'targets': [

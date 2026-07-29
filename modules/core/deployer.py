@@ -52,7 +52,15 @@ class DeployManager:
         if not domain:
             return
         try:
-            self._execute_hooks(domain, event_type)
+            results = self._execute_hooks(domain, event_type)
+            # A successful deploy is a lifecycle event in its own right (#474):
+            # surface it so notifications/SIEM see "the new cert is live",
+            # distinct from the per-hook completion events.
+            succeeded = sum(1 for r in results if r.get('success'))
+            if succeeded:
+                self.event_bus.publish('certificate_deployed', {
+                    'domain': domain, 'event': event_type, 'count': succeeded,
+                })
         except Exception as e:
             logger.error(f"Deploy hooks failed for {domain}: {e}")
 

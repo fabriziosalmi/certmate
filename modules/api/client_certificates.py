@@ -64,6 +64,7 @@ def create_client_certificate_resources(api, managers):
     ocsp_responder = managers.get('ocsp')
     crl_manager = managers.get('crl')
     settings_manager = managers.get('settings')
+    event_bus = managers.get('events')
 
     if not client_cert_manager:
         logger.error("ClientCertificateManager not available")
@@ -286,6 +287,17 @@ def create_client_certificate_resources(api, managers):
 
                 if not success:
                     abort(400, error)
+
+                # Lifecycle notification (#474): a revocation is worth alerting
+                # on. Best-effort — never turn a successful revoke into a 500.
+                if event_bus is not None:
+                    try:
+                        event_bus.publish('certificate_revoked', {
+                            'domain': identifier, 'reason': reason,
+                            'resource_type': 'client_certificate',
+                        })
+                    except Exception as pub_err:
+                        logger.warning("certificate_revoked publish failed: %s", pub_err)
 
                 return {'message': f'Certificate revoked: {identifier}'}, 200
 

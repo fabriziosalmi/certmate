@@ -36,7 +36,15 @@ operate certificates on a schedule.
   (periodic checkpoints) and `GET /api/audit/export` produces an Ed25519-signed
   bundle. An auditor verifies it off the box, pinning the instance's public key
   (`GET /api/audit/public-key`) out of band — proving both that the record was
-  not edited and which instance produced it.
+  written, not edited, and which instance produced it.
+- **SIEM audit sink (push).** Each audit entry can also be streamed live to an
+  external collector in a standard format — **syslog** (RFC 5424) or **CEF**
+  over UDP/TCP, or **generic HTTP/JSON** — configured under `audit_sink` in
+  settings. Entries pass through the credential/secret sanitizer before they
+  leave the process (a token in a detail field is redacted), and the sink is
+  failure-isolated with a short timeout, like the hash chain: a dead collector
+  never blocks or breaks a certificate operation. Lifecycle coverage includes
+  create / renew / deploy / revoke, plus a scheduled summary digest.
 
 ## Regime mapping
 
