@@ -66,11 +66,17 @@ WORKDIR /app
 # copy is what the Trivy scan keeps reporting (CVE-2026-8643, CVE-2026-6357,
 # CVE-2026-3219 against pip 25.0.1); the app itself runs from /opt/venv and
 # never uses it. See issue #403.
+#
+# Pinned, for the same reason the base image is pinned by digest a few lines
+# up: an unpinned `--upgrade pip` would make the runtime stage's contents
+# depend on whatever PyPI happens to serve at build time, so two builds of the
+# same commit could differ. Bump this deliberately when a pip CVE lands.
+ARG PIP_VERSION=26.1.2
 RUN apt-get update && \
     apt-get upgrade -y -o Acquire::Retries=3 && \
     apt-get install -y -o Acquire::Retries=3 bash curl tini && \
     rm -rf /var/lib/apt/lists/* && \
-    pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir "pip==${PIP_VERSION}" && \
     useradd --create-home --shell /bin/bash certmate
 
 # Copy virtual environment from builder stage
