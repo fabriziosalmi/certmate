@@ -349,8 +349,14 @@ class TestIssuanceExecutorListActive:
 
         active = ex.list_active()
         domains = {j['domain'] for j in active}
-        assert 'slow.example.com' in domains, "an in-flight job must be listed"
-        assert 'fast.example.com' not in domains, (
+        # Explicit equality rather than `in` / `not in`: CodeQL reads a bare
+        # hostname membership test as py/incomplete-url-substring-sanitization
+        # (high) even on a set of exact domains, and a known false positive is
+        # still noise in the security tab.
+        assert any(d == 'slow.example.com' for d in domains), (
+            "an in-flight job must be listed"
+        )
+        assert all(d != 'fast.example.com' for d in domains), (
             "a finished job must not be listed — the certificate itself is "
             "already in the list, and replaying it would double the row"
         )
