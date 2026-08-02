@@ -17,7 +17,9 @@ This is a minor release rather than a patch because it adds capability. Nothing 
 
   Files are created with owner-only permissions at the moment of creation, not adjusted afterwards, so a private key is never briefly readable by other users on the machine. `--bundle zip` and `--bundle json` fetch the whole certificate, and `-o -` writes to standard output.
 
-  Combined with an API key scoped to a single domain, a target host can hold one narrow credential for itself and pull on a timer: no inbound access to the host, and no credentials for that host on the CertMate server. The existing role split applies unchanged — the certificate, chain and fullchain are readable by a viewer key, while the private key requires operator.
+  Combined with an API key scoped to a single domain, a target host can hold one narrow credential for itself and pull on a timer: no inbound access to the host, and no credentials for that host on the CertMate server.
+
+  The existing role split applies unchanged. A **viewer** key can pull `--file cert`, `--file chain` and `--file fullchain`. Everything that carries key material needs **operator**: `--file privkey`, `--file combined`, `--file pfx`, and both bundles — the ZIP contains the private key, and the JSON form returns it inline.
 
   This ships in **certmate-cli 0.1.3** and **certmate-sdk 0.1.3**, on PyPI. The clients release on their own cycle; the server side of this has been available for some time.
 
