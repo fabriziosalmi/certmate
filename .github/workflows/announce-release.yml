@@ -1,0 +1,93 @@
+name: Announce release
+
+# 1,240 stars and 7 watchers: shipping a release notifies almost nobody. A
+# Discussion in Announcements is the one surface people can actually subscribe
+# to, and it shows on the repository front page.
+#
+# Automated rather than remembered, for the same reason release.sh bumps the
+# version files: a step that depends on someone remembering it is a step that
+# gets skipped exactly when the release is busiest.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to announce (e.g. v2.25.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  discussions: write
+
+jobs:
+  announce:
+    name: post to Announcements
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post the release to Discussions
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          # Read the release rather than trusting the event payload, so a
+          # manual re-run announces the same thing an automatic one would.
+          name="$(gh release view "$TAG" --repo "$REPO" --json name -q .name)"
+          body="$(gh release view "$TAG" --repo "$REPO" --json body -q .body)"
+          url="$(gh release view "$TAG" --repo "$REPO" --json url -q .url)"
+          version="${TAG#v}"
+
+          # Skip if this release was already announced. Re-running the workflow
+          # should be safe: a duplicate announcement is worse than none.
+          existing="$(gh api graphql -f query='
+            query($q: String!) {
+              search(query: $q, type: DISCUSSION, first: 5) {
+                nodes { ... on Discussion { title url } }
+              }
+            }' -f q="repo:$REPO in:title \"$name\"" -q '.data.search.nodes | length')"
+          if [ "$existing" != "0" ]; then
+            echo "Already announced ($existing matching discussion(s)); nothing to do."
+            exit 0
+          fi
+
+          {
+            printf '%s\n\n' "$body"
+            printf -- '---\n\n'
+            printf '## Upgrade\n\n'
+            printf '```bash\n'
+            printf 'docker pull fabriziosalmi/certmate:%s\n' "$version"
+            printf '```\n\n'
+            printf 'Helm:\n\n'
+            printf '```bash\n'
+            printf 'helm upgrade --install certmate oci://ghcr.io/fabriziosalmi/charts/certmate --version %s\n' "$version"
+            printf '```\n\n'
+            printf 'Full release notes: %s\n\n' "$url"
+            printf 'Found a problem with this release? Open an issue — every fix in the last few releases came from someone who did.\n'
+          } > body.md
+
+          category_id="$(gh api graphql -f query='
+            query($owner: String!, $name: String!) {
+              repository(owner: $owner, name: $name) {
+                discussionCategories(first: 20) { nodes { id name } }
+              }
+            }' -f owner="${REPO%%/*}" -f name="${REPO##*/}" \
+            -q '.data.repository.discussionCategories.nodes[] | select(.name=="Announcements") | .id')"
+          [ -n "$category_id" ] || { echo "::error::no Announcements category found" >&2; exit 1; }
+
+          repo_id="$(gh api graphql -f query='
+            query($owner: String!, $name: String!) {
+              repository(owner: $owner, name: $name) { id }
+            }' -f owner="${REPO%%/*}" -f name="${REPO##*/}" -q .data.repository.id)"
+
+          gh api graphql -F repositoryId="$repo_id" -F categoryId="$category_id" \
+            -F title="$name" -F body=@body.md -f query='
+            mutation($repositoryId: ID!, $categoryId: ID!, $title: String!, $body: String!) {
+              createDiscussion(input: {repositoryId: $repositoryId, categoryId: $categoryId, title: $title, body: $body}) {
+                discussion { url }
+              }
+            }' -q '.data.createDiscussion.discussion.url' | tee -a "$GITHUB_STEP_SUMMARY"

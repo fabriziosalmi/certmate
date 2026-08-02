@@ -3,9 +3,26 @@
 Run [CertMate](https://github.com/fabriziosalmi/certmate) in Kubernetes.
 
 ```bash
-helm install certmate ./charts/certmate --namespace certmate --create-namespace
+helm install certmate oci://ghcr.io/fabriziosalmi/charts/certmate \
+  --namespace certmate --create-namespace
 kubectl -n certmate port-forward svc/certmate 8000:8000
 ```
+
+The chart is published as an OCI artifact to GHCR on every release, so there
+is no `helm repo add` step — Helm 3.8 and later pull `oci://` URLs directly.
+It lives under `charts/` rather than beside the container image, because a
+chart and an image in one OCI repository would fight over the same tags.
+
+Or from a checkout, which is the same chart:
+
+```bash
+helm install certmate ./charts/certmate --namespace certmate --create-namespace
+```
+
+**The chart version is the CertMate version.** `--version 2.25.0` gets the
+chart that deploys CertMate 2.25.0. There is no second number to reconcile,
+deliberately: every independent version copy in this repository has drifted at
+least once.
 
 ## What this chart deliberately will not do
 

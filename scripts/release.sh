@@ -191,11 +191,11 @@ dh.write_text(
 # Chart *version* is deliberately NOT touched — it tracks chart changes.
 chart = pathlib.Path("charts/certmate/Chart.yaml")
 if chart.exists():
-    chart.write_text(
-        re.sub(r'(?m)^(appVersion:\s*")[^"]+(")', rf"\g<1>{v}\g<2>",
-               chart.read_text(encoding="utf-8")),
-        encoding="utf-8",
-    )
+    text = chart.read_text(encoding="utf-8")
+    # Both: the chart versions with the application on purpose (see Chart.yaml).
+    text = re.sub(r'(?m)^(appVersion:\s*")[^"]+(")', rf"\g<1>{v}\g<2>", text)
+    text = re.sub(r'(?m)^(version:\s*)[0-9]+\.[0-9]+\.[0-9]+\s*$', rf"\g<1>{v}", text)
+    chart.write_text(text, encoding="utf-8")
 docs = sorted(pathlib.Path("docs").glob("index.md")) + sorted(pathlib.Path("docs").glob("*/index.md"))
 for page in docs:
     text = page.read_text(encoding="utf-8")
