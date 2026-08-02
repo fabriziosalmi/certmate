@@ -212,7 +212,7 @@ curl http://localhost:8000/health
 # Response
 {
  "status": "healthy",
- "version": "2.25.0",
+ "version": "2.25.1",
  "checks": {
   "cert_dir": "ok",
   "disk_space": "ok",

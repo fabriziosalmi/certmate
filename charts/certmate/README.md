@@ -19,10 +19,11 @@ Or from a checkout, which is the same chart:
 helm install certmate ./charts/certmate --namespace certmate --create-namespace
 ```
 
-**The chart version is the CertMate version.** `--version 2.25.0` gets the
-chart that deploys CertMate 2.25.0. There is no second number to reconcile,
-deliberately: every independent version copy in this repository has drifted at
-least once.
+**The chart version is the CertMate version.** `--version X.Y.Z` gets the
+chart that deploys CertMate X.Y.Z; omit it to take the newest. There is no
+second number to reconcile, deliberately: every independent version copy in
+this repository has drifted at least once — including, briefly, this very
+sentence, which is why it now names no release.
 
 ## What this chart deliberately will not do
 
