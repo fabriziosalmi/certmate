@@ -177,3 +177,54 @@ def test_security_policy_names_the_current_minor_line():
         f"SECURITY.md retires everything below {sorted(retired)}, which does "
         f"not match the supported line {major}.{minor}.x"
     )
+
+
+# The clients version independently of the app (their own `clients-v*` tags and
+# their own PyPI packages), so they are NOT compared to modules.__version__ —
+# only to themselves.
+CLIENT_PACKAGES = [
+    ("certmate-cli", "certmate_cli"),
+    ("certmate-sdk", "certmate"),
+]
+
+PYPROJECT_VERSION = re.compile(r'^version\s*=\s*"([^"]+)"', re.M)
+DUNDER_VERSION = re.compile(r'^__version__\s*=\s*"([^"]+)"', re.M)
+
+
+@pytest.mark.parametrize("dist,module", CLIENT_PACKAGES)
+def test_client_dunder_version_matches_its_pyproject(dist, module):
+    """A published wheel must report the version it was published as.
+
+    This is the same drift class the rest of this file guards, in the one
+    place it was not being guarded: both clients went to PyPI as 0.1.3 while
+    their `__version__` still said 0.1.2, so every bug report quoting
+    `certmate.__version__` named the wrong release. The build reads the
+    version from pyproject.toml, so nothing failed — it just lied.
+    """
+    root = REPO_ROOT / "clients" / dist
+    declared = PYPROJECT_VERSION.search(
+        (root / "pyproject.toml").read_text(encoding="utf-8"))
+    dunder = DUNDER_VERSION.search(
+        (root / module / "__init__.py").read_text(encoding="utf-8"))
+    assert declared, f"{dist}: no version in pyproject.toml"
+    assert dunder, f"{dist}: no __version__ in {module}/__init__.py"
+    assert declared.group(1) == dunder.group(1), (
+        f"{dist}: pyproject.toml says {declared.group(1)!r} but "
+        f"{module}/__init__.py says {dunder.group(1)!r} — bump both in the "
+        f"same commit, they are what the wheel and the runtime each report."
+    )
+
+
+def test_both_clients_ship_the_same_version():
+    """The CLI depends on the SDK and they are released from one `clients-v*`
+    tag, so a split version means the tag names only half of what it built."""
+    versions = {
+        dist: PYPROJECT_VERSION.search(
+            (REPO_ROOT / "clients" / dist / "pyproject.toml")
+            .read_text(encoding="utf-8")).group(1)
+        for dist, _ in CLIENT_PACKAGES
+    }
+    assert len(set(versions.values())) == 1, (
+        f"clients disagree on their version: {versions} — they publish from a "
+        f"single clients-v* tag, so one tag cannot name two versions."
+    )

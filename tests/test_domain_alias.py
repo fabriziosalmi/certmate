@@ -566,3 +566,72 @@ def test_azure_alias_lexicon_config_uses_dnspython_zone_resolution():
     assert cfg['domain'] == 'domain.com.acme-validation.example.net'
     assert cfg['provider_name'] == 'azure'
     assert cfg['auth_subscription_id'] == 'sub'
+
+
+class TestEdgeDNSEgressTimeout:
+    """The EdgeDNS alias branch talks to Akamai from inside the certbot auth
+    hook, on a gunicorn worker thread. `requests` has no default timeout, so a
+    call without one holds that thread until the peer gives up — which, for a
+    dropped connection, is never. All four calls here shipped without one.
+    """
+
+    def _session(self):
+        from modules.core.dns_alias_hook import _edgegrid_auth
+        pytest.importorskip("akamai.edgegrid")
+        session, base_url = _edgegrid_auth({
+            'config': {
+                'client_token': 'ct', 'client_secret': 'cs',
+                'access_token': 'at', 'host': 'https://example.akamaiapis.net',
+            },
+        })
+        return session, base_url
+
+    def test_session_applies_a_default_timeout(self):
+        """Every verb must carry a timeout without the call site asking."""
+        from modules.core.dns_alias_hook import EDGEDNS_TIMEOUT
+
+        session, base_url = self._session()
+        seen = {}
+
+        def fake_send(request, **kwargs):
+            seen.update(kwargs)
+            raise RuntimeError("stop here — we only care about the kwargs")
+
+        session.send = fake_send
+        for verb in ('get', 'post', 'put', 'delete'):
+            seen.clear()
+            with pytest.raises(RuntimeError):
+                getattr(session, verb)(f'{base_url}/config-dns/v2/zones/x')
+            assert seen.get('timeout') == EDGEDNS_TIMEOUT, (
+                f"session.{verb}() went out with timeout={seen.get('timeout')!r}"
+            )
+
+    def test_explicit_timeout_still_wins(self):
+        """The default must be a default, not an override."""
+        session, base_url = self._session()
+        seen = {}
+
+        def fake_send(request, **kwargs):
+            seen.update(kwargs)
+            raise RuntimeError("stop")
+
+        session.send = fake_send
+        with pytest.raises(RuntimeError):
+            session.get(f'{base_url}/x', timeout=1)
+        assert seen.get('timeout') == 1
+
+    def test_error_message_does_not_carry_an_unbounded_body(self):
+        """The failure message is logged, and log sanitisation walks the whole
+        string — so an unbounded remote body becomes our CPU cost."""
+        from modules.core import dns_alias_hook as hook
+
+        class _Response:
+            status_code = 500
+            text = "A" * 100_000
+
+        with pytest.raises(hook.DNSAliasError) as excinfo:
+            if _Response.status_code >= 400:
+                body = (_Response.text or '')[:hook._EDGEDNS_ERROR_SNIPPET]
+                raise hook.DNSAliasError(
+                    f'EdgeDNS API request failed: {_Response.status_code} {body}')
+        assert len(str(excinfo.value)) < 1000

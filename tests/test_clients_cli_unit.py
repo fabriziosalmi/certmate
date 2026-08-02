@@ -1,4 +1,4 @@
-"""Unit tests for certmate-cli 0.1.2 output semantics (no server required).
+"""Unit tests for certmate-cli output semantics (no server required).
 
 The 0.1.1 CLI lied in two places: `audit verify` treated a tampered chain
 (409, "chain file does not exist" AFTER signed checkpoints) as the benign
@@ -288,3 +288,31 @@ def test_download_rejects_bad_key_format_without_calling_the_server(args, expect
     assert result.exit_code != 0
     assert expected in _all_output(result)
     client.download_certificate_file.assert_not_called()
+
+
+class TestVersionFlag:
+    """`--version` is table stakes for a CLI: it is the first thing anyone is
+    asked for in a bug report, and it has to answer with no server, no token
+    and no network. It was missing entirely — `certmate --version` exited 2
+    with "No such option"."""
+
+    @pytest.mark.parametrize("flag", ["--version", "-V"])
+    def test_version_prints_the_package_version_and_exits_zero(self, flag):
+        from certmate_cli import __version__
+
+        result = runner.invoke(app, [flag])
+        assert result.exit_code == 0, _all_output(result)
+        assert result.output.strip() == __version__
+
+    def test_version_needs_no_connection_settings(self):
+        """Eager, so it runs before the callback wants a URL or a token."""
+        result = runner.invoke(app, ["--version"], env={
+            "CERTMATE_URL": "", "CERTMATE_TOKEN": "",
+        })
+        assert result.exit_code == 0, _all_output(result)
+
+    def test_version_is_plain_text(self):
+        """It gets piped into `grep`/`==`, so no Rich markup or wrapping."""
+        result = runner.invoke(app, ["--version"])
+        assert result.output.strip().count("\n") == 0
+        assert "[" not in result.output

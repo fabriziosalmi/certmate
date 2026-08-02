@@ -8,7 +8,10 @@ certbot-dns-rfc2136==2.11.0
 # Popular hosting providers
 certbot-dns-linode==2.11.0
 certbot-dns-vultr==1.1.0
-certbot-dns-hetzner==3.0.0
+# Held at 2.0.1: 3.0.0 depends on the `dns-lexicon-coop` fork, which collides
+# file-for-file with upstream `dns-lexicon`. Same reasoning (and the same
+# byte-identical-plugin evidence) as requirements.txt.
+certbot-dns-hetzner==2.0.1
 certbot-dns-hetzner-cloud==1.0.5
 
 # Domain registrars with DNS

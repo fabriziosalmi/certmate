@@ -58,8 +58,17 @@ def register_ui_routes(app, managers, require_web_auth, auth_manager):
     @app.route('/help')
     @auth_manager.require_role('viewer')
     def help_page():
-        """Help page"""
-        return render_template('help.html')
+        """Help page.
+
+        The provider count is passed in rather than written into the template.
+        Hardcoded, it said 22 while the app supported 29 — a number nobody
+        remembers to bump is a number that is wrong.
+        """
+        from ..core.dns_providers import DNSManager
+        return render_template(
+            'help.html',
+            provider_count=len(DNSManager.SUPPORTED_PROVIDERS),
+        )
 
     @app.route('/activity')
     @auth_manager.require_role('viewer')

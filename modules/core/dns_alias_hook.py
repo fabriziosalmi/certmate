@@ -241,6 +241,21 @@ def _lexicon_change(config, validation, action):
             operations.delete_record(rtype='TXT', name=record, content=validation)
 
 
+# Akamai's API is called from inside the certbot auth hook, which runs
+# in-process on a gunicorn worker thread (1 worker / 8 threads, and SSE already
+# holds one per open browser tab). `requests` has NO default timeout, so a hung
+# connection holds its thread forever — enough of them and the UI is gone.
+# Every other egress path in this module already sets one explicitly
+# (urlopen timeout=30, ipify timeout=10, dns.query timeout=30); EdgeDNS was the
+# only one that did not.
+EDGEDNS_TIMEOUT = 30
+
+# The largest slice of an Akamai error body we are willing to put in an
+# exception message. That message is logged, and log sanitisation walks the
+# whole string, so an unbounded remote body becomes our CPU problem.
+_EDGEDNS_ERROR_SNIPPET = 500
+
+
 def _edgegrid_auth(config):
     provider_config = _provider_config(config)
     _require(provider_config, 'client_token', 'client_secret', 'access_token', 'host')
@@ -250,7 +265,20 @@ def _edgegrid_auth(config):
     except Exception as exc:
         raise DNSAliasError("edgegrid-python and requests are required for EdgeDNS alias mode") from exc
 
-    session = requests.Session()
+    class _TimeoutSession(requests.Session):
+        """A Session that applies EDGEDNS_TIMEOUT unless a call overrides it.
+
+        Set on the session rather than on each call on purpose: `requests` has
+        no session-level timeout, so a per-call `timeout=` argument is a thing
+        every future call site has to remember, and the four that existed here
+        all forgot. This way forgetting is not possible.
+        """
+
+        def request(self, *args, **kwargs):
+            kwargs.setdefault('timeout', EDGEDNS_TIMEOUT)
+            return super().request(*args, **kwargs)
+
+    session = _TimeoutSession()
     session.auth = EdgeGridAuth(
         client_token=provider_config['client_token'],
         client_secret=provider_config['client_secret'],
@@ -296,7 +324,9 @@ def _edgedns_change(config, validation, action):
             return
 
     if response.status_code >= 400:
-        raise DNSAliasError(f'EdgeDNS API request failed: {response.status_code} {response.text}')
+        body = (response.text or '')[:_EDGEDNS_ERROR_SNIPPET]
+        raise DNSAliasError(
+            f'EdgeDNS API request failed: {response.status_code} {body}')
 
 
 def _acme_dns_change(config, validation, action):

@@ -1088,9 +1088,18 @@ def setup_security_headers(app):
                 # ReDoc and its Montserrat/Roboto fonts used to require a CDN
                 # script-src/style-src/font-src whitelist. v2.4.15 self-hosts the
                 # redoc.standalone.js bundle under static/js/ and pins ReDoc's
-                # typography to the system-font stack, removing the need for
-                # cdn.redoc.ly, fonts.googleapis.com, fonts.gstatic.com — the
-                # /redoc/ page is now air-gapped clean.
+                # typography to the system-font stack, so no font or script is
+                # fetched from fonts.googleapis.com, fonts.gstatic.com or
+                # cdn.redoc.ly.
+                #
+                # One residue: the vendored bundle still hardcodes
+                # `cdn.redoc.ly/redoc/logo-mini.svg` for the sidebar logo
+                # (static/js/redoc.standalone.js). `img-src 'self' data:` below
+                # is what stops that request being made — ReDoc's own onError
+                # handler then hides the element, so /redoc renders correctly
+                # and makes no third-party request. Worth knowing that the
+                # air-gap property there rests on the CSP, not on the bundle
+                # being clean: loosening img-src would reintroduce the egress.
                 "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
                 "style-src 'self' 'unsafe-inline'; "
                 "font-src 'self'; "

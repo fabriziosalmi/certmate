@@ -34,7 +34,21 @@ certbot-dns-rfc2136==2.10.0
 certbot-dns-vultr==1.1.0
 certbot-dns-dnsmadeeasy==2.10.0
 certbot-dns-nsone==2.10.0
-certbot-dns-hetzner==3.0.0
+# Held at 2.0.1 DELIBERATELY — do not "upgrade" this to 3.0.0.
+#
+# 3.0.0 swapped its dependency from upstream `dns-lexicon` to the third-party
+# fork `dns-lexicon-coop`. Both distributions ship the SAME top-level
+# `lexicon/` package, so pip installs one over the other with no warning and
+# no conflict: whichever lands last wins, which made the `dns-lexicon==3.25.1`
+# pin below unenforceable and put an unvetted fork into the default image.
+# `modules/core/dns_alias_hook.py` imports `lexicon.client`, so alias mode was
+# the thing running whichever copy won the coin toss.
+#
+# The downgrade costs nothing: every .py file in the plugin is byte-identical
+# between 2.0.1 and 3.0.0 (verified by sha256 against both wheels on PyPI).
+# The two releases differ ONLY in that dependency declaration.
+# tests/test_dependency_collisions.py fails if the fork comes back.
+certbot-dns-hetzner==2.0.1
 certbot-dns-hetzner-cloud==1.0.5
 certbot-dns-porkbun==0.11.0
 certbot-dns-godaddy==2.8.0
@@ -84,7 +98,12 @@ gunicorn==23.0.0
 # Monitoring and metrics
 prometheus_client==0.21.0
 
-# Testing
+# Not a test-only dependency, despite the name, and not removable: the
+# certbot Hetzner/Porkbun plugins declare `requests-mock` as a RUNTIME
+# requirement, so it lands in the image whatever this file says. Pinned here
+# so the version in the image is one we chose rather than one a plugin's
+# floating lower bound picked. The test-suite copy lives in
+# requirements-test.txt.
 requests_mock==1.12.1
 # APScheduler's SQLAlchemyJobStore backs the persistent renewal schedule.
 # Cap below 3.0.0: a major SQLAlchemy bump can break create_engine / the
