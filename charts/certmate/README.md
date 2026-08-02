@@ -47,7 +47,30 @@ credentials you use (`CLOUDFLARE_TOKEN`, …). Everything in that Secret is
 exposed to the container as environment variables.
 
 Left empty, CertMate generates what it can on first boot — fine for a trial,
-not for something you want to reproduce.
+not for something you want to reproduce. With nothing supplied the chart
+creates no Secret at all and mounts no environment from one, rather than
+wiring up an empty object that looks like configuration.
+
+The `secretRef` is **not** marked optional. If `existingSecret` names a Secret
+that does not exist, the pod fails to start and says so, instead of coming up
+without its credentials and turning a typo into a runtime mystery.
+
+### Rotating an external Secret
+
+The chart adds a checksum annotation so that changing values it *owns*
+restarts the pod. It cannot do that for `existingSecret`: the chart does not
+own that object, and reading it would require `lookup`, which returns nothing
+during `helm template` and makes rendering depend on the live cluster —
+breaking dry runs and GitOps diffs.
+
+So after rotating an external Secret, restart the deployment yourself:
+
+```bash
+kubectl -n certmate rollout restart deployment/certmate
+```
+
+or run a controller that does it for you, such as
+[stakater/Reloader](https://github.com/stakater/Reloader).
 
 ## Common values
 

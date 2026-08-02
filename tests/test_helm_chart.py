@@ -104,3 +104,40 @@ class TestRender:
         assert res.returncode == 0, res.stderr
         assert "claimName: my-pvc" in res.stdout
         assert "kind: PersistentVolumeClaim" not in res.stdout
+
+
+@pytest.mark.skipif(shutil.which("helm") is None, reason="helm is not installed")
+class TestSecretWiring:
+    """Three paths, and each must render the honest thing for its case."""
+
+    def _template(self, *args):
+        return subprocess.run(
+            ["helm", "template", "t", str(CHART), *args],
+            capture_output=True, text=True, check=True,
+        ).stdout
+
+    def test_no_secret_values_produces_no_secret_and_no_envfrom(self):
+        """An empty Secret is noise that looks like configuration."""
+        out = self._template()
+        assert "kind: Secret" not in out
+        assert "envFrom" not in out
+
+    def test_supplied_values_produce_a_secret_and_load_it(self):
+        out = self._template("--set", "secrets.apiBearerToken=abc")
+        assert "kind: Secret" in out
+        assert "API_BEARER_TOKEN" in out
+        assert "envFrom" in out
+
+    def test_existing_secret_is_loaded_without_generating_one(self):
+        out = self._template("--set", "secrets.existingSecret=my-sec")
+        assert "kind: Secret" not in out
+        assert "name: my-sec" in out
+
+    def test_the_secret_reference_is_not_optional(self):
+        """A typo in existingSecret must stop the pod, not start it blind."""
+        out = self._template("--set", "secrets.existingSecret=my-sec")
+        envfrom = out[out.index("envFrom"):out.index("envFrom") + 400]
+        assert "optional: true" not in envfrom, (
+            "the secretRef is optional again — a non-existent Secret would let "
+            "the pod start without its credentials"
+        )

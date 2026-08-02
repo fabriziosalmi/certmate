@@ -18,9 +18,16 @@ spec:
   template:
     metadata:
       annotations:
-        {{- if not .Values.secrets.existingSecret }}
-        # Roll the pod when the generated Secret changes, otherwise a rotated
-        # token sits in the API server while the process keeps the old one.
+        {{- if include "certmate.generatesSecret" . }}
+        # Rolls the pod when the chart-generated Secret changes, so a rotated
+        # token is actually picked up.
+        #
+        # This cannot cover secrets.existingSecret: the chart does not own that
+        # object and cannot see its contents without `lookup`, which returns
+        # nothing during `helm template` and would make renders depend on the
+        # live cluster — breaking GitOps diffs and dry runs. Rotating an
+        # external Secret therefore needs `kubectl rollout restart`, or a
+        # controller such as stakater/Reloader. Documented in the chart README.
         checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
         {{- end }}
         {{- with .Values.podAnnotations }}
@@ -62,10 +69,15 @@ spec:
             {{- with .Values.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
+          {{- if include "certmate.hasSecret" . }}
           envFrom:
+            # NOT optional. A typo in secrets.existingSecret should stop the
+            # pod at creation with a clear reason, not start it without its
+            # credentials and turn a configuration error into a runtime
+            # mystery.
             - secretRef:
                 name: {{ include "certmate.secretName" . }}
-                optional: true
+          {{- end }}
           livenessProbe:
             httpGet:
               path: /health
