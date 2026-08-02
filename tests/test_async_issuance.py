@@ -194,6 +194,10 @@ class _FakeExecutor:
         job = self._jobs.get(jid)
         return dict(job) if job else None
 
+    def list_active(self):
+        return [dict(j) for j in self._jobs.values()
+                if j['status'] not in ('succeeded', 'failed')]
+
 
 def _build_app(tmp_path, executor, allowed=True):
     auth = MagicMock()
@@ -226,6 +230,7 @@ def _build_app(tmp_path, executor, allowed=True):
     api.add_namespace(ns)
     ns.add_resource(resources['CreateCertificate'], '/create')
     ns.add_resource(resources['RenewCertificate'], '/<string:domain>/renew')
+    ns.add_resource(resources['CertificateJobs'], '/jobs')
     ns.add_resource(resources['CertificateJob'], '/jobs/<string:job_id>')
 
     @app.before_request
@@ -330,3 +335,77 @@ class TestJobStatusEndpoint:
         app, _ = _build_app(tmp_path, ex, allowed=False)
         r = app.test_client().get('/api/certificates/jobs/j1')
         assert r.status_code == 403
+
+
+class TestIssuanceExecutorListActive:
+    """#399: a page refresh must be able to rediscover work already in flight."""
+
+    def test_lists_queued_and_running_only(self):
+        ex = _exec()
+        gate = threading.Event()
+        running = ex.submit('create', 'slow.example.com', lambda: gate.wait(5) or {'success': True})
+        done = ex.submit('create', 'fast.example.com', lambda: {'success': True})
+        _wait_terminal(ex, done)
+
+        active = ex.list_active()
+        domains = {j['domain'] for j in active}
+        # Explicit equality rather than `in` / `not in`: CodeQL reads a bare
+        # hostname membership test as py/incomplete-url-substring-sanitization
+        # (high) even on a set of exact domains, and a known false positive is
+        # still noise in the security tab.
+        assert any(d == 'slow.example.com' for d in domains), (
+            "an in-flight job must be listed"
+        )
+        assert all(d != 'fast.example.com' for d in domains), (
+            "a finished job must not be listed — the certificate itself is "
+            "already in the list, and replaying it would double the row"
+        )
+        assert {j['job_id'] for j in active} == {running}
+
+        gate.set()
+        _wait_terminal(ex, running)
+        assert ex.list_active() == []
+
+    def test_returns_copies_not_live_records(self):
+        ex = _exec()
+        gate = threading.Event()
+        jid = ex.submit('create', 'x.example.com', lambda: gate.wait(5) or {'success': True})
+        listed = ex.list_active()
+        listed[0]['status'] = 'tampered'
+        assert ex.get(jid)['status'] != 'tampered'
+        gate.set()
+        _wait_terminal(ex, jid)
+
+
+class TestJobsListEndpoint:
+    """#399: the dashboard rebuilds its "issuing" rows from this."""
+
+    def test_lists_in_flight_jobs(self, tmp_path):
+        ex = _FakeExecutor()
+        ex.submit('create', 'a.example.com', lambda: None)
+        app, _ = _build_app(tmp_path, ex)
+        with app.test_client() as c:
+            res = c.get('/api/certificates/jobs')
+        assert res.status_code == 200
+        assert res.json['count'] == 1
+        assert res.json['jobs'][0]['domain'] == 'a.example.com'
+        assert res.json['jobs'][0]['status'] == 'queued'
+
+    def test_scoped_key_sees_only_its_own_domains(self, tmp_path):
+        """Filtered, not refused: a scoped key still gets its own work back."""
+        ex = _FakeExecutor()
+        ex.submit('create', 'mine.example.com', lambda: None)
+        ex.submit('create', 'theirs.example.com', lambda: None)
+        app, managers = _build_app(tmp_path, ex)
+        managers['auth'].user_can_access_domain.side_effect = (
+            lambda user, domain: domain == 'mine.example.com')
+        with app.test_client() as c:
+            res = c.get('/api/certificates/jobs')
+        assert res.status_code == 200
+        assert [j['domain'] for j in res.json['jobs']] == ['mine.example.com']
+
+    def test_404_when_async_issuance_is_disabled(self, tmp_path):
+        app, _ = _build_app(tmp_path, None)
+        with app.test_client() as c:
+            res = c.get('/api/certificates/jobs')
+        assert res.status_code == 404

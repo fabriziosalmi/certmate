@@ -92,6 +92,23 @@ class IssuanceExecutor:
             job = self._jobs.get(job_id)
             return dict(job) if job else None
 
+    def list_active(self):
+        """Every job still queued or running, oldest first.
+
+        The dashboard renders an "issuing" row from client-side state only, so
+        a page refresh made an in-flight issuance vanish from the list and look
+        like it had failed (issue #399). This is what lets any session
+        rediscover the work already in flight — including a different browser,
+        which no amount of client-side persistence could do.
+
+        Terminal jobs are deliberately excluded: a finished certificate is
+        already in the certificate list, and replaying completed jobs would
+        double it up.
+        """
+        with self._lock:
+            return [dict(job) for job in self._jobs.values()
+                    if job['status'] not in _TERMINAL]
+
     def _set(self, job_id, **fields):
         with self._lock:
             job = self._jobs.get(job_id)
