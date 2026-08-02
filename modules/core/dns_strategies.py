@@ -225,20 +225,35 @@ class AzureStrategy(DNSProviderStrategy):
     # can fall through to it unchanged.
 
 class GoogleStrategy(DNSProviderStrategy):
+    """Google Cloud DNS.
+
+    The credentials file IS the service-account JSON — see create_google_config
+    and issue #385. Nothing else is written, so there are no extra secret files
+    to clean up: the single returned path is the SA key, and the caller's
+    ``finally`` already deletes the credentials file.
+    """
+
     def __init__(self):
-        # Extra secret files created alongside the returned credentials ini.
-        # The create/renew finally blocks read this so the SA JSON (a live
-        # GCP private key) is deleted with the ini instead of sitting on
-        # disk until the orphan sweep.
         self.extra_credential_files: list = []
+        self._project_id: str = ''
 
     def create_config_file(self, config_data: Dict[str, Any]) -> Optional[Path]:
-        config_file, sa_file = create_google_config(
-            config_data.get('project_id', ''),
+        # Stashed for configure_certbot_arguments: the project is a certbot
+        # flag, not a field in any file.
+        self._project_id = str(config_data.get('project_id') or '').strip()
+        return create_google_config(
+            self._project_id,
             config_data.get('service_account_key', ''),
         )
-        self.extra_credential_files = [sa_file]
-        return config_file
+
+    def configure_certbot_arguments(self, cmd: list, credentials_file: Optional[Path],
+                                    domain_alias: Optional[str] = None) -> None:
+        super().configure_certbot_arguments(cmd, credentials_file, domain_alias=domain_alias)
+        # Optional for the plugin, which otherwise reads project_id out of the
+        # SA JSON. Passed when configured so an operator whose key belongs to a
+        # different project than the zone still resolves the right one.
+        if self._project_id:
+            cmd.extend([f'--{self.plugin_name}-project', self._project_id])
 
     @property
     def plugin_name(self) -> str:

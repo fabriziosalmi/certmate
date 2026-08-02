@@ -593,13 +593,17 @@ def create_azure_config(subscription_id: str, resource_group: str, tenant_id: st
     )
     return _create_config_file("azure", content)
 
-def create_google_config(project_id: str, service_account_key: str) -> Tuple[Path, Path]:
-    """Create Google Cloud DNS credentials files.
+def create_google_config(project_id: str, service_account_key: str) -> Path:
+    """Write the Google Cloud DNS service-account JSON and return its path.
 
-    Returns ``(config_file, sa_file)``: the ini handed to certbot AND the
-    service-account JSON it references, so the caller can delete BOTH in its
-    ``finally`` — the ini alone was returned before, leaving the live GCP
-    private key on disk until the orphan sweep (up to an hour later).
+    ``certbot-dns-google`` takes the service-account JSON **itself** as
+    ``--dns-google-credentials``: it calls
+    ``google.auth.load_credentials_from_file`` on whatever path it is given.
+    CertMate used to write an ini here (``dns_google_project_id`` /
+    ``dns_google_service_account_key``) and hand certbot that ini, a format the
+    plugin has never supported — every Google DNS-01 issuance failed with
+    ``File ... is not a valid json file``. The project id is not part of any
+    file either; it is its own CLI flag, ``--dns-google-project``. See #385.
 
     The service-account JSON is a live GCP private key. It previously landed at
     a FIXED path (``google-service-account.json``), written 0644-then-chmod, and
@@ -607,7 +611,10 @@ def create_google_config(project_id: str, service_account_key: str) -> Tuple[Pat
     predictable location, and two concurrent Google issuances clobbered each
     other's key. Now: a per-operation random name, created 0600 atomically
     (O_EXCL), plus a best-effort sweep of orphaned key files from crashed or
-    older runs (anything older than the certbot timeout is dead)."""
+    older runs (anything older than the certbot timeout is dead).
+
+    ``project_id`` is accepted and ignored here so callers keep one obvious
+    call shape; GoogleStrategy passes it to certbot as a flag."""
     config_dir = Path("letsencrypt/config")
     config_dir.mkdir(parents=True, exist_ok=True)
     _sweep_orphaned_files(config_dir, "google-sa-*.json")
@@ -617,8 +624,7 @@ def create_google_config(project_id: str, service_account_key: str) -> Tuple[Pat
     with os.fdopen(fd, 'w', encoding='utf-8') as f:
         f.write(service_account_key)
 
-    content = f"dns_google_project_id = {project_id}\ndns_google_service_account_key = {str(sa_file)}\n"
-    return _create_config_file("google", content), sa_file
+    return sa_file
 
 
 def _sweep_orphaned_files(directory: Path, pattern: str, max_age_seconds: int = 3600) -> None:
