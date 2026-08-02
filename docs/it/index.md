@@ -240,7 +240,7 @@ Vedere il file LICENSE nel repository
 
 ## Versione
 
-**Versione corrente**: 2.24.1
+**Versione corrente**: 2.24.2
 **Stato**: Pronto per la produzione
 
 ---
