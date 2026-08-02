@@ -1,3 +1,45 @@
+## v2.25.0 (Pulling certificates, instead of pushing them)
+
+A small release with a single theme, and it came from two users arriving at the same problem from opposite directions.
+
+Deploying a certificate to another machine has usually meant the certificate manager reaching out to it — which means the manager holds credentials for every host it deploys to. Both requests in this release ask for the inverse: let the host fetch what it needs. That is a better posture, and it is now a supported path rather than something to be assembled by hand.
+
+This is a minor release rather than a patch because it adds capability. Nothing changes for an existing install that does not use it.
+
+### Pulling a certificate onto a host
+
+- **`certmate cert download`** (#490) fetches one certificate file at a time, so a deploy script can put each file exactly where it belongs instead of unpacking an archive:
+
+  ```
+  certmate cert download example.com --file fullchain -o /etc/ssl/certs/example.pem
+  certmate cert download example.com --file privkey   -o /etc/ssl/private/example.key
+  ```
+
+  Files are created with owner-only permissions at the moment of creation, not adjusted afterwards, so a private key is never briefly readable by other users on the machine. `--bundle zip` and `--bundle json` fetch the whole certificate, and `-o -` writes to standard output.
+
+  Combined with an API key scoped to a single domain, a target host can hold one narrow credential for itself and pull on a timer: no inbound access to the host, and no credentials for that host on the CertMate server.
+
+  The existing role split applies unchanged. A **viewer** key can pull `--file cert`, `--file chain` and `--file fullchain`. Everything that carries key material needs **operator**: `--file privkey`, `--file combined`, `--file pfx`, and both bundles — the ZIP contains the private key, and the JSON form returns it inline.
+
+  This ships in **certmate-cli 0.1.3** and **certmate-sdk 0.1.3**, on PyPI. The clients release on their own cycle; the server side of this has been available for some time.
+
+### API
+
+- **The legacy private key can be requested inline** (#398). `?format=json` returns the whole bundle in one response, and `?key_format=pkcs1` converts certbot's PKCS#8 key into the traditional form, but the two could not be combined — so an automation that wanted both had to make a second call and stage the key through a file on disk. `?format=json&key_format=pkcs1` now adds `private_key_pkcs1_pem` to the response.
+
+  It is added, not substituted: `private_key_pem` is unchanged, so nothing that already reads this endpoint is affected. The field is named for the encoding rather than for RSA — the traditional form of an ECDSA key is SEC1, and CertMate issues ECDSA by default.
+
+### Security housekeeping
+
+- The MCP server's last outstanding dependency advisory is resolved (#456), bringing open Dependabot alerts to zero. The package concerned requires Node 20, which `mcp/package.json` now declares — it previously advertised Node 18, which has been end-of-life since April 2025 and which CI had already stopped using.
+
+### Notes for operators
+
+- No configuration migration and no new defaults. Every addition here is opt-in.
+- The pull-based pattern is documented in the `certmate-cli` README, and `key_format` in `docs/api.md`.
+
+---
+
 ## v2.24.2 (Google Cloud DNS, and three things the interface got wrong)
 
 A patch release, and every fix in it came from someone who took the time to report a problem.
