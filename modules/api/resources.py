@@ -2094,9 +2094,18 @@ def create_api_resources(api, models, managers):
                                     payload['private_key_pem'].encode('utf-8')
                                 ).decode('utf-8')
                             except (ValueError, TypeError) as e:
+                                # The message is included, not just the type:
+                                # cryptography emits static, descriptive text
+                                # ("Password was not given but private key is
+                                # encrypted", "format is invalid with this
+                                # key") that carries no key material and tells
+                                # an operator which of several very different
+                                # problems they have. CR/LF scrubbed like every
+                                # other interpolated value here.
                                 logger.error(
-                                    "Failed to convert private key to PKCS#1: %s",
+                                    "Failed to convert private key to PKCS#1: %s: %s",
                                     type(e).__name__,
+                                    str(e).replace('\r', ' ').replace('\n', ' '),
                                 )
                                 return {
                                     'error': 'Could not convert the private key to PKCS#1 '
@@ -2150,9 +2159,13 @@ def create_api_resources(api, models, managers):
                             with open(key_path, 'rb') as fh:
                                 pkcs1_pem = _privkey_to_pkcs1(fh.read())
                         except (ValueError, TypeError) as e:
+                            # Same reasoning as the format=json branch above:
+                            # the message is safe and diagnostic. Kept identical
+                            # so the two conversion sites do not drift.
                             logger.error(
-                                "Failed to convert private key to PKCS#1: %s",
+                                "Failed to convert private key to PKCS#1: %s: %s",
                                 type(e).__name__,
+                                str(e).replace('\r', ' ').replace('\n', ' '),
                             )
                             return {
                                 'error': 'Could not convert the private key to PKCS#1 '
