@@ -4,13 +4,24 @@ name: Announce release
 # Discussion in Announcements is the one surface people can actually subscribe
 # to, and it shows on the repository front page.
 #
-# Automated rather than remembered, for the same reason release.sh bumps the
-# version files: a step that depends on someone remembering it is a step that
-# gets skipped exactly when the release is busiest.
+# MANUAL ON PURPOSE. This does not fire on `release: published`, and that is a
+# deliberate difference from publish-chart.yml.
+#
+# Publishing an artifact is mechanical: it either matches the release or the
+# gate stops it. An announcement is the maintainer's voice on a public forum,
+# and once posted it has been read. Firing it automatically means a wrong
+# release note, a mis-tagged release or a release cut and then withdrawn all
+# become communication before anyone has looked at them — and a Discussion
+# cannot be un-sent the way a tag can be moved.
+#
+# So this is a tool, invoked when the release is known to be good. Run it from
+# the Actions tab, or:
+#
+#   gh workflow run announce-release.yml -f tag=v2.25.0
+#
+# It still refuses to post twice for the same tag, so re-running is safe.
 
 on:
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
       tag:
@@ -30,7 +41,7 @@ jobs:
       - name: Post the release to Discussions
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+          TAG: ${{ inputs.tag }}
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
