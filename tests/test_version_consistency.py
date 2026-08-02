@@ -126,3 +126,31 @@ def test_release_notes_document_the_current_version():
         f"the version - scripts/release.sh extracts the GitHub release body by "
         f"matching the literal prefix '## v{__version__} '."
     )
+
+
+def test_release_script_ignores_client_tags_when_finding_the_last_release():
+    """The real-cert gate must be measured from the last RELEASE, not any tag.
+
+    The clients publish from their own `clients-v*` tags, so one of those is
+    routinely the newest tag on main. A bare `git describe --tags` resolves to
+    it, the sensitive-path diff is then computed from the wrong point, and a
+    release that DID touch the issuance pipeline is reported as "no
+    issuance-pipeline change" — which lets --skip-real-cert bypass a gate the
+    script itself calls MANDATORY.
+
+    Caught while cutting v2.25.0: the diff from `clients-v0.1.3` was
+    RELEASE_NOTES.md alone, while the diff from `v2.24.2` contained
+    modules/api/resources.py.
+    """
+    script = (REPO_ROOT / "scripts" / "release.sh").read_text(encoding="utf-8")
+    describe_lines = [
+        line for line in script.splitlines()
+        if "describe --tags" in line and not line.strip().startswith("#")
+    ]
+    assert describe_lines, "release.sh no longer resolves a last tag - has it moved?"
+    for line in describe_lines:
+        assert "--match 'v*'" in line, (
+            "release.sh resolves the last tag without --match 'v*', so a "
+            "clients-v* tag can be mistaken for the last release and disarm "
+            f"the mandatory real-cert gate: {line.strip()}"
+        )
