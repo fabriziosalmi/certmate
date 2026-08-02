@@ -2490,9 +2490,11 @@
                         provider: '',
                         sanCount: 0,
                         state: 'issuing',
-                        // No original request body to replay: a retry offer
-                        // would have nothing to resubmit, and retryCreateJob
-                        // guards on payload.
+                        // No original request body to replay — this page never
+                        // saw the form. Two things depend on that being null:
+                        // failedRowHtml omits the Retry button, and
+                        // retryCreateJob refuses rather than POSTing an empty
+                        // create.
                         payload: null,
                         domainsDisplay: job.domain || ''
                     };
@@ -2579,7 +2581,17 @@
     function retryCreateJob(jobId) {
         var job = pendingJobs[jobId];
         if (!job) return;
-        var payload = job.payload || {};
+        // A job adopted from the server after a refresh (#399) has no request
+        // body to replay. failedRowHtml already hides Retry for those, but
+        // guard here too: this function is exposed on window, and a resubmit
+        // with an empty body would create nothing and report a confusing 400.
+        if (!job.payload) {
+            showMessage('This issuance was started in another session, so there '
+                + 'is nothing to resubmit. Create the certificate again from the form.',
+                'warning');
+            return;
+        }
+        var payload = job.payload;
         var domainsDisplay = job.domainsDisplay || payload.domain || 'certificate';
         delete pendingJobs[jobId];
         if (pendingPollTimers[jobId]) { clearTimeout(pendingPollTimers[jobId]); delete pendingPollTimers[jobId]; }

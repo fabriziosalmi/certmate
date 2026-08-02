@@ -298,10 +298,16 @@ def test_the_dashboard_reattaches_to_in_flight_jobs_on_load():
     assert "pollCertJob" in adopt, "adopted jobs must resume polling"
     assert "renderPendingRows" in adopt, "adopted jobs must be drawn"
 
-    # An adopted job carries no original request body, so a Retry button would
-    # resubmit an empty create.
+    # An adopted job carries no original request body. Two independent
+    # protections, because retryCreateJob is exposed on window and can be
+    # reached without the button: the row omits Retry, and the handler refuses.
     failed_row = _js_function_body(js, "failedRowHtml")
     assert re.search(r"job\.payload\s*\?", failed_row), (
         "the Retry button is offered unconditionally again; a job adopted "
         "after a refresh has no payload to replay and would POST an empty create"
+    )
+    retry = _js_function_body(js, "retryCreateJob")
+    assert re.search(r"if\s*\(\s*!\s*job\.payload\s*\)", retry), (
+        "retryCreateJob no longer refuses a payload-less job; calling it "
+        "directly would POST an empty create"
     )
