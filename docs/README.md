@@ -95,7 +95,10 @@ All features are thoroughly tested:
 
 ```bash
 # Run tests
-python -m pytest tests/ -v
+# The UI suite drives Playwright against a live server and cannot share
+# a process with the rest; e2e needs a running instance. Same selection
+# `make test` and scripts/release.sh use.
+pytest -v --tb=short -m "not ui and not e2e"
 ```
 
 Test coverage includes:
@@ -140,19 +143,28 @@ Test coverage includes:
 
 ## File Structure
 
+<!-- Checked by tests/test_docs_navigation.py: this listing must match
+     what is actually on disk. It used to omit six pages. -->
+
 ```
 docs/
-  README.md            ← You are here
-  index.md             ← Client certificates landing page
-  installation.md      ← Installation & setup
-  kubernetes.md        ← Kubernetes production notes
-  dns-providers.md     ← DNS providers & multi-account
-  ca-providers.md      ← Certificate Authority providers
-  docker.md            ← Docker build & deployment
-  testing.md           ← Testing framework & CI/CD
-  guide.md             ← Client certificates user guide
-  api.md               ← Complete API reference
-  architecture.md      ← System architecture
+  README.md               this file — documentation index  <- you are here
+  THEME_MIGRATION.md      one-off theme migration record
+  api.md                  complete REST API reference
+  architecture.md         system architecture
+  ca-providers.md         certificate authorities
+  compliance.md           audit chain, attribution, NIS2/eIDAS
+  deploy-hooks.md         post-issuance deploy hooks
+  discovery-inventory.md  discovery, inventory, adopt, crypto readiness
+  dns-providers.md        DNS providers, multi-account, domain alias
+  docker.md               Docker build and deployment
+  guide.md                client-certificate user guide
+  index.md                client-certificate landing page
+  installation.md         installation and setup
+  kubernetes.md           Kubernetes production notes and Helm chart
+  mcp.md                  MCP server for AI agents
+  probes.en.md            deployment probes
+  testing.md              test framework and CI/CD
 ```
 
 ---
@@ -176,18 +188,11 @@ docs/
 
 ---
 
-## Status Dashboard
+## Test status
 
-| Component        | Status    | Tests     |
-| ---------------- | --------- | --------- |
-| CA Foundation    | Ready     | 3/3       |
-| CSR Handler      | Ready     | 3/3       |
-| Cert Manager     | Ready     | 8/8       |
-| Filtering        | Ready     | 3/3       |
-| Batch Ops        | Ready     | 2/2       |
-| OCSP/CRL         | Ready     | 5/5       |
-| Audit/Rate Limit | Ready     | 3/3       |
-| **Total**        | **Ready** | **27/27** |
+There is no hand-maintained scorecard here. A table of test counts is stale the day after it is written — this one said `27/27` while the suite had grown past two thousand.
+
+The authoritative signal is CI on `main`: the badges at the top of the [project README](../README.md), and the coverage floor enforced in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml).
 
 ---
 

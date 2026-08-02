@@ -95,7 +95,10 @@ Toutes les fonctionnalités sont testées de manière approfondie :
 
 ```bash
 # Exécuter les tests
-python -m pytest tests/ -v
+# La suite UI pilote Playwright contre un serveur vivant et ne peut pas
+# partager le processus avec le reste ; e2e exige une instance active.
+# La meme selection que `make test` et scripts/release.sh.
+pytest -v --tb=short -m "not ui and not e2e"
 ```
 
 La couverture des tests inclut :
@@ -131,19 +134,27 @@ La couverture des tests inclut :
 
 ## Structure des fichiers
 
+<!-- Checked by tests/test_docs_navigation.py: this listing must match
+     what is actually on disk. It used to omit six pages. -->
+
 ```
-docs/
-  README.md            ← Vous êtes ici
-  index.md             ← Page d'accueil des certificats clients
-  installation.md      ← Installation et configuration
-  kubernetes.md        ← Notes de production Kubernetes
-  dns-providers.md     ← Fournisseurs DNS et multi-comptes
-  ca-providers.md      ← Fournisseurs d'autorité de certification
-  docker.md            ← Construction et déploiement Docker
-  testing.md           ← Framework de test et CI/CD
-  guide.md             ← Guide d'utilisation des certificats clients
-  api.md               ← Référence API complète
-  architecture.md      ← Architecture du système
+docs/fr/
+  README.md           this file — documentation index  <- you are here
+  THEME_MIGRATION.md  one-off theme migration record
+  api.md              complete REST API reference
+  architecture.md     system architecture
+  ca-providers.md     certificate authorities
+  compliance.md       audit chain, attribution, NIS2/eIDAS
+  deploy-hooks.md     post-issuance deploy hooks
+  dns-providers.md    DNS providers, multi-account, domain alias
+  docker.md           Docker build and deployment
+  guide.md            client-certificate user guide
+  index.md            client-certificate landing page
+  installation.md     installation and setup
+  kubernetes.md       Kubernetes production notes and Helm chart
+  mcp.md              MCP server for AI agents
+  probes.md           deployment probes
+  testing.md          test framework and CI/CD
 ```
 
 ---
@@ -167,18 +178,11 @@ docs/
 
 ---
 
-## Tableau de bord des statuts
+## Etat des tests
 
-| Composant           | Statut    | Tests     |
-| ------------------- | --------- | --------- |
-| Fondation CA        | Prêt      | 3/3       |
-| Gestionnaire CSR    | Prêt      | 3/3       |
-| Gestionnaire cert.  | Prêt      | 8/8       |
-| Filtrage            | Prêt      | 3/3       |
-| Opérations par lots | Prêt      | 2/2       |
-| OCSP/CRL            | Prêt      | 5/5       |
-| Audit/Limitation    | Prêt      | 3/3       |
-| **Total**           | **Prêt**  | **27/27** |
+Il n'y a pas ici de tableau de bord maintenu a la main. Un decompte de tests est perime des le lendemain : celui-ci indiquait `27/27` alors que la suite depassait les deux mille.
+
+Le signal faisant autorite est la CI sur `main` : les badges en haut du [README du projet](../../README.md) et le plancher de couverture impose dans [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml).
 
 ---
 

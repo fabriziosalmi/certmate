@@ -95,7 +95,10 @@ Alle Funktionen sind umfassend getestet:
 
 ```bash
 # Tests ausführen
-python -m pytest tests/ -v
+# Die UI-Suite steuert Playwright gegen einen laufenden Server und kann
+# sich den Prozess nicht mit dem Rest teilen; e2e braucht eine laufende
+# Instanz. Dieselbe Auswahl, die `make test` und scripts/release.sh nutzen.
+pytest -v --tb=short -m "not ui and not e2e"
 ```
 
 Die Testabdeckung umfasst:
@@ -131,19 +134,27 @@ Die Testabdeckung umfasst:
 
 ## Dateistruktur
 
+<!-- Checked by tests/test_docs_navigation.py: this listing must match
+     what is actually on disk. It used to omit six pages. -->
+
 ```
-docs/
-  README.md            ← Sie sind hier
-  index.md             ← Einstiegsseite für Client-Zertifikate
-  installation.md      ← Installation & Einrichtung
-  kubernetes.md        ← Kubernetes-Produktionshinweise
-  dns-providers.md     ← DNS-Provider & Multi-Account
-  ca-providers.md      ← Zertifizierungsstellen-Provider
-  docker.md            ← Docker-Build & Deployment
-  testing.md           ← Test-Framework & CI/CD
-  guide.md             ← Benutzeranleitung Client-Zertifikate
-  api.md               ← Vollständige API-Referenz
-  architecture.md      ← Systemarchitektur
+docs/de/
+  README.md           this file — documentation index  <- you are here
+  THEME_MIGRATION.md  one-off theme migration record
+  api.md              complete REST API reference
+  architecture.md     system architecture
+  ca-providers.md     certificate authorities
+  compliance.md       audit chain, attribution, NIS2/eIDAS
+  deploy-hooks.md     post-issuance deploy hooks
+  dns-providers.md    DNS providers, multi-account, domain alias
+  docker.md           Docker build and deployment
+  guide.md            client-certificate user guide
+  index.md            client-certificate landing page
+  installation.md     installation and setup
+  kubernetes.md       Kubernetes production notes and Helm chart
+  mcp.md              MCP server for AI agents
+  probes.md           deployment probes
+  testing.md          test framework and CI/CD
 ```
 
 ---
@@ -167,18 +178,11 @@ docs/
 
 ---
 
-## Status-Dashboard
+## Teststatus
 
-| Komponente       | Status    | Tests     |
-| ---------------- | --------- | --------- |
-| CA-Grundlage     | Bereit    | 3/3       |
-| CSR-Handler      | Bereit    | 3/3       |
-| Zert.-Manager    | Bereit    | 8/8       |
-| Filterung        | Bereit    | 3/3       |
-| Batch-Operationen| Bereit    | 2/2       |
-| OCSP/CRL         | Bereit    | 5/5       |
-| Audit/Rate Limit | Bereit    | 3/3       |
-| **Gesamt**       | **Bereit**| **27/27** |
+Hier steht keine handgepflegte Punktetabelle. Eine Tabelle mit Testzahlen ist am Tag nach dem Schreiben veraltet — diese sagte `27/27`, wahrend die Suite die zweitausend uberschritten hatte.
+
+Das massgebliche Signal ist die CI auf `main`: die Badges oben im [Projekt-README](../../README.md) und die Coverage-Untergrenze in [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml).
 
 ---
 

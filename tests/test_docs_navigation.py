@@ -101,3 +101,89 @@ def test_mcp_readme_tool_count_matches_the_server():
         f"README claims {claimed.group(1)} MCP tools, mcp/index.js defines "
         f"{actual}."
     )
+
+
+# --- claims that go stale --------------------------------------------------- #
+
+ALL_MARKDOWN = [
+    p for p in REPO_ROOT.rglob("*.md")
+    if not any(part in p.parts for part in
+               (".venv", "node_modules", ".git", "scratch", ".claude", "backups"))
+]
+
+
+def test_no_markdown_file_documents_the_broken_test_command():
+    """`pytest tests/ -v` produces four failures on a clean checkout.
+
+    It ran the Playwright `ui` suite in the same process as everything else.
+    Eleven files told contributors to run it — CONTRIBUTING.md and every
+    index/README in all five languages — so the documented way to check your
+    work was the one way that reliably went red.
+    """
+    offenders = [
+        str(p.relative_to(REPO_ROOT)) for p in ALL_MARKDOWN
+        if re.search(r"pytest\s+tests/\s+-v", p.read_text(encoding="utf-8", errors="replace"))
+    ]
+    assert not offenders, (
+        f"{offenders} document `pytest tests/ -v`, which fails on a clean "
+        f'checkout. Use `-m "not ui and not e2e"`.'
+    )
+
+
+@pytest.mark.parametrize("lang", LANGUAGES)
+def test_file_structure_listing_matches_disk(lang):
+    """The docs README draws its own directory tree. Keep it true.
+
+    It listed eleven files while seventeen existed, so six pages — including
+    the whole MCP guide — were invisible to anyone reading the map.
+    """
+    directory = _lang_dir(lang)
+    readme = (directory / "README.md").read_text(encoding="utf-8")
+    block = re.search(r"```\n(docs/[^\n]*\n(?:  [^\n]*\n)+)```", readme)
+    assert block, f"docs/{lang}/README.md has no file-structure block"
+    listed = set(re.findall(r"^  ([A-Za-z0-9._-]+\.md)", block.group(1), re.M))
+    on_disk = {p.name for p in directory.glob("*.md")}
+    assert listed == on_disk, (
+        f"docs/{lang}/README.md file listing is out of date — "
+        f"missing {sorted(on_disk - listed)}, phantom {sorted(listed - on_disk)}"
+    )
+
+
+def test_contributing_names_the_gates_that_actually_run():
+    """CONTRIBUTING must describe the CI that exists, not one that used to.
+
+    It advertised flake8/black/isort/bandit as coming from
+    requirements-test.txt, which contains none of them, and never mentioned
+    the theme, CSS-freshness, coverage-floor or real-cert gates at all.
+    """
+    contributing = (REPO_ROOT / "CONTRIBUTING.md").read_text(encoding="utf-8")
+    for gate in ("bandit", "theme_codemod", "css:build", "cov-fail-under",
+                 "not ui and not e2e"):
+        assert gate in contributing, f"CONTRIBUTING.md never mentions {gate!r}"
+
+
+def test_contributing_does_not_promise_tools_that_are_not_installed():
+    """Anything CONTRIBUTING says requirements-test.txt provides must be in it."""
+    contributing = (REPO_ROOT / "CONTRIBUTING.md").read_text(encoding="utf-8")
+    declared = (REPO_ROOT / "requirements-test.txt").read_text(encoding="utf-8").lower()
+    claim = re.search(r"requirements-test\.txt\s*#\s*([^\n]*)", contributing)
+    if not claim:
+        return
+    for tool in re.findall(r"[a-z0-9_-]{3,}", claim.group(1).lower()):
+        if tool in {"and", "the", "in", "repo", "editable", "sdk", "cli", "test",
+                    "dev", "tooling", "clients"}:
+            continue
+        assert tool in declared, (
+            f"CONTRIBUTING.md says requirements-test.txt installs {tool!r}, "
+            f"but it does not."
+        )
+
+
+def test_a_pull_request_template_exists():
+    """Branch protection requires resolved review threads and green CI; the
+    template is where a contributor finds that out before pushing."""
+    template = REPO_ROOT / ".github" / "PULL_REQUEST_TEMPLATE.md"
+    assert template.exists(), "no PR template"
+    text = template.read_text(encoding="utf-8")
+    assert "not ui and not e2e" in text
+    assert "conversation" in text.lower()

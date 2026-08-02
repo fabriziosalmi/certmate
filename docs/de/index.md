@@ -147,17 +147,15 @@ Alle Funktionen wurden umfassend getestet:
 
 ```bash
 # Run test suite
-python -m pytest tests/ -v
+# Die UI-Suite steuert Playwright gegen einen laufenden Server und kann
+# sich den Prozess nicht mit dem Rest teilen; e2e braucht eine laufende
+# Instanz. Dieselbe Auswahl, die `make test` und scripts/release.sh nutzen.
+pytest -v --tb=short -m "not ui and not e2e"
 ```
 
 ### Testabdeckung
-- CA-Operationen (3 Tests)
-- CSR-Operationen (3 Tests)
-- Zertifikats-Lebenszyklus (8 Tests)
-- Filterung und Suche (3 Tests)
-- Batch-Operationen (2 Tests)
-- OCSP & CRL (5 Tests)
-- Audit & Rate Limiting (3 Tests)
+
+Die Zahlen pro Bereich, die hier standen, beschrieben eine Suite von 27 Tests. Fuhren Sie den obigen Befehl aus, oder lesen Sie die Badges im [Projekt-README](../../README.md).
 
 ---
 
@@ -258,6 +256,6 @@ Siehe LICENSE-Datei im Repository
 
 <div align="center">
 
-[Dokumentation](.) • [Lizenz](../LICENSE)
+[Dokumentation](.) • [Lizenz](../../LICENSE)
 
 </div>

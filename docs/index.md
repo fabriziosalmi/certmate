@@ -147,17 +147,15 @@ All features have been extensively tested:
 
 ```bash
 # Run test suite
-python -m pytest tests/ -v
+# The UI suite drives Playwright against a live server and cannot share
+# a process with the rest; e2e needs a running instance. Same selection
+# `make test` and scripts/release.sh use.
+pytest -v --tb=short -m "not ui and not e2e"
 ```
 
-### Test Coverage
-- CA Operations (3 tests)
-- CSR Operations (3 tests)
-- Certificate Lifecycle (8 tests)
-- Filtering & Search (3 tests)
-- Batch Operations (2 tests)
-- OCSP & CRL (5 tests)
-- Audit & Rate Limiting (3 tests)
+### Test coverage
+
+The per-area counts that used to sit here described a suite of 27 tests. Run the command above for the current figure, or read the badges on the [project README](../README.md).
 
 ---
 

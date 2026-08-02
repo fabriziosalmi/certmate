@@ -141,17 +141,15 @@ curl http://localhost:8000/api/client-certs/USER_ID/download/key \
 Todas las funcionalidades han sido probadas de forma exhaustiva:
 
 ```bash
-python -m pytest tests/ -v
+# La suite de UI dirige Playwright contra un servidor vivo y no puede
+# compartir proceso con el resto; e2e necesita una instancia en marcha.
+# La misma seleccion que usan `make test` y scripts/release.sh.
+pytest -v --tb=short -m "not ui and not e2e"
 ```
 
 ### Cobertura de pruebas
-- Operaciones CA (3 pruebas)
-- Operaciones CSR (3 pruebas)
-- Ciclo de vida de certificados (8 pruebas)
-- Filtrado y búsqueda (3 pruebas)
-- Operaciones por lotes (2 pruebas)
-- OCSP y CRL (5 pruebas)
-- Auditoría y limitación de tasa (3 pruebas)
+
+Los recuentos por area que habia aqui describian una suite de 27 pruebas. Ejecute el comando anterior para la cifra actual, o consulte las insignias del [README del proyecto](../../README.md).
 
 ---
 
@@ -252,6 +250,6 @@ Consulte el archivo LICENSE en el repositorio
 
 <div align="center">
 
-[Documentación](.) • [Licencia](../LICENSE)
+[Documentación](.) • [Licencia](../../LICENSE)
 
 </div>

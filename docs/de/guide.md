@@ -517,7 +517,7 @@ GET /api/client-certs/stats
 
 - [API-Referenz](./api.md) — Alle Endpoints
 - [Architektur](./architecture.md) — Systemdesign
-- [Release-Hinweise](../RELEASE_NOTES.md) — Versionshistorie
+- [Release-Hinweise](../../RELEASE_NOTES.md) — Versionshistorie
 
 ### Tests
 

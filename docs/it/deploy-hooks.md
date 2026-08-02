@@ -279,10 +279,10 @@ Ogni esecuzione di hook scrive una voce `operation: deploy_hook` nel log di audi
 
 ## Vedi anche
 
-- [`modules/core/deployer.py`](../modules/core/deployer.py) — implementazione
-- [`modules/web/settings_routes.py`](../modules/web/settings_routes.py) — endpoint `/api/deploy/*`
-- [`templates/partials/settings_deploy.html`](../templates/partials/settings_deploy.html) — partial UI
-- [`static/js/settings-deploy.js`](../static/js/settings-deploy.js) — componente Alpine
+- [`modules/core/deployer.py`](../../modules/core/deployer.py) — implementazione
+- [`modules/web/settings_routes.py`](../../modules/web/settings_routes.py) — endpoint `/api/deploy/*`
+- [`templates/partials/settings_deploy.html`](../../templates/partials/settings_deploy.html) — partial UI
+- [`static/js/settings-deploy.js`](../../static/js/settings-deploy.js) — componente Alpine
 
 ---
 
