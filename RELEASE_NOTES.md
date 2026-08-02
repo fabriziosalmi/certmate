@@ -1,3 +1,34 @@
+## v2.24.2 (Google Cloud DNS, and three things the interface got wrong)
+
+A patch release, and every fix in it came from someone who took the time to report a problem.
+
+The headline is the same shape as the ACME-DNS fix in v2.24.1, and it is worth saying plainly: **Google Cloud DNS-01 issuance has never worked in any CertMate release either.** If you configured it, watched every request fail, and went looking for a version where it did work, there was none to find. That is fixed here.
+
+### Google Cloud DNS
+
+- **Google Cloud DNS-01 now issues certificates** (#385). `certbot-dns-google` treats `--dns-google-credentials` as the path to the **service-account JSON itself** — it calls `google.auth.load_credentials_from_file` on it. CertMate wrote an ini instead, containing `dns_google_project_id` and a pointer to the key, and handed certbot that; the plugin rejected it with `File ... is not a valid json file`. The project id is not part of any file either: it is its own flag, `--dns-google-project`, which CertMate never passed. Both are corrected, and the fix was verified against a live Google Cloud DNS zone — credentials loaded, TXT record written and removed through the plugin's own client.
+
+  Nothing changes in your configuration. The same Service Account JSON already stored in settings is what gets used.
+
+### Interface
+
+- **Settings can be saved again without touching an unrelated field** (#491). A CA provider with no email address blocked the entire Settings page: a DNS provider change, a storage backend, a regenerated API token, none of it could be saved. Switching the default CA triggered it immediately, since the new CA's email field starts empty. The email registers an ACME account at issuance time and was never required to save settings; it is now enforced only to finish initial setup, and otherwise reported as a warning.
+
+- **Closing the certificate drawer abandons an in-progress edit** (#492). After starting "Edit & reissue" and closing the drawer, pressing "New certificate" re-opened the previous certificate's edit form, its domain field read-only, with no obvious way out. Closing the drawer now leaves a clean create form behind.
+
+- **A certificate being issued no longer disappears when you reload** (#399). The "Issuing" row was drawn from the page's own memory, so a refresh made an in-flight issuance vanish and look as though it had stopped, while the server was still working on it. CertMate now asks the server what is in flight and re-attaches to it — which also means the row appears in a session opened in another browser, not only the one that started it.
+
+### Release engineering
+
+- **Version drift and a portability bug are now impossible rather than fixed** (#488). The "Current Version" line on the documentation landing pages was not owned by the release script and had gone stale twice in a row; it is now bumped automatically for every language, and the test suite fails on any disagreement. The pull-request title the release script generates was also mangled on macOS by a GNU-only regular expression.
+
+### Notes for operators
+
+- No configuration migration, no new defaults, and no change to any other DNS provider.
+- The new `GET /api/certificates/jobs` endpoint lists only issuance and renewal jobs still in flight. It requires the operator role, and a scoped API key sees only jobs for domains it is allowed to manage.
+
+---
+
 ## v2.24.1 (ACME-DNS, which had never worked)
 
 A patch release with one fix that matters to anyone who tried to use ACME-DNS, and one image hygiene change.
