@@ -214,6 +214,17 @@ class Client:
             raise ValueError(
                 f"unknown certificate file {name!r}; use one of "
                 f"{'/'.join(sorted(self.CERT_FILES))}")
+        # Enforce the contract this docstring states instead of deferring to
+        # the server: a round trip to be told "invalid key_format" is a worse
+        # error than one raised here, and the same check already guards
+        # `name` above.
+        if key_format is not None:
+            if key_format not in ("pkcs1", "pkcs8"):
+                raise ValueError(
+                    f"unknown key_format {key_format!r}; use pkcs1 or pkcs8")
+            if name != "privkey":
+                raise ValueError(
+                    f"key_format applies to the private key, not to {name!r}")
         params = {"file": self.CERT_FILES[name]}
         if key_format:
             params["key_format"] = key_format

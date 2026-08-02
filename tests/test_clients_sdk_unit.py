@@ -406,3 +406,17 @@ def test_download_certificate_file_unknown_name_raises_before_any_request():
     with _mock_client(handler) as c:
         with pytest.raises(ValueError):
             c.download_certificate_file("app.example.com", "id_rsa")
+
+
+@pytest.mark.parametrize("name,key_format", [
+    ("privkey", "der"),        # not a format the server accepts
+    ("fullchain", "pkcs1"),    # key_format has no meaning for a public file
+])
+def test_download_certificate_file_validates_key_format_before_requesting(name, key_format):
+    """The docstring's contract is enforced here, not by a round trip."""
+    def handler(request):  # pragma: no cover - must never be reached
+        raise AssertionError("no request may be sent for an invalid key_format")
+
+    with _mock_client(handler) as c:
+        with pytest.raises(ValueError):
+            c.download_certificate_file("app.example.com", name, key_format=key_format)

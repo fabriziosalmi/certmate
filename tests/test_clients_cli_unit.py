@@ -274,3 +274,17 @@ def test_download_bundle_json_is_written_as_json(tmp_path):
     import json as _json
     assert _json.loads(target.read_text())["domain"] == "app.example.com"
     client.download_certificate.assert_called_once_with("app.example.com", fmt="json")
+
+
+@pytest.mark.parametrize("args,expected", [
+    (["--file", "privkey", "--key-format", "der"], "unknown --key-format"),
+    (["--file", "fullchain", "--key-format", "pkcs1"], "--key-format applies to"),
+])
+def test_download_rejects_bad_key_format_without_calling_the_server(args, expected):
+    """Fail fast: learning this from the server costs an authenticated call."""
+    patcher, client = _cli_client()
+    with patcher:
+        result = runner.invoke(app, ["cert", "download", "app.example.com", *args])
+    assert result.exit_code != 0
+    assert expected in _all_output(result)
+    client.download_certificate_file.assert_not_called()

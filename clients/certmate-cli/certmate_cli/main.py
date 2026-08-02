@@ -311,10 +311,18 @@ def cert_download(
         certmate cert download example.com --file fullchain -o /etc/ssl/certs/x.pem
         certmate cert download example.com --file privkey   -o /etc/ssl/private/x.key
     """
+    # Every one of these is checked before a request goes out: being told
+    # "invalid key_format" by the server after a round trip is a worse error
+    # than being told here, and it costs an authenticated call to learn it.
     if bundle is not None and bundle not in ("zip", "json"):
         _die("--bundle must be zip or json")
     if bundle and key_format:
         _die("--key-format applies to --file privkey, not to a bundle")
+    if key_format is not None:
+        if key_format not in ("pkcs1", "pkcs8"):
+            _die(f"unknown --key-format {key_format!r}; use pkcs1 or pkcs8")
+        if not bundle and file != "privkey":
+            _die(f"--key-format applies to --file privkey, not to {file!r}")
 
     if bundle:
         data = _run(lambda: _client(ctx).download_certificate(domain, fmt=bundle))
