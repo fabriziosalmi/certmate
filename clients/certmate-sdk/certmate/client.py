@@ -181,6 +181,45 @@ class Client:
         return self._request("GET", f"/api/certificates/{domain}/download",
                              params=params_by_fmt[fmt])
 
+    #: Short name -> on-disk filename, matching the server's own mapping.
+    CERT_FILES: Dict[str, str] = {
+        "cert": "cert.pem",
+        "chain": "chain.pem",
+        "fullchain": "fullchain.pem",
+        "privkey": "privkey.pem",
+        "combined": "combined.pem",
+        "pfx": "cert.pfx",
+    }
+
+    def download_certificate_file(self, domain: str, name: str,
+                                  key_format: Optional[str] = None) -> bytes:
+        """Download ONE certificate file by short name, as bytes.
+
+        This is the shape a deploy script wants: fetch exactly the file that
+        goes into a given path, rather than a bundle it has to unpack.
+
+        Sent as ``?file=<filename>`` rather than the path-style
+        ``/download/<name>`` route: both exist server-side, but only the
+        query-string form accepts ``key_format``, so this one can also serve
+        the legacy PKCS#1/SEC1 key.
+
+        ``key_format`` is ``pkcs1`` or ``pkcs8`` and applies to ``privkey``
+        only; the server rejects it on any other file.
+
+        Role note: ``privkey``, ``combined`` and ``pfx`` expose private-key
+        material and require operator role, while ``cert``, ``chain`` and
+        ``fullchain`` are readable by a viewer.
+        """
+        if name not in self.CERT_FILES:
+            raise ValueError(
+                f"unknown certificate file {name!r}; use one of "
+                f"{'/'.join(sorted(self.CERT_FILES))}")
+        params = {"file": self.CERT_FILES[name]}
+        if key_format:
+            params["key_format"] = key_format
+        return self._request("GET", f"/api/certificates/{domain}/download",
+                             params=params)
+
     def set_auto_renew(self, domain: str, enabled: bool) -> Dict[str, Any]:
         return self._request("PUT", f"/api/certificates/{domain}/auto-renew",
                              json={"enabled": bool(enabled)}) or {}

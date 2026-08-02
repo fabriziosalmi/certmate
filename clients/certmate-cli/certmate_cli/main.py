@@ -9,8 +9,12 @@ Connection comes from --url/--token or CERTMATE_URL/CERTMATE_TOKEN.
 """
 from __future__ import annotations
 
+import json
+import os
 import re
+import stat
 import sys
+from pathlib import Path
 from typing import List, Optional
 
 import typer
@@ -262,6 +266,83 @@ def cert_rm(ctx: typer.Context, domain: str,
         typer.confirm(f"Delete certificate {domain}?", abort=True)
     _run(lambda: _client(ctx).delete_certificate(domain))
     out.print(f"[green]deleted[/] {domain}.")
+
+
+_FILE_DEFAULT_NAME = {
+    "cert": "cert.pem",
+    "chain": "chain.pem",
+    "fullchain": "fullchain.pem",
+    "privkey": "privkey.pem",
+    "combined": "combined.pem",
+    "pfx": "cert.pfx",
+}
+# Anything that can carry key material is written owner-only. The public
+# files get the same treatment: a deploy script that later relaxes them is
+# an explicit act, whereas a private key written 0644 is a silent one.
+_DOWNLOAD_MODE = 0o600
+
+
+@cert_app.command("download")
+def cert_download(
+    ctx: typer.Context,
+    domain: str,
+    file: str = typer.Option(
+        "fullchain", "--file", "-f",
+        help="Which file: cert, chain, fullchain, privkey, combined, pfx. "
+             "Use --bundle for a whole-certificate archive instead."),
+    output: Optional[str] = typer.Option(
+        None, "--output", "-o",
+        help="Where to write it. Defaults to the file's usual name in the "
+             "current directory; '-' writes to stdout."),
+    key_format: Optional[str] = typer.Option(
+        None, "--key-format",
+        help="pkcs1 or pkcs8, for --file privkey. certbot writes pkcs8; "
+             "pkcs1 is the legacy 'BEGIN RSA PRIVATE KEY' form."),
+    bundle: Optional[str] = typer.Option(
+        None, "--bundle",
+        help="Download a bundle instead of a single file: zip or json."),
+):
+    """Download a certificate file, so a host can pull what it needs.
+
+    Pulling beats pushing when the certificate manager would otherwise need
+    credentials on every target host: give each host an API key scoped to its
+    own domain and let it fetch on a timer.
+
+        certmate cert download example.com --file fullchain -o /etc/ssl/certs/x.pem
+        certmate cert download example.com --file privkey   -o /etc/ssl/private/x.key
+    """
+    if bundle is not None and bundle not in ("zip", "json"):
+        _die("--bundle must be zip or json")
+    if bundle and key_format:
+        _die("--key-format applies to --file privkey, not to a bundle")
+
+    if bundle:
+        data = _run(lambda: _client(ctx).download_certificate(domain, fmt=bundle))
+        default_name = f"{domain}.zip" if bundle == "zip" else f"{domain}.json"
+        payload = json.dumps(data, indent=2).encode() if bundle == "json" else data
+    else:
+        if file not in _FILE_DEFAULT_NAME:
+            _die(f"unknown --file {file!r}; use one of "
+                 f"{', '.join(sorted(_FILE_DEFAULT_NAME))}")
+        payload = _run(lambda: _client(ctx).download_certificate_file(
+            domain, file, key_format=key_format))
+        default_name = _FILE_DEFAULT_NAME[file]
+
+    if output == "-":
+        # Binary-safe: .pfx and .zip are not text.
+        sys.stdout.buffer.write(payload)
+        return
+
+    target = Path(output or default_name)
+    # Create with the restrictive mode rather than chmod-ing after: between
+    # an open() and a chmod() the key is readable by anyone on the box.
+    fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, _DOWNLOAD_MODE)
+    with os.fdopen(fd, "wb") as fh:
+        fh.write(payload)
+    # An existing file keeps its old mode through O_CREAT, so state what was
+    # actually written rather than claiming 0600 unconditionally.
+    mode = stat.S_IMODE(os.stat(target).st_mode)
+    out.print(f"[green]wrote[/] {target} ({len(payload)} bytes, mode {mode:04o})")
 
 
 @cert_app.command("reissue")

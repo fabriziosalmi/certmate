@@ -354,3 +354,55 @@ def test_certificate_explicit_ca_provider_wins_over_staging():
 def test_certificate_without_ca_or_staging_has_no_ca():
     c = Certificate.from_dict({"domain": "a.example.com", "staging": False})
     assert c.ca_provider is None
+
+
+# --------------------------------------------------------------------------
+# #490 — one file at a time, so a host can pull exactly what it deploys
+# --------------------------------------------------------------------------
+
+@pytest.mark.parametrize("name,expected_file", [
+    ("cert", "cert.pem"),
+    ("chain", "chain.pem"),
+    ("fullchain", "fullchain.pem"),
+    ("privkey", "privkey.pem"),
+    ("combined", "combined.pem"),
+    ("pfx", "cert.pfx"),
+])
+def test_download_certificate_file_maps_short_name_to_file_param(name, expected_file):
+    seen = {}
+
+    def handler(request):
+        seen["path"] = request.url.path
+        seen["params"] = dict(request.url.params)
+        return httpx.Response(200, content=b"BYTES",
+                              headers={"content-type": "application/octet-stream"})
+
+    with _mock_client(handler) as c:
+        res = c.download_certificate_file("app.example.com", name)
+    # The query-string form, not the path-style route: only this one accepts
+    # key_format, so the same call can also serve the legacy key.
+    assert seen["path"] == "/api/certificates/app.example.com/download"
+    assert seen["params"] == {"file": expected_file}
+    assert res == b"BYTES"
+
+
+def test_download_certificate_file_forwards_key_format():
+    seen = {}
+
+    def handler(request):
+        seen["params"] = dict(request.url.params)
+        return httpx.Response(200, content=b"KEY",
+                              headers={"content-type": "application/octet-stream"})
+
+    with _mock_client(handler) as c:
+        c.download_certificate_file("app.example.com", "privkey", key_format="pkcs1")
+    assert seen["params"] == {"file": "privkey.pem", "key_format": "pkcs1"}
+
+
+def test_download_certificate_file_unknown_name_raises_before_any_request():
+    def handler(request):  # pragma: no cover - must never be reached
+        raise AssertionError("no request may be sent for an unknown file name")
+
+    with _mock_client(handler) as c:
+        with pytest.raises(ValueError):
+            c.download_certificate_file("app.example.com", "id_rsa")
