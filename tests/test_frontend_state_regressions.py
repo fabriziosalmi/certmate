@@ -183,3 +183,36 @@ def test_no_file_under_tests_is_silently_gitignored():
     out = result.stdout.split()
     swallowed = [f for f in out if f.endswith(".py")]
     assert not swallowed, f"gitignore is hiding test files: {swallowed}"
+
+
+def test_missing_ca_email_does_not_block_saving_unrelated_settings():
+    """#491: a CA without an email must not make the Settings page unsaveable.
+
+    The email registers an ACME account at issuance time. The backend never
+    required it to *save* settings — `validate_settings_post` does not look at
+    it — but settings.js threw unconditionally when the selected CA had no
+    email, so a DNS provider change, a storage backend change or a regenerated
+    bearer token could not be saved at all. Switching the default CA hit it
+    immediately, since the new CA's email field starts empty.
+
+    The guard is kept for initial setup only, mirroring the API-bearer-token
+    check a few lines below it, and degrades to a warning afterwards.
+    """
+    js = _read("static/js/settings.js")
+
+    marker = "Email address is required in the "
+    assert marker in js, "the initial-setup guard disappeared entirely"
+
+    # The throw must be reachable only before setup is complete.
+    guard = js[js.index(marker) - 400:js.index(marker)]
+    assert "setup_completed" in guard, (
+        "the missing-CA-email error is thrown unconditionally again — that is "
+        "#491: it blocks saving settings that have nothing to do with the CA"
+    )
+
+    # And the post-setup path must still tell the user, without failing.
+    assert "missingCaEmailWarning" in js, (
+        "the non-blocking warning was removed; a silently missing CA email "
+        "surfaces only as a failed issuance later"
+    )
+    assert "showMessage(missingCaEmailWarning, 'warning')" in js
