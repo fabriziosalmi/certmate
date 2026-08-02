@@ -46,11 +46,21 @@ jobs:
         run: |
           set -euo pipefail
 
+          # TAG is a workflow_dispatch input. Validate it before it reaches a
+          # command line or a query string: a value starting with '-' would be
+          # read as a flag by gh, and quotes or a newline would break out of
+          # the GraphQL search string below. `case` compares the whole value —
+          # grep would match line by line and let a newline through.
+          case "$TAG" in
+            "" | -*)               echo "::error::tag must be non-empty and must not start with '-': $TAG" >&2; exit 1 ;;
+            *[!A-Za-z0-9._-]*)     echo "::error::tag may only contain letters, digits, dot, underscore and hyphen: $TAG" >&2; exit 1 ;;
+          esac
+
           # Read the release rather than trusting the event payload, so a
-          # manual re-run announces the same thing an automatic one would.
-          name="$(gh release view "$TAG" --repo "$REPO" --json name -q '.name // ""')"
-          body="$(gh release view "$TAG" --repo "$REPO" --json body -q '.body // ""')"
-          url="$(gh release view "$TAG" --repo "$REPO" --json url -q .url)"
+          # re-run announces exactly what the first run would have.
+          name="$(gh release view --repo "$REPO" --json name -q '.name // ""' -- "$TAG")"
+          body="$(gh release view --repo "$REPO" --json body -q '.body // ""' -- "$TAG")"
+          url="$(gh release view --repo "$REPO" --json url -q .url -- "$TAG")"
           version="${TAG#v}"
 
           # A release is not required to have a name, and an empty title would
