@@ -7,16 +7,17 @@ priority class of issue in this project.
 ## Supported versions
 
 Only the latest minor release line receives security fixes. Operators running
-older lines should upgrade to the latest patch on `2.21.x` before reporting —
+older lines should upgrade to the latest patch on `2.25.x` before reporting —
 fixes for retired lines are out of scope.
 
 | Version   | Supported           |
 | --------- | ------------------- |
-| `2.21.x`  | Yes                 |
-| `< 2.21`  | No (please upgrade) |
+| `2.25.x`  | Yes                 |
+| `< 2.25`  | No (please upgrade) |
 
-The supported line moves forward with each `2.x.0` release. With `2.21.0`
-tagged, `2.18.x` and earlier are retired.
+The supported line moves forward with each `2.x.0` release; everything below
+it is retired at that moment. This file is updated by the release tooling, so
+the line above is always the one currently receiving fixes.
 
 ## Reporting a vulnerability
 

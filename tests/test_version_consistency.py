@@ -154,3 +154,26 @@ def test_release_script_ignores_client_tags_when_finding_the_last_release():
             "clients-v* tag can be mistaken for the last release and disarm "
             f"the mandatory real-cert gate: {line.strip()}"
         )
+
+
+def test_security_policy_names_the_current_minor_line():
+    """SECURITY.md is what a researcher reads before reporting.
+
+    It said `2.25.x`... no: it said `2.21.x` while 2.25.0 was the release,
+    four minor lines stale. Someone reading that concludes the version they
+    are running is out of scope, or that nobody is home. It names the MINOR
+    line, so it only moves on a x.y.0 — but it moves without being remembered.
+    """
+    major, minor, _ = __version__.split(".")
+    text = (REPO_ROOT / "SECURITY.md").read_text(encoding="utf-8")
+
+    supported = set(re.findall(r"`(\d+\.\d+)\.x`", text))
+    assert supported == {f"{major}.{minor}"}, (
+        f"SECURITY.md declares support for {sorted(supported)} but the current "
+        f"release is {__version__}. scripts/release.sh bumps this file."
+    )
+    retired = set(re.findall(r"`< (\d+\.\d+)`", text))
+    assert retired == {f"{major}.{minor}"}, (
+        f"SECURITY.md retires everything below {sorted(retired)}, which does "
+        f"not match the supported line {major}.{minor}.x"
+    )
