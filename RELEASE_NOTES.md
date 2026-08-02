@@ -1,3 +1,36 @@
+## v2.25.1 (A Helm chart, and a security policy that tells the truth)
+
+No application code changed in this release — `modules/` is byte-identical to v2.25.0. What changed is how CertMate is installed, described, and reported to.
+
+### Kubernetes
+
+- **A Helm chart** (#504, #506), published to GHCR on each release:
+
+  ```
+  helm install certmate oci://ghcr.io/fabriziosalmi/charts/certmate --version 2.25.1
+  ```
+
+  It encodes what CertMate is rather than emitting generic templates. CertMate is single-instance by design — its scheduler runs inside the web process — so the chart renders exactly one replica and **refuses to render more**, with an explanation, instead of quietly deploying a second scheduler that renews the same certificates against the same volume. It also refuses to run without persistent storage unless you point it at a volume you manage, uses `Recreate` rather than a rolling update that would deadlock on a ReadWriteOnce volume, and keeps the volume holding your certificates when the release is uninstalled.
+
+  The chart version is the CertMate version: `--version 2.25.1` gets the chart that deploys 2.25.1. There is no second number to reconcile.
+
+### Security policy
+
+- **The supported-versions table is current, and stays current** (#508). It had declared `2.21.x` supported while 2.25.0 was released — four minor lines stale, in the file a security researcher reads before reporting. It is now updated by the release tooling and the build fails if it drifts.
+
+- **Workflow permissions are scoped to the jobs that need them** (#508). Two workflows declared write access at the top level, where every job and every future step would inherit it.
+
+### Description
+
+- **CertMate is described as what it became** (#505). The project introduced itself as "an SSL certificate management system" — accurate for its first version, and a poor description of something that now discovers certificates it did not issue, keeps an inventory of what is actually served across an estate, monitors CT logs, reports cryptographic readiness, and runs its own CA.
+
+### Notes for operators
+
+- Upgrading from 2.25.0 changes nothing at runtime. If you are happy there, there is no urgency.
+- The Helm chart is new; the Docker image and every other install path are unchanged.
+
+---
+
 ## v2.25.0 (Pulling certificates, instead of pushing them)
 
 A small release with a single theme, and it came from two users arriving at the same problem from opposite directions.
