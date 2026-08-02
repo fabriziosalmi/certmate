@@ -4,7 +4,7 @@
 
 <img src="certmate_logo.png" alt="CertMate Logo" width="180">
 
-**CertMate** is a self-hosted certificate lifecycle management platform: it issues and renews TLS certificates, **discovers the ones you did not issue**, keeps a single inventory of what exists across your estate — what is served where, who issued it, when it expires, which cryptography it uses — and deploys renewed certificates to where they are needed. Multi-DNS provider support, a private CA, a tamper-evident audit trail, and a REST API for all of it.
+**CertMate** is a self-hosted certificate lifecycle management platform: it issues and renews TLS certificates, **discovers the ones you did not issue**, keeps a single inventory of what exists across your estate — what is served where, who issued it, when it expires, which cryptography it uses — and deploys renewed certificates to where they are needed. It supports 29 DNS providers, runs its own private CA for internal names, keeps a tamper-evident audit trail of every operation, and exposes all of it through a REST API.
 
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-try%20it%20now-2563eb?logo=probot&logoColor=white)](https://demo.certmate.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
