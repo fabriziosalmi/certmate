@@ -509,13 +509,17 @@ Download certificate files for a specific domain. By default, this endpoint retu
 - `file` (Query, Optional) - Specify a single file to download. 
   - Supported values: `fullchain.pem`, `privkey.pem`, `combined.pem`
 - `format` (Query, Optional) - Set to `json` to return all certificate files in a JSON object.
+- `key_format` (Query, Optional) - `pkcs1` or `pkcs8`. Certbot writes PKCS#8 (`BEGIN PRIVATE KEY`); some older stacks require the legacy traditional form. Valid with `file=privkey.pem` (serves the converted key) or with `format=json` (adds a converted copy to the response).
 
 **Response** (200 OK):
 - **Default**: `application/zip` (A ZIP file containing all PEM files)
 - **With `file` param**: `application/x-pem-file` (The raw content of the requested file)
 - **With `format=json`**: `application/json` with `domain`, `cert_pem`, `chain_pem`, `fullchain_pem`, and `private_key_pem`
+- **With `format=json&key_format=pkcs1`**: the above plus `private_key_pkcs1_pem`
 
 The JSON form is the preferred automation shape for Ansible, Salt, or any other client that wants to write PEM files directly.
+
+`key_format=pkcs1` on the JSON form **adds** `private_key_pkcs1_pem` and leaves `private_key_pem` untouched, so an existing consumer is unaffected and a client needing the legacy key no longer has to make a second call and stage it through a file. The field is named for the encoding rather than for RSA: the traditional form of an ECDSA key is SEC1 (`BEGIN EC PRIVATE KEY`), and CertMate issues ECDSA by default. Key types with no traditional encoding (Ed25519) return **422**.
 
 **Examples**:
 

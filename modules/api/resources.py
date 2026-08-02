@@ -1997,6 +1997,14 @@ def create_api_resources(api, models, managers):
             PKCS#1/SEC1 form for stacks that reject certbot's PKCS#8
             (issue #233); the default is the on-disk PKCS#8.
 
+            ?format=json&key_format=pkcs1 adds private_key_pkcs1_pem to the
+            JSON alongside the untouched private_key_pem, so an automation
+            can pull everything it needs in one call instead of downloading
+            the key a second time as a file (issue #398). The field is named
+            for the encoding, not RSA: for an ECDSA key the traditional form
+            is SEC1 ("BEGIN EC PRIVATE KEY"), and CertMate issues ECDSA by
+            default.
+
             ?file=cert.pfx serves the encrypted PKCS#12 bundle when a PFX
             export password is configured (issue #230); 404 otherwise. It
             contains the private key, so it requires operator role.
@@ -2027,8 +2035,10 @@ def create_api_resources(api, models, managers):
                 key_format = request.args.get('key_format')
                 if key_format is not None and key_format not in ('pkcs1', 'pkcs8'):
                     return {'error': "Invalid key_format; use 'pkcs1' or 'pkcs8'."}, 400
-                if key_format and requested_file != 'privkey.pem':
-                    return {'error': 'key_format only applies to ?file=privkey.pem'}, 400
+                if key_format and download_format != 'json' and requested_file != 'privkey.pem':
+                    return {
+                        'error': 'key_format applies to ?file=privkey.pem or ?format=json.'
+                    }, 400
 
                 def _privkey_denied(file_label):
                     """Emit audit + return 403 for viewer trying to pull privkey."""
@@ -2070,6 +2080,28 @@ def create_api_resources(api, models, managers):
                             if not file_path.exists():
                                 return {'error': f'Required cert file not found for domain {domain}: {filename}'}, 404
                             payload[response_key] = file_path.read_text(encoding='utf-8')
+
+                        # ?key_format=pkcs1 adds the legacy/traditional form
+                        # ALONGSIDE private_key_pem rather than replacing it,
+                        # so an existing consumer of format=json is unaffected
+                        # (issue #398). Converted from the bytes just read —
+                        # no second file read, no second path to validate.
+                        # pkcs8 is what is already on disk, so asking for it
+                        # here is a no-op by design.
+                        if key_format == 'pkcs1':
+                            try:
+                                payload['private_key_pkcs1_pem'] = _privkey_to_pkcs1(
+                                    payload['private_key_pem'].encode('utf-8')
+                                ).decode('utf-8')
+                            except (ValueError, TypeError) as e:
+                                logger.error(
+                                    "Failed to convert private key to PKCS#1: %s",
+                                    type(e).__name__,
+                                )
+                                return {
+                                    'error': 'Could not convert the private key to PKCS#1 '
+                                             '(the key type may not support it).'
+                                }, 422
 
                         return jsonify(payload)
                     except FileNotFoundError:
