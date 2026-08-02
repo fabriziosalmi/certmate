@@ -186,6 +186,16 @@ dh.write_text(
 # v2.24.1 (#483, #487) because the script did not own them. Globbed, so a
 # translation added later is picked up without editing this script;
 # test_version_consistency fails the build if one is ever missed.
+# The Helm chart's appVersion is the release it defaults to pulling. Same
+# class of copy as the docs pages and the lockfile: owned here, or stale.
+# Chart *version* is deliberately NOT touched — it tracks chart changes.
+chart = pathlib.Path("charts/certmate/Chart.yaml")
+if chart.exists():
+    chart.write_text(
+        re.sub(r'(?m)^(appVersion:\s*")[^"]+(")', rf"\g<1>{v}\g<2>",
+               chart.read_text(encoding="utf-8")),
+        encoding="utf-8",
+    )
 docs = sorted(pathlib.Path("docs").glob("index.md")) + sorted(pathlib.Path("docs").glob("*/index.md"))
 for page in docs:
     text = page.read_text(encoding="utf-8")
@@ -207,7 +217,7 @@ real-cert E2E skipped (non-issuance change): $skip_reason"
   # the commit produced a release PR whose own CI failed on the version-
   # consistency test — a gate the local run cannot catch, because the bump
   # happens after the gates.
-  git add modules/__init__.py package.json package-lock.json README.dockerhub.md docs/index.md docs/*/index.md
+  git add modules/__init__.py package.json package-lock.json README.dockerhub.md charts/certmate/Chart.yaml docs/index.md docs/*/index.md
   git commit -q -m "$body
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"

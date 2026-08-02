@@ -1,0 +1,30 @@
+CertMate {{ .Chart.AppVersion }} is installing as {{ include "certmate.fullname" . }}.
+
+Reach it:
+{{- if .Values.ingress.enabled }}
+{{- range .Values.ingress.hosts }}
+  http{{ if $.Values.ingress.tls }}s{{ end }}://{{ .host }}
+{{- end }}
+{{- else }}
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "certmate.fullname" . }} {{ .Values.service.port }}:{{ .Values.service.port }}
+  then open http://localhost:{{ .Values.service.port }}
+{{- end }}
+
+{{- if not .Values.secrets.apiBearerToken }}
+{{- if not .Values.secrets.existingSecret }}
+
+No API bearer token was supplied, so CertMate generated one on first boot.
+Read it from the running pod's settings, or set secrets.apiBearerToken (or
+secrets.existingSecret) to control it yourself.
+{{- end }}
+{{- end }}
+
+Two things worth knowing:
+
+  * CertMate is single-instance on purpose. Its scheduler runs in the web
+    process, so a second replica would duplicate every renewal. The chart
+    refuses to render more than one.
+
+  * The volume holding your certificates and the audit chain is annotated
+    helm.sh/resource-policy: keep — `helm uninstall` leaves it behind.
+    Removing it is a deliberate `kubectl delete pvc`.
