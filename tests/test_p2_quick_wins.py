@@ -5,6 +5,7 @@
    window, no symlink-follow.
 3. The Google service-account key gets a per-op random name (no fixed
    predictable path, no concurrent clobber), 0600, and orphans are swept."""
+import json
 import os
 import stat
 from pathlib import Path
@@ -86,6 +87,25 @@ def test_google_sa_file_is_random_and_0600(tmp_path, monkeypatch):
     assert not (cfg / 'google-service-account.json').exists()   # no fixed predictable path
 
 
+def test_google_sweep_window_matches_the_certbot_timeout(tmp_path, monkeypatch):
+    """The orphan window must not outlive the run it is meant to clean up after.
+
+    certificates.py kills certbot at 1800s, so a key older than that belongs to
+    a dead run. Left at the 3600 default the window was twice the documented
+    rationale, keeping a live GCP private key on disk half an hour longer than
+    intended after a crash.
+    """
+    monkeypatch.chdir(tmp_path)
+    seen = {}
+
+    def fake_sweep(directory, pattern, max_age_seconds=3600):
+        seen['max_age_seconds'] = max_age_seconds
+
+    monkeypatch.setattr('modules.core.utils._sweep_orphaned_files', fake_sweep)
+    create_google_config('p', '{"type":"service_account"}')
+    assert seen['max_age_seconds'] == 1800
+
+
 def test_sweep_removes_orphaned_sa_files_only(tmp_path):
     old = tmp_path / 'google-sa-old.json'
     old.write_text('stale')
@@ -99,25 +119,68 @@ def test_sweep_removes_orphaned_sa_files_only(tmp_path):
 
 
 # --- S1 follow-up: the SA JSON is deleted WITH the operation, not left for
-# the orphan sweep. create_google_config returns both paths, GoogleStrategy
-# records the side file, and the create/renew finally blocks unlink it.
+# the orphan sweep. The credentials file IS the SA JSON (#385), so the
+# create/renew finally blocks unlink it as the ordinary credentials file.
 
-def test_create_google_config_returns_both_secret_paths(tmp_path, monkeypatch):
+def test_create_google_config_returns_the_service_account_json(tmp_path, monkeypatch):
+    """certbot-dns-google loads this path with google.auth.load_credentials_from_file.
+
+    It must therefore BE the service-account JSON. CertMate used to write an
+    ini here and hand certbot that instead, which the plugin rejects with
+    "File ... is not a valid json file" — every Google DNS-01 issuance failed
+    (#385).
+    """
     monkeypatch.chdir(tmp_path)
-    config_file, sa_file = create_google_config('proj-1', '{"type":"service_account"}')
-    assert config_file.exists() and sa_file.exists()
-    assert sa_file.name.startswith('google-sa-')
-    assert str(sa_file) in config_file.read_text()
+    sa_json = '{"type": "service_account", "project_id": "proj-1"}'
+    credentials_file = create_google_config('proj-1', sa_json)
+
+    assert credentials_file.exists()
+    assert credentials_file.name.startswith('google-sa-')
+    assert credentials_file.suffix == '.json'
+    # The file handed to certbot must parse as JSON, and be the key verbatim.
+    assert json.loads(credentials_file.read_text()) == json.loads(sa_json)
+    # No ini is written any more.
+    assert not list((tmp_path / 'letsencrypt' / 'config').glob('google-*.ini'))
 
 
-def test_google_strategy_records_sa_file_for_cleanup(tmp_path, monkeypatch):
+def test_google_strategy_has_no_side_files_to_clean_up(tmp_path, monkeypatch):
+    """The single credentials file is the secret, so there is no side file."""
     from modules.core.dns_strategies import GoogleStrategy
     monkeypatch.chdir(tmp_path)
     strategy = GoogleStrategy()
-    config_file = strategy.create_config_file(
+    credentials_file = strategy.create_config_file(
         {'project_id': 'p', 'service_account_key': '{"type":"service_account"}'})
-    assert config_file is not None
-    assert [Path(p).name.startswith('google-sa-') for p in strategy.extra_credential_files] == [True]
+    assert credentials_file is not None
+    assert Path(credentials_file).name.startswith('google-sa-')
+    assert strategy.extra_credential_files == []
+
+
+def test_google_strategy_passes_project_as_a_certbot_flag(tmp_path, monkeypatch):
+    """The project id is --dns-google-project, not a field in any file."""
+    from modules.core.dns_strategies import GoogleStrategy
+    monkeypatch.chdir(tmp_path)
+    strategy = GoogleStrategy()
+    credentials_file = strategy.create_config_file(
+        {'project_id': 'my-proj', 'service_account_key': '{"type":"service_account"}'})
+    cmd = []
+    strategy.configure_certbot_arguments(cmd, credentials_file)
+
+    assert cmd[cmd.index('--authenticator') + 1] == 'dns-google'
+    assert cmd[cmd.index('--dns-google-credentials') + 1] == str(credentials_file)
+    assert cmd[cmd.index('--dns-google-project') + 1] == 'my-proj'
+
+
+def test_google_strategy_omits_project_when_not_configured(tmp_path, monkeypatch):
+    """With no project set the plugin reads it out of the SA JSON itself."""
+    from modules.core.dns_strategies import GoogleStrategy
+    monkeypatch.chdir(tmp_path)
+    strategy = GoogleStrategy()
+    credentials_file = strategy.create_config_file(
+        {'project_id': '  ', 'service_account_key': '{"type":"service_account"}'})
+    cmd = []
+    strategy.configure_certbot_arguments(cmd, credentials_file)
+
+    assert '--dns-google-project' not in cmd
 
 
 def _google_cert_mgr(tmp_path, shell):

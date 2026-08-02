@@ -1579,9 +1579,11 @@ class CertificateManager:
             raise
         finally:
             domain_lock.release()
-            # Always clean up credential files (even on failure), including
-            # side files the ini references (Google's SA JSON) — the sweep in
+            # Always clean up credential files (even on failure), including any
+            # side files a provider writes alongside the main one — the sweep in
             # create_google_config only mops up crashed runs, not live ones.
+            # (Google needs no side file since #385: its credentials file IS the
+            # service-account JSON, so it is unlinked as the main one.)
             for cred_path in [credentials_file, *extra_credential_files]:
                 if cred_path:
                     try:
