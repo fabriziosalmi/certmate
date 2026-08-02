@@ -94,7 +94,16 @@ cmd_prepare() {
 
   info "Real-cert policy (path-aware)"
   local last_tag changed touches=0
-  last_tag="$(git describe --tags --abbrev=0 origin/main 2>/dev/null || true)"
+  # --match 'v*' is load-bearing, not tidiness. The clients publish from their
+  # own `clients-v*` tags, and one of those is usually the most recent tag on
+  # main. Without the filter this resolved to `clients-v0.1.3`, the diff was
+  # computed from there instead of from the last RELEASE, and a release that
+  # HAD changed modules/api/resources.py was reported as "no issuance-pipeline
+  # change" — which would have let --skip-real-cert bypass a MANDATORY gate.
+  # Caught while cutting v2.25.0; the gate ran anyway only because real-cert is
+  # the default when no skip reason is given. A fail-open gate is the exact
+  # thing this script exists to prevent.
+  last_tag="$(git describe --tags --abbrev=0 --match 'v*' origin/main 2>/dev/null || true)"
   if [ -n "$last_tag" ]; then
     changed="$(git diff --name-only "$last_tag..origin/main")"
   else
