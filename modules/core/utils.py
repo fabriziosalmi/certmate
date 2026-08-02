@@ -617,7 +617,13 @@ def create_google_config(project_id: str, service_account_key: str) -> Path:
     call shape; GoogleStrategy passes it to certbot as a flag."""
     config_dir = Path("letsencrypt/config")
     config_dir.mkdir(parents=True, exist_ok=True)
-    _sweep_orphaned_files(config_dir, "google-sa-*.json")
+    # 1800s is not arbitrary: it is the certbot subprocess timeout used on both
+    # the create and renew paths (certificates.py), so a key older than that
+    # belongs to a run that is already dead and cannot be swept out from under
+    # a live issuance. Left at the 3600 default this window was twice as long
+    # as the rationale above claims, leaving a live GCP private key on disk for
+    # an extra half hour after a crash.
+    _sweep_orphaned_files(config_dir, "google-sa-*.json", max_age_seconds=1800)
 
     sa_file = config_dir / f"google-sa-{secrets.token_hex(8)}.json"
     fd = os.open(str(sa_file), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)

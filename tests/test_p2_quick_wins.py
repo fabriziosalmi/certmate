@@ -87,6 +87,25 @@ def test_google_sa_file_is_random_and_0600(tmp_path, monkeypatch):
     assert not (cfg / 'google-service-account.json').exists()   # no fixed predictable path
 
 
+def test_google_sweep_window_matches_the_certbot_timeout(tmp_path, monkeypatch):
+    """The orphan window must not outlive the run it is meant to clean up after.
+
+    certificates.py kills certbot at 1800s, so a key older than that belongs to
+    a dead run. Left at the 3600 default the window was twice the documented
+    rationale, keeping a live GCP private key on disk half an hour longer than
+    intended after a crash.
+    """
+    monkeypatch.chdir(tmp_path)
+    seen = {}
+
+    def fake_sweep(directory, pattern, max_age_seconds=3600):
+        seen['max_age_seconds'] = max_age_seconds
+
+    monkeypatch.setattr('modules.core.utils._sweep_orphaned_files', fake_sweep)
+    create_google_config('p', '{"type":"service_account"}')
+    assert seen['max_age_seconds'] == 1800
+
+
 def test_sweep_removes_orphaned_sa_files_only(tmp_path):
     old = tmp_path / 'google-sa-old.json'
     old.write_text('stale')
