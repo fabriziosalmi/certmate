@@ -2399,6 +2399,13 @@
         var rawErr = String(job.error || 'Certificate issuance failed');
         var errText = escapeHtml(rawErr.length > 140 ? rawErr.slice(0, 137) + '…' : rawErr);
         var errTitle = escapeHtml(rawErr);
+        // Retry resubmits the original request body. A job adopted from the
+        // server after a refresh (#399) has no body to replay — this page
+        // never saw the form — so offering Retry there would POST an empty
+        // create. Dismiss is always available.
+        var retryButton = job.payload
+            ? '<button type="button" onclick="retryCreateJob(\'' + jobId + '\')" class="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded border border-border text-label bg-input hover:bg-gray-50 dark:hover:bg-gray-600" title="Retry issuance for ' + domain + '" aria-label="Retry issuance for ' + domain + '"><i class="fas fa-sync-alt mr-1" aria-hidden="true"></i>Retry</button>'
+            : '';
         return '<tr data-pending-job="' + jobId + '" class="bg-red-50/40 dark:bg-red-900/10">' +
             '<td class="px-6 py-4 md:max-w-0"><div class="flex items-center min-w-0">' +
             '<i class="fas fa-times-circle text-danger-fg mr-2 text-sm shrink-0" aria-hidden="true"></i>' +
@@ -2409,7 +2416,7 @@
             '<td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">' + providerLabel + '</td>' +
             '<td class="px-4 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-muted">—</td>' +
             '<td class="px-4 py-4 whitespace-nowrap text-right"><div class="flex items-center justify-end gap-1">' +
-            '<button type="button" onclick="retryCreateJob(\'' + jobId + '\')" class="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded border border-border text-label bg-input hover:bg-gray-50 dark:hover:bg-gray-600" title="Retry issuance for ' + domain + '" aria-label="Retry issuance for ' + domain + '"><i class="fas fa-sync-alt mr-1" aria-hidden="true"></i>Retry</button>' +
+            retryButton +
             '<button type="button" onclick="dismissPendingJob(\'' + jobId + '\')" class="inline-flex items-center justify-center p-2 text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-100 rounded hover:bg-hover" title="Dismiss" aria-label="Dismiss failed issuance for ' + domain + '"><i class="fas fa-times" aria-hidden="true"></i></button>' +
             '</div></td></tr>';
     }
@@ -2457,6 +2464,47 @@
         showMessage('Issuing certificate for ' + domainsDisplay + '…', 'info');
         renderPendingRows();
         pollCertJob(jobId, job.status_url || ('/api/certificates/jobs/' + jobId));
+    }
+
+    function adoptInFlightJobs() {
+        // pendingJobs lives only in this page's memory, so a refresh used to
+        // drop the "Issuing" row entirely and the certificate looked like it
+        // had failed — while the server was still working on it (#399). Ask
+        // the server what is actually in flight and re-attach to it, which
+        // also covers a session opened in another browser.
+        return fetch('/api/certificates/jobs', { headers: API_HEADERS })
+            .then(function (resp) {
+                // 404 = async issuance disabled on this instance; 403 = the
+                // caller is not an operator. Neither is worth a toast: there
+                // is simply nothing to re-attach to.
+                if (!resp.ok) return null;
+                return resp.json();
+            })
+            .then(function (data) {
+                var jobs = (data && data.jobs) || [];
+                var adopted = 0;
+                jobs.forEach(function (job) {
+                    if (!job || !job.job_id || pendingJobs[job.job_id]) return;
+                    pendingJobs[job.job_id] = {
+                        domain: job.domain || '',
+                        provider: '',
+                        sanCount: 0,
+                        state: 'issuing',
+                        // No original request body to replay: a retry offer
+                        // would have nothing to resubmit, and retryCreateJob
+                        // guards on payload.
+                        payload: null,
+                        domainsDisplay: job.domain || ''
+                    };
+                    adopted++;
+                    pollCertJob(job.job_id, '/api/certificates/jobs/' + job.job_id);
+                });
+                if (adopted) {
+                    renderPendingRows();
+                    addDebugLog('Re-attached to ' + adopted + ' in-flight job(s)', 'info');
+                }
+            })
+            .catch(function () { /* best effort — never block the dashboard */ });
     }
 
     function pollCertJob(jobId, statusUrl) {
@@ -2905,7 +2953,15 @@
         // Resolve the caller's role first so the initial cert list can
         // already render with the right buttons hidden — avoids the
         // viewer briefly seeing admin-only controls before they vanish.
-        refreshCurrentRole().then(function () { loadCertificates().then(function () { maybeOpenCertFromQuery(); maybeFlashCertFromQuery(); }); });
+        refreshCurrentRole().then(function () {
+            loadCertificates().then(function () {
+                maybeOpenCertFromQuery();
+                maybeFlashCertFromQuery();
+                // After the list is on screen, re-attach to anything the
+                // server is still working on (#399).
+                adoptInFlightJobs();
+            });
+        });
         loadProviderAccounts();
 
         // Status filtering is driven by the chips (onclick -> setStatusFilter);

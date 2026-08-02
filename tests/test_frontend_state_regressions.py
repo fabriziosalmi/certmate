@@ -276,3 +276,32 @@ def test_closing_the_cert_drawer_abandons_an_in_progress_reissue_edit():
         "cancelEditReissue lost its not-editing guard; closing the drawer now "
         "wipes a half-filled create form"
     )
+
+
+def test_the_dashboard_reattaches_to_in_flight_jobs_on_load():
+    """#399: the "Issuing" row vanished on refresh and looked like a failure.
+
+    pendingJobs lives only in the page's memory, so reloading dropped the row
+    while the server was still working — @ITJamie reported it reads as if the
+    request had stopped. The dashboard now asks the server what is in flight
+    (GET /api/certificates/jobs) and re-attaches, which also covers a session
+    opened in a different browser.
+    """
+    js = _read("static/js/dashboard.js")
+
+    assert "/api/certificates/jobs" in js, (
+        "the dashboard no longer asks the server for in-flight jobs — that is "
+        "#399: a refresh loses the issuing row"
+    )
+
+    adopt = _js_function_body(js, "adoptInFlightJobs")
+    assert "pollCertJob" in adopt, "adopted jobs must resume polling"
+    assert "renderPendingRows" in adopt, "adopted jobs must be drawn"
+
+    # An adopted job carries no original request body, so a Retry button would
+    # resubmit an empty create.
+    failed_row = _js_function_body(js, "failedRowHtml")
+    assert re.search(r"job\.payload\s*\?", failed_row), (
+        "the Retry button is offered unconditionally again; a job adopted "
+        "after a refresh has no payload to replay and would POST an empty create"
+    )

@@ -2477,6 +2477,33 @@ def create_api_resources(api, models, managers):
                 return scope_err
             return job, 200
 
+    class CertificateJobs(Resource):
+        @api.doc(security='Bearer')
+        @auth_manager.require_role('operator')
+        def get(self):
+            """List the issuance/renewal jobs still in flight.
+
+            The dashboard builds its "issuing" row from client-side state, so
+            a refresh made an in-flight issuance disappear from the list and
+            look like it had failed (issue #399). Listing the jobs the server
+            already tracks lets any session rediscover them — including one
+            opened in a different browser.
+
+            Only queued/running jobs are returned; a finished one is already
+            represented by the certificate itself.
+            """
+            if cert_executor is None:
+                return {'error': 'Async issuance is not enabled'}, 404
+            # Same boundary as polling a single job: a scoped key sees only
+            # jobs for domains it could have created itself. Filtered rather
+            # than refused, so a scoped key still gets its own in-flight work.
+            user = getattr(request, 'current_user', None) or {}
+            jobs = [
+                job for job in cert_executor.list_active()
+                if auth_manager.user_can_access_domain(user, job.get('domain'))
+            ]
+            return {'jobs': jobs, 'count': len(jobs)}, 200
+
     class CertificateAutoRenew(Resource):
         @api.doc(security='Bearer')
         @auth_manager.require_role('operator')
@@ -3862,6 +3889,7 @@ def create_api_resources(api, models, managers):
         'RenewCertificate': RenewCertificate,
         'CertificateReissue': CertificateReissue,
         'CertificateJob': CertificateJob,
+        'CertificateJobs': CertificateJobs,
         'CertificateAutoRenew': CertificateAutoRenew,
         'CertificateRunDeploy': CertificateRunDeploy,
         'BackupList': BackupList,
