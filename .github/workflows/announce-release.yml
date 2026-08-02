@@ -37,19 +37,34 @@ jobs:
 
           # Read the release rather than trusting the event payload, so a
           # manual re-run announces the same thing an automatic one would.
-          name="$(gh release view "$TAG" --repo "$REPO" --json name -q .name)"
-          body="$(gh release view "$TAG" --repo "$REPO" --json body -q .body)"
+          name="$(gh release view "$TAG" --repo "$REPO" --json name -q '.name // ""')"
+          body="$(gh release view "$TAG" --repo "$REPO" --json body -q '.body // ""')"
           url="$(gh release view "$TAG" --repo "$REPO" --json url -q .url)"
           version="${TAG#v}"
 
+          # A release is not required to have a name, and an empty title would
+          # create an untitled discussion AND break the de-duplication below.
+          # The tag is the one thing always present, so the title is keyed on
+          # it: either it already appears in the name, or it is prefixed.
+          if [ -z "$name" ]; then
+            title="$TAG"
+          else
+            case "$name" in
+              *"$TAG"*) title="$name" ;;
+              *) title="$TAG - $name" ;;
+            esac
+          fi
+
           # Skip if this release was already announced. Re-running the workflow
-          # should be safe: a duplicate announcement is worse than none.
+          # should be safe: a duplicate announcement is worse than none. Keyed
+          # on the tag rather than the full title, which is stable even if the
+          # release is later renamed.
           existing="$(gh api graphql -f query='
             query($q: String!) {
               search(query: $q, type: DISCUSSION, first: 5) {
                 nodes { ... on Discussion { title url } }
               }
-            }' -f q="repo:$REPO in:title \"$name\"" -q '.data.search.nodes | length')"
+            }' -f q="repo:$REPO in:title \"$TAG\"" -q '.data.search.nodes | length')"
           if [ "$existing" != "0" ]; then
             echo "Already announced ($existing matching discussion(s)); nothing to do."
             exit 0
@@ -85,7 +100,7 @@ jobs:
             }' -f owner="${REPO%%/*}" -f name="${REPO##*/}" -q .data.repository.id)"
 
           gh api graphql -F repositoryId="$repo_id" -F categoryId="$category_id" \
-            -F title="$name" -F body=@body.md -f query='
+            -F title="$title" -F body=@body.md -f query='
             mutation($repositoryId: ID!, $categoryId: ID!, $title: String!, $body: String!) {
               createDiscussion(input: {repositoryId: $repositoryId, categoryId: $categoryId, title: $title, body: $body}) {
                 discussion { url }

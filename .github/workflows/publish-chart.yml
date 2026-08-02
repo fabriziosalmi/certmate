@@ -47,7 +47,7 @@ jobs:
         # publish workflow applies to pyproject versions.
         run: |
           set -euo pipefail
-          chart_version="$(helm show chart charts/certmate | awk '/^version:/{print $2}')"
+          chart_version="$(helm show chart charts/certmate | awk '/^version:/{gsub(/"/,"",$2); print $2}')"
           app_version="$(helm show chart charts/certmate | awk '/^appVersion:/{gsub(/"/,"",$2); print $2}')"
           echo "chart version=$chart_version appVersion=$app_version"
           if [ "$chart_version" != "$app_version" ]; then
@@ -102,6 +102,6 @@ jobs:
             echo "### Helm chart"
             echo
             echo '```bash'
-            echo "helm install certmate oci://ghcr.io/${owner}/charts/certmate --version $(helm show chart charts/certmate | awk '/^version:/{print $2}')"
+            echo "helm install certmate oci://ghcr.io/${owner}/charts/certmate --version $(helm show chart charts/certmate | awk '/^version:/{gsub(/"/,"",$2); print $2}')"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
