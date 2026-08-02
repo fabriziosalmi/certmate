@@ -439,6 +439,15 @@
             if (focusTarget) setTimeout(function () { focusTarget.focus(); }, 320);
         }
         function closeCertDrawer() {
+            // Leaving the drawer abandons an in-progress "Edit & reissue"
+            // (#492). The edit state used to survive the close, so the next
+            // "New certificate" silently re-opened the edit form for the
+            // previous certificate, with its domain field read-only and no
+            // obvious way back. Closing a dialog is how people abandon an
+            // edit, so treat it as one. No-op when not editing.
+            if (typeof window.cancelEditReissue === 'function') {
+                window.cancelEditReissue();
+            }
             var d = document.getElementById('createCertFormContainer');
             var s = document.getElementById('certDrawerScrim');
             if (d) d.classList.add('translate-x-full');

@@ -16,6 +16,7 @@ missing guard — so pinning the line is what actually stops the regression.
   which is undefined over plain HTTP — a silent no-op on a token shown once.
 """
 
+import re
 from pathlib import Path
 
 import pytest
@@ -24,6 +25,29 @@ import pytest
 pytestmark = [pytest.mark.unit]
 
 ROOT = Path(__file__).resolve().parent.parent
+
+
+def _js_function_body(source, name):
+    """Return the body of ``function <name>(...) { ... }`` by matching braces.
+
+    Slicing to a hard-coded closing-brace string (``"\\n    }"``) made these
+    guards depend on the current indentation, so a pure reformat could fail a
+    test whose behaviour was still correct. Counting braces from the function's
+    opening one is indentation-agnostic; only genuinely removing the code the
+    assertions look for turns them red.
+    """
+    match = re.search(r"function\s+%s\s*\([^)]*\)\s*\{" % re.escape(name), source)
+    assert match, f"function {name} not found — was it renamed?"
+    depth, start = 0, match.end() - 1
+    for index in range(start, len(source)):
+        char = source[index]
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return source[start:index + 1]
+    raise AssertionError(f"unbalanced braces while reading {name}")
 
 
 def _read(rel):
@@ -200,12 +224,18 @@ def test_missing_ca_email_does_not_block_saving_unrelated_settings():
     """
     js = _read("static/js/settings.js")
 
-    marker = "Email address is required in the "
-    assert marker in js, "the initial-setup guard disappeared entirely"
+    assert "Email address is required in the " in js, (
+        "the initial-setup guard disappeared entirely"
+    )
 
-    # The throw must be reachable only before setup is complete.
-    guard = js[js.index(marker) - 400:js.index(marker)]
-    assert "setup_completed" in guard, (
+    # The throw must sit inside a setup_completed check. Whitespace-tolerant so
+    # reindenting or rewrapping the block does not fail a still-correct file —
+    # only dropping the condition does.
+    assert re.search(
+        r"if\s*\(\s*!\s*currentSettings\.setup_completed\s*\)\s*\{\s*"
+        r"throw new Error\(\s*'Email address is required in the ",
+        js,
+    ), (
         "the missing-CA-email error is thrown unconditionally again — that is "
         "#491: it blocks saving settings that have nothing to do with the CA"
     )
@@ -215,4 +245,34 @@ def test_missing_ca_email_does_not_block_saving_unrelated_settings():
         "the non-blocking warning was removed; a silently missing CA email "
         "surfaces only as a failed issuance later"
     )
-    assert "showMessage(missingCaEmailWarning, 'warning')" in js
+    assert re.search(
+        r"showMessage\(\s*missingCaEmailWarning\s*,\s*'warning'\s*\)", js
+    )
+
+
+def test_closing_the_cert_drawer_abandons_an_in_progress_reissue_edit():
+    """#492: the "Edit & reissue" state used to survive closing the drawer.
+
+    Close the edit drawer with the X or by clicking the scrim, then press
+    "New certificate": the drawer re-opened still bound to the previous
+    certificate, domain field read-only, with no obvious way out — the only
+    escape was a small "Cancel edit" button inside the form body.
+
+    Closing a dialog is how people abandon an edit, so closeCertDrawer resets
+    the mode. cancelEditReissue no-ops outside edit mode, so this cannot wipe
+    a create form the user was half-way through.
+    """
+    close_fn = _js_function_body(_read("templates/index.html"), "closeCertDrawer")
+    assert "cancelEditReissue" in close_fn, (
+        "closeCertDrawer no longer clears the reissue edit state — that is "
+        "#492: the next 'New certificate' re-opens the previous edit"
+    )
+
+    # The no-op guard is what makes the call above safe to make unconditionally.
+    cancel_fn = _js_function_body(_read("static/js/dashboard.js"), "cancelEditReissue")
+    assert re.search(
+        r"if\s*\(\s*!\s*reissueEditingDomain\s*\)\s*\{?\s*return", cancel_fn
+    ), (
+        "cancelEditReissue lost its not-editing guard; closing the drawer now "
+        "wipes a half-filled create form"
+    )
