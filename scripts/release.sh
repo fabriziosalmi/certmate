@@ -150,6 +150,20 @@ init.write_text(re.sub(r"__version__ = '[^']+'", f"__version__ = '{v}'", init.re
 pkg = pathlib.Path("package.json"); d = json.loads(pkg.read_text())
 d["version"] = v
 pkg.write_text(json.dumps(d, indent=2) + "\n", encoding="utf-8")
+# package-lock.json carries the same version twice. npm rewrites both from
+# package.json on any install, so leaving them stale means a permanent noisy
+# diff and a lockfile that misreports its release — it had drifted two
+# releases behind before a review caught it. Rewritten textually so npm's
+# key order and formatting survive; a full `npm install --package-lock-only`
+# would also re-resolve dependencies, which a release must not do.
+lock = pathlib.Path("package-lock.json")
+if lock.exists():
+    text = lock.read_text(encoding="utf-8")
+    text = re.sub(r'(^\{\s*\n\s*"name":\s*"[^"]+",\s*\n\s*"version":\s*")[^"]+(")',
+                  rf"\g<1>{v}\g<2>", text, count=1)
+    text = re.sub(r'("":\s*\{\s*\n\s*"name":\s*"[^"]+",\s*\n\s*"version":\s*")[^"]+(")',
+                  rf"\g<1>{v}\g<2>", text, count=1)
+    lock.write_text(text, encoding="utf-8")
 # The /health example in the Docker Hub README prints a version. Bump it here
 # rather than by hand: an example that has to be remembered is an example that
 # goes stale, and test_version_consistency pins it.
@@ -184,7 +198,7 @@ real-cert E2E skipped (non-issuance change): $skip_reason"
   # the commit produced a release PR whose own CI failed on the version-
   # consistency test — a gate the local run cannot catch, because the bump
   # happens after the gates.
-  git add modules/__init__.py package.json README.dockerhub.md docs/index.md docs/*/index.md
+  git add modules/__init__.py package.json package-lock.json README.dockerhub.md docs/index.md docs/*/index.md
   git commit -q -m "$body
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"

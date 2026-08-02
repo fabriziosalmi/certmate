@@ -42,6 +42,27 @@ def test_package_json_matches_module_version():
     )
 
 
+def test_package_lock_matches_module_version():
+    """npm rewrites these two fields from package.json on any install.
+
+    Left stale they are a permanent source of noisy lockfile diffs, and they
+    misreport which release the frontend bundle belongs to. This drifted to
+    two releases behind (2.23.0 while package.json said 2.24.2) before anyone
+    noticed — the same failure as the docs landing pages: a copy of the
+    version that the release script did not own.
+    """
+    lock = json.loads((REPO_ROOT / "package-lock.json").read_text(encoding="utf-8"))
+    found = {
+        "version": lock.get("version"),
+        'packages[""].version': lock.get("packages", {}).get("", {}).get("version"),
+    }
+    for where, value in found.items():
+        assert value == __version__, (
+            f"package-lock.json {where} is {value!r} but modules.__version__ is "
+            f"{__version__!r}. scripts/release.sh bumps this file."
+        )
+
+
 def test_dockerhub_readme_health_example_matches_module_version():
     """The example an operator compares their own /health output against.
 
