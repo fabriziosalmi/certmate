@@ -60,16 +60,25 @@ def test_the_certificate_volume_survives_uninstall():
     )
 
 
-def test_appversion_matches_the_application():
-    """Same rule as package.json, the docs pages and package-lock.json."""
+@pytest.mark.parametrize("field", ["version", "appVersion"])
+def test_chart_versions_track_the_application(field):
+    """Both fields, not just appVersion.
+
+    The chart versions with the application on purpose: a separate chart
+    version is a second number to bump, and every independent copy of a
+    version in this repository has drifted at least once. `version` also has
+    to move for a publish to be a new artifact rather than a rejected
+    duplicate — a chart whose contents changed under an unchanged version is
+    how a stale chart gets served forever.
+    """
     from modules import __version__
-    chart = _read("Chart.yaml")
-    line = [ln for ln in chart.splitlines() if ln.startswith("appVersion:")]
-    assert line, "Chart.yaml has no appVersion"
-    found = line[0].split(":", 1)[1].strip().strip('"')
+    lines = [ln for ln in _read("Chart.yaml").splitlines()
+             if ln.startswith(f"{field}:")]
+    assert lines, f"Chart.yaml has no {field}"
+    found = lines[0].split(":", 1)[1].strip().strip('"')
     assert found == __version__, (
-        f"Chart.yaml appVersion is {found!r} but modules.__version__ is "
-        f"{__version__!r}. scripts/release.sh bumps this file."
+        f"Chart.yaml {field} is {found!r} but modules.__version__ is "
+        f"{__version__!r}. scripts/release.sh bumps both."
     )
 
 

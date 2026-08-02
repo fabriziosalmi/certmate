@@ -186,16 +186,17 @@ dh.write_text(
 # v2.24.1 (#483, #487) because the script did not own them. Globbed, so a
 # translation added later is picked up without editing this script;
 # test_version_consistency fails the build if one is ever missed.
-# The Helm chart's appVersion is the release it defaults to pulling. Same
-# class of copy as the docs pages and the lockfile: owned here, or stale.
-# Chart *version* is deliberately NOT touched — it tracks chart changes.
+# The Helm chart carries the release number twice, and BOTH are bumped: the
+# chart versions with the application on purpose (see charts/certmate/Chart.yaml).
+# `version` must move for a publish to be a new artifact rather than a rejected
+# duplicate; `appVersion` is the image tag the chart deploys by default.
 chart = pathlib.Path("charts/certmate/Chart.yaml")
 if chart.exists():
-    chart.write_text(
-        re.sub(r'(?m)^(appVersion:\s*")[^"]+(")', rf"\g<1>{v}\g<2>",
-               chart.read_text(encoding="utf-8")),
-        encoding="utf-8",
-    )
+    text = chart.read_text(encoding="utf-8")
+    # Both: the chart versions with the application on purpose (see Chart.yaml).
+    text = re.sub(r'(?m)^(appVersion:\s*")[^"]+(")', rf"\g<1>{v}\g<2>", text)
+    text = re.sub(r'(?m)^(version:\s*)[0-9]+\.[0-9]+\.[0-9]+\s*$', rf"\g<1>{v}", text)
+    chart.write_text(text, encoding="utf-8")
 docs = sorted(pathlib.Path("docs").glob("index.md")) + sorted(pathlib.Path("docs").glob("*/index.md"))
 for page in docs:
     text = page.read_text(encoding="utf-8")
