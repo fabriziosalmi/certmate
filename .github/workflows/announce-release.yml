@@ -29,14 +29,19 @@ on:
         required: true
         type: string
 
+# Read-only at the top; the write scope sits on the job that posts. Same
+# reason as publish-chart.yml: nothing else in this file should inherit the
+# ability to write to Discussions.
 permissions:
   contents: read
-  discussions: write
 
 jobs:
   announce:
     name: post to Announcements
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      discussions: write
     steps:
       - name: Post the release to Discussions
         env:

@@ -190,6 +190,20 @@ dh.write_text(
 # chart versions with the application on purpose (see charts/certmate/Chart.yaml).
 # `version` must move for a publish to be a new artifact rather than a rejected
 # duplicate; `appVersion` is the image tag the chart deploys by default.
+# SECURITY.md names the supported MINOR line, not the full version, so it only
+# actually moves on a x.y.0 — but it moves without anyone remembering, which is
+# the point. It had gone four minor releases stale saying 2.21.x while 2.25.0
+# shipped: a researcher reading that concludes the current version is out of
+# scope, or that the project is abandoned.
+sec = pathlib.Path("SECURITY.md")
+if sec.exists():
+    major, minor, _ = v.split(".")
+    line = f"{major}.{minor}"
+    text = sec.read_text(encoding="utf-8")
+    text = re.sub(r"`[0-9]+\.[0-9]+\.x`", f"`{line}.x`", text)
+    text = re.sub(r"`< [0-9]+\.[0-9]+`", f"`< {line}`", text)
+    sec.write_text(text, encoding="utf-8")
+
 chart = pathlib.Path("charts/certmate/Chart.yaml")
 if chart.exists():
     text = chart.read_text(encoding="utf-8")
@@ -218,7 +232,7 @@ real-cert E2E skipped (non-issuance change): $skip_reason"
   # the commit produced a release PR whose own CI failed on the version-
   # consistency test — a gate the local run cannot catch, because the bump
   # happens after the gates.
-  git add modules/__init__.py package.json package-lock.json README.dockerhub.md charts/certmate/Chart.yaml docs/index.md docs/*/index.md
+  git add modules/__init__.py package.json package-lock.json README.dockerhub.md charts/certmate/Chart.yaml SECURITY.md docs/index.md docs/*/index.md
   git commit -q -m "$body
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"

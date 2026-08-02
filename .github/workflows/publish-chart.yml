@@ -23,14 +23,19 @@ on:
         type: boolean
         default: true
 
+# Read-only at the top, matching publish-clients.yml and
+# docker-multiplatform.yml. The write scope lives on the one job that pushes,
+# so a step added elsewhere in this file cannot inherit it.
 permissions:
   contents: read
-  packages: write
 
 jobs:
   publish:
     name: package and push
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
