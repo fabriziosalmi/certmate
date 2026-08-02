@@ -121,6 +121,11 @@ curl http://localhost:8000/api/client-certs/USER_ID/download/key \
 - **[Riferimento API](./api.md)** — Documentazione completa dell'API REST con esempi
 - **[Architettura](./architecture.md)** — Progettazione del sistema, componenti e flusso dei dati
 - **[Guida utente](./guide.md)** — Guida passo-passo per le attività comuni
+- **[Server MCP](./mcp.md)** — Server Model Context Protocol per agenti IA: strumenti, autenticazione, attribuzione nell'audit
+- **[Deploy hook](./deploy-hooks.md)** — Hook post-emissione: configurazione, test, redazione dell'output
+- **[Conformità](./compliance.md)** — Catena di audit, attribuzione delle azioni, postura NIS2/eIDAS
+- **[Sonde di deployment](./probes.md)** — Verificare che il certificato rinnovato sia davvero servito
+- **[Discovery e inventario](../discovery-inventory.md)** — Discovery via probe/CT-log, inventario, adopt, crypto readiness *(in inglese)*
 
 ### Link rapidi
 

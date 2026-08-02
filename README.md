@@ -69,6 +69,46 @@ issuance over DNS-01 (Let's Encrypt staging); see [`demo/`](demo/).
 
 ---
 
+## AI agents (MCP server)
+
+CertMate ships a first-party **Model Context Protocol** server, so an assistant like Claude can
+drive the same REST API the web UI and the CLI use — with the same auth and the same audit trail.
+It lives in [`mcp/`](mcp/), is Node.js (>= 20), and exposes **16 tools**: inventory and status
+(`certmate_list_certificates`, `certmate_get_certificate`, `certmate_diagnostics`,
+`certmate_get_activity`, …), lifecycle operations (`certmate_create_certificate`,
+`certmate_renew_certificate`, `certmate_get_job`, `certmate_set_auto_renew`, …), and delivery
+(`certmate_download_certificate`, `certmate_deploy_certificate`).
+
+```bash
+cd mcp && npm install
+```
+
+```jsonc
+// claude_desktop_config.json — or any MCP-capable client
+{
+  "mcpServers": {
+    "certmate": {
+      "command": "node",
+      "args": ["/path/to/certmate/mcp/index.js"],
+      "env": {
+        "CERTMATE_URL": "https://certmate.example.com",
+        "CERTMATE_TOKEN": "<a scoped API key with is_agent: true>"
+      }
+    }
+  }
+}
+```
+
+**Give it a scoped key, not your admin token.** A key created with `is_agent: true` (a checkbox
+under Settings → API Keys, or `is_agent` in `POST /api/keys`) makes every action the agent takes
+land in the audit chain as `actor.kind="agent"` rather than being indistinguishable from a human
+operator — which is the difference between an audit trail and a rumour. Scope the key to the
+domains the agent is allowed to touch.
+
+Full tool reference, attribution model and safety notes: **[docs/mcp.md](docs/mcp.md)**.
+
+---
+
 ## Why CertMate?
 
 CertMate solves the complexity of SSL certificate management in modern distributed architectures. Whether you're running a single application or managing certificates across multiple datacenters, CertMate provides:
@@ -2528,6 +2568,12 @@ curl -sS -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/diagnostics
 | **[docs/testing.md](docs/testing.md)**             | Testing framework and CI/CD         | Developers            |
 | **[docs/architecture.md](docs/architecture.md)**   | System architecture                 | Developers            |
 | **[docs/api.md](docs/api.md)**                     | Client certificates API reference   | Developers            |
+| **[docs/mcp.md](docs/mcp.md)**                     | MCP server for AI agents: tools, auth, audit attribution | Developers, SRE |
+| **[docs/guide.md](docs/guide.md)**                 | Step-by-step guide for common tasks | All users             |
+| **[docs/discovery-inventory.md](docs/discovery-inventory.md)** | Discovery, inventory, adopt, crypto readiness | SRE, security |
+| **[docs/deploy-hooks.md](docs/deploy-hooks.md)**   | Post-issuance deploy hooks          | DevOps engineers      |
+| **[docs/compliance.md](docs/compliance.md)**       | Audit chain, attribution, NIS2/eIDAS posture | Compliance, security |
+| **[docs/kubernetes.md](docs/kubernetes.md)**       | Pod sizing, OOM troubleshooting, Helm chart | SRE              |
 | **[docs/probes.en.md](docs/probes.en.md)**         | Deployment probe configuration      | DevOps engineers      |
 | **[CONTRIBUTING.md](CONTRIBUTING.md)**             | Development and contribution guide  | Developers            |
 | **[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)**       | Community guidelines                | Contributors          |

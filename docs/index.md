@@ -125,6 +125,10 @@ curl http://localhost:8000/api/client-certs/USER_ID/download/key \
 - **[Docker Guide](./docker.md)** — Docker builds, multi-platform, Compose
 - **[Testing Guide](./testing.md)** — Test framework, CI/CD, coverage
 - **[API Reference](./api.md)** - Complete REST API documentation with examples
+- **[MCP Server](./mcp.md)** — Model Context Protocol server for AI agents: tools, auth, audit attribution
+- **[Deploy Hooks](./deploy-hooks.md)** — post-issuance hooks: configuration, testing, output redaction
+- **[Compliance](./compliance.md)** — audit chain, actor attribution, NIS2/eIDAS posture
+- **[Deployment Probes](./probes.en.md)** — verifying a renewed certificate is actually being served
 - **[Architecture](./architecture.md)** - System design, components, and data flow
 - **[User Guide](./guide.md)** - Step-by-step guide for common tasks
 
