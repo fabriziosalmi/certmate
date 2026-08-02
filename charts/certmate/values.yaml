@@ -1,0 +1,117 @@
+# CertMate Helm values.
+#
+# CertMate is a SINGLE-INSTANCE application. Its scheduler (APScheduler) runs
+# in the web process and gunicorn runs one worker on purpose: a second replica
+# would run a second copy of every renewal job against the same certificate
+# store. The chart refuses to render more than one replica rather than letting
+# that happen quietly.
+
+image:
+  repository: fabriziosalmi/certmate
+  # Defaults to .Chart.AppVersion. Pin a digest in production if you want the
+  # exact bytes rather than the tag.
+  tag: ""
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+# Deliberately not a knob to turn up. See the note at the top of this file.
+replicaCount: 1
+
+service:
+  type: ClusterIP
+  port: 8000
+  annotations: {}
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: certmate.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+persistence:
+  # Certificates, the settings/inventory/audit store, logs and backups all
+  # live on one volume under separate subPaths. One ReadWriteOnce claim is
+  # both simpler and more honest than four: the app is single-instance, so
+  # there is nothing to share.
+  enabled: true
+  existingClaim: ""
+  storageClass: ""
+  accessMode: ReadWriteOnce
+  size: 2Gi
+  annotations: {}
+
+# Values that belong in a Secret. Leave them empty and CertMate generates what
+# it can on first boot; set them for reproducible deployments.
+#
+# Prefer existingSecret in anything that is committed to git — values.yaml is
+# not a secret store.
+secrets:
+  existingSecret: ""
+  apiBearerToken: ""
+  secretKey: ""
+  # DNS provider credentials and anything else the app reads from the
+  # environment. Rendered into the same Secret.
+  extra: {}
+
+env:
+  behindProxy: true      # true when traffic arrives via Ingress
+  gunicornTimeout: 300   # ACME DNS-01 can take minutes on slow providers
+  letsencryptEmail: ""
+extraEnv: []
+
+resources:
+  limits:
+    cpu: "1"
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  # The image's writable trees are group 0 + setgid so an arbitrary UID works
+  # (OpenShift, rootless podman). On OpenShift, clear runAsUser and fsGroup
+  # and let the SCC assign them.
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false   # certbot writes under /app at runtime
+  capabilities:
+    drop: ["ALL"]
+
+# Startup runs migrations and directory setup, so give it room before the
+# liveness probe starts counting failures.
+probes:
+  liveness:
+    initialDelaySeconds: 30
+    periodSeconds: 30
+    timeoutSeconds: 10
+    failureThreshold: 3
+  readiness:
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+podAnnotations: {}
+podLabels: {}

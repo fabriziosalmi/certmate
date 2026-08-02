@@ -1,0 +1,120 @@
+{{- include "certmate.validate" . -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "certmate.fullname" . }}
+  labels: {{- include "certmate.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    # Recreate, not RollingUpdate. A ReadWriteOnce volume cannot be mounted by
+    # the new pod while the old one still holds it, so a rolling update
+    # deadlocks: the new pod waits for a volume the old pod will not release
+    # until the new pod is Ready. Brief downtime is the correct trade for a
+    # single-instance application.
+    type: Recreate
+  selector:
+    matchLabels: {{- include "certmate.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        {{- if include "certmate.generatesSecret" . }}
+        # Rolls the pod when the chart-generated Secret changes, so a rotated
+        # token is actually picked up.
+        #
+        # This cannot cover secrets.existingSecret: the chart does not own that
+        # object and cannot see its contents without `lookup`, which returns
+        # nothing during `helm template` and would make renders depend on the
+        # live cluster — breaking GitOps diffs and dry runs. Rotating an
+        # external Secret therefore needs `kubectl rollout restart`, or a
+        # controller such as stakater/Reloader. Documented in the chart README.
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- end }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "certmate.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "certmate.serviceAccountName" . }}
+      securityContext: {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: certmate
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext: {{- toYaml .Values.securityContext | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+              protocol: TCP
+          env:
+            - name: PORT
+              value: {{ .Values.service.port | quote }}
+            - name: FLASK_ENV
+              value: production
+            - name: BEHIND_PROXY
+              value: {{ .Values.env.behindProxy | quote }}
+            - name: GUNICORN_TIMEOUT
+              value: {{ .Values.env.gunicornTimeout | quote }}
+            {{- with .Values.env.letsencryptEmail }}
+            - name: LETSENCRYPT_EMAIL
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- if include "certmate.hasSecret" . }}
+          envFrom:
+            # NOT optional. A typo in secrets.existingSecret should stop the
+            # pod at creation with a clear reason, not start it without its
+            # credentials and turn a configuration error into a runtime
+            # mystery.
+            - secretRef:
+                name: {{ include "certmate.secretName" . }}
+          {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            {{- toYaml .Values.probes.liveness | nindent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            {{- toYaml .Values.probes.readiness | nindent 12 }}
+          resources: {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            # One claim, four subPaths. The app writes all of these at runtime;
+            # separating them into their own claims would buy nothing on a
+            # single-instance workload and cost three more RWO volumes.
+            - name: data
+              mountPath: /app/certificates
+              subPath: certificates
+            - name: data
+              mountPath: /app/data
+              subPath: data
+            - name: data
+              mountPath: /app/logs
+              subPath: logs
+            - name: data
+              mountPath: /app/backups
+              subPath: backups
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "certmate.pvcName" . }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations: {{- toYaml . | nindent 8 }}
+      {{- end }}

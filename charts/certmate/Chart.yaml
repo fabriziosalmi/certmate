@@ -1,0 +1,25 @@
+apiVersion: v2
+name: certmate
+description: Self-hosted SSL/TLS certificate lifecycle management — issuance, renewal, discovery, inventory and deployment
+type: application
+# Chart version: bumped when the CHART changes.
+version: 0.1.0
+# Application version: tracks the CertMate release this chart defaults to.
+# scripts/release.sh bumps this, and tests/test_version_consistency.py fails
+# the build if it drifts from modules.__version__ — the same treatment the
+# docs landing pages and package-lock.json needed.
+appVersion: "2.25.0"
+home: https://www.certmate.org
+sources:
+  - https://github.com/fabriziosalmi/certmate
+keywords:
+  - certificates
+  - tls
+  - ssl
+  - acme
+  - lets-encrypt
+  - certificate-lifecycle-management
+  - private-ca
+maintainers:
+  - name: fabriziosalmi
+    url: https://github.com/fabriziosalmi
