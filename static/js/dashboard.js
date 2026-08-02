@@ -2093,6 +2093,10 @@
     }
 
     function cancelEditReissue() {
+        // No-op outside edit mode, so closing the drawer can call this
+        // unconditionally (#492) without wiping a create form the user was
+        // half-way through filling in.
+        if (!reissueEditingDomain) return;
         reissueEditingDomain = null;
         var domainField = document.getElementById('domain');
         domainField.readOnly = false;

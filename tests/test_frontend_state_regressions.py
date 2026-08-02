@@ -216,3 +216,34 @@ def test_missing_ca_email_does_not_block_saving_unrelated_settings():
         "surfaces only as a failed issuance later"
     )
     assert "showMessage(missingCaEmailWarning, 'warning')" in js
+
+
+def test_closing_the_cert_drawer_abandons_an_in_progress_reissue_edit():
+    """#492: the "Edit & reissue" state used to survive closing the drawer.
+
+    Close the edit drawer with the X or by clicking the scrim, then press
+    "New certificate": the drawer re-opened still bound to the previous
+    certificate, domain field read-only, with no obvious way out — the only
+    escape was a small "Cancel edit" button inside the form body.
+
+    Closing a dialog is how people abandon an edit, so closeCertDrawer resets
+    the mode. cancelEditReissue no-ops outside edit mode, so this cannot wipe
+    a create form the user was half-way through.
+    """
+    html = _read("templates/index.html")
+    js = _read("static/js/dashboard.js")
+
+    close_fn = html[html.index("function closeCertDrawer"):]
+    close_fn = close_fn[:close_fn.index("\n        }")]
+    assert "cancelEditReissue" in close_fn, (
+        "closeCertDrawer no longer clears the reissue edit state — that is "
+        "#492: the next 'New certificate' re-opens the previous edit"
+    )
+
+    # The no-op guard is what makes the call above safe to make unconditionally.
+    cancel_fn = js[js.index("function cancelEditReissue"):]
+    cancel_fn = cancel_fn[:cancel_fn.index("\n    }")]
+    assert "if (!reissueEditingDomain) return;" in cancel_fn, (
+        "cancelEditReissue lost its not-editing guard; closing the drawer now "
+        "wipes a half-filled create form"
+    )
