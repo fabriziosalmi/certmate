@@ -160,6 +160,11 @@
 
         addDebugLog('Saving main settings...', 'info');
 
+        // Set when the selected CA has no email but the save is allowed
+        // through anyway (#491); surfaced after the save succeeds so it does
+        // not read as a failure.
+        var missingCaEmailWarning = null;
+
         try {
             var formData = new FormData(form);
             var caProviders = collectCAProviderSettings();
@@ -229,7 +234,21 @@
                 settings.pfx_password = pfxPasswordField.value;
             }
 
-            // Validate required fields - email comes from the selected CA provider
+            // The email belongs to the selected CA provider. It is needed to
+            // register an ACME account when a certificate is issued — NOT to
+            // save settings: validate_settings_post never looks at it, so this
+            // was a client-side block on a value the backend does not require.
+            //
+            // Blocking here made every unrelated change unsaveable — a DNS
+            // provider, a storage backend, a regenerated bearer token — for
+            // anyone whose selected CA had no email yet, including right after
+            // switching the default CA. See issue #491.
+            //
+            // It is still enforced to finish initial setup, mirroring how the
+            // API bearer token check below is scoped to setup_completed. After
+            // that it degrades to a warning shown once the save succeeds:
+            // create_certificate still raises "Domain and email are required"
+            // if it is genuinely missing at issuance time.
             if (!settings.email) {
                 var caDisplayName = defaultCA === 'letsencrypt' ? "Let's Encrypt" :
                     defaultCA === 'letsencrypt_staging' ? "Let's Encrypt (Staging)" :
@@ -239,7 +258,10 @@
                     defaultCA === 'sslcom' ? 'SSL.com' :
                     defaultCA === 'digicert' ? 'DigiCert' :
                     defaultCA === 'private_ca' ? 'Private CA' : defaultCA;
-                throw new Error('Email address is required in the ' + caDisplayName + ' configuration section');
+                if (!currentSettings.setup_completed) {
+                    throw new Error('Email address is required in the ' + caDisplayName + ' configuration section');
+                }
+                missingCaEmailWarning = caDisplayName + ' has no email address, so issuing with it will fail until you add one';
             }
 
             if (settings.challenge_type !== 'http-01' && !settings.dns_provider) {
@@ -323,6 +345,9 @@
                 .then(function (result) {
                     addDebugLog('Settings saved successfully', 'info');
                     showMessage('Settings saved successfully', 'success');
+                    if (missingCaEmailWarning) {
+                        showMessage(missingCaEmailWarning, 'warning');
+                    }
 
                     // Reload settings to refresh the UI
                     return loadSettings();
