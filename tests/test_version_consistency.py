@@ -218,12 +218,19 @@ def test_client_dunder_version_matches_its_pyproject(dist, module):
 def test_both_clients_ship_the_same_version():
     """The CLI depends on the SDK and they are released from one `clients-v*`
     tag, so a split version means the tag names only half of what it built."""
-    versions = {
-        dist: PYPROJECT_VERSION.search(
-            (REPO_ROOT / "clients" / dist / "pyproject.toml")
-            .read_text(encoding="utf-8")).group(1)
-        for dist, _ in CLIENT_PACKAGES
-    }
+    versions = {}
+    for dist, _ in CLIENT_PACKAGES:
+        pyproject = REPO_ROOT / "clients" / dist / "pyproject.toml"
+        found = PYPROJECT_VERSION.search(pyproject.read_text(encoding="utf-8"))
+        # Asserted rather than dereferenced: a client moving to
+        # `dynamic = ["version"]` should fail with a sentence explaining what
+        # happened, not an AttributeError on `.group`.
+        assert found, (
+            f"{dist}/pyproject.toml has no inline `version = \"...\"` line. If "
+            f"it moved to a dynamic version, this guard needs to read the "
+            f"version the same way the build does."
+        )
+        versions[dist] = found.group(1)
     assert len(set(versions.values())) == 1, (
         f"clients disagree on their version: {versions} — they publish from a "
         f"single clients-v* tag, so one tag cannot name two versions."

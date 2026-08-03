@@ -620,18 +620,37 @@ class TestEdgeDNSEgressTimeout:
             session.get(f'{base_url}/x', timeout=1)
         assert seen.get('timeout') == 1
 
-    def test_error_message_does_not_carry_an_unbounded_body(self):
+    def test_error_message_does_not_carry_an_unbounded_body(self, monkeypatch):
         """The failure message is logged, and log sanitisation walks the whole
-        string — so an unbounded remote body becomes our CPU cost."""
+        string — so an unbounded remote body becomes our CPU cost.
+
+        Drives the real ``_edgedns_change``. An earlier version of this test
+        rebuilt the truncation inline and asserted against its own copy, so
+        going back to interpolating ``response.text`` directly would have left
+        it green — a test that cannot fail for the regression it names.
+        """
         from modules.core import dns_alias_hook as hook
 
         class _Response:
-            status_code = 500
-            text = "A" * 100_000
+            def __init__(self, status_code, text=""):
+                self.status_code = status_code
+                self.text = text
+
+        class _FakeSession:
+            def get(self, url, **kwargs):
+                return _Response(200)          # first zone guess wins
+
+            def post(self, url, **kwargs):
+                return _Response(500, "A" * 100_000)
+
+        monkeypatch.setattr(hook, '_edgegrid_auth',
+                            lambda config: (_FakeSession(), 'https://example.test'))
 
         with pytest.raises(hook.DNSAliasError) as excinfo:
-            if _Response.status_code >= 400:
-                body = (_Response.text or '')[:hook._EDGEDNS_ERROR_SNIPPET]
-                raise hook.DNSAliasError(
-                    f'EdgeDNS API request failed: {_Response.status_code} {body}')
-        assert len(str(excinfo.value)) < 1000
+            hook._edgedns_change(
+                {'domain_alias': 'alias.example.com'}, 'validation-token', 'create')
+
+        message = str(excinfo.value)
+        assert message.startswith('EdgeDNS API request failed: 500')
+        assert len(message) < 1000, f"error message is {len(message)} chars"
+        assert "A" * 600 not in message, "the remote body was not truncated"
