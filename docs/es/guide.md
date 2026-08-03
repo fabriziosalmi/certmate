@@ -1,5 +1,21 @@
 # CertMate Certificados de Cliente - Guía de uso
 
+## Descripción general
+
+CertMate Certificados de Cliente es una solución completa y lista para producción para la gestión de certificados de cliente con:
+
+- **CA autofirmada** — Genere y gestione su propia Autoridad de Certificación
+- **Gestión completa del ciclo de vida** — Cree, renueve, revoque y supervise certificados de cliente
+- **OCSP & CRL** — Estado de los certificados en tiempo real y listas de revocación
+- **Panel de control web** — Interfaz intuitiva para la gestión de certificados
+- **API REST** — API completa para la automatización
+- **Operaciones por lotes** — Importe certificados de cliente por CSV (máximo 100 filas por solicitud)
+- **Registro de auditoría** — Seguimiento de todas las operaciones para el cumplimiento normativo
+- **Limitación de tasa** — Protección integrada contra el abuso
+
+---
+
+
 ## Primeros pasos
 
 ### Instalación
@@ -12,7 +28,7 @@ pip install -r requirements.txt
 python app.py
 
 # 3. Abrir el panel de control
-# Navega a: http://localhost:5000/client-certificates
+# Navega a: http://localhost:8000/client-certificates
 ```
 
 ### Primeros pasos
@@ -28,7 +44,7 @@ python app.py
 
 ### Funcionalidades del panel de control
 
-**URL**: `http://localhost:5000/client-certificates`
+**URL**: `http://localhost:8000/client-certificates`
 
 #### Panel de estadísticas
 - Total de certificados
@@ -93,7 +109,7 @@ Days Valid: 365
 #### Mediante la API
 
 ```bash
-curl -X POST http://localhost:5000/api/client-certs/create \
+curl -X POST http://localhost:8000/api/client-certs/create \
  -H "Authorization: Bearer TOKEN" \
  -H "Content-Type: application/json" \
  -d '{
@@ -123,12 +139,12 @@ curl -X POST http://localhost:5000/api/client-certs/create \
 
 ```bash
 # Descargar el certificado
-curl http://localhost:5000/api/client-certs/CERT_ID/download/crt \
+curl http://localhost:8000/api/client-certs/CERT_ID/download/crt \
  -H "Authorization: Bearer TOKEN" \
  -o my-cert.crt
 
 # Descargar la clave
-curl http://localhost:5000/api/client-certs/CERT_ID/download/key \
+curl http://localhost:8000/api/client-certs/CERT_ID/download/key \
  -H "Authorization: Bearer TOKEN" \
  -o my-key.key
 ```
@@ -147,7 +163,7 @@ curl http://localhost:5000/api/client-certs/CERT_ID/download/key \
 #### Mediante la API
 
 ```bash
-curl -X POST http://localhost:5000/api/client-certs/CERT_ID/revoke \
+curl -X POST http://localhost:8000/api/client-certs/CERT_ID/revoke \
  -H "Authorization: Bearer TOKEN" \
  -H "Content-Type: application/json" \
  -d '{
@@ -174,7 +190,7 @@ curl -X POST http://localhost:5000/api/client-certs/CERT_ID/revoke \
 #### Mediante la API
 
 ```bash
-curl -X POST http://localhost:5000/api/client-certs/CERT_ID/renew \
+curl -X POST http://localhost:8000/api/client-certs/CERT_ID/renew \
  -H "Authorization: Bearer TOKEN"
 ```
 
@@ -200,19 +216,19 @@ curl -X POST http://localhost:5000/api/client-certs/CERT_ID/renew \
 
 ```bash
 # Listar todos
-curl http://localhost:5000/api/client-certs \
+curl http://localhost:8000/api/client-certs \
  -H "Authorization: Bearer TOKEN"
 
 # Filtrar por uso
-curl "http://localhost:5000/api/client-certs?usage=api-mtls" \
+curl "http://localhost:8000/api/client-certs?usage=api-mtls" \
  -H "Authorization: Bearer TOKEN"
 
 # Filtrar por estado
-curl "http://localhost:5000/api/client-certs?revoked=false" \
+curl "http://localhost:8000/api/client-certs?revoked=false" \
  -H "Authorization: Bearer TOKEN"
 
 # Buscar
-curl "http://localhost:5000/api/client-certs?search=user@" \
+curl "http://localhost:8000/api/client-certs?search=user@" \
  -H "Authorization: Bearer TOKEN"
 ```
 
@@ -223,7 +239,7 @@ curl "http://localhost:5000/api/client-certs?search=user@" \
 #### Mediante la API
 
 ```bash
-curl http://localhost:5000/api/ocsp/status/SERIAL_NUMBER \
+curl http://localhost:8000/api/ocsp/status/SERIAL_NUMBER \
  -H "Authorization: Bearer TOKEN"
 ```
 
@@ -244,12 +260,12 @@ curl http://localhost:5000/api/ocsp/status/SERIAL_NUMBER \
 
 ```bash
 # Formato PEM
-curl http://localhost:5000/api/crl/download/pem \
+curl http://localhost:8000/api/crl/download/pem \
  -H "Authorization: Bearer TOKEN" \
  -o ca.crl
 
 # Formato DER
-curl http://localhost:5000/api/crl/download/der \
+curl http://localhost:8000/api/crl/download/der \
  -H "Authorization: Bearer TOKEN" \
  -o ca.crl
 ```
@@ -257,7 +273,7 @@ curl http://localhost:5000/api/crl/download/der \
 #### Obtener información de la CRL
 
 ```bash
-curl http://localhost:5000/api/crl/download/info \
+curl http://localhost:8000/api/crl/download/info \
  -H "Authorization: Bearer TOKEN"
 ```
 
@@ -296,7 +312,7 @@ user3@example.com,user3@example.com,ACME Corp,api-mtls,730
 ### Mediante la API
 
 ```bash
-curl -X POST http://localhost:5000/api/client-certs/batch \
+curl -X POST http://localhost:8000/api/client-certs/batch \
  -H "Authorization: Bearer TOKEN" \
  -H "Content-Type: application/json" \
  -d '{
@@ -371,7 +387,7 @@ Usage Type: mobile-app
 La renovación automática está activada por defecto. Para comprobar el estado:
 
 ```bash
-curl http://localhost:5000/api/client-certs/CERT_ID \
+curl http://localhost:8000/api/client-certs/CERT_ID \
  -H "Authorization: Bearer TOKEN"
 ```
 

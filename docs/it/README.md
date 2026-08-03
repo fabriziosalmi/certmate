@@ -21,6 +21,10 @@ Benvenuto nella documentazione di CertMate. Questa cartella contiene guide compl
 - **[Riferimento API](./api.md)** — Documentazione completa dell'API REST
 - **[Architettura](./architecture.md)** — Progettazione del sistema, componenti, flusso dei dati
 - **[Guida ai test](./testing.md)** — Framework di test, CI/CD, copertura
+- **[Discovery e inventario](../discovery-inventory.md)** — Discovery via probe/CT-log, inventario, adopt, crypto readiness *(in inglese)*
+- **[Deploy hook](./deploy-hooks.md)** — Hook post-emissione: configurazione, test, redazione dell'output
+- **[Conformità](./compliance.md)** — Catena di audit, attribuzione delle azioni, postura NIS2/eIDAS
+- **[Sonde di deployment](./probes.md)** — Verificare che il certificato rinnovato sia davvero servito
 
 ---
 
@@ -65,7 +69,7 @@ Benvenuto nella documentazione di CertMate. Questa cartella contiene guide compl
 - **Gestione completa del ciclo di vita** — creazione, rinnovo, revoca, monitoraggio
 - **OCSP & CRL** — stato in tempo reale e liste di revoca
 - **Dashboard web** su `/client-certificates`
-- **Operazioni batch** — importazione di 100-30.000 certificati tramite CSV
+- **Operazioni batch** — importazione via CSV, massimo 100 righe per richiesta
 - **Audit logging** e **rate limiting**
 
 ---
@@ -161,7 +165,7 @@ docs/it/
 
 ## Percorso di apprendimento
 
-**Principiante** → [Inizia qui](./index.md) → [Guida introduttiva](./guide.md)
+**Principiante** → [Inizia qui](./guide.md) → [Guida introduttiva](./guide.md)
 
 **Sviluppatore** → [Riferimento API](./api.md) → [Architettura](./architecture.md)
 
@@ -234,6 +238,10 @@ CertMate è distribuito sotto licenza MIT. Vedere il file LICENSE nel repository
 - Consultare il [Riferimento API](./api.md) per i dettagli degli endpoint
 
 ---
+
+---
+
+**Versione corrente**: 2.25.1
 
 <div align="center">
 

@@ -22,9 +22,12 @@ DOCS = REPO_ROOT / "docs"
 
 LANGUAGES = ["en", "it", "de", "es", "fr"]
 
-# Not content pages: the index links to everything else, README.md is the
-# alternative index, and the theme note is a one-off migration record.
-NOT_LINKABLE = {"index.md", "README.md", "THEME_MIGRATION.md"}
+# README.md is the index — it is what GitHub renders when you browse to a
+# directory, and the only entry point anyone actually reaches, since nothing
+# builds this folder into a site. index.md is a stub kept so that deep links
+# from before the rename do not 404; the theme note is a one-off record.
+INDEX = "README.md"
+NOT_LINKABLE = {"README.md", "index.md", "THEME_MIGRATION.md"}
 
 
 def _lang_dir(lang):
@@ -43,20 +46,38 @@ def _links(path):
 
 @pytest.mark.parametrize("lang", LANGUAGES)
 def test_every_page_is_linked_from_its_index(lang):
-    index = _lang_dir(lang) / "index.md"
-    assert index.exists(), f"docs/{lang}: no index.md"
+    index = _lang_dir(lang) / INDEX
+    assert index.exists(), f"docs/{lang}: no {INDEX}"
     unreachable = sorted(_pages(lang) - _links(index))
     assert not unreachable, (
-        f"docs/{lang}/index.md links to none of {unreachable} — those pages "
+        f"docs/{lang}/{INDEX} links to none of {unreachable} — those pages "
         f"exist but nothing points at them."
     )
+
+
+@pytest.mark.parametrize("lang", LANGUAGES)
+def test_the_index_stub_still_points_somewhere_real(lang):
+    """`index.md` is a redirect note for old deep links, nothing more.
+
+    It must stay short — if it grows content again it becomes a second index,
+    which is the whole problem it was created to end — and it must point at
+    both the guide that absorbed it and the real index.
+    """
+    stub = _lang_dir(lang) / "index.md"
+    assert stub.exists(), f"docs/{lang}/index.md is gone — old deep links 404"
+    text = stub.read_text(encoding="utf-8")
+    assert len(text) < 800, (
+        f"docs/{lang}/index.md is {len(text)} chars — it is turning back into a "
+        f"page. It is a redirect note."
+    )
+    assert "./guide.md" in text and f"./{INDEX}" in text
 
 
 @pytest.mark.parametrize("lang", LANGUAGES)
 def test_index_links_resolve(lang):
     """No entry may point at a file that is not there."""
     directory = _lang_dir(lang)
-    index = directory / "index.md"
+    index = directory / INDEX
     text = index.read_text(encoding="utf-8")
     broken = []
     for prefix, target in re.findall(r"\]\((\./|\.\./)([a-z0-9._-]+\.md)", text):
@@ -187,3 +208,39 @@ def test_a_pull_request_template_exists():
     text = template.read_text(encoding="utf-8")
     assert "not ui and not e2e" in text
     assert "conversation" in text.lower()
+
+
+def test_docs_use_the_port_the_app_actually_listens_on():
+    """Every documented URL must hit the port CertMate binds by default.
+
+    210 examples across api.md and guide.md, in all five languages, used
+    `localhost:5000` — Flask's dev-server default, never CertMate's. `app.py`
+    parses `--port` with `default=8000` and the Dockerfile sets `ENV PORT=8000`.
+    So the single most copy-pasted thing in the documentation, the curl
+    example, produced connection refused.
+    """
+    app_py = (REPO_ROOT / "app.py").read_text(encoding="utf-8")
+    declared = re.search(r"--port['\"].*?default=(\d+)", app_py)
+    assert declared, "app.py no longer declares a default port"
+    port = declared.group(1)
+
+    # The test harness binds its own container elsewhere on purpose, so it can
+    # run beside a real instance; conftest.py owns that number.
+    conftest = (REPO_ROOT / "tests" / "conftest.py").read_text(encoding="utf-8")
+    test_port = re.search(r'CERTMATE_TEST_PORT", "(\d+)"', conftest)
+    allowed = {port} | ({test_port.group(1)} if test_port else set())
+
+    wrong = []
+    for path in sorted((REPO_ROOT / "docs").rglob("*.md")):
+        for number, line in enumerate(
+                path.read_text(encoding="utf-8").splitlines(), 1):
+            for match in re.finditer(r"localhost:(\d{2,5})", line):
+                if match.group(1) not in allowed:
+                    wrong.append(
+                        f"{path.relative_to(REPO_ROOT)}:{number}: "
+                        f"localhost:{match.group(1)}")
+    assert not wrong, (
+        f"docs point at a port the app does not listen on (default is {port}):"
+        f"\n  " + "\n  ".join(wrong[:20])
+        + (f"\n  ... and {len(wrong) - 20} more" if len(wrong) > 20 else "")
+    )

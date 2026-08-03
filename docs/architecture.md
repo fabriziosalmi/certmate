@@ -776,7 +776,7 @@ Each certificate has a `metadata.json` file containing:
 
 - **Rate Limiting**: Prevents resource exhaustion
 - **Stateless Design**: Can run multiple instances
-- **Batch Operations**: Handles 100-30k certs per request
+- **Batch Operations**: up to 100 rows per request (the API rejects more with a 400)
 
 ### Auto-Renewal
 

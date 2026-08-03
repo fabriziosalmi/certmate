@@ -753,7 +753,7 @@ Cada certificado tiene un archivo `metadata.json` que contiene:
 
 - **Limitación de tasa**: evita el agotamiento de recursos
 - **Diseño sin estado**: puede ejecutar múltiples instancias
-- **Operaciones por lotes**: gestiona de 100 a 30 000 certificados por petición
+- **Operaciones por lotes**: máximo 100 filas por solicitud (por encima, la API responde 400)
 
 ### Renovación automática
 

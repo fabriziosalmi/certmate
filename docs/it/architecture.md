@@ -754,7 +754,7 @@ Ogni certificato ha un file `metadata.json` contenente:
 
 - **Rate Limiting**: previene l'esaurimento delle risorse
 - **Progettazione stateless**: può eseguire più istanze
-- **Operazioni in batch**: gestisce da 100 a 30.000 certificati per richiesta
+- **Operazioni in batch**: massimo 100 righe per richiesta (oltre, l'API risponde 400)
 
 ### Rinnovo automatico
 

@@ -4,7 +4,7 @@
 
 L'API CertMate per la gestione dei certificati client fornisce endpoint REST per una gestione completa dei certificati con autenticazione, rate limiting e journalizzazione dell'audit.
 
-**URL di base**: `http://localhost:5000/api`
+**URL di base**: `http://localhost:8000/api`
 **Autenticazione**: Bearer Token (obbligatoria su tutti gli endpoint)
 **Content-Type**: `application/json`
 
@@ -23,7 +23,7 @@ Authorization: Bearer IL_TUO_TOKEN
 ### Esempio di richiesta
 
 ```bash
-curl -X GET http://localhost:5000/api/client-certs \
+curl -X GET http://localhost:8000/api/client-certs \
  -H "Authorization: Bearer IL_TUO_TOKEN" \
  -H "Content-Type: application/json"
 ```
@@ -107,7 +107,7 @@ Crea un nuovo certificato client.
 
 **Esempio**:
 ```bash
-curl -X POST http://localhost:5000/api/client-certs/create \
+curl -X POST http://localhost:8000/api/client-certs/create \
  -H "Authorization: Bearer TOKEN" \
  -H "Content-Type: application/json" \
  -d '{
@@ -163,19 +163,19 @@ Elenca tutti i certificati client con filtro opzionale.
 **Esempi**:
 ```bash
 # Elenca tutti i certificati
-curl http://localhost:5000/api/client-certs \
+curl http://localhost:8000/api/client-certs \
  -H "Authorization: Bearer TOKEN"
 
 # Filtra per tipo di utilizzo
-curl "http://localhost:5000/api/client-certs?usage=api-mtls" \
+curl "http://localhost:8000/api/client-certs?usage=api-mtls" \
  -H "Authorization: Bearer TOKEN"
 
 # Elenca solo i revocati
-curl "http://localhost:5000/api/client-certs?revoked=true" \
+curl "http://localhost:8000/api/client-certs?revoked=true" \
  -H "Authorization: Bearer TOKEN"
 
 # Cerca per common name
-curl "http://localhost:5000/api/client-certs?search=user1" \
+curl "http://localhost:8000/api/client-certs?search=user1" \
  -H "Authorization: Bearer TOKEN"
 ```
 
@@ -215,7 +215,7 @@ Recupera i metadati completi di un certificato.
 
 **Esempio**:
 ```bash
-curl http://localhost:5000/api/client-certs/cert-001 \
+curl http://localhost:8000/api/client-certs/cert-001 \
  -H "Authorization: Bearer TOKEN"
 ```
 
@@ -238,17 +238,17 @@ Scarica il certificato, la chiave privata o il file CSR.
 **Esempi**:
 ```bash
 # Scarica il certificato
-curl http://localhost:5000/api/client-certs/cert-001/download/crt \
+curl http://localhost:8000/api/client-certs/cert-001/download/crt \
  -H "Authorization: Bearer TOKEN" \
  -o certificate.crt
 
 # Scarica la chiave privata
-curl http://localhost:5000/api/client-certs/cert-001/download/key \
+curl http://localhost:8000/api/client-certs/cert-001/download/key \
  -H "Authorization: Bearer TOKEN" \
  -o private.key
 
 # Scarica il CSR
-curl http://localhost:5000/api/client-certs/cert-001/download/csr \
+curl http://localhost:8000/api/client-certs/cert-001/download/csr \
  -H "Authorization: Bearer TOKEN" \
  -o request.csr
 ```
@@ -279,7 +279,7 @@ Revoca un certificato con motivo opzionale.
 
 **Esempio**:
 ```bash
-curl -X POST http://localhost:5000/api/client-certs/cert-001/revoke \
+curl -X POST http://localhost:8000/api/client-certs/cert-001/revoke \
  -H "Authorization: Bearer TOKEN" \
  -H "Content-Type: application/json" \
  -d '{
@@ -309,7 +309,7 @@ Rinnova un certificato (stesso CN, nuovo numero seriale).
 
 **Esempio**:
 ```bash
-curl -X POST http://localhost:5000/api/client-certs/cert-001/renew \
+curl -X POST http://localhost:8000/api/client-certs/cert-001/renew \
  -H "Authorization: Bearer TOKEN"
 ```
 
@@ -340,7 +340,7 @@ Recupera le statistiche di utilizzo dei certificati.
 
 **Esempio**:
 ```bash
-curl http://localhost:5000/api/client-certs/stats \
+curl http://localhost:8000/api/client-certs/stats \
  -H "Authorization: Bearer TOKEN"
 ```
 
@@ -388,7 +388,7 @@ Crea piu certificati da dati CSV in un'unica richiesta.
 
 **Esempio**:
 ```bash
-curl -X POST http://localhost:5000/api/client-certs/batch \
+curl -X POST http://localhost:8000/api/client-certs/batch \
  -H "Authorization: Bearer TOKEN" \
  -H "Content-Type: application/json" \
  -d '{
@@ -423,7 +423,7 @@ Interroga lo stato di un certificato tramite OCSP.
 
 **Esempio**:
 ```bash
-curl http://localhost:5000/api/ocsp/status/12345678 \
+curl http://localhost:8000/api/ocsp/status/12345678 \
  -H "Authorization: Bearer TOKEN"
 ```
 
@@ -445,17 +445,17 @@ Scarica la Certificate Revocation List.
 **Esempi**:
 ```bash
 # Scarica la CRL in formato PEM
-curl http://localhost:5000/api/crl/download/pem \
+curl http://localhost:8000/api/crl/download/pem \
  -H "Authorization: Bearer TOKEN" \
  -o ca.crl
 
 # Scarica la CRL in formato DER
-curl http://localhost:5000/api/crl/download/der \
+curl http://localhost:8000/api/crl/download/der \
  -H "Authorization: Bearer TOKEN" \
  -o ca.crl
 
 # Ottieni le informazioni sulla CRL
-curl http://localhost:5000/api/crl/download/info \
+curl http://localhost:8000/api/crl/download/info \
  -H "Authorization: Bearer TOKEN"
 ```
 
@@ -498,22 +498,22 @@ La forma JSON e il formato di automazione preferito per Ansible, Salt o qualsias
 
 ```bash
 # Scarica tutti i file come archivio ZIP
-curl http://localhost:5000/api/certificates/example.com/download \
+curl http://localhost:8000/api/certificates/example.com/download \
  -H "Authorization: Bearer TOKEN" \
  -o example_com_bundle.zip
 
 # Scarica solo il file fullchain.pem
-curl "http://localhost:5000/api/certificates/example.com/download?file=fullchain.pem" \
+curl "http://localhost:8000/api/certificates/example.com/download?file=fullchain.pem" \
  -H "Authorization: Bearer TOKEN" \
  -o fullchain.pem
 
 # Scarica solo la chiave privata
-curl "http://localhost:5000/api/certificates/example.com/download?file=privkey.pem" \
+curl "http://localhost:8000/api/certificates/example.com/download?file=privkey.pem" \
  -H "Authorization: Bearer TOKEN" \
  -o privkey.pem
 
 # Scarica il bundle completo in JSON
-curl "http://localhost:5000/api/certificates/example.com/download?format=json" \
+curl "http://localhost:8000/api/certificates/example.com/download?format=json" \
  -H "Authorization: Bearer TOKEN" \
  -o example_com_bundle.json
 
@@ -548,7 +548,7 @@ Modifica la configurazione di un certificato e lo riemette sul posto — estende
 
 **Esempio**:
 ```bash
-curl -X POST http://localhost:5000/api/certificates/example.com/reissue \
+curl -X POST http://localhost:8000/api/certificates/example.com/reissue \
  -H "Authorization: Bearer TOKEN" \
  -H "Content-Type: application/json" \
  -d '{"san_domains": ["www.example.com", "api.example.com"]}'
@@ -584,7 +584,7 @@ curl -X POST http://localhost:5000/api/certificates/example.com/reissue \
 ### Esempio di errore
 
 ```bash
-curl http://localhost:5000/api/client-certs/invalid-id \
+curl http://localhost:8000/api/client-certs/invalid-id \
  -H "Authorization: Bearer TOKEN"
 
 # Risposta

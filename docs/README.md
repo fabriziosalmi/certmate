@@ -21,6 +21,10 @@ Welcome to the CertMate documentation. This folder contains comprehensive guides
 - **[API Reference](./api.md)** — Complete REST API documentation
 - **[Architecture](./architecture.md)** — System design, components, data flow
 - **[Testing Guide](./testing.md)** — Test framework, CI/CD, coverage
+- **[Certificate Discovery & Inventory](./discovery-inventory.md)** — probe/CT-log discovery, inventory, adopt, crypto readiness
+- **[Deploy Hooks](./deploy-hooks.md)** — post-issuance hooks: configuration, testing, output redaction
+- **[Compliance](./compliance.md)** — audit chain, actor attribution, NIS2/eIDAS posture
+- **[Deployment Probes](./probes.en.md)** — verifying a renewed certificate is actually served
 
 ---
 
@@ -171,7 +175,7 @@ docs/
 
 ## Learning Path
 
-**Beginner** → [Start Here](./index.md) → [Getting Started](./guide.md)
+**Beginner** → [Start Here](./guide.md) → [Getting Started](./guide.md)
 
 **Developer** → [API Reference](./api.md) → [Architecture](./architecture.md)
 
@@ -244,6 +248,10 @@ CertMate is licensed under the MIT License. See LICENSE file in the repository.
 - Check the [API Reference](./api.md) for endpoint details
 
 ---
+
+---
+
+**Current Version**: 2.25.1
 
 <div align="center">
 

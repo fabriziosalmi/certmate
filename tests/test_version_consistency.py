@@ -21,8 +21,12 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 # lands, without anyone remembering to extend this list. Both v2.24.0 and
 # v2.24.1 shipped with these pages stale (#483, and again in #487) precisely
 # because they were only ever fixed by hand.
-DOCS_LANDING_PAGES = sorted(REPO_ROOT.glob("docs/index.md")) + sorted(
-    REPO_ROOT.glob("docs/*/index.md")
+# README.md, not index.md. `docs/index.md` had the version stamp only because
+# of its filename: it was the client-certificate launch write-up, never an
+# index. The index is README.md — which is what GitHub renders when you browse
+# to `docs/`, and is now what scripts/release.sh stamps.
+DOCS_LANDING_PAGES = sorted(REPO_ROOT.glob("docs/README.md")) + sorted(
+    REPO_ROOT.glob("docs/*/README.md")
 )
 
 # Matches the localised "current version" line in any language:
@@ -82,8 +86,9 @@ def test_dockerhub_readme_health_example_matches_module_version():
 
 def test_there_are_docs_landing_pages_to_check():
     """Guard the guard: an empty glob would make the test below vacuously pass."""
-    assert DOCS_LANDING_PAGES, (
-        "neither docs/index.md nor docs/*/index.md matched - has the layout moved?"
+    assert len(DOCS_LANDING_PAGES) >= 5, (
+        f"expected a docs/README.md per language, found {len(DOCS_LANDING_PAGES)} "
+        f"- has the layout moved again?"
     )
 
 
