@@ -3,25 +3,25 @@
 
 # Core Flask dependencies
 Flask==3.1.3
-Flask-CORS==6.0.2
-flask-restx==1.3.0
+Flask-CORS==6.0.5
+flask-restx==1.3.2
 
 # Certificate management
 certbot==2.10.0
 josepy==1.13.0
-certbot-dns-cloudflare==2.10.0
+certbot-dns-cloudflare==2.11.1
 
 # Cloudflare API support
 cloudflare==2.19.4
-dns-lexicon==3.25.1
+dns-lexicon==3.25.2
 
 # Core application dependencies
 urllib3>=2.6.0,!=2.2.0,<3      # CVE-2025-66418, CVE-2025-66471, CVE-2026-21441 (HIGH)
-requests==2.33.0
+requests==2.34.2
 python-dotenv==1.2.2
-APScheduler==3.10.4
+APScheduler==3.11.3
 cryptography==46.0.7               # GHSA-537c-gmf6-5ccf (HIGH) open by choice; blocked by acme 3.3.0 (see SECURITY.md "Known dependency constraint")
-pyopenssl==26.0.0                  # Do not bump to 26.2.0+: removes X509Extension, breaks acme 3.3.0 at import (see SECURITY.md)
+pyopenssl==26.3.0                  # Do not bump to 26.2.0+: removes X509Extension, breaks acme 3.3.0 at import (see SECURITY.md)
 
 # Production server
 gunicorn==23.0.0

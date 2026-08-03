@@ -1,7 +1,7 @@
 # Optional dependencies for Azure Key Vault storage backend
 azure-keyvault-secrets>=4.7.0
 azure-keyvault-certificates>=4.7.0
-azure-identity>=1.12.0
+azure-identity>=1.25.3
 
 # pyca/cryptography is already pulled in by the main requirements files
 # (certbot needs it), but the Certificate-object code path uses
