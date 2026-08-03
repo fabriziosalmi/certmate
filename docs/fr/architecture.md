@@ -754,7 +754,7 @@ Chaque certificat a un fichier `metadata.json` contenant :
 
 - **Limitation de débit** : Empêche l'épuisement des ressources
 - **Conception sans état** : Peut exécuter plusieurs instances
-- **Opérations par lots** : Gère 100 à 30 000 certificats par requête
+- **Opérations par lots** : 100 lignes maximum par requête (au-delà, l'API renvoie 400)
 
 ### Renouvellement automatique
 

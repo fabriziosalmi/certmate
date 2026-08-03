@@ -304,7 +304,7 @@ zeigen.
 > aus dem Host-/Cluster-Netzwerk (Zion schränkt es auf private Quell-IPs ein und
 > gibt öffentlichen Clients 403 zurück), und CertMates `certmate_*` direkt gegen
 > das interne `certmate:8000` mit einem Admin-Bearer-Token (siehe
-> [`monitoring/`](../monitoring/) für das Dashboard und die Scrape-Konfiguration).
+> [`monitoring/`](../../monitoring/) für das Dashboard und die Scrape-Konfiguration).
 
 ### Ausgehenden Datenverkehr einschränken (Egress-Hardening)
 

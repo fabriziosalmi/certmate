@@ -566,3 +566,91 @@ def test_azure_alias_lexicon_config_uses_dnspython_zone_resolution():
     assert cfg['domain'] == 'domain.com.acme-validation.example.net'
     assert cfg['provider_name'] == 'azure'
     assert cfg['auth_subscription_id'] == 'sub'
+
+
+class TestEdgeDNSEgressTimeout:
+    """The EdgeDNS alias branch talks to Akamai from inside the certbot auth
+    hook, on a gunicorn worker thread. `requests` has no default timeout, so a
+    call without one holds that thread until the peer gives up — which, for a
+    dropped connection, is never. All four calls here shipped without one.
+    """
+
+    def _session(self):
+        from modules.core.dns_alias_hook import _edgegrid_auth
+        pytest.importorskip("akamai.edgegrid")
+        session, base_url = _edgegrid_auth({
+            'config': {
+                'client_token': 'ct', 'client_secret': 'cs',
+                'access_token': 'at', 'host': 'https://example.akamaiapis.net',
+            },
+        })
+        return session, base_url
+
+    def test_session_applies_a_default_timeout(self):
+        """Every verb must carry a timeout without the call site asking."""
+        from modules.core.dns_alias_hook import EDGEDNS_TIMEOUT
+
+        session, base_url = self._session()
+        seen = {}
+
+        def fake_send(request, **kwargs):
+            seen.update(kwargs)
+            raise RuntimeError("stop here — we only care about the kwargs")
+
+        session.send = fake_send
+        for verb in ('get', 'post', 'put', 'delete'):
+            seen.clear()
+            with pytest.raises(RuntimeError):
+                getattr(session, verb)(f'{base_url}/config-dns/v2/zones/x')
+            assert seen.get('timeout') == EDGEDNS_TIMEOUT, (
+                f"session.{verb}() went out with timeout={seen.get('timeout')!r}"
+            )
+
+    def test_explicit_timeout_still_wins(self):
+        """The default must be a default, not an override."""
+        session, base_url = self._session()
+        seen = {}
+
+        def fake_send(request, **kwargs):
+            seen.update(kwargs)
+            raise RuntimeError("stop")
+
+        session.send = fake_send
+        with pytest.raises(RuntimeError):
+            session.get(f'{base_url}/x', timeout=1)
+        assert seen.get('timeout') == 1
+
+    def test_error_message_does_not_carry_an_unbounded_body(self, monkeypatch):
+        """The failure message is logged, and log sanitisation walks the whole
+        string — so an unbounded remote body becomes our CPU cost.
+
+        Drives the real ``_edgedns_change``. An earlier version of this test
+        rebuilt the truncation inline and asserted against its own copy, so
+        going back to interpolating ``response.text`` directly would have left
+        it green — a test that cannot fail for the regression it names.
+        """
+        from modules.core import dns_alias_hook as hook
+
+        class _Response:
+            def __init__(self, status_code, text=""):
+                self.status_code = status_code
+                self.text = text
+
+        class _FakeSession:
+            def get(self, url, **kwargs):
+                return _Response(200)          # first zone guess wins
+
+            def post(self, url, **kwargs):
+                return _Response(500, "A" * 100_000)
+
+        monkeypatch.setattr(hook, '_edgegrid_auth',
+                            lambda config: (_FakeSession(), 'https://example.test'))
+
+        with pytest.raises(hook.DNSAliasError) as excinfo:
+            hook._edgedns_change(
+                {'domain_alias': 'alias.example.com'}, 'validation-token', 'create')
+
+        message = str(excinfo.value)
+        assert message.startswith('EdgeDNS API request failed: 500')
+        assert len(message) < 1000, f"error message is {len(message)} chars"
+        assert "A" * 600 not in message, "the remote body was not truncated"

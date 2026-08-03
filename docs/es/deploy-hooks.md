@@ -279,10 +279,10 @@ Cada ejecución de un hook escribe una entrada `operation: deploy_hook` en el re
 
 ## Ver también
 
-- [`modules/core/deployer.py`](../modules/core/deployer.py) — implementación
-- [`modules/web/settings_routes.py`](../modules/web/settings_routes.py) — endpoints `/api/deploy/*`
-- [`templates/partials/settings_deploy.html`](../templates/partials/settings_deploy.html) — partial de UI
-- [`static/js/settings-deploy.js`](../static/js/settings-deploy.js) — componente Alpine
+- [`modules/core/deployer.py`](../../modules/core/deployer.py) — implementación
+- [`modules/web/settings_routes.py`](../../modules/web/settings_routes.py) — endpoints `/api/deploy/*`
+- [`templates/partials/settings_deploy.html`](../../templates/partials/settings_deploy.html) — partial de UI
+- [`static/js/settings-deploy.js`](../../static/js/settings-deploy.js) — componente Alpine
 
 ---
 

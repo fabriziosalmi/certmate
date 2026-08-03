@@ -211,7 +211,11 @@ if chart.exists():
     text = re.sub(r'(?m)^(appVersion:\s*")[^"]+(")', rf"\g<1>{v}\g<2>", text)
     text = re.sub(r'(?m)^(version:\s*)[0-9]+\.[0-9]+\.[0-9]+\s*$', rf"\g<1>{v}", text)
     chart.write_text(text, encoding="utf-8")
-docs = sorted(pathlib.Path("docs").glob("index.md")) + sorted(pathlib.Path("docs").glob("*/index.md"))
+# README.md, not index.md: `docs/index.md` was never a documentation index —
+# it was the client-certificate launch write-up wearing that filename, and it
+# only carried the version stamp because of the name. The index is README.md,
+# which is also what GitHub renders when you browse to `docs/`.
+docs = sorted(pathlib.Path("docs").glob("README.md")) + sorted(pathlib.Path("docs").glob("*/README.md"))
 for page in docs:
     text = page.read_text(encoding="utf-8")
     bumped = re.sub(
@@ -232,7 +236,7 @@ real-cert E2E skipped (non-issuance change): $skip_reason"
   # the commit produced a release PR whose own CI failed on the version-
   # consistency test — a gate the local run cannot catch, because the bump
   # happens after the gates.
-  git add modules/__init__.py package.json package-lock.json README.dockerhub.md charts/certmate/Chart.yaml SECURITY.md docs/index.md docs/*/index.md
+  git add modules/__init__.py package.json package-lock.json README.dockerhub.md charts/certmate/Chart.yaml SECURITY.md docs/README.md docs/*/README.md
   git commit -q -m "$body
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"

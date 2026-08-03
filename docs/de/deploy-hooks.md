@@ -279,10 +279,10 @@ Jede Hook-Ausführung schreibt einen `operation: deploy_hook`-Eintrag in das Aud
 
 ## Siehe auch
 
-- [`modules/core/deployer.py`](../modules/core/deployer.py) — Implementierung
-- [`modules/web/settings_routes.py`](../modules/web/settings_routes.py) — `/api/deploy/*`-Endpoints
-- [`templates/partials/settings_deploy.html`](../templates/partials/settings_deploy.html) — UI-Partial
-- [`static/js/settings-deploy.js`](../static/js/settings-deploy.js) — Alpine-Komponente
+- [`modules/core/deployer.py`](../../modules/core/deployer.py) — Implementierung
+- [`modules/web/settings_routes.py`](../../modules/web/settings_routes.py) — `/api/deploy/*`-Endpoints
+- [`templates/partials/settings_deploy.html`](../../templates/partials/settings_deploy.html) — UI-Partial
+- [`static/js/settings-deploy.js`](../../static/js/settings-deploy.js) — Alpine-Komponente
 
 ---
 

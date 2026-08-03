@@ -174,10 +174,47 @@ def test_no_doc_presents_host_or_flask_debug_as_working_env_vars():
 
 
 def test_the_documented_batch_limit_matches_the_code():
+    """The CSV batch endpoint 400s above 100 rows. No page may promise more.
+
+    This gate existed before and caught nothing for months, in a way worth
+    recording. It looked for the literal "30,000" in two English files. The
+    English pages wrote "30k", so it never matched them; the Italian, German
+    and Spanish pages wrote "30.000" and the French "30 000", and none of those
+    four files were in the list at all. So a check that read as if it enforced
+    the batch limit could not have failed for any page in any language.
+
+    Nine pages promised a user could import up to thirty thousand certificates
+    per request, against an API that 400s above a hundred.
+    """
+    import re
+
     code = _read("modules/api/client_certificates.py")
     assert "max_batch = 100" in code, "the cap moved; update the docs with it"
-    for path in (ROOT / "docs/README.md", ROOT / "docs/index.md"):
-        assert "30,000" not in path.read_text(encoding="utf-8")
+
+    # Every way the five languages phrase a batch claim, against every way
+    # they write a large number - "30k" included, since that is the spelling
+    # the old check could not see.
+    batch_word = (r"(?:batch|lotti|lotes|lots|Batch-Oper|in batch|per request|"
+                  r"per richiesta|pro Anfrage|por (?:solicitud|petici\u00f3n)|"
+                  r"par requ\u00eate)")
+    big_number = r"(?:[1-9][0-9]{3,}|[0-9]+[.,\s\u00a0\u202f][0-9]{3}\b|[0-9]+\s?k\b)"
+    overclaim = re.compile(
+        rf"{batch_word}.*{big_number}|{big_number}.*{batch_word}", re.IGNORECASE)
+    # URLs carry port numbers that look like large numbers; strip them so a
+    # `curl http://localhost:8000/api/client-certs/batch` line is not read as
+    # a claim about batch size.
+    url = re.compile(r"https?://\S+")
+
+    offenders = []
+    for path in sorted((ROOT / "docs").rglob("*.md")):
+        for number, line in enumerate(
+                path.read_text(encoding="utf-8").splitlines(), 1):
+            if overclaim.search(url.sub("", line)):
+                offenders.append(f"{path.relative_to(ROOT)}:{number}: {line.strip()}")
+    assert not offenders, (
+        "docs promise a batch import the API refuses with a 400 "
+        "(max_batch = 100):\n  " + "\n  ".join(offenders)
+    )
 
 
 def test_no_file_under_tests_is_silently_gitignored():

@@ -753,7 +753,7 @@ Jedes Zertifikat besitzt eine `metadata.json`-Datei mit folgenden Inhalten:
 
 - **Rate Limiting**: Verhindert Ressourcenerschöpfung
 - **Zustandsloses Design**: Kann in mehreren Instanzen betrieben werden
-- **Batch-Operationen**: Verarbeitet 100–30.000 Zertifikate pro Anfrage
+- **Batch-Operationen**: höchstens 100 Zeilen pro Anfrage (darüber antwortet die API mit 400)
 
 ### Automatische Erneuerung
 

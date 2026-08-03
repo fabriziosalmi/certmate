@@ -110,3 +110,52 @@ def test_logger_integration():
     assert "exception" in log_json
     assert "admin123" not in log_json["exception"]
     assert "password = \"[REDACTED]\"" in log_json["exception"]
+
+
+def test_pem_redaction_is_linear_on_unclosed_blocks():
+    """A blob that opens PEM blocks and never closes them must not stall.
+
+    The old single-regex form restarted its `.*?` forward scan at every
+    `-----BEGIN`, so cost grew with anchors x length: 0.4 s at 2000 anchors,
+    6.6 s at 8000. `sanitize_text` runs on UNBOUNDED deploy-hook output
+    (deployer.py) on one of the process's eight gunicorn threads, so that is
+    a thread-exhaustion lever, not just a slow function.
+
+    The bound below is loose on purpose — this asserts "not quadratic", not a
+    benchmark, so it does not go red on a loaded CI runner. The old code
+    needed minutes here.
+    """
+    import time
+    from modules.core.structured_logging import sanitize_text
+
+    payload = ("-----BEGIN" + "A" * 20) * 40_000  # ~1.2 MB, zero closers
+    started = time.perf_counter()
+    sanitize_text(payload)
+    elapsed = time.perf_counter() - started
+    assert elapsed < 5.0, f"PEM redaction took {elapsed:.1f}s — quadratic again?"
+
+
+def test_pem_redaction_matches_the_regex_it_replaced():
+    """The linear scanner must redact exactly what PEM_RE would have.
+
+    PEM_RE is kept on the class as the reference; this pins the scanner to it
+    over the shapes that actually distinguish them — unclosed blocks, nested
+    openers, malformed headers, several blocks in one string.
+    """
+    from modules.core.structured_logging import JSONFormatter, _redact_pem_blocks
+
+    cases = [
+        "",
+        "nothing to see here",
+        "-----BEGIN RSA PRIVATE KEY-----\nabc\n-----END RSA PRIVATE KEY-----",
+        "head -----BEGIN X-----body-----END X----- tail",
+        "-----BEGIN A-----1-----END A----------BEGIN B-----2-----END B-----",
+        "-----BEGIN never closed",
+        "-----BEGIN-----",                      # empty header, no match
+        "-----BEGIN A-----no closer at all",
+        "-----BEGIN -----BEGIN A-----x-----END A-----",
+        "junk-----END A-----junk",
+    ]
+    for case in cases:
+        assert _redact_pem_blocks(case) == \
+            JSONFormatter.PEM_RE.sub('[PEM REDACTED]', case), repr(case)

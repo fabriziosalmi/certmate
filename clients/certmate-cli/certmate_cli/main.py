@@ -39,6 +39,24 @@ app.add_typer(deploy_app, name="deploy")
 out = Console()
 err = Console(stderr=True)
 
+
+def _version_callback(value: bool) -> None:
+    """`--version` prints the version and exits 0, before anything else runs.
+
+    It has to be eager: the flag must work with no server configured, no
+    token, and no network — reporting which build you have is the first thing
+    anyone does when something is wrong.
+    """
+    if value:
+        from certmate_cli import __version__
+
+        # Plain print, not `out.print`: a version string gets piped and
+        # compared, so it must not pick up Rich's wrapping or markup.
+        print(__version__)
+        raise typer.Exit(0)
+
+
+
 # A lax hostname/wildcard check for the client-side --dry-run preflight; the
 # server is the real authority, this just catches obvious typos before we
 # spend an API call.
@@ -71,6 +89,13 @@ def _main(
                                         help="API bearer token. Prefer the CERTMATE_TOKEN "
                                              "environment variable: --token is visible to other "
                                              "local processes (ps) and shell history."),
+    # Lives on THIS callback rather than a second one: Typer keeps only one
+    # root callback, so a separate `@app.callback()` silently replaces this
+    # whole function — including the --token warning above.
+    version: Optional[bool] = typer.Option(None, "--version", "-V",
+                                           callback=_version_callback,
+                                           is_eager=True,
+                                           help="Show the certmate-cli version and exit."),
 ):
     # Kept for compatibility, but discourage --token interactively: argv is
     # world-readable via ps and lands in shell history. Warn only on a TTY so

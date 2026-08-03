@@ -21,6 +21,10 @@ Willkommen in der CertMate-Dokumentation. Dieser Ordner enthält umfassende Anle
 - **[API-Referenz](./api.md)** — Vollständige REST-API-Dokumentation
 - **[Architektur](./architecture.md)** — Systemdesign, Komponenten, Datenfluss
 - **[Test-Anleitung](./testing.md)** — Test-Framework, CI/CD, Abdeckung
+- **[Discovery & Inventar](../discovery-inventory.md)** — Probe-/CT-Log-Discovery, Inventar, Adopt, Krypto-Readiness *(auf Englisch)*
+- **[Deploy-Hooks](./deploy-hooks.md)** — Hooks nach der Ausstellung: Konfiguration, Test, Redaktion der Ausgabe
+- **[Compliance](./compliance.md)** — Audit-Kette, Akteur-Attribution, NIS2-/eIDAS-Posture
+- **[Deployment-Probes](./probes.md)** — Prüfen, ob ein erneuertes Zertifikat ausgeliefert wird
 
 ---
 
@@ -65,7 +69,7 @@ Willkommen in der CertMate-Dokumentation. Dieser Ordner enthält umfassende Anle
 - **Vollständiges Lifecycle-Management** — erstellen, erneuern, widerrufen, überwachen
 - **OCSP & CRL** — Echtzeit-Status und Sperrlisten
 - **Web-Dashboard** unter `/client-certificates`
-- **Batch-Operationen** — Import von 100 bis 30.000 Zertifikaten per CSV
+- **Batch-Operationen** — CSV-Import, höchstens 100 Zeilen pro Anfrage
 - **Audit-Logging** und **Rate Limiting**
 
 ---
@@ -95,7 +99,10 @@ Alle Funktionen sind umfassend getestet:
 
 ```bash
 # Tests ausführen
-python -m pytest tests/ -v
+# Die UI-Suite steuert Playwright gegen einen laufenden Server und kann
+# sich den Prozess nicht mit dem Rest teilen; e2e braucht eine laufende
+# Instanz. Dieselbe Auswahl, die `make test` und scripts/release.sh nutzen.
+pytest -v --tb=short -m "not ui and not e2e"
 ```
 
 Die Testabdeckung umfasst:
@@ -131,26 +138,34 @@ Die Testabdeckung umfasst:
 
 ## Dateistruktur
 
+<!-- Checked by tests/test_docs_navigation.py: this listing must match
+     what is actually on disk. It used to omit six pages. -->
+
 ```
-docs/
-  README.md            ← Sie sind hier
-  index.md             ← Einstiegsseite für Client-Zertifikate
-  installation.md      ← Installation & Einrichtung
-  kubernetes.md        ← Kubernetes-Produktionshinweise
-  dns-providers.md     ← DNS-Provider & Multi-Account
-  ca-providers.md      ← Zertifizierungsstellen-Provider
-  docker.md            ← Docker-Build & Deployment
-  testing.md           ← Test-Framework & CI/CD
-  guide.md             ← Benutzeranleitung Client-Zertifikate
-  api.md               ← Vollständige API-Referenz
-  architecture.md      ← Systemarchitektur
+docs/de/
+  README.md           this file — documentation index  <- you are here
+  THEME_MIGRATION.md  one-off theme migration record
+  api.md              complete REST API reference
+  architecture.md     system architecture
+  ca-providers.md     certificate authorities
+  compliance.md       audit chain, attribution, NIS2/eIDAS
+  deploy-hooks.md     post-issuance deploy hooks
+  dns-providers.md    DNS providers, multi-account, domain alias
+  docker.md           Docker build and deployment
+  guide.md            client-certificate user guide
+  index.md            client-certificate landing page
+  installation.md     installation and setup
+  kubernetes.md       Kubernetes production notes and Helm chart
+  mcp.md              MCP server for AI agents
+  probes.md           deployment probes
+  testing.md          test framework and CI/CD
 ```
 
 ---
 
 ## Lernpfad
 
-**Einsteiger** → [Hier starten](./index.md) → [Erste Schritte](./guide.md)
+**Einsteiger** → [Hier starten](./guide.md) → [Erste Schritte](./guide.md)
 
 **Entwickler** → [API-Referenz](./api.md) → [Architektur](./architecture.md)
 
@@ -167,18 +182,11 @@ docs/
 
 ---
 
-## Status-Dashboard
+## Teststatus
 
-| Komponente       | Status    | Tests     |
-| ---------------- | --------- | --------- |
-| CA-Grundlage     | Bereit    | 3/3       |
-| CSR-Handler      | Bereit    | 3/3       |
-| Zert.-Manager    | Bereit    | 8/8       |
-| Filterung        | Bereit    | 3/3       |
-| Batch-Operationen| Bereit    | 2/2       |
-| OCSP/CRL         | Bereit    | 5/5       |
-| Audit/Rate Limit | Bereit    | 3/3       |
-| **Gesamt**       | **Bereit**| **27/27** |
+Hier steht keine handgepflegte Punktetabelle. Eine Tabelle mit Testzahlen ist am Tag nach dem Schreiben veraltet — diese sagte `27/27`, wahrend die Suite die zweitausend uberschritten hatte.
+
+Das massgebliche Signal ist die CI auf `main`: die Badges oben im [Projekt-README](../../README.md) und die Coverage-Untergrenze in [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml).
 
 ---
 
@@ -230,6 +238,10 @@ CertMate steht unter der MIT-Lizenz. Siehe die LICENSE-Datei im Repository.
 - Prüfen Sie die [API-Referenz](./api.md) für Details zu den Endpoints
 
 ---
+
+---
+
+**Aktuelle Version**: 2.25.1
 
 <div align="center">
 
