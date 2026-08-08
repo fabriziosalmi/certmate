@@ -25,3 +25,12 @@ pyopenssl==26.0.0                  # Do not bump to 26.2.0+: removes X509Extensi
 
 # Production server
 gunicorn==23.0.0
+
+# APScheduler's SQLAlchemyJobStore backs the persistent renewal schedule, and
+# modules/core/factory.py imports it at module scope — so this is not optional
+# for the minimal set, it is required to boot at all. Leaving it out made an
+# image built with REQUIREMENTS_FILE=requirements-minimal.txt die during
+# gunicorn's worker import and restart-loop forever (#514). Nothing in CI had
+# ever built this file, which is why an advertised build argument shipped
+# broken; ci.yml now builds and boots it on every run.
+SQLAlchemy>=2.0.0,<3.0.0
