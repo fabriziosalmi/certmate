@@ -244,3 +244,25 @@ def test_docs_use_the_port_the_app_actually_listens_on():
         f"\n  " + "\n  ".join(wrong[:20])
         + (f"\n  ... and {len(wrong) - 20} more" if len(wrong) > 20 else "")
     )
+
+
+def test_no_markdown_carries_shell_quoting_artifacts():
+    """`'"'"'` is how you escape a quote inside a single-quoted shell string.
+
+    It has no business in prose. Seven of them shipped into the v2.25.2 release
+    notes because the notes were written through a heredoc and the escaping
+    leaked verbatim — `pip'"'"'s`, `Flask'"'"'s`, and three inside a quoted
+    Python attribute error. GitHub renders them literally, in the first thing
+    an operator reads about a release.
+    """
+    artifact = "'" + '"' + "'" + '"' + "'"
+    offenders = []
+    for path in ALL_MARKDOWN:
+        text = path.read_text(encoding="utf-8", errors="replace")
+        if artifact in text:
+            count = text.count(artifact)
+            offenders.append(f"{path.relative_to(REPO_ROOT)} ({count})")
+    assert not offenders, (
+        f"shell-escape artifacts leaked into prose: {offenders}. "
+        f"They render literally."
+    )
