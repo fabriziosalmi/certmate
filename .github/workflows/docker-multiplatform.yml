@@ -63,7 +63,7 @@ jobs:
 
     - name: Log in to Docker Hub
       if: github.event_name != 'pull_request'
-      uses: docker/login-action@371161bbe7024a29a25c5e19bfcbc0804fe9ad2c  # v4.5.2
+      uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f  # v4.6.0
       with:
         registry: ${{ env.REGISTRY }}
         username: ${{ secrets.DOCKERHUB_USER }}
@@ -224,7 +224,7 @@ jobs:
         exit-code: '1'
 
     - name: Upload Trivy scan results to GitHub Security tab
-      uses: github/codeql-action/upload-sarif@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81  # v3
+      uses: github/codeql-action/upload-sarif@f205ea1c3313d32999d8d6a48b4f6530d4437b38  # v4.37.4
       # Push/tag only. On a pull request the SARIF lands on the PR ref, so the
       # image's long tail of unfixable base-image CVEs (tracked in #403) shows
       # up as new code-scanning alerts and blocks the merge — the
