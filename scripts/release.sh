@@ -32,7 +32,33 @@ if ! command -v docker >/dev/null 2>&1 && [ -x /Applications/Docker.app/Contents
 fi
 
 # Paths whose change makes the real-cert E2E MANDATORY (issuance pipeline).
-SENSITIVE_RE='^(modules/(core/(certificate|client_cert|deployer|acme|storage)|dns|api/(certificate|resources|client_cert))|requirements.*\.txt|Dockerfile|tests/(e2e_support|test_cert_lifecycle|test_async_issuance|test_health_ready))'
+#
+# FAIL-CLOSED BY DESIGN. This used to be an allowlist of prefixes —
+# `modules/core/(certificate|client_cert|deployer|acme|storage)|modules/dns|...`
+# — and it had rotted badly by 2026-08-08:
+#
+#   * `modules/dns` matched nothing at all. There is no such directory; the DNS
+#     code lives at modules/core/dns_*.py. The branch was dead, so a change to
+#     dns_providers.py, dns_strategies.py, dns_alias_hook.py or
+#     dns_zone_discovery.py did NOT make the real cert mandatory — in the gate
+#     written precisely because two DNS providers had each shipped in a state
+#     where they had never worked in any release.
+#   * Sixteen issuance-critical files were uncovered in total, including
+#     modules/core/shell.py, which is how certbot is invoked at all.
+#
+# The lesson is not "add the missing prefixes" — the next rename breaks it
+# again, silently, and nobody reads a regex this long closely enough to notice.
+# So the rule is inverted: everything that can reach a certificate is sensitive,
+# and the escape hatch exists only for changes that provably cannot (docs, CI,
+# the site, static assets, tests other than the issuance ones).
+#
+# The asymmetry justifies it. A false positive costs one Let's Encrypt staging
+# issuance, about four minutes, which is already the default behaviour. A false
+# negative ships a DNS provider that cannot issue.
+#
+# tests/test_release_gate.py asserts every branch below matches a real path, so
+# a dead branch fails the suite instead of silently disarming the gate.
+SENSITIVE_RE='^(modules/|app\.py$|requirements.*\.txt|Dockerfile|docker-compose\.yml|charts/|tests/(e2e_support|test_cert_lifecycle|test_async_issuance|test_health_ready))'
 
 die()  { echo "ERROR: $*" >&2; exit 1; }
 info() { echo ">>> $*"; }
