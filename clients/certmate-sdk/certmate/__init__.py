@@ -9,7 +9,7 @@ from .errors import (APIError, AuthError, CertMateError, ConflictError,
                      JobFailed, JobTimeout, NotFoundError, TransportError)
 from .models import Certificate, Job
 
-__version__ = "0.1.3"
+__version__ = "0.1.4"
 __all__ = [
     "Client", "Certificate", "Job",
     "CertMateError", "APIError", "AuthError", "NotFoundError", "ConflictError",
