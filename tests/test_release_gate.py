@@ -231,3 +231,39 @@ def test_the_gate_is_still_wired_to_the_skip_flag():
     assert 'grep -Eq "$SENSITIVE_RE"' in script, (
         "release.sh no longer tests changed paths against SENSITIVE_RE"
     )
+
+
+def test_release_tooling_does_not_hardcode_an_author():
+    """Generated commits must not claim an author the script cannot know.
+
+    `release.sh` appended `Co-Authored-By: Claude Opus 4.8 (1M context)` to
+    every release commit. The commit is generated — it rewrites version strings
+    from a template — so the trailer attributed authorship to something that
+    did not write it, permanently, in the git record. It also named a model
+    that had not been used for months, which is how it was spotted: a hardcoded
+    fact nobody had a reason to revisit.
+
+    Covers the executable tooling only. Prose may discuss whatever it likes.
+    """
+    tooling = []
+    for pattern in ("scripts/*.sh", "scripts/*.py", ".github/workflows/*.yml"):
+        tooling.extend(REPO_ROOT.glob(pattern))
+    makefile = REPO_ROOT / "Makefile"
+    if makefile.exists():
+        tooling.append(makefile)
+
+    assert tooling, "found no release tooling to check — has the layout moved?"
+
+    offenders = []
+    for path in tooling:
+        for number, line in enumerate(
+                path.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
+            if re.search(r"Co-Authored-By:|Claude (Opus|Sonnet|Haiku|Fable)",
+                         line, re.IGNORECASE):
+                offenders.append(f"{path.relative_to(REPO_ROOT)}:{number}: {line.strip()}")
+    assert not offenders, (
+        "release tooling hardcodes an author or model name:\n  "
+        + "\n  ".join(offenders)
+        + "\nA generated commit should not claim an author the generator "
+          "cannot know."
+    )

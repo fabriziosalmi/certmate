@@ -4,7 +4,15 @@ const {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } = require("@modelcontextprotocol/sdk/types.js");
-const fetch = require("node-fetch");
+// `fetch` is global from Node 18 and package.json requires >= 20, so there is
+// no node-fetch import here. Do not add one back: node-fetch 3.x is ESM-only
+// and this file is CommonJS. See #348 for why bumping it was rejected in
+// favour of removing it.
+//
+// The responses below are read with `.ok`, `.status`, `.json()` and `.text()`
+// only — identical across implementations. `.body` as a Node stream,
+// `.buffer()`, and the `timeout`/`agent` options are where they differ, so
+// reach for any of those and this note stops applying.
 const { randomUUID } = require("crypto");
 
 // Stable id for this agent process, sent on every CertMate call so the audit
