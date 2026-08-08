@@ -83,9 +83,16 @@ def _expand(pattern):
                 head = current
                 tail = pattern[i + 1:]
                 out = []
+                # Each alternative is expanded in turn, not taken whole: a
+                # nested group like `tests/(a|b|c)` must yield one expansion
+                # per option, or a dead option inside it would still match via
+                # its siblings and be reported as live — the same blind spot,
+                # one level down, as the `modules/dns` branch this file exists
+                # to catch.
                 for alt in _split_top_level(inner):
-                    for rest in _expand(tail):
-                        out.append(head + alt + rest)
+                    for alt_expanded in _expand(alt):
+                        for rest in _expand(tail):
+                            out.append(head + alt_expanded + rest)
                 return out
         elif depth == 0:
             current += ch
