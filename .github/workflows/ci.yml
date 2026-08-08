@@ -115,10 +115,60 @@ jobs:
         name: codecov-umbrella
         fail_ci_if_error: false
 
-    - name: Test Docker build
+    # Build AND boot both requirements sets.
+    #
+    # This step used to run `docker build` alone. A successful build proves the
+    # layers assemble, not that the process starts — and `requirements-minimal
+    # .txt`, which the Dockerfile advertises via REQUIREMENTS_FILE, was never
+    # built by anything at all. It had been missing SQLAlchemy for months:
+    # factory.py imports APScheduler's SQLAlchemyJobStore at module scope, so
+    # gunicorn's worker died on import and the container restart-looped (#514).
+    # It took a user building it to find out.
+    #
+    # So: every advertised requirements file gets built, started, and asked for
+    # /health. A container that cannot answer that has not been tested.
+    - name: Build and boot every advertised image variant
       if: matrix.python-version == '3.12'
       run: |
-        docker build -t certmate:test .
+        set -euo pipefail
+        for req in requirements.txt requirements-minimal.txt; do
+          tag="certmate:test-$(basename "$req" .txt)"
+          echo "::group::build $req"
+          docker build --build-arg REQUIREMENTS_FILE="$req" -t "$tag" .
+          echo "::endgroup::"
+
+          echo "::group::boot $req"
+          cid=$(docker run -d -p 18900:8000 "$tag")
+          ok=0
+          for _ in $(seq 1 30); do
+            if curl -fsS http://localhost:18900/health >/dev/null 2>&1; then ok=1; break; fi
+            # Fail fast if the container is already gone: waiting out the
+            # timeout on a dead container just hides the traceback.
+            if [ "$(docker inspect -f '{{.State.Running}}' "$cid")" != "true" ]; then break; fi
+            sleep 2
+          done
+          if [ "$ok" != 1 ]; then
+            echo "::error::$req produced an image that never served /health"
+            docker logs "$cid" 2>&1 | tail -40
+            docker rm -f "$cid" >/dev/null 2>&1 || true
+            exit 1
+          fi
+          echo "$req -> /health OK"
+
+          # /health says nothing about certbot, and CertMate drives it as a
+          # subprocess. pip's metadata used to refuse any cryptography new
+          # enough to pull a pyOpenSSL that breaks the ACME stack; as of
+          # 2026-08-08 it no longer does, so a bump can install cleanly, boot
+          # cleanly, and fail on the first issuance. Ask the binary directly.
+          if ! docker exec "$cid" certbot --version; then
+            echo "::error::$req built an image whose certbot cannot start — no certificate can be issued. See SECURITY.md 'Known dependency constraint'."
+            docker rm -f "$cid" >/dev/null 2>&1 || true
+            exit 1
+          fi
+
+          docker rm -f "$cid" >/dev/null 2>&1 || true
+          echo "::endgroup::"
+        done
 
   # The Tailwind bundle (static/css/tailwind.min.css) is committed to the repo
   # and served as-is — there is no build step at deploy time. So a stale bundle
