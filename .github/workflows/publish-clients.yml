@@ -34,13 +34,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      # Pinned, and pinned to the same 3.12 the publish jobs use. The gate
+      # below parses pyproject with `tomllib`, which is 3.11+, so it depended
+      # on whatever `python3` the runner image happened to ship. It would have
+      # failed closed rather than passed silently — but this job is the only
+      # thing between a wrong version and a write-once PyPI upload, and it
+      # should not be able to break for a reason unrelated to versions.
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: '3.12'
       - name: Fail unless both package versions equal the pushed tag
         # PyPI uploads are write-once: publishing a clients-vX.Y.Z tag whose
         # pyproject versions disagree would irrevocably ship the wrong
         # version. workflow_dispatch runs carry no tag, but the two packages
         # must still agree with each other (they release as a pair).
         run: |
-          python3 - <<'EOF'
+          python - <<'EOF'
           import os
           import sys
           import tomllib
@@ -58,8 +67,14 @@ jobs:
               # write-once, so this has to be caught before the upload, not by
               # a test suite that does not run in this workflow.
               import re
-              text = open(path, encoding="utf-8").read()
-              m = re.search(r'^__version__ = "([^"]+)"', text, re.M)
+              with open(path, encoding="utf-8") as f:
+                  text = f.read()
+              # Tolerant about spacing and quote style, strict about finding
+              # it: this gate exists to compare versions, not to enforce a
+              # formatting convention, and a reformat that turned it red would
+              # invite someone to loosen it under release pressure. If the
+              # version genuinely cannot be found it still fails.
+              m = re.search(r'''^__version__\s*=\s*["']([^"']+)["']''', text, re.M)
               if not m:
                   sys.exit(f"version gate failed: no __version__ in {path}")
               return m.group(1)
