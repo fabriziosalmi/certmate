@@ -20,17 +20,17 @@ A patch release. Every change here is a fix, and four of them share a shape wort
 
 - **A quadratic blowup in the routine that redacts secrets from logs** (#511). The PEM matcher restarted a forward scan at every `-----BEGIN`, so text that opens blocks it never closes cost time proportional to the square of its length. Measured before the fix: 480 KB of such text burned **21.6 seconds** of CPU on a single worker thread. That routine sanitises deploy-hook output, which is unbounded and frequently carries text from other systems.
 
-  Replaced with a linear scanner, verified equivalent to the old pattern by differential fuzzing. The same 480 KB now takes **36 milliseconds**, and 3.8 MB takes 291.
+  Replaced with a linear scanner, verified equivalent to the old pattern by differential fuzzing. The same 480 KB now takes **36 milliseconds**, and 3.8 MB takes 291 milliseconds.
 
 ### Guarding the dependency pins
 
-- **`certbot --version` is now checked, in the test suite and inside both built images.** Until this release the constraint documented in SECURITY.md was enforced by accident: pip'"'"'s own metadata refused any `cryptography` new enough to pull a `pyOpenSSL` that breaks the pinned ACME stack. That is no longer true. As of 2026-08-08 the combination installs cleanly and then `certbot --version` dies with `AttributeError: module '"'"'OpenSSL.crypto'"'"' has no attribute '"'"'X509Req'"'"'` — taking the whole issuance path with it.
+- **`certbot --version` is now checked, in the test suite and inside both built images.** Until this release the constraint documented in SECURITY.md was enforced by accident: pip's own metadata refused any `cryptography` new enough to pull a `pyOpenSSL` that breaks the pinned ACME stack. That is no longer true. As of 2026-08-08 the combination installs cleanly and then `certbot --version` dies with `AttributeError: module 'OpenSSL.crypto' has no attribute 'X509Req'` — taking the whole issuance path with it.
 
   Nothing would have noticed: the unit suite mocks the shell, `/health` reports on the scheduler and the certificate directory, and the image builds and boots perfectly. An operator would have found out on their first certificate request.
 
 ### Documentation
 
-- **210 examples pointed at the wrong port.** `api.md` and `guide.md`, in all five languages, used `localhost:5000` — Flask'"'"'s development default, never CertMate'"'"'s 8000. The most copy-pasted thing in the documentation returned connection refused.
+- **210 examples pointed at the wrong port.** `api.md` and `guide.md`, in all five languages, used `localhost:5000` — Flask's development default, never CertMate's 8000. The most copy-pasted thing in the documentation returned connection refused.
 - **The batch import limit was overstated by 300x.** Nine pages promised 30,000 certificates per request against an API that rejects more than 100 with a 400.
 - **Eleven files documented a test command that fails on a clean checkout**, and thirteen relative links in the translations pointed at nothing.
 - The MCP server, present and documented in five languages, was linked from no index at all.
