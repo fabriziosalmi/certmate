@@ -4,7 +4,23 @@ const {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } = require("@modelcontextprotocol/sdk/types.js");
-const fetch = require("node-fetch");
+// No node-fetch import: `fetch` has been global since Node 18, and
+// package.json already requires >= 20.
+//
+// Dependabot proposed bumping node-fetch 2.x -> 3.x (#348). 3.x is ESM-only
+// and this file is CommonJS, so that would have thrown ERR_REQUIRE_ESM — but
+// only on Node 20.0 through 20.18. Node enabled `require(esm)` by default in
+// 20.19.0, so on anything newer the bump loads fine. That split is the real
+// hazard: `engines` admits `>=20.0.0` and CI pins `node-version: 20`, which
+// resolves to the newest 20.x, so CI would have been green while an operator
+// on an older 20 got a server that will not start.
+//
+// Dropping the dependency removes the question instead of answering it.
+//
+// Only `.ok`, `.status`, `.json()` and `.text()` are used on the responses
+// below, and those behave identically under node-fetch 2 and the global
+// implementation. Nothing here touches `.body` as a Node stream, `.buffer()`,
+// or the `timeout`/`agent` options, which are where the two actually differ.
 const { randomUUID } = require("crypto");
 
 // Stable id for this agent process, sent on every CertMate call so the audit
