@@ -139,6 +139,29 @@ metadata and a clean-room install on 2026-07-07:
 In short: every cryptography version that fixes the GHSA requires a
 pyOpenSSL that breaks the pinned ACME stack at import.
 
+**Re-verified 2026-08-08 against `cryptography==50.0.0` (Dependabot #516), and
+the situation has become more dangerous, not less.**
+
+- **pip now accepts the combination.** `pip install certbot==2.10.0
+  josepy==1.13.0 cryptography==50.0.0` resolves and installs cleanly, pulling
+  `pyopenssl==26.4.0`. The dependency metadata no longer refuses it, so the
+  guard rail that used to stop this bump at resolution time is gone. The
+  failure has moved from install time to run time: an image builds green and
+  then dies the first time it tries to issue a certificate.
+- **The failure is now `X509Req`, not `X509Extension`.** pyOpenSSL 26.4.0 has
+  dropped both (`hasattr(OpenSSL.crypto, 'X509Req') == False`), and `X509Req`
+  is the one that breaks first.
+- **`certbot` itself no longer starts.** Not merely `acme.crypto_util`:
+  `certbot --version` raises `AttributeError: module 'OpenSSL.crypto' has no
+  attribute 'X509Req'` from `certbot/_internal/main.py:21`. CertMate drives
+  certbot as a CLI subprocess, so this is the entire issuance path, not a
+  library nicety.
+
+So the pin is now doing more work than it was, not less: nothing upstream
+enforces it any more. Do not relax `cryptography` or `pyopenssl` here without
+re-running that clean-room install and confirming `certbot --version` still
+answers. The real fix remains the certbot 5.x stack migration (#103).
+
 **Mitigation / actual exposure.** The vulnerable code path is
 `PKCS7_verify()` (PKCS#7 / S/MIME signature verification):
 

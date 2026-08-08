@@ -107,3 +107,43 @@ def test_every_advertised_requirements_file_is_built_by_ci():
         "the image job no longer checks /health — `docker build` proves the "
         "layers assemble, not that the container starts."
     )
+
+
+def test_the_certbot_cli_actually_runs():
+    """CertMate drives certbot as a subprocess. Prove the binary starts.
+
+    Until 2026-08-08 this was defended by accident: pip's own metadata refused
+    to install a cryptography new enough to drag in a pyOpenSSL that breaks the
+    pinned ACME stack. That guard rail is gone — `pip install certbot==2.10.0
+    josepy==1.13.0 cryptography==50.0.0` now resolves cleanly and installs
+    pyopenssl 26.4.0, which has dropped both `X509Req` and `X509Extension`.
+    `certbot --version` then dies in `certbot/_internal/main.py` with an
+    AttributeError, and every issuance with it.
+
+    Nothing else here would notice. The unit suite mocks the shell, /health
+    reports on the scheduler and the cert directory, and the image builds and
+    boots perfectly well — the first certificate request is where it surfaces.
+    So this asks the one question that matters about the pin: does the binary
+    we shell out to still start?
+
+    No network: `--version` prints and exits.
+    """
+    import shutil
+    import subprocess
+
+    certbot = shutil.which("certbot")
+    if certbot is None:
+        pytest.skip("certbot is not on PATH in this environment")
+
+    result = subprocess.run(
+        [certbot, "--version"], capture_output=True, text=True, timeout=60
+    )
+    assert result.returncode == 0, (
+        "`certbot --version` failed — the ACME stack is broken at import and "
+        "no certificate can be issued. Most likely a cryptography/pyopenssl "
+        "bump; see SECURITY.md 'Known dependency constraint'.\n"
+        f"exit={result.returncode}\n{(result.stderr or result.stdout)[-1500:]}"
+    )
+    assert "certbot" in (result.stdout + result.stderr).lower(), (
+        f"`certbot --version` produced no version line: {result.stdout!r}"
+    )

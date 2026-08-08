@@ -154,6 +154,18 @@ jobs:
             exit 1
           fi
           echo "$req -> /health OK"
+
+          # /health says nothing about certbot, and CertMate drives it as a
+          # subprocess. pip's metadata used to refuse any cryptography new
+          # enough to pull a pyOpenSSL that breaks the ACME stack; as of
+          # 2026-08-08 it no longer does, so a bump can install cleanly, boot
+          # cleanly, and fail on the first issuance. Ask the binary directly.
+          if ! docker exec "$cid" certbot --version; then
+            echo "::error::$req built an image whose certbot cannot start — no certificate can be issued. See SECURITY.md 'Known dependency constraint'."
+            docker rm -f "$cid" >/dev/null 2>&1 || true
+            exit 1
+          fi
+
           docker rm -f "$cid" >/dev/null 2>&1 || true
           echo "::endgroup::"
         done
