@@ -1,3 +1,49 @@
+## v2.25.2 (Things that were never tested, and therefore never worked)
+
+A patch release. Every change here is a fix, and four of them share a shape worth naming: the check that should have caught the bug either did not exist, or existed and could not fail.
+
+### An image variant that could not start
+
+- **`requirements-minimal.txt` produced a container that crash-looped** (#514, reported by @mackboylens). The Dockerfile advertises `REQUIREMENTS_FILE` as a supported build argument, but the minimal set omitted SQLAlchemy while `modules/core/factory.py` imports APScheduler's `SQLAlchemyJobStore` at module scope. Gunicorn's worker died during import, every time.
+
+  It had been broken for months because **nothing in the repository ever built that file** — no workflow, no test, no script referenced it. And the CI step was `docker build` alone, which proves the layers assemble and says nothing about whether the process starts. CI now builds *and boots* every advertised requirements set and requires each to answer `/health`.
+
+  If you build your own image with the default `requirements.txt`, nothing changes: that path was always fine, and the published images are built from it.
+
+### Certificate issuance
+
+- **Four calls to Akamai EdgeDNS had no timeout** (#511). They run inside the certbot authentication hook, on one of the eight threads the process has. `requests` has no default timeout, so a hung connection held that thread indefinitely; enough of them and the interface stops responding. Every other outbound call in that module already set one.
+
+- **A dependency pin was not pinning anything** (#511). `certbot-dns-hetzner==3.0.0` depends on `dns-lexicon-coop`, a third-party fork that ships the same top-level `lexicon/` package as the pinned `dns-lexicon==3.25.1`. pip installed both and let one overwrite the other, so which library the DNS alias mode actually used depended on install order. Held at `certbot-dns-hetzner==2.0.1`, whose four Python files are byte-identical to 3.0.0 — the releases differ only in that dependency line.
+
+### Availability
+
+- **A quadratic blowup in the routine that redacts secrets from logs** (#511). The PEM matcher restarted a forward scan at every `-----BEGIN`, so text that opens blocks it never closes cost time proportional to the square of its length. Measured before the fix: 480 KB of such text burned **21.6 seconds** of CPU on a single worker thread. That routine sanitises deploy-hook output, which is unbounded and frequently carries text from other systems.
+
+  Replaced with a linear scanner, verified equivalent to the old pattern by differential fuzzing. The same 480 KB now takes **36 milliseconds**, and 3.8 MB takes 291.
+
+### Guarding the dependency pins
+
+- **`certbot --version` is now checked, in the test suite and inside both built images.** Until this release the constraint documented in SECURITY.md was enforced by accident: pip'"'"'s own metadata refused any `cryptography` new enough to pull a `pyOpenSSL` that breaks the pinned ACME stack. That is no longer true. As of 2026-08-08 the combination installs cleanly and then `certbot --version` dies with `AttributeError: module '"'"'OpenSSL.crypto'"'"' has no attribute '"'"'X509Req'"'"'` — taking the whole issuance path with it.
+
+  Nothing would have noticed: the unit suite mocks the shell, `/health` reports on the scheduler and the certificate directory, and the image builds and boots perfectly. An operator would have found out on their first certificate request.
+
+### Documentation
+
+- **210 examples pointed at the wrong port.** `api.md` and `guide.md`, in all five languages, used `localhost:5000` — Flask'"'"'s development default, never CertMate'"'"'s 8000. The most copy-pasted thing in the documentation returned connection refused.
+- **The batch import limit was overstated by 300x.** Nine pages promised 30,000 certificates per request against an API that rejects more than 100 with a 400.
+- **Eleven files documented a test command that fails on a clean checkout**, and thirteen relative links in the translations pointed at nothing.
+- The MCP server, present and documented in five languages, was linked from no index at all.
+
+### Notes for operators
+
+- Upgrading is a drop-in. No configuration, data or API changes.
+- Worth upgrading promptly if you use **DNS alias mode with Akamai EdgeDNS**, **deploy hooks that emit large output**, or **the Hetzner DNS plugin**.
+- If you build your own image from `requirements-minimal.txt`, this release is the one that makes it start.
+- The published Docker images were not affected by #514.
+
+---
+
 ## v2.25.1 (A Helm chart, and a security policy that tells the truth)
 
 No application code changed in this release — `modules/` is byte-identical to v2.25.0. What changed is how CertMate is installed, described, and reported to.
