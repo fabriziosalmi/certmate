@@ -155,11 +155,6 @@ server.listen(0, "127.0.0.1", () => {
         process.exit(0);
       }, 400);
       return;
-      /* eslint-disable no-unreachable */
-      console.log("PASS");
-      cleanup();
-      process.exit(0);
-      /* eslint-enable no-unreachable */
     }, 300);
   }
 });

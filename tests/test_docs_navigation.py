@@ -314,11 +314,23 @@ def test_mcp_tools_request_async_issuance():
     # forward-only window missed it. Anchoring on the first mention of the path
     # was worse still — for create that is a comment, so the check would have
     # been satisfied by prose.
+    #
+    # The handler ends at the next `case`/`default`, or at end of file. The
+    # first version required a literal `\n      case "`, which tied the test to
+    # one indentation and would have failed outright on the last case in the
+    # switch — a red build with nothing broken (Copilot, #531).
+    boundary = r'(?=\n\s*(?:case\s+["\']|default\s*:)|\Z)'
     for tool in ("certmate_create_certificate",
                  "certmate_renew_certificate",
                  "certmate_update_certificate"):
-        m = re.search(rf'case "{tool}":(.*?)\n      case "', server, re.S)
+        m = re.search(rf'case "{tool}":(.*?)' + boundary, server, re.S)
         assert m, f"could not isolate the {tool} handler in mcp/index.js"
+        # Over-capturing would let one tool's `async: true` vouch for another.
+        assert m.group(1).count('makeRequest') <= 2, (
+            f"the {tool} handler capture spilled into the next case "
+            f"({m.group(1).count('makeRequest')} makeRequest calls) — the "
+            f"boundary pattern is matching too late to isolate anything"
+        )
         assert "async: true" in m.group(1), (
             f"{tool} does not request async issuance — the server would run it "
             f"inline and never produce a job_id for certmate_get_job to poll"
