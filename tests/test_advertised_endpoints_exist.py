@@ -11,27 +11,45 @@ Nothing caught it because the documentation was checked against itself. The
 route table is the only thing that knows what exists, so the check below asks
 the application, not a list someone maintains by hand.
 """
-import os
 import pathlib
 import re
-import sys
 
 import pytest
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 
-def _url_map():
-    os.environ.setdefault("TESTING", "true")
-    sys.path.insert(0, str(REPO_ROOT))
-    from modules.core.factory import create_app
-    result = create_app()
+@pytest.fixture(scope="session")
+def url_map(tmp_path_factory):
+    """The application's route table, built once, under a temporary root.
+
+    Built once because the first version called `create_app()` inside every
+    parametrised case, and under a temporary root because `setup_directories()`
+    creates `data/`, `certificates/` and `logs/` relative to
+    `modules/core/factory.__file__` — so a test that only wants to read the
+    route table was creating directories in the working tree and would fail on
+    a read-only checkout (Copilot, #534). Anchoring the module's `__file__` to
+    a temp tree is the pattern the rest of the suite already uses; see
+    tests/test_csp_img_src_airgap.py.
+    """
+    root = tmp_path_factory.mktemp("routes") / "certmate"
+    module_dir = root / "modules" / "core"
+    module_dir.mkdir(parents=True)
+    anchor = module_dir / "factory.py"
+    anchor.write_text("# test path anchor\n", encoding="utf-8")
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setenv("TESTING", "true")
+        patch.setenv("FLASK_ENV", "testing")
+        from modules.core.factory import create_app
+        patch.setattr("modules.core.factory.__file__", str(anchor))
+        result = create_app()
     app = result[0] if isinstance(result, tuple) else result
-    rules = {}
-    for rule in app.url_map.iter_rules():
-        methods = {m for m in rule.methods if m not in ("HEAD", "OPTIONS")}
-        rules[_normalise(str(rule))] = methods
-    return rules
+    return {
+        _normalise(str(rule)): {m for m in rule.methods
+                                if m not in ("HEAD", "OPTIONS")}
+        for rule in app.url_map.iter_rules()
+    }
 
 
 def _normalise(path):
@@ -87,15 +105,14 @@ def test_the_help_page_advertises_something():
     )
 
 
-def test_the_route_map_is_populated():
-    routes = _url_map()
-    assert len(routes) > 50, f"only {len(routes)} routes — did the app boot?"
+def test_the_route_map_is_populated(url_map):
+    assert len(url_map) > 50, f"only {len(url_map)} routes — did the app boot?"
 
 
 @pytest.mark.parametrize("source,verb,path", _advertised(),
                          ids=[f"{v} {p}" for _s, v, p in _advertised()])
-def test_every_advertised_endpoint_is_a_real_route(source, verb, path):
-    routes = _url_map()
+def test_every_advertised_endpoint_is_a_real_route(source, verb, path, url_map):
+    routes = url_map
     # `{cert|key|chain}` in a listing stands for one path segment.
     hit = _match(re.sub(r"\{[^}]*\|[^}]*\}", "<X>", path), routes)
     assert hit, (
