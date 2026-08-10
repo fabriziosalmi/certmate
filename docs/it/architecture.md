@@ -23,7 +23,7 @@ Questo documento descrive l'architettura completa di CertMate — sia il sistema
 CertMate è un sistema modulare ed estensibile per la gestione di certificati SSL/TLS costruito con Python/Flask. Supporta molteplici provider CA, oltre due dozzine di provider DNS e backend di archiviazione intercambiabili.
 
 **Informazioni principali:**
-- **Linguaggio**: Python 3.9+ (Flask, Flask-RESTX)
+- **Linguaggio**: Python 3.12 (Flask, Flask-RESTX)
 - **Archiviazione**: filesystem locale come impostazione predefinita + 4 backend cloud (Azure Key Vault, AWS Secrets Manager, HashiCorp Vault, Infisical)
 - **Provider CA**: Let's Encrypt, DigiCert ACME, CA privata
 - **Provider DNS**: oltre due dozzine supportati (Cloudflare, AWS Route53, Azure, Google e altri — vedere [Provider DNS](./dns-providers.md) per l'elenco completo)
@@ -298,7 +298,7 @@ I rinnovi preservano sempre la forma in uso al momento della creazione: certbot 
 
 | Livello | Tecnologie |
 |---------|-----------|
-| **Backend** | Python 3.9+, Flask, Flask-RESTX, APScheduler, Certbot |
+| **Backend** | Python 3.12, Flask, Flask-RESTX, APScheduler, Certbot |
 | **Frontend** | HTML5, Tailwind CSS, Vanilla JavaScript, Font Awesome |
 | **SDK Cloud** | Azure SDK, boto3, hvac, infisical-python |
 | **Crittografia** | cryptography (OpenSSL), plugin certbot |
@@ -768,7 +768,7 @@ Ogni certificato ha un file `metadata.json` contenente:
 
 ### Requisiti minimi
 
-- Python 3.9+
+- Python 3.12
 - 100 MB di spazio su disco per la CA e i certificati iniziali
 - 50 MB per i registri di audit per milione di operazioni
 - Basso utilizzo di memoria

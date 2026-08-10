@@ -9,7 +9,7 @@
 **CertMate** is an SSL certificate management system for modern infrastructure. Multi-DNS provider support, Docker-ready, comprehensive REST API.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
 [![Docker](https://img.shields.io/badge/docker-ready-blue)](https://hub.docker.com/)
 
  **Full Documentation**: https://github.com/fabriziosalmi/certmate

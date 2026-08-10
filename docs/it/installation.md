@@ -6,7 +6,7 @@ Questa guida illustra tutti i metodi di installazione e deploy di CertMate.
 
 ## Prerequisiti
 
-- Python 3.9 o superiore
+- Python 3.12
 - pip (gestore di pacchetti Python)
 - Docker (opzionale, per il deploy containerizzato)
 

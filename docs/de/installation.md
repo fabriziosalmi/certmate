@@ -6,7 +6,7 @@ Diese Anleitung beschreibt alle Methoden zur Installation und zum Deployment von
 
 ## Voraussetzungen
 
-- Python 3.9 oder höher
+- Python 3.12
 - pip (Python-Paketverwaltung)
 - Docker (optional, für containerisiertes Deployment)
 
