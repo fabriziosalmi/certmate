@@ -1,3 +1,112 @@
+## v2.25.4 (Two certificate authorities that could not issue, and the checks that could not see it)
+
+A patch release. One product fault reaches issuance directly; the rest are
+claims the documentation made that the software did not keep, and the gates
+that were supposed to notice.
+
+### DigiCert ACME pointed at a hostname that no longer exists
+
+`acme.digicert.com` does not resolve. It was CertCentral's legacy ACME service,
+which DigiCert stopped supporting on **24 February 2026**, and CertMate went on
+naming it for the six months since — in the CA registry, in the settings page's
+pre-filled default, in the CA guide in all five languages, and in a test that
+asserted the dead URL. The README advertises DigiCert ACME with EAB as a
+supported authority the whole time.
+
+It now points at the DigiCert ONE mPKI directory, which answers and requires
+external account binding, matching what the registry already declared.
+
+**You are affected if** you configured DigiCert as your CA. Issuance failed
+with a DNS error. After upgrading, check the directory URL on the settings
+page: DigiCert's endpoint is **regional**, and an account outside the default
+region has its own URL, shown in CertCentral. The directory URL can be set
+per certificate if yours differs.
+
+### Google Trust Services staging was broken in a different way
+
+`dv.acme-staging.api.pki.goog` serves a certificate issued for another name, so
+the TLS handshake fails verification and no ACME client will talk to it. The
+staging directory is `dv.acme-v02.test-api.pki.goog`. Production was unaffected.
+
+Both were found by a new check that asks every authority in the registry
+whether its directory still exists. It runs weekly rather than on every pull
+request: five external authorities as a merge gate means someone else's outage
+blocks your work, and an authority does not retire an endpoint between two
+commits.
+
+### A DNS provider that was advertised and never shipped
+
+CertMate has carried an Infomaniak strategy, a credentials writer, a factory
+entry and a README row since the provider was added — and never the plugin. So
+`certbot --dns-infomaniak` failed with "unrecognized arguments" in every image
+ever published. The plugin is now installed; the credentials contract was
+verified against the plugin's own source before shipping it.
+
+### The provider table said the same thing about every provider
+
+Its status column read **Stable** on all twenty-nine rows. A column with one
+value cannot be wrong about any particular provider, which is how four wrong
+entries survived in the table people read before choosing one. **Namecheap** is
+the one that matters: the only release on PyPI targets Python 2.7-3.8 and
+cannot work with the supported stack — as the code's own docstring has said all
+along. It is now marked Unavailable, pointing at ACME-DNS or the custom-script
+hook. PowerDNS, Scaleway and Infomaniak are marked by where they actually come
+from.
+
+### Optional dependency sets that moved certbot off its pin, and one that never installed
+
+CertMate holds certbot at 2.10.0 deliberately while the 5.x migration remains a
+plan. Two things contradicted that:
+
+- **Seven packages were pinned to two different versions at once.** Because the
+  Dockerfile installs extras in a separate step, the documented build recipe
+  `EXTRA_REQUIREMENTS="requirements-aws.txt requirements-gcp.txt"` upgraded
+  certbot from 2.10.0 to 3.3.0 — in a build that reported success.
+- **`requirements-extended.txt` could not be installed at all**, in any
+  configuration: two of its plugins demand incompatible versions of the same
+  dependency.
+
+Both are fixed, and CI now resolves every advertised combination on every run.
+
+### The documentation, held to the same standard
+
+- **The Python version was wrong everywhere.** The README badge said 3.9+; six
+  pinned packages require 3.10 or newer, so `pip install -r requirements.txt`
+  refused to run on 3.9 — and so did the minimal set. Every surface now says
+  3.12, which is what the image is built from and what CI tests.
+- **The install guide's pinned list said `certbot==4.1.1`** in all five
+  languages. Correcting the numbers would not have been enough — what makes the
+  stack start is a set of pins the list never mentioned — so the lists were
+  replaced by the requirements files CertMate ships.
+- **A download URL that returns 404.** `GET /{domain}/tls` was in the README
+  twice and in the in-product help page twice, including the curl command. The
+  endpoint is `/api/certificates/{domain}/download`.
+- **A coverage floor nothing enforces** (80% and 95% promised in four
+  languages; the enforced floor is 65%), **two compose variables the image
+  never reads**, and **a Docker Hub link to an image nobody publishes**.
+
+### Two faults in the audit trail
+
+- **Two processes appending at once could write the same sequence number**, and
+  the verifier then reported the chain as tampered with. Appends now take an
+  advisory lock before measuring the chain, and refresh their view of it when
+  another process has appended in the meantime; the verifier distinguishes a
+  duplicate write from a deletion and says which it found.
+- **The MCP server never asked for asynchronous issuance**, so the job-polling
+  loop that its own documentation describes could not run: the call blocked for the
+  whole exchange and no job id was ever produced.
+
+### Notes for operators
+
+- Upgrading is a drop-in. No configuration, data or API changes.
+- If you use DigiCert, confirm the ACME directory URL for your region after
+  upgrading.
+- If you build your own image with `EXTRA_REQUIREMENTS`, rebuild: previous
+  builds using the AWS or GCP sets are running a certbot the project does not
+  support.
+
+---
+
 ## v2.25.3 (Old password hashes stop being old)
 
 One security fix, for installs that predate the move to bcrypt.
