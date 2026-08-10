@@ -2,4 +2,4 @@
 # Install this in addition to requirements-minimal.txt for Google Cloud support
 
 google-cloud-dns==0.35.0
-certbot-dns-google==2.11.0
+certbot-dns-google==2.10.0

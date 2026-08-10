@@ -329,16 +329,33 @@ curl -X POST http://localhost:8000/api/backups/restore \
 
 ### Conflictos de versiones de plugins DNS
 
-Si encuentra conflictos de versiones, use estas versiones específicas:
+Instale desde el archivo requirements que distribuye CertMate. Ese conjunto se
+resuelve, se construye y se arranca en CI en cada ejecución; una lista montada a
+mano no.
 
-```txt
-certbot==4.1.1
-certbot-dns-cloudflare==4.1.1
-certbot-dns-route53==4.1.1
-certbot-dns-azure==2.6.1
-certbot-dns-google==4.1.1
-certbot-dns-powerdns==0.2.1
+```bash
+pip install -r requirements.txt            # todos los proveedores incluidos
+pip install -r requirements-minimal.txt    # solo certbot + Cloudflare
+pip install -r requirements-extended.txt   # más proveedores, sobre minimal
+pip install -r requirements-aws.txt        # Route53, sobre cualquiera de los dos
 ```
+
+> Esta página publicaba su propia lista de versiones, que se había desviado
+> hasta `certbot==4.1.1` en los cinco idiomas mientras el proyecto está fijado a
+> `2.10.0`: la migración a 5.x sigue siendo un plan (incidencia #103), no una
+> versión publicada.
+>
+> Corregir esos números no basta, y por eso la lista se ha eliminado en lugar de
+> actualizarse. Lo que mantiene unida la pila no son las versiones de los
+> plugins, sino `cryptography`, `pyopenssl`, `josepy` y `acme` sosteniéndose
+> mutuamente: las versiones nuevas de pyOpenSSL eliminan
+> `OpenSSL.crypto.X509Extension`, que `acme` evalúa al importar. Montado a mano,
+> certbot muere antes de poder emitir nada — medido cuatro veces, añadiendo un
+> pin cada vez. Véase SECURITY.md, "Known dependency constraint".
+>
+> `certbot-dns-powerdns` necesita su propio entorno: requiere
+> `dns-lexicon<=3.5.6` mientras que los plugins de Linode, OVH, RFC2136,
+> DNSMadeEasy y NS1 requieren `>=3.14.1`, y pip no puede satisfacer ambos.
 
 ### Comandos de validación
 
@@ -465,29 +482,19 @@ services:
 
 ### Instalación manual de dependencias
 
-Si la instalación automática falla, instale los proveedores DNS individualmente:
+Si un proveedor concreto no se instala, añádalo sobre una base que funcione en
+lugar de montar una a mano:
 
 ```bash
-# Núcleo de certbot
-pip install certbot==4.1.1
-
-# Cloudflare
-pip install certbot-dns-cloudflare==4.1.1
-
-# AWS Route53
-pip install certbot-dns-route53==4.1.1 boto3==1.35.76
-
-# Azure DNS
-pip install certbot-dns-azure==2.6.1 azure-identity==1.19.0 azure-mgmt-dns==8.1.0
-
-# Google Cloud DNS
-pip install certbot-dns-google==4.1.1 google-cloud-dns==0.35.0
-
-# PowerDNS
-pip install certbot-dns-powerdns==0.2.1
+pip install -r requirements-minimal.txt    # primero la base que funciona
+pip install -r requirements-aws.txt        # Route53 + boto3
+pip install -r requirements-gcp.txt        # Google Cloud DNS
+pip install -r requirements-azure.txt      # Azure DNS
 ```
 
-> La mayoría de los plugins DNS requieren Certbot 4.1.1. El plugin de Azure tiene versionado independiente (2.6.1) y PowerDNS es un plugin más reciente (0.2.1).
+Cada archivo lleva las versiones que su plugin necesita, y CI resuelve todas las
+combinaciones en cada ejecución — incluida la comprobación de que certbot no se
+sale de su pin.
 
 ### Comandos de validación
 
