@@ -170,6 +170,72 @@ jobs:
           echo "::endgroup::"
         done
 
+    # The optional requirements files are never built above, because no image
+    # ships them — and that is exactly why they rotted unnoticed:
+    #
+    #   * requirements-extended.txt could not be installed at all, in any
+    #     environment. certbot-dns-powerdns==0.2.1 wants dns-lexicon<=3.5.6 and
+    #     certbot-dns-linode wants >=3.14.1: ResolutionImpossible, alone in an
+    #     empty venv or layered either way. Advertised by the Dockerfile as an
+    #     EXTRA_REQUIREMENTS option the whole time.
+    #   * requirements-aws.txt and -gcp.txt pinned plugins above the certbot
+    #     pin. Since extras install in a *separate* pip run, pip upgraded
+    #     certbot off 2.10.0 — measured at 3.3.0 on 3.12 — in a build that
+    #     reported success.
+    #
+    # Resolving is enough to catch both and costs seconds, so every file and
+    # every combination the Dockerfile and docker-compose.yml advertise gets
+    # resolved on every run. `--dry-run` does full dependency resolution
+    # without downloading wheels.
+    - name: Resolve every optional requirements combination
+      if: matrix.python-version == '3.12'
+      run: |
+        set -euo pipefail
+        combos=(
+          "requirements-minimal.txt requirements-extended.txt"
+          "requirements.txt requirements-aws.txt"
+          "requirements.txt requirements-gcp.txt"
+          "requirements.txt requirements-azure.txt"
+          "requirements.txt requirements-aws.txt requirements-gcp.txt"
+        )
+        pinned=$(grep -oE '^certbot==[0-9.]+' requirements.txt | cut -d= -f3)
+        echo "certbot is pinned at $pinned"
+        for combo in "${combos[@]}"; do
+          echo "::group::resolve $combo"
+          args=()
+          for f in $combo; do args+=(-r "$f"); done
+          # Resolved together, not one after another. The Dockerfile installs
+          # extras in a separate pip run, where a plugin requiring a newer
+          # certbot is silently granted it; asking pip to satisfy every file at
+          # once turns that same silent upgrade into ResolutionImpossible,
+          # which is the answer we want on a build machine. Both failure modes
+          # are covered: this catches the conflict, the version check below
+          # catches a drift pip could satisfy.
+          report=$(mktemp)
+          # --ignore-installed is what makes this a check. The job already has
+          # requirements.txt installed, so without it pip reports only the
+          # delta — four packages, certbot not among them — and any assertion
+          # about certbot's resolved version passes without having looked at
+          # one. Verified: the report goes from 4 entries to the full set.
+          if ! python -m pip install --dry-run --ignore-installed --quiet \
+               --report "$report" "${args[@]}"; then
+            echo "::error::$combo does not resolve — this combination is advertised and cannot be installed"
+            exit 1
+          fi
+          # One line on purpose: a multi-line `python -c "..."` inside a YAML
+          # block scalar has to start at column 0 to be valid Python, and that
+          # is not valid YAML. The default is 'ABSENT', never the pinned
+          # version — a resolution that does not mention certbot has not
+          # checked certbot, and must not read as a pass.
+          got=$(python -c "import json; d=json.load(open('$report')); print(next((i.get('metadata',{}).get('version','UNKNOWN') for i in d.get('install',[]) if i.get('metadata',{}).get('name','').lower()=='certbot'), 'ABSENT'))")
+          if [ "$got" != "$pinned" ]; then
+            echo "::error::$combo resolves certbot to $got, not the pinned $pinned. An optional file is dragging the ACME stack off its pin (#103 is still a plan, not a migration)."
+            exit 1
+          fi
+          echo "$combo -> certbot $got"
+          echo "::endgroup::"
+        done
+
   # The Tailwind bundle (static/css/tailwind.min.css) is committed to the repo
   # and served as-is — there is no build step at deploy time. So a stale bundle
   # ships silently whenever input.css / tailwind.config.js change without a

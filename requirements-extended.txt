@@ -2,11 +2,21 @@
 # Install this in addition to requirements-minimal.txt for additional DNS providers
 
 # Self-hosted and enterprise DNS
-certbot-dns-powerdns==0.2.1
-certbot-dns-rfc2136==2.11.0
+# certbot-dns-powerdns is NOT listed here, and this file was unusable until it
+# was removed: 0.2.1 (the latest) requires dns-lexicon<=3.5.6, while
+# certbot-dns-linode below requires dns-lexicon>=3.14.1. pip cannot satisfy
+# both, so `pip install -r requirements-extended.txt` ended in
+# ResolutionImpossible — alone in an empty venv, layered on
+# requirements-minimal.txt as the header suggests, and layered on
+# requirements.txt as the Dockerfile advertises. Every path.
+# requirements.txt had already excluded it for exactly this reason and says
+# "Install separately if needed"; this file reintroduced the conflict it
+# documented avoiding, and nothing built it, so nothing ever said so.
+#   pip install certbot-dns-powerdns==0.2.1   # in its own environment
+certbot-dns-rfc2136==2.10.0
 
 # Popular hosting providers
-certbot-dns-linode==2.11.0
+certbot-dns-linode==2.10.0
 certbot-dns-vultr==1.1.0
 # Held at 2.0.1: 3.0.0 depends on the `dns-lexicon-coop` fork, which collides
 # file-for-file with upstream `dns-lexicon`. Same reasoning (and the same
@@ -16,7 +26,7 @@ certbot-dns-hetzner-cloud==1.0.5
 
 # Domain registrars with DNS
 certbot-dns-gandi==1.6.1
-certbot-dns-ovh==2.11.0
+certbot-dns-ovh==2.10.0
 # certbot-dns-namecheap removed: only v1.0.0 exists on PyPI (alpha,
 # targets Python 2.7-3.8) and is incompatible with certbot 2.x / Python 3.12.
 # Namecheap users should use acme-dns or manual DNS challenge instead.
@@ -24,8 +34,8 @@ certbot-dns-porkbun==0.11.0
 certbot-dns-godaddy==2.8.0
 
 # Specialized DNS services
-certbot-dns-dnsmadeeasy==2.11.0
-certbot-dns-nsone==2.11.0
+certbot-dns-dnsmadeeasy==2.10.0
+certbot-dns-nsone==2.10.0
 certbot-dns-he-ddns==0.1.0
 certbot-dns-dynudns==0.0.6
 
