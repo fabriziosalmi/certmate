@@ -88,29 +88,61 @@ def _expected(distribution):
         return "Extended image"
     if _is_pinned(optional, distribution):
         return "Stable"          # per-cloud extras (aws/gcp/azure) are supported
-    if _is_only_a_comment(base + extended, distribution):
-        return {"Separate install", "Unavailable"}
+    # Not pinned anywhere: whether it is documented as a deliberate exclusion
+    # (a comment in requirements.txt) or absent entirely, the honest answers are
+    # the same two. An earlier version branched on that distinction and returned
+    # the identical set from both arms — a conditional that decided nothing.
+    del base, extended
     return {"Separate install", "Unavailable"}
 
 
 def _table_rows():
-    """(display name, availability) for every row of the provider table."""
+    """(display name, availability) for every row of the provider table.
+
+    The first version filtered out any line containing "Credentials" — intended
+    to drop the header, which does not need dropping (its cells carry no `**`,
+    so the pattern never matched it). What it actually dropped was every
+    provider whose credentials cell reads "API Credentials": EfficientIP
+    SOLIDserver and OVH went unchecked, and the >= 25 guard below did not
+    notice because 27 still cleared it. Found via Copilot on #535.
+    """
     rows = []
     for line in README.read_text(encoding="utf-8").splitlines():
         match = re.match(r"^\|\s*\*\*(.+?)\*\*[^|]*\|.*\|\s*\*\*([\w ]+)\*\*\s*\|\s*$",
                          line)
-        if match and "Credentials" not in line:
+        if match:
             name = re.sub(r"\s*\(.*?\)", "", match.group(1)).strip()
             rows.append((name, match.group(2).strip()))
     return rows
 
 
+# Parsed once: the parametrisation below needs both the values and the ids, and
+# reading README.md twice at collection time is two chances to disagree.
+TABLE_ROWS = _table_rows()
+
+
 def test_the_table_is_being_parsed():
-    rows = _table_rows()
-    assert len(rows) >= 25, (
-        f"parsed {len(rows)} provider rows out of README.md — the table format "
-        f"changed and every check below would pass over nothing."
+    rows = TABLE_ROWS
+    # Only the provider table: the legend underneath it is also a markdown
+    # table whose rows start with `| **`, and counting those would make this
+    # guard disagree with itself.
+    listed, inside = 0, False
+    for line in README.read_text(encoding="utf-8").splitlines():
+        if line.startswith("| Provider "):
+            inside = True
+            continue
+        if inside:
+            if not line.startswith("|"):
+                break
+            if line.startswith("| ---"):
+                continue
+            listed += 1
+    assert len(rows) == listed, (
+        f"parsed {len(rows)} rows but the table has {listed}. Silently covering "
+        f"fewer providers than the table lists is exactly how EfficientIP and "
+        f"OVH went unchecked."
     )
+    assert len(rows) >= 25, f"only {len(rows)} provider rows found"
     values = {status for _name, status in rows}
     assert len(values) > 1, (
         f"every row says {values}. A column with one value is decoration, not "
@@ -119,7 +151,7 @@ def test_the_table_is_being_parsed():
 
 
 @pytest.mark.parametrize("distribution", sorted(set(DISTRIBUTIONS.values())))
-def test_every_distribution_name_is_one_the_requirements_know(distribution):
+def test_every_distribution_name_is_known_to_the_requirements(distribution):
     """The table above must describe real packages, or it proves nothing."""
     everything = "".join(
         _requirements(p.name) for p in REPO_ROOT.glob("requirements*.txt"))
@@ -130,8 +162,8 @@ def test_every_distribution_name_is_one_the_requirements_know(distribution):
     )
 
 
-@pytest.mark.parametrize("name,claimed", _table_rows(),
-                         ids=[n for n, _s in _table_rows()])
+@pytest.mark.parametrize("name,claimed", TABLE_ROWS,
+                         ids=[n for n, _s in TABLE_ROWS])
 def test_the_availability_column_matches_the_requirements(name, claimed):
     if name in NATIVE:
         assert claimed == "Stable", (
@@ -146,8 +178,12 @@ def test_the_availability_column_matches_the_requirements(name, claimed):
     )
     expected = _expected(distribution)
     allowed = {expected} if isinstance(expected, str) else expected
+    pinned_in = sorted(
+        path.name for path in REPO_ROOT.glob("requirements*.txt")
+        if _is_pinned(_requirements(path.name), distribution)
+    )
+    where = "pinned in " + ", ".join(pinned_in) if pinned_in else "pinned nowhere"
     assert claimed in allowed, (
-        f"README says {name} is '{claimed}', but {distribution} is "
-        f"{'pinned in ' + ', '.join(p.name for p in REPO_ROOT.glob('requirements*.txt') if _is_pinned(_requirements(p.name), distribution)) if any(_is_pinned(_requirements(p.name), distribution) for p in REPO_ROOT.glob('requirements*.txt')) else 'pinned nowhere'}. "
+        f"README says {name} is '{claimed}', but {distribution} is {where}. "
         f"Expected one of {sorted(allowed)}."
     )
