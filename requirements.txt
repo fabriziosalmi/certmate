@@ -53,6 +53,14 @@ certbot-dns-hetzner-cloud==1.0.5
 certbot-dns-porkbun==0.11.0
 certbot-dns-godaddy==2.8.0
 certbot-dns-arvancloud==0.1.0
+# Infomaniak: Swiss ISP and cloud provider. CertMate has shipped an
+# InfomaniakStrategy, a credentials-file writer and a README row for it since
+# the provider was added — and never the plugin, so `certbot --dns-infomaniak`
+# failed with "unrecognized arguments" in every image ever published. 0.2.4
+# requires only certbot>=0.31.0 and Python>=3.9; verified in a clean venv on
+# top of requirements-minimal.txt: certbot stays at 2.10.0, the entry point
+# registers, `pip check` is clean.
+certbot-dns-infomaniak==0.2.4
 # acme-dns needs NO certbot plugin. certbot-acme-dns==0.3.1 was pinned here
 # until v2.24.0 but never worked: it exposes no --acme-dns-credentials option,
 # so certbot rejected the command line CertMate built and every acme-dns
