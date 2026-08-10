@@ -19,6 +19,8 @@ with the thing it describes.
 
 Each check reads the source of truth rather than a second copy of the claim.
 """
+import functools
+import os
 import pathlib
 import re
 
@@ -30,12 +32,22 @@ _SKIP_DIRS = (".venv", "node_modules", ".git", "scratch", ".claude", "backups")
 _SKIP_FILES = ("RELEASE_NOTES.md", "CHANGELOG.md")
 
 
+@functools.lru_cache(maxsize=1)
 def _markdown():
-    return [
-        path for path in sorted(REPO_ROOT.rglob("*.md"))
-        if not any(part in path.parts for part in _SKIP_DIRS)
-        and path.name not in _SKIP_FILES
-    ]
+    """Every markdown file, pruning the heavy trees instead of walking them.
+
+    `rglob` descends into `.git`, `node_modules` and `.venv` in full and only
+    then discards what it found — tens of thousands of stats for a set that is
+    static within a run (Copilot, #537). `os.walk` with in-place pruning of
+    `dirs` never enters them.
+    """
+    found = []
+    for root, dirs, files in os.walk(REPO_ROOT):
+        dirs[:] = [d for d in dirs if d not in _SKIP_DIRS]
+        for name in files:
+            if name.endswith(".md") and name not in _SKIP_FILES:
+                found.append(pathlib.Path(root) / name)
+    return tuple(sorted(found))
 
 
 def _enforced_coverage_floor():
@@ -108,10 +120,19 @@ def test_no_compose_example_sets_a_variable_nothing_reads():
 
 
 def test_every_docker_hub_reference_names_the_image_we_publish():
-    """The repository knows its own image name; the docs must agree.
+    """The docs must name the image this repository publishes.
 
-    Taken from the workflow that pushes it, not from a constant here — a name
-    typed twice is a name that can differ twice.
+    An earlier docstring here claimed the expected name was derived from the
+    publish workflow. It is not, and saying so was the kind of overclaim this
+    file exists to catch (Copilot, #537). The workflow builds the namespace
+    from `secrets.DOCKERHUB_USER`, which no test can read, falling back to the
+    repository owner. So the owner is what this checks against — correct while
+    the secret matches it, which is the documented fallback and the case today.
+
+    If publishing ever moves to an organisation account whose name differs from
+    the GitHub owner, this test fails on correct documentation. The failure
+    message says so, and the fix is to name the account here rather than to
+    delete the check.
     """
     # The publish workflow builds the tag as `${namespace}/${IMAGE_NAME}`, and
     # its own comment says the namespace falls back to the repository owner. So
@@ -143,7 +164,10 @@ def test_every_docker_hub_reference_names_the_image_we_publish():
                 if match.group(1) not in published:
                     offenders.append(
                         f"{path.relative_to(REPO_ROOT)}:{number}: "
-                        f"{match.group(1)} — we publish {sorted(published)}")
+                        f"{match.group(1)} — expected {sorted(published)} "
+                        f"(the GitHub owner, which is the namespace the "
+                        f"publish workflow falls back to; if DOCKERHUB_USER "
+                        f"now names a different account, record it here)")
     assert not offenders, (
         "documentation links to a Docker Hub image nobody publishes:\n  "
         + "\n  ".join(offenders)
