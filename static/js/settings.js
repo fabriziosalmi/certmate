@@ -2612,7 +2612,7 @@
 
         // DigiCert configuration
         caProviders.digicert = {
-            acme_url: document.getElementById('digicert-acme-url').value || 'https://acme.digicert.com/v2/acme/directory',
+            acme_url: document.getElementById('digicert-acme-url').value || 'https://one.digicert.com/mpki/api/v1/acme/v2/directory',
             eab_kid: document.getElementById('digicert-eab-kid').value || '',
             eab_hmac: document.getElementById('digicert-eab-hmac').value || '',
             email: document.getElementById('digicert-email').value || ''

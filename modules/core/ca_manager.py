@@ -43,8 +43,25 @@ class CAManager:
             },
             'digicert': {
                 'name': 'DigiCert',
-                'production_url': 'https://acme.digicert.com/v2/DV',
-                'staging_url': 'https://acme.digicert.com/v2/DV/staging',
+                # `acme.digicert.com` no longer exists — NXDOMAIN, verified
+                # against Cloudflare's resolver while every other digicert.com
+                # host answers. It was CertCentral's legacy ACME service, which
+                # DigiCert stopped supporting on 24 February 2026; this entry
+                # kept pointing at it for months afterwards while the README
+                # advertised DigiCert ACME as a supported CA.
+                #
+                # The replacement is the DigiCert ONE mPKI endpoint, which
+                # returns a real directory (newAccount / newNonce / newOrder /
+                # renewalInfo) and sets externalAccountRequired: true, matching
+                # requires_eab below. It is REGIONAL: an account outside the
+                # default region has its own directory URL, shown in
+                # CertCentral. Operators override it per certificate via
+                # `acme_url`; this is the default, not the only value.
+                'production_url': 'https://one.digicert.com/mpki/api/v1/acme/v2/directory',
+                # DigiCert publishes no public ACME staging directory. Pointing
+                # this at an invented `/staging` path is what produced the dead
+                # URL above, so it names the same endpoint rather than a guess.
+                'staging_url': 'https://one.digicert.com/mpki/api/v1/acme/v2/directory',
                 'requires_eab': True,
                 'supports_wildcard': True,
                 'certificate_types': ['DV', 'OV', 'EV'],
@@ -71,7 +88,12 @@ class CAManager:
             'google': {
                 'name': 'Google Trust Services',
                 'production_url': 'https://dv.acme-v02.api.pki.goog/directory',
-                'staging_url': 'https://dv.acme-staging.api.pki.goog/directory',
+                # dv.acme-staging.api.pki.goog serves a certificate for a
+                # different name, so the TLS handshake fails hostname
+                # verification and no ACME client will talk to it. Google's
+                # staging directory is dv.acme-v02.test-api.pki.goog, which
+                # answers correctly and advertises externalAccountRequired.
+                'staging_url': 'https://dv.acme-v02.test-api.pki.goog/directory',
                 'requires_eab': True,
                 'supports_wildcard': True,
                 'certificate_types': ['DV'],

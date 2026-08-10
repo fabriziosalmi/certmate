@@ -36,7 +36,7 @@ Lo staging e una voce di Certificate Authority separata (dalla v2.12.0), non un 
 - **Ideale per**: Ambienti enterprise, applicazioni commerciali
 
 **Requisiti di configurazione:**
-- **URL directory ACME**: `https://acme.digicert.com/v2/acme/directory`
+- **URL directory ACME**: `https://one.digicert.com/mpki/api/v1/acme/v2/directory`
 - **EAB Key ID**: Fornito da DigiCert
 - **EAB HMAC Key**: Fornita da DigiCert
 - **Email**: Obbligatoria per le notifiche sui certificati
@@ -123,7 +123,7 @@ curl -X POST http://localhost:8000/api/settings/test-ca-provider \
   -d '{
     "ca_provider": "digicert",
     "config": {
-      "acme_url": "https://acme.digicert.com/v2/acme/directory",
+      "acme_url": "https://one.digicert.com/mpki/api/v1/acme/v2/directory",
       "eab_kid": "your_key_id",
       "eab_hmac": "your_hmac_key",
       "email": "admin@example.com"

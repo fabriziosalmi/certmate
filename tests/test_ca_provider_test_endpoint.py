@@ -61,7 +61,7 @@ class TestCAProviderTestEndpoint:
         r = api.post_json("/api/settings/test-ca-provider", {
             "ca_provider": "digicert",
             "config": {
-                "acme_url": "https://acme.digicert.com/v2/acme/directory",
+                "acme_url": "https://one.digicert.com/mpki/api/v1/acme/v2/directory",
                 "eab_key_id": "kid-canonical-spelling",
                 "eab_hmac_key": "hmac-canonical-spelling-long-enough-to-pass",
                 "email": "admin@example.com",
