@@ -224,7 +224,7 @@ CertMate supports a wide range of DNS providers through Let's Encrypt DNS-01 cha
 | **Azure DNS**          | Service Principal credentials | **Yes**       | Microsoft ecosystem             | **Stable** |
 | **Google Cloud DNS**   | Service Account JSON          | **Yes**       | Google Cloud Platform           | **Stable** |
 | **DigitalOcean**       | API Token                     | **Yes**       | Cloud infrastructure            | **Stable** |
-| **PowerDNS**           | API URL, API Key              | **Yes**       | Self-hosted, On-premises        | **Extended image** |
+| **PowerDNS**           | API URL, API Key              | **Yes**       | Self-hosted, On-premises        | **Separate install** |
 | **EfficientIP SOLIDserver** | Host, API Credentials     | **Yes**       | Enterprise DDI / Smart Architecture | **Stable** |
 | **RFC2136**            | Nameserver, TSIG Key/Secret   | **Yes**       | Standard DNS update protocol    | **Stable** |
 | **Linode** (Akamai Connected Cloud) | API Key             | Single        | Cloud hosting                   | **Stable** |
