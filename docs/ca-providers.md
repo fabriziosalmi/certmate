@@ -39,7 +39,7 @@ Converting a staging certificate to production requires a reissue with the produ
 - **Best For**: Enterprise environments, commercial applications
 
 **Configuration Requirements:**
-- **ACME Directory URL**: `https://acme.digicert.com/v2/acme/directory`
+- **ACME Directory URL**: `https://one.digicert.com/mpki/api/v1/acme/v2/directory`
 - **EAB Key ID**: Provided by DigiCert
 - **EAB HMAC Key**: Provided by DigiCert
 - **Email**: Required for certificate notifications
@@ -126,7 +126,7 @@ curl -X POST http://localhost:8000/api/settings/test-ca-provider \
   -d '{
     "ca_provider": "digicert",
     "config": {
-      "acme_url": "https://acme.digicert.com/v2/acme/directory",
+      "acme_url": "https://one.digicert.com/mpki/api/v1/acme/v2/directory",
       "eab_kid": "your_key_id",
       "eab_hmac": "your_hmac_key",
       "email": "admin@example.com"

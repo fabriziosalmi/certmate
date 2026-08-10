@@ -6,6 +6,13 @@ on:
   pull_request:
     branches: [ main, develop ]
   workflow_dispatch:
+  schedule:
+    # Mondays 06:00 UTC, for the ca-endpoints job. The other jobs opt out of
+    # this trigger explicitly (`if: github.event_name != 'schedule'`) — saying
+    # so in a comment did not make it so, and a weekly full run would turn a
+    # CA-reachability signal into noise from whatever else happened to break
+    # that week (Copilot, #538).
+    - cron: '0 6 * * 1'
 
 # Default to read-only. The single job below only reads source and uploads
 # coverage via codecov-action (which manages its own auth via the upload
@@ -22,6 +29,7 @@ concurrency:
 
 jobs:
   test:
+    if: github.event_name != 'schedule'
     # GitHub-hosted, ephemeral VM per job. The e2e suite (tests/conftest.py)
     # builds and runs a FIXED-name container (certmate-test-suite) on port
     # 18888; on a shared self-hosted host, two test jobs from different
@@ -99,7 +107,14 @@ jobs:
         # false, so coverage could fall to zero with CI still green. 65 is
         # comfortably below the current number; raise it as a ratchet, never
         # lower it to make a red build pass.
-        pytest -v --tb=short --cov=modules --cov-report=xml --cov-report=html --cov-fail-under=65 -m "not ui"
+        # `not network`: the CA-reachability checks in
+        # tests/test_ca_endpoints_are_live.py fetch five external ACME
+        # directories. They found two real defects (a DigiCert host that no
+        # longer resolves, a Google staging endpoint whose certificate is for
+        # another name) — but as a required check they would turn every PR red
+        # on someone else's outage. They run on the weekly schedule below
+        # instead, where a failure is news rather than a blocked merge.
+        pytest -v --tb=short --cov=modules --cov-report=xml --cov-report=html --cov-fail-under=65 -m "not ui and not network"
 
     - name: Upload coverage reports
       if: matrix.python-version == '3.12'
@@ -236,6 +251,36 @@ jobs:
           echo "::endgroup::"
         done
 
+  # Every CA in the registry, asked whether its ACME directory still exists.
+  #
+  # `digicert` pointed at acme.digicert.com for months after DigiCert retired
+  # CertCentral's legacy ACME service on 24 February 2026 — the hostname stopped
+  # resolving and nothing said so, because a CA endpoint is only exercised
+  # during a real issuance against that CA, and the release gate issues against
+  # Let's Encrypt staging. Weekly is the right cadence: a CA does not retire an
+  # endpoint between two pull requests, and this must never be the reason a
+  # merge is blocked.
+  ca-endpoints:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+    - name: Set up Python
+      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v5
+      with:
+        python-version: '3.12'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install -r requirements-test.txt
+
+    - name: Ask every CA whether its directory still exists
+      run: pytest tests/test_ca_endpoints_are_live.py -v --tb=short -m network
+
   # The Tailwind bundle (static/css/tailwind.min.css) is committed to the repo
   # and served as-is — there is no build step at deploy time. So a stale bundle
   # ships silently whenever input.css / tailwind.config.js change without a
@@ -249,6 +294,7 @@ jobs:
   # regression that made the documented job-polling loop impossible sat there
   # undetected because nothing asked.
   mcp:
+    if: github.event_name != 'schedule'
     name: MCP server
     runs-on: ubuntu-latest
     steps:
@@ -269,6 +315,7 @@ jobs:
       run: npm test
 
   frontend-css:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     steps:
     - name: Checkout code

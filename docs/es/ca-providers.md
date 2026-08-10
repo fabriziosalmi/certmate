@@ -36,7 +36,7 @@ El staging es una entrada de autoridad de certificación independiente (desde v2
 - **Ideal para**: Entornos empresariales, aplicaciones comerciales
 
 **Requisitos de configuración:**
-- **URL del directorio ACME**: `https://acme.digicert.com/v2/acme/directory`
+- **URL del directorio ACME**: `https://one.digicert.com/mpki/api/v1/acme/v2/directory`
 - **EAB Key ID**: Proporcionado por DigiCert
 - **EAB HMAC Key**: Proporcionada por DigiCert
 - **Email**: Requerido para las notificaciones de certificado
@@ -123,7 +123,7 @@ curl -X POST http://localhost:8000/api/settings/test-ca-provider \
   -d '{
     "ca_provider": "digicert",
     "config": {
-      "acme_url": "https://acme.digicert.com/v2/acme/directory",
+      "acme_url": "https://one.digicert.com/mpki/api/v1/acme/v2/directory",
       "eab_kid": "your_key_id",
       "eab_hmac": "your_hmac_key",
       "email": "admin@example.com"
