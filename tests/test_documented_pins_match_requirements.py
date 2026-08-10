@@ -8,8 +8,10 @@ remembered writing it. Following it gave you a stack CertMate has never been
 tested against: the 5.x migration is still issue #103, a plan.
 
 Correcting the numbers would not have been enough, and this is the part worth
-remembering. The pins that make certbot start are `cryptography`, `pyopenssl`,
-`josepy` and `acme`, none of which the list mentioned. Adding them back one at
+remembering. The pins that make certbot start are `cryptography`, `pyopenssl` and
+`josepy`, none of which the list mentioned. (`acme` is not pinned here at
+all — it arrives as certbot's own dependency, which is why naming it in an
+earlier draft of this docstring was wrong.) Adding them back one at
 a time, in a clean virtualenv, `certbot --version` failed four times in a row:
 
     AttributeError: module 'OpenSSL.crypto' has no attribute 'X509Req'
@@ -94,12 +96,15 @@ def test_no_document_tells_you_to_install_a_version_we_do_not_ship():
     )
 
 
-@pytest.mark.parametrize("package", ["certbot", "cryptography", "pyopenssl", "josepy"])
-def test_the_interlocking_pins_are_never_split_across_a_document(package):
+def test_the_interlocking_pins_are_never_split_across_a_document():
     """certbot cannot be documented without what makes it start.
 
     A code block naming `certbot==` and nothing else is the shape of the
     section this test came from: correct in isolation, unusable in practice.
+
+    This ran four times over a `package` parameter its body never read — four
+    identical assertions wearing different names (Copilot, #533). The set it
+    checks lives in the regex below, where it is used.
     """
     offenders = []
     for path, number, name, _version in _documented_pins():

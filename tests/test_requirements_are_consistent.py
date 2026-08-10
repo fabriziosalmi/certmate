@@ -92,15 +92,31 @@ def test_certbot_stays_on_its_pin_everywhere():
     def _key(version):
         return tuple(int(part) for part in re.findall(r"\d+", version)[:3])
 
+    # Anything above the pin, regardless of major. The first version of this
+    # check required the majors to match — so `certbot-dns-route53==4.1.1`
+    # against `certbot==2.10.0` was skipped entirely, which is the exact number
+    # the install docs had drifted to and the exact case this test exists for
+    # (Copilot, #533). A guard that steps aside for the biggest version of the
+    # problem is not a guard.
+    #
+    # A handful of plugins version independently (vultr 1.1.0, gandi 1.6.1,
+    # powerdns 0.2.1, hetzner 2.0.1) — all of them below the certbot pin, so
+    # none needs an exception. If one legitimately goes above it, add it here
+    # with the evidence, rather than widening the rule until it stops catching
+    # anything.
+    checked = 0
     offenders = []
     for pkg, where in pins.items():
         if not pkg.startswith("certbot-dns-"):
             continue
         for filename, version in where.items():
-            # Only the plugins that track certbot's own numbering — the others
-            # (vultr 1.1.0, gandi 1.6.1, powerdns 0.2.1) version independently.
-            if _key(version)[:1] == _key(pinned)[:1] and _key(version) > _key(pinned):
+            checked += 1
+            if _key(version) > _key(pinned):
                 offenders.append(f"{filename}: {pkg}=={version} > certbot=={pinned}")
+    assert checked >= 10, (
+        f"only {checked} plugin pins examined — the parser is not seeing the "
+        f"requirements files, so this test would pass over nothing."
+    )
     assert not offenders, (
         "these plugins are pinned above the certbot pin and require "
         "`certbot>=` their own version, so installing them upgrades certbot:\n  "
