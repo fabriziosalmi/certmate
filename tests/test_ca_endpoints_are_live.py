@@ -32,7 +32,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from modules.core.ca_manager import CAManager  # noqa: E402
 
-pytestmark = [pytest.mark.unit]
+# Deliberately NO module-level `unit` mark. Marks are additive, so one here
+# would put the network tests into `make test-unit` — an offline suite that
+# quietly reaches five external CAs (Copilot, #538). The offline tests carry
+# `unit` individually; the network ones carry `network` only.
 
 
 def _network_is_reachable():
@@ -90,11 +93,13 @@ def _urls():
     return found
 
 
+@pytest.mark.unit
 def test_the_registry_exposes_urls():
     """Guard the guard: an empty list would make every check below vacuous."""
     assert len(_urls()) >= 8, f"only {len(_urls())} CA URLs found in the registry"
 
 
+@pytest.mark.unit
 @pytest.mark.parametrize("key,field,url", _urls(),
                          ids=[f"{k}.{f}" for k, f, _u in _urls()])
 def test_no_ca_points_at_a_retired_host(key, field, url):
@@ -104,6 +109,7 @@ def test_no_ca_points_at_a_retired_host(key, field, url):
     )
 
 
+@pytest.mark.unit
 @pytest.mark.parametrize("key,field,url", _urls(),
                          ids=[f"{k}.{f}" for k, f, _u in _urls()])
 def test_every_ca_url_is_https(key, field, url):
@@ -128,7 +134,11 @@ def test_every_ca_serves_a_real_acme_directory(key, field, url):
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
             status = response.status
-            body = response.read(4096).decode("utf-8", "replace")
+            # Read to EOF, capped. 4096 bytes truncated mid-object on any
+            # directory larger than that, so a healthy CA would have failed on
+            # a JSON error (Copilot, #538). 1 MiB is far past any real
+            # directory and still bounds a misbehaving server.
+            body = response.read(1024 * 1024).decode("utf-8", "replace")
     except urllib.error.URLError as error:
         pytest.fail(
             f"{key}.{field} ({url}) is unreachable: {error}. If the CA has "
@@ -174,7 +184,8 @@ def test_no_ca_demands_eab_without_the_registry_knowing():
             url, headers={"User-Agent": "certmate-ca-check"})
         try:
             with urllib.request.urlopen(request, timeout=30) as response:
-                directory = json.loads(response.read(4096).decode("utf-8", "replace"))
+                directory = json.loads(
+                    response.read(1024 * 1024).decode("utf-8", "replace"))
         except Exception:
             continue          # reachability is the previous test's business
         advertised = bool(directory.get("meta", {}).get("externalAccountRequired"))

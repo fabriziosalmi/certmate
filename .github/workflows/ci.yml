@@ -7,7 +7,11 @@ on:
     branches: [ main, develop ]
   workflow_dispatch:
   schedule:
-    # Mondays 06:00 UTC — only the ca-endpoints job runs on this trigger.
+    # Mondays 06:00 UTC, for the ca-endpoints job. The other jobs opt out of
+    # this trigger explicitly (`if: github.event_name != 'schedule'`) — saying
+    # so in a comment did not make it so, and a weekly full run would turn a
+    # CA-reachability signal into noise from whatever else happened to break
+    # that week (Copilot, #538).
     - cron: '0 6 * * 1'
 
 # Default to read-only. The single job below only reads source and uploads
@@ -25,6 +29,7 @@ concurrency:
 
 jobs:
   test:
+    if: github.event_name != 'schedule'
     # GitHub-hosted, ephemeral VM per job. The e2e suite (tests/conftest.py)
     # builds and runs a FIXED-name container (certmate-test-suite) on port
     # 18888; on a shared self-hosted host, two test jobs from different
@@ -289,6 +294,7 @@ jobs:
   # regression that made the documented job-polling loop impossible sat there
   # undetected because nothing asked.
   mcp:
+    if: github.event_name != 'schedule'
     name: MCP server
     runs-on: ubuntu-latest
     steps:
@@ -309,6 +315,7 @@ jobs:
       run: npm test
 
   frontend-css:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     steps:
     - name: Checkout code
