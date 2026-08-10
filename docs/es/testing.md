@@ -272,9 +272,10 @@ Los hooks incluyen: formateo de código (black, isort), linting (flake8), verifi
 
 ## Requisitos de cobertura
 
-- Mínimo **80%** de cobertura de código global
-- Las rutas críticas deben tener **95%+** de cobertura
-- Toda nueva funcionalidad debe incluir pruebas
+- CI impone un mínimo del **65%** sobre `modules/` (`--cov-fail-under`, un
+  trinquete: súbalo, nunca lo baje para que pase una build). El número actual
+  está cómodamente por encima.
+- Todas las funcionalidades nuevas deben incluir tests.
 
 ---
 

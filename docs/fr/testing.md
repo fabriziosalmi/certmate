@@ -272,9 +272,10 @@ Les hooks incluent : formatage de code (black, isort), linting (flake8), vérifi
 
 ## Exigences de couverture
 
-- Minimum **80%** de couverture de code globale
-- Les chemins critiques doivent avoir **95%+** de couverture
-- Toute nouvelle fonctionnalité doit inclure des tests
+- La CI impose un plancher de **65%** sur `modules/` (`--cov-fail-under`, un
+  cliquet : à relever, jamais à abaisser pour faire passer une build). Le
+  chiffre actuel est confortablement au-dessus.
+- Toutes les nouvelles fonctionnalités doivent inclure des tests.
 
 ---
 

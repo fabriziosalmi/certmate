@@ -1991,8 +1991,11 @@ services:
           memory: 256M
     environment:
       - FLASK_ENV=production
-      - GUNICORN_WORKERS=1
-      - GUNICORN_THREADS=8
+      # The worker and thread counts are fixed in the image
+      # (`--workers 1 --threads 8`): one worker because the scheduler runs
+      # in-process and a second would duplicate every renewal. GUNICORN_TIMEOUT
+      # is the one that is read.
+      - GUNICORN_TIMEOUT=300   # the image default; raise it for slow DNS providers
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -2607,7 +2610,7 @@ curl -sS -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/diagnostics
 - **API Documentation**: http://your-server:8000/docs/ (Swagger UI)
 - **Alternative API Docs**: http://your-server:8000/redoc/ (ReDoc)
 - **GitHub Repository**: https://github.com/fabriziosalmi/certmate
-- **Docker Hub**: https://hub.docker.com/r/certmate/certmate
+- **Docker Hub**: https://hub.docker.com/r/fabriziosalmi/certmate
 - **Issue Tracker**: https://github.com/fabriziosalmi/certmate/issues
 
 ### Examples Repository
