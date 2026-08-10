@@ -153,8 +153,8 @@
                                 <li><span class="text-blue-500">GET</span> /api/certificates</li>
                                 <li><span class="text-green-500">POST</span> /api/certificates/create</li>
                                 <li><span class="text-green-500">POST</span> /api/certificates/{domain}/renew</li>
-                                <li><span class="text-blue-500">GET</span> /{domain}/tls <span class="text-gray-400 not-italic">(ZIP bundle)</span></li>
-                                <li><span class="text-blue-500">GET</span> /{domain}/tls/{cert|key|chain|fullchain}</li>
+                                <li><span class="text-blue-500">GET</span> /api/certificates/{domain}/download <span class="text-gray-400 not-italic">(ZIP bundle)</span></li>
+                                <li><span class="text-blue-500">GET</span> /api/certificates/{domain}/download/{cert|chain|fullchain|privkey|combined}</li>
                                 <li><span class="text-blue-500">GET</span> /api/activity</li>
                                 <li><span class="text-blue-500">GET</span> /api/deploy/history</li>
                             </ul>
@@ -170,7 +170,7 @@ curl -X POST http://localhost:8000/api/certificates/create \
 # Download full bundle as ZIP
 curl -H "Authorization: Bearer $TOKEN" \
   -o example.com.zip \
-  http://localhost:8000/example.com/tls</code></pre>
+  http://localhost:8000/api/certificates/example.com/download</code></pre>
                         </div>
                     </div>
                     <p class="text-sm text-gray-700 dark:text-gray-200 mt-3">
