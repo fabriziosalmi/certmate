@@ -10,7 +10,10 @@ Each chain line is the canonical JSON of::
 
 where ``hash = sha256(canon({"seq", "entry", "prev_hash"}))`` and ``prev_hash``
 is the previous line's ``hash`` (the genesis line uses ``""``). ``seq`` is a
-gap-free monotonic counter, so a missing ``seq`` proves a deletion.
+gap-free monotonic counter, so a missing ``seq`` proves a deletion and a
+REPEATED ``seq`` proves a double write — two different faults, and the verifier
+says which. A repeat is not tampering: it is what two processes appending to one
+chain file produce, and the append path takes an advisory file lock to stop it.
 
 Honest threat model: the chain proves these N entries are authentic and ordered.
 It detects tampering by anyone WITHOUT the writer's running state, but it does
@@ -132,15 +135,42 @@ class _ChainVerifier:
                 f"malformed record at position {position} (missing fields)",
                 self._expected_seq)
 
-        if not self._seen:
+        first_record = not self._seen
+        if first_record:
             self._seen = True
             self._first_seq = seq
         if self._expected_seq is None:
             self._expected_seq = seq
         elif seq != self._expected_seq:
-            return self._fail(
-                f"sequence break: expected seq {self._expected_seq}, found "
-                f"{seq} (a deletion or reorder)", self._expected_seq)
+            # Name the failure correctly. A seq that went BACKWARDS is not a
+            # deletion — nothing was removed, something was written twice, which
+            # is what two processes sharing a data directory produce. Reporting
+            # that as "a deletion or reorder" tells an operator their
+            # tamper-evident log was tampered with, which is the one thing this
+            # file exists to be trusted about. A seq that jumped FORWARD is the
+            # deletion case.
+            if first_record:
+                # `_expected_seq` came from a caller-supplied anchor, not from
+                # a previous line. The file simply does not start where the
+                # anchor says it does — neither a double write nor a deletion.
+                return self._fail(
+                    f"sequence break: anchor mismatch — the anchor says this slice starts "
+                    f"at seq "
+                    f"{self._expected_seq}, the first record is {seq}",
+                    self._expected_seq)
+            if seq < self._expected_seq:
+                reason = (
+                    f"sequence break: duplicate or out-of-order seq — expected "
+                    f"{self._expected_seq}, "
+                    f"found {seq} (the same seq written more than once — typically "
+                    f"two processes appending to one chain file, not tampering)")
+            else:
+                reason = (
+                    f"sequence break: missing entries — expected seq {self._expected_seq}, found "
+                    f"{seq} ({seq - self._expected_seq} entr"
+                    f"{'y' if seq - self._expected_seq == 1 else 'ies'} absent — "
+                    f"a deletion or truncation)")
+            return self._fail(reason, self._expected_seq)
 
         if rec_prev != self._prev_hash:
             return self._fail(

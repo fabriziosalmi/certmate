@@ -42,6 +42,33 @@ def _int_env(name: str, default: int) -> int:
     return value
 
 
+
+def _lock_file(fh) -> None:
+    """Take an exclusive advisory lock on an open file, where the platform has
+    them. POSIX only: the shipped image is Linux and the lock is advisory, so a
+    platform without flock degrades to the previous behaviour rather than
+    refusing to log."""
+    try:
+        import fcntl
+    except ImportError:  # pragma: no cover - non-POSIX
+        return
+    try:
+        fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
+    except OSError as e:  # pragma: no cover - e.g. a filesystem without locking
+        logger.debug(f"Audit chain: advisory lock unavailable ({e}); continuing")
+
+
+def _unlock_file(fh) -> None:
+    try:
+        import fcntl
+    except ImportError:  # pragma: no cover - non-POSIX
+        return
+    try:
+        fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
+    except OSError:  # pragma: no cover
+        pass
+
+
 class AuditLogger:
     """Centralized audit logging for certificate operations."""
 
@@ -131,15 +158,26 @@ class AuditLogger:
             self.audit_logger.addHandler(self.file_handler)
         self.audit_logger.setLevel(logging.INFO)
 
-        # Tamper-evident hash chain (Phase 2). One writer, one local file; the
-        # lock guards the shared next-seq/last-hash state because Flask request
-        # threads and the APScheduler renewal thread share this instance.
+        # Tamper-evident hash chain (Phase 2). The threading lock guards the
+        # shared next-seq/last-hash state across Flask request threads and the
+        # APScheduler renewal thread. It cannot see a SECOND PROCESS: two
+        # instances sharing a data directory each recover the same `_next_seq`
+        # at startup and then both append with it, producing duplicate seqs.
+        # That is not hypothetical — it happened on 2026-06-25, two `migrate`
+        # entries at an identical timestamp, and left the chain permanently
+        # unverifiable. CertMate is single-instance by design (the Helm chart
+        # refuses a second replica), but "by design" is not an enforcement, so
+        # the append also takes an advisory file lock and re-reads the tail
+        # whenever the file has grown underneath it.
         self._chain_enabled = enable_chain and os.environ.get('CERTMATE_AUDIT_CHAIN', '1') != '0'
         self._chain_dir = Path(chain_dir) if chain_dir is not None else self.audit_log_dir
         self.audit_chain_file = self._chain_dir / audit_chain.CHAIN_FILENAME
         self._chain_lock = threading.Lock()
         self._next_seq = 0
         self._last_hash = audit_chain.GENESIS_PREV
+        # Size of the chain file as of our last append. A mismatch under the
+        # file lock means somebody else wrote, so our cached seq/hash are stale.
+        self._chain_size = 0
         if self._chain_enabled:
             self._recover_chain_state()
 
@@ -178,6 +216,10 @@ class AuditLogger:
             if last_good is not None:
                 self._next_seq = last_good['seq'] + 1
                 self._last_hash = last_good['hash']
+            try:
+                self._chain_size = self.audit_chain_file.stat().st_size
+            except OSError:
+                self._chain_size = 0
         except Exception as e:
             # Recovery runs inside AuditLogger.__init__, which the factory calls
             # unguarded — it must NEVER abort app startup (that would take the
@@ -185,6 +227,28 @@ class AuditLogger:
             # rather than fork it from a wrong baseline or raise.
             logger.error(f"Could not recover audit chain state; disabling chain: {e}")
             self._chain_enabled = False
+
+
+    def _refresh_if_another_writer_appended(self) -> None:
+        """Re-read the chain tail when the file grew since our last append.
+
+        Cheap in the normal case: one stat, and the size matches. When it does
+        not, a second process has appended and our cached ``_next_seq`` /
+        ``_last_hash`` describe a line that is no longer the head — writing
+        from them is exactly how duplicate seqs are produced. Must be called
+        with the advisory file lock held.
+        """
+        try:
+            size = self.audit_chain_file.stat().st_size
+        except OSError:
+            return
+        if size == self._chain_size:
+            return
+        logger.warning(
+            "Audit chain grew from %s to %s bytes underneath this process — "
+            "another writer is appending to the same file. Re-reading the head "
+            "before appending.", self._chain_size, size)
+        self._recover_chain_state()
 
     def _chain_append(self, entry: Dict[str, Any]) -> None:
         """Append one audit entry to the hash chain. Best-effort and isolated:
@@ -195,12 +259,24 @@ class AuditLogger:
             return
         try:
             with self._chain_lock:
-                seq = self._next_seq
-                line = audit_chain.make_line(seq, entry, self._last_hash)
                 with open(self.audit_chain_file, 'a', encoding='utf-8') as f:
-                    f.write(json.dumps(line, ensure_ascii=False) + '\n')
-                    f.flush()
-                    os.fsync(f.fileno())
+                    # Advisory lock FIRST, then look at the file. Another
+                    # process holding it may be mid-append; taking the lock
+                    # before measuring is what makes the staleness check sound.
+                    _lock_file(f)
+                    try:
+                        self._refresh_if_another_writer_appended()
+                        seq = self._next_seq
+                        line = audit_chain.make_line(seq, entry, self._last_hash)
+                        f.write(json.dumps(line, ensure_ascii=False) + '\n')
+                        f.flush()
+                        os.fsync(f.fileno())
+                        try:
+                            self._chain_size = f.tell()
+                        except OSError:
+                            self._chain_size = 0
+                    finally:
+                        _unlock_file(f)
                 # Advance only after the line is durably written.
                 self._next_seq = seq + 1
                 self._last_hash = line['hash']
