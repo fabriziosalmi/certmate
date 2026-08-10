@@ -21,6 +21,7 @@ Naming the offenders one at a time is how the previous guard ended up shorter
 than the defect. This one asks the general question instead: does anything read
 this?
 """
+import functools
 import pathlib
 import re
 
@@ -43,7 +44,14 @@ def _sources():
     return [p for p in found if p.is_file()]
 
 
+@functools.lru_cache(maxsize=1)
 def _blobs():
+    """Read every source once per session, not once per variable.
+
+    Without the cache this ran `len(.env.example) x len(sources)` file reads —
+    the parametrised test below calls it for each variable, and each call
+    re-read roughly forty files (Copilot, #532).
+    """
     return {p: p.read_text(encoding="utf-8", errors="replace") for p in _sources()}
 
 
