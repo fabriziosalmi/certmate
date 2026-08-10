@@ -203,7 +203,7 @@ CertMate solves the complexity of SSL certificate management in modern distribut
 - **Activity Timeline** - Chronological view of all certificate and system events
 
 ### **Developer Experience**
-- **One-URL Downloads** - Simple certificate retrieval for automation (`/{domain}/tls`)
+- **One-URL Downloads** - Simple certificate retrieval for automation (`/api/certificates/{domain}/download`)
 - **Individual Component Downloads** - Fetch cert, key, chain, or fullchain separately
 - **Multiple Output Formats** - PEM, ZIP, individual files
 - **SDK Examples** - Python, Bash, Ansible, Terraform examples
@@ -1002,16 +1002,21 @@ Content-Type: application/json
 **Certificate downloads for infrastructure automation:**
 
 ```bash
-# Download certificates via simple URL pattern
-GET /{domain}/tls
+# Download every certificate file as one ZIP
+GET /api/certificates/{domain}/download
 Authorization: Bearer your_token_here
 ```
 
 This endpoint returns a ZIP file containing all certificate files:
 - `cert.pem` - Server certificate
-- `chain.pem` - Intermediate certificate chain 
+- `chain.pem` - Intermediate certificate chain
 - `fullchain.pem` - Full certificate chain (cert + chain)
 - `privkey.pem` - Private key
+
+For a single file, use the path form
+`GET /api/certificates/{domain}/download/{cert|chain|fullchain|privkey|combined}`.
+`privkey` and `combined` require operator; a viewer may pull the public
+material only.
 
 ### Integration Examples
 
