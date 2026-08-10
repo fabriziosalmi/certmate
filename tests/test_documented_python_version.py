@@ -81,27 +81,46 @@ def _documented():
 
 def test_the_sources_of_truth_agree():
     """The image and the matrix must not drift apart from each other either."""
-    assert _dockerfile_version() in _ci_versions(), (
-        f"the image is built on Python {_dockerfile_version()} but CI tests "
-        f"{sorted(_ci_versions())} — nothing is testing what ships."
+    image, matrix = _dockerfile_version(), _ci_versions()
+    assert image in matrix, (
+        f"the image is built on Python {image} but CI tests {sorted(matrix)} — "
+        f"nothing is testing what ships."
     )
 
 
 def test_the_documentation_names_a_version():
+    """Anchored on a specific line, not on an arbitrary count.
+
+    `len(found) >= 10` cuts both ways: it fails a documentation refactor that
+    legitimately reduces the mentions, and it passes a scan that has quietly
+    stopped reading four of the five languages (Copilot, #536). So it checks
+    that the README badge — the most visible version claim in the project, and
+    the one that was wrong — is among what the scan found.
+    """
     found = _documented()
-    assert len(found) >= 10, (
-        f"found {len(found)} Python version mentions across the docs — the "
-        f"scan is not reading them, so the check below would pass vacuously."
+    assert found, "the scan found no Python version mentions at all"
+    assert any(entry[0] == "README.md" for entry in found), (
+        "the scan found no Python version in README.md. The badge at the top "
+        "of it is the claim this file exists to check; a scan that misses it "
+        "is not checking anything that matters."
     )
 
 
-@pytest.mark.parametrize("path,number,version", _documented(),
-                         ids=[f"{p}:{n}" for p, n, _v in _documented()])
+# Scanned once. Calling _documented() for the values and again for the ids is
+# two walks of the documentation and two chances for them to disagree in length
+# or order, which pytest reports as a parametrisation error rather than a docs
+# problem (Copilot, #536).
+DOCUMENTED = _documented()
+
+
+@pytest.mark.parametrize("path,number,version", DOCUMENTED,
+                         ids=[f"{p}:{n}" for p, n, _v in DOCUMENTED])
 def test_no_document_names_a_python_we_neither_build_nor_test(path, number, version):
-    allowed = {_dockerfile_version()} | _ci_versions()
+    image, matrix = _dockerfile_version(), _ci_versions()
+    allowed = {image} | matrix
     assert version in allowed, (
         f"{path}:{number} names Python {version}. The image is built on "
-        f"{_dockerfile_version()} and CI tests {sorted(_ci_versions())}. "
+        f"{image} and CI tests {sorted(matrix)}. "
         f"Documenting a version nothing builds or tests is how `Python 3.9+` "
         f"sat in the README badge while `pip install -r requirements.txt` "
         f"refused to run on 3.9."
