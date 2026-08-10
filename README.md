@@ -217,21 +217,21 @@ CertMate solves the complexity of SSL certificate management in modern distribut
 
 CertMate supports a wide range of DNS providers through Let's Encrypt DNS-01 challenge via individual certbot plugins that provide reliable, well-tested DNS challenge support. The complete list is in the table below. **Multi-account support** is available for major providers, enabling enterprise-grade deployments with separate accounts for production, staging, and disaster recovery.
 
-| Provider               | Credentials Required          | Multi-Account | Use Case                        | Status     |
-| ---------------------- | ----------------------------- | ------------- | ------------------------------- | ---------- |
+| Provider               | Credentials Required          | Multi-Account | Use Case                        | Availability |
+| ---------------------- | ----------------------------- | ------------- | ------------------------------- | ------------ |
 | **Cloudflare**         | API Token                     | **Yes**       | Global CDN, Free tier available | **Stable** |
 | **AWS Route53**        | Access Key, Secret Key        | **Yes**       | AWS infrastructure, Enterprise  | **Stable** |
 | **Azure DNS**          | Service Principal credentials | **Yes**       | Microsoft ecosystem             | **Stable** |
 | **Google Cloud DNS**   | Service Account JSON          | **Yes**       | Google Cloud Platform           | **Stable** |
 | **DigitalOcean**       | API Token                     | **Yes**       | Cloud infrastructure            | **Stable** |
-| **PowerDNS**           | API URL, API Key              | **Yes**       | Self-hosted, On-premises        | **Stable** |
+| **PowerDNS**           | API URL, API Key              | **Yes**       | Self-hosted, On-premises        | **Extended image** |
 | **EfficientIP SOLIDserver** | Host, API Credentials     | **Yes**       | Enterprise DDI / Smart Architecture | **Stable** |
 | **RFC2136**            | Nameserver, TSIG Key/Secret   | **Yes**       | Standard DNS update protocol    | **Stable** |
 | **Linode** (Akamai Connected Cloud) | API Key             | Single        | Cloud hosting                   | **Stable** |
 | **Akamai Edge DNS**    | EdgeGrid (.edgerc) credentials| Single        | Enterprise managed DNS          | **Stable** |
 | **Gandi**              | API Token                     | Single        | Domain registrar                | **Stable** |
 | **OVH**                | API Credentials               | Single        | European hosting                | **Stable** |
-| **Namecheap**          | Username, API Key             | Single        | Domain registrar                | **Stable** |
+| **Namecheap**          | Username, API Key             | Single        | Domain registrar                | **Unavailable** |
 | **Vultr**              | API Key                       | Single        | Global cloud infrastructure     | **Stable** |
 | **DNS Made Easy**      | API Key, Secret Key           | Single        | Enterprise DNS management       | **Stable** |
 | **NS1**                | API Key                       | Single        | Intelligent DNS platform        | **Stable** |
@@ -239,15 +239,34 @@ CertMate supports a wide range of DNS providers through Let's Encrypt DNS-01 cha
 | **Hetzner Cloud**      | API Token                     | Single        | Hetzner Cloud DNS (hcloud)      | **Stable** |
 | **Porkbun**            | API Key, Secret Key           | Single        | Domain registrar with DNS       | **Stable** |
 | **GoDaddy**            | API Key, Secret               | Single        | Popular domain registrar        | **Stable** |
-| **Hurricane Electric** | Username, Password            | Single        | Free DNS hosting                | **Stable** |
-| **Dynu**               | API Token                     | Single        | Dynamic DNS service             | **Stable** |
+| **Hurricane Electric** | Username, Password            | Single        | Free DNS hosting                | **Extended image** |
+| **Dynu**               | API Token                     | Single        | Dynamic DNS service             | **Extended image** |
 | **ArvanCloud**         | API Key                       | Single        | Iranian cloud provider          | **Stable** |
 | **Infomaniak**         | API Token                     | Single        | Swiss ISP & cloud provider      | **Stable** |
 | **ACME-DNS**           | JSON Config                   | Single        | Generic ACME-DNS server         | **Stable** |
-| **Scaleway**           | API Token (secret key)        | Single        | European cloud (EU-sovereign)   | **Stable** |
+| **Scaleway**           | API Token (secret key)        | Single        | European cloud (EU-sovereign)   | **Separate install** |
 | **deSEC**              | API Token                     | Single        | Free, non-profit DNSSEC DNS     | **Stable** |
 | **DuckDNS**            | Token                         | Single        | Free dynamic DNS                | **Stable** |
 | **Custom Script**      | User-provided hook scripts    | Single        | Any provider via custom hooks   | **Stable** |
+
+**What the availability column means.** Until now it said `Stable` on all
+twenty-nine rows, which is not a status — a column with one value cannot be
+wrong about any particular provider, and four of them were wrong:
+
+| Value | Meaning |
+| ----- | ------- |
+| **Stable** | The plugin is pinned in `requirements.txt`, so it is in the default image. |
+| **Extended image** | Pinned in `requirements-extended.txt`. Build with `--build-arg EXTRA_REQUIREMENTS=requirements-extended.txt`. |
+| **Separate install** | Not shipped in any image. `pip install` it yourself, in its own environment where noted. |
+| **Unavailable** | No usable plugin exists for the supported stack. CertMate can be configured for it, but issuance will fail. |
+
+`Namecheap` is the **Unavailable** one: the only release on PyPI is
+`certbot-dns-namecheap` 1.0.0, an alpha targeting Python 2.7-3.8, incompatible
+with certbot 2.x on Python 3.12 — as `NamecheapStrategy`'s own docstring has
+said all along. Use ACME-DNS or the custom-script hook for Namecheap domains.
+`Scaleway` is alpha (0.0.7, declares Python 2.7 support) and `PowerDNS` pulls
+`dns-lexicon<=3.5.6`, which conflicts with the rest of the extended set — hence
+its own environment.
 
 ### Provider Categories
 
