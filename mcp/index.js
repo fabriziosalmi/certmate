@@ -262,11 +262,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           domain: args.domain,
           dns_provider: args.dns_provider,
           account_id: args.account_id,
-          ca_provider: args.ca_provider
+          ca_provider: args.ca_provider,
+          // Without this the server takes the SYNCHRONOUS branch
+          // (`_wants_async`, modules/api/resources.py) and blocks for the whole
+          // ACME exchange — minutes on a slow DNS provider. The MCP client's
+          // own timeout aborts the tool call while certbot keeps going, and no
+          // job_id is ever produced, so certmate_get_job has nothing to poll.
+          // The documented "create, then poll until done" loop could not run.
+          async: true
         });
         break;
       case "certmate_renew_certificate":
-        result = await makeRequest("POST", `/api/certificates/${encodeURIComponent(args.domain)}/renew`);
+        result = await makeRequest("POST", `/api/certificates/${encodeURIComponent(args.domain)}/renew`, { async: true });
         break;
       case "certmate_deploy_certificate":
         result = await makeRequest("POST", `/api/certificates/${encodeURIComponent(args.domain)}/deploy`);
@@ -306,7 +313,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         result = await makeRequest("DELETE", `/api/certificates/${encodeURIComponent(args.domain)}`);
         break;
       case "certmate_update_certificate": {
-        const body = {};
+        // Same reasoning as create/renew: without `async` the server reissues
+        // inline and the tool call outlives the client's patience.
+        const body = { async: true };
         // Omit san_domains entirely when not provided so the reissue keeps the
         // current SAN set ([] is a deliberate "drop all").
         if (Array.isArray(args.sans)) body.san_domains = args.sans;

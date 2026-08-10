@@ -241,6 +241,16 @@ def create_api_models(api):
         'elliptic_curve': fields.String(
             description="ECDSA curve — required when key_type='ecdsa'.",
             enum=['secp256r1', 'secp384r1']
+        ),
+        # Declared here because callers already send it and the server already
+        # honours it (`_wants_async`, resources.py). certmate-sdk has sent
+        # `async: True` on every create since 0.1.x; leaving it out of the model
+        # meant the published Swagger contract described a request the shipped
+        # client does not make, and would reject it outright if validation were
+        # ever turned on. ReissueCertificate has always declared it.
+        'async': fields.Boolean(
+            description='Defer issuance to a background job (202 + job id). '
+                        'Poll GET /api/certificates/jobs/<job_id>.'
         )
     })
 
