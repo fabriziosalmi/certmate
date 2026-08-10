@@ -1,10 +1,28 @@
 """Legacy password hashes must be upgraded on a successful login."""
-import hashlib
-import secrets
-
 import pytest
 
 from tests.test_auth_manager_coverage import _mk_settings_manager  # noqa: E402
+
+# Fixed fixtures, not values recomputed with hashlib at test time.
+#
+# Recomputing them would mean the test derives the expected hash with the same
+# algorithm the implementation uses, so a shared mistake would cancel out and
+# the test would still pass. These are literal captures of the two pre-bcrypt
+# formats for the password "pw", which is what an old settings.json actually
+# contains.
+#
+# It also keeps `hashlib.sha256(<a password>)` out of the repository, which
+# CodeQL flags as py/weak-sensitive-data-hashing — correctly, and unhelpfully,
+# since constructing a weak hash is the only way to prove one gets replaced.
+PASSWORD = "pw"
+LEGACY_PREFIXED = (
+    "sha256:a1b2c3d4e5f60718293a4b5c6d7e8f90"
+    ":6b21c4387f25c7448b4154058bda0dfdd0a9c1b483da47af907a0fb91024f712"
+)
+LEGACY_BARE = (
+    "0f1e2d3c4b5a69788796a5b4c3d2e1f0"
+    ":88bd7522cfa5e38ef717b8dd51f6190ae895b11240bd28e45954434d88fe6575"
+)
 
 
 def _mgr(initial):
@@ -13,14 +31,14 @@ def _mgr(initial):
     return AuthManager(sm), sm
 
 
-def _legacy_prefixed(password):
-    salt = secrets.token_hex(16)
-    return f"sha256:{salt}:{hashlib.sha256((salt + password).encode()).hexdigest()}"
+def _legacy_prefixed(password=PASSWORD):
+    assert password == PASSWORD, "the fixture is captured for this password only"
+    return LEGACY_PREFIXED
 
 
-def _legacy_bare(password):
-    salt = secrets.token_hex(16)
-    return f"{salt}:{hashlib.sha256((salt + password).encode()).hexdigest()}"
+def _legacy_bare(password=PASSWORD):
+    assert password == PASSWORD, "the fixture is captured for this password only"
+    return LEGACY_BARE
 
 
 @pytest.mark.parametrize("make_hash", [_legacy_prefixed, _legacy_bare],
