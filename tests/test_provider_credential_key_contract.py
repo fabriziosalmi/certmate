@@ -136,16 +136,75 @@ def _installed_certbot_plugins():
     return {ep.name for ep in entry_points(group='certbot.plugins')}
 
 
+def _normalise_dist(name: str) -> str:
+    """PEP 503 name normalisation: lower-case, runs of -_. collapsed to '-'."""
+    import re as _re
+    return _re.sub(r'[-_.]+', '-', name).lower()
+
+
+def _installed_certbot_distributions():
+    """Installed distributions that look like a certbot DNS plugin, mapped to
+    the ``certbot.plugins`` entry-point names they actually register."""
+    from importlib.metadata import distributions
+    found = {}
+    for dist in distributions():
+        # PEP 503 normalisation: a distribution reports whatever name it
+        # declared, and several of these declare underscores
+        # (`certbot_dns_porkbun`). Matching the raw string silently missed them
+        # and turned a real check into a skip.
+        name = _normalise_dist(dist.metadata['Name'] or '')
+        if not name.startswith('certbot-dns') and not name.startswith('certbot-plugin'):
+            continue
+        found[name] = {ep.name for ep in dist.entry_points
+                       if ep.group == 'certbot.plugins'}
+    return found
+
+
 @pytest.mark.parametrize('provider', sorted(EXPECTED_MULTI_PROVIDER_CONTRACT))
 def test_expected_entry_point_exists_when_plugin_installed(provider):
-    """For plugins present in this venv, the expected entry-point name must be
-    REAL (registered), not just internally consistent. Skips plugins that are
-    documented as install-separately."""
+    """The expected entry-point name must be the one the plugin registers.
+
+    This test was previously unable to fail. It read:
+
+        if expected_plugin not in installed:
+            pytest.skip(...)
+        assert expected_plugin in installed
+
+    — an assertion that is the exact negation of its own skip guard. The bug it
+    exists to catch is a WRONG entry-point name (CertMate asking certbot for
+    `dns-dynu` when the plugin registers `dns-dynudns`), and a wrong name lands
+    in the skip branch, never the assert. Four providers skipped silently.
+
+    The distinction that actually matters is between "this plugin is not
+    installed here" — a legitimate skip, several are install-separately — and
+    "the distribution IS installed but registers a different name", which is
+    the defect. So: find the distribution, then hold it to the name.
+    """
     expected_plugin, _ = EXPECTED_MULTI_PROVIDER_CONTRACT[provider]
-    installed = _installed_certbot_plugins()
-    if expected_plugin not in installed:
-        pytest.skip(f"plugin {expected_plugin} not installed in this venv")
-    assert expected_plugin in installed
+    dists = _installed_certbot_distributions()
+
+    # Candidate distribution names for this provider, by the naming convention
+    # every one of these plugins follows.
+    candidates = {
+        _normalise_dist(f"certbot-{expected_plugin}"),   # dns-vultr -> certbot-dns-vultr
+        _normalise_dist(f"certbot-dns-{provider}"),      # dynudns   -> certbot-dns-dynudns
+        _normalise_dist(f"certbot-plugin-{expected_plugin.replace('dns-', '')}"),
+    }
+    present = {name: eps for name, eps in dists.items() if name in candidates}
+
+    if not present:
+        pytest.skip(
+            f"no distribution for '{provider}' installed here "
+            f"(looked for {sorted(candidates)})")
+
+    registered = set()
+    for eps in present.values():
+        registered |= eps
+    assert expected_plugin in registered, (
+        f"{provider}: CertMate asks certbot for '{expected_plugin}', but the "
+        f"installed distribution(s) {sorted(present)} register {sorted(registered)}. "
+        f"Issuance for this provider fails with 'unrecognized arguments'."
+    )
 
 
 # ---------------------------------------------------------------------------

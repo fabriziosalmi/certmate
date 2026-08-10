@@ -133,6 +133,32 @@ ALL_MARKDOWN = [
 ]
 
 
+# Ports documented on a localhost URL that belong to something other than the
+# CertMate application. Value = the non-markdown file that declares the port, so
+# the exception stands or falls with the thing it describes.
+OTHER_SERVICE_PORTS = {
+    "18899": "demo/certmate-cli.tape",   # the demo container, deliberately off 8000
+}
+
+
+def test_every_port_exception_is_backed_by_the_file_that_declares_it():
+    """An allow-list is only as honest as its evidence.
+
+    Without this, silencing the port gate for a genuinely wrong number costs
+    one line in a dict — which is how a gate stops describing reality.
+    """
+    for port, source in OTHER_SERVICE_PORTS.items():
+        path = REPO_ROOT / source
+        assert path.exists(), (
+            f"port {port} is excused by {source}, which does not exist. Remove "
+            f"the exception or fix the reference."
+        )
+        assert port in path.read_text(encoding="utf-8", errors="replace"), (
+            f"port {port} is excused by {source}, but that file does not "
+            f"mention it. The exception no longer describes anything."
+        )
+
+
 def test_no_markdown_file_documents_the_broken_test_command():
     """`pytest tests/ -v` produces four failures on a clean checkout.
 
@@ -218,6 +244,11 @@ def test_docs_use_the_port_the_app_actually_listens_on():
     parses `--port` with `default=8000` and the Dockerfile sets `ENV PORT=8000`.
     So the single most copy-pasted thing in the documentation, the curl
     example, produced connection refused.
+
+    The first version of this test scanned `docs/` alone — it covered exactly
+    the files it had been written for and nothing else. Proven, not assumed:
+    injecting 21 `localhost:5000` URLs into README.md, the file people read
+    first, left the suite green. It now reads every markdown file in the tree.
     """
     app_py = (REPO_ROOT / "app.py").read_text(encoding="utf-8")
     declared = re.search(r"--port['\"].*?default=(\d+)", app_py)
@@ -230,15 +261,26 @@ def test_docs_use_the_port_the_app_actually_listens_on():
     test_port = re.search(r'CERTMATE_TEST_PORT", "(\d+)"', conftest)
     allowed = {port} | ({test_port.group(1)} if test_port else set())
 
+    # Ports belonging to something that is not CertMate. Each needs a reason,
+    # and each is checked below against the file that actually declares it —
+    # an allow-list nobody can verify is just a way to silence the gate.
+    allowed |= set(OTHER_SERVICE_PORTS)
+
     wrong = []
-    for path in sorted((REPO_ROOT / "docs").rglob("*.md")):
+    for path in ALL_MARKDOWN:
+        if path.name in ("RELEASE_NOTES.md", "CHANGELOG.md"):
+            continue  # a changelog quotes the wrong port while announcing its fix
         for number, line in enumerate(
-                path.read_text(encoding="utf-8").splitlines(), 1):
-            for match in re.finditer(r"localhost:(\d{2,5})", line):
+                path.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
+            # Only URLs: the defect is the copy-pasteable example. A docker
+            # log-driver address or a port mapping is not one, and flagging it
+            # would push someone to add exceptions until the gate means nothing.
+            for match in re.finditer(r"https?://(?:localhost|127\.0\.0\.1):(\d{2,5})",
+                                     line):
                 if match.group(1) not in allowed:
                     wrong.append(
                         f"{path.relative_to(REPO_ROOT)}:{number}: "
-                        f"localhost:{match.group(1)}")
+                        f"{match.group(0)}")
     assert not wrong, (
         f"docs point at a port the app does not listen on (default is {port}):"
         f"\n  " + "\n  ".join(wrong[:20])

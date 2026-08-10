@@ -765,7 +765,7 @@ Voir le [Guide d'architecture](./architecture.md) pour les détails d'implément
 ### Mode débogage
 
 ```bash
-export FLASK_DEBUG=1
+export CERTMATE_LOG_LEVEL=DEBUG
 python app.py
 ```
 

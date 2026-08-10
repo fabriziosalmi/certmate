@@ -819,7 +819,7 @@ See the [Architecture Guide](./architecture.md) for full implementation details.
 ### Debug Mode
 
 ```bash
-export FLASK_DEBUG=1
+export CERTMATE_LOG_LEVEL=DEBUG
 python app.py
 ```
 

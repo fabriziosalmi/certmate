@@ -165,12 +165,39 @@ def test_no_doc_promises_the_default_account_endpoint():
 
 
 def test_no_doc_presents_host_or_flask_debug_as_working_env_vars():
-    """Neither is read anywhere, and HOST reads as a security control (#429)."""
-    for path in (ROOT / "README.md", ROOT / "README.dockerhub.md"):
-        for line in path.read_text(encoding="utf-8").splitlines():
-            stripped = line.strip()
-            if stripped.startswith(("HOST=", "FLASK_DEBUG=")):
-                pytest.fail(f"{path.name}: '{stripped}' has no effect")
+    """Neither is read anywhere, and FLASK_DEBUG reads as a security control.
+
+    This guard could not fail, for two independent reasons, while eleven live
+    offenders sat in the tree:
+
+      * it scanned two files, and every offender is under docs/ — including all
+        four translations, the same blind spot as the batch-limit gate below;
+      * it matched lines *starting* with `FLASK_DEBUG=`, and every real
+        occurrence is written `export FLASK_DEBUG=1`.
+
+    A prefix check on a hand-picked file list is how a gate ends up describing
+    a defect it cannot see. It now reads every markdown file in the repository
+    and matches the assignment anywhere on the line.
+    """
+    import re
+    offenders = []
+    pattern = re.compile(r"\b(HOST|FLASK_DEBUG)\s*=")
+    for path in sorted(ROOT.rglob("*.md")):
+        if any(part in path.parts for part in
+               (".venv", "node_modules", ".git", "scratch", ".claude", "backups")):
+            continue
+        # The changelog quotes the removed variables while explaining that they
+        # were removed. A record of history is allowed to name what it records.
+        if path.name in ("RELEASE_NOTES.md", "CHANGELOG.md"):
+            continue
+        for number, line in enumerate(
+                path.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
+            if pattern.search(line):
+                offenders.append(f"{path.relative_to(ROOT)}:{number}: {line.strip()}")
+    assert not offenders, (
+        "these document an environment variable the application never reads:\n  "
+        + "\n  ".join(offenders)
+    )
 
 
 def test_the_documented_batch_limit_matches_the_code():

@@ -766,7 +766,7 @@ Vollständige Implementierungsdetails finden Sie im [Architekturhandbuch](./arch
 ### Debug-Modus
 
 ```bash
-export FLASK_DEBUG=1
+export CERTMATE_LOG_LEVEL=DEBUG
 python app.py
 ```
 
