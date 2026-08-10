@@ -69,7 +69,6 @@ def test_the_user_can_log_in_again_after_the_upgrade():
 
 def test_a_modern_hash_is_left_alone():
     """No pointless rewrite: a bcrypt/scrypt hash must survive untouched."""
-    from modules.core.auth import AuthManager
     settings = {"users": {}}
     mgr, _ = _mgr(settings)
     modern = mgr._hash_password("pw")
@@ -123,3 +122,31 @@ def test_a_user_deleted_during_the_login_is_not_resurrected():
     sm.update.side_effect = _update_after_delete
     assert mgr.authenticate_user("admin", "pw") is not None
     assert "admin" not in settings["users"], "deleted user was recreated"
+
+
+def test_a_concurrent_password_reset_is_not_clobbered_by_the_upgrade():
+    """The upgrade is derived from the OLD plaintext. It must not win a race.
+
+    An admin resetting this user's password between the verification and the
+    locked write would otherwise have their reset silently reverted — and the
+    old password would start working again. Compare-and-set, not blind write.
+    """
+    settings = {"users": {"admin": {"password_hash": _legacy_prefixed(),
+                                    "role": "admin", "enabled": True}}}
+    mgr, sm = _mgr(settings)
+    new_hash = mgr._hash_password("the-admin-reset-it-to-this")
+
+    def _reset_lands_first(fn, label):
+        settings["users"]["admin"]["password_hash"] = new_hash
+        fn(settings)
+        return True
+
+    sm.update.side_effect = _reset_lands_first
+
+    assert mgr.authenticate_user("admin", PASSWORD) is not None
+
+    stored = settings["users"]["admin"]["password_hash"]
+    assert stored == new_hash, "the concurrent password reset was clobbered"
+    assert mgr._verify_password("the-admin-reset-it-to-this", stored) is True
+    assert mgr._verify_password(PASSWORD, stored) is False, \
+        "the old password still works — the reset was undone"

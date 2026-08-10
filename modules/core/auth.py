@@ -752,7 +752,7 @@ class AuthManager:
                 if not stored_hash.startswith(('$2', 'scrypt:')):
                     try:
                         upgraded = self._hash_password(password)
-                    except Exception as exc:  # pragma: no cover - defensive
+                    except Exception as exc:
                         # Never turn a correct password into a failed login over
                         # a hashing problem. Worst case the account keeps the
                         # old hash and the next login tries again.
@@ -774,7 +774,13 @@ class AuthManager:
                     if record is None:
                         return
                     record['last_login'] = now
-                    if upgraded:
+                    # Compare-and-set, not a blind write. If an admin reset
+                    # this password between the check above and this locked
+                    # update, `upgraded` is derived from the OLD plaintext —
+                    # storing it would silently revert their reset and make the
+                    # old password work again. Only replace the hash we
+                    # actually verified.
+                    if upgraded and record.get('password_hash') == stored_hash:
                         record['password_hash'] = upgraded
                     settings['users'] = stored_users
 
@@ -784,7 +790,7 @@ class AuthManager:
                         logger.info(
                             f"Upgraded the stored password hash for '{username}'"
                             " from a legacy format on successful login")
-                except Exception as exc:  # pragma: no cover - defensive
+                except Exception as exc:
                     # Same reasoning: the credential was correct. Recording when
                     # it was used is not worth refusing entry over — and the old
                     # code did exactly that, turning a full disk into a failed
