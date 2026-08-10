@@ -266,3 +266,85 @@ def test_no_markdown_carries_shell_quoting_artifacts():
         f"shell-escape artifacts leaked into prose: {offenders}. "
         f"They render literally."
     )
+
+
+def test_docs_mcp_documents_every_tool_the_server_ships():
+    """`docs/mcp.md` enumerated 13 tools while `mcp/index.js` registered 16.
+
+    The three it omitted were `certmate_update_certificate`,
+    `certmate_get_certificate_file` and `certmate_delete_certificate` — the last
+    of which deletes certificate files from disk and is not reversible. An
+    operator reading the documented surface would not have known the agent could
+    do it.
+
+    The tool-count assertion in the README was already gated; the enumeration
+    here was not, which is how a list can be exhaustive-looking and short.
+    """
+    server = (REPO_ROOT / "mcp" / "index.js").read_text(encoding="utf-8")
+    shipped = set(re.findall(r'name:\s*"(certmate_[a-z_]+)"', server))
+    assert shipped, "no tools found in mcp/index.js — has the shape changed?"
+
+    doc = (REPO_ROOT / "docs" / "mcp.md").read_text(encoding="utf-8")
+    documented = set(re.findall(r"certmate_[a-z_]+", doc))
+
+    missing = sorted(shipped - documented)
+    assert not missing, f"docs/mcp.md does not mention {missing}"
+
+    phantom = sorted(documented - shipped)
+    assert not phantom, f"docs/mcp.md documents tools the server does not ship: {phantom}"
+
+
+def test_mcp_tools_request_async_issuance():
+    """create / renew / reissue must opt into the background job.
+
+    The server only takes the async branch when the caller sends `async`
+    (`_wants_async`, modules/api/resources.py). Without it the request blocks
+    for the whole ACME exchange, the MCP client's timeout aborts the tool call
+    while certbot keeps running, and no `job_id` is ever produced — so the
+    `certmate_get_job` loop that docs/mcp.md tells an agent to follow could not
+    execute at all.
+
+    mcp/test-tools.js asserts this against a recording mock; this is the cheap
+    check that runs in the Python suite too, because the MCP suite is a separate
+    CI job and a reviewer reading only this one should still see the contract.
+    """
+    server = (REPO_ROOT / "mcp" / "index.js").read_text(encoding="utf-8")
+    # Check the whole handler for each tool, not a fixed window around the
+    # call: reissue builds its body several lines ABOVE the makeRequest, and a
+    # forward-only window missed it. Anchoring on the first mention of the path
+    # was worse still — for create that is a comment, so the check would have
+    # been satisfied by prose.
+    #
+    # The handler ends at the next `case`/`default`, or at end of file. The
+    # first version required a literal `\n      case "`, which tied the test to
+    # one indentation and would have failed outright on the last case in the
+    # switch — a red build with nothing broken (Copilot, #531).
+    boundary = r'(?=\n\s*(?:case\s+["\']|default\s*:)|\Z)'
+    for tool in ("certmate_create_certificate",
+                 "certmate_renew_certificate",
+                 "certmate_update_certificate"):
+        m = re.search(rf'case "{tool}":(.*?)' + boundary, server, re.S)
+        assert m, f"could not isolate the {tool} handler in mcp/index.js"
+        # Over-capturing would let one tool's `async: true` vouch for another.
+        assert m.group(1).count('makeRequest') <= 2, (
+            f"the {tool} handler capture spilled into the next case "
+            f"({m.group(1).count('makeRequest')} makeRequest calls) — the "
+            f"boundary pattern is matching too late to isolate anything"
+        )
+        assert "async: true" in m.group(1), (
+            f"{tool} does not request async issuance — the server would run it "
+            f"inline and never produce a job_id for certmate_get_job to poll"
+        )
+
+
+def test_the_mcp_suites_are_run_by_ci():
+    """A test suite nothing executes is not a test suite.
+
+    `mcp/test-smoke.js` and `mcp/test-tools.js` were referenced by no workflow,
+    no Makefile target, not run-tests.sh and not release.sh — while Dependabot
+    updated `mcp/` dependencies, so those bumps shipped with a suite that never
+    ran.
+    """
+    ci = (REPO_ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    assert "working-directory: mcp" in ci, "no CI job runs anything inside mcp/"
+    assert "npm test" in ci, "the mcp job does not run its test suite"

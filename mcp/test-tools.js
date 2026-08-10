@@ -103,6 +103,13 @@ server.listen(0, "127.0.0.1", () => {
     if (!upd.body || JSON.stringify(upd.body.san_domains) !== JSON.stringify(["www.api.example.com"]) || upd.body.domain_alias !== "alias.example.net") {
       fail(`update sent the wrong reissue body: ${JSON.stringify(upd.body)}`);
     }
+    // Without `async` the server reissues inline (`_wants_async`,
+    // modules/api/resources.py): the call blocks for the whole ACME exchange,
+    // the MCP client's timeout kills it, and no job_id is produced — so the
+    // documented "poll certmate_get_job until done" loop cannot run at all.
+    if (upd.body.async !== true) {
+      fail(`update must request async issuance; sent ${JSON.stringify(upd.body)}`);
+    }
 
     const getf = requests.find((r) => r.method === "GET" && r.url === "/api/certificates/api.example.com/download?file=fullchain.pem");
     if (!getf) fail("get_certificate_file did not GET /api/certificates/api.example.com/download?file=fullchain.pem");
@@ -123,10 +130,31 @@ server.listen(0, "127.0.0.1", () => {
         fail(`update without sans must omit san_domains; sent ${JSON.stringify(upd2.body)}`);
       }
       if (upd2.body.domain_alias !== "") fail("update should pass domain_alias='' to clear the alias");
-      console.log("OK: delete -> DELETE; update -> POST reissue (body, and san_domains omitted when sans absent); get_file -> GET ?file= returning raw PEM");
-      console.log("PASS");
-      cleanup();
-      process.exit(0);
+      if (upd2.body.async !== true) fail("update must request async issuance even without sans");
+
+      // create and renew take the same branch, and are the two the docs tell
+      // an agent to follow with certmate_get_job.
+      requests.length = 0;
+      call(14, "certmate_create_certificate", { domain: "new.example.com", dns_provider: "cloudflare" });
+      call(15, "certmate_renew_certificate", { domain: "api.example.com" });
+      setTimeout(() => {
+        const cre = requests.find((r) => r.method === "POST" && r.url === "/api/certificates/create");
+        if (!cre) fail("create did not POST /api/certificates/create");
+        if (!cre.body || cre.body.async !== true) {
+          fail(`create must request async issuance; sent ${JSON.stringify(cre.body)}`);
+        }
+        const ren = requests.find((r) => r.method === "POST" && r.url === "/api/certificates/api.example.com/renew");
+        if (!ren) fail("renew did not POST .../renew");
+        if (!ren.body || ren.body.async !== true) {
+          fail(`renew must request async issuance; sent ${JSON.stringify(ren.body)}`);
+        }
+        console.log("OK: create / renew / update all request async issuance (202 + job_id)");
+        console.log("OK: delete -> DELETE; update -> POST reissue (body, and san_domains omitted when sans absent); get_file -> GET ?file= returning raw PEM");
+        console.log("PASS");
+        cleanup();
+        process.exit(0);
+      }, 400);
+      return;
     }, 300);
   }
 });

@@ -175,6 +175,33 @@ jobs:
   # ships silently whenever input.css / tailwind.config.js change without a
   # rebuild. This job rebuilds from source and fails if the committed output
   # drifts, forcing `npm run css:build` to be part of every CSS-touching PR.
+  # The MCP server ships in the image and is documented as a supported way to
+  # drive CertMate from an assistant, but its two test suites were run by
+  # nothing: no workflow, no Makefile target, not run-tests.sh, not release.sh.
+  # Dependabot DOES update mcp/ dependencies (.github/dependabot.yml), so those
+  # bumps were shipping with a suite that never executed — and the async
+  # regression that made the documented job-polling loop impossible sat there
+  # undetected because nothing asked.
+  mcp:
+    name: MCP server
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+    - name: Set up Node
+      uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v4
+      with:
+        node-version: '20'
+
+    - name: Install MCP dependencies
+      working-directory: mcp
+      run: npm ci
+
+    - name: Run the MCP suites
+      working-directory: mcp
+      run: npm test
+
   frontend-css:
     runs-on: ubuntu-latest
     steps:

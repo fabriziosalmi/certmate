@@ -23,12 +23,37 @@ The CertMate MCP server exposes the following tools to AI assistants:
 
 **Providers**
 12. **`certmate_list_dns_providers`** — DNS providers supported and configured on this instance.
-13. **`certmate_list_dns_accounts`** — Configured DNS provider accounts (credentials masked); use a returned account id as `account_id` when creating a certificate.
+13. **`certmate_list_dns_accounts`** — Configured DNS provider accounts (credentials masked); use a returned account id as `account_id` when creating a certificate. **Requires `admin`.**
+
+**Editing and removing**
+14. **`certmate_update_certificate`** — Changes an existing certificate's coverage in place by reissuing it: replace the SAN set and/or the DNS-01 alias. The primary domain is the certificate's identity and cannot be changed here. Returns a `job_id`.
+15. **`certmate_delete_certificate`** — **Destructive and not reversible.** Removes the certificate files from disk and the domain from settings. **Requires `admin`.**
+16. **`certmate_get_certificate_file`** — Returns one certificate file as raw, pasteable PEM rather than JSON-wrapped. Anything carrying key material needs `operator`.
+
+## Roles
+
+Give the agent the narrowest token that does its job, and note that three tools
+need more than the rest:
+
+| Tool | Minimum role |
+|---|---|
+| everything under Inventory & status, except diagnostics/settings | `viewer` |
+| `certmate_create_certificate`, `certmate_renew_certificate`, `certmate_set_auto_renew`, `certmate_update_certificate`, `certmate_download_certificate`, `certmate_get_certificate_file` | `operator` |
+| `certmate_diagnostics`, `certmate_get_settings` | `admin` |
+| **`certmate_deploy_certificate`** | **`admin`** |
+| **`certmate_list_dns_accounts`** | **`admin`** |
+| **`certmate_delete_certificate`** | **`admin`** |
+
+Deploy and account listing are the surprising ones: both read or act on stored
+credentials, so both are `admin` on the server side even though an agent that
+only renews would otherwise be happy with `operator`. An operator-scoped agent
+asked to "pick an account and issue" will get a 403 on the account lookup — pass
+the `account_id` in the prompt instead, or give it an admin token deliberately.
 
 ## Setup & Configuration
 
 ### Prerequisites
-- Node.js (v18 or higher)
+- Node.js (>= 20 — `mcp/package.json` declares `engines.node: ">=20.0.0"`)
 - npm
 
 ### Installation
