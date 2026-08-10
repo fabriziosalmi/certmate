@@ -19,8 +19,8 @@ external account binding, matching what the registry already declared.
 **You are affected if** you configured DigiCert as your CA. Issuance failed
 with a DNS error. After upgrading, check the directory URL on the settings
 page: DigiCert's endpoint is **regional**, and an account outside the default
-region has its own URL, shown in CertCentral. It can be overridden per
-certificate.
+region has its own URL, shown in CertCentral. The directory URL can be set
+per certificate if yours differs.
 
 ### Google Trust Services staging was broken in a different way
 
@@ -89,10 +89,11 @@ Both are fixed, and CI now resolves every advertised combination on every run.
 
 - **Two processes appending at once could write the same sequence number**, and
   the verifier then reported the chain as tampered with. Appends now take an
-  advisory lock and re-read a stale baseline; the verifier distinguishes a
+  advisory lock before measuring the chain, and refresh their view of it when
+  another process has appended in the meantime; the verifier distinguishes a
   duplicate write from a deletion and says which it found.
 - **The MCP server never asked for asynchronous issuance**, so the job-polling
-  loop its own documentation describes could not run: the call blocked for the
+  loop that its own documentation describes could not run: the call blocked for the
   whole exchange and no job id was ever produced.
 
 ### Notes for operators
