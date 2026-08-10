@@ -241,7 +241,7 @@ def test_external_api(mock_get, client):
 
 Die CI-Pipeline läuft bei jedem Push und Pull Request:
 
-1. **Mehrere Python-Versionen**: Tests auf Python 3.9, 3.11, 3.12
+1. **Mehrere Python-Versionen**: Tests auf Python 3.12
 2. **Codequalität**: Linting mit flake8
 3. **Sicherheit**: Scanning mit bandit
 4. **Tests**: Vollständige Test-Suite mit Coverage

@@ -6,7 +6,7 @@ Ce guide couvre toutes les méthodes d'installation et de déploiement de CertMa
 
 ## Prérequis
 
-- Python 3.9 ou supérieur
+- Python 3.12
 - pip (gestionnaire de paquets Python)
 - Docker (optionnel, pour le déploiement conteneurisé)
 
