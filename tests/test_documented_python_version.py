@@ -64,6 +64,15 @@ def _documented():
             continue
         for number, line in enumerate(
                 path.read_text(encoding="utf-8").splitlines(), 1):
+            # A version stated *about a third-party package* is not a claim
+            # about what CertMate runs on, and treating it as one made this
+            # gate reject true sentences. The provider table explains that
+            # `certbot-dns-namecheap` 1.0.0 targets Python 2.7-3.8 — accurate,
+            # and the reason that plugin is marked Unavailable. Lines naming a
+            # backticked distribution are describing that distribution.
+            if re.search(r"`[\w.-]*(?:certbot|dns)[\w.-]*`|`Scaleway`|`PowerDNS`",
+                         line):
+                continue
             for match in re.finditer(r"[Pp]ython[- ](\d+\.\d+)", line):
                 found.append((str(path.relative_to(REPO_ROOT)), number,
                               match.group(1)))
