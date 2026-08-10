@@ -16,7 +16,6 @@ grew underneath it, and the verifier distinguishes a repeat from a gap.
 """
 import json
 import multiprocessing
-import os
 import sys
 
 import pytest
