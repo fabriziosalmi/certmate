@@ -363,7 +363,7 @@ curl -X GET http://localhost:8000/api/health
 ### Modo de depuración
 
 ```bash
-export FLASK_DEBUG=1
+export CERTMATE_LOG_LEVEL=DEBUG
 python app.py
 ```
 
@@ -512,7 +512,7 @@ curl -X GET http://localhost:8000/api/health
 ### Modo de depuración
 
 ```bash
-export FLASK_DEBUG=1
+export CERTMATE_LOG_LEVEL=DEBUG
 python app.py
 ```
 
