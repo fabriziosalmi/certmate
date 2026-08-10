@@ -730,11 +730,68 @@ class AuthManager:
                 logger.warning(f"Login attempt for disabled user: {username}")
                 return None
             
-            if self._verify_password(password, user.get('password_hash', '')):
-                # Update last login
-                user['last_login'] = utc_now().isoformat()
-                self._save_users(users)
-                
+            stored_hash = user.get('password_hash', '')
+            if self._verify_password(password, stored_hash):
+                # Upgrade a legacy hash now that we hold the plaintext.
+                #
+                # _verify_password still accepts the pre-bcrypt formats
+                # ("sha256:<salt>:<hex>" and the bare "<salt>:<hex>") so an
+                # operator who installed before those were replaced can still
+                # log in. But nothing ever rewrote them, so those accounts kept
+                # a salted SHA-256 for ever, however often they signed in — a
+                # fast hash, brute-forceable at GPU speed from a leaked
+                # settings.json, where bcrypt and scrypt are deliberately slow.
+                # The only escape was changing the password by hand, and
+                # nothing told anyone to. (CodeQL py/weak-sensitive-data-hashing
+                # has pointed at this since 2026-05-17.)
+                #
+                # A successful login is the one moment the plaintext is in
+                # hand, so it is the only place this can happen without asking
+                # the operator to do anything.
+                upgraded = None
+                if not stored_hash.startswith(('$2', 'scrypt:')):
+                    try:
+                        upgraded = self._hash_password(password)
+                    except Exception as exc:  # pragma: no cover - defensive
+                        # Never turn a correct password into a failed login over
+                        # a hashing problem. Worst case the account keeps the
+                        # old hash and the next login tries again.
+                        logger.warning(
+                            "Could not upgrade the stored password hash for "
+                            f"'{username}': {exc}")
+
+                now = utc_now().isoformat()
+
+                # A targeted mutation, not a rewrite of the whole users map.
+                # `_save_users(users)` wrote back the snapshot this request had
+                # read, so a login racing an admin's edit clobbered it — and a
+                # login racing a user deletion put the deleted user back.
+                # Re-reading the record under the settings lock makes the
+                # delete win, which is the correct outcome.
+                def _touch(settings):
+                    stored_users = settings.get('users') or {}
+                    record = stored_users.get(username)
+                    if record is None:
+                        return
+                    record['last_login'] = now
+                    if upgraded:
+                        record['password_hash'] = upgraded
+                    settings['users'] = stored_users
+
+                try:
+                    self.settings_manager.update(_touch, "user_management")
+                    if upgraded:
+                        logger.info(
+                            f"Upgraded the stored password hash for '{username}'"
+                            " from a legacy format on successful login")
+                except Exception as exc:  # pragma: no cover - defensive
+                    # Same reasoning: the credential was correct. Recording when
+                    # it was used is not worth refusing entry over — and the old
+                    # code did exactly that, turning a full disk into a failed
+                    # login.
+                    logger.warning(
+                        f"Could not persist login metadata for '{username}': {exc}")
+
                 logger.info(f"User '{username}' authenticated successfully")
                 return {
                     'username': username,
