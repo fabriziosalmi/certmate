@@ -4,7 +4,7 @@ One security fix, for installs that predate the move to bcrypt.
 
 ### Legacy password hashes are upgraded on login
 
-CertMate replaced its password hashing with bcrypt (scrypt where bcrypt cannot be imported) some releases ago. Verification still accepted the two pre-bcrypt formats so that operators hashed under the old scheme could still sign in — but **nothing ever rewrote them**.
+CertMate replaced its password hashing with bcrypt (scrypt where bcrypt cannot be imported), some releases ago. Verification still accepted the two pre-bcrypt formats, so that anyone whose stored hash was still in the old format could sign in — but **nothing ever rewrote those hashes**.
 
 So an admin account created before that change kept a salted SHA-256 for ever, however many times it signed in. SHA-256 is fast: a leaked `settings.json` is brute-forceable at GPU speed, where bcrypt and scrypt are deliberately slow. The only way out was to change the password by hand, and nothing told anyone to.
 
