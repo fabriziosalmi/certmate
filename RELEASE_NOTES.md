@@ -1,3 +1,32 @@
+## v2.25.3 (Old password hashes stop being old)
+
+One security fix, for installs that predate the move to bcrypt.
+
+### Legacy password hashes are upgraded on login
+
+CertMate replaced its password hashing with bcrypt (scrypt where bcrypt cannot be imported), some releases ago. Verification still accepted the two pre-bcrypt formats, so that anyone whose stored hash was still in the old format could sign in — but **nothing ever rewrote those hashes**.
+
+So an admin account created before that change kept a salted SHA-256 for ever, however many times it signed in. SHA-256 is fast: a leaked `settings.json` is brute-forceable at GPU speed, where bcrypt and scrypt are deliberately slow. The only way out was to change the password by hand, and nothing told anyone to.
+
+A successful login is the one moment the plaintext is in hand, so that is where the hash is now re-derived with the current algorithm and stored. It happens once, transparently, with no action from you and no change to how you sign in.
+
+**You are affected if** your CertMate predates the bcrypt change and you have never changed your password since. The upgrade will happen on your next login. A modern hash is left untouched.
+
+The write is a compare-and-set: if an administrator resets a password in the moment between the check and the write, their reset wins and the old password does not come back.
+
+### Two smaller faults in the same path
+
+- **A failed write denied a correct login.** Recording `last_login` used to be able to fail the whole authentication — a full disk turned a valid password into "login failed". Persisting when a credential was used is not worth refusing entry over.
+- **A login racing a user deletion recreated that user.** The login wrote back the whole user map as it had read it, so a deleted account came back. The write is now scoped to the one record, re-read under the settings lock, and the deletion wins.
+
+### Notes for operators
+
+- Upgrading is a drop-in. No configuration, data or API changes.
+- Nothing to do afterwards: the hash upgrade is automatic and happens at most once per account.
+- If you run with `bcrypt` unavailable, hashes are upgraded to scrypt rather than bcrypt — still a slow KDF, still a large improvement over SHA-256.
+
+---
+
 ## v2.25.2 (Things that were never tested, and therefore never worked)
 
 A patch release. Every change here is a fix, and four of them share a shape worth naming: the check that should have caught the bug either did not exist, or existed and could not fail.
