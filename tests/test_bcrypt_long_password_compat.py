@@ -20,8 +20,8 @@ So the truncation is explicit on both sides now, which preserves 4.x behaviour
 exactly rather than changing it during a dependency upgrade. These tests are
 what keep it that way.
 """
+import ast
 import pathlib
-import re
 
 import pytest
 
@@ -94,14 +94,41 @@ def test_neither_side_passes_bcrypt_an_untruncated_password():
     password — which tests bcrypt, not CertMate, and duly failed under 4.x
     where it truncates instead. What matters is that our code decides, in the
     same way, on both sides.
+
+    It read the source line by line, which missed the call split across lines —
+    the form black would produce the moment the expression grew (Copilot,
+    #542). Parsing the AST asks about the call, not about how it is typed.
     """
-    source = (pathlib.Path(__file__).resolve().parent.parent
-              / "modules" / "core" / "auth.py").read_text(encoding="utf-8")
-    offenders = [
-        f"{number}: {line.strip()}"
-        for number, line in enumerate(source.splitlines(), 1)
-        if re.search(r"bcrypt\.(hashpw|checkpw)\(\s*password\.encode\(\)", line)
+    path = (pathlib.Path(__file__).resolve().parent.parent
+            / "modules" / "core" / "auth.py")
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+
+    calls = [
+        node for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr in ("hashpw", "checkpw")
+        and isinstance(node.func.value, ast.Name)
+        and node.func.value.id == "bcrypt"
     ]
+    assert calls, (
+        "no bcrypt.hashpw/checkpw call found in auth.py — this check has lost "
+        "its subject and would pass whatever the file said."
+    )
+
+    offenders = []
+    for call in calls:
+        if not call.args:
+            continue
+        first = call.args[0]
+        # `password.encode()` — the unbounded form. `_bcrypt_input(password)`
+        # is a Name call and never matches.
+        if (isinstance(first, ast.Call)
+                and isinstance(first.func, ast.Attribute)
+                and first.func.attr == "encode"):
+            offenders.append(f"line {call.lineno}: bcrypt.{call.func.attr}("
+                             f"{ast.unparse(first)}, ...)")
+
     assert not offenders, (
         "these hand bcrypt the full password instead of _bcrypt_input():\n  "
         + "\n  ".join(offenders)
