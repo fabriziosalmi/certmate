@@ -33,6 +33,29 @@ ROLE_HIERARCHY = {'viewer': 0, 'operator': 1, 'admin': 2}
 _UNSET = object()
 
 
+
+# bcrypt has always ignored everything past the 72nd byte of a password. Until
+# 4.x it truncated silently; 5.0.0 raises ValueError instead.
+#
+# That change is a lockout, not a crash, and it is invisible: `_verify_password`
+# catches ValueError and returns False, so every operator whose password is
+# longer than 72 bytes would simply be told their password is wrong, for ever,
+# with nothing in the logs to say why. Their stored hash was derived from the
+# truncated form, so it is still perfectly valid — only the call to check it
+# would fail.
+#
+# So the truncation is now explicit and applied on both sides, which keeps
+# behaviour identical to bcrypt 4.x rather than changing it during an upgrade.
+# It does mean two passwords sharing their first 72 bytes are equivalent, as
+# they always have been under bcrypt; that is a property of the algorithm, not
+# something introduced here.
+_BCRYPT_MAX_BYTES = 72
+
+
+def _bcrypt_input(password):
+    """The bytes bcrypt will actually consider, whatever the caller passed."""
+    return password.encode()[:_BCRYPT_MAX_BYTES]
+
 class AuthManager:
     """Class to handle authentication and authorization"""
     
@@ -88,7 +111,8 @@ class AuthManager:
         """
         if BCRYPT_AVAILABLE:
             # bcrypt handles salt internally, rounds=12 provides good security
-            return bcrypt.hashpw(password.encode(), bcrypt.gensalt(rounds=12)).decode()
+            return bcrypt.hashpw(_bcrypt_input(password),
+                                 bcrypt.gensalt(rounds=12)).decode()
         # bcrypt import failed — scrypt KDF fallback (NOT a fast hash).
         # Format: "scrypt:<n>:<r>:<p>:<salt_hex>:<hash_hex>".
         if salt is None:
@@ -109,7 +133,8 @@ class AuthManager:
             # bcrypt hash (starts with $2b$ / $2a$)
             if stored_hash.startswith('$2'):
                 if BCRYPT_AVAILABLE:
-                    return bcrypt.checkpw(password.encode(), stored_hash.encode())
+                    return bcrypt.checkpw(_bcrypt_input(password),
+                                          stored_hash.encode())
                 logger.error("bcrypt hash found but bcrypt not available")
                 return False
 
