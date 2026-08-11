@@ -30,10 +30,37 @@ updates:
       - dependency-name: "certbot"
       - dependency-name: "josepy"
       - dependency-name: "acme"
-      # DNS plugins version-track certbot majors; block majors only so
-      # compatible minor/patch plugin fixes still arrive.
+      # DNS plugins used to be blocked at MAJOR only, on the reasoning that
+      # minor and patch fixes are compatible. They are not, and the exception
+      # cost a release: every plugin from certbot's own release train carries
+      # `certbot>=` its own version, so a MINOR bump drags certbot off the pin
+      # just as surely as a major one.
+      #
+      #   certbot-dns-route53 2.10.0 -> 2.11.0  requires certbot>=2.11.0
+      #   certbot-dns-azure   2.5.0  -> 2.6.1   requires certbot>=3.0,<4.0
+      #
+      # Both are minor bumps. The second is the one requirements-azure.txt
+      # already documents as breaking the install — and PR #387 proposed it.
+      # Measured: layering such a plugin moved certbot 2.10.0 -> 3.3.0 in a
+      # build that reported success (fixed in #533).
       - dependency-name: "certbot-dns-*"
-        update-types: ["version-update:semver-major"]
+      - dependency-name: "certbot-plugin-*"
+      # The pins that actually hold the stack together, and that the previous
+      # list left entirely exposed. Each is documented in requirements.txt at
+      # the line it appears on; tests/test_dependabot_holds_the_stack.py fails
+      # if one is pinned-and-documented but missing here.
+      #
+      #   pyopenssl    26.2.0+ removes OpenSSL.crypto.X509Extension, which
+      #                acme 3.3.0 evaluates at import — certbot crashes before
+      #                it can issue anything.
+      #   cryptography 48.0.1 requires pyopenssl>=26.2.0, i.e. the same crash
+      #                by another route. GHSA-537c-gmf6-5ccf is open by choice
+      #                until the certbot 5.x epic; see SECURITY.md.
+      #   dns-lexicon  the resolver set is balanced around 3.25.1; moving it
+      #                breaks the lexicon-based plugins against each other.
+      - dependency-name: "pyopenssl"
+      - dependency-name: "cryptography"
+      - dependency-name: "dns-lexicon"
 
   - package-ecosystem: "npm"
     directories:

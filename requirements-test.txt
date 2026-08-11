@@ -14,3 +14,10 @@ playwright
 # server they wrap. Order matters: the SDK first (the CLI depends on it).
 -e ./clients/certmate-sdk
 -e ./clients/certmate-cli
+
+# Read by tests/test_dependabot_holds_the_stack.py to parse .github/dependabot.yml.
+# Pinned explicitly rather than relied on transitively: it arrives today via
+# bandit, cloudflare and dns-lexicon, so the test would start failing with
+# ModuleNotFoundError the day any of those drops it — for reasons having
+# nothing to do with what it checks.
+PyYAML==6.0.3
