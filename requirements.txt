@@ -91,7 +91,7 @@ cloudflare==2.19.4                 # Cloudflare API support
 dns-lexicon==3.25.1                # Provider-neutral DNS API support for alias mode
 
 # Core application dependencies
-urllib3>=2.6.0,!=2.2.0,<3      # CVE-2025-66418, CVE-2025-66471, CVE-2026-21441 (HIGH)
+urllib3!=2.2.0,>=2.7.0,<3      # CVE-2025-66418, CVE-2025-66471, CVE-2026-21441 (HIGH)
 requests==2.33.0
 python-dotenv==1.2.2
 APScheduler==3.10.4
