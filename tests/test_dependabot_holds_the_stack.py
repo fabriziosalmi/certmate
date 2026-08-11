@@ -60,14 +60,23 @@ HELD_FAMILIES = {
 }
 
 
-def _pip_ignore():
+def _pip_configs():
     config = yaml.safe_load(DEPENDABOT.read_text(encoding="utf-8"))
     pip = [u for u in config["updates"] if u["package-ecosystem"] == "pip"]
     assert pip, "dependabot.yml no longer configures the pip ecosystem"
+    return pip
+
+
+def _pip_ignore(config):
     return {
         entry["dependency-name"]: entry.get("update-types")
-        for entry in pip[0].get("ignore", [])
+        for entry in config.get("ignore", [])
     }
+
+
+def _directory(config):
+    """A pip block can target one directory or several."""
+    return config.get("directory") or ", ".join(config.get("directories", ["?"]))
 
 
 def _requirements_text():
@@ -77,20 +86,52 @@ def _requirements_text():
     )
 
 
+def _reason_near_pin(package, evidence, window=4):
+    """Is `evidence` written within `window` lines of `package`'s pin?
+
+    The first version of this asked whether the phrase appeared anywhere in the
+    concatenated requirements files, which is false confidence of the exact
+    kind this suite exists to remove: the reason for pyopenssl could have been
+    sitting next to cryptography, in another file, and the check would have
+    been satisfied (Copilot, #541). Proximity in the same file is what makes it
+    a reason *for that pin*.
+    """
+    for path in sorted(REPO_ROOT.glob("requirements*.txt")):
+        lines = path.read_text(encoding="utf-8").splitlines()
+        for number, line in enumerate(lines):
+            if not re.match(rf"^{re.escape(package)}==", line, re.I):
+                continue
+            near = lines[max(0, number - window):number + window + 1]
+            if any(evidence in candidate for candidate in near):
+                return True
+    return False
+
+
 def test_the_config_is_being_read():
-    ignore = _pip_ignore()
-    assert len(ignore) >= 5, (
-        f"parsed {len(ignore)} ignore entries — the config shape changed and "
-        f"every check below would pass over nothing."
-    )
+    for config in _pip_configs():
+        ignore = _pip_ignore(config)
+        assert len(ignore) >= 5, (
+            f"the pip block for {_directory(config)} has {len(ignore)} ignore "
+            f"entries — the config shape changed and every check below would "
+            f"pass over nothing."
+        )
 
 
 @pytest.mark.parametrize("package", sorted(HELD))
 def test_every_held_package_is_ignored_entirely(package):
-    ignore = _pip_ignore()
+    # Every pip block, not just the first. A second one — for another
+    # directory, say — would otherwise be completely unconstrained while this
+    # test went on passing against the first (Copilot, #541).
+    for config in _pip_configs():
+        _assert_held(package, config)
+
+
+def _assert_held(package, config):
+    ignore = _pip_ignore(config)
     assert package in ignore, (
         f"{package} is pinned deliberately but Dependabot is free to propose "
-        f"bumps for it. Add it to the ignore list in .github/dependabot.yml."
+        f"bumps for it in the {_directory(config)} block. Add it to the "
+        f"ignore list in .github/dependabot.yml."
     )
     assert ignore[package] is None, (
         f"{package} is ignored only for {ignore[package]}. A narrower rule is "
@@ -102,8 +143,14 @@ def test_every_held_package_is_ignored_entirely(package):
 
 @pytest.mark.parametrize("pattern", sorted(HELD_FAMILIES))
 def test_every_held_family_is_ignored_entirely(pattern):
-    ignore = _pip_ignore()
-    assert pattern in ignore, f"{pattern} is not ignored by Dependabot"
+    for config in _pip_configs():
+        _assert_family_held(pattern, config)
+
+
+def _assert_family_held(pattern, config):
+    ignore = _pip_ignore(config)
+    assert pattern in ignore, (
+        f"{pattern} is not ignored in the {_directory(config)} block")
     assert ignore[pattern] is None, (
         f"{pattern} is ignored only for {ignore[pattern]}. Minor and patch "
         f"bumps of these plugins require a newer certbot — measured: "
@@ -120,10 +167,11 @@ def test_every_held_package_is_still_pinned_and_explained(package, evidence):
         f"{package} is on the hold list but is no longer pinned in any "
         f"requirements file. Remove the hold or restore the pin."
     )
-    assert evidence in text, (
-        f"{package} is held, but the reason ({evidence!r}) is no longer "
-        f"written down next to the pin. A hold whose reason has been deleted "
-        f"is a hold nobody can review."
+    assert _reason_near_pin(package, evidence), (
+        f"{package} is held, but the reason ({evidence!r}) is not written "
+        f"within a few lines of its pin in any requirements file. A hold whose "
+        f"reason has been deleted — or which borrowed another package's — is a "
+        f"hold nobody can review."
     )
 
 
@@ -154,7 +202,10 @@ def test_a_defensive_entry_really_is_unpinned(package):
 def test_no_ignore_entry_is_unexplained():
     """The other direction: everything ignored must be something we hold."""
     known = set(HELD) | set(HELD_FAMILIES) | DEFENSIVE
-    unexplained = sorted(set(_pip_ignore()) - known)
+    seen = set()
+    for config in _pip_configs():
+        seen |= set(_pip_ignore(config))
+    unexplained = sorted(seen - known)
     assert not unexplained, (
         f"these are ignored by Dependabot but are not on the hold list: "
         f"{unexplained}. Either record why they are held — with the reason in "
