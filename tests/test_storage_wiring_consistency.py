@@ -125,3 +125,57 @@ def test_settings_js_panel_map_matches_dispatch():
         f"settings.js storage panel map != dispatchable: "
         f"missing={sorted(canonical - panel_keys)} extra={sorted(panel_keys - canonical)}"
     )
+
+
+# The proper nouns each dispatched backend is documented under. Product names
+# stay in English in every translation, which is what makes them checkable
+# across all five guides.
+#
+# `local_filesystem` is deliberately absent: it is the only one whose name is a
+# common noun, and the translations render it as "Filesystem locale",
+# "Lokales Dateisystem", "Sistema de archivos local". Requiring the English
+# string there failed four correct documents — my check, not their prose. It is
+# also the default and appears in every guide's opening paragraph, so it is not
+# the one at risk of going undocumented.
+_UNTRANSLATED_NAME = {"local_filesystem"}
+_DOC_NAMES = {
+    "azure_keyvault": "Azure Key Vault",
+    "aws_secrets_manager": "AWS Secrets Manager",
+    "hashicorp_vault": "HashiCorp Vault",
+    "infisical": "Infisical",
+    "s3_compatible": "S3-compatible",
+}
+
+
+def test_every_dispatched_backend_has_a_documented_name():
+    """The mapping above must keep up with the dispatch, or the check below
+    silently stops covering the newest backend."""
+    missing = sorted(_canonical() - set(_DOC_NAMES) - _UNTRANSLATED_NAME)
+    assert not missing, (
+        f"these backends are dispatched but have no documented name here: "
+        f"{missing}. Add them, and add them to the architecture guide."
+    )
+
+
+@pytest.mark.parametrize("guide", sorted(
+    str(p.relative_to(_ROOT)) for p in _ROOT.glob("docs/**/architecture.md")))
+def test_the_architecture_guide_lists_every_backend(guide):
+    """The seventh surface, and the only one that was not pinned.
+
+    This file already cross-validates the API model enum, the resources'
+    available/valid/migrate lists, the settings select and the settings JS
+    panel map against the dispatch. The documentation was not among them, and
+    it had fallen a whole backend behind: `s3_compatible` ships with a class,
+    three test files and a settings-UI panel, and the architecture guide listed
+    "4 cloud backends" without it — in all five languages.
+    """
+    text = _read(guide)
+    missing = [
+        f"{key} ({name})" for key, name in sorted(_DOC_NAMES.items())
+        if key in _canonical() and name not in text
+    ]
+    assert not missing, (
+        f"{guide} does not mention {missing}. A backend the application "
+        f"dispatches, the API accepts and the settings page offers, described "
+        f"nowhere."
+    )

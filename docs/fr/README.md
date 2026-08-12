@@ -57,7 +57,7 @@ Bienvenue dans la documentation de CertMate. Ce dossier contient des guides comp
 - **Plus de deux douzaines de fournisseurs DNS** pour les défis Let's Encrypt DNS-01 (voir [Fournisseurs DNS](./dns-providers.md) pour la liste complète)
 - **Plusieurs fournisseurs CA** : Let's Encrypt, DigiCert, CA privée
 - **Support multi-comptes** par fournisseur DNS
-- **Backends de stockage interchangeables** : Local, Azure Key Vault, AWS, Vault, Infisical
+- **Backends de stockage interchangeables** : Local, Azure Key Vault, AWS, Vault, Infisical, S3-compatible
 - **Renouvellement automatique** avec seuils configurables
 - **Support Docker** avec constructions multi-plateforme (ARM64 + AMD64)
 - **Nettoyeur de logs** — Supprime automatiquement les tokens API, clés privées et identifiants sensibles des logs CertMate
