@@ -148,17 +148,42 @@ _DOC_NAMES = {
 
 
 def test_every_dispatched_backend_has_a_documented_name():
-    """The mapping above must keep up with the dispatch, or the check below
-    silently stops covering the newest backend."""
-    missing = sorted(_canonical() - set(_DOC_NAMES) - _UNTRANSLATED_NAME)
+    """Both directions.
+
+    A dispatched backend with no name here silently stops being covered by the
+    guide check. A name here for a backend that is no longer dispatched is the
+    opposite failure — the guide would be required to document something that
+    does not exist, and nobody would know why (Copilot, #557).
+    """
+    canonical = _canonical()
+    named = set(_DOC_NAMES) | _UNTRANSLATED_NAME
+    missing = sorted(canonical - named)
     assert not missing, (
         f"these backends are dispatched but have no documented name here: "
         f"{missing}. Add them, and add them to the architecture guide."
     )
+    stale = sorted(named - canonical)
+    assert not stale, (
+        f"these have a documented name here but are no longer dispatched: "
+        f"{stale}. Remove them, or the guide is asked to describe a backend "
+        f"the application cannot use."
+    )
 
 
-@pytest.mark.parametrize("guide", sorted(
-    str(p.relative_to(_ROOT)) for p in _ROOT.glob("docs/**/architecture.md")))
+def _guides():
+    """Every document that states the backend list, in every language.
+
+    architecture.md and the docs landing README both enumerate them. Only the
+    former was covered at first, and the Italian README slipped through with
+    five backends and abbreviated names while the other four were corrected —
+    the translations blind spot, inside the very patch that fixed it.
+    """
+    found = [p for p in _ROOT.glob("docs/**/architecture.md")]
+    found += [p for p in _ROOT.glob("docs/**/README.md")]
+    return sorted(str(p.relative_to(_ROOT)) for p in found)
+
+
+@pytest.mark.parametrize("guide", _guides())
 def test_the_architecture_guide_lists_every_backend(guide):
     """The seventh surface, and the only one that was not pinned.
 
@@ -170,9 +195,12 @@ def test_the_architecture_guide_lists_every_backend(guide):
     "4 cloud backends" without it — in all five languages.
     """
     text = _read(guide)
+    # _canonical() reflects over the dispatch source; computed once rather than
+    # per entry inside the comprehension.
+    canonical = _canonical()
     missing = [
         f"{key} ({name})" for key, name in sorted(_DOC_NAMES.items())
-        if key in _canonical() and name not in text
+        if key in canonical and name not in text
     ]
     assert not missing, (
         f"{guide} does not mention {missing}. A backend the application "
