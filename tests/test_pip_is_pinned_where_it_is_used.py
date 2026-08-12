@@ -74,12 +74,25 @@ def test_every_stage_declares_the_same_pip_version():
     )
 
 
-@pytest.mark.parametrize("number,line", _pip_installs(),
-                         ids=[f"line-{n}" for n, _l in _pip_installs()])
+# Parsed once. Calling it for the values and again for the ids reads the
+# Dockerfile twice at collection time, and the two lists can disagree — pytest
+# reports that as a parametrisation error rather than as what it is
+# (Copilot, #553). Third time this shape has come up in this repo.
+PIP_INSTALLS = _pip_installs()
+
+
+@pytest.mark.parametrize("number,line", PIP_INSTALLS,
+                         ids=[f"line-{n}" for n, _l in PIP_INSTALLS])
 def test_no_pip_install_of_pip_is_unpinned(number, line):
     """`pip install -U pip` is the shape that started this."""
-    assert re.search(r'pip==\$\{?PIP_VERSION\}?|pip==[0-9]', line), (
-        f"Dockerfile:{number} installs pip without a version:\n    {line}\n"
-        f"That is how /opt/venv/bin/pip — the one on PATH — floated at 26.2.1 "
-        f"while the pinned copy nothing uses sat at 26.1.2."
+    # Only the shared ARG. Accepting a numeric literal here would have let one
+    # stage sit at `pip==26.1.2` while `ARG PIP_VERSION` moved on — pinned, and
+    # drifted, which is the state this file exists to prevent rather than a
+    # milder version of it (Copilot, #553).
+    assert re.search(r'pip==\$\{?PIP_VERSION\}?', line), (
+        f"Dockerfile:{number} does not install pip via PIP_VERSION:\n    {line}\n"
+        f"A bare `pip install -U pip` is how /opt/venv/bin/pip — the one on "
+        f"PATH — floated at 26.2.1 while the pinned copy nothing uses sat at "
+        f"26.1.2. A hard-coded number is the same drift with extra steps: use "
+        f"the ARG so both stages move together."
     )
