@@ -160,16 +160,27 @@ def main():
         if plugin in registered:
             continue
         # The plugin is missing. Did we mean to ship it?
-        candidate = "certbot-" + plugin
-        # Which distribution would provide this plugin? Derived names are not
-        # always right — `dns-dynu` comes from certbot-dns-dynudns, `dns-ns1`
-        # from certbot-dns-nsone — so the pinned set is searched for one whose
-        # name contains the provider key before falling back to the guess.
-        owner = next((d for d in pinned if key.replace("-", "") in d.replace("-", "")),
-                     candidate)
-        if candidate in installed:
+        # Which distribution would provide this plugin? A derived name is only
+        # a guess and is wrong more often than it looks: `dns-dynu` comes from
+        # certbot-dns-dynudns, `dns-ns1` from certbot-dns-nsone, and `edgedns`
+        # from certbot-PLUGIN-edgedns rather than certbot-dns-anything. So the
+        # installed and pinned sets are searched for a distribution matching
+        # the provider key first, and the guess is the last resort — normalised
+        # like everything else, or it could never match either set.
+        #
+        # Using the guess for the "installed" test, as the first version did,
+        # meant the misnamed-entry-point failure could not be detected for any
+        # provider whose distribution is not literally `certbot-<plugin>`
+        # (Copilot, #558).
+        candidate = _normalise("certbot-" + plugin)
+        owner = next(
+            (d for d in list(installed) + list(pinned)
+             if _normalise(key).replace("-", "") in d.replace("-", "")),
+            candidate,
+        )
+        if owner in installed:
             failures.append(
-                f"{key}: certbot has no plugin '{plugin}', yet {candidate} is "
+                f"{key}: certbot has no plugin '{plugin}', yet {owner} is "
                 f"installed — the entry point is named something else, so "
                 f"issuance fails with 'unrecognized arguments'")
         elif owner in pinned:
