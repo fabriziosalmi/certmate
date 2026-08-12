@@ -20,15 +20,11 @@ suite skips it. What runs everywhere is the offline half: the shape of the URLs
 and the fact that a dead one cannot come back unnoticed.
 """
 import json
-import os
 import re
-import sys
 import urllib.error
 import urllib.request
 
 import pytest
-
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from modules.core.ca_manager import CAManager  # noqa: E402
 
