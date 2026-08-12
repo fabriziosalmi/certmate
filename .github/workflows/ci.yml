@@ -281,6 +281,34 @@ jobs:
     - name: Ask every CA whether its directory still exists
       run: pytest tests/test_ca_endpoints_are_live.py -v --tb=short -m network
 
+  # The wiki is a separate git repository, so nothing in CI has ever looked at
+  # it — and it has now drifted three times, each time by keeping a second copy
+  # of something the repo had already corrected. The last sweep found four
+  # claims fixed in docs/ months earlier: Python 3.9, a DigiCert host that
+  # stopped resolving in February, an endpoint that returns 404, and an
+  # environment variable read by nothing.
+  #
+  # Weekly and not required, for the same reason as ca-endpoints: the wiki is
+  # not part of the merge decision, and a clone failing should never block a
+  # pull request. A finding here is news, not a broken build.
+  wiki:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+    - name: Set up Python
+      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v5
+      with:
+        python-version: '3.12'
+
+    - name: Clone the wiki
+      run: git clone --depth 1 https://github.com/${{ github.repository }}.wiki.git wiki
+
+    - name: Check the wiki against the repository
+      run: python scripts/check_wiki.py wiki
+
   # The Tailwind bundle (static/css/tailwind.min.css) is committed to the repo
   # and served as-is — there is no build step at deploy time. So a stale bundle
   # ships silently whenever input.css / tailwind.config.js change without a
