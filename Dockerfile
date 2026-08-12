@@ -3,7 +3,7 @@
 # moving target on Docker Hub, the digest is content-addressed and
 # guarantees byte-identical bytes. Bump deliberately when there's a
 # CVE fix or feature reason — not implicitly on every rebuild.
-FROM python:3.12-slim-trixie@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de AS builder
+FROM python:3.12-slim-trixie@sha256:229a2c5bfa27522db7815ea81f9bed70af17ccb9de9fc7ad142b1877b5830d36 AS builder
 
 # Set working directory for build stage
 WORKDIR /build
@@ -66,7 +66,7 @@ RUN pip install "pip==${PIP_VERSION}" -U setuptools wheel && \
     fi
 
 # Production stage — same digest pin as the builder stage above.
-FROM python:3.12-slim-trixie@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
+FROM python:3.12-slim-trixie@sha256:229a2c5bfa27522db7815ea81f9bed70af17ccb9de9fc7ad142b1877b5830d36
 
 # Set working directory
 WORKDIR /app
