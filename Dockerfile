@@ -36,8 +36,27 @@ ARG REQUIREMENTS_FILE=requirements.txt
 #
 # Empty by default → no second install, layer cached.
 ARG EXTRA_REQUIREMENTS=
+# The venv's pip, pinned to the same version as the runtime stage's.
+#
+# This used to be a bare `pip install -U pip`, and the effect was that the pin
+# defended the copy nobody uses. `ENV PATH` puts /opt/venv/bin first, so `pip`
+# in the finished image resolves to THIS one — measured on the published
+# v2.25.4 image:
+#
+#     /usr/local/bin/pip   26.1.2   pinned, and the comment below explains why
+#     /opt/venv/bin/pip    26.2.1   whatever PyPI served that day
+#     which pip         -> /opt/venv/bin/pip
+#
+# The runtime pin's own comment gives reproducibility as a reason — "two builds
+# of the same commit could differ" — and that was true of the unpinned one, not
+# the pinned one. Same ARG, so a deliberate bump moves both together.
+ARG PIP_VERSION=26.1.2
 # shellcheck disable=SC2086 — intentional word-splitting to iterate the list.
-RUN pip install -U pip setuptools wheel && \
+# No -U: an exact `==` specifier installs that version regardless of what is
+# already there — verified, including downgrading 26.2.1 to 26.1.2 — so the
+# flag only muddies the intent (Copilot, #553). setuptools and wheel keep
+# theirs; they are build-time only and never reach the runtime stage.
+RUN pip install "pip==${PIP_VERSION}" -U setuptools wheel && \
     pip install --no-cache-dir -r ${REQUIREMENTS_FILE} && \
     if [ -n "${EXTRA_REQUIREMENTS}" ]; then \
         for req in ${EXTRA_REQUIREMENTS}; do \
