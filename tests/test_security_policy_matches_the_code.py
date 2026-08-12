@@ -66,15 +66,29 @@ def _allowed_name():
     return match.group(1)
 
 
+# Parsed once, at import. If SECURITY.md's wording changes the assertion inside
+# _blocked_names() would fire during collection, which pytest reports as a
+# collection error rather than as a failing test — the message says exactly
+# what happened, but it aborts the whole file instead of failing one check
+# (Copilot, #556). Held as a value so the parametrisation below sees a list
+# either way, and the dedicated test reports the parse failure on its own.
+try:
+    BLOCKED_NAMES = _blocked_names()
+    PARSE_ERROR = None
+except AssertionError as error:            # pragma: no cover - the failure path
+    BLOCKED_NAMES, PARSE_ERROR = [], str(error)
+
+
 def test_the_policy_still_names_a_list():
-    names = _blocked_names()
+    assert PARSE_ERROR is None, PARSE_ERROR
+    names = BLOCKED_NAMES
     assert len(names) >= 5, (
         f"parsed {names} out of SECURITY.md — fewer than the five it has "
         f"always named, so this test would be checking less than it claims."
     )
 
 
-@pytest.mark.parametrize("name", _blocked_names())
+@pytest.mark.parametrize("name", BLOCKED_NAMES)
 def test_every_secret_the_policy_names_is_actually_rejected(name):
     safe, reason = DeployManager._is_command_safe(f"cat /app/data/{name}")
     assert safe is False, (
