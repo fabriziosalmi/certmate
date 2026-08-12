@@ -4,7 +4,14 @@
 
 The CertMate Client Certificates API provides REST endpoints for complete certificate management with authentication, rate limiting, and audit logging.
 
-**Base URL**: `http://localhost:8000/api`
+**Base URL**: `http://localhost:8000`
+
+> Every path below is absolute and starts with `/api`. It used to be a
+> mix: thirteen paths written relative to a base ending in `/api`, and
+> eight written with the prefix — so against the stated base one set
+> resolved to `/api/api/...`. The four translations had lost the base-URL
+> line entirely, which left their relative paths with nothing to resolve
+> against at all.
 **Authentication**: Bearer Token (required on all endpoints)
 **Content-Type**: `application/json`
 
@@ -87,7 +94,7 @@ HTTP 429 Too Many Requests
 
 #### 1. Create Certificate
 
-**Endpoint**: `POST /client-certs/create`
+**Endpoint**: `POST /api/client-certs/create`
 
 Create a new client certificate.
 
@@ -146,7 +153,7 @@ curl -X POST http://localhost:8000/api/client-certs/create \
 
 #### 2. List Certificates
 
-**Endpoint**: `GET /client-certs`
+**Endpoint**: `GET /api/client-certs`
 
 List all client certificates with optional filtering.
 
@@ -206,7 +213,7 @@ curl "http://localhost:8000/api/client-certs?search=user1" \
 
 #### 3. Get Certificate Details
 
-**Endpoint**: `GET /client-certs/<identifier>`
+**Endpoint**: `GET /api/client-certs/<identifier>`
 
 Get complete metadata for a certificate.
 
@@ -246,7 +253,7 @@ curl http://localhost:8000/api/client-certs/cert-001 \
 
 #### 4. Download Certificate Files
 
-**Endpoint**: `GET /client-certs/<identifier>/download/<type>`
+**Endpoint**: `GET /api/client-certs/<identifier>/download/<type>`
 
 Download certificate, private key, or CSR file.
 
@@ -280,7 +287,7 @@ curl http://localhost:8000/api/client-certs/cert-001/download/csr \
 
 #### 5. Revoke Certificate
 
-**Endpoint**: `POST /client-certs/<identifier>/revoke`
+**Endpoint**: `POST /api/client-certs/<identifier>/revoke`
 
 Revoke a certificate with optional reason.
 
@@ -314,7 +321,7 @@ curl -X POST http://localhost:8000/api/client-certs/cert-001/revoke \
 
 #### 6. Renew Certificate
 
-**Endpoint**: `POST /client-certs/<identifier>/renew`
+**Endpoint**: `POST /api/client-certs/<identifier>/renew`
 
 Renew a certificate (same CN, new serial).
 
@@ -340,7 +347,7 @@ curl -X POST http://localhost:8000/api/client-certs/cert-001/renew \
 
 #### 7. Get Statistics
 
-**Endpoint**: `GET /client-certs/stats`
+**Endpoint**: `GET /api/client-certs/stats`
 
 Get certificate usage statistics.
 
@@ -371,7 +378,7 @@ curl http://localhost:8000/api/client-certs/stats \
 
 #### 8. Batch Import Certificates
 
-**Endpoint**: `POST /client-certs/batch`
+**Endpoint**: `POST /api/client-certs/batch`
 
 Create multiple certificates from CSV data in single request.
 
@@ -428,7 +435,7 @@ curl -X POST http://localhost:8000/api/client-certs/batch \
 
 #### 9. OCSP Status Query
 
-**Endpoint**: `GET /ocsp/status/<serial_number>`
+**Endpoint**: `GET /api/ocsp/status/<serial_number>`
 
 Query certificate status via OCSP.
 
@@ -454,7 +461,7 @@ curl http://localhost:8000/api/ocsp/status/12345678 \
 
 #### 10. CRL Distribution
 
-**Endpoint**: `GET /crl/download/<format_type>`
+**Endpoint**: `GET /api/crl/download/<format_type>`
 
 Download Certificate Revocation List.
 
@@ -500,7 +507,7 @@ curl http://localhost:8000/api/crl/download/info \
 
 #### 11. Download Domain Certificate Files
 
-**Endpoint**: `GET /certificates/<domain>/download`
+**Endpoint**: `GET /api/certificates/<domain>/download`
 
 Download certificate files for a specific domain. By default, this endpoint returns a ZIP archive containing all certificate components. A specific file can be requested using the `file` query parameter. JSON mode is also available for automation that wants all PEMs in one response.
 
@@ -550,7 +557,7 @@ curl "http://localhost:8000/api/certificates/example.com/download?format=json" \
 
 #### 12. Reissue Domain Certificate (edit configuration)
 
-**Endpoint**: `POST /certificates/<domain>/reissue`
+**Endpoint**: `POST /api/certificates/<domain>/reissue`
 
 Edit a certificate's configuration and reissue it in place — extend or drop
 SAN entries without delete + recreate. Omitted fields keep the values the
@@ -572,7 +579,7 @@ explicitly changed (no key flags are sent and certbot keeps the lineage key).
 - `domain_alias`: omit to keep, `""` to clear
 - `dns_provider`, `account_id`, `ca_provider`, `challenge_type`: omit to keep
 - `key_type`/`key_size`/`elliptic_curve`: omit to keep the existing key shape
-- `async`: defer issuance to a background job (202 + job id, poll `GET /certificates/jobs/<job_id>`)
+- `async`: defer issuance to a background job (202 + job id, poll `GET /api/certificates/jobs/<job_id>`)
 
 **Response** (200 OK, or 202 Accepted with `async`): message, domain, dns_provider, ca_provider, duration.
 
