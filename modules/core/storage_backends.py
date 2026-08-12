@@ -89,6 +89,41 @@ def _retry_call(fn, *args, **kwargs):
     return _with_retry()(fn)(*args, **kwargs)
 
 
+
+def _as_text(filename: str, content: bytes) -> str:
+    """Decode one certificate file for a backend that stores text.
+
+    Every remote backend serialises certificate files as text — a JSON blob for
+    S3, AWS Secrets Manager, Vault and Infisical, one secret per file for Azure
+    and Infisical. That is fine: certificate material is PEM, which is ASCII.
+
+    They all used `errors='replace'`, which turns anything that is not valid
+    UTF-8 into U+FFFD and stores it. Measured against a real MinIO:
+
+        in:  b"\x00\x01\xff\xfe"
+        out: b"\x00\x01\xef\xbf\xbd\xef\xbf\xbd"
+
+    Nothing sends such content today — both places that assemble `cert_files`
+    iterate CERTIFICATE_FILES, which is four PEM files. But the signature says
+    `Dict[str, bytes]`, and `cert.pfx` (PKCS#12, binary) already exists
+    elsewhere in the product. The day it is added to that tuple, the local copy
+    would be correct and every remote copy silently truncated to mojibake, with
+    a successful store reported.
+
+    So: refuse. The caller's `except` turns this into a False return and a
+    logged error, which is a bad day rather than a bad certificate. Fixing the
+    format to carry base64 is the other option and a larger one — it changes
+    what is on disk for every existing stored certificate.
+    """
+    try:
+        return content.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise ValueError(
+            f"{filename} is not valid UTF-8 and this backend stores text; "
+            f"storing it would corrupt the remote copy while the local one "
+            f"stayed correct ({error})"
+        ) from error
+
 def _validate_storage_domain(domain: str) -> str:
     """Validate domain name for use in storage backend paths/keys.
     Raises ValueError if domain contains path traversal or invalid chars."""
@@ -709,7 +744,7 @@ class AzureKeyVaultBackend(CertificateStorageBackend):
         client = self._get_client()
         for filename, content in cert_files.items():
             secret_name = self._sanitize_secret_name(f"cert-{domain}-{filename.replace('.', '-')}")
-            client.set_secret(secret_name, content.decode('utf-8', errors='replace'))
+            client.set_secret(secret_name, _as_text(filename, content))
         metadata_name = self._sanitize_secret_name(f"cert-{domain}-metadata")
         client.set_secret(metadata_name, json.dumps(metadata))
         return True
@@ -1125,7 +1160,7 @@ class AWSSecretsManagerBackend(CertificateStorageBackend):
 
         # Combine all certificate data into a single secret
         secret_data = {
-            'files': {k: v.decode('utf-8', errors='replace') for k, v in cert_files.items()},
+            'files': {k: _as_text(k, v) for k, v in cert_files.items()},
             'metadata': metadata
         }
 
@@ -1281,7 +1316,7 @@ class HashiCorpVaultBackend(CertificateStorageBackend):
 
         # Prepare secret data
         secret_data = {
-            'files': {k: v.decode('utf-8', errors='replace') for k, v in cert_files.items()},
+            'files': {k: _as_text(k, v) for k, v in cert_files.items()},
             'metadata': metadata
         }
 
@@ -1364,7 +1399,12 @@ class HashiCorpVaultBackend(CertificateStorageBackend):
         try:
             client = self._get_client()
             secret_path = f"certmate/certificates/{domain}"
-            
+
+            # Vault's delete succeeds on a path that never existed, so ask
+            # first: the caller distinguishes "removed" from "there was nothing
+            # to remove", and warns an operator to check by hand on the latter.
+            existed = self.certificate_exists(domain)
+
             if self.engine_version == 'v2':
                 client.secrets.kv.v2.delete_metadata_and_all_versions(
                     path=secret_path,
@@ -1376,8 +1416,12 @@ class HashiCorpVaultBackend(CertificateStorageBackend):
                     mount_point=self.mount_point
                 )
             
-            logger.info(f"Certificate deleted from HashiCorp Vault for {domain}")
-            return True
+            if existed:
+                logger.info(f"Certificate deleted from HashiCorp Vault for {domain}")
+            else:
+                logger.info(
+                    f"No certificate in HashiCorp Vault to delete for {domain}")
+            return existed
             
         except Exception as e:
             logger.error(f"Failed to delete certificate from HashiCorp Vault for {domain}: {e}")
@@ -1458,7 +1502,7 @@ class InfisicalBackend(CertificateStorageBackend):
         # Store certificate files as individual secrets (upsert: update if exists, create otherwise)
         for filename, content in cert_files.items():
             secret_key = f"certmate-{domain}-{filename.replace('.', '-')}"
-            secret_value = content.decode('utf-8', errors='replace')
+            secret_value = _as_text(filename, content)
             try:
                 client.update_secret(
                     secret_name=secret_key,
@@ -1694,7 +1738,7 @@ class S3CompatibleBackend(CertificateStorageBackend):
         _validate_storage_domain(domain)
         client = self._get_client()
         secret_data = {
-            'files': {k: v.decode('utf-8', errors='replace') for k, v in cert_files.items()},
+            'files': {k: _as_text(k, v) for k, v in cert_files.items()},
             'metadata': metadata,
         }
         client.put_object(
@@ -1746,11 +1790,26 @@ class S3CompatibleBackend(CertificateStorageBackend):
         return sorted(domains)
 
     def delete_certificate(self, domain: str) -> bool:
+        """True only when something was actually removed.
+
+        `delete_object` succeeds whether or not the key exists — S3 deletes are
+        idempotent — so returning True unconditionally told the caller a
+        certificate had been removed when there had never been one there. That
+        matters: CertificateManager warns "verify by hand that no private key
+        remains" on a False, and swallows that warning on a True. The local
+        filesystem backend already returned False in this case, so the same
+        deletion produced a different answer depending on which backend was
+        configured (found by tests/test_storage_backends_live.py).
+        """
         try:
             client = self._get_client()
+            existed = self.certificate_exists(domain)
             client.delete_object(Bucket=self.bucket, Key=self._key(domain))
-            logger.info(f"Certificate deleted from S3 for {domain}")
-            return True
+            if existed:
+                logger.info(f"Certificate deleted from S3 for {domain}")
+            else:
+                logger.info(f"No certificate in S3 to delete for {domain}")
+            return existed
         except Exception as e:
             logger.error(f"Failed to delete certificate from S3 for {domain}: {e}")
             return False

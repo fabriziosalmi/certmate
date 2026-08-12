@@ -328,6 +328,73 @@ jobs:
     - name: Check the wiki against the repository
       run: python scripts/check_wiki.py wiki
 
+  # Storage backends against real servers rather than a faithful fake.
+  #
+  # The in-memory S3 fake is a good test and cannot disagree with me: it
+  # reproduces my understanding of the protocol, including where that is
+  # wrong. Two of the five remote backends run for real at no meaningful cost,
+  # and the first live run found two things the fake never asked about — every
+  # remote backend silently mangled non-UTF-8 content, and S3 and Vault
+  # reported a successful delete for a certificate that was never there while
+  # the local backend reported False, on the path that warns an operator to
+  # check for a leftover private key.
+  #
+  # Runs on pull requests: unlike the CA probes these are local containers, so
+  # nobody else's outage can turn it red.
+  storage-live:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    services:
+      minio:
+        image: minio/minio:latest@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
+        env:
+          MINIO_ROOT_USER: certmate
+          MINIO_ROOT_PASSWORD: certmate123
+        ports:
+          - 19000:9000
+        options: >-
+          --health-cmd "mc ready local || curl -f http://localhost:9000/minio/health/live"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+      vault:
+        image: hashicorp/vault:latest@sha256:5be49781ecf78bfe775c5309c6a4d9f4e9e040b6c885c99eb2b12fb69855e1a2
+        env:
+          VAULT_DEV_ROOT_TOKEN_ID: certmate-root
+        ports:
+          - 18200:8200
+        options: >-
+          --cap-add IPC_LOCK
+          --health-cmd "wget -qO- http://127.0.0.1:8200/v1/sys/health || exit 1"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+    - name: Set up Python
+      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v5
+      with:
+        python-version: '3.12'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install -r requirements-test.txt
+        pip install hvac
+
+    - name: Exercise the storage backends against MinIO and Vault
+      env:
+        CERTMATE_TEST_S3_ENDPOINT: http://localhost:19000
+        CERTMATE_TEST_VAULT_ADDR: http://localhost:18200
+      run: |
+        # The suite fails rather than skips when these are set and the server
+        # does not answer, so a service that never started cannot pass as a
+        # green run of zero tests. Belt and braces: assert the count too.
+        pytest tests/test_storage_backends_live.py -m live -v | tee /tmp/live.log
+        grep -q "10 passed" /tmp/live.log || {
+          echo "::error::the live storage suite did not run the expected tests"
+          exit 1
+        }
+
   # The Tailwind bundle (static/css/tailwind.min.css) is committed to the repo
   # and served as-is — there is no build step at deploy time. So a stale bundle
   # ships silently whenever input.css / tailwind.config.js change without a
