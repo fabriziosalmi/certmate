@@ -1,7 +1,7 @@
 # Azure DNS specific requirements
 # Install this in addition to requirements-minimal.txt for Azure support
 
-azure-identity==1.17.1
+azure-identity==1.25.3
 azure-mgmt-dns==8.1.0
 # 2.5.0 is the latest certbot-dns-azure that still supports certbot 2.x
 # (the rest of CertMate is pinned to certbot==2.10.0 via requirements.txt).
