@@ -181,6 +181,25 @@ jobs:
             exit 1
           fi
 
+          # Ask the built image whether every provider it offers can actually
+          # reach certbot. The suite validates the issuance path against mocks
+          # — nine test files stub `check_certbot_plugin_installed` to True —
+          # so the guard between a configured provider and certbot's
+          # "unrecognized arguments" is never exercised for real. That is how
+          # Infomaniak shipped with a strategy, a credentials writer, a README
+          # row and no plugin in any published image.
+          #
+          # In the image, not in a developer's virtualenv, where the answer is
+          # whatever happens to be installed locally. The requirements file is
+          # passed explicitly: it is what this build was meant to carry, and
+          # guessing it is the difference between a missing plugin and an
+          # optional one.
+          if ! docker exec "$cid" python /app/scripts/check_providers.py "$req"; then
+            echo "::error::$req built an image whose providers cannot all reach certbot"
+            docker rm -f "$cid" >/dev/null 2>&1 || true
+            exit 1
+          fi
+
           docker rm -f "$cid" >/dev/null 2>&1 || true
           echo "::endgroup::"
         done
