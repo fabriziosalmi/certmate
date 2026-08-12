@@ -50,8 +50,15 @@ def _truth():
         raise SystemExit("cannot read the port or the Python version from the "
                          "repository — this script is checking nothing")
 
+    # sorted(): glob order is filesystem order, and the pins dict is
+    # last-write-wins. Two files pinning the same package differently would
+    # make the checker's verdict depend on directory layout — non-deterministic
+    # in exactly the way a checker must not be (Copilot, #555). The repo also
+    # forbids differing pins (tests/test_requirements_are_consistent.py), but
+    # this script must not lean on a guarantee it does not enforce itself.
     requirements = "".join(
-        p.read_text(encoding="utf-8") for p in REPO_ROOT.glob("requirements*.txt"))
+        p.read_text(encoding="utf-8")
+        for p in sorted(REPO_ROOT.glob("requirements*.txt")))
     pins = {
         re.sub(r"[-_.]+", "-", name).lower(): version
         for name, version in re.findall(r"^([A-Za-z0-9_.-]+)==([\w.]+)",
