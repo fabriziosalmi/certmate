@@ -125,3 +125,85 @@ def test_settings_js_panel_map_matches_dispatch():
         f"settings.js storage panel map != dispatchable: "
         f"missing={sorted(canonical - panel_keys)} extra={sorted(panel_keys - canonical)}"
     )
+
+
+# The proper nouns each dispatched backend is documented under. Product names
+# stay in English in every translation, which is what makes them checkable
+# across all five guides.
+#
+# `local_filesystem` is deliberately absent: it is the only one whose name is a
+# common noun, and the translations render it as "Filesystem locale",
+# "Lokales Dateisystem", "Sistema de archivos local". Requiring the English
+# string there failed four correct documents — my check, not their prose. It is
+# also the default and appears in every guide's opening paragraph, so it is not
+# the one at risk of going undocumented.
+_UNTRANSLATED_NAME = {"local_filesystem"}
+_DOC_NAMES = {
+    "azure_keyvault": "Azure Key Vault",
+    "aws_secrets_manager": "AWS Secrets Manager",
+    "hashicorp_vault": "HashiCorp Vault",
+    "infisical": "Infisical",
+    "s3_compatible": "S3-compatible",
+}
+
+
+def test_every_dispatched_backend_has_a_documented_name():
+    """Both directions.
+
+    A dispatched backend with no name here silently stops being covered by the
+    guide check. A name here for a backend that is no longer dispatched is the
+    opposite failure — the guide would be required to document something that
+    does not exist, and nobody would know why (Copilot, #557).
+    """
+    canonical = _canonical()
+    named = set(_DOC_NAMES) | _UNTRANSLATED_NAME
+    missing = sorted(canonical - named)
+    assert not missing, (
+        f"these backends are dispatched but have no documented name here: "
+        f"{missing}. Add them, and add them to the architecture guide."
+    )
+    stale = sorted(named - canonical)
+    assert not stale, (
+        f"these have a documented name here but are no longer dispatched: "
+        f"{stale}. Remove them, or the guide is asked to describe a backend "
+        f"the application cannot use."
+    )
+
+
+def _guides():
+    """Every document that states the backend list, in every language.
+
+    architecture.md and the docs landing README both enumerate them. Only the
+    former was covered at first, and the Italian README slipped through with
+    five backends and abbreviated names while the other four were corrected —
+    the translations blind spot, inside the very patch that fixed it.
+    """
+    found = [p for p in _ROOT.glob("docs/**/architecture.md")]
+    found += [p for p in _ROOT.glob("docs/**/README.md")]
+    return sorted(str(p.relative_to(_ROOT)) for p in found)
+
+
+@pytest.mark.parametrize("guide", _guides())
+def test_the_architecture_guide_lists_every_backend(guide):
+    """The seventh surface, and the only one that was not pinned.
+
+    This file already cross-validates the API model enum, the resources'
+    available/valid/migrate lists, the settings select and the settings JS
+    panel map against the dispatch. The documentation was not among them, and
+    it had fallen a whole backend behind: `s3_compatible` ships with a class,
+    three test files and a settings-UI panel, and the architecture guide listed
+    "4 cloud backends" without it — in all five languages.
+    """
+    text = _read(guide)
+    # _canonical() reflects over the dispatch source; computed once rather than
+    # per entry inside the comprehension.
+    canonical = _canonical()
+    missing = [
+        f"{key} ({name})" for key, name in sorted(_DOC_NAMES.items())
+        if key in canonical and name not in text
+    ]
+    assert not missing, (
+        f"{guide} does not mention {missing}. A backend the application "
+        f"dispatches, the API accepts and the settings page offers, described "
+        f"nowhere."
+    )
