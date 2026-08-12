@@ -21,7 +21,6 @@ exists, which is the only thing that knows.
 """
 import pathlib
 import re
-import sys
 
 import pytest
 
@@ -52,7 +51,11 @@ def url_map(tmp_path_factory):
     anchor = module_dir / "factory.py"
     anchor.write_text("# test path anchor\n", encoding="utf-8")
 
-    sys.path.insert(0, str(REPO_ROOT))
+    # No sys.path insert: pytest's rootdir handling already puts the repo
+    # root first, and a session fixture that prepends to sys.path leaks
+    # that for the rest of the run — global state escaping a fixture
+    # (Copilot, #554). Verified the import still resolves without it, in
+    # isolation and in the full suite.
     with pytest.MonkeyPatch.context() as patch:
         patch.setenv("TESTING", "true")
         patch.setenv("FLASK_ENV", "testing")
