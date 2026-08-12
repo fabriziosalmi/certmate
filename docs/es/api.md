@@ -64,7 +64,7 @@ HTTP 429 Too Many Requests
 
 #### 1. Crear certificado
 
-**Endpoint**: `POST /client-certs/create`
+**Endpoint**: `POST /api/client-certs/create`
 
 Crea un nuevo certificado de cliente.
 
@@ -123,7 +123,7 @@ curl -X POST http://localhost:8000/api/client-certs/create \
 
 #### 2. Listar certificados
 
-**Endpoint**: `GET /client-certs`
+**Endpoint**: `GET /api/client-certs`
 
 Lista todos los certificados de cliente con filtrado opcional.
 
@@ -183,7 +183,7 @@ curl "http://localhost:8000/api/client-certs?search=user1" \
 
 #### 3. Obtener detalles de un certificado
 
-**Endpoint**: `GET /client-certs/<identifier>`
+**Endpoint**: `GET /api/client-certs/<identifier>`
 
 Obtiene los metadatos completos de un certificado.
 
@@ -223,7 +223,7 @@ curl http://localhost:8000/api/client-certs/cert-001 \
 
 #### 4. Descargar archivos de un certificado
 
-**Endpoint**: `GET /client-certs/<identifier>/download/<type>`
+**Endpoint**: `GET /api/client-certs/<identifier>/download/<type>`
 
 Descarga el certificado, la clave privada o el archivo CSR.
 
@@ -257,7 +257,7 @@ curl http://localhost:8000/api/client-certs/cert-001/download/csr \
 
 #### 5. Revocar un certificado
 
-**Endpoint**: `POST /client-certs/<identifier>/revoke`
+**Endpoint**: `POST /api/client-certs/<identifier>/revoke`
 
 Revoca un certificado con un motivo opcional.
 
@@ -291,7 +291,7 @@ curl -X POST http://localhost:8000/api/client-certs/cert-001/revoke \
 
 #### 6. Renovar un certificado
 
-**Endpoint**: `POST /client-certs/<identifier>/renew`
+**Endpoint**: `POST /api/client-certs/<identifier>/renew`
 
 Renueva un certificado (mismo CN, nuevo número de serie).
 
@@ -317,7 +317,7 @@ curl -X POST http://localhost:8000/api/client-certs/cert-001/renew \
 
 #### 7. Obtener estadísticas
 
-**Endpoint**: `GET /client-certs/stats`
+**Endpoint**: `GET /api/client-certs/stats`
 
 Obtiene estadísticas de uso de los certificados.
 
@@ -348,7 +348,7 @@ curl http://localhost:8000/api/client-certs/stats \
 
 #### 8. Importación por lotes de certificados
 
-**Endpoint**: `POST /client-certs/batch`
+**Endpoint**: `POST /api/client-certs/batch`
 
 Crea múltiples certificados a partir de datos CSV en una sola solicitud.
 
@@ -405,7 +405,7 @@ curl -X POST http://localhost:8000/api/client-certs/batch \
 
 #### 9. Consulta de estado OCSP
 
-**Endpoint**: `GET /ocsp/status/<serial_number>`
+**Endpoint**: `GET /api/ocsp/status/<serial_number>`
 
 Consulta el estado de un certificado mediante OCSP.
 
@@ -431,7 +431,7 @@ curl http://localhost:8000/api/ocsp/status/12345678 \
 
 #### 10. Distribución de la CRL
 
-**Endpoint**: `GET /crl/download/<format_type>`
+**Endpoint**: `GET /api/crl/download/<format_type>`
 
 Descarga la lista de revocación de certificados (CRL).
 
@@ -477,7 +477,7 @@ curl http://localhost:8000/api/crl/download/info \
 
 #### 11. Descargar archivos de certificado de dominio
 
-**Endpoint**: `GET /certificates/<domain>/download`
+**Endpoint**: `GET /api/certificates/<domain>/download`
 
 Descarga los archivos de certificado para un dominio específico. Por defecto, este endpoint devuelve un archivo ZIP con todos los componentes del certificado. Se puede solicitar un archivo concreto mediante el parámetro de consulta `file`. También está disponible el modo JSON para la automatización que necesite todos los PEM en una sola respuesta.
 
@@ -523,7 +523,7 @@ curl "http://localhost:8000/api/certificates/example.com/download?format=json" \
 
 #### 12. Reemitir un certificado de dominio (editar la configuración)
 
-**Endpoint**: `POST /certificates/<domain>/reissue`
+**Endpoint**: `POST /api/certificates/<domain>/reissue`
 
 Edita la configuración de un certificado y lo reemite en su lugar — permite ampliar o eliminar entradas SAN sin necesidad de eliminar y volver a crear. Los campos omitidos conservan los valores con los que se emitió el certificado (leídos desde sus metadatos), por lo que la configuración de DNS/alias/CA no es necesario volver a introducirla. El certificado actual sigue sirviéndose hasta que la reemisión tenga éxito. La forma de la clave se preserva salvo cambio explícito (no se envían indicadores de clave y certbot conserva la clave de la cadena de certificados).
 
@@ -540,7 +540,7 @@ Edita la configuración de un certificado y lo reemite en su lugar — permite a
 - `domain_alias`: omitir para conservar, `""` para borrar
 - `dns_provider`, `account_id`, `ca_provider`, `challenge_type`: omitir para conservar
 - `key_type`/`key_size`/`elliptic_curve`: omitir para conservar la forma de clave existente
-- `async`: diferir la emisión a un job en segundo plano (202 + ID del job, consultar `GET /certificates/jobs/<job_id>`)
+- `async`: diferir la emisión a un job en segundo plano (202 + ID del job, consultar `GET /api/certificates/jobs/<job_id>`)
 
 **Respuesta** (200 OK, o 202 Accepted con `async`): message, domain, dns_provider, ca_provider, duration.
 
