@@ -24,7 +24,7 @@ CertMate è un sistema modulare ed estensibile per la gestione di certificati SS
 
 **Informazioni principali:**
 - **Linguaggio**: Python 3.12 (Flask, Flask-RESTX)
-- **Archiviazione**: filesystem locale come impostazione predefinita + 4 backend cloud (Azure Key Vault, AWS Secrets Manager, HashiCorp Vault, Infisical)
+- **Archiviazione**: filesystem locale come impostazione predefinita + 5 backend remoti (Azure Key Vault, AWS Secrets Manager, HashiCorp Vault, Infisical, S3-compatible)
 - **Provider CA**: Let's Encrypt, DigiCert ACME, CA privata
 - **Provider DNS**: oltre due dozzine supportati (Cloudflare, AWS Route53, Azure, Google e altri — vedere [Provider DNS](./dns-providers.md) per l'elenco completo)
 - **API**: REST con Swagger/OpenAPI tramite Flask-RESTX
@@ -181,6 +181,7 @@ Tutti i backend implementano `CertificateStorageBackend`:
 | **AWS Secrets Manager** | AWS Secrets Manager |
 | **HashiCorp Vault** | Vault KV v1/v2 |
 | **Infisical** | Secret Infisical |
+| **S3-compatible** | Any S3 API: MinIO/Ceph self-hosted, or Hetzner, Contabo, OVHcloud, Scaleway, Exoscale, Wasabi |
 
 #### Azure Key Vault — modalità di archiviazione
 
