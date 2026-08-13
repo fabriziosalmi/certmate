@@ -328,6 +328,84 @@ jobs:
     - name: Check the wiki against the repository
       run: python scripts/check_wiki.py wiki
 
+  # Storage backends against real servers rather than a faithful fake.
+  #
+  # The in-memory S3 fake is a good test and cannot disagree with me: it
+  # reproduces my understanding of the protocol, including where that is
+  # wrong. Two of the five remote backends run for real at no meaningful cost,
+  # and the first live run found two things the fake never asked about — every
+  # remote backend silently mangled non-UTF-8 content, and S3 and Vault
+  # reported a successful delete for a certificate that was never there while
+  # the local backend reported False, on the path that warns an operator to
+  # check for a leftover private key.
+  #
+  # Runs on pull requests: unlike the CA probes these are local containers, so
+  # nobody else's outage can turn it red.
+  storage-live:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+    - name: Set up Python
+      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v5
+      with:
+        python-version: '3.12'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install -r requirements-test.txt
+        # hvac lives in the optional Vault set, not the core one. Installed
+        # from that file rather than by name so it carries the same constraint
+        # as a real Vault deployment; a bare `pip install hvac` would make this
+        # job the one place the version floats (Copilot, #559).
+        pip install -r requirements-vault-storage.txt
+
+    # Started here rather than under `services:` because a service container
+    # cannot be given a command, and MinIO's image does nothing without
+    # `server /data` — the first attempt failed with "Failed to initialize
+    # container minio". Starting them in a step also lets the readiness wait be
+    # explicit instead of trusting a health-check guess.
+    - name: Start MinIO and Vault
+      run: |
+        set -euo pipefail
+        docker run -d --name minio -p 19000:9000 \
+          -e MINIO_ROOT_USER=certmate -e MINIO_ROOT_PASSWORD=certmate123 \
+          minio/minio:latest@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e \
+          server /data
+        docker run -d --name vault -p 18200:8200 --cap-add IPC_LOCK \
+          -e VAULT_DEV_ROOT_TOKEN_ID=certmate-root \
+          -e VAULT_DEV_LISTEN_ADDRESS=0.0.0.0:8200 \
+          hashicorp/vault:latest@sha256:5be49781ecf78bfe775c5309c6a4d9f4e9e040b6c885c99eb2b12fb69855e1a2
+        for i in $(seq 1 30); do
+          curl -fsS http://localhost:19000/minio/health/live >/dev/null 2>&1 \
+            && curl -fsS http://localhost:18200/v1/sys/health >/dev/null 2>&1 \
+            && { echo "both up after ${i}s"; exit 0; }
+          sleep 1
+        done
+        echo "::error::MinIO or Vault never became ready"
+        docker logs minio 2>&1 | tail -20
+        docker logs vault 2>&1 | tail -20
+        exit 1
+
+    - name: Exercise the storage backends against MinIO and Vault
+      env:
+        CERTMATE_TEST_S3_ENDPOINT: http://localhost:19000
+        CERTMATE_TEST_VAULT_ADDR: http://localhost:18200
+      run: |
+        # The suite fails rather than skips when these are set and the server
+        # does not answer, so a container that died cannot pass as a green run
+        # of zero tests. Belt and braces: assert the count too, because
+        # "0 passed" is a suspiciously agreeable result.
+        pytest tests/test_storage_backends_live.py -m live -v | tee /tmp/live.log
+        grep -q "10 passed" /tmp/live.log || {
+          echo "::error::the live storage suite did not run the expected tests"
+          exit 1
+        }
+
   # The Tailwind bundle (static/css/tailwind.min.css) is committed to the repo
   # and served as-is — there is no build step at deploy time. So a stale bundle
   # ships silently whenever input.css / tailwind.config.js change without a
