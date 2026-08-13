@@ -93,9 +93,9 @@ def _retry_call(fn, *args, **kwargs):
 def _as_text(filename: str, content: bytes) -> str:
     """Decode one certificate file for a backend that stores text.
 
-    Every remote backend serialises certificate files as text — a JSON blob for
-    S3, AWS Secrets Manager, Vault and Infisical, one secret per file for Azure
-    and Infisical. That is fine: certificate material is PEM, which is ASCII.
+    Every remote backend serialises certificate files as text: a JSON blob for
+    S3, AWS Secrets Manager and Vault, one secret per file for Azure and
+    Infisical. That is fine — certificate material is PEM, which is ASCII.
 
     They all used `errors='replace'`, which turns anything that is not valid
     UTF-8 into U+FFFD and stores it. Measured against a real MinIO:
@@ -1403,7 +1403,22 @@ class HashiCorpVaultBackend(CertificateStorageBackend):
             # Vault's delete succeeds on a path that never existed, so ask
             # first: the caller distinguishes "removed" from "there was nothing
             # to remove", and warns an operator to check by hand on the latter.
-            existed = self.certificate_exists(domain)
+            #
+            # Not certificate_exists(): it swallows every exception, so an
+            # expired token would report "nothing to remove" for a secret that
+            # is still sitting there (Copilot, #559). InvalidPath is Vault's
+            # "no such secret"; anything else propagates.
+            import hvac.exceptions
+            try:
+                if self.engine_version == 'v2':
+                    client.secrets.kv.v2.read_secret_version(
+                        path=secret_path, mount_point=self.mount_point)
+                else:
+                    client.secrets.kv.v1.read_secret(
+                        path=secret_path, mount_point=self.mount_point)
+                existed = True
+            except hvac.exceptions.InvalidPath:
+                existed = False
 
             if self.engine_version == 'v2':
                 client.secrets.kv.v2.delete_metadata_and_all_versions(
@@ -1803,7 +1818,23 @@ class S3CompatibleBackend(CertificateStorageBackend):
         """
         try:
             client = self._get_client()
-            existed = self.certificate_exists(domain)
+            # Not certificate_exists(): that returns False for *any* exception,
+            # so a timeout or a 403 would be reported as "there was nothing to
+            # delete" — a reassuring answer to a question we could not answer
+            # (Copilot, #559). Only a 404/NoSuchKey means absent; anything else
+            # propagates to the handler below, which says so.
+            try:
+                client.head_object(Bucket=self.bucket, Key=self._key(domain))
+                existed = True
+            except Exception as probe_error:
+                code = getattr(probe_error, "response", {}).get(
+                    "Error", {}).get("Code", "")
+                status = getattr(probe_error, "response", {}).get(
+                    "ResponseMetadata", {}).get("HTTPStatusCode")
+                if str(code) in ("404", "NoSuchKey", "NotFound") or status == 404:
+                    existed = False
+                else:
+                    raise
             client.delete_object(Bucket=self.bucket, Key=self._key(domain))
             if existed:
                 logger.info(f"Certificate deleted from S3 for {domain}")

@@ -11,11 +11,17 @@ MinIO speaks S3, and Vault has a dev mode. Between them they exercise boto3's
 `endpoint_url` and addressing, hvac's KV v2 pathing, and the error shapes both
 libraries raise — the parts a fake tends to get plausibly wrong.
 
-The first live run found one thing the fake never asked about: every remote
-backend decoded certificate files with `errors='replace'`, so anything that is
-not valid UTF-8 was stored as U+FFFD. Only PEM reaches them today, so nothing
-was corrupt in the field; the backends now refuse rather than mangle, and the
-last test here pins that.
+The first live run found two things the fake never asked about, and both are
+pinned below.
+
+Every remote backend decoded certificate files with `errors='replace'`, so
+anything that is not valid UTF-8 was stored as U+FFFD. Only PEM reaches them
+today, so nothing was corrupt in the field; they refuse now rather than mangle.
+
+And S3 and Vault reported a successful delete for a certificate that had never
+been stored, where the local filesystem backend reported False for the same
+situation — on the path whose caller warns an operator to check for a leftover
+private key.
 
     CERTMATE_TEST_S3_ENDPOINT=http://localhost:19000 \\
     CERTMATE_TEST_VAULT_ADDR=http://localhost:18200 \\
@@ -54,8 +60,11 @@ def _reachable(url, path):
     try:
         urllib.request.urlopen(url.rstrip("/") + path, timeout=10).close()
         return True
-    except urllib.error.HTTPError:
-        return True              # answered; the status does not matter here
+    except urllib.error.HTTPError as answered:
+        # HTTPError is itself a file-like response; closing it returns the
+        # socket rather than leaving it to the garbage collector.
+        answered.close()
+        return True              # it answered; the status does not matter here
     except Exception as error:
         pytest.fail(
             f"{url} is configured but did not answer ({error}). This test is "
