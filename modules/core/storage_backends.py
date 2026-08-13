@@ -1408,7 +1408,13 @@ class HashiCorpVaultBackend(CertificateStorageBackend):
             # expired token would report "nothing to remove" for a secret that
             # is still sitting there (Copilot, #559). InvalidPath is Vault's
             # "no such secret"; anything else propagates.
-            import hvac.exceptions
+            # Matched by class name rather than by importing
+            # hvac.exceptions: hvac is an optional dependency, and the offline
+            # suite exercises this method with a fake client in an environment
+            # where the real package is absent. An `import hvac.exceptions`
+            # here turned every fake-backed delete into "No module named
+            # 'hvac'" — a hard dependency added to a path built to work
+            # without one.
             try:
                 if self.engine_version == 'v2':
                     client.secrets.kv.v2.read_secret_version(
@@ -1417,7 +1423,9 @@ class HashiCorpVaultBackend(CertificateStorageBackend):
                     client.secrets.kv.v1.read_secret(
                         path=secret_path, mount_point=self.mount_point)
                 existed = True
-            except hvac.exceptions.InvalidPath:
+            except Exception as probe_error:
+                if type(probe_error).__name__ != 'InvalidPath':
+                    raise
                 existed = False
 
             if self.engine_version == 'v2':
