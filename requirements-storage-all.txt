@@ -2,7 +2,7 @@
 # Install with: pip install -r requirements-storage-all.txt
 
 # Azure Key Vault
-azure-keyvault-secrets>=4.7.0
+azure-keyvault-secrets>=4.11.1
 azure-keyvault-certificates>=4.11.1
 azure-identity>=1.25.3
 
