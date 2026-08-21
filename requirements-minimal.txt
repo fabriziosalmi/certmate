@@ -12,7 +12,7 @@ josepy==1.13.0
 certbot-dns-cloudflare==2.10.0
 
 # Cloudflare API support
-cloudflare==2.19.4
+cloudflare==2.19.4                 # Hold at 2.x: 3.x+ is a different SDK, certbot-dns-cloudflare 2.10.0 breaks at import (#568); moves with #103
 dns-lexicon==3.25.1
 
 # Core application dependencies
