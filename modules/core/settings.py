@@ -567,7 +567,8 @@ class SettingsManager:
         callers can react to validation failures.
         """
         with self._lock:
-            settings = self.load_settings()
+            # From disk, never from the request cache — see load_settings.
+            settings = self.load_settings(use_cache=False)
             mutator(settings)
             return self.save_settings(settings, reason)
 
@@ -586,7 +587,11 @@ class SettingsManager:
         credential for the same backend or CA provider.
         """
         with self._lock:
-            existing = self.load_settings()
+            # From disk, never from the request cache — see load_settings.
+            # `protected_keys` below restores users/api_keys from `existing`,
+            # so a cached `existing` made the protection restore a stale copy:
+            # it protected the snapshot, not the file.
+            existing = self.load_settings(use_cache=False)
             merged = {**existing, **incoming}
             for key, value in incoming.items():
                 if (key in _DEEP_MERGE_SETTINGS_KEYS
@@ -643,7 +648,7 @@ class SettingsManager:
             logger.error(f"Backup restore failed: {e}")
         return None
 
-    def load_settings(self):
+    def load_settings(self, use_cache=True):
         """Load settings from file with improved error handling.
 
         Acquires the re-entrant lock so concurrent saves cannot observe a
@@ -653,8 +658,20 @@ class SettingsManager:
         return a deepcopy of the cached parsed dict. The cache is cleared
         on any successful save (atomic_update / save_settings) and lives
         only for the current request. See `_request_cache_*` above.
+
+        ``use_cache=False`` forces a disk read. Every read-modify-write MUST
+        pass it, because the cache is scoped to the request and not to the
+        lock: `update`/`atomic_update` hold `self._lock` for the whole
+        read-modify-write, which stops two writes interleaving, but a cached
+        base makes the "read" a snapshot taken when the request STARTED. On
+        the synchronous issuance path that snapshot is minutes old —
+        cert_service.py loads settings, runs certbot, then writes — so every
+        concurrent write (a user created, a domain registered, a credential
+        saved) was silently rolled back by whichever request finished last.
+        A domain rolled out of `settings['domains']` is never visited by
+        check_renewals again and its certificate expires in silence.
         """
-        cached = self._request_cache_get()
+        cached = self._request_cache_get() if use_cache else None
         if cached is not None:
             # Deepcopy so callers that mutate the returned dict (load →
             # mutate in place → save) don't pollute the request-scoped
