@@ -163,7 +163,7 @@ CertMate solves the complexity of SSL certificate management in modern distribut
 - **Automatic Backups** - Settings and certificates backed up automatically on changes
 - **Manual Backup Creation** - On-demand backup creation via web UI or API
 - **Comprehensive Coverage** - Backs up DNS configurations, certificates, and application settings
-- **Retention Management** - Configurable retention policies with automatic cleanup
+- **Retention Management** - The 50 most recent archives per type are kept; older ones are removed automatically
 - **Easy Restore** - Simple restore process from any backup point with atomic consistency
 - **Download Support** - Export backups for external storage and disaster recovery
 
@@ -360,7 +360,7 @@ PORT=8000
 
 > **Storage Backends**: By default, certificates are stored locally. For enterprise deployments, you can configure Azure Key Vault, AWS Secrets Manager, HashiCorp Vault, Infisical, or any S3-compatible object storage via the web interface after startup. See [Storage Backends](#certificate-storage-configuration) for details.
 
-> **Backup Best Practices**: CertMate includes a unified backup system that creates atomic snapshots of both settings and certificates. After setup, create your first backup from Settings → Backup Management.
+> **Backup Best Practices**: CertMate includes a unified backup system that creates atomic snapshots of both settings and certificates. After setup, create a **disaster-recovery** backup — `POST /api/backups/create` with `{"include_secrets": true}` and `CERTMATE_BACKUP_PASSPHRASE` set — and keep it off the host. The default (and every automatic) backup is *share-safe*: credentials masked and no private keys, so it cannot restore an instance on its own.
 
 ### 3. Deploy
 
@@ -2042,7 +2042,7 @@ CertMate provides comprehensive backup and recovery capabilities built directly 
 - **Atomic Operation**: Creates a single ZIP file containing both settings and certificates
 - **Data Consistency**: Ensures settings and certificates are always in sync
 - **Prevents Corruption**: Eliminates configuration/certificate mismatches
-- **Simplified Management**: One backup file contains everything needed for complete restoration
+- **Simplified Management**: One file per snapshot. A disaster-recovery archive (`include_secrets=true`) contains everything needed for complete restoration; the default share-safe archive contains certificates, chains, metadata, the audit chain and the inventory — no credentials and no private keys
 
 **Two kinds of archive:**
 - **Share-safe** (the default, and what every automatic backup is): settings with every credential masked, and **no private keys** — no ACME `privkey.pem`, no ACME account key, no private-CA key, no `.pfx`. Certificates, chains, metadata, the audit chain and the inventory are all there. The manifest says so (`secrets_masked`, `key_material_excluded`). Such an archive cannot restore an instance on its own, and the restore path refuses to pretend otherwise.
@@ -2050,8 +2050,8 @@ CertMate provides comprehensive backup and recovery capabilities built directly 
 
 **Automatic Backups:**
 - **Unified Snapshots** - Automatically created when DNS providers, domains, certificates, or application settings are modified (share-safe, see above)
-- **Retention Management** - Configurable retention policy (default: 10 most recent backups)
-- **Automatic Cleanup** - Old backups are automatically removed based on retention settings
+- **Retention** - The 50 most recent archives per type are kept (`MAX_BACKUPS_PER_TYPE`); this is a constant, not a setting. Logging in no longer writes a backup, so routine sign-ins do not consume restore points
+- **Automatic Cleanup** - Older archives are removed automatically when the limit is reached
 
 **Manual Backups:**
 - **On-Demand Creation** - Create backups anytime via the web interface or API
