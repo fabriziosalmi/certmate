@@ -102,9 +102,11 @@ first, not a closed audit.
   every endpoint answers an anonymous caller as admin. Turning off the last
   credential — SSO, or local auth — is now refused with a 409 that says why.
   Running without authentication **on purpose** (a proxy in front
-  authenticates for you) is still possible and is now explicit: repeat the
-  request with `"confirm_unauthenticated": true`; the settings toggle asks,
-  and the audit trail records who chose it.
+  authenticates for you) is still possible and is now explicit — **for local
+  auth only**: repeat the request with `"confirm_unauthenticated": true`; the
+  settings toggle asks, and the audit trail records who chose it. With SSO as
+  the last credential there is no override: configure another credential
+  first, then turn SSO off.
 - **The four PEM files are published as one unit.** A failure on the fourth
   copy left a new certificate beside the previous private key, served and
   deployed, and the next renewal check found `live/` fresh and never repaired
