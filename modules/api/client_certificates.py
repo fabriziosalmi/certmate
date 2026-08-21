@@ -1,6 +1,7 @@
 import logging
 import re
 from flask import request, send_file, Response
+from werkzeug.exceptions import HTTPException
 from flask_restx import Resource, fields, abort
 from io import BytesIO
 
@@ -99,6 +100,11 @@ def create_client_certificate_resources(api, managers):
 
                 return {'certificates': certs, 'total': len(certs)}, 200
 
+            except HTTPException:
+                # abort(4xx) above raises HTTPException, a subclass of
+                # Exception: without this clause every 400/403/404 the
+                # handler meant to send was rewritten to 500 below.
+                raise
             except Exception as e:
                 logger.error(f"Error listing client certificates: {str(e)}")
                 abort(500, "Failed to list certificates")
@@ -158,6 +164,11 @@ def create_client_certificate_resources(api, managers):
 
                 return cert_data, 201
 
+            except HTTPException:
+                # abort(4xx) above raises HTTPException, a subclass of
+                # Exception: without this clause every 400/403/404 the
+                # handler meant to send was rewritten to 500 below.
+                raise
             except Exception as e:
                 logger.error(f"Error creating client certificate: {str(e)}")
                 abort(500, "Failed to create certificate")
@@ -178,6 +189,11 @@ def create_client_certificate_resources(api, managers):
 
                 return metadata, 200
 
+            except HTTPException:
+                # abort(4xx) above raises HTTPException, a subclass of
+                # Exception: without this clause every 400/403/404 the
+                # handler meant to send was rewritten to 500 below.
+                raise
             except Exception as e:
                 logger.error(f"Error getting certificate metadata: {str(e)}")
                 abort(500, "Failed to get certificate metadata")
@@ -253,14 +269,12 @@ def create_client_certificate_resources(api, managers):
                     download_name=f"{identifier}.{file_type}"
                 )
 
+            except HTTPException:
+                # abort(4xx) above raises HTTPException, a subclass of
+                # Exception: without this clause every 400/403/404 the
+                # handler meant to send was rewritten to 500 below.
+                raise
             except Exception as e:
-                # Let HTTPException pass through — the bare `abort(...)`
-                # calls above raise werkzeug HTTPException, which IS a
-                # subclass of Exception. Without this re-raise the
-                # 400/403/404 statuses would be rewritten to 500 here.
-                from werkzeug.exceptions import HTTPException
-                if isinstance(e, HTTPException):
-                    raise
                 logger.error(f"Error downloading certificate file: {str(e)}")
                 abort(500, "Failed to download certificate file")
 
@@ -301,6 +315,11 @@ def create_client_certificate_resources(api, managers):
 
                 return {'message': f'Certificate revoked: {identifier}'}, 200
 
+            except HTTPException:
+                # abort(4xx) above raises HTTPException, a subclass of
+                # Exception: without this clause every 400/403/404 the
+                # handler meant to send was rewritten to 500 below.
+                raise
             except Exception as e:
                 logger.error(f"Error revoking certificate: {str(e)}")
                 abort(500, "Failed to revoke certificate")
@@ -326,6 +345,11 @@ def create_client_certificate_resources(api, managers):
 
                 return cert_data, 201
 
+            except HTTPException:
+                # abort(4xx) above raises HTTPException, a subclass of
+                # Exception: without this clause every 400/403/404 the
+                # handler meant to send was rewritten to 500 below.
+                raise
             except Exception as e:
                 logger.error(f"Error renewing certificate: {str(e)}")
                 abort(500, "Failed to renew certificate")
@@ -340,6 +364,11 @@ def create_client_certificate_resources(api, managers):
                 stats = client_cert_manager.get_statistics()
                 return stats, 200
 
+            except HTTPException:
+                # abort(4xx) above raises HTTPException, a subclass of
+                # Exception: without this clause every 400/403/404 the
+                # handler meant to send was rewritten to 500 below.
+                raise
             except Exception as e:
                 logger.error(f"Error getting statistics: {str(e)}")
                 abort(500, "Failed to get certificate statistics")
@@ -428,6 +457,11 @@ def create_client_certificate_resources(api, managers):
                 logger.info(f"Batch certificate creation: {results['successful']}/{results['total']} successful")
                 return results, 201
 
+            except HTTPException:
+                # abort(4xx) above raises HTTPException, a subclass of
+                # Exception: without this clause every 400/403/404 the
+                # handler meant to send was rewritten to 500 below.
+                raise
             except Exception as e:
                 logger.error(f"Error in batch creation: {str(e)}")
                 abort(500, "Failed to process batch certificate creation")
@@ -458,6 +492,11 @@ def create_client_certificate_resources(api, managers):
 
             except ValueError:
                 abort(400, "Invalid serial number")
+            except HTTPException:
+                # abort(4xx) above raises HTTPException, a subclass of
+                # Exception: without this clause every 400/403/404 the
+                # handler meant to send was rewritten to 500 below.
+                raise
             except Exception as e:
                 logger.error(f"Error getting OCSP status: {str(e)}")
                 abort(500, "Failed to get OCSP status")
@@ -504,6 +543,11 @@ def create_client_certificate_resources(api, managers):
                 else:
                     abort(400, "Format must be 'pem', 'der', or 'info'")
 
+            except HTTPException:
+                # abort(4xx) above raises HTTPException, a subclass of
+                # Exception: without this clause every 400/403/404 the
+                # handler meant to send was rewritten to 500 below.
+                raise
             except Exception as e:
                 logger.error(f"Error getting CRL: {str(e)}")
                 abort(500, "Failed to get CRL")

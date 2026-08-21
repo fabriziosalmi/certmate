@@ -7,6 +7,7 @@ import os
 import copy
 import hashlib
 import json
+import re
 import shlex
 import subprocess
 import sys
@@ -88,6 +89,16 @@ _REISSUE_OWNED_METADATA_KEYS = frozenset({
     'domain', 'san_domains', 'dns_provider', 'challenge_type', 'created_at',
     'email', 'staging', 'account_id', 'ca_provider', 'ca_account_id',
     'domain_alias', 'alias_dns_provider', 'storage_warning',
+})
+
+# Every key CertMate itself writes into metadata.json. Used as an allowlist
+# when a corrupt file is quarantined and the log names what it still carried:
+# intersecting with this set means no identifier-shaped VALUE found in the
+# debris ('{"ca_provider": "private_ca": ' matches "private_ca" as a key)
+# can reach the log — by construction, not by luck.
+_KNOWN_METADATA_KEYS = _REISSUE_OWNED_METADATA_KEYS | frozenset({
+    'renewed_at', 'deployment_host', 'deployment_port', 'deployment_protocol',
+    'deployment_status', 'key_type', 'key_size', 'elliptic_curve',
 })
 
 
@@ -480,12 +491,27 @@ class CertificateManager:
             quarantine = metadata_file.with_suffix(
                 f'.json.corrupt-{utc_now().strftime("%Y%m%dT%H%M%SZ")}'
             )
+            # Name the keys the damaged file still visibly carries, so the
+            # operator learns WHAT was lost (ca_provider, domain_alias,
+            # san_domains, deployment_*) and not only that something was.
+            # Names only, never values. With ca_provider gone, a private-CA
+            # certificate renews without its trust bundle until the
+            # .corrupt-* file is repaired — see _renewal_ca_bundle.
+            try:
+                raw = metadata_file.read_text(encoding='utf-8', errors='replace')
+            except OSError:
+                raw = ''
+            lost_keys = sorted(
+                set(re.findall(r'"([A-Za-z_][A-Za-z0-9_]*)"\s*:', raw)) & _KNOWN_METADATA_KEYS)
             try:
                 metadata_file.rename(quarantine)
                 logger.error(
                     f"Corrupt metadata for {domain}: {e}. "
                     f"Quarantined to {quarantine.name}; downstream callers "
-                    f"will see an empty metadata dict until a fresh write."
+                    f"will see an empty metadata dict until a fresh write. "
+                    f"Keys still readable in the damaged file: "
+                    f"{', '.join(lost_keys) if lost_keys else 'none'} — "
+                    f"repair it from the .corrupt-* copy to recover them."
                 )
             except OSError as rename_err:
                 logger.error(
@@ -1063,6 +1089,10 @@ class CertificateManager:
                 'storage_warning': metadata.get('storage_warning'),
                 'deployment_port': metadata.get('deployment_port'),
                 'deployment_protocol': metadata.get('deployment_protocol'),
+                # When the certificate was issued and last renewed (ISO text
+                # from metadata), so /metrics can report real timestamps.
+                'created_at': metadata.get('created_at'),
+                'renewed_at': metadata.get('renewed_at'),
             }
         except Exception as e:
             logger.error(f"Error parsing certificate for {domain}: {e}")
@@ -2075,6 +2105,11 @@ class CertificateManager:
         Mirrors what ``build_certbot_command`` does at issuance for
         ``private_ca``: resolve the CA account the certificate was issued
         under and write its ``ca_cert`` to a temp file.
+
+        A quarantined metadata.json (see _load_metadata) no longer carries
+        ca_provider, so until the operator repairs it from the .corrupt-*
+        copy the certificate renews without a bundle — the quarantine log
+        line names the lost keys for exactly that reason.
 
         When the account is gone or has no bundle the attempt still goes
         ahead without one — honestly: against an endpoint whose
