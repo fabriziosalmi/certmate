@@ -150,10 +150,13 @@ def _metrics_body(tmp_path, domain, cert_info):
 
 def _sample(body, metric, domain):
     """Prometheus gauges are process-global and keep their label series across
-    tests, so every test here uses its own domain label."""
-    import re
-    m = re.search(re.escape(metric) + r'\{[^}]*domain="' + re.escape(domain) + r'"[^}]*\} ([0-9.e+]+)', body)
-    return float(m.group(1)) if m else None
+    tests, so every test here uses its own domain label and the lookup is by
+    line: the sample line for *metric* carrying *domain*."""
+    needle = f'domain="{domain}"'
+    for line in body.splitlines():
+        if line.startswith(metric + '{') and needle in line:
+            return float(line.rsplit(' ', 1)[1])
+    return None
 
 
 def test_last_renewal_is_the_recorded_event_not_a_guess_from_expiry(tmp_path):
