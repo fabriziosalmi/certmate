@@ -406,6 +406,113 @@ jobs:
           exit 1
         }
 
+  # The acme-dns hook against a real acme-dns, including the DNS answer.
+  #
+  # This is the one path in the product with a documented history of never
+  # having worked: the certbot plugin CertMate used until v2.24.0 exposes no
+  # credentials-file option, so certbot rejected the command line and every
+  # acme-dns issuance failed, in every release that advertised it. The
+  # replacement publishes the TXT record itself and was verified by hand once.
+  # Nothing has verified it since.
+  #
+  # A mock cannot: the failure was an API contract that looked right. So the
+  # suite drives the real hook and then asks DNS whether the record is there —
+  # "the POST returned 200" is exactly what a fake would have told you.
+  #
+  # postgres is not optional: the official acme-dns image is built without the
+  # sqlite driver and dies with `sql: unknown driver "sqlite3"`.
+  acme-dns-live:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+    - name: Set up Python
+      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v5
+      with:
+        python-version: '3.12'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install -r requirements-test.txt
+
+    - name: Start acme-dns and the postgres it needs
+      run: |
+        set -euo pipefail
+        docker network create acmedns-net
+
+        docker run -d --name acmedns-pg --network acmedns-net \
+          -e POSTGRES_USER=acmedns -e POSTGRES_PASSWORD=acmedns \
+          -e POSTGRES_DB=acmedns \
+          postgres:16-alpine@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777
+
+        mkdir -p "$RUNNER_TEMP/acme-dns"
+        # `port` must be quoted: acme-dns parses it as a string and refuses to
+        # start on an int with "incompatible types".
+        cat > "$RUNNER_TEMP/acme-dns/config.cfg" <<'CFG'
+        [general]
+        listen = "0.0.0.0:53"
+        protocol = "both"
+        domain = "auth.test"
+        nsname = "auth.test"
+        nsadmin = "admin.auth.test"
+        records = ["auth.test. A 127.0.0.1", "auth.test. NS auth.test."]
+        debug = false
+        [database]
+        engine = "postgres"
+        connection = "postgres://acmedns:acmedns@acmedns-pg:5432/acmedns?sslmode=disable"
+        [api]
+        ip = "0.0.0.0"
+        port = "8080"
+        tls = "none"
+        corsorigins = ["*"]
+        use_header = false
+        header_name = "X-Forwarded-For"
+        [logconfig]
+        loglevel = "info"
+        logtype = "stdout"
+        logformat = "text"
+        CFG
+
+        for i in $(seq 1 30); do
+          docker exec acmedns-pg pg_isready -U acmedns >/dev/null 2>&1 && break
+          sleep 1
+        done
+        # The loop above breaks on success and falls through on timeout; say
+        # so here, or the acme-dns container fails later with a less useful
+        # error (Copilot, #560).
+        docker exec acmedns-pg pg_isready -U acmedns >/dev/null 2>&1 \
+          || { echo "postgres never became ready"; docker logs acmedns-pg; exit 1; }
+
+        docker run -d --name acmedns --network acmedns-net \
+          -p 18053:53/udp -p 18080:8080 \
+          -v "$RUNNER_TEMP/acme-dns:/etc/acme-dns:ro" \
+          joohoi/acme-dns:latest@sha256:8d327df58b1c9f6361c76734f9761a108fa4f12cf7ca94440a0404a28f75de62
+
+        for i in $(seq 1 30); do
+          curl -fsS -X POST http://localhost:18080/register >/dev/null 2>&1 \
+            && { echo "acme-dns up after ${i}s"; exit 0; }
+          sleep 1
+        done
+        echo "::error::acme-dns never became ready"
+        docker logs acmedns 2>&1 | tail -30
+        docker logs acmedns-pg 2>&1 | tail -10
+        exit 1
+
+    - name: Drive the hook and check DNS actually serves the record
+      env:
+        CERTMATE_TEST_ACMEDNS_URL: http://localhost:18080
+        CERTMATE_TEST_ACMEDNS_DNS: 127.0.0.1:18053
+      run: |
+        pytest tests/test_acme_dns_live.py -m live -v | tee /tmp/acmedns.log
+        grep -q "5 passed" /tmp/acmedns.log || {
+          echo "::error::the acme-dns suite did not run the expected tests"
+          exit 1
+        }
+
   # The Tailwind bundle (static/css/tailwind.min.css) is committed to the repo
   # and served as-is — there is no build step at deploy time. So a stale bundle
   # ships silently whenever input.css / tailwind.config.js change without a
