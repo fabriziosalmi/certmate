@@ -91,6 +91,16 @@ _REISSUE_OWNED_METADATA_KEYS = frozenset({
     'domain_alias', 'alias_dns_provider', 'storage_warning',
 })
 
+# Every key CertMate itself writes into metadata.json. Used as an allowlist
+# when a corrupt file is quarantined and the log names what it still carried:
+# intersecting with this set means no identifier-shaped VALUE found in the
+# debris ('{"ca_provider": "private_ca": ' matches "private_ca" as a key)
+# can reach the log — by construction, not by luck.
+_KNOWN_METADATA_KEYS = _REISSUE_OWNED_METADATA_KEYS | frozenset({
+    'renewed_at', 'deployment_host', 'deployment_port', 'deployment_protocol',
+    'deployment_status', 'key_type', 'key_size', 'elliptic_curve',
+})
+
 
 class CertificateManager:
     """Class to handle certificate operations"""
@@ -491,7 +501,8 @@ class CertificateManager:
                 raw = metadata_file.read_text(encoding='utf-8', errors='replace')
             except OSError:
                 raw = ''
-            lost_keys = sorted(set(re.findall(r'"([A-Za-z_][A-Za-z0-9_]*)"\s*:', raw)))
+            lost_keys = sorted(
+                set(re.findall(r'"([A-Za-z_][A-Za-z0-9_]*)"\s*:', raw)) & _KNOWN_METADATA_KEYS)
             try:
                 metadata_file.rename(quarantine)
                 logger.error(

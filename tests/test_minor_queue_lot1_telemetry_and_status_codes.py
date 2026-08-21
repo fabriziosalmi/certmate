@@ -222,13 +222,18 @@ def test_quarantine_names_the_keys_the_damaged_file_still_carries(tmp_path, capl
     cm = CertificateManager(cert_dir=dirs[0], settings_manager=sm, dns_manager=MagicMock(), shell_executor=MagicMock())
     dom = dirs[0] / "app.internal"
     dom.mkdir()
+    # Not a clean truncation: a value followed by a colon ('"private_ca": ')
+    # and a second interleaved object — the shapes where "quoted word then
+    # colon" stops meaning "key". Only names the product knows may be logged.
     (dom / "metadata.json").write_text(
-        '{"domain": "app.internal", "ca_provider": "private_ca", "dns_provider": "cloudflare", '
-        '"san_domains": ["a.app.internal"], "deployment_host": "10.0.0.9", "domain_alias": "acme.ex')
+        '{"domain": "app.internal", "ca_provider": "private_ca": "dns_provider": "cloudflare", '
+        '"san_domains": ["a.app.internal"]}{"secret_token": "abc", "deployment_host": "10.0.0.9", '
+        '"domain_alias": "acme.ex')
     with caplog.at_level(logging.ERROR):
         assert cm._load_metadata("app.internal") == {}
     line = "\n".join(r.getMessage() for r in caplog.records if "Corrupt metadata" in r.getMessage())
     for key in ("ca_provider", "dns_provider", "san_domains", "deployment_host", "domain_alias"):
         assert key in line, (key, line)
     assert "private_ca" not in line and "10.0.0.9" not in line, "names only, never values"
+    assert "secret_token" not in line, "only keys CertMate itself writes, by allowlist"
     assert list(dom.glob("metadata.json.corrupt-*"))
