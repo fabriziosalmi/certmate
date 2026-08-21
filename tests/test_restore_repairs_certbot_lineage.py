@@ -15,6 +15,8 @@ themselves on the next renewal attempt).
 """
 
 import os
+# NOTE (#582): these tests exercise the disaster-recovery archive, which is the
+# one that carries key material; the default (share-safe) archive no longer does.
 import zipfile
 
 import pytest
@@ -63,7 +65,7 @@ def file_ops(tmp_path):
 def test_zip_flattens_symlinks_then_restore_repairs_them(file_ops, tmp_path):
     _seed_certbot_lineage(file_ops.cert_dir)
 
-    filename = file_ops.create_unified_backup({"domains": [DOMAIN]}, "test")
+    filename = file_ops.create_unified_backup({"domains": [DOMAIN]}, "test", include_secrets=True)
     backup_path = file_ops.backup_dir / "unified" / filename
 
     dest = tmp_path / "restored"
