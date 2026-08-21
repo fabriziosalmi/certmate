@@ -1624,6 +1624,7 @@
 
     // Multi-account support functions
     var providerAccounts = {};
+    var accountSelectProvider = '';  // provider the account list was built for
 
     // One request for every provider: /api/dns/accounts answers with a plain
     // list of {provider, account_id, name, ...}, grouped by provider here.
@@ -1658,7 +1659,10 @@
         if (!providerSelect || !accountContainer || !accountSelect) return;
 
         var selectedProvider = providerSelect.value;
-        var previous = accountSelect.value;
+        // Only carry a value over when the provider is the same one the list
+        // was built for: two providers may share an account_id (Copilot, #574).
+        var previous = selectedProvider === accountSelectProvider ? accountSelect.value : '';
+        accountSelectProvider = selectedProvider;
 
         // A single account is the default account: nothing to choose.
         if (selectedProvider && providerAccounts[selectedProvider] && providerAccounts[selectedProvider].length > 1) {
