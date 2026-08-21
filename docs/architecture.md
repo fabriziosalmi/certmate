@@ -294,7 +294,7 @@ Renewals always preserve the shape that was in effect at creation time: certbot 
 | POST | `/api/certificates` | Create new certificate |
 | GET | `/api/certificates/{domain}` | Get certificate info |
 | POST | `/api/certificates/{domain}/renew` | Renew certificate |
-| GET | `/api/certificates/{domain}/download` | Download as ZIP |
+| GET | `/api/certificates/{domain}/download` | Download: ZIP by default; `?file=<cert.pem\|chain.pem\|fullchain.pem\|privkey.pem\|combined.pem\|cert.pfx>` for one file; `?format=json` for every PEM inline |
 | GET | `/{domain}/tls` | Direct fullchain download |
 
 ### Client Certificates
@@ -802,7 +802,7 @@ Each certificate has a `metadata.json` file containing:
 - Enable audit logging for compliance
 - Configure rate limiting based on load
 - Regular CRL updates (daily or on revocation)
-- Backup CA keys and metadata
+- Back up CA keys and metadata with a disaster-recovery archive (`include_secrets=true` + `CERTMATE_BACKUP_PASSPHRASE`); the default share-safe backup deliberately leaves the CA key out
 - Monitor audit logs for suspicious activity
 
 ### High Availability

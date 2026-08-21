@@ -20,6 +20,7 @@ suite skips it. What runs everywhere is the offline half: the shape of the URLs
 and the fact that a dead one cannot come back unnoticed.
 """
 import json
+import time
 import re
 import urllib.error
 import urllib.request
@@ -127,15 +128,35 @@ def test_every_ca_serves_a_real_acme_directory(key, field, url):
     otherwise meet on their first certificate.
     """
     request = urllib.request.Request(url, headers={"User-Agent": "certmate-ca-check"})
-    try:
-        with urllib.request.urlopen(request, timeout=30) as response:
-            status = response.status
-            # Read to EOF, capped. 4096 bytes truncated mid-object on any
-            # directory larger than that, so a healthy CA would have failed on
-            # a JSON error (Copilot, #538). 1 MiB is far past any real
-            # directory and still bounds a misbehaving server.
-            body = response.read(1024 * 1024).decode("utf-8", "replace")
-    except urllib.error.URLError as error:
+    # A CA that is slow once is not a CA that is gone: ZeroSSL timed out a
+    # single read on 2026-08-17 and the weekly run went red for nothing.
+    # Three attempts, a pause between them; a retired host fails all three
+    # just as fast as it failed one.
+    error = None
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                status = response.status
+                # Read to EOF, capped. 4096 bytes truncated mid-object on any
+                # directory larger than that, so a healthy CA would have failed
+                # on a JSON error (Copilot, #538). 1 MiB is far past any real
+                # directory and still bounds a misbehaving server.
+                body = response.read(1024 * 1024).decode("utf-8", "replace")
+            error = None
+            break
+        except urllib.error.HTTPError as exc:
+            # The server answered — a 404/410 is a verdict, not a transient.
+            # No retry, no sleep: fall through to the status assertion below
+            # with what it said (Copilot, #577).
+            status = exc.code
+            body = exc.read(1024 * 1024).decode("utf-8", "replace") if exc.fp else ""
+            error = None
+            break
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            error = exc
+            if attempt < 2:
+                time.sleep(5)
+    if error is not None:
         pytest.fail(
             f"{key}.{field} ({url}) is unreachable: {error}. If the CA has "
             f"retired this endpoint, update modules/core/ca_manager.py, the "
