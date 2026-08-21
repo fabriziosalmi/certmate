@@ -498,3 +498,56 @@ class TestAuthDisabledBanner:
             # test whatever happens above, or the "banner hidden" assertion
             # elsewhere in the module turns red for a reason three screens away.
             browser_page.unroute("**/api/auth/config")
+
+
+class TestDeliberateNoAuthToggle:
+    """#587 — the local-auth toggle on a local-only instance: the first request
+    is refused (409), the UI asks with the one-way-door wording, confirming
+    repeats the request with the flag and authentication is off; cancelling
+    leaves it on. Re-enabled at the end for the tests after this one."""
+
+    def _open_users_tab(self, page):
+        page.goto(f"{BASE_URL}/settings")
+        page.wait_for_load_state("networkidle")
+        page.evaluate("() => { const w = document.getElementById('setupWizard'); if (w) w.remove(); }")
+        page.locator('button[role="tab"]:has-text("Users")').click(timeout=10000)
+        page.wait_for_timeout(400)
+
+    def test_cancel_keeps_auth_on_and_confirm_turns_it_off(self, browser_page):
+        self._open_users_tab(browser_page)
+        # The toggle's state arrives from /api/auth/config asynchronously;
+        # wait for it rather than reading it the instant the tab opens.
+        expect(browser_page.locator("#localAuthToggle")).to_be_checked(timeout=10000)
+
+        # Cancel: the 409 arrives, the dialog shows, nothing changes.
+        browser_page.evaluate("document.getElementById('localAuthToggle').click()")
+        dialog_confirm = browser_page.locator('[data-action="confirm"]')
+        expect(dialog_confirm).to_be_visible(timeout=10000)
+        expect(browser_page.get_by_text("Run without authentication?")).to_be_visible()
+        browser_page.locator('[data-action="cancel"]').click()
+        browser_page.wait_for_timeout(500)
+        assert browser_page.evaluate("""
+            async () => (await (await fetch('/api/auth/config')).json()).local_auth_enabled
+        """) is True
+        expect(browser_page.locator("#localAuthToggle")).to_be_checked(timeout=5000)
+
+        # Confirm: the request is repeated with the flag and auth goes off.
+        try:
+            browser_page.evaluate("document.getElementById('localAuthToggle').click()")
+            expect(dialog_confirm).to_be_visible(timeout=10000)
+            dialog_confirm.click()
+            browser_page.wait_for_timeout(800)
+            assert browser_page.evaluate("""
+                async () => (await (await fetch('/api/auth/config')).json()).local_auth_enabled
+            """) is False
+            expect(browser_page.locator("#authSecurityBanner")).to_be_visible(timeout=5000)
+        finally:
+            # Re-enable for the tests after this one (never needs the flag).
+            browser_page.evaluate("""
+                async () => { await fetch('/api/auth/config', {method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({local_auth_enabled: true})}); }
+            """)
+        assert browser_page.evaluate("""
+            async () => (await (await fetch('/api/auth/config')).json()).local_auth_enabled
+        """) is True
