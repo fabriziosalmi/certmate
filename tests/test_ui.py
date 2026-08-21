@@ -387,6 +387,7 @@ class TestClientCertListKeepsItsFilter:
         expect(active_chip).to_have_attribute("aria-pressed", "true")
         # Assert on our two identifiers, not on a global count: the container
         # is session-scoped and other tests may leave certificates behind.
+
         def row(identifier):
             return browser_page.locator(
                 '#certTableBody button[data-cc-action="details"][data-id="%s"]' % identifier)
