@@ -1041,6 +1041,10 @@ class CertificateManager:
                 'storage_warning': metadata.get('storage_warning'),
                 'deployment_port': metadata.get('deployment_port'),
                 'deployment_protocol': metadata.get('deployment_protocol'),
+                # When the certificate was issued and last renewed (ISO text
+                # from metadata), so /metrics can report real timestamps.
+                'created_at': metadata.get('created_at'),
+                'renewed_at': metadata.get('renewed_at'),
             }
         except Exception as e:
             logger.error(f"Error parsing certificate for {domain}: {e}")

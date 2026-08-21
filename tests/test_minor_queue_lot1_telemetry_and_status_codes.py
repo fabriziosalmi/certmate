@@ -1,4 +1,4 @@
-"""Two findings from the 2026-08-18 audit's minor queue, verified before fixing.
+"""Findings from the 2026-08-18 audit's minor queue, each verified before fixing.
 
 1. ``authenticate_api_token`` persisted ``last_used_at`` as a datetime object.
    ``json.dump`` refused it, the error was swallowed on purpose (auth must not
@@ -120,3 +120,61 @@ def test_client_cert_handlers_send_the_status_they_meant(client_cert_app, method
     r = call(path, json=body) if body is not None else call(path)
     assert r.status_code == expected, (r.status_code, r.get_data(as_text=True)[:200])
     assert r.status_code != 500
+
+
+# --------------------------------------------------------------------------- #
+# 3. /metrics renewal timestamps
+# --------------------------------------------------------------------------- #
+
+def _metrics_body(tmp_path, domain, cert_info):
+    from types import SimpleNamespace
+    from modules.web.misc_routes import register_misc_routes
+
+    def passthrough(*_a, **_k):
+        def deco(fn):
+            return fn
+        return deco
+    (tmp_path / 'certs').mkdir(exist_ok=True)
+    managers = {
+        'settings': SimpleNamespace(load_settings=lambda: {
+            'domains': [{'domain': domain}], 'renewal_threshold_days': 30,
+            'dns_providers': {'cloudflare': {'default': {'api_token': 'x'}}}}),
+        'file_ops': SimpleNamespace(cert_dir=tmp_path / 'certs'),
+        'certificates': SimpleNamespace(get_certificate_info=lambda d, *a, **k: cert_info if d == domain else None),
+        'cache': SimpleNamespace(get_stats=lambda: {'total_entries': 0}),
+    }
+    app = Flask(__name__)
+    register_misc_routes(app, managers, passthrough, SimpleNamespace(require_role=passthrough))
+    return app.test_client().get('/metrics').get_data(as_text=True)
+
+
+def _sample(body, metric, domain):
+    """Prometheus gauges are process-global and keep their label series across
+    tests, so every test here uses its own domain label."""
+    import re
+    m = re.search(re.escape(metric) + r'\{[^}]*domain="' + re.escape(domain) + r'"[^}]*\} ([0-9.e+]+)', body)
+    return float(m.group(1)) if m else None
+
+
+def test_last_renewal_is_the_recorded_event_not_a_guess_from_expiry(tmp_path):
+    """'mock data for now' shipped: last_renewal was derived from the expiry
+    date and, for a 90-day certificate with a 30-day threshold, pointed into
+    the future. It is now the metadata's renewed_at (else created_at)."""
+    body = _metrics_body(tmp_path, 'renewed.example.net', {
+        'exists': True, 'days_left': 80, 'dns_provider': 'cloudflare',
+        'created_at': '2026-08-01T08:00:00Z', 'renewed_at': '2026-08-20T03:00:00Z'})
+    from datetime import datetime, timezone
+    expected = datetime(2026, 8, 20, 3, 0, tzinfo=timezone.utc).timestamp()
+    assert _sample(body, 'certmate_certificate_last_renewal_timestamp', 'renewed.example.net') == expected
+    import time
+    nxt = _sample(body, 'certmate_certificate_next_renewal_timestamp', 'renewed.example.net')
+    assert abs(nxt - (time.time() + 50 * 86400)) < 120   # due when days_left hits 30
+
+
+def test_no_timestamp_known_means_no_sample(tmp_path):
+    body = _metrics_body(tmp_path, 'unknown-age.example.net',
+                         {'exists': True, 'days_left': 10, 'dns_provider': 'cloudflare'})
+    assert _sample(body, 'certmate_certificate_last_renewal_timestamp', 'unknown-age.example.net') is None
+    import time
+    # Inside the renewal window: due now, not in the past.
+    assert abs(_sample(body, 'certmate_certificate_next_renewal_timestamp', 'unknown-age.example.net') - time.time()) < 120
