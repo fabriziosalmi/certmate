@@ -810,7 +810,16 @@ class AuthManager:
                     settings['users'] = stored_users
 
                 try:
-                    self.settings_manager.update(_touch, "user_management")
+                    # No backup for a plain login. save_settings writes a full
+                    # unified ZIP of settings + certificates for every reason
+                    # that is not None and then prunes to MAX_BACKUPS_PER_TYPE
+                    # (50), so recording last_login evicted a real restore
+                    # point every time somebody signed in. A hash upgrade IS
+                    # worth a restore point; a timestamp is not. The
+                    # backup_reason=None idiom already exists for exactly this
+                    # (api_keys last_used_at).
+                    self.settings_manager.update(
+                        _touch, "password_hash_upgraded" if upgraded else None)
                     if upgraded:
                         logger.info(
                             f"Upgraded the stored password hash for '{username}'"
