@@ -15,6 +15,8 @@ guards the real settings entry.
 """
 
 import stat
+# NOTE (#582): these tests exercise the disaster-recovery archive, which is the
+# one that carries key material; the default (share-safe) archive no longer does.
 import zipfile
 
 import pytest
@@ -71,7 +73,7 @@ def _archive_names(file_ops, filename):
 def test_backup_archives_ca_key_client_certs_crl_and_audit(file_ops):
     _seed_pki_and_audit(file_ops.data_dir)
 
-    filename = file_ops.create_unified_backup({"domains": []}, "test")
+    filename = file_ops.create_unified_backup({"domains": []}, "test", include_secrets=True)
     assert filename, "create_unified_backup returned None"
     names = _archive_names(file_ops, filename)
 
@@ -90,7 +92,7 @@ def test_backup_archives_ca_key_client_certs_crl_and_audit(file_ops):
 def test_backup_metadata_counts_the_data_files(file_ops):
     _seed_pki_and_audit(file_ops.data_dir)
 
-    filename = file_ops.create_unified_backup({"domains": []}, "test")
+    filename = file_ops.create_unified_backup({"domains": []}, "test", include_secrets=True)
     path = file_ops.backup_dir / "unified" / filename
     with zipfile.ZipFile(path) as zf:
         import json
@@ -105,7 +107,7 @@ def test_backup_metadata_counts_the_data_files(file_ops):
 
 def test_backup_without_a_private_ca_still_works(file_ops):
     """No data/certs or data/audit on disk is the common case, not an error."""
-    filename = file_ops.create_unified_backup({"domains": []}, "test")
+    filename = file_ops.create_unified_backup({"domains": []}, "test", include_secrets=True)
     assert filename
     names = _archive_names(file_ops, filename)
     assert not any(n.startswith("data/") for n in names)
@@ -113,7 +115,7 @@ def test_backup_without_a_private_ca_still_works(file_ops):
 
 def test_restore_round_trips_the_ca_key_with_locked_down_permissions(file_ops, tmp_path):
     _seed_pki_and_audit(file_ops.data_dir)
-    filename = file_ops.create_unified_backup({"domains": []}, "test")
+    filename = file_ops.create_unified_backup({"domains": []}, "test", include_secrets=True)
     backup_path = file_ops.backup_dir / "unified" / filename
 
     # Restore into a pristine instance.
@@ -144,7 +146,7 @@ def test_restore_round_trips_the_ca_key_with_locked_down_permissions(file_ops, t
 def test_restore_refuses_non_allowlisted_data_entries(file_ops, tmp_path):
     """A tampered archive must not write settings.json through the data/ branch."""
     _seed_pki_and_audit(file_ops.data_dir)
-    filename = file_ops.create_unified_backup({"domains": []}, "test")
+    filename = file_ops.create_unified_backup({"domains": []}, "test", include_secrets=True)
     backup_path = file_ops.backup_dir / "unified" / filename
 
     tampered = tmp_path / "tampered.zip"
@@ -184,7 +186,7 @@ def test_restore_carries_an_audit_log_larger_than_the_pem_size_limit(file_ops, t
     big = "x" * (12 * 1024 * 1024)  # 12 MB, over the PEM-entry limit
     (file_ops.data_dir / "audit" / "certificate_audit.log").write_text(big)
 
-    filename = file_ops.create_unified_backup({"domains": []}, "test")
+    filename = file_ops.create_unified_backup({"domains": []}, "test", include_secrets=True)
     backup_path = file_ops.backup_dir / "unified" / filename
 
     dest = tmp_path / "restored_big"

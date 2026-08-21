@@ -18,6 +18,8 @@ Also pins the functional contract:
 - the metadata.json domains list matches what's on disk
 """
 from __future__ import annotations
+# NOTE (#582): these tests exercise the disaster-recovery archive, which is the
+# one that carries key material; the default (share-safe) archive no longer does.
 
 import json
 import zipfile
@@ -65,7 +67,7 @@ def test_create_unified_backup_iterdir_called_once(file_ops):
         return real_iterdir(self)
 
     with patch.object(Path, 'iterdir', counted_iterdir):
-        ok = file_ops.create_unified_backup(settings, backup_reason="test")
+        ok = file_ops.create_unified_backup(settings, backup_reason="test", include_secrets=True)
 
     assert ok, "create_unified_backup must succeed"
     assert cert_dir_iterdir_calls[0] == 1, (
@@ -79,7 +81,7 @@ def test_create_unified_backup_contents(file_ops, tmp_path):
     """Functional contract: zip has the expected entries and metadata."""
     settings = {"email": "test@example.com", "domains": ["a.example.com"]}
 
-    ok = file_ops.create_unified_backup(settings, backup_reason="contents")
+    ok = file_ops.create_unified_backup(settings, backup_reason="contents", include_secrets=True)
     assert ok
 
     unified_dir = file_ops.backup_dir / "unified"
