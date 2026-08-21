@@ -334,6 +334,52 @@ class TestHelpPageUI:
         expect(browser_page.locator("section#troubleshooting")).to_be_visible()
 
 
+class TestDnsAccountSelector:
+    """#563 — with several accounts on one DNS provider, the create form has
+    to offer them. The selector existed in the markup but never appeared:
+    the loader read ``data.accounts`` off a response that is a plain list,
+    so every certificate went to the default account regardless of zone."""
+
+    def test_account_selector_lists_the_configured_accounts(self, browser_page):
+        browser_page.goto(f"{BASE_URL}/settings")
+        browser_page.wait_for_load_state("networkidle")
+        browser_page.evaluate("""
+            async () => {
+                for (const [id, name] of [['zone-a', 'Zone A'], ['zone-b', 'Zone B']]) {
+                    const r = await fetch('/api/dns/cloudflare/accounts/' + id, {
+                        method: 'PUT',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({name: name, api_token: 'test-token-' + id})
+                    });
+                    if (!r.ok) throw new Error('PUT account ' + id + ' -> ' + r.status);
+                }
+            }
+        """)
+
+        browser_page.goto(BASE_URL)
+        expect(browser_page.locator("#domain")).to_be_visible(timeout=10000)
+        browser_page.select_option("#dns_provider_select", "cloudflare")
+
+        container = browser_page.locator("#account-selection-container")
+        expect(container).to_be_visible(timeout=10000)
+        select = browser_page.locator("#account_select")
+        # "Use default account" + the two configured ones (+ whatever account
+        # the default settings already carry for the provider).
+        values = select.locator("option").evaluate_all("els => els.map(e => e.value)")
+        assert "" in values and "zone-a" in values and "zone-b" in values, values
+        expect(select).to_contain_text("Zone A")
+        expect(select).to_contain_text("Zone B")
+
+        # Pick the non-default one and make sure the value that would be
+        # posted is its account_id, not a label.
+        browser_page.select_option("#account_select", "zone-b")
+        assert browser_page.eval_on_selector("#account_select", "el => el.value") == "zone-b"
+
+        # Another provider with no accounts: the selector hides again.
+        browser_page.select_option("#dns_provider_select", "hetzner")
+        expect(container).to_be_hidden()
+
+
 class TestClientCertListKeepsItsFilter:
     """#562 / #561 — the client list opens on Active, keeps that view across
     a refresh (the post-revoke reload used to snap back to All), remembers
