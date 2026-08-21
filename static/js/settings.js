@@ -2827,16 +2827,18 @@
             });
     }
 
-    function toggleLocalAuth() {
+    function toggleLocalAuth(confirmUnauthenticated) {
         var toggle = document.getElementById('localAuthToggle');
         var enabled = toggle.checked;
+        var body = { local_auth_enabled: enabled };
+        if (confirmUnauthenticated) body.confirm_unauthenticated = true;
 
         fetch('/api/auth/config', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ local_auth_enabled: enabled })
+            body: JSON.stringify(body)
         })
             .then(function (response) {
                 return response.json().then(function (data) {
@@ -2844,6 +2846,24 @@
                         showMessage(data.message, 'success');
                         var banner = document.getElementById('authSecurityBanner');
                         if (banner) banner.style.display = enabled ? 'none' : 'block';
+                    } else if (response.status === 409 && data.confirm_unauthenticated_required && !confirmUnauthenticated) {
+                        // The one-way-door guard (#581): this is the last
+                        // credential. Running without authentication is a
+                        // deliberate, audited choice — ask, then repeat with
+                        // the flag (#587).
+                        toggle.checked = !enabled; // hold the toggle until confirmed
+                        CertMate.confirm(
+                            'Local authentication is the only credential configured. ' +
+                            'Turning it off puts this instance in setup mode: every endpoint, ' +
+                            'including private-key download, answers any caller on the network as admin. ' +
+                            'Only do this if something in front of CertMate authenticates for you. ' +
+                            'The choice is recorded in the audit log with your name.',
+                            'Run without authentication?'
+                        ).then(function (confirmed) {
+                            if (!confirmed) return;
+                            toggle.checked = enabled;
+                            toggleLocalAuth(true);
+                        });
                     } else {
                         showMessage(data.error || 'Failed to update auth config', 'error');
                         toggle.checked = !enabled; // Revert toggle

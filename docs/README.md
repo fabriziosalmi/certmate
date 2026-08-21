@@ -23,6 +23,7 @@ Welcome to the CertMate documentation. This folder contains comprehensive guides
 - **[Testing Guide](./testing.md)** — Test framework, CI/CD, coverage
 - **[Certificate Discovery & Inventory](./discovery-inventory.md)** — probe/CT-log discovery, inventory, adopt, crypto readiness
 - **[Deploy Hooks](./deploy-hooks.md)** — post-issuance hooks: configuration, testing, output redaction
+- **[Webhooks](./webhooks.md)** — generic webhooks: payload templates, authentication, signature verification
 - **[Compliance](./compliance.md)** — audit chain, actor attribution, NIS2/eIDAS posture
 - **[Deployment Probes](./probes.en.md)** — verifying a renewed certificate is actually served
 
@@ -159,6 +160,7 @@ docs/
   ca-providers.md         certificate authorities
   compliance.md           audit chain, attribution, NIS2/eIDAS
   deploy-hooks.md         post-issuance deploy hooks
+  webhooks.md             generic webhooks: payload templates, auth, signature
   discovery-inventory.md  discovery, inventory, adopt, crypto readiness
   dns-providers.md        DNS providers, multi-account, domain alias
   docker.md               Docker build and deployment
@@ -251,7 +253,7 @@ CertMate is licensed under the MIT License. See LICENSE file in the repository.
 
 ---
 
-**Current Version**: 2.25.4
+**Current Version**: 2.26.0
 
 <div align="center">
 

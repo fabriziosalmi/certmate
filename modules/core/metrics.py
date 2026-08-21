@@ -6,12 +6,28 @@ SSL certificate infrastructure health and status.
 """
 
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 import logging
 
 from .constants import iter_cert_domain_dirs
+
+
+def _iso_to_epoch(value):
+    """ISO-8601 text (naive = UTC, or with offset) -> unix timestamp, else None."""
+    if not value or not isinstance(value, str):
+        return None
+    text = value.strip()
+    if text.endswith('Z'):
+        text = text[:-1] + '+00:00'
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.timestamp()
 
 logger = logging.getLogger(__name__)
 
@@ -369,18 +385,37 @@ class CertMateMetricsCollector:
                             dns_provider=dns_provider
                         ).set(max(0, days_left))
                     
-                    # Set renewal timestamps (mock data for now)
-                    # In a real implementation, you'd track these from actual renewal events
-                    certificate_last_renewal.labels(
-                        domain=domain,
-                        dns_provider=dns_provider
-                    ).set(time.time() - (renewal_threshold_days - days_left) * 24 * 3600 if days_left is not None else 0)
-                    
-                    certificate_next_renewal.labels(
-                        domain=domain,
-                        dns_provider=dns_provider
-                    ).set(time.time() + (days_left - renewal_threshold_days) * 24 * 3600 if days_left is not None and days_left > renewal_threshold_days else time.time())
-                    
+                    # Last renewal: the real event, from metadata (renewed_at,
+                    # else created_at for a certificate never renewed). The
+                    # previous value was derived from the expiry date — a
+                    # "mock for now" that shipped, and for a 90-day
+                    # certificate with a 30-day threshold it pointed into the
+                    # future. No sample when neither timestamp is known.
+                    last_renewal_ts = _iso_to_epoch(
+                        cert_info.get('renewed_at') or cert_info.get('created_at'))
+                    if last_renewal_ts is not None:
+                        certificate_last_renewal.labels(
+                            domain=domain,
+                            dns_provider=dns_provider
+                        ).set(last_renewal_ts)
+                    else:
+                        # A gauge that stops being set keeps its last value.
+                        # If the timestamp became unknown (metadata.json
+                        # quarantined, say) the series must go away, not
+                        # freeze on a stale date (review, #584).
+                        try:
+                            certificate_last_renewal.remove(domain, dns_provider)
+                        except KeyError:
+                            pass
+                    # Next renewal: the scheduler renews once days_left falls
+                    # to the threshold, so this is a real prediction — due
+                    # now when already inside the window.
+                    if days_left is not None:
+                        due_in_days = max(0, days_left - renewal_threshold_days)
+                        certificate_next_renewal.labels(
+                            domain=domain,
+                            dns_provider=dns_provider
+                        ).set(time.time() + due_in_days * 24 * 3600)
                 else:
                     status_counts['missing'] += 1
             
