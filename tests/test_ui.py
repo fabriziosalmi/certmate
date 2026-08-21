@@ -489,7 +489,6 @@ class TestDeliberateNoAuthToggle:
 
     def test_cancel_keeps_auth_on_and_confirm_turns_it_off(self, browser_page):
         self._open_users_tab(browser_page)
-        toggle = browser_page.locator("#localAuthToggle")
         assert browser_page.evaluate("document.getElementById('localAuthToggle').checked") is True
 
         # Cancel: the 409 arrives, the dialog shows, nothing changes.
