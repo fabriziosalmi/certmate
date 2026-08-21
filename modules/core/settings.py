@@ -877,7 +877,24 @@ class SettingsManager:
                 settings = self.file_ops.safe_file_read(self.settings_file, is_json=True)
                 if not isinstance(settings, dict):
                     logger.warning("Settings file exists but is empty or corrupted, attempting backup restore")
+                    # Empty and unreadable are different cases. The refusal
+                    # below exists to protect CONTENT a text editor could
+                    # repair; a zero-byte file has nothing to lose, so for it
+                    # the first-time template is still the right answer.
+                    # Unreadable (permissions) counts as "has content": we
+                    # cannot tell, and that is precisely where overwriting
+                    # destroys something good.
+                    try:
+                        has_content = bool(self.settings_file.read_text(
+                            encoding='utf-8', errors='replace').strip())
+                    except OSError:
+                        has_content = True
                     settings = self._try_restore_from_backup()
+                    if settings is None and not has_content:
+                        logger.warning("Settings file is empty and no usable backup exists; "
+                                       "recreating it with the first-time template")
+                        self.save_settings(first_time_template)
+                        return first_time_template
                     if settings is None:
                         # Do NOT recreate the file. safe_file_read returns the
                         # default for a JSON typo, a PermissionError and an

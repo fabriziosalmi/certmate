@@ -217,3 +217,35 @@ def test_logging_in_does_not_consume_restore_points(instance):
 
 if __name__ == "__main__":  # pragma: no cover
     pytest.main([__file__, "-v"])
+
+
+def test_an_empty_settings_file_still_boots_with_the_first_time_template(tmp_path):
+    """The refusal to overwrite exists to protect content a text editor could
+    repair. A zero-byte settings.json has nothing to lose: a fresh boot with
+    the first-time template is the pre-existing behaviour and stays."""
+    from modules.core.file_operations import FileOperations
+    from modules.core.settings import SettingsManager
+    dirs = [tmp_path / n for n in ("certificates", "data", "backups", "logs")]
+    for d in dirs:
+        d.mkdir()
+    settings_file = dirs[1] / "settings.json"
+    settings_file.write_text("")
+    sm = SettingsManager(file_ops=FileOperations(*dirs), settings_file=settings_file)
+    settings = sm.load_settings()
+    assert isinstance(settings, dict) and 'dns_providers' in settings
+    assert settings_file.stat().st_size > 0
+
+
+def test_a_corrupt_settings_file_with_no_usable_backup_refuses_to_boot(tmp_path):
+    from modules.core.file_operations import FileOperations
+    from modules.core.settings import SettingsManager, SettingsUnreadableError
+    dirs = [tmp_path / n for n in ("certificates", "data", "backups", "logs")]
+    for d in dirs:
+        d.mkdir()
+    settings_file = dirs[1] / "settings.json"
+    settings_file.write_text('{"users": {"admin": {"password_hash": "$2b$12$real"}, "domains": [')
+    sm = SettingsManager(file_ops=FileOperations(*dirs), settings_file=settings_file)
+    import pytest as _pytest
+    with _pytest.raises(SettingsUnreadableError):
+        sm.load_settings()
+    assert 'password_hash' in settings_file.read_text(), "the operator's only copy must survive"
