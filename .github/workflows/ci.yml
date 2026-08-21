@@ -481,6 +481,11 @@ jobs:
           docker exec acmedns-pg pg_isready -U acmedns >/dev/null 2>&1 && break
           sleep 1
         done
+        # The loop above breaks on success and falls through on timeout; say
+        # so here, or the acme-dns container fails later with a less useful
+        # error (Copilot, #560).
+        docker exec acmedns-pg pg_isready -U acmedns >/dev/null 2>&1 \
+          || { echo "postgres never became ready"; docker logs acmedns-pg; exit 1; }
 
         docker run -d --name acmedns --network acmedns-net \
           -p 18053:53/udp -p 18080:8080 \

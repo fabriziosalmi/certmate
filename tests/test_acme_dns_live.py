@@ -101,13 +101,26 @@ def test_the_hook_publishes_a_record_dns_will_serve(account):
     )
 
 
-def test_a_second_validation_replaces_the_first(account):
-    """A renewal issues a new challenge against the same subdomain."""
-    first, second = _validation(), _validation()
+def test_acme_dns_keeps_the_last_two_validations_and_drops_the_third_oldest(account):
+    """acme-dns serves the two most recent TXT values by design: an order for
+    ``example.com`` + ``*.example.com`` needs two challenges live on the same
+    subdomain at once. So a second validation does not replace the first — it
+    joins it — and only a third pushes the first out. Asserting both halves is
+    what distinguishes "the hook updates the record" from "the newest value
+    happens to be present" (Copilot, #560)."""
+    first, second, third = _validation(), _validation(), _validation()
     _acme_dns_change(_config(account), first, "create")
     _acme_dns_change(_config(account), second, "create")
     served = _txt_records(account["fulldomain"])
-    assert second in served, "the newest validation is not being served"
+    assert first in served and second in served, (
+        f"after two updates acme-dns should serve both values, got {served}")
+
+    _acme_dns_change(_config(account), third, "create")
+    served = _txt_records(account["fulldomain"])
+    assert third in served and second in served, (
+        f"the two newest validations are not both served: {served}")
+    assert first not in served, (
+        f"the oldest validation is still served after two newer ones: {served}")
 
 
 def test_wrong_credentials_are_refused_rather_than_ignored(account):
