@@ -72,7 +72,8 @@ def _webhook_url_is_internal(url: str) -> bool:
 #   auth_header      header name for auth_type=header (default X-API-Key)
 #   payload_template JSON text with {{placeholders}}; empty = the default body
 #   timeout          seconds, 1..60 (default 10)
-#   max_retries      0..5 attempts after the first (default 3 total, as before)
+#   max_retries      total delivery attempts, 1..5 (default 3, as before); 0 is
+#                    accepted from older configs and means 1
 #
 # Every secret-bearing field name matches the settings secret regex (token,
 # password), so it is masked on GET and restored on a round-trip save.
@@ -673,6 +674,9 @@ class Notifier:
         sending it: method, URL, header names (values of credentials masked),
         and the body. Returns ``{'error': ...}`` for a config that cannot
         render."""
+        if (cfg.get('type') or 'generic') != 'generic':
+            return {'error': "preview renders generic webhooks only; Slack, Discord, "
+                             "Telegram, ntfy and Gotify have a fixed body — use Test"}
         err = validate_webhook_config(cfg)
         if err:
             return {'error': err}

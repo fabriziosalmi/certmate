@@ -300,3 +300,9 @@ def test_preview_of_a_broken_config_is_a_400_with_the_reason():
     r = app.test_client().post('/api/notifications/webhook/preview',
                                json={'config': {'type': 'generic', 'auth_type': 'bearer'}})
     assert r.status_code == 400 and 'auth_token' in r.get_json()['error']
+
+
+def test_preview_is_for_generic_webhooks_only():
+    notifier = Notifier(settings_manager=MagicMock(), data_dir='/nonexistent')
+    out = notifier.preview_webhook({'type': 'slack', 'url': 'https://hooks.slack.example/x'})
+    assert 'generic' in out['error']

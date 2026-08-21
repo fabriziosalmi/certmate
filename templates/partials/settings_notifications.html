@@ -188,7 +188,7 @@
                                         </div>
                                         <div>
                                             <label class="text-xs text-muted mb-1 block">Attempts</label>
-                                            <input type="number" min="0" max="5" x-model.number="wh.max_retries" placeholder="3" aria-label="Delivery attempts" class="w-full px-2 py-1.5 text-sm border text-foreground border-border rounded-lg bg-input">
+                                            <input type="number" min="1" max="5" x-model.number="wh.max_retries" placeholder="3" aria-label="Delivery attempts (total)" class="w-full px-2 py-1.5 text-sm border text-foreground border-border rounded-lg bg-input">
                                         </div>
                                     </div>
                                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-2" x-show="wh.auth_type === 'bearer'">
