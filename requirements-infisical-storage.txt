@@ -1,2 +1,2 @@
 # Optional dependencies for Infisical storage backend
-infisical-python>=2.0.0
+infisical-python>=2.3.6

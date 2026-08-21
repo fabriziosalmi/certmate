@@ -2,7 +2,7 @@
 # Install with: pip install -r requirements-storage-all.txt
 
 # Azure Key Vault
-azure-keyvault-secrets>=4.7.0
+azure-keyvault-secrets>=4.11.1
 azure-keyvault-certificates>=4.11.1
 azure-identity>=1.25.3
 
@@ -11,10 +11,10 @@ azure-identity>=1.25.3
 cryptography>=41.0.0
 
 # AWS Secrets Manager
-boto3>=1.43.67
+boto3>=1.43.72
 
 # HashiCorp Vault
 hvac>=2.4.0
 
 # Infisical
-infisical-python>=2.0.0
+infisical-python>=2.3.6
