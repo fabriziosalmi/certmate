@@ -488,8 +488,13 @@ class TestAuthDisabledBanner:
                 status=200, content_type="application/json",
                 body='{"local_auth_enabled": false, "has_users": true}'),
         )
-        browser_page.goto(f"{BASE_URL}/settings")
-        browser_page.wait_for_load_state("networkidle")
-        browser_page.locator('button[role="tab"]:has-text("Users")').click(timeout=10000)
-        expect(browser_page.locator("#authSecurityBanner")).to_be_visible(timeout=10000)
-        browser_page.unroute("**/api/auth/config")
+        try:
+            browser_page.goto(f"{BASE_URL}/settings")
+            browser_page.wait_for_load_state("networkidle")
+            browser_page.locator('button[role="tab"]:has-text("Users")').click(timeout=10000)
+            expect(browser_page.locator("#authSecurityBanner")).to_be_visible(timeout=10000)
+        finally:
+            # browser_page is module-scoped: the stub must not outlive this
+            # test whatever happens above, or the "banner hidden" assertion
+            # elsewhere in the module turns red for a reason three screens away.
+            browser_page.unroute("**/api/auth/config")
