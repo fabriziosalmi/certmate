@@ -3081,6 +3081,12 @@ def create_api_resources(api, models, managers):
 
                     return response, 200
                 else:
+                    reason = getattr(file_ops, 'last_restore_error', None)
+                    if reason:
+                        # The restore declined for a reason it can state
+                        # (a share-safe archive over a populated instance);
+                        # nothing was written. 409, not 500.
+                        return {'error': f'Restore refused: {reason}'}, 409
                     return {'error': 'Failed to restore unified backup'}, 500
 
             except FileNotFoundError:
