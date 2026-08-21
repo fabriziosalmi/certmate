@@ -790,6 +790,7 @@ class AuditLogger:
         local_auth_enabled_after: bool,
         user: Optional[str] = None,
         ip_address: Optional[str] = None,
+        confirm_unauthenticated: bool = False,
     ) -> None:
         """Log a change to the local-auth toggle."""
         self.log_operation(
@@ -800,6 +801,9 @@ class AuditLogger:
             details={
                 'before': bool(local_auth_enabled_before),
                 'after': bool(local_auth_enabled_after),
+                # True when the admin went past the one-way-door guard on
+                # purpose (#587): the instance now runs without authentication.
+                'confirm_unauthenticated': confirm_unauthenticated,
             },
             user=user,
             ip_address=ip_address,
@@ -814,6 +818,7 @@ class AuditLogger:
         expires_at: Optional[str] = None,
         user: Optional[str] = None,
         ip_address: Optional[str] = None,
+        confirm_unauthenticated: bool = False,
     ) -> None:
         """Log scoped API key creation. Token plaintext is NEVER logged."""
         self.log_operation(
@@ -837,6 +842,7 @@ class AuditLogger:
         name: str,
         user: Optional[str] = None,
         ip_address: Optional[str] = None,
+        confirm_unauthenticated: bool = False,
     ) -> None:
         """Log scoped API key revocation."""
         self.log_operation(
@@ -855,6 +861,7 @@ class AuditLogger:
         role: str,
         user: Optional[str] = None,
         ip_address: Optional[str] = None,
+        confirm_unauthenticated: bool = False,
     ) -> None:
         """Log local-auth user creation."""
         self.log_operation(
@@ -872,6 +879,7 @@ class AuditLogger:
         username: str,
         user: Optional[str] = None,
         ip_address: Optional[str] = None,
+        confirm_unauthenticated: bool = False,
     ) -> None:
         """Log local-auth user deletion."""
         self.log_operation(
@@ -890,6 +898,7 @@ class AuditLogger:
         new_role: str,
         user: Optional[str] = None,
         ip_address: Optional[str] = None,
+        confirm_unauthenticated: bool = False,
     ) -> None:
         """Log a role change on a local-auth user."""
         self.log_operation(
@@ -909,6 +918,7 @@ class AuditLogger:
         operation: str,
         user: Optional[str] = None,
         ip_address: Optional[str] = None,
+        confirm_unauthenticated: bool = False,
     ) -> None:
         """Log a deploy hook mutation. Hook commands themselves are NOT logged
         (they can contain secrets and risk creating an injection log line).
@@ -934,6 +944,7 @@ class AuditLogger:
         new: Optional[str],
         user: Optional[str] = None,
         ip_address: Optional[str] = None,
+        confirm_unauthenticated: bool = False,
     ) -> None:
         """Log a change to the active CA provider."""
         self.log_operation(
@@ -954,6 +965,7 @@ class AuditLogger:
         reason: str,
         user: Optional[str] = None,
         ip_address: Optional[str] = None,
+        confirm_unauthenticated: bool = False,
     ) -> None:
         """Log an authorization denial (e.g. scoped key tried to access
         a domain outside its allowed_domains)."""
