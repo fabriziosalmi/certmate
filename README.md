@@ -2314,7 +2314,7 @@ CertMate includes a built-in notification system configurable from Settings > No
 - **Telegram** - Bot API messages (bot token + chat ID)
 - **ntfy** - Push to an [ntfy](https://ntfy.sh) topic (self-hostable); optional access token, per-message priority
 - **Gotify** - Push to a self-hosted [Gotify](https://gotify.net) server (server URL + app token, numeric priority)
-- **Generic Webhooks** - HTTP POST with HMAC-SHA256 signed payloads for custom integrations
+- **Generic Webhooks** - HTTP POST/PUT/PATCH with HMAC-SHA256 signed payloads, bearer/basic/header authentication, and a JSON **payload template** with `{{placeholders}}` so the body fits whatever receives it — see [docs/webhooks.md](docs/webhooks.md)
 - **Weekly Digest** - Scheduled summary of certificate status and upcoming renewals
 
 All notification channels support per-event filtering (created, renewed, expiring, failed) and can be tested from the settings UI.
@@ -2600,6 +2600,7 @@ curl -sS -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/diagnostics
 | **[docs/guide.md](docs/guide.md)**                 | Step-by-step guide for common tasks | All users             |
 | **[docs/discovery-inventory.md](docs/discovery-inventory.md)** | Discovery, inventory, adopt, crypto readiness | SRE, security |
 | **[docs/deploy-hooks.md](docs/deploy-hooks.md)**   | Post-issuance deploy hooks          | DevOps engineers      |
+| **[docs/webhooks.md](docs/webhooks.md)**           | Generic webhooks: payload templates, auth, signature verification | Integrators |
 | **[docs/compliance.md](docs/compliance.md)**       | Audit chain, attribution, NIS2/eIDAS posture | Compliance, security |
 | **[docs/kubernetes.md](docs/kubernetes.md)**       | Pod sizing, OOM troubleshooting, Helm chart | SRE              |
 | **[docs/probes.en.md](docs/probes.en.md)**         | Deployment probe configuration      | DevOps engineers      |

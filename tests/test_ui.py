@@ -504,7 +504,10 @@ class TestDeliberateNoAuthToggle:
     """#587 — the local-auth toggle on a local-only instance: the first request
     is refused (409), the UI asks with the one-way-door wording, confirming
     repeats the request with the flag and authentication is off; cancelling
-    leaves it on. Re-enabled at the end for the tests after this one."""
+    leaves it on. Re-enabled at the end for the tests after this one.
+
+    This test REALLY disables authentication on the instance behind BASE_URL
+    for the span of two calls. Run it only against a disposable instance."""
 
     def _open_users_tab(self, page):
         page.goto(f"{BASE_URL}/settings")

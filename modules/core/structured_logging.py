@@ -126,9 +126,9 @@ class JSONFormatter(logging.Formatter):
 
     # Sensitive keywords to match in field names (case-insensitive)
     SENSITIVE_FIELD_PATTERNS = {
-        'password', 'token', 'secret', 'api_key', 'api_token', 'private_key',
+        'password', 'token', 'secret', 'api_key', 'api-key', 'api_token', 'private_key',
         'privkey', 'key_pem', 'encryption_key', 'credentials', 'bearer_token',
-        'auth', 'jwt'
+        'auth', 'jwt', 'cookie'
     }
 
     # Matches any PEM block structure.
@@ -143,9 +143,19 @@ class JSONFormatter(logging.Formatter):
     PEM_END_RE = re.compile(r'-----END[^-]+-----', re.DOTALL)
 
     # Matches key-value assignments containing sensitive keywords (double-quoted, single-quoted, or bare words)
+    # The value alternation tries an HTTP credential scheme first
+    # (``Authorization: Bearer <token>``): the bare-token class excludes
+    # whitespace, so without it the scheme word was redacted and the token
+    # survived — the one part that mattered. The name class deliberately
+    # stays hyphen-free (a hyphen-admitting prefix turns a long dashed run
+    # into quadratic backtracking — see the PEM test below); ``X-Api-Key``
+    # is caught through the ``api-key`` pattern instead. A quote right after
+    # the name (``'Authorization': 'Basic …'`` — a dict or JSON rendered into
+    # a log line) is accepted so the quoted value that follows is redacted.
     SENSITIVE_KV_RE = re.compile(
-        r'(\b[a-zA-Z0-9_]*(?:' + '|'.join(SENSITIVE_FIELD_PATTERNS) + r')[a-zA-Z0-9_]*\b\s*[:=]\s*)'
-        r'(?:"[^"\\]*(?:\\.[^"\\]*)*"|\'[^\'\\]*(?:\\.[^\'\\]*)*\'|[a-zA-Z0-9_\-\.\+\/\=\*@#\$%\|\^&\(\)\[\]\{\}]+)',
+        r'(\b[a-zA-Z0-9_]*(?:' + '|'.join(sorted(SENSITIVE_FIELD_PATTERNS)) + r')[a-zA-Z0-9_]*\b["\']?\s*[:=]\s*)'
+        r'(?:(?:Bearer|Basic|Digest|Token|ApiKey|Negotiate)\s+[^\s"\']+'
+        r'|"[^"\\]*(?:\\.[^"\\]*)*"|\'[^\'\\]*(?:\\.[^\'\\]*)*\'|[a-zA-Z0-9_\-\.\+\/\=\*@#\$%\|\^&\(\)\[\]\{\}]+)',
         re.IGNORECASE
     )
     
