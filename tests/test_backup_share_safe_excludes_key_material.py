@@ -186,3 +186,22 @@ def test_disaster_recovery_archive_restores_over_certificates(file_ops):
 
     assert ok is True and file_ops.last_restore_error is None
     assert (file_ops.cert_dir / 'example.com' / 'privkey.pem').read_text() == 'KEY'
+
+
+def test_dr_restore_locks_down_every_kind_of_key_material(file_ops):
+    """After a DR restore the .pfx bundle and certbot's keys/ copy must be
+    0600 like privkey.pem — the restore used a narrower name pattern than the
+    backup's predicate, so a restored PKCS#12 came back 0644."""
+    import os
+    import stat
+    _plant_instance(file_ops)
+    filename = file_ops.create_unified_backup({'domains': []}, 'dr', include_secrets=True)
+    for rel in ('cert.pfx', 'privkey.pem', 'keys/0000_key-certbot.pem', 'cert.pem'):
+        path = file_ops.cert_dir / 'example.com' / rel
+        path.unlink()
+    assert file_ops.restore_unified_backup(str(file_ops.backup_dir / 'unified' / filename)) is True
+    for rel in ('cert.pfx', 'privkey.pem', 'keys/0000_key-certbot.pem'):
+        mode = stat.S_IMODE(os.stat(file_ops.cert_dir / 'example.com' / rel).st_mode)
+        assert mode == 0o600, (rel, oct(mode))
+    mode = stat.S_IMODE(os.stat(file_ops.cert_dir / 'example.com' / 'cert.pem').st_mode)
+    assert mode & 0o044, ('cert.pem must stay readable', oct(mode))

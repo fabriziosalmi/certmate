@@ -916,7 +916,11 @@ class FileOperations:
                         # Set appropriate permissions: lock down every private
                         # key (live, archived, and the ACME account key), leave
                         # public cert material world-readable.
-                        if _PRIVATE_KEY_FILE_RE.search(target_path.name):
+                        # One predicate for what is key material — the same
+                        # one the share-safe archive uses to leave it out —
+                        # so a restored .pfx/.p12 or a keys/ copy lands 0600
+                        # like privkey.pem (review, #582).
+                        if _is_key_material(target_path) or _PRIVATE_KEY_FILE_RE.search(target_path.name):
                             os.chmod(target_path, 0o600)
                         else:
                             os.chmod(target_path, 0o644)
