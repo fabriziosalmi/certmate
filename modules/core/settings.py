@@ -102,6 +102,16 @@ SETTINGS_REJECT_KEYS = frozenset({
 
 SECRET_MASK_SENTINEL = '********'
 
+
+class SettingsUnreadableError(RuntimeError):
+    """settings.json is present but unusable, and no backup can replace it.
+
+    Raised instead of silently recreating the file. app.py wraps create_app in
+    try/except and exits 1, so the operator gets one clear line and a container
+    that stops, rather than an instance that came up with every credential set
+    to the mask sentinel.
+    """
+
 # Field-name pattern identifying secret-like keys. Must stay in sync with
 # the masking regex in modules/web/settings_routes.py so a value masked on
 # GET is also recognised on POST. An empty string in one of these fields
@@ -567,7 +577,8 @@ class SettingsManager:
         callers can react to validation failures.
         """
         with self._lock:
-            settings = self.load_settings()
+            # From disk, never from the request cache — see load_settings.
+            settings = self.load_settings(use_cache=False)
             mutator(settings)
             return self.save_settings(settings, reason)
 
@@ -586,7 +597,11 @@ class SettingsManager:
         credential for the same backend or CA provider.
         """
         with self._lock:
-            existing = self.load_settings()
+            # From disk, never from the request cache — see load_settings.
+            # `protected_keys` below restores users/api_keys from `existing`,
+            # so a cached `existing` made the protection restore a stale copy:
+            # it protected the snapshot, not the file.
+            existing = self.load_settings(use_cache=False)
             merged = {**existing, **incoming}
             for key, value in incoming.items():
                 if (key in _DEEP_MERGE_SETTINGS_KEYS
@@ -608,8 +623,45 @@ class SettingsManager:
                     del merged[key]
             return self.save_settings(merged)
 
+    @staticmethod
+    def _backup_can_restore_credentials(zf, names, settings):
+        """True iff this backup's secrets are real and not the mask sentinel.
+
+        Every AUTOMATIC backup is masked: `save_settings` calls
+        `create_unified_backup(settings, reason)` and `include_secrets`
+        defaults to False, which writes SECRET_MASK_SENTINEL in place of every
+        credential. That default is right — a leaked backup must not also be a
+        credential dump — but it means the newest backup on disk is almost
+        always one that CANNOT restore this instance.
+
+        The manifest has said so since unified backups existed
+        (`secrets_masked` in backup_metadata.json). Nothing read it. Older or
+        hand-made archives may not carry the field, so a missing flag falls
+        back to looking for the sentinel in the settings themselves rather
+        than assuming the archive is usable.
+        """
+        import json
+        if "backup_metadata.json" in names:
+            try:
+                metadata = json.loads(zf.read("backup_metadata.json").decode("utf-8"))
+                if isinstance(metadata, dict) and "secrets_masked" in metadata:
+                    return not metadata["secrets_masked"]
+            except (ValueError, KeyError, UnicodeDecodeError):
+                pass                       # fall through to the content check
+        return SECRET_MASK_SENTINEL not in json.dumps(settings)
+
     def _try_restore_from_backup(self):
-        """Attempt to restore settings from the most recent unified backup."""
+        """Restore settings from the most recent backup that can actually restore.
+
+        Returns None when every candidate is masked. The caller must not treat
+        that as "no backup found and I may recreate the file": installing a
+        masked archive writes the mask sentinel as every password hash, bearer
+        token, API key hash, OIDC client secret and DNS credential. No local
+        login works, no token works, SSO is broken, every renewal fails at the
+        provider — and `setup_completed` is still True, so the wizard does not
+        reopen. The log line said "Settings restored successfully from backup".
+        """
+        masked_only = []
         try:
             import io, zipfile, json
             from .file_operations import (
@@ -632,18 +684,30 @@ class SettingsManager:
                     with zipfile.ZipFile(zip_source, 'r') as zf:
                         if "settings.json" not in zf.namelist():
                             continue
+                        names = zf.namelist()
                         raw = json.loads(zf.read("settings.json").decode('utf-8'))
                         settings = raw.get('settings') if isinstance(raw, dict) and 'settings' in raw else raw
                         if isinstance(settings, dict) and settings:
+                            if not self._backup_can_restore_credentials(zf, names, settings):
+                                masked_only.append(backup_path.name)
+                                continue
                             logger.info(f"Restored settings from backup: {backup_path.name}")
                             return settings
                 except Exception as e:
                     logger.debug(f"Could not read backup {backup_path.name}: {e}")
         except Exception as e:
             logger.error(f"Backup restore failed: {e}")
+        if masked_only:
+            logger.error(
+                "Found %d recent backup(s) but every one of them has its "
+                "secrets masked, so restoring it would install the mask "
+                "sentinel as every credential and lock this instance out: %s. "
+                "A backup that can restore is made with include_secrets=true "
+                "(POST /api/backups/create).",
+                len(masked_only), ", ".join(masked_only))
         return None
 
-    def load_settings(self):
+    def load_settings(self, use_cache=True):
         """Load settings from file with improved error handling.
 
         Acquires the re-entrant lock so concurrent saves cannot observe a
@@ -653,8 +717,20 @@ class SettingsManager:
         return a deepcopy of the cached parsed dict. The cache is cleared
         on any successful save (atomic_update / save_settings) and lives
         only for the current request. See `_request_cache_*` above.
+
+        ``use_cache=False`` forces a disk read. Every read-modify-write MUST
+        pass it, because the cache is scoped to the request and not to the
+        lock: `update`/`atomic_update` hold `self._lock` for the whole
+        read-modify-write, which stops two writes interleaving, but a cached
+        base makes the "read" a snapshot taken when the request STARTED. On
+        the synchronous issuance path that snapshot is minutes old —
+        cert_service.py loads settings, runs certbot, then writes — so every
+        concurrent write (a user created, a domain registered, a credential
+        saved) was silently rolled back by whichever request finished last.
+        A domain rolled out of `settings['domains']` is never visited by
+        check_renewals again and its certificate expires in silence.
         """
-        cached = self._request_cache_get()
+        cached = self._request_cache_get() if use_cache else None
         if cached is not None:
             # Deepcopy so callers that mutate the returned dict (load →
             # mutate in place → save) don't pollute the request-scoped
@@ -801,11 +877,42 @@ class SettingsManager:
                 settings = self.file_ops.safe_file_read(self.settings_file, is_json=True)
                 if not isinstance(settings, dict):
                     logger.warning("Settings file exists but is empty or corrupted, attempting backup restore")
+                    # Empty and unreadable are different cases. The refusal
+                    # below exists to protect CONTENT a text editor could
+                    # repair; a zero-byte file has nothing to lose, so for it
+                    # the first-time template is still the right answer.
+                    # Unreadable (permissions) counts as "has content": we
+                    # cannot tell, and that is precisely where overwriting
+                    # destroys something good.
+                    try:
+                        has_content = bool(self.settings_file.read_text(
+                            encoding='utf-8', errors='replace').strip())
+                    except OSError:
+                        has_content = True
                     settings = self._try_restore_from_backup()
-                    if settings is None:
-                        logger.warning("No usable backup found, recreating settings with defaults")
+                    if settings is None and not has_content:
+                        logger.warning("Settings file is empty and no usable backup exists; "
+                                       "recreating it with the first-time template")
                         self.save_settings(first_time_template)
                         return first_time_template
+                    if settings is None:
+                        # Do NOT recreate the file. safe_file_read returns the
+                        # default for a JSON typo, a PermissionError and an
+                        # empty read alike, and settings.json is written
+                        # atomically (mkstemp + fsync + rename), so the
+                        # application never produces this state itself —
+                        # something outside it did. Overwriting with the
+                        # first-time template destroys the operator's only
+                        # copy of a file a text editor could have repaired,
+                        # and leaves the instance in setup mode, which is
+                        # world-open on the network.
+                        raise SettingsUnreadableError(
+                            f"{self.settings_file} exists but could not be "
+                            f"read as JSON, and no backup on disk can restore "
+                            f"it (see the log above). Refusing to overwrite "
+                            f"it. Fix the file, or restore a backup made with "
+                            f"include_secrets=true, then restart."
+                        )
                     logger.info("Settings restored successfully from backup")
 
                 # Downgrade detection: warn loudly if settings.json was saved
@@ -1021,6 +1128,15 @@ class SettingsManager:
                     return _copy.deepcopy(settings)
                 return settings
 
+            except SettingsUnreadableError:
+                # Must not be swallowed by the handler below. Returning the
+                # defaults in-memory leaves setup_completed False, which makes
+                # is_setup_mode() true and serves every gated endpoint to
+                # anonymous callers as admin — an instance that cannot read
+                # its own credentials must not come up world-open instead.
+                # app.py catches this and exits 1, so the operator gets a
+                # container that stops with one actionable line.
+                raise
             except Exception as e:
                 logger.error(f"Error loading settings: {e}")
                 logger.warning("Returning default settings in-memory (existing file preserved on disk)")

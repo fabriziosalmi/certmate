@@ -49,11 +49,18 @@
 
                     <!-- Enable toggle + provider name -->
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <label class="flex items-center space-x-2">
-                            <input type="checkbox" x-model="cfg.enabled"
-                                   class="h-4 w-4 text-primary focus:ring-primary border-border rounded">
-                            <span class="text-sm font-medium text-label">Enable OIDC/SSO</span>
-                        </label>
+                        <div>
+                            <label class="flex items-center space-x-2">
+                                <input type="checkbox" x-model="cfg.enabled"
+                                       class="h-4 w-4 text-primary focus:ring-primary border-border rounded">
+                                <span class="text-sm font-medium text-label">Enable OIDC/SSO</span>
+                            </label>
+                            <p class="text-xs text-muted mt-1">
+                                On an SSO-only instance this is the only thing keeping the
+                                instance closed. Saving with it off is refused unless local
+                                authentication or an API bearer token is configured first.
+                            </p>
+                        </div>
                         <div>
                             <label class="block text-xs text-muted mb-1">Provider display name</label>
                             <input type="text" x-model="cfg.provider_name" placeholder="SSO"

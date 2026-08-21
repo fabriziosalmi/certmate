@@ -3036,7 +3036,15 @@ def create_api_resources(api, models, managers):
                 pre_restore_backup = None
                 if create_backup:
                     current_settings = settings_manager.load_settings()
-                    pre_restore_backup = file_ops.create_unified_backup(current_settings, "pre_restore")
+                    # include_secrets=True: this archive exists for exactly one
+                    # purpose — putting the instance back if the restore below
+                    # goes wrong. A masked rollback cannot recover a single
+                    # credential, which makes it a file that looks like a
+                    # safety net and is not one. It never leaves the host and
+                    # is written chmod 0600, and the opt-in is audit-logged
+                    # with the restore entry below.
+                    pre_restore_backup = file_ops.create_unified_backup(
+                        current_settings, "pre_restore", include_secrets=True)
                     logger.info(f"Created pre-restore backup: {pre_restore_backup}")
 
                 # Restore from unified backup
