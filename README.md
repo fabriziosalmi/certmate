@@ -2044,8 +2044,12 @@ CertMate provides comprehensive backup and recovery capabilities built directly 
 - **Prevents Corruption**: Eliminates configuration/certificate mismatches
 - **Simplified Management**: One backup file contains everything needed for complete restoration
 
+**Two kinds of archive:**
+- **Share-safe** (the default, and what every automatic backup is): settings with every credential masked, and **no private keys** — no ACME `privkey.pem`, no ACME account key, no private-CA key, no `.pfx`. Certificates, chains, metadata, the audit chain and the inventory are all there. The manifest says so (`secrets_masked`, `key_material_excluded`). Such an archive cannot restore an instance on its own, and the restore path refuses to pretend otherwise.
+- **Disaster recovery**: `POST /api/backups/create` with `{"include_secrets": true}` (admin, audited) — plaintext settings and every key. Set `CERTMATE_BACKUP_PASSPHRASE` so it is encrypted at rest; that is the archive to keep off-site.
+
 **Automatic Backups:**
-- **Unified Snapshots** - Automatically created when DNS providers, domains, certificates, or application settings are modified
+- **Unified Snapshots** - Automatically created when DNS providers, domains, certificates, or application settings are modified (share-safe, see above)
 - **Retention Management** - Configurable retention policy (default: 10 most recent backups)
 - **Automatic Cleanup** - Old backups are automatically removed based on retention settings
 

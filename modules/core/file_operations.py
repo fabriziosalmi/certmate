@@ -59,6 +59,36 @@ _PRIVATE_KEY_FILE_RE = re.compile(
 # straight to disk around that gate.
 _BACKUP_DATA_SUBTREES = ('certs', 'audit', 'inventory')
 
+# Key material: what a share-safe (include_secrets=False) backup must NOT carry.
+# The settings tree was masked since the May 2026 audit, but the archive still
+# walked every certificate directory and data/certs/ — so a "masked" backup
+# held every ACME private key, the ACME account key and the private CA key,
+# while its manifest said secrets_masked=True and two docstrings called it
+# share-safe. A .pfx/.p12 bundle contains the key too, and pfx_password may be
+# empty.
+_KEY_FILE_SUFFIXES = frozenset({'.key', '.pfx', '.p12'})
+
+
+def _is_key_material(path) -> bool:
+    """True for a file that carries a private key."""
+    name = path.name.lower()
+    if name.startswith('privkey') and name.endswith('.pem'):
+        return True
+    if name == 'private_key.json':
+        return True
+    return path.suffix.lower() in _KEY_FILE_SUFFIXES
+
+
+_BACKUP_REASON_RE = re.compile(r'[^A-Za-z0-9_.-]+')
+
+
+def _safe_backup_reason(reason) -> str:
+    """``backup_reason`` lands in the archive file name; keep it to a short
+    token so a reason such as ``../../etc`` cannot steer the write outside
+    backups/unified/."""
+    cleaned = _BACKUP_REASON_RE.sub('_', str(reason or 'manual')).strip('._-')
+    return (cleaned or 'manual')[:48]
+
 # Per-entry ceiling when restoring the data/ subtrees. Deliberately far above
 # the 10 MB used for PEM files: certificate_audit.log is append-only and grows
 # with every operation, and an audit chain restored with a hole in it is
@@ -270,17 +300,25 @@ class FileOperations:
     def create_unified_backup(self, settings_data, backup_reason="manual", include_secrets=False):
         """Create a unified backup containing both settings and certificates.
 
-        ``include_secrets`` controls whether secret-bearing fields in
-        ``settings_data`` (DNS provider tokens, storage backend
+        ``include_secrets`` decides what kind of archive this is.
+
+        ``False`` (default) is the **share-safe** archive: secret-bearing
+        fields in ``settings_data`` (DNS provider tokens, storage backend
         credentials, ``api_bearer_token``, ``smtp_password``, OIDC
-        ``client_secret``, user password hashes, …) appear in plaintext
-        in the resulting zip. Default ``False`` writes the canonical
-        mask sentinel in place of every secret, so a leaked backup file
-        does NOT also leak every CertMate credential. The opt-in
-        ``include_secrets=True`` path produces a plaintext backup for
-        full disaster-recovery use; callers MUST audit-log the opt-in
-        because the resulting file on disk is now a credential dump
-        that survives outside the API role gate.
+        ``client_secret``, user password hashes, …) are written as the
+        canonical mask sentinel, AND no key material is carried — no
+        ``privkey*.pem``, no ACME account ``private_key.json``, no
+        ``.key``/``.pfx``/``.p12`` under data/certs/ (the private CA key
+        included). Certificates, chains, metadata, the audit chain and
+        the inventory are all there. Such an archive cannot restore an
+        instance on its own (the manifest says so: ``secrets_masked`` +
+        ``key_material_excluded``), and the restore path knows it.
+
+        ``True`` is the **disaster-recovery** archive: plaintext settings
+        and every key. Callers MUST audit-log the opt-in because the file
+        on disk is now a credential dump that survives outside the API
+        role gate. With ``CERTMATE_BACKUP_PASSPHRASE`` set the payload is
+        encrypted at rest, which is the intended way to keep one.
 
         Output file is always chmod 0600 — only the certmate process
         user can read it — so backup-dir-readable threats (rsync,
@@ -289,7 +327,10 @@ class FileOperations:
         """
         try:
             timestamp = utc_now().strftime("%Y%m%d_%H%M%S_%f")
+            backup_reason = _safe_backup_reason(backup_reason)
             backup_id = f"backup_{timestamp}_{backup_reason}"
+            exclude_keys = not include_secrets
+            key_files_excluded = 0
             passphrase = _backup_passphrase()
             backup_filename = f"{backup_id}{_BACKUP_ENC_SUFFIX if passphrase else '.zip'}"
             backup_path = self.backup_dir / "unified" / backup_filename
@@ -337,6 +378,11 @@ class FileOperations:
                 # operator inspecting an old archive can see whether it's
                 # a share-safe (masked) snapshot or a full-restore one.
                 "secrets_masked": not include_secrets,
+                # Share-safe archives carry no private keys (ACME keys,
+                # account key, private CA key, PKCS#12 bundles). The count
+                # is filled in below, once the tree has been walked.
+                "key_material_excluded": exclude_keys,
+                "key_files_excluded": 0,
                 "encrypted": bool(passphrase),
             }
 
@@ -345,12 +391,12 @@ class FileOperations:
             # plaintext zip to disk, not even transiently.
             zip_buffer = io.BytesIO()
             with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zipf:
-                # Add settings data
+                # settings.json is written after the file walk (below), so
+                # its manifest copy carries the final key_files_excluded.
                 settings_backup = {
                     "metadata": metadata,
                     "settings": settings_to_write
                 }
-                zipf.writestr("settings.json", json.dumps(settings_backup, indent=2))
 
                 # Reuse the domain_dirs list from above instead of doing a
                 # second iterdir + is_dir() on the same cert_dir.
@@ -367,6 +413,9 @@ class FileOperations:
                         rel_parts = cert_file.relative_to(domain_dir).parts
                         if rel_parts and rel_parts[0] in _BACKUP_EXCLUDE_DIRS:
                             continue
+                        if exclude_keys and _is_key_material(cert_file):
+                            key_files_excluded += 1
+                            continue
                         # Add file to zip with relative path under certificates/
                         arc_path = f"certificates/{cert_file.relative_to(self.cert_dir)}"
                         zipf.write(cert_file, arc_path)
@@ -377,9 +426,14 @@ class FileOperations:
                 # were previously absent from every backup — silently, since
                 # total_domains still looked right.
                 for data_file in data_files:
+                    if exclude_keys and _is_key_material(data_file):
+                        key_files_excluded += 1
+                        continue
                     zipf.write(data_file, f"data/{data_file.relative_to(self.data_dir)}")
 
-                # Add unified metadata
+                # Manifest, in both places it lives, with the final count.
+                metadata["key_files_excluded"] = key_files_excluded
+                zipf.writestr("settings.json", json.dumps(settings_backup, indent=2))
                 zipf.writestr("backup_metadata.json", json.dumps(metadata, indent=2))
 
             payload = zip_buffer.getvalue()
@@ -398,8 +452,10 @@ class FileOperations:
                 logger.warning(f"Could not tighten permissions on {backup_path}: {perm_err}")
 
             mode_tag = 'plaintext' if include_secrets else 'masked'
+            keys_tag = 'included' if include_secrets else f'excluded ({key_files_excluded} files)'
             enc_tag = 'encrypted' if passphrase else 'cleartext'
-            logger.info(f"Unified backup created: {backup_filename} (contains {len(domains)} domains; secrets={mode_tag}; at-rest={enc_tag})")
+            logger.info(f"Unified backup created: {backup_filename} (contains {len(domains)} domains; "
+                        f"secrets={mode_tag}; keys={keys_tag}; at-rest={enc_tag})")
             self._prune_unified_backups()
             self._upload_backup_offsite(backup_path, backup_filename, settings_data,
                                         encrypted=bool(passphrase))
