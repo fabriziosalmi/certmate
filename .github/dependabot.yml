@@ -61,6 +61,13 @@ updates:
       - dependency-name: "pyopenssl"
       - dependency-name: "cryptography"
       - dependency-name: "dns-lexicon"
+      # python-cloudflare 3.x+ is a different SDK under the same name.
+      # certbot-dns-cloudflare 2.10.0 imports the 2.x client and declares
+      # only `cloudflare>=1.5.1`, so pip resolves a 5.x bump happily and
+      # certbot dies at import — tests/test_requirements_sets.py caught it
+      # on #568. Moves with #103. Ignored entirely, like the rest of the
+      # held set: 2.19.4 is where the 2.x line the plugin understands ends.
+      - dependency-name: "cloudflare"
 
   - package-ecosystem: "npm"
     directories:

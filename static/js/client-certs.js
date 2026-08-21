@@ -12,10 +12,47 @@
     var ccCurrentStatus = '';  // '' = all — driven by the status filter chips
     var _initialized = false;
 
+    // The chips are remembered across page loads, and "Active" is the
+    // starting point: a client CA accumulates revoked and short-lived
+    // certificates quickly, and a list that opens on all of them — and
+    // snapped back to all of them after every revoke — meant re-clicking
+    // the same chip between each action (#562).
+    var CC_FILTER_KEY = 'cm.clientTab.filters';
+
+    function ccRememberFilters() {
+        try {
+            localStorage.setItem(CC_FILTER_KEY, JSON.stringify({ status: ccCurrentStatus, usage: ccCurrentUsage }));
+        } catch (e) { /* private mode / quota: a preference, not a feature */ }
+    }
+
+    function ccRestoreFilters() {
+        var status = 'active', usage = '';
+        try {
+            var saved = JSON.parse(localStorage.getItem(CC_FILTER_KEY) || 'null');
+            if (saved && typeof saved === 'object') {
+                if (['', 'active', 'revoked'].indexOf(saved.status) !== -1) status = saved.status;
+                if (typeof saved.usage === 'string') usage = saved.usage;
+            }
+        } catch (e) { /* fall through to the defaults */ }
+        ccCurrentStatus = status;
+        ccCurrentUsage = usage;
+        ccPressChips();
+    }
+
+    function ccPressChips() {
+        document.querySelectorAll('[data-cc-status-chip]').forEach(function (chip) {
+            chip.setAttribute('aria-pressed', chip.getAttribute('data-cc-status-chip') === ccCurrentStatus ? 'true' : 'false');
+        });
+        document.querySelectorAll('[data-cc-usage-chip]').forEach(function (chip) {
+            chip.setAttribute('aria-pressed', chip.getAttribute('data-cc-usage-chip') === ccCurrentUsage ? 'true' : 'false');
+        });
+    }
+
     // Public init — called when client tab becomes visible
     window.initClientCerts = function() {
         if (_initialized) return;
         _initialized = true;
+        ccRestoreFilters();
         ccLoadStatistics();
         ccLoadCertificates();
         ccSetupEventListeners();
@@ -82,11 +119,20 @@
             .catch(function(e) { console.error('Error loading client cert statistics:', e); });
     }
 
+    // Every (re)load applies the current chips, so a revoke or renew that
+    // refreshes the list lands back in the same view (#562).
     function ccLoadCertificates() {
+        var usage = ccCurrentUsage;
+        var status = ccCurrentStatus;
         fetch('/api/client-certs')
             .then(function(r) { return r.json(); })
             .then(function(data) {
-                certificatesData = data.certificates || [];
+                var all = data.certificates || [];
+                certificatesData = all.filter(function(cert) {
+                    var matchUsage = !usage || cert.cert_usage === usage;
+                    var matchStatus = !status || (status === 'active' && !cert.revoked) || (status === 'revoked' && cert.revoked);
+                    return matchUsage && matchStatus;
+                });
                 ccRenderCertificates();
             })
             .catch(function(e) { console.error('Error loading client certificates:', e); });
@@ -352,16 +398,14 @@
     // rest reset. ccCurrent{Status,Usage} are the source of truth read below.
     function ccSetStatusFilter(value) {
         ccCurrentStatus = value;
-        document.querySelectorAll('[data-cc-status-chip]').forEach(function (chip) {
-            chip.setAttribute('aria-pressed', chip.getAttribute('data-cc-status-chip') === value ? 'true' : 'false');
-        });
+        ccPressChips();
+        ccRememberFilters();
         ccFilterCertificates();
     }
     function ccSetUsageFilter(value) {
         ccCurrentUsage = value;
-        document.querySelectorAll('[data-cc-usage-chip]').forEach(function (chip) {
-            chip.setAttribute('aria-pressed', chip.getAttribute('data-cc-usage-chip') === value ? 'true' : 'false');
-        });
+        ccPressChips();
+        ccRememberFilters();
         ccFilterCertificates();
     }
     function ccRefresh() {
@@ -372,24 +416,10 @@
     window.ccSetUsageFilter = ccSetUsageFilter;
     window.ccRefresh = ccRefresh;
 
+    // Free-text CN/email search lives in the global ⌘K palette; the chips are
+    // applied by the loader itself.
     function ccFilterCertificates() {
-        var usage = ccCurrentUsage;
-        var status = ccCurrentStatus;
-
-        // Re-fetch original data and filter (free-text CN/email search now lives
-        // in the global ⌘K palette).
-        fetch('/api/client-certs')
-            .then(function(r) { return r.json(); })
-            .then(function(data) {
-                var all = data.certificates || [];
-                certificatesData = all.filter(function(cert) {
-                    var matchUsage = !usage || cert.cert_usage === usage;
-                    var matchStatus = !status || (status === 'active' && !cert.revoked) || (status === 'revoked' && cert.revoked);
-                    return matchUsage && matchStatus;
-                });
-                ccRenderCertificates();
-            })
-            .catch(function(e) { console.error('Error filtering client certificates:', e); });
+        ccLoadCertificates();
     }
 
     function ccShowCertDetails(id) {
@@ -451,11 +481,33 @@
         }
     });
 
+    // Fetch, then hand the bytes to the browser: a refusal (no PFX password
+    // configured, viewer role on .key/.pfx) comes back as a toast with the
+    // server's reason instead of a bare JSON error page (#561).
     window.downloadCertFile = function(type) {
         if (!currentCertId) return;
         if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(currentCertId)) return;
-        if (['crt', 'key', 'csr'].indexOf(type) === -1) return;
-        window.location.href = '/api/client-certs/' + encodeURIComponent(currentCertId) + '/download/' + encodeURIComponent(type);
+        if (['crt', 'key', 'csr', 'pfx'].indexOf(type) === -1) return;
+        var id = currentCertId;
+        var url = '/api/client-certs/' + encodeURIComponent(id) + '/download/' + encodeURIComponent(type);
+        fetch(url, { credentials: 'same-origin' })
+            .then(function(r) {
+                if (r.ok) return r.blob().then(function(blob) {
+                    var a = document.createElement('a');
+                    var href = URL.createObjectURL(blob);
+                    a.href = href;
+                    a.download = id + '.' + type;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    setTimeout(function() { URL.revokeObjectURL(href); }, 1000);
+                });
+                return r.json().catch(function() { return {}; }).then(function(body) {
+                    var reason = (body && (body.message || body.error)) || ('HTTP ' + r.status);
+                    CertMate.toast(reason, 'error');
+                });
+            })
+            .catch(function() { CertMate.toast('Download failed', 'error'); });
     };
 
     function ccRevokeCert(id) {
