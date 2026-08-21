@@ -84,6 +84,9 @@
             <button type="button" onclick="downloadCertFile('csr')" aria-label="Download CSR file" class="btn btn-secondary flex-1 min-w-[6rem]">
                 <i class="fas fa-download mr-1.5"></i> .csr
             </button>
+            <button type="button" onclick="downloadCertFile('pfx')" aria-label="Download PKCS#12 bundle (certificate and private key, encrypted with the PFX password from Settings)" title="PKCS#12 bundle for Windows / browsers — encrypted with the PFX password set in Settings → General" class="btn btn-secondary flex-1 min-w-[6rem] text-warning-fg">
+                <i class="fas fa-file-archive mr-1.5"></i> .pfx
+            </button>
         </div>
     </div>
 </div>
