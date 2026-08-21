@@ -477,14 +477,17 @@ jobs:
         logformat = "text"
         CFG
 
-        for i in $(seq 1 30); do
-          docker exec acmedns-pg pg_isready -U acmedns >/dev/null 2>&1 && break
+        # Readiness over TCP (-h): during initdb the image's bootstrap server
+        # answers on the unix socket only, then restarts for real. 90 s: a
+        # cold runner has been seen to take more than 30 (#566).
+        for i in $(seq 1 90); do
+          docker exec acmedns-pg pg_isready -h 127.0.0.1 -U acmedns -d acmedns >/dev/null 2>&1 && break
           sleep 1
         done
         # The loop above breaks on success and falls through on timeout; say
         # so here, or the acme-dns container fails later with a less useful
         # error (Copilot, #560).
-        docker exec acmedns-pg pg_isready -U acmedns >/dev/null 2>&1 \
+        docker exec acmedns-pg pg_isready -h 127.0.0.1 -U acmedns -d acmedns >/dev/null 2>&1 \
           || { echo "postgres never became ready"; docker logs acmedns-pg; exit 1; }
 
         docker run -d --name acmedns --network acmedns-net \

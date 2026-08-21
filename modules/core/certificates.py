@@ -308,12 +308,27 @@ class CertificateManager:
         returns before this copy ever runs again, so nothing repaired it and
         check_renewals booked it as skipped_not_due — no failure, no alert.
 
-        Staging every file first means a failure mid-way leaves the flat copy
-        exactly as it was: still the old certificate, still internally
-        consistent, still serving. The promote loop is four renames within the
-        same directory, which is as close to atomic as a multi-file publish
-        gets on a POSIX filesystem.
+        Staging every file first means a failure while staging leaves the
+        flat copy exactly as it was: still the old certificate, still
+        internally consistent, still serving. The promote loop is four renames
+        within the same directory — not a transaction: a failure between the
+        second and the third rename still leaves a mixed generation. What
+        changed is that the window shrank from four full read+write copies to
+        four metadata renames, and that the state is no longer permanent: the
+        next renewal check compares the flat copy with live/ and republishes
+        (see the not-yet-due branch of renew_certificate), where the old code
+        returned before the copy loop and booked skipped_not_due forever.
+        Promoting privkey.pem first would not help — new key beside old
+        certificate is just as unusable.
         """
+        # Leftovers from an attempt that died between staging and promote
+        # (SIGKILL, OOM, container stopped) are cleaned by nobody else; the
+        # caller holds the domain lock, so whatever is here is from a dead
+        # attempt and not from a publish in flight. Four known names, no
+        # wildcard: this is a delete, and the set of files it can ever touch
+        # is spelled out here rather than matched.
+        for file_name in CERTIFICATE_FILES:
+            (dest_dir / f"{file_name}.staging").unlink(missing_ok=True)
         staged = []
         try:
             for file_name in CERTIFICATE_FILES:

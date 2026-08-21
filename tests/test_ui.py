@@ -124,38 +124,39 @@ class TestSettingsUI:
         expect(cloudflare_card).to_be_visible(timeout=5000)
 
     def test_auth_security_banner_visible(self, browser_page):
+        """Disabling local auth on an instance where it is the only credential
+        is refused (409) since #581: it would put the instance back into setup
+        mode, where every endpoint answers an anonymous caller as admin. So the
+        'authentication is disabled' banner must NOT appear, the toggle must
+        stay on, and the refusal must say why. (Before #581 this test disabled
+        auth and asserted the banner; that path is now the guarded one.)"""
         browser_page.goto(f"{BASE_URL}/settings")
         browser_page.wait_for_load_state("networkidle")
 
-        # Disable local auth via browser fetch (authenticated via session cookie)
-        browser_page.evaluate("""
-            fetch('/api/auth/config', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({local_auth_enabled: false})
-            })
+        result = browser_page.evaluate("""
+            async () => {
+                const r = await fetch('/api/auth/config', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({local_auth_enabled: false})
+                });
+                return {status: r.status, body: await r.json()};
+            }
         """)
-        browser_page.wait_for_timeout(500)
+        assert result["status"] == 409, result
+        assert "setup mode" in (result["body"].get("hint") or ""), result
 
-        # Reload to pick up change
+        # Reload: the door stayed closed, so no banner.
         browser_page.reload()
         browser_page.wait_for_load_state("networkidle")
-
-        # Banner is inside the Users tab — switch to it first
         browser_page.locator('button[role="tab"]:has-text("Users")').click(timeout=10000)
         browser_page.wait_for_timeout(500)
+        expect(browser_page.locator("#authSecurityBanner")).to_be_hidden()
 
-        banner = browser_page.locator("#authSecurityBanner")
-        expect(banner).to_be_visible(timeout=10000)
-
-        # Re-enable auth for subsequent tests
-        browser_page.evaluate("""
-            fetch('/api/auth/config', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({local_auth_enabled: true})
-            })
+        still_on = browser_page.evaluate("""
+            async () => { const r = await fetch('/api/auth/config'); return (await r.json()); }
         """)
+        assert still_on.get("local_auth_enabled") is True, still_on
 
     def test_save_settings_button(self, browser_page):
         browser_page.goto(f"{BASE_URL}/settings")
@@ -332,3 +333,142 @@ class TestHelpPageUI:
         browser_page.goto(f"{BASE_URL}/help")
         browser_page.wait_for_load_state("networkidle")
         expect(browser_page.locator("section#troubleshooting")).to_be_visible()
+
+
+class TestDnsAccountSelector:
+    """#563 — with several accounts on one DNS provider, the create form has
+    to offer them. The selector existed in the markup but never appeared:
+    the loader read ``data.accounts`` off a response that is a plain list,
+    so every certificate went to the default account regardless of zone."""
+
+    def test_account_selector_lists_the_configured_accounts(self, browser_page):
+        browser_page.goto(f"{BASE_URL}/settings")
+        browser_page.wait_for_load_state("networkidle")
+        browser_page.evaluate("""
+            async () => {
+                for (const [id, name] of [['zone-a', 'Zone A'], ['zone-b', 'Zone B']]) {
+                    const r = await fetch('/api/dns/cloudflare/accounts/' + id, {
+                        method: 'PUT',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({name: name, api_token: 'test-token-' + id})
+                    });
+                    if (!r.ok) throw new Error('PUT account ' + id + ' -> ' + r.status);
+                }
+            }
+        """)
+
+        browser_page.goto(BASE_URL)
+        expect(browser_page.locator("#domain")).to_be_visible(timeout=10000)
+        browser_page.select_option("#dns_provider_select", "cloudflare")
+
+        container = browser_page.locator("#account-selection-container")
+        expect(container).to_be_visible(timeout=10000)
+        select = browser_page.locator("#account_select")
+        # "Use default account" + the two configured ones (+ whatever account
+        # the default settings already carry for the provider).
+        values = select.locator("option").evaluate_all("els => els.map(e => e.value)")
+        assert "" in values and "zone-a" in values and "zone-b" in values, values
+        expect(select).to_contain_text("Zone A")
+        expect(select).to_contain_text("Zone B")
+
+        # Pick the non-default one and make sure the value that would be
+        # posted is its account_id, not a label.
+        browser_page.select_option("#account_select", "zone-b")
+        assert browser_page.eval_on_selector("#account_select", "el => el.value") == "zone-b"
+
+        # Another provider with no accounts: the selector hides again.
+        browser_page.select_option("#dns_provider_select", "hetzner")
+        expect(container).to_be_hidden()
+
+
+class TestClientCertListKeepsItsFilter:
+    """#562 / #561 — the client list opens on Active, keeps that view across
+    a refresh (the post-revoke reload used to snap back to All), remembers
+    it across page loads, and the details panel offers the .pfx bundle the
+    API has served since v2.24.0 but the UI never exposed."""
+
+    @staticmethod
+    def _drop_wizard(page):
+        # The first-run wizard is a fixed overlay (#setupWizard, z-[110]) that
+        # intercepts every click on a fresh container; other tests remove it
+        # the same way.
+        page.evaluate(
+            "() => { const w = document.getElementById('setupWizard'); if (w) w.remove(); }")
+
+    def _open_client_tab(self, page):
+        page.goto(BASE_URL)
+        page.wait_for_load_state("domcontentloaded")
+        # The server/client segmented control is Alpine-bound; give the
+        # deferred x-data a moment, then switch to the client view.
+        client_btn = page.locator("#certViewClientBtn")
+        expect(client_btn).to_be_visible(timeout=10000)
+        page.wait_for_timeout(1000)
+        self._drop_wizard(page)
+        client_btn.click()
+        expect(client_btn).to_have_attribute("aria-pressed", "true", timeout=10000)
+        page.wait_for_timeout(800)
+
+    def test_active_is_the_view_and_it_survives_refresh_and_reload(self, browser_page):
+        browser_page.goto(f"{BASE_URL}/settings")
+        browser_page.wait_for_load_state("networkidle")
+        ids = browser_page.evaluate("""
+            async () => {
+                const out = [];
+                for (const cn of ['filter-keep-a', 'filter-keep-b']) {
+                    const r = await fetch('/api/client-certs/create', {
+                        method: 'POST', headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({common_name: cn, cert_usage: 'api-mtls', days_valid: 30})
+                    });
+                    if (!r.ok) throw new Error('create ' + cn + ' -> ' + r.status);
+                    const body = await r.json();
+                    out.push(body.identifier || (body.certificate && body.certificate.identifier));
+                }
+                return out;
+            }
+        """)
+        assert len(ids) == 2 and all(ids), ids
+        browser_page.evaluate("localStorage.removeItem('cm.clientTab.filters')")
+
+        self._open_client_tab(browser_page)
+        active_chip = browser_page.locator('[data-cc-status-chip="active"]')
+        expect(active_chip).to_have_attribute("aria-pressed", "true")
+        # Assert on our two identifiers, not on a global count: the container
+        # is session-scoped and other tests may leave certificates behind.
+
+        def row(identifier):
+            return browser_page.locator(
+                '#certTableBody button[data-cc-action="details"][data-id="%s"]' % identifier)
+        expect(row(ids[0])).to_be_visible(timeout=10000)
+        expect(row(ids[1])).to_be_visible(timeout=10000)
+
+        # Revoke one through the API and refresh the way the Revoke button
+        # does: the view must still be Active, with one row fewer.
+        browser_page.evaluate("""
+            async (id) => {
+                const r = await fetch('/api/client-certs/' + id + '/revoke', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({reason: 'test'})
+                });
+                if (!r.ok) throw new Error('revoke -> ' + r.status);
+                window.ccRefresh();
+            }
+        """, ids[0])
+        expect(row(ids[0])).to_have_count(0, timeout=10000)
+        expect(row(ids[1])).to_be_visible()
+        expect(active_chip).to_have_attribute("aria-pressed", "true")
+
+        # Remembered across a page load.
+        self._drop_wizard(browser_page)
+        browser_page.locator('[data-cc-status-chip="revoked"]').click()
+        expect(row(ids[0])).to_be_visible(timeout=10000)
+        expect(row(ids[1])).to_have_count(0)
+        self._open_client_tab(browser_page)
+        expect(browser_page.locator('[data-cc-status-chip="revoked"]')).to_have_attribute("aria-pressed", "true")
+        expect(row(ids[0])).to_be_visible(timeout=10000)
+        expect(row(ids[1])).to_have_count(0)
+
+        # The details panel has the PKCS#12 button next to crt/key/csr.
+        self._drop_wizard(browser_page)
+        row(ids[0]).click()
+        pfx = browser_page.locator('button[onclick="downloadCertFile(\'pfx\')"]')
+        expect(pfx).to_be_visible(timeout=5000)
