@@ -654,7 +654,11 @@ class OIDCManager:
                 # local-only until somebody logged in again (#564).
                 loader = getattr(client, 'load_server_metadata', None)
                 if callable(loader):
-                    metadata = loader() or {}
+                    # Some Authlib versions return the dict, others only
+                    # populate client.server_metadata — accept either.
+                    metadata = (loader()
+                                or getattr(client, 'server_metadata', None)
+                                or {})
                     end_session = metadata.get('end_session_endpoint')
             if not end_session:
                 return None

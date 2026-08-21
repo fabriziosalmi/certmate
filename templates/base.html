@@ -153,8 +153,8 @@
         fetch('/api/auth/logout',{method:'POST',credentials:'same-origin'})
             .then(function(r){return r.json().catch(function(){return {};});})
             .then(function(data){
-                var next = (data && typeof data.oidc_logout_url === 'string' && /^https?:\/\//.test(data.oidc_logout_url))
-                    ? data.oidc_logout_url : '/login';
+                var url = (data && typeof data.oidc_logout_url === 'string') ? data.oidc_logout_url.trim() : '';
+                var next = /^https?:\/\//i.test(url) ? url : '/login';
                 window.location.href = next;
             })
             .catch(function(){window.location.href='/login'});

@@ -75,9 +75,15 @@ def test_the_logout_button_follows_the_url_the_backend_returns():
     it fixed. The frontend must read the body and go where it says; a
     local session (no URL) still lands on /login."""
     html = (REPO / 'templates' / 'base.html').read_text(encoding='utf-8')
-    match = re.search(r'function doLogout\(\)\{(.*?)\n    \}', html, re.S)
-    assert match, 'doLogout() not found in base.html'
-    body = match.group(1)
+    start = re.search(r'function doLogout\(\)\s*\{', html)
+    assert start, 'doLogout() not found in base.html'
+    # Walk to the matching brace rather than trusting indentation.
+    depth, i = 1, start.end()
+    while depth and i < len(html):
+        depth += {'{': 1, '}': -1}.get(html[i], 0)
+        i += 1
+    assert depth == 0, 'doLogout() body did not close'
+    body = html[start.end():i - 1]
     assert 'oidc_logout_url' in body, (
         'doLogout() ignores the response body — the IdP session is never '
         'terminated (#564)')
@@ -119,7 +125,10 @@ def test_end_session_url_is_built_after_a_restart(tmp_path):
     oidc = OIDCManager(sm, am)
 
     class _ColdClient:
-        """What Authlib looks like before its first network call."""
+        """What Authlib looks like before its first network call. Returns
+        None from the loader and only populates the attribute — the shape
+        Copilot flagged as unhandled on #573; the dict-returning shape is
+        covered by the same branch."""
         server_metadata = {}
         loads = 0
 
@@ -127,7 +136,7 @@ def test_end_session_url_is_built_after_a_restart(tmp_path):
             self.loads += 1
             self.server_metadata = {
                 'end_session_endpoint': 'https://idp.example.com/logout'}
-            return self.server_metadata
+            return None
 
     cold = _ColdClient()
     oidc._client = lambda app: cold  # type: ignore[assignment]
