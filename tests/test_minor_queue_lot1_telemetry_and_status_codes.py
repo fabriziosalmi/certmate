@@ -143,9 +143,15 @@ def _metrics_body(tmp_path, domain, cert_info):
         'certificates': SimpleNamespace(get_certificate_info=lambda d, *a, **k: cert_info if d == domain else None),
         'cache': SimpleNamespace(get_stats=lambda: {'total_entries': 0}),
     }
+    # The collector refreshes at most once per 30 s (should_collect); the
+    # tests in this file scrape back to back, so make each scrape real.
+    from modules.core import metrics as metrics_module
+    metrics_module.metrics_collector.last_collection = 0
     app = Flask(__name__)
     register_misc_routes(app, managers, passthrough, SimpleNamespace(require_role=passthrough))
-    return app.test_client().get('/metrics').get_data(as_text=True)
+    body = app.test_client().get('/metrics').get_data(as_text=True)
+    metrics_module.metrics_collector.last_collection = 0   # leave it fresh for the next test
+    return body
 
 
 def _sample(body, metric, domain):
