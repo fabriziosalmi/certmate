@@ -83,7 +83,7 @@ certbot-dns-desec==1.3.2
 #   pip install certbot-dns-scaleway==0.0.7
 
 # Cloud SDK dependencies
-boto3==1.43.72                    # AWS support
+boto3==1.43.73                    # AWS support
 azure-identity==1.25.3             # Azure support
 azure-mgmt-dns==9.0.0              # Azure DNS support
 google-cloud-dns==0.37.0           # Google Cloud support
@@ -93,7 +93,7 @@ dns-lexicon==3.25.1                # Provider-neutral DNS API support for alias 
 # Core application dependencies
 urllib3!=2.2.0,>=2.7.0,<3      # CVE-2025-66418, CVE-2025-66471, CVE-2026-21441 (HIGH)
 requests==2.34.2
-python-dotenv==1.2.2
+python-dotenv==1.2.3
 APScheduler==3.11.3
 cryptography==46.0.7               # GHSA-537c-gmf6-5ccf (HIGH) is open by choice: 48.0.1 needs pyopenssl>=26.2.0, which breaks acme 3.3.0 at import. See SECURITY.md "Known dependency constraint"; unblocked by the certbot 5.x epic (#103).
 pyopenssl==26.0.0                  # Requires cryptography>=46.0.0,<47. Do not bump to 26.2.0+: it removes OpenSSL.crypto.X509Extension, which acme==3.3.0 evaluates at import time (certbot crashes). See SECURITY.md.
