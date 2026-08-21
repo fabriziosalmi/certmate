@@ -363,8 +363,10 @@ class TestDnsAccountSelector:
         container = browser_page.locator("#account-selection-container")
         expect(container).to_be_visible(timeout=10000)
         select = browser_page.locator("#account_select")
-        # "Use default account" + the two configured ones.
-        expect(select.locator("option")).to_have_count(3)
+        # "Use default account" + the two configured ones (+ whatever account
+        # the default settings already carry for the provider).
+        values = select.locator("option").evaluate_all("els => els.map(e => e.value)")
+        assert "" in values and "zone-a" in values and "zone-b" in values, values
         expect(select).to_contain_text("Zone A")
         expect(select).to_contain_text("Zone B")
 
