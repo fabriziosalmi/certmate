@@ -265,6 +265,76 @@ class CertificateManager:
             tmp.unlink(missing_ok=True)
             raise
 
+    def _stale_flat_files(self, src_dir: Path, dest_dir: Path):
+        """Which of CERTIFICATE_FILES differ between live/ and the flat copy.
+
+        `live/<domain>/` is certbot's copy and the only ground truth. The flat
+        files beside it are what /download serves, what deploy hooks ship and
+        what the storage backends push, so any disagreement between the two is
+        an operator-visible defect regardless of how it happened.
+
+        Returns [] when the live directory is absent — an imported or
+        externally-managed certificate has nothing to reconcile against, and
+        must not be reported as stale.
+        """
+        if not src_dir.is_dir():
+            return []
+        stale = []
+        for file_name in CERTIFICATE_FILES:
+            src_file, dest_file = src_dir / file_name, dest_dir / file_name
+            if not src_file.exists():
+                continue
+            try:
+                if (not dest_file.exists()
+                        or src_file.read_bytes() != dest_file.read_bytes()):
+                    stale.append(file_name)
+            except OSError:
+                stale.append(file_name)
+        return stale
+
+    def _publish_flat_files(self, src_dir: Path, dest_dir: Path) -> dict:
+        """Copy live/ to the flat directory as one unit, not four.
+
+        `_atomic_binary_copy` is atomic per file and there was no atomicity
+        across the four, no rollback on the exception paths, and privkey.pem is
+        LAST in CERTIFICATE_FILES. A failure on the fourth file therefore left
+        a new cert.pem, chain.pem and fullchain.pem beside the PREVIOUS
+        privkey.pem — a pair that cannot complete a handshake, served straight
+        off local disk by /api/certificates/<domain>/download and pushed to
+        every deploy hook.
+
+        Worse than the window was the permanence: the next scheduled renewal
+        fingerprints live/, finds it already fresh, concludes renewed=False and
+        returns before this copy ever runs again, so nothing repaired it and
+        check_renewals booked it as skipped_not_due — no failure, no alert.
+
+        Staging every file first means a failure mid-way leaves the flat copy
+        exactly as it was: still the old certificate, still internally
+        consistent, still serving. The promote loop is four renames within the
+        same directory, which is as close to atomic as a multi-file publish
+        gets on a POSIX filesystem.
+        """
+        staged = []
+        try:
+            for file_name in CERTIFICATE_FILES:
+                src_file = src_dir / file_name
+                if not src_file.exists():
+                    continue
+                staging = dest_dir / f"{file_name}.staging"
+                staging.write_bytes(src_file.read_bytes())
+                shutil.copymode(src_file, staging)
+                staged.append((staging, dest_dir / file_name))
+        except Exception:
+            for staging, _dest in staged:
+                staging.unlink(missing_ok=True)
+            raise
+
+        published = {}
+        for staging, dest_file in staged:
+            staging.replace(dest_file)
+            published[dest_file.name] = dest_file.read_bytes()
+        return published
+
     @staticmethod
     def _atomic_json_write(path: Path, data: dict) -> None:
         """Write JSON atomically via a temp file + rename to avoid partial writes on crash."""
@@ -1857,11 +1927,37 @@ class CertificateManager:
 
                 if not renewed:
                     logger.info(f"Certificate for {domain} is not yet due for renewal; no action taken")
+                    # Before returning: does the flat copy still agree with
+                    # live/? This branch is where a half-finished publish
+                    # became permanent — it returns before the copy below, so
+                    # nothing ever retried it and the daily run kept booking
+                    # the domain as skipped_not_due. Reconciling here is what
+                    # heals an instance that is already in that state; the
+                    # staged publish above is what stops it happening again.
+                    stale = self._stale_flat_files(domain_dir / 'live' / domain, domain_dir)
+                    if stale:
+                        logger.warning(
+                            "Certificate for %s did not need renewing, but its "
+                            "served copy disagreed with certbot's: %s. "
+                            "Republishing — this is the state where a new "
+                            "certificate can sit beside the previous private "
+                            "key.", domain, ", ".join(stale))
+                        try:
+                            self._publish_flat_files(domain_dir / 'live' / domain, domain_dir)
+                        except Exception as republish_error:
+                            logger.error(
+                                "Could not republish the served copy for %s: %s",
+                                domain, republish_error)
+                            raise RuntimeError(
+                                f"{domain} is serving files that do not match "
+                                f"its certificate and they could not be "
+                                f"repaired: {republish_error}") from republish_error
                     self._invalidate_certificate_info_cache(domain)
                     return {
                         'success': True,
                         'renewed': False,
                         'domain': domain,
+                        'repaired': stale or None,
                         'message': 'Certificate not yet due for renewal',
                     }
 
@@ -1869,14 +1965,7 @@ class CertificateManager:
                 src_dir = domain_dir / 'live' / domain
                 dest_dir = domain_dir
                 
-                cert_files = {}
-                for file_name in CERTIFICATE_FILES:
-                    src_file = src_dir / file_name
-                    dest_file = dest_dir / file_name
-                    if src_file.exists():
-                        self._atomic_binary_copy(src_file, dest_file)
-                        with open(dest_file, 'rb') as f:
-                            cert_files[file_name] = f.read()
+                cert_files = self._publish_flat_files(src_dir, dest_dir)
                 
                 # Stamp the renewal BEFORE storing, so the external copy
                 # carries the same renewed_at as the local one; then persist
