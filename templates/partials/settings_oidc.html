@@ -191,7 +191,7 @@
                         <input type="url" x-model="cfg.post_logout_redirect_uri"
                                placeholder="https://example.com/"
                                class="w-full px-3 py-2 border border-border rounded-md text-sm bg-input text-foreground">
-                        <p class="mt-1 text-xs text-muted">Where to send the user after the IdP's end-session endpoint. Required by some providers for SLO.</p>
+                        <p class="mt-1 text-xs text-muted">Where to send the user after the IdP's end-session endpoint. Required by some providers for SLO. Register this exact URI at the IdP too (Keycloak: the client's <em>Valid post logout redirect URIs</em>), or the IdP rejects the logout with <code>invalid_redirect_uri</code>.</p>
                     </div>
 
                     <!-- Save button -->
