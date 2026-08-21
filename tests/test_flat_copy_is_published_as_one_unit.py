@@ -199,3 +199,26 @@ def test_a_certificate_with_no_live_directory_is_not_called_stale(manager):
 
 if __name__ == "__main__":  # pragma: no cover
     pytest.main([__file__, "-v"])
+
+
+def test_leftovers_from_a_killed_attempt_are_removed_before_publishing(tmp_path):
+    """A process killed between staging and promote (SIGKILL, OOM) leaves
+    *.staging files that no exception handler can clean. The next publish
+    removes them first; the domain lock guarantees they are not in flight."""
+    from modules.core.certificates import CertificateManager
+    from unittest.mock import MagicMock
+    src = tmp_path / 'live'
+    dest = tmp_path / 'flat'
+    src.mkdir()
+    dest.mkdir()
+    for name in ('cert.pem', 'chain.pem', 'fullchain.pem', 'privkey.pem'):
+        (src / name).write_text(f'new-{name}')
+        (dest / name).write_text(f'old-{name}')
+    (dest / 'privkey.pem.staging').write_text('from-a-dead-attempt')
+    (dest / 'cert.pem.staging').write_text('from-a-dead-attempt')
+    cm = CertificateManager.__new__(CertificateManager)
+    cm.shell_executor = MagicMock()
+    published = cm._publish_flat_files(src, dest)
+    assert set(published) == {'cert.pem', 'chain.pem', 'fullchain.pem', 'privkey.pem'}
+    assert not list(dest.glob('*.staging'))
+    assert (dest / 'privkey.pem').read_text() == 'new-privkey.pem'

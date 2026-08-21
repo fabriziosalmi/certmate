@@ -44,6 +44,7 @@ HELD = {
     "pyopenssl": "Do not bump to 26.2.0+",
     "cryptography": "GHSA-537c-gmf6-5ccf",
     "dns-lexicon": "dns-lexicon",
+    "cloudflare": "#568",
 }
 
 # Ignored defensively rather than held: `acme` is not pinned anywhere — it
