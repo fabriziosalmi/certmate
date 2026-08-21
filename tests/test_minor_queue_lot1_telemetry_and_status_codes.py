@@ -187,3 +187,15 @@ def test_no_timestamp_known_means_no_sample(tmp_path):
     import time
     # Inside the renewal window: due now, not in the past.
     assert abs(_sample(body, 'certmate_certificate_next_renewal_timestamp', 'unknown-age.example.net') - time.time()) < 120
+
+
+def test_a_timestamp_that_becomes_unknown_removes_the_series_instead_of_freezing_it(tmp_path):
+    """Prometheus gauges keep their last value until set again; a domain whose
+    metadata was quarantined must lose its last_renewal series, not keep a
+    stale date."""
+    dom = 'quarantined.example.net'
+    body = _metrics_body(tmp_path, dom, {'exists': True, 'days_left': 40, 'dns_provider': 'cloudflare',
+                                         'renewed_at': '2026-08-20T03:00:00Z'})
+    assert _sample(body, 'certmate_certificate_last_renewal_timestamp', dom) is not None
+    body = _metrics_body(tmp_path, dom, {'exists': True, 'days_left': 40, 'dns_provider': 'cloudflare'})
+    assert _sample(body, 'certmate_certificate_last_renewal_timestamp', dom) is None

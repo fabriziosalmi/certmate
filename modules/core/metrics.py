@@ -398,6 +398,15 @@ class CertMateMetricsCollector:
                             domain=domain,
                             dns_provider=dns_provider
                         ).set(last_renewal_ts)
+                    else:
+                        # A gauge that stops being set keeps its last value.
+                        # If the timestamp became unknown (metadata.json
+                        # quarantined, say) the series must go away, not
+                        # freeze on a stale date (review, #584).
+                        try:
+                            certificate_last_renewal.remove(domain, dns_provider)
+                        except KeyError:
+                            pass
                     # Next renewal: the scheduler renews once days_left falls
                     # to the threshold, so this is a real prediction — due
                     # now when already inside the window.

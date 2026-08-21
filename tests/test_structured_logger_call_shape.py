@@ -29,9 +29,17 @@ def _structured_logger_names(tree):
     return names
 
 
+def _scanned_files():
+    """modules/ plus the top-level entry points: app.py binds the same logger
+    and is where boot-time logging lives — the place this defect is fatal
+    rather than noisy."""
+    yield from sorted((REPO / 'modules').rglob('*.py'))
+    yield from sorted(REPO.glob('*.py'))
+
+
 def _offenders():
     found = []
-    for path in sorted((REPO / 'modules').rglob('*.py')):
+    for path in _scanned_files():
         src = path.read_text(encoding='utf-8')
         if 'get_certmate_logger' not in src:
             continue
@@ -62,7 +70,7 @@ def test_the_scan_sees_structured_loggers_at_all():
     """Guard the guard: if nothing binds get_certmate_logger at module level
     any more, the scan above passes over nothing."""
     bound = 0
-    for path in (REPO / 'modules').rglob('*.py'):
+    for path in _scanned_files():
         src = path.read_text(encoding='utf-8')
         if 'get_certmate_logger' in src and _structured_logger_names(ast.parse(src)):
             bound += 1
