@@ -340,6 +340,14 @@ class TestClientCertListKeepsItsFilter:
     it across page loads, and the details panel offers the .pfx bundle the
     API has served since v2.24.0 but the UI never exposed."""
 
+    @staticmethod
+    def _drop_wizard(page):
+        # The first-run wizard is a fixed overlay (#setupWizard, z-[110]) that
+        # intercepts every click on a fresh container; other tests remove it
+        # the same way.
+        page.evaluate(
+            "() => { const w = document.getElementById('setupWizard'); if (w) w.remove(); }")
+
     def _open_client_tab(self, page):
         page.goto(BASE_URL)
         page.wait_for_load_state("domcontentloaded")
@@ -347,6 +355,8 @@ class TestClientCertListKeepsItsFilter:
         # deferred x-data a moment, then switch to the client view.
         client_btn = page.locator("#certViewClientBtn")
         expect(client_btn).to_be_visible(timeout=10000)
+        page.wait_for_timeout(1000)
+        self._drop_wizard(page)
         client_btn.click()
         expect(client_btn).to_have_attribute("aria-pressed", "true", timeout=10000)
         page.wait_for_timeout(800)
@@ -370,13 +380,18 @@ class TestClientCertListKeepsItsFilter:
             }
         """)
         assert len(ids) == 2 and all(ids), ids
-        browser_page.evaluate("localStorage.removeItem('certmate.clientCerts.filters')")
+        browser_page.evaluate("localStorage.removeItem('cm.clientTab.filters')")
 
         self._open_client_tab(browser_page)
         active_chip = browser_page.locator('[data-cc-status-chip="active"]')
         expect(active_chip).to_have_attribute("aria-pressed", "true")
-        rows = browser_page.locator('#certTableBody button[data-cc-action="details"]')
-        expect(rows).to_have_count(2, timeout=10000)
+        # Assert on our two identifiers, not on a global count: the container
+        # is session-scoped and other tests may leave certificates behind.
+        def row(identifier):
+            return browser_page.locator(
+                '#certTableBody button[data-cc-action="details"][data-id="%s"]' % identifier)
+        expect(row(ids[0])).to_be_visible(timeout=10000)
+        expect(row(ids[1])).to_be_visible(timeout=10000)
 
         # Revoke one through the API and refresh the way the Revoke button
         # does: the view must still be Active, with one row fewer.
@@ -390,17 +405,22 @@ class TestClientCertListKeepsItsFilter:
                 window.ccRefresh();
             }
         """, ids[0])
-        expect(rows).to_have_count(1, timeout=10000)
+        expect(row(ids[0])).to_have_count(0, timeout=10000)
+        expect(row(ids[1])).to_be_visible()
         expect(active_chip).to_have_attribute("aria-pressed", "true")
 
         # Remembered across a page load.
+        self._drop_wizard(browser_page)
         browser_page.locator('[data-cc-status-chip="revoked"]').click()
-        expect(rows).to_have_count(1, timeout=10000)
+        expect(row(ids[0])).to_be_visible(timeout=10000)
+        expect(row(ids[1])).to_have_count(0)
         self._open_client_tab(browser_page)
         expect(browser_page.locator('[data-cc-status-chip="revoked"]')).to_have_attribute("aria-pressed", "true")
-        expect(rows).to_have_count(1, timeout=10000)
+        expect(row(ids[0])).to_be_visible(timeout=10000)
+        expect(row(ids[1])).to_have_count(0)
 
         # The details panel has the PKCS#12 button next to crt/key/csr.
-        rows.first.click()
+        self._drop_wizard(browser_page)
+        row(ids[0]).click()
         pfx = browser_page.locator('button[onclick="downloadCertFile(\'pfx\')"]')
         expect(pfx).to_be_visible(timeout=5000)

@@ -17,7 +17,7 @@
     // certificates quickly, and a list that opens on all of them — and
     // snapped back to all of them after every revoke — meant re-clicking
     // the same chip between each action (#562).
-    var CC_FILTER_KEY = 'certmate.clientCerts.filters';
+    var CC_FILTER_KEY = 'cm.clientTab.filters';
 
     function ccRememberFilters() {
         try {
