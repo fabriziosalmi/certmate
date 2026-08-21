@@ -324,9 +324,11 @@ class CertificateManager:
         # Leftovers from an attempt that died between staging and promote
         # (SIGKILL, OOM, container stopped) are cleaned by nobody else; the
         # caller holds the domain lock, so whatever is here is from a dead
-        # attempt and not from a publish in flight.
-        for leftover in dest_dir.glob('*.staging'):
-            leftover.unlink(missing_ok=True)
+        # attempt and not from a publish in flight. Four known names, no
+        # wildcard: this is a delete, and the set of files it can ever touch
+        # is spelled out here rather than matched.
+        for file_name in CERTIFICATE_FILES:
+            (dest_dir / f"{file_name}.staging").unlink(missing_ok=True)
         staged = []
         try:
             for file_name in CERTIFICATE_FILES:
