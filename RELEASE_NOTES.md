@@ -1,3 +1,177 @@
+## v2.26.0 (The renewal path held to the standard of the issuance path, and two features)
+
+A minor release. Two new capabilities, both of them declarative where the
+only option used to be a shell command; and a set of defects with one shape
+in common: the renewal path, the restore path and the logout path had each
+been checked by analogy with the path beside them, and each was missing a
+property the other had.
+
+**Read this first if you have ever shared a backup.** Every archive CertMate
+made before this release with the default setting (`include_secrets=false` —
+every automatic backup) **contains the private key of every certificate**,
+although its manifest says `secrets_masked: true` and the interface called it
+*share-safe*. Archives made by v2.22.0 or later **also contain the private CA
+key and every client-certificate key** (that is when `data/certs/` joined the
+backup). The exception is an archive with the `.zip.enc` suffix: encrypted at
+rest, unreadable without `CERTMATE_BACKUP_PASSPHRASE`. If you shared an archive
+believing it harmless, list what it holds —
+
+```
+unzip -l backup_XXXX.zip | grep -E 'privkey|private_key|\.key$|\.pfx$'
+```
+
+— and treat every key you find as exposed: reissue those certificates and,
+if the CA key is there, rotate the private CA. This is the one item in this
+release that an upgrade does not fix on its own.
+
+### Generic webhooks get a payload template, a method, and first-class authentication
+
+A generic webhook was "POST this fixed JSON, optionally signed, with the
+headers you typed". Slack, PagerDuty, Mattermost, an ITSM endpoint each want
+their own body and their own way of being told who is calling, and the only
+way to give it to them was a deploy hook with curl in it.
+
+A webhook can now carry a **payload template** — JSON text with
+`{{placeholders}}` (`{{event}}`, `{{title}}`, `{{message}}`, `{{timestamp}}`,
+`{{domain}}`, `{{details}}`, `{{details.<field>}}`) — a **method** (POST, PUT,
+PATCH), **authentication** (bearer token, basic, or a named header), a
+**timeout** and a number of **attempts**. Inside a JSON string a value is
+inserted escaped, so a value carrying quotes or newlines cannot break out of
+the string; outside a string it becomes a JSON literal. A template that does
+not render to valid JSON is rejected when you save, with the reason, not
+discovered at the first renewal. The HMAC signature covers the templated body.
+The editor gets the new fields, placeholder chips that insert at the caret,
+and **Preview**, which renders the request for a sample event without sending
+it. See `docs/webhooks.md`.
+
+Two things were found on the way and fixed: a custom header such as
+`Authorization` or `X-Auth` was returned in clear by the settings read, to
+the viewer role; every custom header value is now masked on read and restored
+on save. And the log sanitiser redacted the word `Bearer` and let the token
+through; it now redacts the credential.
+
+### A share-safe backup now carries no private key, and says so
+
+`include_secrets=false` — the default, and what every automatic backup is —
+masked the settings tree and called the archive share-safe, in the manifest,
+in its docstring and in the web route's. The archive walk never looked at
+what it was zipping: every ACME `privkey.pem` (flat, `live/`, `archive/`,
+certbot's own `keys/` copies), the ACME account key, the private CA key and
+any `.pfx` went into every automatic backup.
+
+Share-safe now means it: no key material from either tree, the manifest says
+`key_material_excluded`, and the restore path reads the flag — it refuses,
+before writing anything, to lay a key-less archive over an instance that
+already holds certificates, because cert.pem from the archive next to the
+privkey.pem on disk is a pair that does not complete a handshake. The
+`include_secrets=true` archive is unchanged: plaintext settings and every key,
+encrypted at rest with `CERTMATE_BACKUP_PASSPHRASE`, made on purpose through
+`POST /api/backups/create`.
+
+**You are affected if** you relied on the automatic backups to recover
+certificate private keys. They never could recover the instance (every
+credential in them is masked — see below); from this release they do not
+carry keys either. Disaster recovery is a deliberate `include_secrets=true`
+archive with a passphrase.
+
+### Four defects that survived a full-field audit
+
+The 2026-08-18 audit confirmed 43 findings after adversarial verification.
+This release closes the four that could damage a production instance, plus
+twelve smaller ones; twenty-seven remain open, none of them urgent, listed
+with their verifier severities in #591. That is a choice of what to fix
+first, not a closed audit.
+
+- **The settings lock protected a snapshot, not the file.** Read-modify-write
+  paths read from the per-request cache, a snapshot taken when the request
+  started — minutes old on the synchronous issuance path — so a concurrent
+  write (a user created, a domain registered, a credential saved) was rolled
+  back by whichever request finished last. A domain rolled out of the list
+  was never visited by renewal again. Every read-modify-write now reads from
+  disk.
+- **A backup that cannot restore is not a backup.** The automatic restore on a
+  corrupt `settings.json` installed the newest archive — masked — as live
+  settings, which set every password hash, bearer token and DNS credential to
+  the mask sentinel and reported success. It now picks the newest archive that
+  can restore, and when none exists it refuses to overwrite the file and
+  stops, with one line saying what to do, rather than coming up world-open.
+  An empty file still boots with the first-time template. Logging in no longer
+  writes a backup (each one evicted a real restore point).
+- **Setup mode is a door that only closes.** On an SSO-only instance,
+  unchecking "Enable OIDC/SSO" put the instance back into setup mode, where
+  every endpoint answers an anonymous caller as admin. Turning off the last
+  credential — SSO, or local auth — is now refused with a 409 that says why.
+  Running without authentication **on purpose** (a proxy in front
+  authenticates for you) is still possible and is now explicit: repeat the
+  request with `"confirm_unauthenticated": true`; the settings toggle asks,
+  and the audit trail records who chose it.
+- **The four PEM files are published as one unit.** A failure on the fourth
+  copy left a new certificate beside the previous private key, served and
+  deployed, and the next renewal check found `live/` fresh and never repaired
+  it. The copy is staged and promoted together, and a renewal check that finds
+  the served copy disagreeing with certbot's republishes it.
+
+### The renewal path, held to the standard of the issuance path
+
+- **Certificates from a private ACME CA could not renew.** Issuance handed
+  certbot the private CA's trust bundle; renewal built its own environment and
+  never read the certificate's CA, so every renewal against a private endpoint
+  failed TLS verification — silently, until expiry. Renewal now resolves the
+  CA account the certificate was issued under and passes the same bundle.
+- **A corrupt `metadata.json` was overwritten with `{}`** by the renewal that
+  read it, losing the DNS provider, SANs, CA and deployment settings with no
+  copy kept. It is quarantined now, as it already was on every other path.
+
+### The fixes from the issue tracker
+
+- **OIDC logout never reached the IdP** (#564): the backend returned the
+  end-session URL and the logout button ignored it, so the IdP session
+  survived and the next "Login with SSO" signed the user straight back in.
+  It is followed now; the URL is also built after a restart, when Authlib's
+  metadata cache is empty.
+- **The DNS account selector never appeared** (#563): the create form read the
+  account list off a response that is a plain list, found nothing, and every
+  certificate went to the default account regardless of zone. One request,
+  grouped by provider, for every provider rather than seven.
+- **Client certificates** (#561, #562): the details panel offers the `.pfx`
+  bundle the API has served since v2.24.0; the list keeps its filter across
+  revoke and renew, remembers it, and opens on Active.
+- **Download documentation** (#572): `?file=` and `?format=json` were
+  documented everywhere but the architecture table and the website.
+
+### Smaller things
+
+- `last_used_at` on API keys was never written (a datetime object that JSON
+  refused, the error swallowed on purpose). It is ISO text now.
+- The client-certificate API turned every 400/403/404 it meant to send into a
+  500. It sends the status it meant.
+- A boot that could not create the ACME challenge directory died inside its
+  own "non-fatal" warning (the structured logger takes no positional
+  arguments). Fixed, with a test that keeps such calls at zero.
+- `/metrics` stopped inventing `certificate_last_renewal_timestamp` from the
+  expiry date; it is the recorded renewal (or issuance), and absent when
+  neither is known rather than 1970.
+- `cloudflare` is held at 2.x in Dependabot: 3.x+ is a different SDK under the
+  same name and breaks `certbot-dns-cloudflare` at import; the CA reachability
+  probe retries a slow CA instead of reddening the weekly run; postgres in the
+  acme-dns job gets 90 s over TCP.
+
+### Notes for operators
+
+- Automatic backups no longer carry private keys. Make a disaster-recovery
+  archive: `POST /api/backups/create {"include_secrets": true}` with
+  `CERTMATE_BACKUP_PASSPHRASE` set.
+- If `settings.json` is corrupt at boot and no restorable archive exists, the
+  container now stops with one line instead of starting in setup mode. Fix the
+  file or restore a DR archive, then restart.
+- Disabling SSO or local auth when it is the last credential answers 409.
+  Configure the other first — or, for local auth only, confirm on purpose with
+  `confirm_unauthenticated: true` (audited).
+- Generic webhooks: existing ones are unchanged (no template = the previous
+  body). Custom header values are masked on read from now on.
+
+---
+
 ## v2.25.4 (Two certificate authorities that could not issue, and the checks that could not see it)
 
 A patch release. One product fault reaches issuance directly; the rest are
