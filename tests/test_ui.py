@@ -356,7 +356,7 @@ class TestClientCertListKeepsItsFilter:
             async () => {
                 const out = [];
                 for (const cn of ['filter-keep-a', 'filter-keep-b']) {
-                    const r = await fetch('/api/client-certs', {
+                    const r = await fetch('/api/client-certs/create', {
                         method: 'POST', headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({common_name: cn, cert_usage: 'api-mtls', days_valid: 30})
                     });
