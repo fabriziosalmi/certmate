@@ -160,10 +160,74 @@
                                         <button type="button" @click="if(hk.trim()){if(!wh.headers)wh.headers={};wh.headers[hk.trim()]=hv;wh.headers=Object.assign({},wh.headers);hk='';hv='';}" class="text-primary text-xs px-1"><i class="fas fa-plus"></i></button>
                                     </div>
                                 </div>
+                                <!-- Generic webhooks: method, authentication, payload template, timeout (#218).
+                                     raw: the template placeholders use double braces and must reach the browser untouched by Jinja. -->
+                                {% raw %}
+                                <div class="mt-2 space-y-2" x-show="wh.type === 'generic'">
+                                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                        <div>
+                                            <label class="text-xs text-muted mb-1 block">Method</label>
+                                            <select x-model="wh.method" aria-label="HTTP method" class="w-full px-2 py-1.5 text-sm border text-foreground border-border rounded-lg bg-input">
+                                                <option value="POST">POST</option>
+                                                <option value="PUT">PUT</option>
+                                                <option value="PATCH">PATCH</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="text-xs text-muted mb-1 block">Authentication</label>
+                                            <select x-model="wh.auth_type" aria-label="Authentication" class="w-full px-2 py-1.5 text-sm border text-foreground border-border rounded-lg bg-input">
+                                                <option value="none">None</option>
+                                                <option value="bearer">Bearer token</option>
+                                                <option value="basic">Basic</option>
+                                                <option value="header">Header</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="text-xs text-muted mb-1 block">Timeout (s)</label>
+                                            <input type="number" min="1" max="60" x-model.number="wh.timeout" placeholder="10" aria-label="Timeout in seconds" class="w-full px-2 py-1.5 text-sm border text-foreground border-border rounded-lg bg-input">
+                                        </div>
+                                        <div>
+                                            <label class="text-xs text-muted mb-1 block">Attempts</label>
+                                            <input type="number" min="0" max="5" x-model.number="wh.max_retries" placeholder="3" aria-label="Delivery attempts" class="w-full px-2 py-1.5 text-sm border text-foreground border-border rounded-lg bg-input">
+                                        </div>
+                                    </div>
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2" x-show="wh.auth_type === 'bearer'">
+                                        <div class="sm:col-span-2"><input type="password" x-model="wh.auth_token" placeholder="Bearer token" aria-label="Bearer token" class="w-full px-3 py-2 text-sm border text-foreground border-border rounded-lg bg-input"></div>
+                                    </div>
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2" x-show="wh.auth_type === 'basic'">
+                                        <div><input type="text" x-model="wh.auth_username" placeholder="Username" aria-label="Basic auth username" class="w-full px-3 py-2 text-sm border text-foreground border-border rounded-lg bg-input"></div>
+                                        <div><input type="password" x-model="wh.auth_password" placeholder="Password" aria-label="Basic auth password" class="w-full px-3 py-2 text-sm border text-foreground border-border rounded-lg bg-input"></div>
+                                    </div>
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2" x-show="wh.auth_type === 'header'">
+                                        <div><input type="text" x-model="wh.auth_header" placeholder="X-API-Key" aria-label="Authentication header name" class="w-full px-3 py-2 text-sm border text-foreground border-border rounded-lg bg-input"></div>
+                                        <div><input type="password" x-model="wh.auth_token" placeholder="Header value" aria-label="Authentication header value" class="w-full px-3 py-2 text-sm border text-foreground border-border rounded-lg bg-input"></div>
+                                    </div>
+                                    <div>
+                                        <div class="flex items-center justify-between mb-1">
+                                            <label class="text-xs text-muted">Payload template <span class="opacity-70">(JSON; empty = CertMate's default body)</span></label>
+                                            <button type="button" @click="previewWebhook(wh)" class="text-xs text-info-fg hover:underline"><i class="fas fa-eye mr-1"></i>Preview</button>
+                                        </div>
+                                        <div class="flex flex-wrap gap-1 mb-1">
+                                            <template x-for="v in templateVariables" :key="v">
+                                                <button type="button" @click="insertPlaceholder(wh, v, $event)" :title="'Insert {{' + v + '}}'" class="px-1.5 py-0.5 rounded text-[11px] font-mono bg-sunken border border-border text-muted hover:text-foreground hover:border-primary" x-text="'{{' + v + '}}'"></button>
+                                            </template>
+                                        </div>
+                                        <textarea x-model="wh.payload_template" :data-wh-idx="idx" rows="5" spellcheck="false" aria-label="Payload template" placeholder='{"text": "{{title}}: {{domain}} ({{event}})"}' class="w-full px-3 py-2 text-xs font-mono border text-foreground border-border rounded-lg bg-input"></textarea>
+                                        <p class="mt-1 text-[11px] text-muted">Inside a string a value is escaped; outside it becomes a JSON literal (number, object, null). <code>{{details.&lt;field&gt;}}</code> reaches any field of the event.</p>
+                                        <div x-show="wh._preview" x-cloak class="mt-2 rounded-lg border border-border bg-sunken p-2">
+                                            <div class="flex items-center justify-between text-[11px] text-muted mb-1">
+                                                <span><span class="font-mono" x-text="wh._preview && wh._preview.method"></span> <span class="font-mono" x-text="wh._preview && wh._preview.url"></span></span>
+                                                <button type="button" @click="wh._preview = null" class="hover:text-foreground" aria-label="Close preview"><i class="fas fa-times"></i></button>
+                                            </div>
+                                            <pre class="text-[11px] font-mono whitespace-pre-wrap break-all text-foreground" x-text="wh._preview && wh._preview.text"></pre>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endraw %}
                                 <button type="button" @click="testWebhook(wh)" class="text-sm text-info-fg hover:underline"><i class="fas fa-paper-plane mr-1"></i>Test</button>
                             </div>
                         </template>
-                        <button type="button" @click="config.channels.webhooks.push({enabled:true,name:'',url:'',type:'generic',secret:'',events:[],headers:{}})" class="text-sm text-primary hover:underline"><i class="fas fa-plus mr-1"></i>Add webhook</button>
+                        <button type="button" @click="config.channels.webhooks.push({enabled:true,name:'',url:'',type:'generic',secret:'',events:[],headers:{},method:'POST',auth_type:'none',payload_template:''})" class="text-sm text-primary hover:underline"><i class="fas fa-plus mr-1"></i>Add webhook</button>
                         <!-- Delivery log -->
                         <div class="border-t border-border mt-4 pt-4">
                             <button type="button" @click="showDeliveries = !showDeliveries; if(showDeliveries) loadDeliveries()" class="text-sm font-medium text-label hover:text-foreground transition">

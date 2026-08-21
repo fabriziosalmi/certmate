@@ -3,9 +3,11 @@ Notification system for CertMate.
 Supports SMTP email and webhook (Slack, Discord, generic) notifications.
 """
 
+import base64
 import json
 import logging
 import os
+import re
 import smtplib
 import hashlib
 import hmac
@@ -52,6 +54,187 @@ def _webhook_url_is_internal(url: str) -> bool:
                 or ip.is_reserved or ip.is_multicast or ip.is_unspecified):
             return True
     return False
+
+
+# --- Generic webhook: method, authentication, payload template (#218) ------ #
+#
+# A generic webhook used to be "POST this fixed JSON, optionally signed, with
+# whatever headers you typed". Slack, PagerDuty, Mattermost, an internal ITSM
+# endpoint — each wants its own body shape and its own way of being told who
+# is calling. These fields make that declarative config rather than a shell
+# hook with curl in it:
+#
+#   method           POST (default) | PUT | PATCH
+#   auth_type        none (default) | bearer | basic | header
+#   auth_token       bearer token, or the header value for auth_type=header
+#   auth_username    basic auth
+#   auth_password    basic auth
+#   auth_header      header name for auth_type=header (default X-API-Key)
+#   payload_template JSON text with {{placeholders}}; empty = the default body
+#   timeout          seconds, 1..60 (default 10)
+#   max_retries      0..5 attempts after the first (default 3 total, as before)
+#
+# Every secret-bearing field name matches the settings secret regex (token,
+# password), so it is masked on GET and restored on a round-trip save.
+
+WEBHOOK_METHODS = ('POST', 'PUT', 'PATCH')
+WEBHOOK_AUTH_TYPES = ('none', 'bearer', 'basic', 'header')
+WEBHOOK_DEFAULT_TIMEOUT = 10
+WEBHOOK_MAX_TIMEOUT = 60
+WEBHOOK_DEFAULT_RETRIES = 3
+WEBHOOK_MAX_RETRIES = 5
+
+# What a template may reference. ``details.*`` reaches into the event payload
+# (domain, error, hook_name, days_until_expiry, ... whatever the event carries).
+TEMPLATE_VARIABLES = (
+    ('event', 'event name, e.g. certificate_renewed'),
+    ('title', 'human title, e.g. Certificate Renewed'),
+    ('message', 'one-line message'),
+    ('timestamp', 'ISO-8601 UTC'),
+    ('domain', 'the certificate domain (shortcut for details.domain)'),
+    ('details', 'the whole event payload as a JSON object'),
+    ('details.<field>', 'one field of the event payload, e.g. details.error'),
+)
+
+_PLACEHOLDER_RE = re.compile(r'\{\{\s*([A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)*)\s*\}\}')
+
+
+def webhook_template_variables(event, title, message, details=None):
+    """The variable set a payload template is rendered against."""
+    details = details if isinstance(details, dict) else {}
+    return {
+        'event': event,
+        'title': title,
+        'message': message,
+        'timestamp': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+        'domain': details.get('domain'),
+        'details': details,
+    }
+
+
+def _lookup(variables, dotted):
+    node = variables
+    for part in dotted.split('.'):
+        if isinstance(node, dict) and part in node:
+            node = node[part]
+        else:
+            return None
+    return node
+
+
+def _inside_json_string(prefix):
+    """True when *prefix* ends inside a JSON string literal — i.e. an odd
+    number of unescaped double quotes precede this point."""
+    inside = False
+    i = 0
+    while i < len(prefix):
+        ch = prefix[i]
+        if ch == '\\' and inside:
+            i += 2
+            continue
+        if ch == '"':
+            inside = not inside
+        i += 1
+    return inside
+
+
+def render_payload_template(template, variables):
+    """Substitute ``{{name}}`` placeholders and return the JSON text.
+
+    A placeholder *inside* a JSON string (``"text": "{{domain}} renewed"``)
+    is inserted as an escaped string fragment, so a value carrying quotes,
+    newlines or backslashes cannot break out of the string. A placeholder
+    *outside* a string (``"days": {{details.days_until_expiry}}``) is
+    inserted as a JSON literal — number, bool, object, or a quoted string —
+    so the template stays valid JSON either way. Unknown names render as an
+    empty fragment inside a string and ``null`` outside it.
+
+    Raises ValueError when the result is not valid JSON: the template is the
+    operator's, and a broken one must fail at save/preview time, not only at
+    3 a.m. on the first renewal.
+    """
+    if not isinstance(template, str):
+        raise ValueError('payload_template must be a string')
+
+    out = []
+    last = 0
+    for match in _PLACEHOLDER_RE.finditer(template):
+        out.append(template[last:match.start()])
+        value = _lookup(variables, match.group(1))
+        if _inside_json_string(''.join(out)):
+            if value is None:
+                fragment = ''
+            elif isinstance(value, (dict, list)):
+                fragment = json.dumps(json.dumps(value, separators=(',', ':')))[1:-1]
+            else:
+                fragment = json.dumps(str(value))[1:-1]
+        else:
+            fragment = json.dumps(value)
+        out.append(fragment)
+        last = match.end()
+    out.append(template[last:])
+    rendered = ''.join(out)
+    try:
+        json.loads(rendered)
+    except ValueError as exc:
+        raise ValueError(f'payload_template does not render to valid JSON: {exc}')
+    return rendered
+
+
+def _coerce_int(value, default, low, high, name):
+    if value in (None, ''):
+        return default, None
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return None, f'{name} must be a whole number'
+    if number < low or number > high:
+        return None, f'{name} must be between {low} and {high}'
+    return number, None
+
+
+def validate_webhook_config(cfg):
+    """Return an error string for a malformed generic-webhook config, else None.
+
+    Only the new fields are judged here (method, auth, template, timeout,
+    retries); URL/scheme/SSRF checks stay in the send path, where they
+    always were, so a placeholder URL can still be saved and tested later.
+    """
+    if not isinstance(cfg, dict):
+        return 'webhook must be an object'
+    if cfg.get('type', 'generic') != 'generic':
+        return None
+    method = (cfg.get('method') or 'POST').upper()
+    if method not in WEBHOOK_METHODS:
+        return f"method must be one of {', '.join(WEBHOOK_METHODS)}"
+    auth_type = cfg.get('auth_type') or 'none'
+    if auth_type not in WEBHOOK_AUTH_TYPES:
+        return f"auth_type must be one of {', '.join(WEBHOOK_AUTH_TYPES)}"
+    if auth_type == 'bearer' and not cfg.get('auth_token'):
+        return 'bearer authentication needs auth_token'
+    if auth_type == 'basic' and not (cfg.get('auth_username') and cfg.get('auth_password')):
+        return 'basic authentication needs auth_username and auth_password'
+    if auth_type == 'header':
+        if not cfg.get('auth_token'):
+            return 'header authentication needs auth_token (the header value)'
+        name = (cfg.get('auth_header') or 'X-API-Key').strip()
+        if not re.match(r'^[A-Za-z0-9-]+$', name):
+            return 'auth_header is not a valid header name'
+    _, err = _coerce_int(cfg.get('timeout'), WEBHOOK_DEFAULT_TIMEOUT, 1, WEBHOOK_MAX_TIMEOUT, 'timeout')
+    if err:
+        return err
+    _, err = _coerce_int(cfg.get('max_retries'), WEBHOOK_DEFAULT_RETRIES, 0, WEBHOOK_MAX_RETRIES, 'max_retries')
+    if err:
+        return err
+    template = cfg.get('payload_template')
+    if template:
+        try:
+            render_payload_template(template, webhook_template_variables(
+                'certificate_renewed', 'Certificate Renewed',
+                'Certificate Renewed: example.com', {'domain': 'example.com'}))
+        except ValueError as exc:
+            return str(exc)
+    return None
 
 
 class Notifier:
@@ -202,8 +385,18 @@ class Notifier:
 
     def _send_webhook_with_retry(self, cfg: dict, event: str, title: str,
                                 message: str, details: Optional[dict] = None,
-                                max_retries: int = 3) -> dict:
-        """Send webhook with exponential backoff retry and delivery logging."""
+                                max_retries: Optional[int] = None) -> dict:
+        """Send webhook with exponential backoff retry and delivery logging.
+
+        ``max_retries`` is the total number of attempts; the per-webhook
+        ``max_retries`` setting (0..5) wins over the default of 3 (#218).
+        """
+        if max_retries is None:
+            max_retries, err = _coerce_int(cfg.get('max_retries'), WEBHOOK_DEFAULT_RETRIES,
+                                           0, WEBHOOK_MAX_RETRIES, 'max_retries')
+            if err:
+                max_retries = WEBHOOK_DEFAULT_RETRIES
+        max_retries = max(1, int(max_retries))
         start_ms = int(time.time() * 1000)
         result = {}
         attempts = 0
@@ -365,14 +558,28 @@ class Notifier:
                                    'priority': priority}).encode('utf-8')
 
             else:  # generic — signed JSON with optional custom headers
-                payload = {
-                    'event': event, 'title': title, 'message': message,
-                    'details': details or {},
-                    'timestamp': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
-                }
-                body = json.dumps(payload).encode('utf-8')
-                for hdr_name, hdr_value in cfg.get('headers', {}).items():
+                template = cfg.get('payload_template')
+                if template:
+                    # Operator-shaped body (#218); a broken template is a
+                    # config error, reported rather than retried into.
+                    try:
+                        rendered = render_payload_template(
+                            template, webhook_template_variables(event, title, message, details))
+                    except ValueError as exc:
+                        return {'error': str(exc), 'config_error': True}
+                    body = rendered.encode('utf-8')
+                else:
+                    payload = {
+                        'event': event, 'title': title, 'message': message,
+                        'details': details or {},
+                        'timestamp': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+                    }
+                    body = json.dumps(payload).encode('utf-8')
+                for hdr_name, hdr_value in (cfg.get('headers') or {}).items():
                     headers[hdr_name] = hdr_value
+                auth_err = self._apply_webhook_auth(cfg, headers)
+                if auth_err:
+                    return {'error': auth_err, 'config_error': True}
                 # HMAC-SHA256 signature with timestamp for replay protection.
                 if secret:
                     timestamp = str(int(time.time()))
@@ -395,12 +602,23 @@ class Notifier:
                                  'refused (SSRF guard). Set CERTMATE_ALLOW_INTERNAL_WEBHOOKS=true '
                                  'to permit internal targets.'}
 
-            req = Request(url, data=body, method='POST')
+            method = 'POST'
+            timeout = WEBHOOK_DEFAULT_TIMEOUT
+            if wh_type == 'generic':
+                method = (cfg.get('method') or 'POST').upper()
+                if method not in WEBHOOK_METHODS:
+                    return {'error': f"method must be one of {', '.join(WEBHOOK_METHODS)}",
+                            'config_error': True}
+            timeout, t_err = _coerce_int(cfg.get('timeout'), WEBHOOK_DEFAULT_TIMEOUT,
+                                         1, WEBHOOK_MAX_TIMEOUT, 'timeout')
+            if t_err:
+                return {'error': t_err, 'config_error': True}
+            req = Request(url, data=body, method=method)
             req.add_header('Content-Type', content_type)
             for hdr_name, hdr_value in headers.items():
                 req.add_header(hdr_name, hdr_value)
 
-            with urlopen(req, timeout=10) as resp:  # nosec B310
+            with urlopen(req, timeout=timeout) as resp:  # nosec B310
                 status = resp.status
                 logger.info(f"Webhook '{cfg.get('name', 'webhook')}' ({wh_type}) sent: HTTP {status}")
                 return {'success': True, 'status': status}
@@ -411,6 +629,78 @@ class Notifier:
         except Exception as e:
             logger.error(f"Webhook failed: {e}")
             return {'error': str(e)}
+
+    @staticmethod
+    def _apply_webhook_auth(cfg: dict, headers: dict) -> Optional[str]:
+        """Add the configured authentication header. Returns an error or None."""
+        auth_type = cfg.get('auth_type') or 'none'
+        if auth_type == 'none':
+            return None
+        if auth_type == 'bearer':
+            token = (cfg.get('auth_token') or '').strip()
+            if not token:
+                return 'bearer authentication needs auth_token'
+            headers['Authorization'] = f'Bearer {token}'
+            return None
+        if auth_type == 'basic':
+            username = cfg.get('auth_username') or ''
+            password = cfg.get('auth_password') or ''
+            if not (username and password):
+                return 'basic authentication needs auth_username and auth_password'
+            raw = f'{username}:{password}'.encode('utf-8')
+            headers['Authorization'] = 'Basic ' + base64.b64encode(raw).decode('ascii')
+            return None
+        if auth_type == 'header':
+            token = (cfg.get('auth_token') or '').strip()
+            if not token:
+                return 'header authentication needs auth_token (the header value)'
+            name = (cfg.get('auth_header') or 'X-API-Key').strip()
+            if not re.match(r'^[A-Za-z0-9-]+$', name):
+                return 'auth_header is not a valid header name'
+            headers[name] = token
+            return None
+        return f"auth_type must be one of {', '.join(WEBHOOK_AUTH_TYPES)}"
+
+    def preview_webhook(self, cfg: dict, event: str = 'certificate_renewed',
+                        details: Optional[dict] = None) -> dict:
+        """Render what a generic webhook would send for a sample event, without
+        sending it: method, URL, header names (values of credentials masked),
+        and the body. Returns ``{'error': ...}`` for a config that cannot
+        render."""
+        err = validate_webhook_config(cfg)
+        if err:
+            return {'error': err}
+        details = details or {'domain': 'example.com', 'days_until_expiry': 29,
+                              'expires_at': '2026-09-19T08:00:00Z'}
+        title = event.replace('_', ' ').title()
+        message = f"{title}: {details.get('domain', 'example.com')}"
+        variables = webhook_template_variables(event, title, message, details)
+        template = cfg.get('payload_template')
+        if template:
+            body = render_payload_template(template, variables)
+        else:
+            body = json.dumps({
+                'event': event, 'title': title, 'message': message,
+                'details': details, 'timestamp': variables['timestamp'],
+            }, indent=2)
+        headers = {'User-Agent': 'CertMate-Webhook/2.0', 'Content-Type': 'application/json'}
+        for hdr_name, hdr_value in (cfg.get('headers') or {}).items():
+            headers[hdr_name] = hdr_value
+        self._apply_webhook_auth(cfg, headers)
+        if cfg.get('secret'):
+            headers['X-CertMate-Signature'] = 't=<timestamp>,v1=<hmac-sha256>'
+        shown = {}
+        for name, value in headers.items():
+            lowered = name.lower()
+            sensitive = any(word in lowered for word in ('authorization', 'key', 'token', 'secret', 'cookie'))
+            shown[name] = '********' if sensitive else value
+        return {
+            'method': (cfg.get('method') or 'POST').upper(),
+            'url': (cfg.get('url') or '').strip(),
+            'headers': shown,
+            'body': body,
+            'variables': [{'name': n, 'description': d} for n, d in TEMPLATE_VARIABLES],
+        }
 
     def test_channel(self, channel_type: str, config: dict) -> dict:
         """Test a notification channel with a test message."""

@@ -110,7 +110,7 @@ SECRET_MASK_SENTINEL = '********'
 # settings without re-entering a secret the UI deliberately does not
 # repopulate (see loadStorageBackendSettings in static/js/settings.js).
 _SECRET_KEY_RE = re.compile(
-    r'(token|secret|password|key|credential|hmac)',
+    r'(token|secret|password|key|credential|hmac|authorization|cookie)',
     re.IGNORECASE,
 )
 # Keys whose name matches the secret regex but whose value is NOT a secret.
@@ -294,6 +294,19 @@ def _restore_masked_list_secrets(old_list, new_list):
                     item[key] = prior[key]
                 else:
                     item.pop(key, None)
+            elif isinstance(item.get(key), dict):
+                # One level of nesting: a generic webhook's custom ``headers``
+                # map, whose Authorization / X-API-Key values are masked on
+                # GET like any other credential (#218) and must survive the
+                # round-trip the same way.
+                prior_nested = prior.get(key) if isinstance(prior.get(key), dict) else {}
+                nested = item[key]
+                for sub in list(nested.keys()):
+                    if _is_secret_key(sub) and nested.get(sub) == SECRET_MASK_SENTINEL:
+                        if sub in prior_nested:
+                            nested[sub] = prior_nested[sub]
+                        else:
+                            nested.pop(sub, None)
     return new_list
 
 
