@@ -17,4 +17,4 @@ boto3>=1.43.72
 hvac>=2.4.0
 
 # Infisical
-infisical-python>=2.0.0
+infisical-python>=2.3.6
