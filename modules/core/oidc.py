@@ -646,6 +646,21 @@ class OIDCManager:
             metadata = getattr(client, 'server_metadata', None) or {}
             end_session = metadata.get('end_session_endpoint')
             if not end_session:
+                # Authlib fills ``server_metadata`` lazily, on the first
+                # authorize/token call. After a process restart a user who
+                # logged in before it has a valid session and an id_token
+                # in their cookie, but the registry is empty — so without
+                # this fetch every logout after a restart degraded to
+                # local-only until somebody logged in again (#564).
+                loader = getattr(client, 'load_server_metadata', None)
+                if callable(loader):
+                    # Some Authlib versions return the dict, others only
+                    # populate client.server_metadata — accept either.
+                    metadata = (loader()
+                                or getattr(client, 'server_metadata', None)
+                                or {})
+                    end_session = metadata.get('end_session_endpoint')
+            if not end_session:
                 return None
             cfg = self._load_config()
             redirect = (post_logout_redirect_uri or cfg.get('post_logout_redirect_uri') or '').strip()

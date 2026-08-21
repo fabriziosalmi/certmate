@@ -33,4 +33,4 @@ gunicorn==26.0.0
 # gunicorn's worker import and restart-loop forever (#514). Nothing in CI had
 # ever built this file, which is why an advertised build argument shipped
 # broken; ci.yml now builds and boots it on every run.
-SQLAlchemy>=2.0.0,<3.0.0
+SQLAlchemy>=2.0.52,<3.0.0
