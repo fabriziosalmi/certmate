@@ -1625,38 +1625,43 @@
     // Multi-account support functions
     var providerAccounts = {};
 
+    // One request for every provider: /api/dns/accounts answers with a plain
+    // list of {provider, account_id, name, ...}, grouped by provider here.
+    //
+    // The previous version asked seven hardcoded providers one by one and read
+    // ``data.accounts`` off a response that has always been a list — so it
+    // never found an account, the selector never appeared, and every
+    // certificate went to the default account no matter which zone it was
+    // for (#563). Providers outside the seven never had a chance at all.
     function loadProviderAccounts() {
-        var providers = ['cloudflare', 'route53', 'digitalocean', 'azure', 'google', 'powerdns', 'rfc2136'];
-
-        providers.forEach(function (provider) {
-            fetch('/api/dns/' + provider + '/accounts', {
-                headers: API_HEADERS
-            }).then(function (response) {
-                if (response.ok) {
-                    return response.json().then(function (data) {
-                        var accounts = data.accounts || {};
-                        var accountsArray = Object.keys(accounts).map(function (accountId) {
-                            var account = accounts[accountId];
-                            account.account_id = accountId;
-                            return account;
-                        });
-                        providerAccounts[provider] = accountsArray;
-                    });
-                }
-            }).catch(function () {
-                providerAccounts[provider] = [];
-            });
-        });
+        return fetch('/api/dns/accounts', { headers: API_HEADERS })
+            .then(function (response) { return response.ok ? response.json() : []; })
+            .then(function (data) {
+                var list = Array.isArray(data) ? data
+                    : (data && Array.isArray(data.accounts) ? data.accounts : []);
+                var grouped = {};
+                list.forEach(function (account) {
+                    if (!account || !account.provider || !account.account_id) return;
+                    (grouped[account.provider] = grouped[account.provider] || []).push(account);
+                });
+                providerAccounts = grouped;
+                // The drawer may already be open on a provider: refresh it.
+                updateAccountSelection();
+            })
+            .catch(function () { providerAccounts = {}; });
     }
 
     function updateAccountSelection() {
         var providerSelect = document.getElementById('dns_provider_select');
         var accountContainer = document.getElementById('account-selection-container');
         var accountSelect = document.getElementById('account_select');
+        if (!providerSelect || !accountContainer || !accountSelect) return;
 
         var selectedProvider = providerSelect.value;
+        var previous = accountSelect.value;
 
-        if (selectedProvider && providerAccounts[selectedProvider] && providerAccounts[selectedProvider].length > 0) {
+        // A single account is the default account: nothing to choose.
+        if (selectedProvider && providerAccounts[selectedProvider] && providerAccounts[selectedProvider].length > 1) {
             accountContainer.style.display = 'block';
             accountSelect.innerHTML = '<option value="">Use default account</option>';
 
@@ -1666,6 +1671,9 @@
                 option.textContent = account.name || account.account_id;
                 accountSelect.appendChild(option);
             });
+            // Keep a value set before the list arrived (edit flow, or a fast
+            // hand) if it is still one of the options.
+            if (previous) accountSelect.value = previous;
         } else {
             accountContainer.style.display = 'none';
             accountSelect.innerHTML = '<option value="">Use default account</option>';
