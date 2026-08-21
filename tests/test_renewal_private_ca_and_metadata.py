@@ -11,7 +11,6 @@
    reported. ``_load_metadata`` already quarantined; renewal did not use it.
 """
 import os
-from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -52,7 +51,8 @@ def _real_ca_manager():
     get_ca_config / create_ca_trust_bundle are the real methods."""
     from modules.core.ca_manager import CAManager
     cam = CAManager.__new__(CAManager)
-    cam.get_ca_config = MagicMock(return_value=({'ca_cert': CA_PEM, 'acme_url': 'https://ca.internal/acme/directory'}, 'default'))
+    cam.get_ca_config = MagicMock(return_value=(
+        {'ca_cert': CA_PEM, 'acme_url': 'https://ca.internal/acme/directory'}, 'default'))
     return cam
 
 
