@@ -232,6 +232,25 @@ proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
 proxy_set_header X-Forwarded-Proto $scheme;
 ```
 
+#### The bundled nginx profile
+
+`docker-compose.yml` ships an optional `nginx` service (`--profile nginx`)
+that terminates TLS in front of CertMate. Its configuration is **not**
+tracked as `nginx.conf` — that file is yours and gitignored — but as
+`nginx.conf.example`, the same pattern as `.env.example` / `.env`:
+
+```bash
+cp nginx.conf.example nginx.conf
+# edit nginx.conf: replace every <your-domain> in ssl_certificate / ssl_certificate_key
+docker compose --profile nginx up -d
+```
+
+Copy **before** `up`: if `nginx.conf` does not exist on the host when the
+bind mount is created, Docker creates it as an empty *directory* and nginx
+fails to start. Upgrading from a release where `nginx.conf` was tracked:
+your edited copy stays in place (git now ignores it); diff it against the
+new `nginx.conf.example` after a pull to pick up upstream changes.
+
 #### Example: Zion (Rust TLS gateway + WAF)
 
 [Zion](https://github.com/fabriziosalmi/zion) is a high-performance Rust TLS

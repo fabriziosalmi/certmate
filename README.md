@@ -1866,7 +1866,7 @@ certmate/
  requirements.txt # Python dependencies
  docker-compose.yml # Docker Compose configuration
  Dockerfile # Container build instructions
- nginx.conf # Nginx reverse proxy config
+ nginx.conf.example # Nginx reverse proxy config template (copy to nginx.conf)
  .env.example # Environment template
  README.md # This documentation
  CONTRIBUTING.md # Contribution guidelines
