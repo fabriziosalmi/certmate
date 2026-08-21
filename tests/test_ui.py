@@ -332,3 +332,73 @@ class TestHelpPageUI:
         browser_page.goto(f"{BASE_URL}/help")
         browser_page.wait_for_load_state("networkidle")
         expect(browser_page.locator("section#troubleshooting")).to_be_visible()
+
+
+class TestClientCertListKeepsItsFilter:
+    """#562 / #561 — the client list opens on Active, keeps that view across
+    a refresh (the post-revoke reload used to snap back to All), remembers
+    it across page loads, and the details panel offers the .pfx bundle the
+    API has served since v2.24.0 but the UI never exposed."""
+
+    def _open_client_tab(self, page):
+        page.goto(BASE_URL)
+        page.wait_for_load_state("domcontentloaded")
+        page.wait_for_timeout(1500)
+        client_btn = page.locator("text=Client Certificates").first
+        expect(client_btn).to_be_visible(timeout=10000)
+        client_btn.click()
+        page.wait_for_timeout(800)
+
+    def test_active_is_the_view_and_it_survives_refresh_and_reload(self, browser_page):
+        browser_page.goto(f"{BASE_URL}/settings")
+        browser_page.wait_for_load_state("networkidle")
+        ids = browser_page.evaluate("""
+            async () => {
+                const out = [];
+                for (const cn of ['filter-keep-a', 'filter-keep-b']) {
+                    const r = await fetch('/api/client-certs', {
+                        method: 'POST', headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({common_name: cn, cert_usage: 'api-mtls', days_valid: 30})
+                    });
+                    if (!r.ok) throw new Error('create ' + cn + ' -> ' + r.status);
+                    const body = await r.json();
+                    out.push(body.identifier || (body.certificate && body.certificate.identifier));
+                }
+                return out;
+            }
+        """)
+        assert len(ids) == 2 and all(ids), ids
+        browser_page.evaluate("localStorage.removeItem('certmate.clientCerts.filters')")
+
+        self._open_client_tab(browser_page)
+        active_chip = browser_page.locator('[data-cc-status-chip="active"]')
+        expect(active_chip).to_have_attribute("aria-pressed", "true")
+        rows = browser_page.locator('#certTableBody button[data-cc-action="details"]')
+        expect(rows).to_have_count(2, timeout=10000)
+
+        # Revoke one through the API and refresh the way the Revoke button
+        # does: the view must still be Active, with one row fewer.
+        browser_page.evaluate("""
+            async (id) => {
+                const r = await fetch('/api/client-certs/' + id + '/revoke', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({reason: 'test'})
+                });
+                if (!r.ok) throw new Error('revoke -> ' + r.status);
+                window.ccRefresh();
+            }
+        """, ids[0])
+        expect(rows).to_have_count(1, timeout=10000)
+        expect(active_chip).to_have_attribute("aria-pressed", "true")
+
+        # Remembered across a page load.
+        browser_page.locator('[data-cc-status-chip="revoked"]').click()
+        expect(rows).to_have_count(1, timeout=10000)
+        self._open_client_tab(browser_page)
+        expect(browser_page.locator('[data-cc-status-chip="revoked"]')).to_have_attribute("aria-pressed", "true")
+        expect(rows).to_have_count(1, timeout=10000)
+
+        # The details panel has the PKCS#12 button next to crt/key/csr.
+        rows.first.click()
+        pfx = browser_page.locator('button[onclick="downloadCertFile(\'pfx\')"]')
+        expect(pfx).to_be_visible(timeout=5000)
