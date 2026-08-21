@@ -42,6 +42,8 @@ def _plant_instance(file_ops):
         'accounts/acme-v02.api.letsencrypt.org/directory/abc/private_key.json': '{"kty":"RSA"}',
         'accounts/acme-v02.api.letsencrypt.org/directory/abc/regr.json': '{}',
         'renewal/example.com.conf': 'conf',
+        'keys/0000_key-certbot.pem': 'KEY0', 'keys/0001_key-certbot.pem': 'KEY1',
+        'csr/0000_csr-certbot.pem': 'CSR0',
     }.items():
         path = dom / rel
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -74,8 +76,11 @@ KEY_FILES = {
     'data/certs/ca/ca.key',
     'data/certs/client/alice/alice.key',
     'data/certs/client/alice/alice.p12',
+    'certificates/example.com/keys/0000_key-certbot.pem',
+    'certificates/example.com/keys/0001_key-certbot.pem',
 }
 PUBLIC_FILES = {
+    'certificates/example.com/csr/0000_csr-certbot.pem',
     'certificates/example.com/cert.pem',
     'certificates/example.com/fullchain.pem',
     'certificates/example.com/metadata.json',
@@ -115,7 +120,7 @@ def test_disaster_recovery_backup_carries_every_key(file_ops):
 @pytest.mark.parametrize('name, expected', [
     ('privkey.pem', True), ('privkey1.pem', True), ('PRIVKEY.PEM', True),
     ('private_key.json', True), ('ca.key', True), ('alice.key', True),
-    ('cert.pfx', True), ('bundle.p12', True),
+    ('cert.pfx', True), ('bundle.p12', True), ('0000_key-certbot.pem', True),
     ('cert.pem', False), ('fullchain.pem', False), ('chain.pem', False),
     ('regr.json', False), ('metadata.json', False), ('ca.crt', False),
     ('crl.pem', False), ('private_key.json.bak', False), ('keyring.txt', False),
@@ -140,3 +145,44 @@ def test_reason_cannot_steer_the_archive_outside_the_backup_dir(file_ops):
     filename = file_ops.create_unified_backup({'domains': []}, '../../escape')
     assert filename and '/' not in filename and '..' not in filename
     assert (file_ops.backup_dir / 'unified' / filename).exists()
+
+
+def test_share_safe_archive_is_refused_over_an_instance_with_certificates(file_ops):
+    _plant_instance(file_ops)
+    filename = file_ops.create_unified_backup({'domains': []}, 'nightly')
+    before = (file_ops.cert_dir / 'example.com' / 'privkey.pem').read_text()
+    (file_ops.cert_dir / 'example.com' / 'cert.pem').write_text('NEWER-CERT-ON-DISK')
+
+    ok = file_ops.restore_unified_backup(str(file_ops.backup_dir / 'unified' / filename))
+
+    assert ok is False
+    assert 'key_material_excluded' in (file_ops.last_restore_error or '')
+    assert 'example.com' in file_ops.last_restore_error
+    # Nothing written: the on-disk pair is untouched.
+    assert (file_ops.cert_dir / 'example.com' / 'cert.pem').read_text() == 'NEWER-CERT-ON-DISK'
+    assert (file_ops.cert_dir / 'example.com' / 'privkey.pem').read_text() == before
+
+
+def test_share_safe_archive_restores_onto_an_empty_instance(file_ops):
+    _plant_instance(file_ops)
+    filename = file_ops.create_unified_backup({'domains': []}, 'nightly')
+    import shutil
+    shutil.rmtree(file_ops.cert_dir / 'example.com')
+
+    ok = file_ops.restore_unified_backup(str(file_ops.backup_dir / 'unified' / filename))
+
+    assert ok is True
+    assert file_ops.last_restore_error is None
+    assert (file_ops.cert_dir / 'example.com' / 'cert.pem').exists()
+    assert not (file_ops.cert_dir / 'example.com' / 'privkey.pem').exists()
+
+
+def test_disaster_recovery_archive_restores_over_certificates(file_ops):
+    _plant_instance(file_ops)
+    filename = file_ops.create_unified_backup({'domains': []}, 'dr', include_secrets=True)
+    (file_ops.cert_dir / 'example.com' / 'privkey.pem').write_text('ROTATED')
+
+    ok = file_ops.restore_unified_backup(str(file_ops.backup_dir / 'unified' / filename))
+
+    assert ok is True and file_ops.last_restore_error is None
+    assert (file_ops.cert_dir / 'example.com' / 'privkey.pem').read_text() == 'KEY'

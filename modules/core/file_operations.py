@@ -69,12 +69,20 @@ _BACKUP_DATA_SUBTREES = ('certs', 'audit', 'inventory')
 _KEY_FILE_SUFFIXES = frozenset({'.key', '.pfx', '.p12'})
 
 
+# certbot's config-dir is the domain directory, so its ``keys/`` subtree —
+# a copy of every private key it generated, named NNNN_key-certbot.pem — is
+# walked too. Excluded by directory in a share-safe archive (a directory rule
+# survives a future change of file-name convention; a name pattern would not),
+# and the name is in the predicate as well for anything that copies one out.
+_KEY_MATERIAL_DIRS = frozenset({'keys'})
+
+
 def _is_key_material(path) -> bool:
     """True for a file that carries a private key."""
     name = path.name.lower()
     if name.startswith('privkey') and name.endswith('.pem'):
         return True
-    if name == 'private_key.json':
+    if name == 'private_key.json' or name.endswith('_key-certbot.pem'):
         return True
     return path.suffix.lower() in _KEY_FILE_SUFFIXES
 
@@ -191,6 +199,8 @@ class FileOperations:
             self.backup_dir.resolve(),
             self.logs_dir.resolve()
         ]
+        # Why the last restore_unified_backup() returned False, when it knows.
+        self.last_restore_error = None
 
     def safe_file_read(self, file_path, is_json=False, default=None):
         """Safely read a file with proper error handling and file locking"""
@@ -311,8 +321,12 @@ class FileOperations:
         ``.key``/``.pfx``/``.p12`` under data/certs/ (the private CA key
         included). Certificates, chains, metadata, the audit chain and
         the inventory are all there. Such an archive cannot restore an
-        instance on its own (the manifest says so: ``secrets_masked`` +
-        ``key_material_excluded``), and the restore path knows it.
+        instance on its own; the manifest says so (``secrets_masked`` +
+        ``key_material_excluded``) and ``restore_unified_backup`` reads
+        the flag: it refuses to lay key-less certificates over an
+        instance that has certificates, because cert.pem from the archive
+        next to the privkey.pem already on disk is a pair that does not
+        complete a handshake.
 
         ``True`` is the **disaster-recovery** archive: plaintext settings
         and every key. Callers MUST audit-log the opt-in because the file
@@ -413,7 +427,8 @@ class FileOperations:
                         rel_parts = cert_file.relative_to(domain_dir).parts
                         if rel_parts and rel_parts[0] in _BACKUP_EXCLUDE_DIRS:
                             continue
-                        if exclude_keys and _is_key_material(cert_file):
+                        if exclude_keys and (rel_parts[0] in _KEY_MATERIAL_DIRS
+                                             or _is_key_material(cert_file)):
                             key_files_excluded += 1
                             continue
                         # Add file to zip with relative path under certificates/
@@ -654,6 +669,40 @@ class FileOperations:
                 return err or "hook failed current validator"
         return None
 
+    def _refuse_keyless_restore_over_certificates(self, zipf):
+        """Return a reason string when *zipf* is a share-safe archive
+        (``key_material_excluded``) and this instance already has
+        certificates on disk; None when the restore may proceed."""
+        manifest = None
+        names = set(zipf.namelist())
+        for candidate in ("backup_metadata.json", "settings.json"):
+            if candidate not in names:
+                continue
+            try:
+                parsed = json.loads(zipf.read(candidate).decode("utf-8"))
+            except (ValueError, UnicodeDecodeError):
+                continue
+            if candidate == "settings.json":
+                parsed = parsed.get("metadata") if isinstance(parsed, dict) else None
+            if isinstance(parsed, dict):
+                manifest = parsed
+                break
+        if not manifest or not manifest.get("key_material_excluded"):
+            return None
+        if not self.cert_dir.exists():
+            return None
+        existing = sorted(
+            d.name for d in self.cert_dir.iterdir()
+            if d.is_dir() and ((d / "privkey.pem").exists() or (d / "cert.pem").exists()))
+        if not existing:
+            return None
+        shown = ", ".join(existing[:5]) + (" …" if len(existing) > 5 else "")
+        return (f"this archive is share-safe and contains no private keys "
+                f"(key_material_excluded); restoring it over an instance that already "
+                f"holds certificates ({shown}) would leave certificates that do not match "
+                f"the keys on disk. Restore a disaster-recovery archive "
+                f"(include_secrets=true) instead, or restore onto an empty instance.")
+
     def restore_unified_backup(self, backup_file_path):
         """Restore from a unified backup file (both settings and certificates).
 
@@ -718,7 +767,19 @@ class FileOperations:
             settings_data = None
 
             # Extract unified backup
+            self.last_restore_error = None
             with zipfile.ZipFile(backup_path, 'r') as zipf:
+                # Gate 0: a share-safe archive carries no private keys. Laid
+                # over an instance that has certificates it would replace
+                # cert.pem/chain.pem/fullchain.pem and leave privkey.pem as it
+                # was — a certificate that does not match its key, written
+                # into the flat copy AND live/ so the two agree and the
+                # flat-vs-live repair sees nothing to fix (review, #582).
+                refusal = self._refuse_keyless_restore_over_certificates(zipf)
+                if refusal:
+                    self.last_restore_error = refusal
+                    logger.error(f"Refusing restore: {refusal}")
+                    return False
                 # First, restore settings
                 if "settings.json" in zipf.namelist():
                     settings_content = zipf.read("settings.json")
