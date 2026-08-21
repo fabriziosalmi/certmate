@@ -412,8 +412,12 @@ def configure_app(container: AppContainer, app, test_config=None):
     except OSError as e:
         # Non-fatal at boot; HTTP-01 issuance would fail later with a clear
         # error if the directory is genuinely unwritable.
-        logger.warning("Could not create ACME challenge directory %s: %s",
-                       challenge_dir, e)
+        # f-string, not %-args: this logger is a StructuredLogger, whose
+        # warning(msg, **kwargs) takes no positional args — the lazy-% form
+        # raised TypeError here and took the boot down with a one-line
+        # message and no traceback, exactly when the directory was not
+        # writable (audit 2026-08-18; tests/test_structured_logger_call_shape.py).
+        logger.warning(f"Could not create ACME challenge directory {challenge_dir}: {e}")
 
     if test_config:
         app.config.update(test_config)

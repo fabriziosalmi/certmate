@@ -802,7 +802,7 @@ Each certificate has a `metadata.json` file containing:
 - Enable audit logging for compliance
 - Configure rate limiting based on load
 - Regular CRL updates (daily or on revocation)
-- Backup CA keys and metadata
+- Back up CA keys and metadata with a disaster-recovery archive (`include_secrets=true` + `CERTMATE_BACKUP_PASSPHRASE`); the default share-safe backup deliberately leaves the CA key out
 - Monitor audit logs for suspicious activity
 
 ### High Availability

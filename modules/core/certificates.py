@@ -7,6 +7,7 @@ import os
 import copy
 import hashlib
 import json
+import re
 import shlex
 import subprocess
 import sys
@@ -88,6 +89,16 @@ _REISSUE_OWNED_METADATA_KEYS = frozenset({
     'domain', 'san_domains', 'dns_provider', 'challenge_type', 'created_at',
     'email', 'staging', 'account_id', 'ca_provider', 'ca_account_id',
     'domain_alias', 'alias_dns_provider', 'storage_warning',
+})
+
+# Every key CertMate itself writes into metadata.json. Used as an allowlist
+# when a corrupt file is quarantined and the log names what it still carried:
+# intersecting with this set means no identifier-shaped VALUE found in the
+# debris ('{"ca_provider": "private_ca": ' matches "private_ca" as a key)
+# can reach the log — by construction, not by luck.
+_KNOWN_METADATA_KEYS = _REISSUE_OWNED_METADATA_KEYS | frozenset({
+    'renewed_at', 'deployment_host', 'deployment_port', 'deployment_protocol',
+    'deployment_status', 'key_type', 'key_size', 'elliptic_curve',
 })
 
 
@@ -265,6 +276,91 @@ class CertificateManager:
             tmp.unlink(missing_ok=True)
             raise
 
+    def _stale_flat_files(self, src_dir: Path, dest_dir: Path):
+        """Which of CERTIFICATE_FILES differ between live/ and the flat copy.
+
+        `live/<domain>/` is certbot's copy and the only ground truth. The flat
+        files beside it are what /download serves, what deploy hooks ship and
+        what the storage backends push, so any disagreement between the two is
+        an operator-visible defect regardless of how it happened.
+
+        Returns [] when the live directory is absent — an imported or
+        externally-managed certificate has nothing to reconcile against, and
+        must not be reported as stale.
+        """
+        if not src_dir.is_dir():
+            return []
+        stale = []
+        for file_name in CERTIFICATE_FILES:
+            src_file, dest_file = src_dir / file_name, dest_dir / file_name
+            if not src_file.exists():
+                continue
+            try:
+                if (not dest_file.exists()
+                        or src_file.read_bytes() != dest_file.read_bytes()):
+                    stale.append(file_name)
+            except OSError:
+                stale.append(file_name)
+        return stale
+
+    def _publish_flat_files(self, src_dir: Path, dest_dir: Path) -> dict:
+        """Copy live/ to the flat directory as one unit, not four.
+
+        `_atomic_binary_copy` is atomic per file and there was no atomicity
+        across the four, no rollback on the exception paths, and privkey.pem is
+        LAST in CERTIFICATE_FILES. A failure on the fourth file therefore left
+        a new cert.pem, chain.pem and fullchain.pem beside the PREVIOUS
+        privkey.pem — a pair that cannot complete a handshake, served straight
+        off local disk by /api/certificates/<domain>/download and pushed to
+        every deploy hook.
+
+        Worse than the window was the permanence: the next scheduled renewal
+        fingerprints live/, finds it already fresh, concludes renewed=False and
+        returns before this copy ever runs again, so nothing repaired it and
+        check_renewals booked it as skipped_not_due — no failure, no alert.
+
+        Staging every file first means a failure while staging leaves the
+        flat copy exactly as it was: still the old certificate, still
+        internally consistent, still serving. The promote loop is four renames
+        within the same directory — not a transaction: a failure between the
+        second and the third rename still leaves a mixed generation. What
+        changed is that the window shrank from four full read+write copies to
+        four metadata renames, and that the state is no longer permanent: the
+        next renewal check compares the flat copy with live/ and republishes
+        (see the not-yet-due branch of renew_certificate), where the old code
+        returned before the copy loop and booked skipped_not_due forever.
+        Promoting privkey.pem first would not help — new key beside old
+        certificate is just as unusable.
+        """
+        # Leftovers from an attempt that died between staging and promote
+        # (SIGKILL, OOM, container stopped) are cleaned by nobody else; the
+        # caller holds the domain lock, so whatever is here is from a dead
+        # attempt and not from a publish in flight. Four known names, no
+        # wildcard: this is a delete, and the set of files it can ever touch
+        # is spelled out here rather than matched.
+        for file_name in CERTIFICATE_FILES:
+            (dest_dir / f"{file_name}.staging").unlink(missing_ok=True)
+        staged = []
+        try:
+            for file_name in CERTIFICATE_FILES:
+                src_file = src_dir / file_name
+                if not src_file.exists():
+                    continue
+                staging = dest_dir / f"{file_name}.staging"
+                staging.write_bytes(src_file.read_bytes())
+                shutil.copymode(src_file, staging)
+                staged.append((staging, dest_dir / file_name))
+        except Exception:
+            for staging, _dest in staged:
+                staging.unlink(missing_ok=True)
+            raise
+
+        published = {}
+        for staging, dest_file in staged:
+            staging.replace(dest_file)
+            published[dest_file.name] = dest_file.read_bytes()
+        return published
+
     @staticmethod
     def _atomic_json_write(path: Path, data: dict) -> None:
         """Write JSON atomically via a temp file + rename to avoid partial writes on crash."""
@@ -380,7 +476,14 @@ class CertificateManager:
         try:
             with open(metadata_file, 'r', encoding='utf-8') as f:
                 metadata = json.load(f)
-                return metadata if isinstance(metadata, dict) else {}
+            if isinstance(metadata, dict):
+                return metadata
+            # Valid JSON of the wrong shape (a list, a string) is as unusable
+            # as a syntax error and was the one corruption that still came
+            # back as {} without a quarantine — and so got overwritten by the
+            # next save (review, #583). Same treatment.
+            raise json.JSONDecodeError(
+                f"metadata is a {type(metadata).__name__}, not an object", "", 0)
         except json.JSONDecodeError as e:
             # The on-disk metadata is unparseable. Quarantine it before
             # returning {} — otherwise the next _save_metadata would overwrite
@@ -388,12 +491,27 @@ class CertificateManager:
             quarantine = metadata_file.with_suffix(
                 f'.json.corrupt-{utc_now().strftime("%Y%m%dT%H%M%SZ")}'
             )
+            # Name the keys the damaged file still visibly carries, so the
+            # operator learns WHAT was lost (ca_provider, domain_alias,
+            # san_domains, deployment_*) and not only that something was.
+            # Names only, never values. With ca_provider gone, a private-CA
+            # certificate renews without its trust bundle until the
+            # .corrupt-* file is repaired — see _renewal_ca_bundle.
+            try:
+                raw = metadata_file.read_text(encoding='utf-8', errors='replace')
+            except OSError:
+                raw = ''
+            lost_keys = sorted(
+                set(re.findall(r'"([A-Za-z_][A-Za-z0-9_]*)"\s*:', raw)) & _KNOWN_METADATA_KEYS)
             try:
                 metadata_file.rename(quarantine)
                 logger.error(
                     f"Corrupt metadata for {domain}: {e}. "
                     f"Quarantined to {quarantine.name}; downstream callers "
-                    f"will see an empty metadata dict until a fresh write."
+                    f"will see an empty metadata dict until a fresh write. "
+                    f"Keys still readable in the damaged file: "
+                    f"{', '.join(lost_keys) if lost_keys else 'none'} — "
+                    f"repair it from the .corrupt-* copy to recover them."
                 )
             except OSError as rename_err:
                 logger.error(
@@ -971,6 +1089,10 @@ class CertificateManager:
                 'storage_warning': metadata.get('storage_warning'),
                 'deployment_port': metadata.get('deployment_port'),
                 'deployment_protocol': metadata.get('deployment_protocol'),
+                # When the certificate was issued and last renewed (ISO text
+                # from metadata), so /metrics can report real timestamps.
+                'created_at': metadata.get('created_at'),
+                'renewed_at': metadata.get('renewed_at'),
             }
         except Exception as e:
             logger.error(f"Error parsing certificate for {domain}: {e}")
@@ -1616,6 +1738,7 @@ class CertificateManager:
             raise DomainOperationInProgress(domain)
         alias_hook_config = None
         credentials_file = None
+        ca_bundle_path = None
         # Secret side files the credentials ini references (Google's SA
         # JSON); deleted in the finally alongside the ini.
         extra_credential_files = []
@@ -1645,14 +1768,14 @@ class CertificateManager:
             logs_dir = domain_dir / 'logs'
 
             metadata_file = domain_dir / 'metadata.json'
-            metadata = {}
-            if metadata_file.exists():
-                try:
-                    with open(metadata_file, 'r') as f:
-                        metadata = json.load(f)
-                except Exception as e:
-                    logger.warning(f"Failed to read metadata for renewal of {domain}: {e}")
-            
+            # The one metadata reader that quarantines a corrupt file instead
+            # of returning {} over it. The inline json.load this replaces did
+            # the latter — and the renewal then wrote renewed_at into that
+            # {} and saved it, destroying dns_provider, san_domains,
+            # ca_provider, domain_alias and every deployment_* key in one
+            # pass, without a .corrupt-* copy and with success reported.
+            metadata = self._load_metadata(domain)
+
             cmd = [
                 'certbot', 'renew',
                 '--cert-name', domain,
@@ -1685,6 +1808,16 @@ class CertificateManager:
             # renewal, causing Route53 and other env-var-based providers to
             # fail with "Unable to locate credentials").
             process_env = os.environ.copy()
+            # A private ACME CA whose endpoint presents a certificate from its
+            # own root: creation passed the trust bundle through
+            # REQUESTS_CA_BUNDLE (ca_manager.build_certbot_command); renewal
+            # built its own environment and never read ca_provider, so every
+            # renewal against such a CA failed TLS verification — silently,
+            # until the certificate expired. Same bundle, same variable, same
+            # cleanup in the finally below.
+            ca_bundle_path = self._renewal_ca_bundle(metadata)
+            if ca_bundle_path:
+                process_env['REQUESTS_CA_BUNDLE'] = ca_bundle_path
 
             dns_provider = metadata.get('dns_provider')
             challenge_type = metadata.get('challenge_type', 'dns-01')
@@ -1857,11 +1990,37 @@ class CertificateManager:
 
                 if not renewed:
                     logger.info(f"Certificate for {domain} is not yet due for renewal; no action taken")
+                    # Before returning: does the flat copy still agree with
+                    # live/? This branch is where a half-finished publish
+                    # became permanent — it returns before the copy below, so
+                    # nothing ever retried it and the daily run kept booking
+                    # the domain as skipped_not_due. Reconciling here is what
+                    # heals an instance that is already in that state; the
+                    # staged publish above is what stops it happening again.
+                    stale = self._stale_flat_files(domain_dir / 'live' / domain, domain_dir)
+                    if stale:
+                        logger.warning(
+                            "Certificate for %s did not need renewing, but its "
+                            "served copy disagreed with certbot's: %s. "
+                            "Republishing — this is the state where a new "
+                            "certificate can sit beside the previous private "
+                            "key.", domain, ", ".join(stale))
+                        try:
+                            self._publish_flat_files(domain_dir / 'live' / domain, domain_dir)
+                        except Exception as republish_error:
+                            logger.error(
+                                "Could not republish the served copy for %s: %s",
+                                domain, republish_error)
+                            raise RuntimeError(
+                                f"{domain} is serving files that do not match "
+                                f"its certificate and they could not be "
+                                f"repaired: {republish_error}") from republish_error
                     self._invalidate_certificate_info_cache(domain)
                     return {
                         'success': True,
                         'renewed': False,
                         'domain': domain,
+                        'repaired': stale or None,
                         'message': 'Certificate not yet due for renewal',
                     }
 
@@ -1869,14 +2028,7 @@ class CertificateManager:
                 src_dir = domain_dir / 'live' / domain
                 dest_dir = domain_dir
                 
-                cert_files = {}
-                for file_name in CERTIFICATE_FILES:
-                    src_file = src_dir / file_name
-                    dest_file = dest_dir / file_name
-                    if src_file.exists():
-                        self._atomic_binary_copy(src_file, dest_file)
-                        with open(dest_file, 'rb') as f:
-                            cert_files[file_name] = f.read()
+                cert_files = self._publish_flat_files(src_dir, dest_dir)
                 
                 # Stamp the renewal BEFORE storing, so the external copy
                 # carries the same renewed_at as the local one; then persist
@@ -1939,7 +2091,52 @@ class CertificateManager:
                         os.unlink(cred_path)
                     except (FileNotFoundError, OSError):
                         pass
+            if ca_bundle_path:
+                try:
+                    os.unlink(ca_bundle_path)
+                except (FileNotFoundError, OSError):
+                    pass
             domain_lock.release()
+
+    def _renewal_ca_bundle(self, metadata):
+        """Return the trust-bundle path certbot needs to talk to this
+        certificate's CA at renewal, or None.
+
+        Mirrors what ``build_certbot_command`` does at issuance for
+        ``private_ca``: resolve the CA account the certificate was issued
+        under and write its ``ca_cert`` to a temp file.
+
+        A quarantined metadata.json (see _load_metadata) no longer carries
+        ca_provider, so until the operator repairs it from the .corrupt-*
+        copy the certificate renews without a bundle — the quarantine log
+        line names the lost keys for exactly that reason.
+
+        When the account is gone or has no bundle the attempt still goes
+        ahead without one — honestly: against an endpoint whose
+        certificate chains to the private root it will fail TLS
+        verification, which is the pre-fix behaviour and what the error
+        line says; against an endpoint with a publicly trusted
+        certificate (a private ACME CA behind a public-cert front) it
+        succeeds, which is why refusing here would be wrong.
+        """
+        if metadata.get('ca_provider') != 'private_ca' or self.ca_manager is None:
+            return None
+        account_id = metadata.get('ca_account_id')
+        try:
+            account_config, _ = self.ca_manager.get_ca_config('private_ca', account_id)
+            bundle = self.ca_manager.create_ca_trust_bundle('private_ca', account_config)
+        except Exception as e:
+            logger.error(f"Renewal will run without the private CA trust bundle "
+                         f"(private_ca/{account_id or 'default'}: {e}); it fails TLS "
+                         f"verification unless the ACME endpoint presents a publicly "
+                         f"trusted certificate")
+            return None
+        if not bundle:
+            logger.error(f"Renewal will run without the private CA trust bundle: account "
+                         f"private_ca/{account_id or 'default'} has no ca_cert; it fails TLS "
+                         f"verification unless the ACME endpoint presents a publicly "
+                         f"trusted certificate")
+        return bundle
 
     def check_renewals(self):
         """Check and renew certificates that are about to expire.

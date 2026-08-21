@@ -3036,7 +3036,15 @@ def create_api_resources(api, models, managers):
                 pre_restore_backup = None
                 if create_backup:
                     current_settings = settings_manager.load_settings()
-                    pre_restore_backup = file_ops.create_unified_backup(current_settings, "pre_restore")
+                    # include_secrets=True: this archive exists for exactly one
+                    # purpose — putting the instance back if the restore below
+                    # goes wrong. A masked rollback cannot recover a single
+                    # credential, which makes it a file that looks like a
+                    # safety net and is not one. It never leaves the host and
+                    # is written chmod 0600, and the opt-in is audit-logged
+                    # with the restore entry below.
+                    pre_restore_backup = file_ops.create_unified_backup(
+                        current_settings, "pre_restore", include_secrets=True)
                     logger.info(f"Created pre-restore backup: {pre_restore_backup}")
 
                 # Restore from unified backup
@@ -3073,6 +3081,12 @@ def create_api_resources(api, models, managers):
 
                     return response, 200
                 else:
+                    reason = getattr(file_ops, 'last_restore_error', None)
+                    if reason:
+                        # The restore declined for a reason it can state
+                        # (a share-safe archive over a populated instance);
+                        # nothing was written. 409, not 500.
+                        return {'error': f'Restore refused: {reason}'}, 409
                     return {'error': 'Failed to restore unified backup'}, 500
 
             except FileNotFoundError:
