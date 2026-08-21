@@ -124,38 +124,39 @@ class TestSettingsUI:
         expect(cloudflare_card).to_be_visible(timeout=5000)
 
     def test_auth_security_banner_visible(self, browser_page):
+        """Disabling local auth on an instance where it is the only credential
+        is refused (409) since #581: it would put the instance back into setup
+        mode, where every endpoint answers an anonymous caller as admin. So the
+        'authentication is disabled' banner must NOT appear, the toggle must
+        stay on, and the refusal must say why. (Before #581 this test disabled
+        auth and asserted the banner; that path is now the guarded one.)"""
         browser_page.goto(f"{BASE_URL}/settings")
         browser_page.wait_for_load_state("networkidle")
 
-        # Disable local auth via browser fetch (authenticated via session cookie)
-        browser_page.evaluate("""
-            fetch('/api/auth/config', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({local_auth_enabled: false})
-            })
+        result = browser_page.evaluate("""
+            async () => {
+                const r = await fetch('/api/auth/config', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({local_auth_enabled: false})
+                });
+                return {status: r.status, body: await r.json()};
+            }
         """)
-        browser_page.wait_for_timeout(500)
+        assert result["status"] == 409, result
+        assert "setup mode" in (result["body"].get("hint") or ""), result
 
-        # Reload to pick up change
+        # Reload: the door stayed closed, so no banner.
         browser_page.reload()
         browser_page.wait_for_load_state("networkidle")
-
-        # Banner is inside the Users tab — switch to it first
         browser_page.locator('button[role="tab"]:has-text("Users")').click(timeout=10000)
         browser_page.wait_for_timeout(500)
+        expect(browser_page.locator("#authSecurityBanner")).to_be_hidden()
 
-        banner = browser_page.locator("#authSecurityBanner")
-        expect(banner).to_be_visible(timeout=10000)
-
-        # Re-enable auth for subsequent tests
-        browser_page.evaluate("""
-            fetch('/api/auth/config', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({local_auth_enabled: true})
-            })
+        still_on = browser_page.evaluate("""
+            async () => { const r = await fetch('/api/auth/config'); return (await r.json()); }
         """)
+        assert still_on.get("local_auth_enabled") is True, still_on
 
     def test_save_settings_button(self, browser_page):
         browser_page.goto(f"{BASE_URL}/settings")
