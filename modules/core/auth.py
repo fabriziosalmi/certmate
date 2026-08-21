@@ -582,7 +582,10 @@ class AuthManager:
                             keys = s.get('api_keys') or {}
                             target = keys.get(matched_id)
                             if target is not None:
-                                target['last_used_at'] = now
+                                # ISO text, not the datetime object: json.dump
+                                # refused the object, the swallowed error kept
+                                # the column empty for every key, forever.
+                                target['last_used_at'] = now.isoformat()
                                 s['api_keys'] = keys
                         try:
                             self.settings_manager.update(_touch, None)
