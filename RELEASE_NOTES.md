@@ -17,7 +17,7 @@ rest, unreadable without `CERTMATE_BACKUP_PASSPHRASE`. If you shared an archive
 believing it harmless, list what it holds —
 
 ```
-unzip -l backup_XXXX.zip | grep -E 'privkey|private_key|\.key$|\.pfx$'
+unzip -l backup_XXXX.zip | grep -E 'privkey|private_key|_key-certbot\.pem$|\.key$|\.pfx$|\.p12$'
 ```
 
 — and treat every key you find as exposed: reissue those certificates and,
@@ -56,8 +56,8 @@ through; it now redacts the credential.
 masked the settings tree and called the archive share-safe, in the manifest,
 in its docstring and in the web route's. The archive walk never looked at
 what it was zipping: every ACME `privkey.pem` (flat, `live/`, `archive/`,
-certbot's own `keys/` copies), the ACME account key, the private CA key and
-any `.pfx` went into every automatic backup.
+certbot's own `keys/*_key-certbot.pem` copies), the ACME account key, the
+private CA key and any `.pfx`/`.p12` bundle went into every automatic backup.
 
 Share-safe now means it: no key material from either tree, the manifest says
 `key_material_excluded`, and the restore path reads the flag — it refuses,
