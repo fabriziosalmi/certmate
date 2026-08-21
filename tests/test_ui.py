@@ -515,7 +515,9 @@ class TestDeliberateNoAuthToggle:
 
     def test_cancel_keeps_auth_on_and_confirm_turns_it_off(self, browser_page):
         self._open_users_tab(browser_page)
-        assert browser_page.evaluate("document.getElementById('localAuthToggle').checked") is True
+        # The toggle's state arrives from /api/auth/config asynchronously;
+        # wait for it rather than reading it the instant the tab opens.
+        expect(browser_page.locator("#localAuthToggle")).to_be_checked(timeout=10000)
 
         # Cancel: the 409 arrives, the dialog shows, nothing changes.
         browser_page.evaluate("document.getElementById('localAuthToggle').click()")
@@ -527,7 +529,7 @@ class TestDeliberateNoAuthToggle:
         assert browser_page.evaluate("""
             async () => (await (await fetch('/api/auth/config')).json()).local_auth_enabled
         """) is True
-        assert browser_page.evaluate("document.getElementById('localAuthToggle').checked") is True
+        expect(browser_page.locator("#localAuthToggle")).to_be_checked(timeout=5000)
 
         # Confirm: the request is repeated with the flag and auth goes off.
         try:
