@@ -810,7 +810,16 @@ class AuthManager:
                     settings['users'] = stored_users
 
                 try:
-                    self.settings_manager.update(_touch, "user_management")
+                    # No backup for a plain login. save_settings writes a full
+                    # unified ZIP of settings + certificates for every reason
+                    # that is not None and then prunes to MAX_BACKUPS_PER_TYPE
+                    # (50), so recording last_login evicted a real restore
+                    # point every time somebody signed in. A hash upgrade IS
+                    # worth a restore point; a timestamp is not. The
+                    # backup_reason=None idiom already exists for exactly this
+                    # (api_keys last_used_at).
+                    self.settings_manager.update(
+                        _touch, "password_hash_upgraded" if upgraded else None)
                     if upgraded:
                         logger.info(
                             f"Upgraded the stored password hash for '{username}'"
@@ -995,11 +1004,50 @@ class AuthManager:
         OIDC/SSO-only deployment — but the instance stayed world-open because
         local auth was never enabled. A fresh install with no operator-provided
         credential is unchanged: it stays in setup mode so onboarding works."""
+        return self.setup_mode_for(self.settings_manager.load_settings())
+
+    def setup_mode_for(self, settings):
+        """``is_setup_mode()`` evaluated against an arbitrary settings dict.
+
+        One definition, two callers: the live predicate above, and
+        ``would_open_setup_mode`` below, which asks the same question about a
+        change that has not been written yet. Keeping them as one function is
+        the point — a guard that re-implements the predicate it defends drifts
+        away from it, and the drift is invisible until the day it matters.
+        """
         if self.has_operator_bearer_token():
             return False
-        if self._is_oidc_configured():
+        oidc = settings.get('oidc') or {}
+        if oidc.get('enabled') and oidc.get('issuer_url') and oidc.get('client_id'):
             return False
-        return not (self.is_local_auth_enabled() and self.has_any_users())
+        users = settings.get('users') or {}
+        return not (settings.get('local_auth_enabled', False) and len(users) > 0)
+
+    def would_open_setup_mode(self, candidate_settings):
+        """True iff applying *candidate_settings* would leave this instance
+        serving every gated endpoint to anonymous callers as admin.
+
+        Setup mode is not a mild state. ``_authenticate_request`` returns
+        ``{'username': 'setup_user', 'role': 'admin'}`` for a caller with no
+        credential at all, which is enough to read /api/settings, mint API
+        keys, create admin users and download private keys.
+
+        It exists so a fresh install can be bootstrapped, and it closes as soon
+        as the operator configures ANY credential. The hole this guards is the
+        way back: an SSO-only deployment (no API_BEARER_TOKEN, local auth never
+        enabled because OIDC JIT provisioning does not flip it) is held closed
+        by the OIDC branch alone, so unchecking "Enable OIDC/SSO" reopened the
+        whole instance. That branch was added in v2.21.4 to CLOSE the
+        world-open hole on SSO-only boxes; it also made closure depend on a
+        checkbox, and nothing checked the transition.
+
+        Returns False when the instance is already in setup mode: a fresh
+        install must still be configurable, and this guard is about not
+        REGRESSING out of a secured state.
+        """
+        if self.is_setup_mode():
+            return False
+        return self.setup_mode_for(candidate_settings)
 
     def needs_credentialed_bootstrap(self):
         """RESTRICTED (never world-open) bootstrap signal for the web UI only.
