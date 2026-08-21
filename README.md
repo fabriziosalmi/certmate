@@ -2111,24 +2111,21 @@ curl -H "Authorization: Bearer your_token" \
 
 **Backup File (ZIP):**
 ```
-unified_backup_20241225_120000.zip
- settings.json # Complete application settings
- timestamp: "2024-12-25T12:00:00Z"
- version: "2.3.0"
- dns_providers: {...}
- domains: [...]
- settings: {...}
- certificates/ # All certificate files
- domain1.com/
- cert.pem
- chain.pem
- fullchain.pem
- privkey.pem
- domain2.com/
- cert.pem
- chain.pem
- fullchain.pem
- privkey.pem
+backup_20260821_120000_000000_manual.zip
+ backup_metadata.json  # manifest: secrets_masked, key_material_excluded, key_files_excluded, encrypted
+ settings.json         # application settings — credentials masked in a share-safe archive, plaintext in a DR one
+ certificates/
+   domain1.com/
+     cert.pem
+     chain.pem
+     fullchain.pem
+     privkey.pem       # DR archive only (include_secrets=true); absent from a share-safe archive
+     metadata.json
+     live/ archive/ renewal/ accounts/   # certbot lineage (keys under accounts/ and live/ DR only)
+ data/
+   certs/ca/ca.crt      # ca.key: DR only
+   certs/client/...     # client certificates (.key/.pfx: DR only)
+   audit/ inventory/
 ```
 
 #### Recovery Procedures
