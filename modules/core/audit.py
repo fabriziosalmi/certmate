@@ -790,6 +790,7 @@ class AuditLogger:
         local_auth_enabled_after: bool,
         user: Optional[str] = None,
         ip_address: Optional[str] = None,
+        confirm_unauthenticated: bool = False,
     ) -> None:
         """Log a change to the local-auth toggle."""
         self.log_operation(
@@ -800,6 +801,9 @@ class AuditLogger:
             details={
                 'before': bool(local_auth_enabled_before),
                 'after': bool(local_auth_enabled_after),
+                # True when the admin went past the one-way-door guard on
+                # purpose (#587): the instance now runs without authentication.
+                'confirm_unauthenticated': confirm_unauthenticated,
             },
             user=user,
             ip_address=ip_address,

@@ -167,14 +167,26 @@ def register_auth_routes(app, managers, require_web_auth, auth_manager,
 
         candidate = dict(auth_manager.settings_manager.load_settings())
         candidate['local_auth_enabled'] = enable
-        if auth_manager.would_open_setup_mode(candidate):
+        # The accidental case is refused; the deliberate one is represented
+        # (#587). An operator who fronts CertMate with a proxy that
+        # authenticates for them may run without local auth — on purpose,
+        # saying so, and it goes in the audit trail with their name on it.
+        # Strictly the JSON boolean true: a string 'false', a 1 or an object
+        # must not read as 'yes, open the instance' (Copilot, #589).
+        confirm_unauthenticated = data.get('confirm_unauthenticated') is True
+        would_open = auth_manager.would_open_setup_mode(candidate)
+        if would_open and not confirm_unauthenticated:
             return jsonify({
                 'error': 'Refusing to disable the last way in',
                 'hint': 'Turning local authentication off here would put this '
                         'instance back into setup mode, where every endpoint '
                         'answers an anonymous caller as admin — including the '
                         'private-key download. Configure SSO or set '
-                        'API_BEARER_TOKEN first, then disable local auth.',
+                        'API_BEARER_TOKEN first, then disable local auth. To '
+                        'run without authentication on purpose (a proxy in '
+                        'front authenticates for you), repeat the request with '
+                        '"confirm_unauthenticated": true; the choice is audited.',
+                'confirm_unauthenticated_required': True,
             }), 409
 
         before = auth_manager.is_local_auth_enabled()
@@ -186,6 +198,14 @@ def register_auth_routes(app, managers, require_web_auth, auth_manager,
                     local_auth_enabled_after=enable,
                     user=user.get('username'),
                     ip_address=request.remote_addr,
+                    confirm_unauthenticated=bool(would_open and confirm_unauthenticated),
                 )
+            if would_open and confirm_unauthenticated:
+                logger.warning(
+                    "Local authentication disabled on purpose by %s from %s: this "
+                    "instance now answers every caller as admin. Make sure "
+                    "something in front of it authenticates.",
+                    (getattr(request, 'current_user', {}) or {}).get('username'),
+                    request.remote_addr)
             return jsonify({'message': 'Auth config updated'})
         return jsonify({'error': 'Update failed'}), 500
