@@ -465,7 +465,14 @@ class CertificateManager:
         try:
             with open(metadata_file, 'r', encoding='utf-8') as f:
                 metadata = json.load(f)
-                return metadata if isinstance(metadata, dict) else {}
+            if isinstance(metadata, dict):
+                return metadata
+            # Valid JSON of the wrong shape (a list, a string) is as unusable
+            # as a syntax error and was the one corruption that still came
+            # back as {} without a quarantine — and so got overwritten by the
+            # next save (review, #583). Same treatment.
+            raise json.JSONDecodeError(
+                f"metadata is a {type(metadata).__name__}, not an object", "", 0)
         except json.JSONDecodeError as e:
             # The on-disk metadata is unparseable. Quarantine it before
             # returning {} — otherwise the next _save_metadata would overwrite
@@ -1701,6 +1708,7 @@ class CertificateManager:
             raise DomainOperationInProgress(domain)
         alias_hook_config = None
         credentials_file = None
+        ca_bundle_path = None
         # Secret side files the credentials ini references (Google's SA
         # JSON); deleted in the finally alongside the ini.
         extra_credential_files = []
@@ -1730,14 +1738,14 @@ class CertificateManager:
             logs_dir = domain_dir / 'logs'
 
             metadata_file = domain_dir / 'metadata.json'
-            metadata = {}
-            if metadata_file.exists():
-                try:
-                    with open(metadata_file, 'r') as f:
-                        metadata = json.load(f)
-                except Exception as e:
-                    logger.warning(f"Failed to read metadata for renewal of {domain}: {e}")
-            
+            # The one metadata reader that quarantines a corrupt file instead
+            # of returning {} over it. The inline json.load this replaces did
+            # the latter — and the renewal then wrote renewed_at into that
+            # {} and saved it, destroying dns_provider, san_domains,
+            # ca_provider, domain_alias and every deployment_* key in one
+            # pass, without a .corrupt-* copy and with success reported.
+            metadata = self._load_metadata(domain)
+
             cmd = [
                 'certbot', 'renew',
                 '--cert-name', domain,
@@ -1770,6 +1778,16 @@ class CertificateManager:
             # renewal, causing Route53 and other env-var-based providers to
             # fail with "Unable to locate credentials").
             process_env = os.environ.copy()
+            # A private ACME CA whose endpoint presents a certificate from its
+            # own root: creation passed the trust bundle through
+            # REQUESTS_CA_BUNDLE (ca_manager.build_certbot_command); renewal
+            # built its own environment and never read ca_provider, so every
+            # renewal against such a CA failed TLS verification — silently,
+            # until the certificate expired. Same bundle, same variable, same
+            # cleanup in the finally below.
+            ca_bundle_path = self._renewal_ca_bundle(metadata)
+            if ca_bundle_path:
+                process_env['REQUESTS_CA_BUNDLE'] = ca_bundle_path
 
             dns_provider = metadata.get('dns_provider')
             challenge_type = metadata.get('challenge_type', 'dns-01')
@@ -2043,7 +2061,47 @@ class CertificateManager:
                         os.unlink(cred_path)
                     except (FileNotFoundError, OSError):
                         pass
+            if ca_bundle_path:
+                try:
+                    os.unlink(ca_bundle_path)
+                except (FileNotFoundError, OSError):
+                    pass
             domain_lock.release()
+
+    def _renewal_ca_bundle(self, metadata):
+        """Return the trust-bundle path certbot needs to talk to this
+        certificate's CA at renewal, or None.
+
+        Mirrors what ``build_certbot_command`` does at issuance for
+        ``private_ca``: resolve the CA account the certificate was issued
+        under and write its ``ca_cert`` to a temp file.
+
+        When the account is gone or has no bundle the attempt still goes
+        ahead without one — honestly: against an endpoint whose
+        certificate chains to the private root it will fail TLS
+        verification, which is the pre-fix behaviour and what the error
+        line says; against an endpoint with a publicly trusted
+        certificate (a private ACME CA behind a public-cert front) it
+        succeeds, which is why refusing here would be wrong.
+        """
+        if metadata.get('ca_provider') != 'private_ca' or self.ca_manager is None:
+            return None
+        account_id = metadata.get('ca_account_id')
+        try:
+            account_config, _ = self.ca_manager.get_ca_config('private_ca', account_id)
+            bundle = self.ca_manager.create_ca_trust_bundle('private_ca', account_config)
+        except Exception as e:
+            logger.error(f"Renewal will run without the private CA trust bundle "
+                         f"(private_ca/{account_id or 'default'}: {e}); it fails TLS "
+                         f"verification unless the ACME endpoint presents a publicly "
+                         f"trusted certificate")
+            return None
+        if not bundle:
+            logger.error(f"Renewal will run without the private CA trust bundle: account "
+                         f"private_ca/{account_id or 'default'} has no ca_cert; it fails TLS "
+                         f"verification unless the ACME endpoint presents a publicly "
+                         f"trusted certificate")
+        return bundle
 
     def check_renewals(self):
         """Check and renew certificates that are about to expire.
