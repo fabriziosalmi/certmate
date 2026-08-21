@@ -118,3 +118,17 @@ def test_corrupt_metadata_is_quarantined_not_overwritten(tmp_path):
     assert not (domain_dir / "metadata.json").exists() or \
         (domain_dir / "metadata.json").read_text() != '{}', \
         "metadata.json must not be replaced by an empty object"
+
+
+def test_valid_json_of_the_wrong_shape_is_quarantined_too(tmp_path):
+    """A list or a string parses fine and is just as unusable — it used to
+    come back as {} with no quarantine, and the next save overwrote it."""
+    shell = MagicMock()
+    shell.run.return_value = SimpleNamespace(returncode=1, stdout="", stderr="bail")
+    cm = _build_cm(tmp_path, shell)
+    wrong = '["not", "an", "object"]'
+    domain_dir = _seed(cm, "example.com", wrong)
+    with pytest.raises(RuntimeError):
+        cm.renew_certificate("example.com", force=True)
+    quarantined = list(domain_dir.glob("metadata.json.corrupt-*"))
+    assert quarantined and quarantined[0].read_text() == wrong

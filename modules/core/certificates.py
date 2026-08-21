@@ -450,7 +450,14 @@ class CertificateManager:
         try:
             with open(metadata_file, 'r', encoding='utf-8') as f:
                 metadata = json.load(f)
-                return metadata if isinstance(metadata, dict) else {}
+            if isinstance(metadata, dict):
+                return metadata
+            # Valid JSON of the wrong shape (a list, a string) is as unusable
+            # as a syntax error and was the one corruption that still came
+            # back as {} without a quarantine — and so got overwritten by the
+            # next save (review, #583). Same treatment.
+            raise json.JSONDecodeError(
+                f"metadata is a {type(metadata).__name__}, not an object", "", 0)
         except json.JSONDecodeError as e:
             # The on-disk metadata is unparseable. Quarantine it before
             # returning {} — otherwise the next _save_metadata would overwrite
@@ -2052,20 +2059,34 @@ class CertificateManager:
 
         Mirrors what ``build_certbot_command`` does at issuance for
         ``private_ca``: resolve the CA account the certificate was issued
-        under and write its ``ca_cert`` to a temp file. Best-effort — a CA
-        account that no longer exists, or one without a bundle, leaves the
-        environment as it was rather than blocking the attempt.
+        under and write its ``ca_cert`` to a temp file.
+
+        When the account is gone or has no bundle the attempt still goes
+        ahead without one — honestly: against an endpoint whose
+        certificate chains to the private root it will fail TLS
+        verification, which is the pre-fix behaviour and what the error
+        line says; against an endpoint with a publicly trusted
+        certificate (a private ACME CA behind a public-cert front) it
+        succeeds, which is why refusing here would be wrong.
         """
         if metadata.get('ca_provider') != 'private_ca' or self.ca_manager is None:
             return None
+        account_id = metadata.get('ca_account_id')
         try:
-            account_config, _ = self.ca_manager.get_ca_config(
-                'private_ca', metadata.get('ca_account_id'))
-            return self.ca_manager.create_ca_trust_bundle('private_ca', account_config)
+            account_config, _ = self.ca_manager.get_ca_config('private_ca', account_id)
+            bundle = self.ca_manager.create_ca_trust_bundle('private_ca', account_config)
         except Exception as e:
-            logger.warning(f"Could not build the CA trust bundle for renewal "
-                           f"(private_ca/{metadata.get('ca_account_id') or 'default'}): {e}")
+            logger.error(f"Renewal will run without the private CA trust bundle "
+                         f"(private_ca/{account_id or 'default'}: {e}); it fails TLS "
+                         f"verification unless the ACME endpoint presents a publicly "
+                         f"trusted certificate")
             return None
+        if not bundle:
+            logger.error(f"Renewal will run without the private CA trust bundle: account "
+                         f"private_ca/{account_id or 'default'} has no ca_cert; it fails TLS "
+                         f"verification unless the ACME endpoint presents a publicly "
+                         f"trusted certificate")
+        return bundle
 
     def check_renewals(self):
         """Check and renew certificates that are about to expire.
