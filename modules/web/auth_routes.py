@@ -165,6 +165,18 @@ def register_auth_routes(app, managers, require_web_auth, auth_manager,
         if enable and not auth_manager.has_any_users():
             return jsonify({'error': 'Create admin first'}), 400
 
+        candidate = dict(auth_manager.settings_manager.load_settings())
+        candidate['local_auth_enabled'] = enable
+        if auth_manager.would_open_setup_mode(candidate):
+            return jsonify({
+                'error': 'Refusing to disable the last way in',
+                'hint': 'Turning local authentication off here would put this '
+                        'instance back into setup mode, where every endpoint '
+                        'answers an anonymous caller as admin — including the '
+                        'private-key download. Configure SSO or set '
+                        'API_BEARER_TOKEN first, then disable local auth.',
+            }), 409
+
         before = auth_manager.is_local_auth_enabled()
         if auth_manager.enable_local_auth(enable):
             if audit_logger and before != enable:
