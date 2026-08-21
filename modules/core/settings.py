@@ -110,7 +110,7 @@ SECRET_MASK_SENTINEL = '********'
 # settings without re-entering a secret the UI deliberately does not
 # repopulate (see loadStorageBackendSettings in static/js/settings.js).
 _SECRET_KEY_RE = re.compile(
-    r'(token|secret|password|key|credential|hmac|authorization|cookie)',
+    r'(token|secret|password|key|credential|hmac|authorization)',
     re.IGNORECASE,
 )
 # Keys whose name matches the secret regex but whose value is NOT a secret.
@@ -144,6 +144,15 @@ _PROVIDER_SPECIFIC_SECRET_FIELDS = {
     'acme-dns': frozenset({'username', 'subdomain'}),
 }
 
+# Parents under which EVERY string value is a credential, whatever the
+# operator named the key. A webhook's custom ``headers`` map is the case:
+# ``X-Auth``, ``X-Hub-Signature``, ``PRIVATE-TOKEN`` are all how someone
+# authenticates to a receiver, and a name heuristic cannot keep up with the
+# names people use (#580 review). The price is that a harmless header such as
+# ``X-Tenant`` is masked on read too; its value survives a round-trip save
+# like any other masked secret.
+_ALL_VALUES_SECRET_PARENTS = frozenset({'headers'})
+
 
 def mask_secrets_in_settings(settings_dict):
     """Return a deep-copied settings dict with every credential-bearing
@@ -175,10 +184,11 @@ def mask_secrets_in_settings(settings_dict):
     def _walk(node, parent_key=None):
         if isinstance(node, dict):
             provider_extras = _PROVIDER_SPECIFIC_SECRET_FIELDS.get(parent_key, frozenset())
+            all_secret = parent_key in _ALL_VALUES_SECRET_PARENTS
             out = {}
             for key, value in node.items():
                 if isinstance(value, str) and value and (
-                    _is_secret_key(key) or key in provider_extras
+                    all_secret or _is_secret_key(key) or key in provider_extras
                 ):
                     out[key] = SECRET_MASK_SENTINEL
                 else:
@@ -301,8 +311,9 @@ def _restore_masked_list_secrets(old_list, new_list):
                 # round-trip the same way.
                 prior_nested = prior.get(key) if isinstance(prior.get(key), dict) else {}
                 nested = item[key]
+                all_secret = key in _ALL_VALUES_SECRET_PARENTS
                 for sub in list(nested.keys()):
-                    if _is_secret_key(sub) and nested.get(sub) == SECRET_MASK_SENTINEL:
+                    if (all_secret or _is_secret_key(sub)) and nested.get(sub) == SECRET_MASK_SENTINEL:
                         if sub in prior_nested:
                             nested[sub] = prior_nested[sub]
                         else:

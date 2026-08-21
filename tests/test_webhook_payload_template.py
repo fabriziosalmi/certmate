@@ -213,27 +213,39 @@ def test_retry_count_comes_from_the_config():
 # Masking: credentials in custom headers and the new auth fields
 # --------------------------------------------------------------------------- #
 
-def test_auth_fields_and_authorization_header_are_masked_on_read():
+def test_auth_fields_and_every_custom_header_are_masked_on_read():
+    """Header values are credentials whatever the key is called: X-Auth and
+    X-Hub-Signature match no name heuristic and were reaching the viewer role
+    in clear through GET /api/web/settings (review, #580)."""
     masked = mask_secrets_in_settings({'notifications': {'channels': {'webhooks': [{
         'type': 'generic', 'url': 'https://h', 'auth_type': 'bearer', 'auth_token': 'T',
         'auth_username': 'u', 'auth_password': 'P',
-        'headers': {'Authorization': 'Bearer X', 'X-Api-Key': 'K', 'X-Env': 'prod'},
+        'headers': {'Authorization': 'Bearer X', 'X-Api-Key': 'K', 'X-Auth': 'A',
+                    'X-Hub-Signature': 'S', 'X-Tenant': 'acme'},
     }]}}})
     wh = masked['notifications']['channels']['webhooks'][0]
     assert wh['auth_token'] == MASK and wh['auth_password'] == MASK
     assert wh['auth_username'] == 'u'
-    assert wh['headers']['Authorization'] == MASK and wh['headers']['X-Api-Key'] == MASK
-    assert wh['headers']['X-Env'] == 'prod'
+    assert set(wh['headers'].values()) == {MASK}
+    assert wh['url'] == 'https://h'
 
 
 def test_masked_header_values_are_restored_on_round_trip():
     old = [{'name': 'w', 'type': 'generic', 'url': 'https://h', 'auth_token': 'T',
-            'headers': {'Authorization': 'Bearer X', 'X-Env': 'prod'}}]
+            'headers': {'Authorization': 'Bearer X', 'X-Tenant': 'acme', 'X-Gone': 'g'}}]
     new = [{'name': 'w', 'type': 'generic', 'url': 'https://h', 'auth_token': MASK,
-            'headers': {'Authorization': MASK, 'X-Env': 'staging'}}]
+            'headers': {'Authorization': MASK, 'X-Tenant': MASK, 'X-New': 'typed'}}]
     _restore_masked_list_secrets(old, new)
     assert new[0]['auth_token'] == 'T'
-    assert new[0]['headers'] == {'Authorization': 'Bearer X', 'X-Env': 'staging'}
+    # Masked -> prior value; retyped -> kept; deleted -> gone.
+    assert new[0]['headers'] == {'Authorization': 'Bearer X', 'X-Tenant': 'acme', 'X-New': 'typed'}
+
+
+def test_a_datetime_in_the_event_does_not_break_a_bare_placeholder():
+    import datetime as _dt
+    out = render_payload_template('{"when": {{details.when}}, "t": "{{details.when}}"}',
+                                  _vars(when=_dt.datetime(2026, 8, 21, 7, 0)))
+    assert json.loads(out) == {'when': '2026-08-21 07:00:00', 't': '2026-08-21 07:00:00'}
 
 
 # --------------------------------------------------------------------------- #

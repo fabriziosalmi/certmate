@@ -165,11 +165,14 @@ def render_payload_template(template, variables):
             if value is None:
                 fragment = ''
             elif isinstance(value, (dict, list)):
-                fragment = json.dumps(json.dumps(value, separators=(',', ':')))[1:-1]
+                fragment = json.dumps(json.dumps(value, separators=(',', ':'), default=str))[1:-1]
             else:
                 fragment = json.dumps(str(value))[1:-1]
         else:
-            fragment = json.dumps(value)
+            # default=str: an event payload may carry a datetime or another
+            # object json does not know; a runtime value must never turn a
+            # valid template into an exception (review, #580).
+            fragment = json.dumps(value, default=str)
         out.append(fragment)
         last = match.end()
     out.append(template[last:])
@@ -562,10 +565,13 @@ class Notifier:
                 if template:
                     # Operator-shaped body (#218); a broken template is a
                     # config error, reported rather than retried into.
+                    # (TypeError would mean a value json cannot serialise
+                    # even with default=str — not expected, but not a
+                    # reason to crash the notifier either.)
                     try:
                         rendered = render_payload_template(
                             template, webhook_template_variables(event, title, message, details))
-                    except ValueError as exc:
+                    except (ValueError, TypeError) as exc:
                         return {'error': str(exc), 'config_error': True}
                     body = rendered.encode('utf-8')
                 else:
