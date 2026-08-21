@@ -427,7 +427,7 @@ class FileOperations:
                         rel_parts = cert_file.relative_to(domain_dir).parts
                         if rel_parts and rel_parts[0] in _BACKUP_EXCLUDE_DIRS:
                             continue
-                        if exclude_keys and (rel_parts[0] in _KEY_MATERIAL_DIRS
+                        if exclude_keys and rel_parts and (rel_parts[0] in _KEY_MATERIAL_DIRS
                                              or _is_key_material(cert_file)):
                             key_files_excluded += 1
                             continue
