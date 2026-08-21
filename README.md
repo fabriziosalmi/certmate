@@ -163,7 +163,7 @@ CertMate solves the complexity of SSL certificate management in modern distribut
 - **Automatic Backups** - Settings and certificates backed up automatically on changes
 - **Manual Backup Creation** - On-demand backup creation via web UI or API
 - **Comprehensive Coverage** - Backs up DNS configurations, certificates, and application settings
-- **Retention Management** - The 50 most recent archives per type are kept; older ones are removed automatically
+- **Retention Management** - 50 most recent archives per type, and nothing older than 30 days — both constants; keep disaster-recovery archives off the host
 - **Easy Restore** - Simple restore process from any backup point with atomic consistency
 - **Download Support** - Export backups for external storage and disaster recovery
 
@@ -2050,8 +2050,8 @@ CertMate provides comprehensive backup and recovery capabilities built directly 
 
 **Automatic Backups:**
 - **Unified Snapshots** - Automatically created when DNS providers, domains, certificates, or application settings are modified (share-safe, see above)
-- **Retention** - The 50 most recent archives per type are kept (`MAX_BACKUPS_PER_TYPE`); this is a constant, not a setting. Logging in no longer writes a backup, so routine sign-ins do not consume restore points
-- **Automatic Cleanup** - Older archives are removed automatically when the limit is reached
+- **Retention** - Two rules, whichever hits first: the 50 most recent archives per type are kept (`MAX_BACKUPS_PER_TYPE`), **and any archive older than 30 days is deleted regardless of how few there are** (`BACKUP_RETENTION_DAYS`). Both are constants, not settings. This is why a disaster-recovery archive must be kept off the host: one left in `backups/unified/` is deleted after 30 days like any other. Logging in no longer writes a backup, so routine sign-ins do not consume restore points
+- **Automatic Cleanup** - Pruning runs after every backup, applying both rules above
 
 **Manual Backups:**
 - **On-Demand Creation** - Create backups anytime via the web interface or API
