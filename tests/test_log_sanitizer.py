@@ -159,3 +159,32 @@ def test_pem_redaction_matches_the_regex_it_replaced():
     for case in cases:
         assert _redact_pem_blocks(case) == \
             JSONFormatter.PEM_RE.sub('[PEM REDACTED]', case), repr(case)
+
+
+class TestHttpCredentialSchemes:
+    """``Authorization: Bearer <token>`` used to come out as
+    ``Authorization: "[REDACTED]" <token>`` — the scheme word was the value
+    the regex saw, and the token survived. Same for Basic, and for hyphenated
+    header names such as ``X-Api-Key`` that the name class could not match."""
+
+    def test_bearer_token_is_redacted_not_just_the_scheme(self):
+        from modules.core.structured_logging import sanitize_text
+        out = sanitize_text('request failed: Authorization: Bearer eyJhbGciOi.abc.def status=401')
+        assert 'eyJhbGciOi' not in out
+        assert 'status=401' in out
+
+    def test_basic_and_custom_api_key_headers(self):
+        from modules.core.structured_logging import sanitize_text
+        out = sanitize_text("headers={'Authorization': 'Basic dXNlcjpwdw==', 'X-Api-Key': 'k-12345', 'X-Env': 'prod'}")
+        assert 'dXNlcjpwdw==' not in out and 'k-12345' not in out
+        assert "'X-Env': 'prod'" in out
+
+    def test_cookie_header(self):
+        from modules.core.structured_logging import sanitize_text
+        out = sanitize_text('Cookie: session=abc123; other=1')
+        assert 'abc123' not in out
+
+    def test_plain_words_are_left_alone(self):
+        from modules.core.structured_logging import sanitize_text
+        text = 'renewed example.com, issuer=letsencrypt, keyword=foo'
+        assert sanitize_text(text) == text

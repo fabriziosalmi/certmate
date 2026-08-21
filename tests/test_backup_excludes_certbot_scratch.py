@@ -11,6 +11,8 @@ certbot needs that lineage/account state to renew a restored certificate.
 """
 
 import zipfile
+# NOTE (#582): these tests exercise the disaster-recovery archive, which is the
+# one that carries key material; the default (share-safe) archive no longer does.
 
 import pytest
 
@@ -56,7 +58,7 @@ def _seed_domain_tree(cert_dir, domain):
 def test_backup_keeps_cert_files_excludes_logs_and_work(file_ops):
     _seed_domain_tree(file_ops.cert_dir, "example.com")
 
-    filename = file_ops.create_unified_backup({"domains": []}, "test")
+    filename = file_ops.create_unified_backup({"domains": []}, "test", include_secrets=True)
     assert filename, "create_unified_backup returned None"
 
     with zipfile.ZipFile(file_ops.backup_dir / "unified" / filename) as zf:

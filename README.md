@@ -163,7 +163,7 @@ CertMate solves the complexity of SSL certificate management in modern distribut
 - **Automatic Backups** - Settings and certificates backed up automatically on changes
 - **Manual Backup Creation** - On-demand backup creation via web UI or API
 - **Comprehensive Coverage** - Backs up DNS configurations, certificates, and application settings
-- **Retention Management** - Configurable retention policies with automatic cleanup
+- **Retention Management** - 50 most recent archives per type, and nothing older than 30 days — both constants; keep disaster-recovery archives off the host
 - **Easy Restore** - Simple restore process from any backup point with atomic consistency
 - **Download Support** - Export backups for external storage and disaster recovery
 
@@ -360,7 +360,7 @@ PORT=8000
 
 > **Storage Backends**: By default, certificates are stored locally. For enterprise deployments, you can configure Azure Key Vault, AWS Secrets Manager, HashiCorp Vault, Infisical, or any S3-compatible object storage via the web interface after startup. See [Storage Backends](#certificate-storage-configuration) for details.
 
-> **Backup Best Practices**: CertMate includes a unified backup system that creates atomic snapshots of both settings and certificates. After setup, create your first backup from Settings → Backup Management.
+> **Backup Best Practices**: CertMate includes a unified backup system that creates atomic snapshots of both settings and certificates. After setup, create a **disaster-recovery** backup — `POST /api/backups/create` with `{"include_secrets": true}` and `CERTMATE_BACKUP_PASSPHRASE` set — and keep it off the host. The default (and every automatic) backup is *share-safe*: credentials masked and no private keys, so it cannot restore an instance on its own.
 
 ### 3. Deploy
 
@@ -2042,12 +2042,16 @@ CertMate provides comprehensive backup and recovery capabilities built directly 
 - **Atomic Operation**: Creates a single ZIP file containing both settings and certificates
 - **Data Consistency**: Ensures settings and certificates are always in sync
 - **Prevents Corruption**: Eliminates configuration/certificate mismatches
-- **Simplified Management**: One backup file contains everything needed for complete restoration
+- **Simplified Management**: One file per snapshot. A disaster-recovery archive (`include_secrets=true`) contains everything needed for complete restoration; the default share-safe archive contains certificates, chains, metadata, the audit chain and the inventory — no credentials and no private keys
+
+**Two kinds of archive:**
+- **Share-safe** (the default, and what every automatic backup is): settings with every credential masked, and **no private keys** — no ACME `privkey.pem`, no ACME account key, no private-CA key, no `.pfx`. Certificates, chains, metadata, the audit chain and the inventory are all there. The manifest says so (`secrets_masked`, `key_material_excluded`). Such an archive cannot restore an instance on its own, and the restore path refuses to pretend otherwise.
+- **Disaster recovery**: `POST /api/backups/create` with `{"include_secrets": true}` (admin, audited) — plaintext settings and every key. Set `CERTMATE_BACKUP_PASSPHRASE` so it is encrypted at rest; that is the archive to keep off-site.
 
 **Automatic Backups:**
-- **Unified Snapshots** - Automatically created when DNS providers, domains, certificates, or application settings are modified
-- **Retention Management** - Configurable retention policy (default: 10 most recent backups)
-- **Automatic Cleanup** - Old backups are automatically removed based on retention settings
+- **Unified Snapshots** - Automatically created when DNS providers, domains, certificates, or application settings are modified (share-safe, see above)
+- **Retention** - Two rules, whichever hits first: the 50 most recent archives per type are kept (`MAX_BACKUPS_PER_TYPE`), **and any archive older than 30 days is deleted regardless of how few there are** (`BACKUP_RETENTION_DAYS`). Both are constants, not settings. This is why a disaster-recovery archive must be kept off the host: one left in `backups/unified/` is deleted after 30 days like any other. Logging in no longer writes a backup, so routine sign-ins do not consume restore points
+- **Automatic Cleanup** - Pruning runs after every backup, applying both rules above
 
 **Manual Backups:**
 - **On-Demand Creation** - Create backups anytime via the web interface or API
@@ -2107,24 +2111,21 @@ curl -H "Authorization: Bearer your_token" \
 
 **Backup File (ZIP):**
 ```
-unified_backup_20241225_120000.zip
- settings.json # Complete application settings
- timestamp: "2024-12-25T12:00:00Z"
- version: "2.3.0"
- dns_providers: {...}
- domains: [...]
- settings: {...}
- certificates/ # All certificate files
- domain1.com/
- cert.pem
- chain.pem
- fullchain.pem
- privkey.pem
- domain2.com/
- cert.pem
- chain.pem
- fullchain.pem
- privkey.pem
+backup_20260821_120000_000000_manual.zip
+ backup_metadata.json  # manifest: secrets_masked, key_material_excluded, key_files_excluded, encrypted
+ settings.json         # application settings — credentials masked in a share-safe archive, plaintext in a DR one
+ certificates/
+   domain1.com/
+     cert.pem
+     chain.pem
+     fullchain.pem
+     privkey.pem       # DR archive only (include_secrets=true); absent from a share-safe archive
+     metadata.json
+     live/ archive/ renewal/ accounts/   # certbot lineage (keys under accounts/ and live/ DR only)
+ data/
+   certs/ca/ca.crt      # ca.key: DR only
+   certs/client/...     # client certificates (.key/.pfx: DR only)
+   audit/ inventory/
 ```
 
 #### Recovery Procedures
@@ -2313,7 +2314,7 @@ CertMate includes a built-in notification system configurable from Settings > No
 - **Telegram** - Bot API messages (bot token + chat ID)
 - **ntfy** - Push to an [ntfy](https://ntfy.sh) topic (self-hostable); optional access token, per-message priority
 - **Gotify** - Push to a self-hosted [Gotify](https://gotify.net) server (server URL + app token, numeric priority)
-- **Generic Webhooks** - HTTP POST with HMAC-SHA256 signed payloads for custom integrations
+- **Generic Webhooks** - HTTP POST/PUT/PATCH with HMAC-SHA256 signed payloads, bearer/basic/header authentication, and a JSON **payload template** with `{{placeholders}}` so the body fits whatever receives it — see [docs/webhooks.md](docs/webhooks.md)
 - **Weekly Digest** - Scheduled summary of certificate status and upcoming renewals
 
 All notification channels support per-event filtering (created, renewed, expiring, failed) and can be tested from the settings UI.
@@ -2599,6 +2600,7 @@ curl -sS -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/diagnostics
 | **[docs/guide.md](docs/guide.md)**                 | Step-by-step guide for common tasks | All users             |
 | **[docs/discovery-inventory.md](docs/discovery-inventory.md)** | Discovery, inventory, adopt, crypto readiness | SRE, security |
 | **[docs/deploy-hooks.md](docs/deploy-hooks.md)**   | Post-issuance deploy hooks          | DevOps engineers      |
+| **[docs/webhooks.md](docs/webhooks.md)**           | Generic webhooks: payload templates, auth, signature verification | Integrators |
 | **[docs/compliance.md](docs/compliance.md)**       | Audit chain, attribution, NIS2/eIDAS posture | Compliance, security |
 | **[docs/kubernetes.md](docs/kubernetes.md)**       | Pod sizing, OOM troubleshooting, Helm chart | SRE              |
 | **[docs/probes.en.md](docs/probes.en.md)**         | Deployment probe configuration      | DevOps engineers      |
