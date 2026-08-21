@@ -144,6 +144,14 @@ def test_every_ca_serves_a_real_acme_directory(key, field, url):
                 body = response.read(1024 * 1024).decode("utf-8", "replace")
             error = None
             break
+        except urllib.error.HTTPError as exc:
+            # The server answered — a 404/410 is a verdict, not a transient.
+            # No retry, no sleep: fall through to the status assertion below
+            # with what it said (Copilot, #577).
+            status = exc.code
+            body = exc.read(1024 * 1024).decode("utf-8", "replace") if exc.fp else ""
+            error = None
+            break
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
             error = exc
             if attempt < 2:

@@ -294,7 +294,7 @@ Renewals always preserve the shape that was in effect at creation time: certbot 
 | POST | `/api/certificates` | Create new certificate |
 | GET | `/api/certificates/{domain}` | Get certificate info |
 | POST | `/api/certificates/{domain}/renew` | Renew certificate |
-| GET | `/api/certificates/{domain}/download` | Download: ZIP by default, `?file=fullchain.pem` (or `privkey.pem`, `combined.pem`) for one PEM, `?format=json` for every PEM inline |
+| GET | `/api/certificates/{domain}/download` | Download: ZIP by default; `?file=<cert.pem\|chain.pem\|fullchain.pem\|privkey.pem\|combined.pem\|cert.pfx>` for one file; `?format=json` for every PEM inline |
 | GET | `/{domain}/tls` | Direct fullchain download |
 
 ### Client Certificates
