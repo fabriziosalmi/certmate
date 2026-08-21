@@ -171,7 +171,9 @@ def register_auth_routes(app, managers, require_web_auth, auth_manager,
         # (#587). An operator who fronts CertMate with a proxy that
         # authenticates for them may run without local auth — on purpose,
         # saying so, and it goes in the audit trail with their name on it.
-        confirm_unauthenticated = bool(data.get('confirm_unauthenticated', False))
+        # Strictly the JSON boolean true: a string 'false', a 1 or an object
+        # must not read as 'yes, open the instance' (Copilot, #589).
+        confirm_unauthenticated = data.get('confirm_unauthenticated') is True
         would_open = auth_manager.would_open_setup_mode(candidate)
         if would_open and not confirm_unauthenticated:
             return jsonify({

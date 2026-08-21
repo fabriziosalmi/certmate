@@ -103,3 +103,14 @@ def test_the_audit_entry_carries_the_flag():
                                    user='admin', ip_address='10.0.0.5', confirm_unauthenticated=True)
     details = logger.log_operation.call_args.kwargs['details']
     assert details == {'before': True, 'after': False, 'confirm_unauthenticated': True}
+
+
+@pytest.mark.parametrize('value', ['true', 'false', 1, {}, [True], 'yes'])
+def test_only_the_json_boolean_true_counts_as_confirmation(tmp_path, value):
+    audit = MagicMock()
+    app, am = _build(tmp_path, audit)
+    r = app.test_client().post('/api/auth/config',
+                               json={'local_auth_enabled': False, 'confirm_unauthenticated': value})
+    assert r.status_code == 409, (value, r.get_json())
+    assert am.is_setup_mode() is False
+    audit.log_auth_config_changed.assert_not_called()
