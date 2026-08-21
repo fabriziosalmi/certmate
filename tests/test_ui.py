@@ -343,10 +343,12 @@ class TestClientCertListKeepsItsFilter:
     def _open_client_tab(self, page):
         page.goto(BASE_URL)
         page.wait_for_load_state("domcontentloaded")
-        page.wait_for_timeout(1500)
-        client_btn = page.locator("text=Client Certificates").first
+        # The server/client segmented control is Alpine-bound; give the
+        # deferred x-data a moment, then switch to the client view.
+        client_btn = page.locator("#certViewClientBtn")
         expect(client_btn).to_be_visible(timeout=10000)
         client_btn.click()
+        expect(client_btn).to_have_attribute("aria-pressed", "true", timeout=10000)
         page.wait_for_timeout(800)
 
     def test_active_is_the_view_and_it_survives_refresh_and_reload(self, browser_page):
