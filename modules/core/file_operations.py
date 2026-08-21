@@ -80,7 +80,10 @@ _KEY_MATERIAL_DIRS = frozenset({'keys'})
 def _is_key_material(path) -> bool:
     """True for a file that carries a private key."""
     name = path.name.lower()
-    if name.startswith('privkey') and name.endswith('.pem'):
+    # Any privkey* — .pem, a numbered archive copy, or the transient
+    # privkey.pem.staging that #581's staged publish writes for a moment:
+    # a backup taken in that moment must not carry it either.
+    if name.startswith('privkey'):
         return True
     if name == 'private_key.json' or name.endswith('_key-certbot.pem'):
         return True

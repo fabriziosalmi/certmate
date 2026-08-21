@@ -118,7 +118,7 @@ def test_disaster_recovery_backup_carries_every_key(file_ops):
 
 
 @pytest.mark.parametrize('name, expected', [
-    ('privkey.pem', True), ('privkey1.pem', True), ('PRIVKEY.PEM', True),
+    ('privkey.pem', True), ('privkey1.pem', True), ('PRIVKEY.PEM', True), ('privkey.pem.staging', True),
     ('private_key.json', True), ('ca.key', True), ('alice.key', True),
     ('cert.pfx', True), ('bundle.p12', True), ('0000_key-certbot.pem', True),
     ('cert.pem', False), ('fullchain.pem', False), ('chain.pem', False),
