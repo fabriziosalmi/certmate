@@ -7,6 +7,7 @@ import os
 import copy
 import hashlib
 import json
+import re
 import shlex
 import subprocess
 import sys
@@ -480,12 +481,26 @@ class CertificateManager:
             quarantine = metadata_file.with_suffix(
                 f'.json.corrupt-{utc_now().strftime("%Y%m%dT%H%M%SZ")}'
             )
+            # Name the keys the damaged file still visibly carries, so the
+            # operator learns WHAT was lost (ca_provider, domain_alias,
+            # san_domains, deployment_*) and not only that something was.
+            # Names only, never values. With ca_provider gone, a private-CA
+            # certificate renews without its trust bundle until the
+            # .corrupt-* file is repaired — see _renewal_ca_bundle.
+            try:
+                raw = metadata_file.read_text(encoding='utf-8', errors='replace')
+            except OSError:
+                raw = ''
+            lost_keys = sorted(set(re.findall(r'"([A-Za-z_][A-Za-z0-9_]*)"\s*:', raw)))
             try:
                 metadata_file.rename(quarantine)
                 logger.error(
                     f"Corrupt metadata for {domain}: {e}. "
                     f"Quarantined to {quarantine.name}; downstream callers "
-                    f"will see an empty metadata dict until a fresh write."
+                    f"will see an empty metadata dict until a fresh write. "
+                    f"Keys still readable in the damaged file: "
+                    f"{', '.join(lost_keys) if lost_keys else 'none'} — "
+                    f"repair it from the .corrupt-* copy to recover them."
                 )
             except OSError as rename_err:
                 logger.error(
@@ -2079,6 +2094,11 @@ class CertificateManager:
         Mirrors what ``build_certbot_command`` does at issuance for
         ``private_ca``: resolve the CA account the certificate was issued
         under and write its ``ca_cert`` to a temp file.
+
+        A quarantined metadata.json (see _load_metadata) no longer carries
+        ca_provider, so until the operator repairs it from the .corrupt-*
+        copy the certificate renews without a bundle — the quarantine log
+        line names the lost keys for exactly that reason.
 
         When the account is gone or has no bundle the attempt still goes
         ahead without one — honestly: against an endpoint whose

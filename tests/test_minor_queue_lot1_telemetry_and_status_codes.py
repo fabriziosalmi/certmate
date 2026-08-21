@@ -199,3 +199,36 @@ def test_a_timestamp_that_becomes_unknown_removes_the_series_instead_of_freezing
     assert _sample(body, 'certmate_certificate_last_renewal_timestamp', dom) is not None
     body = _metrics_body(tmp_path, dom, {'exists': True, 'days_left': 40, 'dns_provider': 'cloudflare'})
     assert _sample(body, 'certmate_certificate_last_renewal_timestamp', dom) is None
+
+
+# --------------------------------------------------------------------------- #
+# 4. A quarantined metadata.json says what it lost
+# --------------------------------------------------------------------------- #
+
+def test_quarantine_names_the_keys_the_damaged_file_still_carries(tmp_path, caplog):
+    """Knowing a file was corrupt is not knowing what to put back. The
+    quarantine line lists the key names still readable in the damaged file
+    (never values) — ca_provider among them, which is what a private-CA
+    renewal silently runs without until the file is repaired."""
+    import logging
+    from unittest.mock import MagicMock
+    from modules.core.certificates import CertificateManager
+    from modules.core.file_operations import FileOperations
+    from modules.core.settings import SettingsManager
+    dirs = [tmp_path / n for n in ("certificates", "data", "backups", "logs")]
+    for d in dirs:
+        d.mkdir()
+    sm = SettingsManager(file_ops=FileOperations(*dirs), settings_file=dirs[1] / "settings.json")
+    cm = CertificateManager(cert_dir=dirs[0], settings_manager=sm, dns_manager=MagicMock(), shell_executor=MagicMock())
+    dom = dirs[0] / "app.internal"
+    dom.mkdir()
+    (dom / "metadata.json").write_text(
+        '{"domain": "app.internal", "ca_provider": "private_ca", "dns_provider": "cloudflare", '
+        '"san_domains": ["a.app.internal"], "deployment_host": "10.0.0.9", "domain_alias": "acme.ex')
+    with caplog.at_level(logging.ERROR):
+        assert cm._load_metadata("app.internal") == {}
+    line = "\n".join(r.getMessage() for r in caplog.records if "Corrupt metadata" in r.getMessage())
+    for key in ("ca_provider", "dns_provider", "san_domains", "deployment_host", "domain_alias"):
+        assert key in line, (key, line)
+    assert "private_ca" not in line and "10.0.0.9" not in line, "names only, never values"
+    assert list(dom.glob("metadata.json.corrupt-*"))
