@@ -474,6 +474,32 @@ class TestClientCertListKeepsItsFilter:
         expect(pfx).to_be_visible(timeout=5000)
 
 
+class TestAuthDisabledBanner:
+    """The 'authentication is disabled' banner depends on one HTTP answer
+    (settings.js: fetch('/api/auth/config') → show when local_auth_enabled is
+    false), not on server state. Intercepting that route keeps the banner
+    covered without putting the instance into a state the guard now refuses
+    (#581) and without the old test's re-enable dance."""
+
+    def test_banner_shows_when_local_auth_is_reported_off(self, browser_page):
+        browser_page.route(
+            "**/api/auth/config",
+            lambda route: route.fulfill(
+                status=200, content_type="application/json",
+                body='{"local_auth_enabled": false, "has_users": true}'),
+        )
+        try:
+            browser_page.goto(f"{BASE_URL}/settings")
+            browser_page.wait_for_load_state("networkidle")
+            browser_page.locator('button[role="tab"]:has-text("Users")').click(timeout=10000)
+            expect(browser_page.locator("#authSecurityBanner")).to_be_visible(timeout=10000)
+        finally:
+            # browser_page is module-scoped: the stub must not outlive this
+            # test whatever happens above, or the "banner hidden" assertion
+            # elsewhere in the module turns red for a reason three screens away.
+            browser_page.unroute("**/api/auth/config")
+
+
 class TestDeliberateNoAuthToggle:
     """#587 — the local-auth toggle on a local-only instance: the first request
     is refused (409), the UI asks with the one-way-door wording, confirming
