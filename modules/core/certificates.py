@@ -1686,6 +1686,7 @@ class CertificateManager:
             raise DomainOperationInProgress(domain)
         alias_hook_config = None
         credentials_file = None
+        ca_bundle_path = None
         # Secret side files the credentials ini references (Google's SA
         # JSON); deleted in the finally alongside the ini.
         extra_credential_files = []
@@ -1715,14 +1716,14 @@ class CertificateManager:
             logs_dir = domain_dir / 'logs'
 
             metadata_file = domain_dir / 'metadata.json'
-            metadata = {}
-            if metadata_file.exists():
-                try:
-                    with open(metadata_file, 'r') as f:
-                        metadata = json.load(f)
-                except Exception as e:
-                    logger.warning(f"Failed to read metadata for renewal of {domain}: {e}")
-            
+            # The one metadata reader that quarantines a corrupt file instead
+            # of returning {} over it. The inline json.load this replaces did
+            # the latter — and the renewal then wrote renewed_at into that
+            # {} and saved it, destroying dns_provider, san_domains,
+            # ca_provider, domain_alias and every deployment_* key in one
+            # pass, without a .corrupt-* copy and with success reported.
+            metadata = self._load_metadata(domain)
+
             cmd = [
                 'certbot', 'renew',
                 '--cert-name', domain,
@@ -1755,6 +1756,16 @@ class CertificateManager:
             # renewal, causing Route53 and other env-var-based providers to
             # fail with "Unable to locate credentials").
             process_env = os.environ.copy()
+            # A private ACME CA whose endpoint presents a certificate from its
+            # own root: creation passed the trust bundle through
+            # REQUESTS_CA_BUNDLE (ca_manager.build_certbot_command); renewal
+            # built its own environment and never read ca_provider, so every
+            # renewal against such a CA failed TLS verification — silently,
+            # until the certificate expired. Same bundle, same variable, same
+            # cleanup in the finally below.
+            ca_bundle_path = self._renewal_ca_bundle(metadata)
+            if ca_bundle_path:
+                process_env['REQUESTS_CA_BUNDLE'] = ca_bundle_path
 
             dns_provider = metadata.get('dns_provider')
             challenge_type = metadata.get('challenge_type', 'dns-01')
@@ -2028,7 +2039,33 @@ class CertificateManager:
                         os.unlink(cred_path)
                     except (FileNotFoundError, OSError):
                         pass
+            if ca_bundle_path:
+                try:
+                    os.unlink(ca_bundle_path)
+                except (FileNotFoundError, OSError):
+                    pass
             domain_lock.release()
+
+    def _renewal_ca_bundle(self, metadata):
+        """Return the trust-bundle path certbot needs to talk to this
+        certificate's CA at renewal, or None.
+
+        Mirrors what ``build_certbot_command`` does at issuance for
+        ``private_ca``: resolve the CA account the certificate was issued
+        under and write its ``ca_cert`` to a temp file. Best-effort — a CA
+        account that no longer exists, or one without a bundle, leaves the
+        environment as it was rather than blocking the attempt.
+        """
+        if metadata.get('ca_provider') != 'private_ca' or self.ca_manager is None:
+            return None
+        try:
+            account_config, _ = self.ca_manager.get_ca_config(
+                'private_ca', metadata.get('ca_account_id'))
+            return self.ca_manager.create_ca_trust_bundle('private_ca', account_config)
+        except Exception as e:
+            logger.warning(f"Could not build the CA trust bundle for renewal "
+                           f"(private_ca/{metadata.get('ca_account_id') or 'default'}): {e}")
+            return None
 
     def check_renewals(self):
         """Check and renew certificates that are about to expire.
