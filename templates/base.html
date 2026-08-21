@@ -142,9 +142,21 @@
     // Logout visibility is now gated server-side via the `current_user`
     // Jinja context var, so the deferred /api/auth/me probe is no longer
     // needed — the button either renders or it doesn't, no layout shift.
+    // The backend answers with ``oidc_logout_url`` for SSO-minted sessions:
+    // the IdP's end-session endpoint, with id_token_hint + client_id +
+    // post_logout_redirect_uri already on it. Follow it, or the IdP session
+    // survives a CertMate logout and the next "Login with SSO" signs the
+    // user straight back in (#564). Local sessions get no URL and land on
+    // /login as before. The URL is built server-side from the IdP discovery
+    // document and our own settings — it is not user input.
     function doLogout(){
         fetch('/api/auth/logout',{method:'POST',credentials:'same-origin'})
-            .then(function(){window.location.href='/login'})
+            .then(function(r){return r.json().catch(function(){return {};});})
+            .then(function(data){
+                var next = (data && typeof data.oidc_logout_url === 'string' && /^https?:\/\//.test(data.oidc_logout_url))
+                    ? data.oidc_logout_url : '/login';
+                window.location.href = next;
+            })
             .catch(function(){window.location.href='/login'});
     }
     // Theme preference is tri-state: 'auto' (no stored key — follows the OS
