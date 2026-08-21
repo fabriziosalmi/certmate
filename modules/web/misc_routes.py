@@ -1,4 +1,5 @@
 import logging
+import re
 import time
 
 from ..core.audit_chain import CheckpointReadError
@@ -400,6 +401,16 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
             from modules.core.settings import (
                 _strip_masked_values, _deep_merge_dict, _restore_masked_list_secrets,
             )
+            from modules.core.notifier import validate_webhook_config
+            # A generic webhook's method / auth / payload template is judged
+            # here, at save time, so a template that cannot render is a 400
+            # now and not a silent delivery failure later (#218).
+            channels = data.get('channels') if isinstance(data.get('channels'), dict) else {}
+            for index, webhook in enumerate(channels.get('webhooks') or []):
+                problem = validate_webhook_config(webhook)
+                if problem:
+                    label = (webhook.get('name') if isinstance(webhook, dict) else None) or f'#{index + 1}'
+                    return jsonify({'error': f'webhook {label}: {problem}'}), 400
             clean_data = _strip_masked_values(data)
 
             def _mutator(s):
@@ -542,6 +553,30 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
         except Exception as e:
             logger.error(f"Notification test failed: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500
+
+    @app.route('/api/notifications/webhook/preview', methods=['POST'])
+    @auth_manager.require_role('admin')
+    def api_notifications_webhook_preview():
+        """Render what a generic webhook would send for a sample event —
+        method, URL, header names (credentials masked), body — without
+        sending anything. Backs the payload-template editor (#218)."""
+        notifier = managers.get('notifier')
+        if notifier is None:
+            return jsonify({'error': 'Notifier not available'}), 503
+        try:
+            data = request.json or {}
+            config = data.get('config') or {}
+            if not isinstance(config, dict):
+                return jsonify({'error': 'config must be a JSON object'}), 400
+            event = data.get('event') or 'certificate_renewed'
+            if not isinstance(event, str) or not re.match(r'^[a-z_]{1,64}$', event):
+                return jsonify({'error': 'event must be a lowercase event name'}), 400
+            result = notifier.preview_webhook(config, event=event)
+            status = 400 if 'error' in result else 200
+            return jsonify(result), status
+        except Exception as e:
+            logger.error(f"Webhook preview failed: {e}")
+            return jsonify({'error': 'Failed to render webhook preview'}), 500
 
     @app.route('/api/digest/send', methods=['POST'])
     @auth_manager.require_role('admin')
