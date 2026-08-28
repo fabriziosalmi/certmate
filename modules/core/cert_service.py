@@ -288,9 +288,14 @@ class CertificateService:
         ``ValueError`` on bad input, :class:`DomainOutOfScope` on scope.
         """
         domain = (domain or '').strip()
-        ok, msg = validate_domain(domain)
+        # Same rebind-to-normalised as prepare_create: use the bare hostname
+        # validate_domain returns, not the raw string, so a URL form cannot
+        # drive `cert_dir / domain` here either. The reissue path builds the
+        # same paths as create and must hold the same invariant.
+        ok, normalized = validate_domain(domain)
         if not ok:
-            raise ValueError(f'Invalid domain: {msg}')
+            raise ValueError(f'Invalid domain: {normalized}')
+        domain = normalized
 
         cert_file = self._certs.cert_dir / domain / 'cert.pem'
         if not cert_file.exists():
@@ -325,9 +330,10 @@ class CertificateService:
             alias_dns_provider = None
 
         if domain_alias:
-            ok, msg = validate_domain(domain_alias)
+            ok, normalized_alias = validate_domain(domain_alias)
             if not ok:
-                raise ValueError(f'Invalid domain_alias: {msg}')
+                raise ValueError(f'Invalid domain_alias: {normalized_alias}')
+            domain_alias = normalized_alias
 
         # Scope covers the primary and the FINAL SAN set (kept + added):
         # a scoped key must not be able to keep another tenant's SAN alive

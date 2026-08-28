@@ -1436,14 +1436,23 @@ class CertificateManager:
             # Build list of all domains (primary + SANs)
             all_domains = [domain]
             if san_domains:
-                # Filter and validate SAN domains
+                # Filter and validate SAN domains. validate_domain returns the
+                # normalised name (URL netloc extracted, lowercased) as its
+                # second value; append THAT, not the raw entry, so a SAN never
+                # reaches certbot's -d as a URL form or a case variant. De-dup
+                # is against the normalised value and the already-normalised
+                # primary, so "Example.com" as a SAN of "example.com" collapses
+                # instead of producing a duplicate -d.
                 for san in san_domains:
                     san = san.strip()
-                    if san and san != domain and san not in all_domains:
-                        is_valid, validation_msg = validate_domain(san)
-                        if not is_valid:
-                            raise ValueError(f"Invalid SAN domain '{san}': {validation_msg}")
-                        all_domains.append(san)
+                    if not san:
+                        continue
+                    is_valid, san_normalized = validate_domain(san)
+                    if not is_valid:
+                        raise ValueError(
+                            f"Invalid SAN domain '{san}': {san_normalized}")
+                    if san_normalized != domain and san_normalized not in all_domains:
+                        all_domains.append(san_normalized)
                 logger.info(f"Creating SAN certificate with domains: {', '.join(all_domains)}")
 
             # HTTP-01 does not support wildcard domains

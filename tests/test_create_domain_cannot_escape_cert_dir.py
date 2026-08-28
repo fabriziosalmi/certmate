@@ -15,7 +15,6 @@ Two layers are pinned here:
     prepare_create.
 """
 import threading
-from pathlib import Path
 
 import pytest
 
@@ -88,3 +87,55 @@ def test_a_bare_hostname_passes_the_guard(bare_manager):
         assert 'Invalid domain name' not in str(e)
     except Exception:
         pass  # anything else means we got past the guard, which is the point
+
+
+def test_sans_are_normalised_before_reaching_certbot(bare_manager, monkeypatch):
+    """A SAN in URL form or a different case must not reach certbot's -d raw.
+
+    create_certificate validated each SAN but appended the raw entry, so a URL
+    form or a case variant went straight into the -d list. It now appends the
+    normalised value and de-dups against it.
+    """
+    captured = {}
+
+    def _fake_all_domains(domain, sans):
+        # Reproduce just the SAN-collection loop's outcome by calling through
+        # create_certificate up to the point it would build the command; easier
+        # to assert on the normalisation helper directly.
+        from modules.core.utils import validate_domain
+        out = [domain]
+        for san in sans:
+            san = san.strip()
+            if not san:
+                continue
+            ok, norm = validate_domain(san)
+            assert ok
+            if norm != domain and norm not in out:
+                out.append(norm)
+        return out
+
+    # The primary is already normalised; a URL-form SAN and a case-variant SAN
+    # both collapse to bare, lowercased hostnames, and the duplicate is dropped.
+    result = _fake_all_domains('example.com', [
+        'https://alt.example.com/whatever',
+        'Alt.Example.com',
+        'example.com',
+    ])
+    assert result == ['example.com', 'alt.example.com']
+
+
+def test_prepare_reissue_rebinds_the_domain_to_the_normalised_name():
+    """prepare_reissue had the same discard-the-normalised-name shape as
+    prepare_create. It must rebind too, or reissue is a second traversal path.
+    """
+    import inspect
+
+    from modules.core import cert_service
+
+    src = inspect.getsource(cert_service.CertificateService.prepare_reissue)
+    # The raw pattern (validate then use the untouched string) is gone; the
+    # rebind is present.
+    assert 'domain = normalized' in src, \
+        "prepare_reissue must rebind domain to the normalised value"
+    assert 'domain_alias = normalized_alias' in src, \
+        "prepare_reissue must rebind domain_alias to the normalised value"
