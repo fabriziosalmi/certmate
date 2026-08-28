@@ -38,10 +38,23 @@ def utc_now_iso() -> str:
 _MIN_TOKEN_LENGTH = 32  # Increased minimum for better security
 _MAX_TOKEN_LENGTH = 512
 _MIN_UNIQUE_CHARS = 12  # Increased for better entropy
+# Placeholder and classic-weak values, matched as substrings anywhere in the
+# token. Deliberately NOT generic nouns: 'api', 'key', 'token', 'secret',
+# 'admin', 'test', 'demo', 'default' and 'example' used to be in this set, and
+# any of them appearing ANYWHERE rejected the token — so
+# `certmate-api-token-<32 random chars>` was refused while being perfectly
+# strong. That refusal was not a warning the operator could act on: the token
+# was dropped, a random one generated in its place, and the instance came up
+# with no operator credential at all (see _bearer_token_from_env_or_generate).
+# What actually protects against a guessable token is the length floor and the
+# character-variety floor below. This set exists only to catch a value copied
+# out of the documentation without editing it; note that the value we ship in
+# .env.example ('your_secure_api_token_here') is 26 characters and is already
+# refused by _MIN_TOKEN_LENGTH, so it does not depend on this list.
 _WEAK_TOKEN_PATTERNS = {
-    'password', '12345', 'admin', 'test', 'demo', 'change-this',
-    'default', 'secret', 'token', 'key', 'api', 'qwerty', 'example',
-    'your_token_here', 'your_super_secure_api_token_here_change_this'
+    'password', '12345', 'qwerty', 'letmein', 'change-this', 'change_this',
+    'changeme', 'your_token_here', 'your_secure_api_token_here',
+    'your_super_secure_api_token_here_change_this',
 }
 
 # A mapping of DNS providers to their required credential fields for validation.
