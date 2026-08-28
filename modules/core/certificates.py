@@ -276,6 +276,70 @@ class CertificateManager:
             tmp.unlink(missing_ok=True)
             raise
 
+    def _seed_acme_account(self, domain, cert_dir, ca_provider, ca_account_id):
+        """Give a new domain the ACME account a sibling already registered.
+
+        `--config-dir` is per domain (ca_manager.build_certbot_command), and
+        certbot keeps its ACME account under the config dir. So every new
+        domain registered a brand-new account with the CA: 50 domains through
+        POST /api/web/certificates/batch — the size this product accepts in one
+        request — is 50 registrations from one IP in one run, which no CA
+        allows. It also leaves 50 account private keys on disk, each one a
+        credential that every backup then carries.
+
+        Copying the donor's `accounts/` tree in before certbot runs makes it
+        find a registered account and skip registration. This cannot bind a
+        certificate to the wrong account: certbot indexes accounts by the ACME
+        directory URL, so a tree that does not match the `--server` in use is
+        ignored and certbot registers exactly as it does today. The
+        ca_account_id match is belt-and-braces on top of that, for two CA
+        accounts (different EAB credentials) on the same server.
+
+        Best-effort by design. Any failure leaves the directory untouched and
+        the run proceeds unchanged — this is an optimisation on the issuance
+        path, and the issuance path must not acquire a new way to fail.
+        """
+        try:
+            target = Path(cert_dir) / domain / 'accounts'
+            if target.exists() and any(target.rglob('*.json')):
+                return None                      # already has an account
+            for candidate in sorted(Path(cert_dir).iterdir()):
+                if not candidate.is_dir() or candidate.name == domain:
+                    continue
+                donor = candidate / 'accounts'
+                if not donor.is_dir() or not any(donor.rglob('*.json')):
+                    continue
+                metadata = self._load_metadata(candidate.name)
+                if metadata.get('ca_provider') != ca_provider:
+                    continue
+                if (metadata.get('ca_account_id') or None) != (ca_account_id or None):
+                    continue
+                # Stage, then promote. copytree failing halfway would
+                # otherwise leave a partial accounts/ tree, and the
+                # "already has an account" check above would read that
+                # wreckage as a registered account and skip seeding for
+                # good (Copilot, #604). Same shape as _publish_flat_files.
+                staging = target.parent / '.accounts-seeding'
+                shutil.rmtree(staging, ignore_errors=True)
+                try:
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copytree(donor, staging)
+                    if target.exists():
+                        shutil.copytree(staging, target, dirs_exist_ok=True)
+                        shutil.rmtree(staging, ignore_errors=True)
+                    else:
+                        staging.rename(target)
+                except Exception:
+                    shutil.rmtree(staging, ignore_errors=True)
+                    raise
+                logger.info(
+                    "Reusing the ACME account registered for %s instead of "
+                    "registering a new one for %s", candidate.name, domain)
+                return candidate.name
+        except Exception as e:                   # noqa: BLE001 - best effort
+            logger.debug("Could not seed an ACME account for %s: %s", domain, e)
+        return None
+
     def _stale_flat_files(self, src_dir: Path, dest_dir: Path):
         """Which of CERTIFICATE_FILES differ between live/ and the flat copy.
 
@@ -1579,6 +1643,16 @@ class CertificateManager:
                 else:
                     safe_cmd.append(str(part))
             logger.debug(f"Certbot command: {' '.join(safe_cmd)}")
+
+            # build_certbot_command created the per-domain config dir; hand
+            # this domain the account a sibling already registered, so a batch
+            # of new domains does not become a batch of new ACME accounts.
+            # used_ca_account_id, not the request parameter: metadata persists
+            # the RESOLVED account (line ~1708), so comparing against the
+            # caller's `ca_account_id` — None whenever they did not name one —
+            # never matched a donor and the reuse silently never happened
+            # (Copilot, #604).
+            self._seed_acme_account(domain, cert_dir, ca_provider, used_ca_account_id)
 
             # Run certbot with isolated environment
             result = self.shell_executor.run(
