@@ -182,5 +182,49 @@ def test_the_supersede_write_still_works_without_a_race(mgr):
     assert "revoked" not in final, "nothing revoked it; the field must not appear"
 
 
+def test_both_paths_take_the_same_metadata_lock(mgr):
+    """Narrow is not closed.
+
+    Re-reading immediately before the write shrank the window from the length
+    of a signature to a few microseconds, but two unlocked read-modify-writes
+    can still interleave, and then either the revocation or the supersede
+    marker is the one that disappears (Copilot, #603). Both paths now take the
+    per-identifier lock — the SAME lock object, or it protects nothing.
+
+    Asserted by watching who acquires it rather than by hammering threads: a
+    stress test that passes 999 times out of 1000 is not evidence, and this
+    is the property the correctness actually rests on.
+    """
+    _seed(mgr)
+    taken = []
+    real = mgr._metadata_lock
+
+    def watch(identifier):
+        lock = real(identifier)
+        taken.append((identifier, id(lock)))
+        return lock
+
+    mgr._metadata_lock = watch                       # type: ignore[assignment]
+    mgr.create_client_certificate = (                # type: ignore[assignment]
+        lambda **kwargs: (True, None, {"identifier": "alice-2", "serial_number": 9999}))
+
+    mgr.renew_certificate("alice-1")
+    mgr.revoke_certificate("alice-1", reason="superseded")
+
+    assert [i for i, _ in taken] == ["alice-1", "alice-1"], (
+        f"both paths must lock on the identifier; saw {taken}"
+    )
+    assert len({lock_id for _, lock_id in taken}) == 1, (
+        "renew and revoke took DIFFERENT lock objects, which serialises "
+        "nothing — the whole point is that they contend on the same one"
+    )
+
+
+def test_a_lock_is_per_identifier_not_global(mgr):
+    """Two different certificates must not serialise on each other."""
+    assert mgr._metadata_lock("alice-1") is mgr._metadata_lock("alice-1")
+    assert mgr._metadata_lock("alice-1") is not mgr._metadata_lock("bob-1")
+
+
 if __name__ == "__main__":  # pragma: no cover
     pytest.main([__file__, "-v"])
