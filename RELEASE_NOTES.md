@@ -74,6 +74,16 @@ the compose file and installation docs saying to copy it before `up` — a missi
 host file becomes an empty directory otherwise. Thanks to @ratiugtun for the
 `.env.example` analogy.
 
+### Dependencies
+
+- `azure-mgmt-dns` 8.1.0 -> 9.0.0. A major bump on the SDK behind Azure DNS,
+  and `certbot-dns-azure==2.5.0` asks for `>=8.0.0` with no upper bound, so
+  the metadata alone would have accepted a break. Checked against the pinned
+  stack: the plugin imports, and the three operations it calls —
+  `record_sets.create_or_update`, `.delete`, `.get` — exist on 9.0.0 with the
+  signature it uses.
+- `boto3` 1.43.72 -> 1.43.73, `python-dotenv` 1.2.2 -> 1.2.3.
+
 ### Notes for operators
 
 - Nothing to do to upgrade. If you keep a customised `nginx.conf`, it is now
