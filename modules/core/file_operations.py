@@ -129,16 +129,20 @@ class RestoreIncompleteError(RuntimeError):
         )
 
 
-def _extract_zip_member_atomically(zipf, file_info, target_path, max_bytes,
-                                   mode):
+def _extract_zip_member_atomically(zipf, file_info, target_path, max_bytes):
     """Extract one archive member to *target_path* without ever leaving it in
     a half-written state.
 
-    The member is streamed into a sibling temp file, chmod'd, then promoted
-    with ``os.replace`` — an atomic rename on the same filesystem. Until that
-    rename, ``target_path`` is untouched: if the read fails (a corrupt member,
-    a bad CRC pulled back from an off-site copy) or the declared size is a lie,
-    the pre-existing file is still exactly what it was.
+    The member is streamed into a sibling temp file, locked to 0600, then
+    promoted with ``os.replace`` — an atomic rename on the same filesystem.
+    Until that rename, ``target_path`` is untouched: if the read fails (a
+    corrupt member, a bad CRC pulled back from an off-site copy) or the
+    declared size is a lie, the pre-existing file is still exactly what it was.
+
+    The promoted file is 0600 — restrictive by default, so a private key is
+    never briefly world-readable. A caller that restores public material
+    (cert.pem/chain.pem/fullchain.pem) relaxes it to 0644 afterwards, with a
+    literal mode; that is a widening of an already-safe file, not a window.
 
     This replaces two earlier shapes that both ended at zero bytes:
     ``open(target_path, 'wb')`` truncated the destination *before* the first
@@ -174,9 +178,9 @@ def _extract_zip_member_atomically(zipf, file_info, target_path, max_bytes,
                         f'(declared {file_info.file_size})'
                     )
                 target.write(chunk)
-        # chmod the temp file, so the promoted file has correct permissions the
-        # instant it becomes visible — no window where a key is world-readable.
-        os.chmod(tmp_path, mode)
+        # chmod the temp file, so the promoted file is 0600 the instant it
+        # becomes visible — a key is never briefly world-readable.
+        os.chmod(tmp_path, 0o600)
         os.replace(tmp_path, target_path)
         return written
     except BaseException:
@@ -978,35 +982,33 @@ class FileOperations:
 
                         logger.info(f"Extracting certificate file: {file_info.filename}")
 
-                        # Permissions decided up front, on the final name, so
-                        # the atomic helper can stamp them on the temp file
-                        # before it is promoted — no window where a restored key
-                        # is world-readable. Lock down every private key (live,
-                        # archived, ACME account); public cert material stays
-                        # world-readable. Same predicate the share-safe archive
-                        # uses to leave key material out (review, #582).
-                        if (_is_key_material(target_path)
-                                or _PRIVATE_KEY_FILE_RE.search(target_path.name)):
-                            mode = 0o600
-                        else:
-                            mode = 0o644
-
                         # Atomic extract: target_path is left untouched until a
                         # complete copy has been written and promoted by rename.
                         # A corrupt member (bad CRC from an off-site copy) or an
                         # oversize one used to truncate the live file to zero and
                         # then `continue`, while the restore still returned True
                         # — that is how a working privkey.pem was silently lost.
+                        # The promoted file is 0600.
                         try:
                             _extract_zip_member_atomically(
-                                zipf, file_info, target_path,
-                                max_entry_size, mode)
+                                zipf, file_info, target_path, max_entry_size)
                         except Exception as e:
                             logger.error(
                                 f"Error extracting {file_info.filename}: {e} "
                                 f"(existing file left intact)")
                             failed_entries.append(file_info.filename)
                             continue
+
+                        # Relax public certificate material to 0644 so nginx and
+                        # other containers reading the bind-mounted cert dir can
+                        # see it. Private keys (live, archived, ACME account) and
+                        # any .pfx/keys copy stay 0600 — same predicate the
+                        # share-safe archive uses to leave key material out
+                        # (review, #582). Widening an already-0600 file, so a key
+                        # is never even briefly world-readable.
+                        if not (_is_key_material(target_path)
+                                or _PRIVATE_KEY_FILE_RE.search(target_path.name)):
+                            os.chmod(target_path, 0o644)
 
                         # Track restored domains
                         if '/' in relative_path:
@@ -1065,10 +1067,16 @@ class FileOperations:
                         # the exact hazard the old branch warned about, and now
                         # it aborts the whole restore instead of reporting
                         # success.
+                        # The helper promotes at 0600, which is exactly what
+                        # data/ wants for every file: the CA key, the audit
+                        # signing key and client keys are all here, and nothing
+                        # outside the app process reads data/, so even the CA
+                        # cert and CRL stay 0600 (publishing them is the
+                        # server's job, /api/crl/download, not the filesystem's).
                         try:
                             _extract_zip_member_atomically(
                                 zipf, file_info, target_path,
-                                _MAX_DATA_ENTRY_BYTES, 0o600)
+                                _MAX_DATA_ENTRY_BYTES)
                         except Exception as e:
                             logger.error(
                                 f"Error extracting {file_info.filename}: {e} "
