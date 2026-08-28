@@ -1270,6 +1270,23 @@ class CertificateManager:
                 omitting the flags makes certbot keep the existing key
                 type.
         """
+        # Path-safety gate at the sink. `domain` becomes cert_dir/<domain>/…,
+        # the certbot --config-dir/--cert-name, and the target of
+        # _seed_acme_account — and it keys the per-domain lock just below. Every
+        # caller is supposed to hand a bare hostname; a URL-form value whose
+        # netloc passed validate_domain but was kept raw ("https://x/../y")
+        # would escape cert_dir here and drop the ACME account private key under
+        # the public /.well-known/acme-challenge webroot. The create sources
+        # normalise to the bare hostname now, but this is the last line that
+        # every path — including the batch route, which does not go through
+        # prepare_create — must cross, so a future caller cannot reintroduce the
+        # escape. Reject rather than normalise: normalisation is the source's
+        # job; reaching the sink with path characters means something upstream
+        # failed and the request must not proceed.
+        if (not domain or '/' in domain or '\\' in domain
+                or '..' in domain or '\x00' in domain):
+            raise ValueError('Invalid domain name')
+
         # Acquire per-domain lock to prevent concurrent create/renew operations
         domain_lock = self._get_domain_lock(domain)
         if not domain_lock.acquire(timeout=self._domain_lock_timeout()):
@@ -1419,14 +1436,23 @@ class CertificateManager:
             # Build list of all domains (primary + SANs)
             all_domains = [domain]
             if san_domains:
-                # Filter and validate SAN domains
+                # Filter and validate SAN domains. validate_domain returns the
+                # normalised name (URL netloc extracted, lowercased) as its
+                # second value; append THAT, not the raw entry, so a SAN never
+                # reaches certbot's -d as a URL form or a case variant. De-dup
+                # is against the normalised value and the already-normalised
+                # primary, so "Example.com" as a SAN of "example.com" collapses
+                # instead of producing a duplicate -d.
                 for san in san_domains:
                     san = san.strip()
-                    if san and san != domain and san not in all_domains:
-                        is_valid, validation_msg = validate_domain(san)
-                        if not is_valid:
-                            raise ValueError(f"Invalid SAN domain '{san}': {validation_msg}")
-                        all_domains.append(san)
+                    if not san:
+                        continue
+                    is_valid, san_normalized = validate_domain(san)
+                    if not is_valid:
+                        raise ValueError(
+                            f"Invalid SAN domain '{san}': {san_normalized}")
+                    if san_normalized != domain and san_normalized not in all_domains:
+                        all_domains.append(san_normalized)
                 logger.info(f"Creating SAN certificate with domains: {', '.join(all_domains)}")
 
             # HTTP-01 does not support wildcard domains
