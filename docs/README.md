@@ -26,6 +26,7 @@ Welcome to the CertMate documentation. This folder contains comprehensive guides
 - **[Webhooks](./webhooks.md)** — generic webhooks: payload templates, authentication, signature verification
 - **[Compliance](./compliance.md)** — audit chain, actor attribution, NIS2/eIDAS posture
 - **[Deployment Probes](./probes.en.md)** — verifying a renewed certificate is actually served
+- **[Disaster Recovery](./disaster-recovery.md)** — backups, what a masked archive can and cannot restore, recovery on a fresh host
 
 ---
 
@@ -161,6 +162,7 @@ docs/
   compliance.md           audit chain, attribution, NIS2/eIDAS
   deploy-hooks.md         post-issuance deploy hooks
   webhooks.md             generic webhooks: payload templates, auth, signature
+  disaster-recovery.md    backups, restore, recovery on a fresh host
   discovery-inventory.md  discovery, inventory, adopt, crypto readiness
   dns-providers.md        DNS providers, multi-account, domain alias
   docker.md               Docker build and deployment

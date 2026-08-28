@@ -2604,6 +2604,7 @@ curl -sS -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/diagnostics
 | **[docs/compliance.md](docs/compliance.md)**       | Audit chain, attribution, NIS2/eIDAS posture | Compliance, security |
 | **[docs/kubernetes.md](docs/kubernetes.md)**       | Pod sizing, OOM troubleshooting, Helm chart | SRE              |
 | **[docs/probes.en.md](docs/probes.en.md)**         | Deployment probe configuration      | DevOps engineers      |
+| **[docs/disaster-recovery.md](docs/disaster-recovery.md)** | Backups, restore, recovery on a fresh host | SRE, system administrators |
 | **[CONTRIBUTING.md](CONTRIBUTING.md)**             | Development and contribution guide  | Developers            |
 | **[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)**       | Community guidelines                | Contributors          |
 
