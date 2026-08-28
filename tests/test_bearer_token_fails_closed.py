@@ -18,7 +18,6 @@ Two halves, and both matter:
 These tests pin both, plus the control that a first run with no token at all
 still generates one and boots normally.
 """
-import os
 
 import pytest
 

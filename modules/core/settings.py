@@ -491,18 +491,25 @@ def _bearer_token_from_env_or_generate():
     """Return a valid api_bearer_token for the default settings template.
 
     Resolution order (mutually exclusive):
-    1. API_BEARER_TOKEN_FILE — if set, read the token from that file. Any
-       read error or validation failure generates a fresh token immediately;
-       API_BEARER_TOKEN is never consulted (to avoid encouraging both vars).
-    2. API_BEARER_TOKEN — only checked when API_BEARER_TOKEN_FILE is absent.
-       An invalid value (too short, weak pattern, insufficient entropy) is
-       logged and a fresh token is generated instead. This prevents a
-       misconfigured env var (issue #108: docker-compose passing an empty or
-       weak ${API_BEARER_TOKEN}) from poisoning save_settings with a
-       misleading "API token length must be between 32 and 512 characters"
-       rejection.
-    3. generate_secure_token() — fallback when neither variable is set or
-       both fail validation.
+    1. API_BEARER_TOKEN_FILE — if set, read the token from that file. A read
+       error, or a token that fails validation, raises
+       BearerTokenUnusableError; API_BEARER_TOKEN is never consulted as a
+       fallback (to avoid encouraging both vars, and because falling back
+       would defeat the point of the refusal).
+    2. API_BEARER_TOKEN — only checked when API_BEARER_TOKEN_FILE is absent,
+       and stripped first, so an empty or whitespace-only value reads as "not
+       configured" and falls through to (3). That is issue #108's case:
+       docker-compose passing an unexpanded ${API_BEARER_TOKEN}. A non-empty
+       value that fails validation raises BearerTokenUnusableError.
+    3. generate_secure_token() — when neither variable is set.
+
+    Raises:
+        BearerTokenUnusableError: the operator supplied a token that cannot be
+            used. Substituting a generated one would leave the instance with
+            no operator credential at all, which is the failure this refusal
+            exists to prevent; #108's requirement (an unusable value must
+            never reach settings.json) is met by refusing rather than by
+            silently replacing.
     """
     # An operator who sets API_BEARER_TOKEN or API_BEARER_TOKEN_FILE has said
     # "this instance is authenticated". If the value turns out unusable we must
