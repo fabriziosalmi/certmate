@@ -154,7 +154,6 @@ def test_a_member_that_fails_to_open_does_not_leak_a_descriptor():
     """
     import os
     import tempfile
-    from pathlib import Path
 
     from modules.core.file_operations import _extract_zip_member_atomically
 
