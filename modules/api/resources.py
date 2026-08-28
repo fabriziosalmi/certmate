@@ -25,6 +25,7 @@ from ..core.constants import CERTIFICATE_FILES, iter_cert_domain_dirs
 from ..core.auth import ROLE_HIERARCHY
 from ..core.utils import utc_now_iso, classify_renewal_error
 from ..core.certificates import DomainOperationInProgress
+from ..core.file_operations import RestoreIncompleteError
 from ..core.cert_service import CertificateService, DomainOutOfScope
 from ..core.audit_context import audit_context_from_request
 from ..core.inventory_view import build_inventory_view, record_in_scope
@@ -3091,6 +3092,20 @@ def create_api_resources(api, models, managers):
 
             except FileNotFoundError:
                 return {'error': 'Backup file not found'}, 404
+            except RestoreIncompleteError as e:
+                # Some members restored, at least one did not. The failed ones
+                # kept their pre-existing files (atomic extract), so nothing was
+                # truncated — but the instance is now a mix of old and new and
+                # must not be reported as a clean restore. Name the members so
+                # the operator knows what to check before rolling back.
+                logger.error(f"Restore incomplete: {e}")
+                return {
+                    'error': 'Restore incomplete — some files could not be '
+                             'restored and were left unchanged; the instance '
+                             'is in a mixed state. Roll back with the '
+                             'pre-restore backup.',
+                    'failed': e.failed,
+                }, 500
             except ValueError as e:
                 logger.warning(f"Backup restore validation error: {e}")
                 return {'error': 'Invalid backup data'}, 400
