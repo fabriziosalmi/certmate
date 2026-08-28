@@ -1,3 +1,90 @@
+## v2.26.1 (Five fixes, and a security record that had stopped being one)
+
+A patch release. Nothing here changes what CertMate does; it changes things it
+was doing wrongly or saying inaccurately.
+
+### The list of advisories we were living with had stopped being the list
+
+CertMate pins `cryptography` and `pyopenssl` behind their fixed versions on
+purpose: every release that clears the advisories needs a pyOpenSSL that breaks
+the pinned ACME stack, and `cryptography==50.0.0` installs cleanly and then
+kills `certbot --version`. That decision was recorded in SECURITY.md and the
+Dependabot alert dismissed as tolerable risk pointing at it.
+
+The record had drifted. SECURITY.md documented one advisory, dismissed months
+earlier, while **three more, published 2026-08-03 against the same pin, sat
+open, unassessed and unmentioned** — through the v2.26.0 release. The reasoning
+in the file was correct; it had simply stopped being complete, and nothing
+looked.
+
+All four are now listed with their severity, the defect, the API that reaches
+them and the first fixed version. **None of the three new ones is reachable**:
+two need the X.509 verifier, one needs PKCS#7 `EnvelopedData` decryption, and
+neither API is called anywhere in the shipped stack — checked across
+`modules/`, `app.py` and the pinned `certbot` / `acme` / `josepy`. Unlike the
+older advisory, whose defect sat in the statically linked OpenSSL, these three
+are in `cryptography`'s own code and are reached through one named API each,
+which is what makes "we do not call it" a complete answer.
+
+A weekly job now asks the repository which advisories it is actually carrying —
+open, or dismissed as tolerable risk, because both are decisions to keep running
+with a known flaw — and fails when one is missing from SECURITY.md. No test can
+see live alerts, so a merge gate could not have caught this.
+
+### A revocation no longer disappears into a renewal that was already signing
+
+Renewing a client certificate read its metadata, spent the length of a key
+generation and a signature inside the signing call, then wrote that snapshot
+back to mark the old certificate superseded. **A revocation landing in between
+was erased** — and that field is what the OCSP responder answers from, so the
+responder went back to saying `good` for a certificate the operator had just
+revoked.
+
+The trigger was not an operator clicking Renew and then Revoke; the UI confirms
+before revoking, which is seconds against a window of milliseconds. It was the
+03:00 renewal sweep crossing a revocation done by hand.
+
+The renewal now writes back only the fields it owns, onto the metadata as it is
+at that moment, and both paths take a per-identifier lock around their metadata
+sections — never around the signing, so renewals of different certificates stay
+concurrent. When a revocation does land mid-flight it is logged: the revocation
+stands, but a new certificate exists for an identity that was just withdrawn,
+and nothing else would have said so.
+
+### A batch of new domains is no longer a batch of new ACME accounts
+
+`--config-dir` is per domain and certbot keeps its ACME account there, so every
+new domain registered a brand-new account with the CA. `POST
+/api/web/certificates/batch` accepts 50 domains in one request, so onboarding a
+batch was 50 registrations from one IP in one run — which no CA allows — and
+left 50 account private keys on disk, each one a credential every backup then
+carried.
+
+A new domain is now given the account a sibling issued under the same CA and CA
+account already registered. This cannot bind a certificate to the wrong account:
+certbot indexes accounts by the ACME directory URL, so a tree that does not
+match the server in use is ignored and it registers exactly as before. Any
+failure leaves the directory alone and the run proceeds unchanged.
+
+### The bundled nginx profile no longer overwrites your copy (#576)
+
+`nginx.conf` shipped tracked, so an operator's edits were in the way of every
+upgrade. It ships as `nginx.conf.example` now, with `nginx.conf` gitignored and
+the compose file and installation docs saying to copy it before `up` — a missing
+host file becomes an empty directory otherwise. Thanks to @ratiugtun for the
+`.env.example` analogy.
+
+### Notes for operators
+
+- Nothing to do to upgrade. If you keep a customised `nginx.conf`, it is now
+  yours: copy `nginx.conf.example` once and your file stops being overwritten.
+- The four `cryptography` advisories remain open by choice, documented and
+  unreachable. They clear with the certbot 5.x migration (#103), which is
+  measured and ready except for one plugin — see #602 if you issue through
+  Azure DNS.
+
+---
+
 ## v2.26.0 (The renewal path held to the standard of the issuance path, and two features)
 
 A minor release. Two new capabilities, both of them declarative where the
