@@ -328,6 +328,42 @@ jobs:
     - name: Check the wiki against the repository
       run: python scripts/check_wiki.py wiki
 
+  # Every dependency advisory we are living with must be written down.
+  #
+  # CertMate holds cryptography and pyopenssl behind their fixed versions on
+  # purpose, and records that decision in SECURITY.md while dismissing the
+  # alert as tolerable_risk pointing back at it. On 2026-08-21 the record had
+  # drifted: SECURITY.md documented one advisory, dismissed months earlier,
+  # while three published on 2026-08-03 against the same pin sat open,
+  # unassessed and unmentioned — through a release. The reasoning in the file
+  # was fine; it had stopped being the complete list, and nothing looked.
+  #
+  # Weekly rather than a merge gate because it needs the live alert list,
+  # which no test can see. A finding here is news: either an advisory arrived
+  # and nobody assessed it, or the pin can finally move.
+  advisories:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      # Listing Dependabot alerts needs this explicitly; the workflow-level
+      # read-all already grants it, but a job that reads security data should
+      # say so where someone reviewing the job can see it.
+      security-events: read
+      contents: read
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+    - name: Set up Python
+      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v5
+      with:
+        python-version: '3.12'
+
+    - name: Every carried advisory is documented in SECURITY.md
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: python scripts/check_advisories.py ${{ github.repository }}
+
   # Storage backends against real servers rather than a faithful fake.
   #
   # The in-memory S3 fake is a good test and cannot disagree with me: it
