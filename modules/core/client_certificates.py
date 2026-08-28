@@ -519,18 +519,62 @@ class ClientCertificateManager:
             )
 
             if success:
-                # Update old metadata to mark as superseded
-                old_metadata["superseded_by"] = cert_data["identifier"]
-                old_metadata["superseded_at"] = utc_now().isoformat()
-                # Belt-and-braces against runaway re-renewal: renewal_enabled
-                # gates check_renewals, so disabling it on the superseded cert
-                # guarantees the scheduled sweep can never re-pick this old cert
-                # even if the superseded_by guard were ever weakened.
-                old_metadata["renewal_enabled"] = False
-
+                # Write back only the three fields this operation owns, onto
+                # the metadata as it is NOW — not onto the snapshot read at the
+                # top of this method.
+                #
+                # create_client_certificate above generates a key and signs a
+                # certificate; that takes long enough for a revocation to land
+                # in between. `old_metadata` was read before it and does not
+                # carry `revoked`, so writing the whole dict back erased the
+                # revocation — and OCSP decides on exactly that field
+                # (ocsp_crl.py:49), so the responder went back to answering
+                # "good" for a certificate the operator had just revoked. The
+                # credible trigger is not an operator double-clicking (the UI
+                # confirms before revoking) but the 03:00 renewal sweep
+                # crossing a manual revoke.
+                superseded = {
+                    "superseded_by": cert_data["identifier"],
+                    "superseded_at": utc_now().isoformat(),
+                    # Belt-and-braces against runaway re-renewal:
+                    # renewal_enabled gates check_renewals, so disabling it on
+                    # the superseded cert guarantees the scheduled sweep can
+                    # never re-pick this old cert even if the superseded_by
+                    # guard were ever weakened.
+                    "renewal_enabled": False,
+                }
+                revoked_meanwhile = False
                 for metadata_file in self.client_certs_dir.glob(f"*/{identifier}/metadata.json"):
+                    try:
+                        with open(metadata_file) as f:
+                            current = json.load(f)
+                        if not isinstance(current, dict):
+                            current = dict(old_metadata)
+                    except (OSError, ValueError):
+                        # Unreadable now, readable at the top of the method:
+                        # fall back to the snapshot rather than lose the
+                        # supersede marker, and say so.
+                        logger.warning(
+                            "Could not re-read metadata for %s before marking "
+                            "it superseded; writing from the pre-renewal copy",
+                            identifier)
+                        current = dict(old_metadata)
+                    revoked_meanwhile = revoked_meanwhile or bool(current.get("revoked"))
+                    current.update(superseded)
                     with open(metadata_file, 'w') as f:
-                        json.dump(old_metadata, f, indent=2)
+                        json.dump(current, f, indent=2)
+
+                if revoked_meanwhile:
+                    # The identity was revoked while this renewal was signing.
+                    # The revocation stands — it is not erased — but a new
+                    # certificate now exists for an identity the operator just
+                    # withdrew, and nothing else would ever tell them.
+                    logger.warning(
+                        "Certificate %s was revoked while its renewal was in "
+                        "flight. The revocation stands, but %s was issued for "
+                        "the same identity and is NOT revoked; revoke it too "
+                        "if that was not intended.",
+                        identifier, cert_data["identifier"])
 
                 logger.info(f"Renewed certificate: {identifier} -> {cert_data['identifier']}")
                 return True, None, cert_data
