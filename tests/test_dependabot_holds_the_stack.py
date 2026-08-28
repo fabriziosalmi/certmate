@@ -42,7 +42,15 @@ HELD = {
     "certbot": "Certificate management",
     "josepy": "josepy",
     "pyopenssl": "Do not bump to 26.2.0+",
-    "cryptography": "GHSA-537c-gmf6-5ccf",
+    # Not a GHSA id any more. This entry used to be "GHSA-537c-gmf6-5ccf",
+    # and the requirements comment named that one advisory — which is how the
+    # record drifted: three more were published on 2026-08-03 against the same
+    # pin and the comment still named the first. The list of advisories now
+    # lives in exactly one place (SECURITY.md, checked weekly against the live
+    # alerts by scripts/check_advisories.py), and what has to sit next to the
+    # pin is the pointer to it. A pointer does not go stale when an advisory
+    # arrives; an enumeration does.
+    "cryptography": 'SECURITY.md "Known dependency constraint"',
     "dns-lexicon": "dns-lexicon",
     "cloudflare": "#568",
 }

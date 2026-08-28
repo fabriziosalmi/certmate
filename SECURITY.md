@@ -106,6 +106,19 @@ or download certificates.
 
 ## Known dependency constraint
 
+CertMate pins `cryptography==46.0.7` and `pyopenssl==26.0.0`. Every version
+that would clear the advisories below needs a pyOpenSSL that breaks the pinned
+ACME stack, so the pins are held deliberately: the alerts are open by choice,
+not by oversight. One reason blocks all of them, and one fix clears all of
+them (issue #103); both are described once, after the advisories.
+
+**Four advisories are held by this constraint.** The first is a flaw in the
+OpenSSL statically linked into the `cryptography` wheel; the other three,
+published 2026-08-03, are in `cryptography`'s own code and are reached only
+through specific APIs. That difference is what makes the reachability argument
+below hold for the three, and it is why they are analysed separately rather
+than folded into the first.
+
 ### GHSA-537c-gmf6-5ccf — vulnerable OpenSSL statically linked in `cryptography` wheels
 
 CertMate currently pins `cryptography==46.0.7`, which is flagged HIGH by
@@ -179,12 +192,48 @@ answers. The real fix remains the certbot 5.x stack migration (#103).
   provider APIs) uses Python's `ssl` module, which links the interpreter's
   own OpenSSL, not the copy inside the cryptography wheel.
 
+### The 2026-08-03 advisories in `cryptography`'s own code
+
+Three further advisories against `cryptography <= 46.0.7` were published on
+2026-08-03. They are a different shape from the one above: the defect is in
+`cryptography`'s own Rust and Python code, not in the linked OpenSSL, so each
+is reached through one named API and through nothing else.
+
+| Advisory | Severity | Defect | Reached through | First fixed in |
+| --- | --- | --- | --- | --- |
+| GHSA-g6cj-pr64-35w5 | HIGH | duplicate self-signed intermediates cause exponential X.509 path building | `cryptography.x509.verification` | 49.0.0 |
+| GHSA-jwv3-5hgf-82ww | HIGH | PKCS#7 `EnvelopedData` decryption exposes a Bleichenbacher oracle | the PKCS#7 decryption API | 50.0.0 |
+| GHSA-m2h6-j472-rp4c | MEDIUM | the verifier accepts wildcard DNS names, allowing escape from `permittedSubtrees` name constraints | `cryptography.x509.verification` | 49.0.0 |
+
+**Actual exposure: none of the three is reachable.** Two need the X.509
+verifier (`PolicyBuilder` / `ClientVerifier` / `ServerVerifier`), one needs
+PKCS#7 `EnvelopedData` decryption. Neither API is called anywhere in the
+shipped stack — verified across `modules/`, `app.py` and the pinned
+`certbot==2.10.0` / `acme==3.3.0` / `josepy==1.13.0`, none of which references
+`x509.verification`, `PolicyBuilder`, `ClientVerifier`, `ServerVerifier`,
+`pkcs7` or `EnvelopedData`.
+
+What CertMate does use from `cryptography` is X.509 parsing and building,
+`Fernet`, hashes, key serialization, RSA and Ed25519 key generation, and
+PBKDF2. The `.pfx` export
+(`modules/core/storage_backends.py:175`) calls `serialization.pkcs12`, which
+is PKCS#12 — a different structure and a different code path from the PKCS#7
+`EnvelopedData` decryption the Bleichenbacher advisory describes. CertMate
+never decrypts PKCS#7 at all; it only ever writes PKCS#12.
+
+**The constraint has tightened, not loosened.** Clearing all three needs
+`cryptography>=50.0.0`, and 50.0.0 is the exact version the re-verification
+above proves fatal: it installs cleanly and then `certbot --version` dies on
+`X509Req`. The version that would close these alerts is the version that
+breaks issuance.
+
 **Fix path.** The certbot 5.x migration epic (issue #103): newer `acme`
 releases drop the removed pyOpenSSL API but require `josepy>=2` and a newer
 certbot line. Once that migration lands, `pyopenssl>=26.2.0` and
-`cryptography>=48.0.1` unblock together, and the Dependabot alerts for
-GHSA-537c-gmf6-5ccf can be closed. Until then the alerts remain open by
-choice, not by oversight.
+`cryptography>=48.0.1` unblock together, and all four Dependabot alerts above
+can be closed. Until then they remain open by choice, not by oversight, and
+this section is the record of that choice: an advisory against `cryptography`
+that is not listed here has not been assessed, and should be treated as new.
 
 ## Coordinated disclosure
 

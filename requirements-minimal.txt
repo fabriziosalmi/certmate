@@ -20,7 +20,7 @@ urllib3!=2.2.0,>=2.7.0,<3      # CVE-2025-66418, CVE-2025-66471, CVE-2026-21441 
 requests==2.34.2
 python-dotenv==1.2.3
 APScheduler==3.11.3
-cryptography==46.0.7               # GHSA-537c-gmf6-5ccf (HIGH) open by choice; blocked by acme 3.3.0 (see SECURITY.md "Known dependency constraint")
+cryptography==46.0.7               # Held: 4 advisories open by choice, none reachable. Do NOT name them here — this line named one and three more arrived unnoticed. SECURITY.md "Known dependency constraint" is the list.
 pyopenssl==26.0.0                  # Do not bump to 26.2.0+: removes X509Extension, breaks acme 3.3.0 at import (see SECURITY.md)
 
 # Production server
