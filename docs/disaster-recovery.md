@@ -126,9 +126,34 @@ This is the only archive that restores certificates in a usable state, keeps the
 renewal lineage, and preserves the private CA. It is also a **plaintext
 credential and private-key dump**: it is written `0600` (readable only by the
 CertMate process user) and the opt-in is audit-logged, but once it leaves the
-host it is as sensitive as your `.env` plus every key you hold. **Store it
-encrypted** (age, gpg, or an encrypted bucket) and treat it like a password
-vault export.
+host it is as sensitive as your `.env` plus every key you hold.
+
+**Do not carry that risk manually — turn on backup encryption.** Set
+`CERTMATE_BACKUP_PASSPHRASE` in the environment and every archive CertMate
+writes is encrypted at rest: Fernet (AES-128-CBC + HMAC-SHA256) with a key
+derived by PBKDF2-SHA256 at 600,000 iterations, saved as `.zip.enc`. Restore
+decrypts transparently when the same passphrase is present.
+
+```bash
+# docker-compose.yml, or the .env you already pass to the container
+CERTMATE_BACKUP_PASSPHRASE=<from your vault>
+```
+
+Three properties matter for DR:
+
+- The passphrase comes **from the environment only, never from `settings.json`** —
+  storing it in settings would put it inside the very backups it protects.
+- The archive keeps a **cleartext header** carrying non-secret metadata (backup
+  id, timestamp, domain names), so you can list and identify archives without
+  the passphrase. Only the payload is encrypted.
+- **Lose the passphrase and the backup is gone.** Restoring with the wrong one
+  fails cleanly — `wrong passphrase or corrupted backup`, nothing is written —
+  but there is no recovery path. Keep it in the same vault as `SECRET_KEY`, and
+  treat losing it as losing the backup.
+
+Note also that CertMate's automatic `settings.json` self-recovery skips
+encrypted archives when no passphrase is present in the environment: an instance
+that lost its passphrase cannot even fall back to its own local backups.
 
 Use masked archives for sharing, inspection and configuration history; use a
 full archive, encrypted, for actual disaster recovery.
@@ -172,7 +197,10 @@ they preserve is only complete in a full (`include_secrets: true`) archive.
 Check `backup_metadata.json` before trusting an archive for recovery:
 
 ```bash
+# a cleartext .zip archive
 unzip -p backup.zip backup_metadata.json | jq '{secrets_masked, key_material_excluded, key_files_excluded}'
+# an encrypted .zip.enc archive — the header is readable without the passphrase
+sed -n 2p backup.zip.enc | jq '.metadata | {secrets_masked, key_material_excluded, key_files_excluded}'
 # a DR-capable archive reads: {"secrets_masked": false, "key_material_excluded": false, "key_files_excluded": 0}
 ```
 
@@ -190,8 +218,9 @@ see §4.
 
 Local backups die with the disk. Copy them somewhere else on a schedule.
 
-A **full** archive contains private keys and plaintext credentials, so encrypt it
-in transit and at rest and restrict who can read it. A **masked** archive holds no
+A **full** archive contains private keys and plaintext credentials. Encrypt it —
+preferably with `CERTMATE_BACKUP_PASSPHRASE` (§2), so it is already `.zip.enc`
+before it ever leaves the host — and restrict who can read it. A **masked** archive holds no
 keys and no credentials, but it still lists your domains, hostnames, contact
 addresses and hook commands — treat it as internal, not public.
 
