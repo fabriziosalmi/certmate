@@ -24,7 +24,7 @@ cryptography==46.0.7               # Held: 4 advisories open by choice, none rea
 pyopenssl==26.0.0                  # Do not bump to 26.2.0+: removes X509Extension, breaks acme 3.3.0 at import (see SECURITY.md)
 
 # Production server
-gunicorn==26.0.0
+gunicorn==26.2.0
 
 # APScheduler's SQLAlchemyJobStore backs the persistent renewal schedule, and
 # modules/core/factory.py imports it at module scope — so this is not optional
