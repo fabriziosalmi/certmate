@@ -5,6 +5,7 @@ Handles creation, management, renewal, and revocation of client certificates
 
 import logging
 import json
+import threading
 import os
 import re
 from pathlib import Path
@@ -66,6 +67,18 @@ class ClientCertificateManager:
         """
         self.client_certs_dir = Path(client_certs_dir)
         self.private_ca = private_ca
+
+        # Per-identifier lock over metadata.json.
+        #
+        # Re-reading immediately before the write narrowed the renew/revoke
+        # lost-update window from the length of a signature to a few
+        # microseconds, but narrow is not closed: two unlocked
+        # read-modify-writes can still interleave, and then either the
+        # revocation or the supersede marker is the one that disappears
+        # (Copilot, #603). Held only around the metadata sections — never
+        # around the signing — so renewals do not serialise on each other.
+        self._metadata_locks: dict[str, threading.Lock] = {}
+        self._metadata_locks_mutex = threading.Lock()
 
         # Create subdirectories for different cert types
         self.vpn_certs_dir = self.client_certs_dir / "vpn"
@@ -364,6 +377,13 @@ class ClientCertificateManager:
             logger.error(f"Error listing client certificates: {str(e)}")
             return []
 
+    def _metadata_lock(self, identifier: str) -> threading.Lock:
+        """Return the per-identifier metadata lock, creating it on first use."""
+        with self._metadata_locks_mutex:
+            if identifier not in self._metadata_locks:
+                self._metadata_locks[identifier] = threading.Lock()
+            return self._metadata_locks[identifier]
+
     def get_certificate_metadata(self, identifier: str) -> Optional[Dict[str, Any]]:
         """
         Get metadata for a specific certificate.
@@ -399,20 +419,33 @@ class ClientCertificateManager:
             Tuple of (success, error_message)
         """
         try:
-            # Get metadata
-            metadata = self.get_certificate_metadata(identifier)
-            if not metadata:
-                return False, f"Certificate not found: {identifier}"
+            # Read and write under the per-identifier lock: a renewal
+            # finishing at the same moment does its own read-modify-write on
+            # this file, and unlocked they interleave (Copilot, #603).
+            with self._metadata_lock(identifier):
+                metadata = self.get_certificate_metadata(identifier)
+                if not metadata:
+                    return False, f"Certificate not found: {identifier}"
 
-            # Update metadata
-            metadata["revoked"] = True
-            metadata["revoked_at"] = utc_now().isoformat()
-            metadata["reason_revoked"] = reason
+                # Update metadata
+                metadata["revoked"] = True
+                metadata["revoked_at"] = utc_now().isoformat()
+                metadata["reason_revoked"] = reason
 
-            # Save updated metadata
-            for metadata_file in self.client_certs_dir.glob(f"*/{identifier}/metadata.json"):
-                with open(metadata_file, 'w') as f:
-                    json.dump(metadata, f, indent=2)
+                # Save updated metadata. Writing every match and then
+                # regenerating the CRL once is deliberate: this used to sit
+                # inside the loop and return from the first file, which was
+                # the same thing only while the glob yielded exactly one.
+                written = 0
+                for metadata_file in self.client_certs_dir.glob(f"*/{identifier}/metadata.json"):
+                    with open(metadata_file, 'w') as f:
+                        json.dump(metadata, f, indent=2)
+                    written += 1
+                if not written:
+                    # get_certificate_metadata found it a moment ago with the
+                    # same glob, so this means it vanished underneath us.
+                    # Reporting success here would be a lie about a revocation.
+                    return False, f"Metadata file not found for: {identifier}"
 
                 logger.info(f"Revoked certificate: {identifier} (reason: {reason})")
 
@@ -438,8 +471,6 @@ class ClientCertificateManager:
                     self.private_ca.generate_crl(revoked_records)
 
                 return True, None
-
-            return False, f"Metadata file not found for: {identifier}"
 
         except Exception as e:
             logger.error(f"Error revoking certificate: {str(e)}")
@@ -519,18 +550,70 @@ class ClientCertificateManager:
             )
 
             if success:
-                # Update old metadata to mark as superseded
-                old_metadata["superseded_by"] = cert_data["identifier"]
-                old_metadata["superseded_at"] = utc_now().isoformat()
-                # Belt-and-braces against runaway re-renewal: renewal_enabled
-                # gates check_renewals, so disabling it on the superseded cert
-                # guarantees the scheduled sweep can never re-pick this old cert
-                # even if the superseded_by guard were ever weakened.
-                old_metadata["renewal_enabled"] = False
+                # Write back only the three fields this operation owns, onto
+                # the metadata as it is NOW — not onto the snapshot read at the
+                # top of this method.
+                #
+                # create_client_certificate above generates a key and signs a
+                # certificate; that takes long enough for a revocation to land
+                # in between. `old_metadata` was read before it and does not
+                # carry `revoked`, so writing the whole dict back erased the
+                # revocation — and OCSP decides on exactly that field
+                # (ocsp_crl.py:49), so the responder went back to answering
+                # "good" for a certificate the operator had just revoked. The
+                # credible trigger is not an operator double-clicking (the UI
+                # confirms before revoking) but the 03:00 renewal sweep
+                # crossing a manual revoke.
+                superseded = {
+                    "superseded_by": cert_data["identifier"],
+                    "superseded_at": utc_now().isoformat(),
+                    # Belt-and-braces against runaway re-renewal:
+                    # renewal_enabled gates check_renewals, so disabling it on
+                    # the superseded cert guarantees the scheduled sweep can
+                    # never re-pick this old cert even if the superseded_by
+                    # guard were ever weakened.
+                    "renewal_enabled": False,
+                }
+                revoked_meanwhile = False
+                # Under the same per-identifier lock the revoke path takes:
+                # the re-read below is only atomic with the write if nothing
+                # else can slip between them (Copilot, #603). The lock covers
+                # the metadata section only — never create_client_certificate
+                # above — so two renewals of different certificates, and the
+                # signing itself, stay concurrent.
+                lock = self._metadata_lock(identifier)
+                with lock:
+                    for metadata_file in self.client_certs_dir.glob(f"*/{identifier}/metadata.json"):
+                        try:
+                            with open(metadata_file) as f:
+                                current = json.load(f)
+                            if not isinstance(current, dict):
+                                current = dict(old_metadata)
+                        except (OSError, ValueError):
+                            # Unreadable now, readable at the top of the method:
+                            # fall back to the snapshot rather than lose the
+                            # supersede marker, and say so.
+                            logger.warning(
+                                "Could not re-read metadata for %s before marking "
+                                "it superseded; writing from the pre-renewal copy",
+                                identifier)
+                            current = dict(old_metadata)
+                        revoked_meanwhile = revoked_meanwhile or bool(current.get("revoked"))
+                        current.update(superseded)
+                        with open(metadata_file, 'w') as f:
+                            json.dump(current, f, indent=2)
 
-                for metadata_file in self.client_certs_dir.glob(f"*/{identifier}/metadata.json"):
-                    with open(metadata_file, 'w') as f:
-                        json.dump(old_metadata, f, indent=2)
+                if revoked_meanwhile:
+                    # The identity was revoked while this renewal was signing.
+                    # The revocation stands — it is not erased — but a new
+                    # certificate now exists for an identity the operator just
+                    # withdrew, and nothing else would ever tell them.
+                    logger.warning(
+                        "Certificate %s was revoked while its renewal was in "
+                        "flight. The revocation stands, but %s was issued for "
+                        "the same identity and is NOT revoked; revoke it too "
+                        "if that was not intended.",
+                        identifier, cert_data["identifier"])
 
                 logger.info(f"Renewed certificate: {identifier} -> {cert_data['identifier']}")
                 return True, None, cert_data
