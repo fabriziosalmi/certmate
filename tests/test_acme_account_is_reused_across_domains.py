@@ -25,6 +25,8 @@ issuance path must not acquire a new way to fail.
 from __future__ import annotations
 
 import json
+import pathlib
+import shutil
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -167,6 +169,74 @@ def test_the_issuance_path_seeds_before_certbot_runs(manager):
         "will keep registering its own"
     )
     assert seen['called'][0] == "new.example.com"
+
+
+def test_the_resolved_ca_account_is_what_gets_matched(manager):
+    """The donor is matched on the account metadata RECORDS, not the one the
+    caller asked for.
+
+    `create_certificate` resolves the CA account through
+    `ca_manager.get_ca_config` and persists that resolved id
+    (`used_ca_account_id`). Passing the request parameter instead — `None`
+    whenever the caller did not name an account, which is the common case —
+    compared None against "production" and never found a donor, so the reuse
+    silently never happened (Copilot, #604). A fix that looks right and does
+    nothing is the worst kind.
+    """
+    cert_manager, cert_dir = manager
+    cert_manager.ca_manager = MagicMock()
+    cert_manager.ca_manager.get_ca_config.return_value = ({"server": "x"}, "production")
+    cert_manager.ca_manager.build_certbot_command.return_value = (["certbot"], {})
+    seen = {}
+
+    def record(domain, cd, ca_provider, ca_account_id):
+        seen['account'] = ca_account_id
+        return None
+
+    with patch.object(CertificateManager, "_seed_acme_account", side_effect=record):
+        with patch.object(cert_manager, "shell_executor") as shell:
+            shell.run.side_effect = RuntimeError("stop after seeding")
+            try:
+                cert_manager.create_certificate(
+                    domain="new.example.com", email="ops@example.com",
+                    dns_provider="cloudflare", dns_config={"api_token": "t"},
+                    ca_provider="letsencrypt")      # no ca_account_id: the common call
+            except Exception:
+                pass
+
+    assert seen.get('account') == "production", (
+        f"the seeder was handed {seen.get('account')!r}; metadata records the "
+        f"resolved account, so anything else never matches a donor"
+    )
+
+
+def test_a_copy_that_fails_halfway_leaves_nothing_behind(manager):
+    """A partial accounts/ tree would read as a registered account forever."""
+    cert_manager, cert_dir = manager
+    _seed_domain(cert_dir, "first.example.com")
+    target_domain = cert_dir / "second.example.com"
+    target_domain.mkdir()
+
+    real_copytree = shutil.copytree
+
+    def half_way(src, dst, **kwargs):
+        # Write something, then die: exactly what a full disk or a killed
+        # process does in the middle of a tree copy.
+        pathlib.Path(dst).mkdir(parents=True, exist_ok=True)
+        (pathlib.Path(dst) / "private_key.json").write_text("{}", encoding="utf-8")
+        raise OSError("disk full")
+
+    with patch("modules.core.certificates.shutil.copytree", side_effect=half_way):
+        assert cert_manager._seed_acme_account(
+            "second.example.com", cert_dir, "letsencrypt", None) is None
+
+    leftovers = sorted(p.name for p in target_domain.rglob("*.json"))
+    assert leftovers == [], (
+        f"a failed copy left {leftovers} behind; the next run would read that "
+        f"as an account already registered and never seed again"
+    )
+    assert not (target_domain / ".accounts-seeding").exists(), "staging dir left behind"
+    assert real_copytree is shutil.copytree
 
 
 if __name__ == "__main__":  # pragma: no cover

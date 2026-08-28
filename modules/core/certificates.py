@@ -314,8 +314,24 @@ class CertificateManager:
                     continue
                 if (metadata.get('ca_account_id') or None) != (ca_account_id or None):
                     continue
-                target.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copytree(donor, target, dirs_exist_ok=True)
+                # Stage, then promote. copytree failing halfway would
+                # otherwise leave a partial accounts/ tree, and the
+                # "already has an account" check above would read that
+                # wreckage as a registered account and skip seeding for
+                # good (Copilot, #604). Same shape as _publish_flat_files.
+                staging = target.parent / '.accounts-seeding'
+                shutil.rmtree(staging, ignore_errors=True)
+                try:
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copytree(donor, staging)
+                    if target.exists():
+                        shutil.copytree(staging, target, dirs_exist_ok=True)
+                        shutil.rmtree(staging, ignore_errors=True)
+                    else:
+                        staging.rename(target)
+                except Exception:
+                    shutil.rmtree(staging, ignore_errors=True)
+                    raise
                 logger.info(
                     "Reusing the ACME account registered for %s instead of "
                     "registering a new one for %s", candidate.name, domain)
@@ -1631,7 +1647,12 @@ class CertificateManager:
             # build_certbot_command created the per-domain config dir; hand
             # this domain the account a sibling already registered, so a batch
             # of new domains does not become a batch of new ACME accounts.
-            self._seed_acme_account(domain, cert_dir, ca_provider, ca_account_id)
+            # used_ca_account_id, not the request parameter: metadata persists
+            # the RESOLVED account (line ~1708), so comparing against the
+            # caller's `ca_account_id` — None whenever they did not name one —
+            # never matched a donor and the reuse silently never happened
+            # (Copilot, #604).
+            self._seed_acme_account(domain, cert_dir, ca_provider, used_ca_account_id)
 
             # Run certbot with isolated environment
             result = self.shell_executor.run(
