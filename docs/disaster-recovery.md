@@ -370,6 +370,10 @@ Every domain must print `ok`. Then:
   DNS-01 propagation per domain and, above a few dozen domains, the CA's rate
   limits (Let's Encrypt allows a limited number of certificates per registered
   domain per week). Measure this before you need it.
+- **Keep the secrets reachable.** `SECRET_KEY`, `API_BEARER_TOKEN` and — if
+  you encrypted your archives — `CERTMATE_BACKUP_PASSPHRASE` must be in a
+  vault you can open during the incident. Without the passphrase the backups
+  are unreadable and the RTO becomes infinite.
 - **Test your restore.** A backup you have never restored is a hope, not a plan.
   Periodically (quarterly is a reasonable default for a single node) restore your
   latest backup onto a scratch host and run §6 — including the key check, which
