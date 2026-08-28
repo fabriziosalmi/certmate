@@ -134,6 +134,18 @@ _NON_SECRET_KEY_NAMES = frozenset({
 })
 
 
+class BearerTokenUnusableError(SettingsUnreadableError):
+    """The operator configured an API bearer token that cannot be used.
+
+    Subclasses SettingsUnreadableError on purpose: load_settings re-raises that
+    type instead of falling through to "return the defaults in-memory", and the
+    auth layer turns it into a 401 on every request. Both are what we want here.
+    Ignoring an operator-supplied token and generating a random one in its place
+    is the one outcome that must never happen — see the raise sites below.
+    """
+
+
+
 def _is_secret_key(name: str) -> bool:
     if name in _NON_SECRET_KEY_NAMES:
         return False
@@ -492,33 +504,51 @@ def _bearer_token_from_env_or_generate():
     3. generate_secure_token() — fallback when neither variable is set or
        both fail validation.
     """
+    # An operator who sets API_BEARER_TOKEN or API_BEARER_TOKEN_FILE has said
+    # "this instance is authenticated". If the value turns out unusable we must
+    # NOT quietly substitute a random token: _detect_operator_bearer_token()
+    # then sees no operator credential, is_setup_mode() stays true, and every
+    # gated endpoint answers an anonymous caller as admin. The operator did the
+    # right thing, the log said a fresh token had been generated, and the
+    # instance was open to the network. Fail closed instead.
     token_file = os.getenv('API_BEARER_TOKEN_FILE')
     if token_file:
         try:
             file_token = Path(token_file).read_text().strip()
-            is_valid, reason = validate_api_token(file_token)
-            if is_valid:
-                return file_token
-            logger.warning(
-                "API_BEARER_TOKEN_FILE token is invalid (%s); "
-                "falling back to API_BEARER_TOKEN or a generated token.",
-                reason)
         except Exception as e:
-            logger.warning("Could not read API_BEARER_TOKEN_FILE (%s): %s", token_file, e)
-            return generate_secure_token()
+            raise BearerTokenUnusableError(
+                f"API_BEARER_TOKEN_FILE is set to {token_file!r} but could not "
+                f"be read ({e}). Refusing to serve: ignoring it would leave this "
+                f"instance with NO AUTHENTICATION, answering every endpoint to "
+                f"anonymous callers as admin. Fix the path/permissions, or unset "
+                f"API_BEARER_TOKEN_FILE."
+            ) from e
+        is_valid, reason = validate_api_token(file_token)
+        if is_valid:
+            return file_token
+        raise BearerTokenUnusableError(
+            f"The token in API_BEARER_TOKEN_FILE ({token_file}) is not usable: "
+            f"{reason} Refusing to serve: ignoring it would leave this instance "
+            f"with NO AUTHENTICATION, answering every endpoint to anonymous "
+            f"callers as admin. Replace it with a token that satisfies the "
+            f"requirement above, or unset API_BEARER_TOKEN_FILE."
+        )
 
-    env_token = os.getenv('API_BEARER_TOKEN')
+    # Stripped, so that API_BEARER_TOKEN= (the unexpanded default in
+    # docker-compose.yml, issue #108) and a value that is only whitespace both
+    # read as "not configured" and generate a token, exactly as before. Only a
+    # non-empty value the operator actually meant reaches the refusal below.
+    env_token = (os.getenv('API_BEARER_TOKEN') or '').strip()
     if env_token:
         is_valid, reason = validate_api_token(env_token)
         if is_valid:
             return env_token
-        logger.warning(
-            "API_BEARER_TOKEN environment variable is invalid (%s); "
-            "ignoring it and generating a fresh random bearer token. "
-            "Set a valid token (32-512 chars, no weak patterns, >=12 unique "
-            "chars) in your .env file or unset API_BEARER_TOKEN to silence "
-            "this warning.",
-            reason,
+        raise BearerTokenUnusableError(
+            f"API_BEARER_TOKEN is set but not usable: {reason} Refusing to "
+            f"serve: ignoring it would leave this instance with NO "
+            f"AUTHENTICATION, answering every endpoint to anonymous callers as "
+            f"admin. Set a token that satisfies the requirement above, or "
+            f"unset API_BEARER_TOKEN to let CertMate generate one."
         )
     return generate_secure_token()
 
@@ -1158,8 +1188,10 @@ class SettingsManager:
                 # is_setup_mode() true and serves every gated endpoint to
                 # anonymous callers as admin — an instance that cannot read
                 # its own credentials must not come up world-open instead.
-                # app.py catches this and exits 1, so the operator gets a
-                # container that stops with one actionable line.
+                # Nothing catches this above: it reaches the auth layer,
+                # which logs the reason and answers 401. The container keeps
+                # running and serves nothing, which is the safe end of the
+                # trade — verified in a container, not assumed.
                 raise
             except Exception as e:
                 logger.error(f"Error loading settings: {e}")
