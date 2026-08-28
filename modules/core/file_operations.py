@@ -107,6 +107,94 @@ def _safe_backup_reason(reason) -> str:
 # use, not on memory.
 _MAX_DATA_ENTRY_BYTES = 512 * 1024 * 1024
 
+
+class RestoreIncompleteError(RuntimeError):
+    """A restore extracted some entries but not all of them.
+
+    Raised at the end of restore_unified_backup when at least one archive
+    member could not be written. The point is the "not all": the previous
+    behaviour logged each failure and returned True, so the API answered
+    ``200 "restored atomically successfully"`` while, in the case that
+    prompted this, a live ``privkey.pem`` had just been truncated to zero
+    bytes and lost. Failing loudly instead means the operator reaches for the
+    pre-restore backup rather than trusting an instance that reports healthy
+    and cannot serve TLS. ``failed`` lists the archive member names.
+    """
+
+    def __init__(self, failed):
+        self.failed = list(failed)
+        super().__init__(
+            "restore incomplete: could not extract "
+            + ", ".join(self.failed)
+        )
+
+
+def _extract_zip_member_atomically(zipf, file_info, target_path, max_bytes):
+    """Extract one archive member to *target_path* without ever leaving it in
+    a half-written state.
+
+    The member is streamed into a sibling temp file, locked to 0600, then
+    promoted with ``os.replace`` — an atomic rename on the same filesystem.
+    Until that rename, ``target_path`` is untouched: if the read fails (a
+    corrupt member, a bad CRC pulled back from an off-site copy) or the
+    declared size is a lie, the pre-existing file is still exactly what it was.
+
+    The promoted file is 0600 — restrictive by default, so a private key is
+    never briefly world-readable. A caller that restores public material
+    (cert.pem/chain.pem/fullchain.pem) relaxes it to 0644 afterwards, with a
+    literal mode; that is a widening of an already-safe file, not a window.
+
+    This replaces two earlier shapes that both ended at zero bytes:
+    ``open(target_path, 'wb')`` truncated the destination *before* the first
+    byte was read, and the surrounding ``except: ... continue`` (or the
+    oversize ``continue``) then left it empty. The certificates/ branch, which
+    holds every privkey.pem and the ACME account key, had no cleanup at all.
+
+    Streams in 1 MiB chunks, so a large audit log bounds disk, not memory.
+    Raises on any failure (after removing the temp file); the caller records
+    the member as failed and keeps going.
+    """
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(
+        dir=str(target_path.parent),
+        prefix='.' + target_path.name + '.',
+        suffix='.restoring',
+    )
+    tmp_path = Path(tmp_name)
+    try:
+        written = 0
+        # os.fdopen FIRST, so it takes ownership of the mkstemp fd before
+        # zipf.open is evaluated: if opening the member raises (a corrupt entry
+        # header), the already-entered file object is closed on the way out and
+        # the fd is not leaked. With the order reversed, a member that fails to
+        # open would strand one file descriptor per attempt.
+        with os.fdopen(fd, 'wb') as target, zipf.open(file_info) as source:
+            while True:
+                chunk = source.read(1024 * 1024)
+                if not chunk:
+                    break
+                written += len(chunk)
+                if written > max_bytes:
+                    # The header size can understate the real size; this is the
+                    # check that actually holds. Treated as a failure, not a
+                    # skip: an entry that does not fit is a hole in the restore.
+                    raise ValueError(
+                        f'entry exceeds {max_bytes}-byte limit '
+                        f'(declared {file_info.file_size})'
+                    )
+                target.write(chunk)
+        # chmod the temp file, so the promoted file is 0600 the instant it
+        # becomes visible — a key is never briefly world-readable.
+        os.chmod(tmp_path, 0o600)
+        os.replace(tmp_path, target_path)
+        return written
+    except BaseException:
+        try:
+            tmp_path.unlink()
+        except OSError:
+            pass
+        raise
+
 # --- Backup encryption at rest --------------------------------------------
 # Unified backups embed every certificate private key (privkey.pem). With
 # CERTMATE_BACKUP_PASSPHRASE set, the whole zip is encrypted (Fernet:
@@ -730,6 +818,21 @@ class FileOperations:
            on-disk settings file exists yet, the masked sentinels stay
            in place and the response log surfaces a warning so the
            operator knows to re-enter credentials.
+
+        Returns:
+            True on a clean restore.
+            False if the archive could not be opened or a pre-write safety
+            gate declined (see ``last_restore_error`` for the reason).
+
+        Raises:
+            RestoreIncompleteError: the archive opened and some members were
+                written, but at least one could not be. Each failed member
+                left its pre-existing file intact (extraction is atomic), so
+                nothing was truncated — but the instance is now a mix of old
+                and new, so this is not reported as success. ``.failed`` lists
+                the member names. Callers that only expect True/False must
+                handle this: the API layer turns it into a 500 that names the
+                failed members and points at the pre-restore backup.
         """
         temp_zip_path = None
         try:
@@ -767,6 +870,10 @@ class FileOperations:
             self.data_dir.mkdir(parents=True, exist_ok=True)
 
             restored_domains = []
+            # Archive members that could not be written. A non-empty list at
+            # the end turns the whole restore into a raised error instead of a
+            # reported success — see RestoreIncompleteError.
+            failed_entries = []
             settings_data = None
 
             # Extract unified backup
@@ -890,39 +997,37 @@ class FileOperations:
                             logger.warning(f"Invalid path in ZIP: {file_info.filename}")
                             continue
 
-                        # Decompression bomb protection: reject oversized entries
-                        max_entry_size = 10 * 1024 * 1024  # 10 MB per file
-                        if file_info.file_size > max_entry_size:
-                            logger.warning(f"Skipping oversized ZIP entry: {file_info.filename} ({file_info.file_size} bytes)")
-                            continue
+                        # Decompression bomb protection: 10 MB per PEM file.
+                        max_entry_size = 10 * 1024 * 1024
 
                         logger.info(f"Extracting certificate file: {file_info.filename}")
 
-                        # Ensure target directory exists
-                        target_path.parent.mkdir(parents=True, exist_ok=True)
-
-                        # Extract file with size limit
+                        # Atomic extract: target_path is left untouched until a
+                        # complete copy has been written and promoted by rename.
+                        # A corrupt member (bad CRC from an off-site copy) or an
+                        # oversize one used to truncate the live file to zero and
+                        # then `continue`, while the restore still returned True
+                        # — that is how a working privkey.pem was silently lost.
+                        # The promoted file is 0600.
                         try:
-                            with zipf.open(file_info) as source, open(target_path, 'wb') as target:
-                                data = source.read(max_entry_size + 1)
-                                if len(data) > max_entry_size:
-                                    logger.warning(f"ZIP entry exceeds size limit: {file_info.filename}")
-                                    continue
-                                target.write(data)
+                            _extract_zip_member_atomically(
+                                zipf, file_info, target_path, max_entry_size)
                         except Exception as e:
-                            logger.error(f"Error extracting {file_info.filename}: {e}")
+                            logger.error(
+                                f"Error extracting {file_info.filename}: {e} "
+                                f"(existing file left intact)")
+                            failed_entries.append(file_info.filename)
                             continue
 
-                        # Set appropriate permissions: lock down every private
-                        # key (live, archived, and the ACME account key), leave
-                        # public cert material world-readable.
-                        # One predicate for what is key material — the same
-                        # one the share-safe archive uses to leave it out —
-                        # so a restored .pfx/.p12 or a keys/ copy lands 0600
-                        # like privkey.pem (review, #582).
-                        if _is_key_material(target_path) or _PRIVATE_KEY_FILE_RE.search(target_path.name):
-                            os.chmod(target_path, 0o600)
-                        else:
+                        # Relax public certificate material to 0644 so nginx and
+                        # other containers reading the bind-mounted cert dir can
+                        # see it. Private keys (live, archived, ACME account) and
+                        # any .pfx/keys copy stay 0600 — same predicate the
+                        # share-safe archive uses to leave key material out
+                        # (review, #582). Widening an already-0600 file, so a key
+                        # is never even briefly world-readable.
+                        if not (_is_key_material(target_path)
+                                or _PRIVATE_KEY_FILE_RE.search(target_path.name)):
                             os.chmod(target_path, 0o644)
 
                         # Track restored domains
@@ -964,49 +1069,6 @@ class FileOperations:
                             logger.warning(f"Invalid path in ZIP: {file_info.filename}")
                             continue
 
-                        # The 10 MB per-entry cap that suits PEM files would
-                        # silently truncate DR here: certificate_audit.log is
-                        # append-only and routinely outgrows it on a
-                        # long-lived instance. Skipping it would leave the
-                        # audit chain unverifiable while the restore still
-                        # reported success. Larger cap, chunked write (never
-                        # hold the file in memory), and an ERROR — not a
-                        # warning — when even that is exceeded, because the
-                        # result is an incomplete restore.
-                        if file_info.file_size > _MAX_DATA_ENTRY_BYTES:
-                            logger.error(
-                                f"Restore incomplete: {file_info.filename} is "
-                                f"{file_info.file_size} bytes, above the "
-                                f"{_MAX_DATA_ENTRY_BYTES}-byte limit for data/ entries"
-                            )
-                            continue
-
-                        target_path.parent.mkdir(parents=True, exist_ok=True)
-
-                        try:
-                            written = 0
-                            with zipf.open(file_info) as source, open(target_path, 'wb') as target:
-                                while True:
-                                    chunk = source.read(1024 * 1024)
-                                    if not chunk:
-                                        break
-                                    written += len(chunk)
-                                    if written > _MAX_DATA_ENTRY_BYTES:
-                                        raise ValueError(
-                                            'declared size understated the real size'
-                                        )
-                                    target.write(chunk)
-                        except Exception as e:
-                            logger.error(f"Error extracting {file_info.filename}: {e}")
-                            # Never leave a half-written PKI/audit file behind:
-                            # a truncated ca.key or audit chain is worse than
-                            # an absent one, because it looks restored.
-                            try:
-                                target_path.unlink(missing_ok=True)
-                            except OSError:
-                                pass
-                            continue
-
                         # The CA signing key, the audit signing key and every
                         # client private key land here. Unlike certificates/,
                         # which operators bind-mount and read from other
@@ -1015,7 +1077,32 @@ class FileOperations:
                         # includes the CA cert and the CRL: they are public
                         # information, but publishing them is the server's
                         # job (/api/crl/download), not the filesystem's.
-                        os.chmod(target_path, 0o600)
+                        #
+                        # Same atomic helper as certificates/: certificate_audit.log
+                        # is append-only and outgrows the 10 MB PEM cap, so the
+                        # limit here is _MAX_DATA_ENTRY_BYTES and the write is
+                        # chunked. An entry that fails or overflows leaves the
+                        # existing file intact and is recorded, not swallowed —
+                        # a half-restored audit chain that "looks restored" was
+                        # the exact hazard the old branch warned about, and now
+                        # it aborts the whole restore instead of reporting
+                        # success.
+                        # The helper promotes at 0600, which is exactly what
+                        # data/ wants for every file: the CA key, the audit
+                        # signing key and client keys are all here, and nothing
+                        # outside the app process reads data/, so even the CA
+                        # cert and CRL stay 0600 (publishing them is the
+                        # server's job, /api/crl/download, not the filesystem's).
+                        try:
+                            _extract_zip_member_atomically(
+                                zipf, file_info, target_path,
+                                _MAX_DATA_ENTRY_BYTES)
+                        except Exception as e:
+                            logger.error(
+                                f"Error extracting {file_info.filename}: {e} "
+                                f"(existing file left intact)")
+                            failed_entries.append(file_info.filename)
+                            continue
 
                         restored_data_files += 1
             
@@ -1030,13 +1117,28 @@ class FileOperations:
                 except OSError as e:
                     logger.warning(f"Could not rebuild lineage symlinks for {domain}: {e}")
 
+            # Symlinks for the good domains are rebuilt above regardless, so a
+            # partially-restored instance is at least internally consistent for
+            # what did land. But if anything failed, the caller must not be told
+            # the restore succeeded: a single lost privkey.pem is the whole
+            # reason this raises. The good entries stay written and the failed
+            # ones kept their pre-existing files (atomic extract), so the
+            # operator can inspect, then roll back via the pre-restore backup.
+            if failed_entries:
+                raise RestoreIncompleteError(failed_entries)
+
             logger.info(f"Unified backup restored successfully from: {backup_path.name}")
             if restored_domains:
                 logger.info(f"Restored {len(restored_domains)} domains: {', '.join(restored_domains)}")
             if restored_data_files:
                 logger.info(f"Restored {restored_data_files} PKI/audit files under data/")
             return True
-            
+
+        except RestoreIncompleteError:
+            # Must not be swallowed into `return False` below: that path logs a
+            # generic error and discards the list of members that failed. The
+            # API caller turns this into a 500 that names them.
+            raise
         except Exception as e:
             logger.error(f"Error restoring unified backup: {e}")
             return False
