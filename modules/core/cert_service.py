@@ -153,14 +153,25 @@ class CertificateService:
         # creation, settings write, certbot): a poisoned primary domain
         # ("../poisoned") would otherwise be persisted into settings.json and
         # replayed by the renewal loop. SAN *content* is validated one layer
-        # down in create_certificate; here we only guard the container type.
-        ok, msg = validate_domain(domain)
+        # down in create_certificate.
+        #
+        # validate_domain returns the NORMALISED name as its second value on
+        # success (the URL netloc extracted, lowercased) — and we now use it
+        # instead of discarding it. Keeping the caller's raw string was the
+        # bug: "https://x/../../y" has a perfectly good netloc, passed
+        # validation, and was then used verbatim as a path component, escaping
+        # cert_dir. Rebinding to the normalised name means everything
+        # downstream — the cert dir, the certbot --cert-name, _seed_acme_account
+        # — sees a bare hostname that can never contain '/' or '..'.
+        ok, normalized = validate_domain(domain)
         if not ok:
-            raise ValueError(f'Invalid domain: {msg}')
+            raise ValueError(f'Invalid domain: {normalized}')
+        domain = normalized
         if domain_alias:
-            ok, msg = validate_domain(domain_alias)
+            ok, normalized_alias = validate_domain(domain_alias)
             if not ok:
-                raise ValueError(f'Invalid domain_alias: {msg}')
+                raise ValueError(f'Invalid domain_alias: {normalized_alias}')
+            domain_alias = normalized_alias
         if san_domains and not isinstance(san_domains, list):
             raise ValueError('Invalid san_domains format')
 

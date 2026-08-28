@@ -1270,6 +1270,23 @@ class CertificateManager:
                 omitting the flags makes certbot keep the existing key
                 type.
         """
+        # Path-safety gate at the sink. `domain` becomes cert_dir/<domain>/…,
+        # the certbot --config-dir/--cert-name, and the target of
+        # _seed_acme_account — and it keys the per-domain lock just below. Every
+        # caller is supposed to hand a bare hostname; a URL-form value whose
+        # netloc passed validate_domain but was kept raw ("https://x/../y")
+        # would escape cert_dir here and drop the ACME account private key under
+        # the public /.well-known/acme-challenge webroot. The create sources
+        # normalise to the bare hostname now, but this is the last line that
+        # every path — including the batch route, which does not go through
+        # prepare_create — must cross, so a future caller cannot reintroduce the
+        # escape. Reject rather than normalise: normalisation is the source's
+        # job; reaching the sink with path characters means something upstream
+        # failed and the request must not proceed.
+        if (not domain or '/' in domain or '\\' in domain
+                or '..' in domain or '\x00' in domain):
+            raise ValueError('Invalid domain name')
+
         # Acquire per-domain lock to prevent concurrent create/renew operations
         domain_lock = self._get_domain_lock(domain)
         if not domain_lock.acquire(timeout=self._domain_lock_timeout()):
