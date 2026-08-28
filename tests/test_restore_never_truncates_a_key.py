@@ -141,3 +141,40 @@ def test_no_restoring_temp_files_are_left_behind(instance):
         pass
     leftovers = [p for p in cert.rglob('*.restoring*')]
     assert leftovers == [], f"temp files left behind: {leftovers}"
+
+
+def test_a_member_that_fails_to_open_does_not_leak_a_descriptor():
+    """The temp file's fd must be closed even when zipf.open raises.
+
+    The extract opens the mkstemp fd and the zip member in one `with`. If the
+    member open is on the left and raises (a corrupt entry header), the fd is
+    never adopted by a file object and leaks — one descriptor per failed
+    member, until the process runs out. os.fdopen goes first so the fd is
+    always closed on the way out.
+    """
+    import os
+    import tempfile
+    from pathlib import Path
+
+    from modules.core.file_operations import _extract_zip_member_atomically
+
+    class _FailingZip:
+        def open(self, _info):
+            raise OSError("corrupt member header")
+
+    class _Info:
+        filename = "certificates/x/privkey.pem"
+        file_size = 10
+
+    def _open_fds():
+        return len(os.listdir('/dev/fd')) if os.path.isdir('/dev/fd') else 0
+
+    d = Path(tempfile.mkdtemp())
+    before = _open_fds()
+    for _ in range(100):
+        with pytest.raises(OSError):
+            _extract_zip_member_atomically(_FailingZip(), _Info(),
+                                           d / 'privkey.pem', 10_000)
+    after = _open_fds()
+    assert after - before <= 2, f"leaked descriptors: {before} -> {after}"
+    assert list(d.glob('*.restoring*')) == [], "temp files left behind"

@@ -163,7 +163,12 @@ def _extract_zip_member_atomically(zipf, file_info, target_path, max_bytes):
     tmp_path = Path(tmp_name)
     try:
         written = 0
-        with zipf.open(file_info) as source, os.fdopen(fd, 'wb') as target:
+        # os.fdopen FIRST, so it takes ownership of the mkstemp fd before
+        # zipf.open is evaluated: if opening the member raises (a corrupt entry
+        # header), the already-entered file object is closed on the way out and
+        # the fd is not leaked. With the order reversed, a member that fails to
+        # open would strand one file descriptor per attempt.
+        with os.fdopen(fd, 'wb') as target, zipf.open(file_info) as source:
             while True:
                 chunk = source.read(1024 * 1024)
                 if not chunk:
@@ -813,6 +818,21 @@ class FileOperations:
            on-disk settings file exists yet, the masked sentinels stay
            in place and the response log surfaces a warning so the
            operator knows to re-enter credentials.
+
+        Returns:
+            True on a clean restore.
+            False if the archive could not be opened or a pre-write safety
+            gate declined (see ``last_restore_error`` for the reason).
+
+        Raises:
+            RestoreIncompleteError: the archive opened and some members were
+                written, but at least one could not be. Each failed member
+                left its pre-existing file intact (extraction is atomic), so
+                nothing was truncated — but the instance is now a mix of old
+                and new, so this is not reported as success. ``.failed`` lists
+                the member names. Callers that only expect True/False must
+                handle this: the API layer turns it into a 500 that names the
+                failed members and points at the pre-restore backup.
         """
         temp_zip_path = None
         try:
