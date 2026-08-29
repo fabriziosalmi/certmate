@@ -7,7 +7,6 @@ not check: it logged the None and ran the restore anyway, overwriting settings
 and certificates irreversibly while having told the operator it made a backup
 first. It now refuses with 500 and does not touch the instance.
 """
-from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
