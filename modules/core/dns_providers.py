@@ -308,10 +308,25 @@ class DNSManager:
                     provider_config['accounts'] = {}
                 provider_config['accounts'][account_id] = account_config
 
-                # First account for this provider becomes the default.
+                # Claim the default slot for the first REAL account. The
+                # first-run migration pre-seeds default_accounts[provider] =
+                # 'default' pointing at the empty scaffolded placeholder, so
+                # `provider not in default_accounts` was never true after that
+                # and a real account added later never became the default —
+                # issuance then resolved the empty placeholder and handed certbot
+                # a blank credential. Promote the new account when there is
+                # no default, or the current default points at an account that
+                # is not actually configured, provided the new one is.
                 if 'default_accounts' not in settings:
                     settings['default_accounts'] = {}
-                if provider not in settings['default_accounts']:
+                accounts = provider_config['accounts']
+                current_default = settings['default_accounts'].get(provider)
+                current_cfg = (accounts.get(current_default)
+                               if current_default else None)
+                if not current_default or (
+                        not self._account_has_credentials(provider, current_cfg)
+                        and self._account_has_credentials(
+                            provider, account_config)):
                     settings['default_accounts'][provider] = account_id
 
             success = self.settings_manager.update(

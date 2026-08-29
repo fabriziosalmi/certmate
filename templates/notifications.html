@@ -178,7 +178,12 @@
             var content = document.getElementById('notifContent');
             content.setAttribute('aria-busy', 'true');
             fetch('/api/certificates', { credentials: 'same-origin' })
-                .then(function(r) { return r.ok ? r.json() : []; })
+                // An HTTP error (401/403/500) must NOT become an empty list —
+                // render() would paint "All certificates are healthy." over a
+                // failed load, on the one page whose job is to warn about
+                // expiring certs. Reject so the .catch shows the load failed.
+                // Same pattern as crypto_report.html / inventory.js.
+                .then(function(r) { return r.ok ? r.json() : Promise.reject(r.status); })
                 .then(function(certs) {
                     _certs = Array.isArray(certs) ? certs : [];
                     render();
