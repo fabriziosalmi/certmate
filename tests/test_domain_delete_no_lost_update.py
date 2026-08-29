@@ -46,26 +46,78 @@ def _drop(domain):
     return mut
 
 
-def test_a_concurrent_registration_survives_a_delete(sm):
+def test_the_stale_snapshot_approach_loses_b_but_the_mutator_does_not(sm):
+    """Directly contrast the two approaches on the SAME interleaving: A reads
+    the domain list, B registers concurrently, then A removes its domain.
+
+    - the old shape (snapshot taken early, then atomic_update({'domains': list
+      built from that snapshot})) writes the stale list back and drops B;
+    - the new shape (update(mutator) re-reads the fresh list under the lock)
+      keeps B.
+    """
     manager, path = sm
     b_written = threading.Event()
+    snapshot_taken = threading.Event()
+
+    # --- old shape: snapshot then whole-list atomic_update ---
+    def delete_a_stale():
+        snap = manager.load_settings(use_cache=False)   # taken before B lands
+        snapshot_taken.set()
+        b_written.wait(2)
+        kept = [d for d in snap.get('domains', [])
+                if d.get('domain') != 'a.example.com']
+        manager.atomic_update({'domains': kept})
 
     def register_b():
+        snapshot_taken.wait(2)                          # let delete snapshot first
         manager.update(lambda s: s.setdefault('domains', []).append(
             {'domain': 'b.example.com'}), reason='register_b')
         b_written.set()
 
-    def delete_a():
-        # The delete's read-modify-write happens after B lands, under the lock,
-        # so it sees the fresh list — the interleaving that used to lose B.
+    t1 = threading.Thread(target=delete_a_stale)
+    t2 = threading.Thread(target=register_b)
+    t1.start(); t2.start(); t1.join(); t2.join()
+    assert 'b.example.com' not in _domains(path), \
+        "precondition: the stale-snapshot approach must lose B here"
+
+    # reset and run the SAME interleaving with the mutator (the fix)
+    (path).write_text(json.dumps({
+        'domains': [{'domain': 'a.example.com'}], 'email': 'ops@example.com',
+        'users': {'admin': {'role': 'admin'}}}))
+    b_written.clear()
+
+    def delete_a_mutator():
         b_written.wait(2)
         manager.update(_drop('a.example.com'), reason='delete_a')
 
-    t1 = threading.Thread(target=delete_a)
-    t2 = threading.Thread(target=register_b)
-    t1.start(); t2.start(); t1.join(); t2.join()
+    t3 = threading.Thread(target=delete_a_mutator)
+    t4 = threading.Thread(target=register_b)
+    t3.start(); t4.start(); t3.join(); t4.join()
+    assert _domains(path) == ['b.example.com'], \
+        "the mutator re-reads under the lock and keeps B"
 
-    assert _domains(path) == ['b.example.com']
+
+def test_a_no_op_delete_does_not_persist(sm):
+    """Removing a domain that is not present must not write settings (nor
+    trigger an automatic backup) — a no-op stays a no-op."""
+    manager, path = sm
+    manager.load_settings(use_cache=False)   # let any migration settle first
+    before = path.read_text()
+
+    class _AlreadyAbsent(Exception):
+        pass
+
+    def guarded(s):
+        current = s.get('domains', []) or []
+        kept = [d for d in current if d.get('domain') != 'zzz.example.com']
+        if len(kept) == len(current):
+            raise _AlreadyAbsent
+        s['domains'] = kept
+
+    with pytest.raises(_AlreadyAbsent):
+        manager.update(guarded, reason='noop')
+    # the mutator raised before save_settings, so the file is byte-identical
+    assert path.read_text() == before, "a no-op delete must not rewrite settings"
 
 
 def test_update_removes_only_the_named_domain(sm):

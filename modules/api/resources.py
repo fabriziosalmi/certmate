@@ -1729,15 +1729,27 @@ def create_api_resources(api, models, managers):
                 # list would win and silently drop the freshly-registered
                 # domain from renewals. The mutator filters the fresh on-disk
                 # list instead, removing only this domain.
+                class _AlreadyAbsent(Exception):
+                    pass
+
+                def _drop_domain(s):
+                    current = s.get('domains', []) or []
+                    kept = [
+                        d for d in current
+                        if (isinstance(d, str) and d != domain)
+                        or (isinstance(d, dict) and d.get('domain') != domain)
+                    ]
+                    # Nothing to remove — do not persist (and do not trigger an
+                    # automatic backup) for a no-op, matching the previous
+                    # `if len(new_domains) != len(domains)` guard.
+                    if len(kept) == len(current):
+                        raise _AlreadyAbsent
+                    s['domains'] = kept
+
                 try:
-                    def _drop_domain(s):
-                        current = s.get('domains', []) or []
-                        s['domains'] = [
-                            d for d in current
-                            if (isinstance(d, str) and d != domain)
-                            or (isinstance(d, dict) and d.get('domain') != domain)
-                        ]
                     settings_manager.update(_drop_domain, reason='certificate_delete')
+                except _AlreadyAbsent:
+                    pass
                 except Exception as e:
                     logger.warning(f"Removed cert for {domain} but failed to update settings: {e}")
 
