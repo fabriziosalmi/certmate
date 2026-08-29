@@ -1720,9 +1720,11 @@ class CertificateManager:
 
             if live_dir.exists():
                 cert_files = self._publish_flat_files(live_dir, cert_output_dir)
+                # No domain in the message: the surrounding logs already carry
+                # it, and interpolating a user-influenced value tripped CodeQL's
+                # log-injection rule for no added signal here.
                 logger.info(
-                    "Published %d flat certificate files for %s",
-                    len(cert_files), domain)
+                    "Published %d flat certificate files", len(cert_files))
             
             # certbot exited 0 — but verify a certificate actually materialised
             # before reporting success. A missing or empty live dir (a suffixed
