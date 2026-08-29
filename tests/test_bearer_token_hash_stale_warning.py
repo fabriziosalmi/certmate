@@ -8,7 +8,6 @@ world-open — the bearer path fails closed) but silent. The diagnostic warning
 fires only in that case: a supplied token that does not verify against a stored
 HMAC hash. It is read-only — it must never change the stored hash.
 """
-import json
 from unittest.mock import MagicMock
 
 import pytest
@@ -98,3 +97,28 @@ def test_the_check_never_writes_the_stored_hash(monkeypatch):
     am.warn_if_bearer_token_hash_is_stale()
     sm.update.assert_not_called()
     sm.atomic_update.assert_not_called()
+
+
+def test_silent_for_a_malformed_token(monkeypatch, caplog):
+    """A malformed token is not a SECRET_KEY problem — the warning must not
+    fire, or it would mislead (the bearer fail-closed path handles bad tokens)."""
+    monkeypatch.setenv('API_BEARER_TOKEN', 'short')
+    am = AuthManager(_mgr(_hash_with(_OLD)))
+    am.set_hmac_key(_NEW)
+    assert _warned(am, caplog) is False
+
+
+def test_the_message_names_the_file_source(monkeypatch, caplog, tmp_path):
+    """When the token came from API_BEARER_TOKEN_FILE the message must say so,
+    not API_BEARER_TOKEN."""
+    f = tmp_path / 'token'
+    f.write_text(_TOKEN)
+    monkeypatch.delenv('API_BEARER_TOKEN', raising=False)
+    monkeypatch.setenv('API_BEARER_TOKEN_FILE', str(f))
+    am = AuthManager(_mgr(_hash_with(_OLD)))
+    am.set_hmac_key(_NEW)
+    caplog.clear()
+    with caplog.at_level('WARNING'):
+        am.warn_if_bearer_token_hash_is_stale()
+    msg = ' '.join(r.getMessage() for r in caplog.records)
+    assert 'API_BEARER_TOKEN_FILE' in msg

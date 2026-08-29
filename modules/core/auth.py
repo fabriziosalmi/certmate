@@ -1003,6 +1003,14 @@ class AuthManager:
             if not env_token:
                 return  # operator supplied no token — nothing to diagnose
 
+            # A malformed token is not a SECRET_KEY problem — it is the token,
+            # and the bearer fail-closed path (#610) already handles that. Only
+            # a well-formed token that does not verify points at a stale hash,
+            # so validate first to avoid a misleading SECRET_KEY diagnostic.
+            from .utils import validate_api_token
+            if not validate_api_token(env_token)[0]:
+                return
+
             stored = self.settings_manager.load_settings().get(
                 'api_bearer_token_hash')
             if not stored or not stored.startswith('hmac-sha256:'):
@@ -1010,15 +1018,19 @@ class AuthManager:
             if self._verify_api_token(env_token, stored):
                 return  # the token matches the hash — nothing wrong
 
+            source = ('API_BEARER_TOKEN_FILE'
+                      if os.getenv('API_BEARER_TOKEN_FILE')
+                      else 'API_BEARER_TOKEN')
             logger.warning(
-                "The API_BEARER_TOKEN supplied does not match the stored "
+                "The %s supplied does not match the stored "
                 "api_bearer_token_hash. That hash is bound to SECRET_KEY "
                 "(HMAC-SHA256), so the usual cause is a SECRET_KEY different "
                 "from the one in effect when the token was hashed — typically "
                 "after restoring a backup onto a new host. API requests will "
                 "401 until this is resolved. Fix: provide the original "
                 "SECRET_KEY (SECRET_KEY or SECRET_KEY_FILE), or reset the "
-                "bearer token via the API Keys UI / a fresh settings save.")
+                "bearer token via the API Keys UI / a fresh settings save.",
+                source)
         except Exception as e:
             logger.debug(f"bearer-token staleness check skipped: {e}")
 
