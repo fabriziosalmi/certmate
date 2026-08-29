@@ -3060,6 +3060,22 @@ def create_api_resources(api, models, managers):
                     # with the restore entry below.
                     pre_restore_backup = file_ops.create_unified_backup(
                         current_settings, "pre_restore", include_secrets=True)
+                    # create_unified_backup returns None on failure (e.g. the
+                    # backups directory is not writable). The operator asked for
+                    # a pre-restore backup precisely so the restore is
+                    # reversible; if we cannot make one, proceeding would
+                    # overwrite settings and certificates with no way back. Fail
+                    # closed instead of silently doing the irreversible thing.
+                    if not pre_restore_backup:
+                        return {
+                            'error': 'Refusing to restore: the pre-restore '
+                                     'backup could not be created, so the '
+                                     'restore would not be reversible. Check '
+                                     'that the backup directory is writable, or '
+                                     'retry with '
+                                     'create_backup_before_restore=false to '
+                                     'proceed without a safety net.'
+                        }, 500
                     logger.info(f"Created pre-restore backup: {pre_restore_backup}")
 
                 # Restore from unified backup
