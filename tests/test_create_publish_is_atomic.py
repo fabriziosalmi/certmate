@@ -8,7 +8,6 @@ hooks. This is the create AND the replace=True reissue path. It now goes through
 _publish_flat_files (stage all four, promote by rename, roll back on error), the
 same helper the renew path already uses.
 """
-import shutil
 from pathlib import Path
 from unittest.mock import patch
 
@@ -79,5 +78,11 @@ def test_create_certificate_no_longer_writes_the_flat_files_in_place():
     must not write the served files directly; it must go through the helper."""
     import inspect
     src = inspect.getsource(CertificateManager.create_certificate)
-    assert '_publish_flat_files' in src, \
+    # strip comments so the check looks at code, not the explanatory comment
+    code = '\n'.join(line.split('#', 1)[0] for line in src.splitlines())
+    assert '_publish_flat_files' in code, \
         "create_certificate must publish via _publish_flat_files"
+    # and the non-atomic loop must be gone: no direct dst write of the served
+    # files. The old loop wrote `dst_file.write_bytes(data)` over cert_output_dir.
+    assert 'dst_file.write_bytes' not in code, \
+        "create_certificate must not write the served files in place"

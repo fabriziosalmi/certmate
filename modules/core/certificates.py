@@ -1703,23 +1703,26 @@ class CertificateManager:
             
             # Move certificates to standard location. Publish live/ to the flat
             # directory through the SAME staged-promote helper the renew path
-            # uses: stage all four to <name>.staging, then promote by rename,
-            # rolling back the staged set on any error. The previous in-place
-            # loop wrote each served file directly, in CERTIFICATE_FILES order
-            # with privkey.pem last and no rollback, so a failure on the fourth
-            # write (ENOSPC, a container killed mid-write) left a new cert.pem
-            # beside the old privkey.pem — a pair that cannot handshake, served
-            # straight off disk. This is the create AND the replace=True reissue
-            # path, i.e. it overwrites a certificate that is currently served.
-            # _publish_flat_files returns {filename: bytes}, the same shape the
-            # rest of this method expects from cert_files.
+            # uses: stage all four to <name>.staging, then promote by rename.
+            # A failure while STAGING rolls the staged set back, so the served
+            # copy is left exactly as it was. (The promote loop is four renames
+            # and is not itself transactional — a crash between renames leaves a
+            # mixed generation — but the next renewal check reconciles that,
+            # which the old in-place loop's state was permanent past.) The
+            # previous loop wrote each served file directly, privkey.pem last,
+            # with no staging at all, so a failure on the fourth write left a new
+            # cert.pem beside the old privkey.pem — a pair that cannot handshake,
+            # served straight off disk. This is the create AND the replace=True
+            # reissue path. _publish_flat_files returns {filename: bytes}, the
+            # same shape the rest of this method expects from cert_files.
             live_dir = cert_output_dir / 'live' / domain
             cert_files = {}
 
             if live_dir.exists():
                 cert_files = self._publish_flat_files(live_dir, cert_output_dir)
-                for name in cert_files:
-                    logger.info(f"Published {name} to {cert_output_dir / name}")
+                logger.info(
+                    "Published %d flat certificate files for %s",
+                    len(cert_files), domain)
             
             # certbot exited 0 — but verify a certificate actually materialised
             # before reporting success. A missing or empty live dir (a suffixed
