@@ -9,8 +9,6 @@ signing key — after which no CRL can ever be signed for the old CA again.
 
 initialize() now refuses on a partial CA and leaves the surviving file untouched.
 """
-import shutil
-
 import pytest
 
 from modules.core.private_ca import PrivateCAGenerator
@@ -75,3 +73,14 @@ def test_force_still_regenerates_over_a_partial(real_ca_files, tmp_path):
     d, ca = _plant(tmp_path, {'ca.crt': crt})
     assert ca.initialize(force=True) is True
     assert (d / 'ca.key').exists(), "force must produce a full new CA"
+
+
+def test_force_from_a_key_only_partial_backs_up_the_key(real_ca_files, tmp_path):
+    """force=True from a key-only partial must back up ca.key before it is
+    overwritten — the backup was skipped when ca.crt was absent."""
+    _crt, key = real_ca_files
+    d, ca = _plant(tmp_path, {'ca.key': key})
+    assert ca.initialize(force=True) is True
+    backups = list((d / 'backups').glob('ca_*.key'))
+    assert backups, "the surviving ca.key must be backed up before regeneration"
+    assert backups[0].read_bytes() == key

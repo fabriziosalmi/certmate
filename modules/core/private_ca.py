@@ -463,7 +463,12 @@ class PrivateCAGenerator:
             True if successful
         """
         try:
-            if not self.ca_cert_path.exists():
+            # Nothing to back up only when BOTH files are absent. Guarding on
+            # ca.crt alone skipped the backup for a key-only partial CA, so a
+            # force=True regeneration from that state would overwrite the only
+            # copy of ca.key with no backup. The per-file copies below already
+            # handle whichever files are present.
+            if not self.ca_cert_path.exists() and not self.ca_key_path.exists():
                 return True
 
             # Create backup directory
