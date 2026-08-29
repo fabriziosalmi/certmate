@@ -296,6 +296,33 @@ class PrivateCAGenerator:
                     backend=default_backend()
                 )
 
+            # The key and the certificate are loaded from two separate files,
+            # and nothing guarantees they are the same generation. A share-safe
+            # backup carries ca.crt but not ca.key (key material is excluded),
+            # so restoring one over a node whose ca.key was regenerated leaves
+            # a matched-by-filename, mismatched-by-content pair. Loading it and
+            # signing anyway is silent corruption: leaf certs then fail
+            # `verify_directly_issued_by(published_ca_cert)`, and a CRL signed
+            # with the wrong key is discarded as unauthentic — revocation fails
+            # open. Refuse the pair unless the public keys actually match.
+            cert_pub = self._ca_cert.public_key().public_bytes(
+                serialization.Encoding.PEM,
+                serialization.PublicFormat.SubjectPublicKeyInfo)
+            key_pub = self._ca_key.public_key().public_bytes(
+                serialization.Encoding.PEM,
+                serialization.PublicFormat.SubjectPublicKeyInfo)
+            if cert_pub != key_pub:
+                logger.error(
+                    "CA private key does not match CA certificate — the pair is "
+                    "from different generations (e.g. a share-safe backup "
+                    "restored ca.crt without ca.key). Refusing to load: signing "
+                    "with a mismatched key silently produces certificates and "
+                    "CRLs that no relying party will accept.")
+                self._ca_loaded = False
+                self._ca_key = None
+                self._ca_cert = None
+                return False
+
             # Check CA certificate expiry
             if datetime.now(timezone.utc) > self._ca_cert.not_valid_after_utc:
                 logger.error("CA certificate has expired — cannot sign new certificates")
