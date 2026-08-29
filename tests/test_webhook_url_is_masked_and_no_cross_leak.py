@@ -2,8 +2,7 @@
 webhook's secret across a save.
 
 For Slack, Discord, ntfy and Gotify the incoming-webhook URL embeds the bearer
-secret in its path, so anyone who reads it can post to the channel. mask_secrets_
-in_settings masks by field NAME and 'url' matched nothing, so GET /api/web/settings
+secret in its path, so anyone who reads it can post to the channel. ``mask_secrets_in_settings`` masks by field NAME and 'url' matched nothing, so GET /api/web/settings
 returned it in cleartext to the viewer role and the share-safe backup ZIP carried
 it. It is now masked (#16), and restored on a round-trip like any other secret.
 

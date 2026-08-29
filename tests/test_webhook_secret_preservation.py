@@ -73,16 +73,19 @@ def test_non_secret_fields_untouched():
     assert new[0]['token'] == 'T'          # secret restored
 
 
-def test_duplicate_identity_webhooks_keep_distinct_secrets():
-    # Two webhooks sharing (type, url, name): each masked secret must restore
-    # from its OWN prior (consume-once), not both collapse onto the first.
+def test_duplicate_identity_webhooks_drop_masked_secrets():
+    # Two webhooks sharing (type, name) are AMBIGUOUS: with no stable id, list
+    # order is all that is left to match on, and a reorder/deletion would
+    # restore the wrong one's secret — the cross-endpoint leak (type,name) was
+    # chosen to avoid. So masked secrets are dropped, not guessed by position.
     old = [
-        {'name': 'dup', 'type': 'generic', 'url': 'https://x', 'secret': 'S1'},
-        {'name': 'dup', 'type': 'generic', 'url': 'https://x', 'secret': 'S2'},
+        {'name': 'dup', 'type': 'generic', 'url': 'https://a', 'secret': 'S1'},
+        {'name': 'dup', 'type': 'generic', 'url': 'https://b', 'secret': 'S2'},
     ]
     new = [
-        {'name': 'dup', 'type': 'generic', 'url': 'https://x', 'secret': MASK},
-        {'name': 'dup', 'type': 'generic', 'url': 'https://x', 'secret': MASK},
+        {'name': 'dup', 'type': 'generic', 'url': MASK, 'secret': MASK},
+        {'name': 'dup', 'type': 'generic', 'url': MASK, 'secret': MASK},
     ]
     _restore_masked_list_secrets(old, new)
-    assert [w['secret'] for w in new] == ['S1', 'S2']
+    assert all('secret' not in w or w['secret'] != 'S1' for w in new)
+    assert all('secret' not in w or w['secret'] != 'S2' for w in new)

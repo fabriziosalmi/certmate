@@ -342,19 +342,26 @@ def _restore_masked_list_secrets(old_list, new_list):
     def _field_is_secret(key):
         return _is_secret_key(key) or key in _WEBHOOK_LIST_SECRET_FIELDS
 
-    # Queue prior dicts per identity so duplicate-identity entries are matched
-    # one-to-one rather than every duplicate resolving to the first.
     by_identity = {}
     for old in old_list:
         if isinstance(old, dict):
             by_identity.setdefault(_identity(old), deque()).append(old)
+    # An identity shared by more than one prior entry is AMBIGUOUS: with no
+    # stable per-webhook id, list order is the only thing left to match on, and
+    # a reorder or a deletion would then restore the wrong entry's secret — the
+    # same cross-endpoint credential leak (type,name) was chosen to avoid. So a
+    # masked secret whose identity is ambiguous is dropped (the operator
+    # re-enters it), never guessed by position.
+    ambiguous = {ident for ident, q in by_identity.items() if len(q) > 1}
 
     for item in new_list:
         if not isinstance(item, dict):
             continue
-        queue = by_identity.get(_identity(item))
-        # Identity match or nothing — never a positional guess (see docstring).
-        prior = queue.popleft() if queue else {}
+        ident = _identity(item)
+        queue = by_identity.get(ident)
+        # Unique identity match, or nothing — never a positional guess, and
+        # never an ambiguous duplicate (see above and the docstring).
+        prior = queue.popleft() if (queue and ident not in ambiguous) else {}
         for key in list(item.keys()):
             if _field_is_secret(key) and item.get(key) == SECRET_MASK_SENTINEL:
                 if key in prior:
