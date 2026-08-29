@@ -1,6 +1,12 @@
-## v2.26.2 (A security-hardening patch: seventeen fixes, no new behaviour)
+## v2.26.2 (A security-hardening patch: seventeen fixes)
 
-A patch release. Nothing here changes what CertMate does or how you operate it.
+A patch release. It adds no features and changes nothing about how you operate
+CertMate in normal use. What several of these fixes do change, deliberately, is
+what happens in the failure and edge cases they target: an instance that cannot
+read its own credentials now refuses to serve instead of coming up open, a
+restore that is interrupted aborts instead of half-completing, a private CA with
+a mismatched key refuses to sign. Failing closed in those moments is the point.
+
 It closes a batch of defects found in an internal adversarial audit, each one
 verified by reproducing it against the shipped code and then again against the
 fix. They cluster in the places a certificate manager cannot afford to be wrong:
