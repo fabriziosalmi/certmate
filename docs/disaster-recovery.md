@@ -323,16 +323,34 @@ restoring a masked backup, every certificate is listed as present, with a valid
 expiry and `needs_renewal: false`, while none of them can serve TLS. The API
 alone cannot tell you whether you have recovered:
 
-```bash
-docker exec certmate sh -c '
-for d in /app/certificates/*/; do
-  n=$(basename "$d"); [ -f "$d/cert.pem" ] || continue
-  if [ ! -f "$d/privkey.pem" ]; then echo "$n: NO PRIVATE KEY - cannot serve TLS"; continue; fi
-  c=$(openssl x509 -noout -pubkey -in "$d/cert.pem" | openssl sha256)
-  k=$(openssl pkey -pubout -in "$d/privkey.pem" | openssl sha256)
-  [ "$c" = "$k" ] && echo "$n: ok" || echo "$n: KEY DOES NOT MATCH CERT"
-done'
-```
+~~~bash
+docker exec -i certmate python - <<'PY'
+import glob, os
+from cryptography import x509
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+
+for d in sorted(glob.glob('/app/certificates/*/')):
+    name = os.path.basename(os.path.dirname(d))
+    cert_path = os.path.join(d, 'cert.pem')
+    key_path = os.path.join(d, 'privkey.pem')
+    if not os.path.exists(cert_path):
+        continue
+    if not os.path.exists(key_path):
+        print(f"{name}: NO PRIVATE KEY - cannot serve TLS")
+        continue
+    try:
+        with open(cert_path, 'rb') as f:
+            cert = x509.load_pem_x509_certificate(f.read())
+        with open(key_path, 'rb') as f:
+            key = serialization.load_pem_private_key(f.read(), password=None)
+        c_pub = cert.public_key().public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo)
+        k_pub = key.public_key().public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo)
+        print(f"{name}: ok" if c_pub == k_pub else f"{name}: KEY DOES NOT MATCH CERT")
+    except Exception as e:
+        print(f"{name}: ERROR {type(e).__name__}: {e}")
+PY
+~~~
 
 Every domain must print `ok`. Then:
 
