@@ -61,6 +61,14 @@ def _managers(tmp_path, saved):
         side_effect=lambda _d, md: saved.update(md) or True
     )
 
+    # The handler reads metadata through _load_metadata (the manager builds the
+    # path and quarantines corrupt JSON); mirror the real one by reading the
+    # metadata.json the test wrote on disk.
+    def _load(d):
+        f = Path(tmp_path) / d / 'metadata.json'
+        return json.loads(f.read_text()) if f.exists() else {}
+    certificate_manager._load_metadata = MagicMock(side_effect=_load)
+
     settings_manager = MagicMock()
     settings_manager.load_settings.return_value = {'domains': [{'domain': domain}]}
 

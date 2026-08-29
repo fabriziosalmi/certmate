@@ -1594,72 +1594,72 @@ def create_api_resources(api, models, managers):
             try:
                 import json as _json
 
-                # 1. Update on-disk metadata.json
-                metadata_file = cert_dir / 'metadata.json'
-                metadata = {}
-                if metadata_file.exists():
-                    try:
-                        with open(metadata_file, 'r') as f:
-                            metadata = _json.load(f)
-                    except Exception as e:
-                        logger.warning("Failed to load metadata.json for domain %s: %s", domain, e)
+                # Serialise this metadata read-modify-write against an in-flight
+                # renewal (which carries a pre-renewal metadata snapshot across
+                # its whole certbot run and would otherwise clobber this write).
+                with certificate_manager.domain_lock(domain):
+                    # 1. Update on-disk metadata.json. Read through the manager
+                    # (which builds the path from the already-validated domain
+                    # and quarantines corrupt JSON instead of silently returning
+                    # {}) rather than opening cert_dir/'metadata.json' directly.
+                    metadata = certificate_manager._load_metadata(domain)
 
-                old_provider = metadata.get('dns_provider')
-                if new_dns_provider:
-                    metadata['dns_provider'] = new_dns_provider
-                if new_account_id:
-                    metadata['account_id'] = new_account_id
-                if new_alias_dns_provider:
-                    metadata['alias_dns_provider'] = new_alias_dns_provider
+                    old_provider = metadata.get('dns_provider')
+                    if new_dns_provider:
+                        metadata['dns_provider'] = new_dns_provider
+                    if new_account_id:
+                        metadata['account_id'] = new_account_id
+                    if new_alias_dns_provider:
+                        metadata['alias_dns_provider'] = new_alias_dns_provider
 
-                # --- deployment probe config ---
-                # Only touch probe config when the caller actually sends the
-                # key: an ABSENT key leaves existing config intact, an explicit
-                # null deletes it. Keying off `is not None` instead would let a
-                # DNS-only PATCH silently wipe a cert's probe config.
-                if 'deployment_port' in data:
-                    if new_deploy_port is not None:
-                        try:
-                            port = int(new_deploy_port)
-                            if port < 1 or port > 65535:
-                                return {'error': 'deployment_port must be 1-65535'}, 400
-                            metadata['deployment_port'] = port
-                        except (TypeError, ValueError):
-                            return {'error': 'deployment_port must be an integer'}, 400
-                    else:
-                        metadata.pop('deployment_port', None)
+                    # --- deployment probe config ---
+                    # Only touch probe config when the caller actually sends the
+                    # key: an ABSENT key leaves existing config intact, an explicit
+                    # null deletes it. Keying off `is not None` instead would let a
+                    # DNS-only PATCH silently wipe a cert's probe config.
+                    if 'deployment_port' in data:
+                        if new_deploy_port is not None:
+                            try:
+                                port = int(new_deploy_port)
+                                if port < 1 or port > 65535:
+                                    return {'error': 'deployment_port must be 1-65535'}, 400
+                                metadata['deployment_port'] = port
+                            except (TypeError, ValueError):
+                                return {'error': 'deployment_port must be an integer'}, 400
+                        else:
+                            metadata.pop('deployment_port', None)
 
-                if 'deployment_protocol' in data:
-                    if new_deploy_protocol is not None:
-                        if new_deploy_protocol not in _PROBE_PROTOCOLS:
-                            return {
-                                'error': f"deployment_protocol must be one of {_PROBE_PROTOCOLS!r}"
-                            }, 400
-                        metadata['deployment_protocol'] = new_deploy_protocol
-                    else:
-                        metadata.pop('deployment_protocol', None)
+                    if 'deployment_protocol' in data:
+                        if new_deploy_protocol is not None:
+                            if new_deploy_protocol not in _PROBE_PROTOCOLS:
+                                return {
+                                    'error': f"deployment_protocol must be one of {_PROBE_PROTOCOLS!r}"
+                                }, 400
+                            metadata['deployment_protocol'] = new_deploy_protocol
+                        else:
+                            metadata.pop('deployment_protocol', None)
 
-                if 'deployment_host' in data:
-                    if new_deploy_host is not None:
-                        if not isinstance(new_deploy_host, str):
-                            return {'error': 'deployment_host must be a string'}, 400
-                        host = new_deploy_host.strip()
-                        # A probe target is a bare hostname: no scheme, no path,
-                        # no whitespace, and no wildcard label (you deploy a
-                        # cert on a concrete name, not on "*.").
-                        if (not host or len(host) > 253 or host.startswith('*.')
-                                or any(c in host for c in ' \t/\\')
-                                or '://' in host):
-                            return {
-                                'error': 'deployment_host must be a bare hostname '
-                                         '(no scheme, path, whitespace, or wildcard)'
-                            }, 400
-                        metadata['deployment_host'] = host
-                    else:
-                        metadata.pop('deployment_host', None)
+                    if 'deployment_host' in data:
+                        if new_deploy_host is not None:
+                            if not isinstance(new_deploy_host, str):
+                                return {'error': 'deployment_host must be a string'}, 400
+                            host = new_deploy_host.strip()
+                            # A probe target is a bare hostname: no scheme, no path,
+                            # no whitespace, and no wildcard label (you deploy a
+                            # cert on a concrete name, not on "*.").
+                            if (not host or len(host) > 253 or host.startswith('*.')
+                                    or any(c in host for c in ' \t/\\')
+                                    or '://' in host):
+                                return {
+                                    'error': 'deployment_host must be a bare hostname '
+                                             '(no scheme, path, whitespace, or wildcard)'
+                                }, 400
+                            metadata['deployment_host'] = host
+                        else:
+                            metadata.pop('deployment_host', None)
 
-                if not certificate_manager._save_metadata(domain, metadata):
-                    return {'error': f'Failed to update metadata for domain: {domain}'}, 500
+                    if not certificate_manager._save_metadata(domain, metadata):
+                        return {'error': f'Failed to update metadata for domain: {domain}'}, 500
                 logger.info(
                     f"Updated DNS provider for {domain}: "
                     f"{old_provider} → {new_dns_provider or old_provider}"
@@ -1690,6 +1690,14 @@ def create_api_resources(api, models, managers):
                     response['deployment_host'] = metadata.get('deployment_host')
                 return response, 200
 
+            except DomainOperationInProgress:
+                # A create/renew holds the per-domain lock; the config change
+                # cannot safely interleave with it. Same 409 the create/renew
+                # routes return, so the client can retry once issuance settles.
+                return {
+                    'error': f'An operation is in progress for {domain}; '
+                             f'retry once it completes'
+                }, 409
             except Exception as e:
                 logger.error(f"Failed to update certificate config for {domain}: {e}")
                 return {'error': 'Failed to update certificate config'}, 500
@@ -1718,17 +1726,38 @@ def create_api_resources(api, models, managers):
                     return {'error': f'Certificate not found for domain: {domain}'}, 404
 
                 # Best-effort: drop the domain from settings so the dashboard
-                # stops listing it.
-                try:
-                    settings = settings_manager.load_settings()
-                    domains = settings.get('domains', []) or []
-                    new_domains = [
-                        d for d in domains
+                # stops listing it. Do it as a read-modify-write under the lock
+                # (settings_manager.update), NOT load_settings()+atomic_update
+                # with a whole 'domains' list: the load here is a request-cache
+                # HIT (the rate-limit before_request primed flask.g), and
+                # delete_certificate above can span a storage-backend network
+                # round-trip, so a concurrent registration that lands in that
+                # window is absent from the cached list. atomic_update replaces
+                # 'domains' wholesale (it is not a deep-merge key), so the stale
+                # list would win and silently drop the freshly-registered
+                # domain from renewals. The mutator filters the fresh on-disk
+                # list instead, removing only this domain.
+                class _AlreadyAbsent(Exception):
+                    pass
+
+                def _drop_domain(s):
+                    current = s.get('domains', []) or []
+                    kept = [
+                        d for d in current
                         if (isinstance(d, str) and d != domain)
                         or (isinstance(d, dict) and d.get('domain') != domain)
                     ]
-                    if len(new_domains) != len(domains):
-                        settings_manager.atomic_update({'domains': new_domains})
+                    # Nothing to remove — do not persist (and do not trigger an
+                    # automatic backup) for a no-op, matching the previous
+                    # `if len(new_domains) != len(domains)` guard.
+                    if len(kept) == len(current):
+                        raise _AlreadyAbsent
+                    s['domains'] = kept
+
+                try:
+                    settings_manager.update(_drop_domain, reason='certificate_delete')
+                except _AlreadyAbsent:
+                    pass
                 except Exception as e:
                     logger.warning(f"Removed cert for {domain} but failed to update settings: {e}")
 
