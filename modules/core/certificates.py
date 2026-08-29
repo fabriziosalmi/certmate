@@ -2148,9 +2148,9 @@ class CertificateManager:
                     # because get_certificate_info reads the backend copy when a
                     # storage backend is configured, needs_renewal stayed True
                     # forever, every run landed here, and the store was never
-                    # tried again (#1). And when the reconcile above republished
+                    # tried again. And when the reconcile above republished
                     # the flat PEMs, the new generation reached /download and the
-                    # deploy hooks but not the backend or the PFX (#2). Push here
+                    # deploy hooks but not the backend or the PFX. Push here
                     # when the external copy is behind — a prior store failed
                     # (storage_warning persisted) or we just republished — so
                     # downstream is not stranded on the old certificate.

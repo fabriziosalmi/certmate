@@ -5,16 +5,15 @@ store that failed once (expired Vault token, transient 5xx) was never retried:
 the local cert was fresh but the backend stayed on the OLD generation, and
 because get_certificate_info reads the backend copy when a backend is
 configured, needs_renewal stayed True forever — every run landed in the
-not-yet-due branch, which never touched the backend (#1). And when that branch
+not-yet-due branch, which never touched the backend. And when that branch
 republished the flat PEMs, the new generation reached /download and the deploy
-hooks but not the backend or the PFX (#2).
+hooks but not the backend or the PFX.
 
 The not-yet-due branch now pushes to the backend when the external copy is
 behind (a prior store failed, or the flats were just republished), clearing the
 storage_warning on success.
 """
 import json
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
