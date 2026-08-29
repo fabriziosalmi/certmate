@@ -26,3 +26,13 @@ def test_an_http_error_rejects_instead_of_becoming_an_empty_list():
 def test_the_catch_branch_reports_the_failure():
     src = TEMPLATE.read_text(encoding='utf-8')
     assert 'Could not load certificates.' in src
+
+
+def test_the_catch_branch_clears_the_loading_state():
+    """The failure path must reset the same busy/summary state render() does,
+    or the page is left with aria-busy="true" and the summary stuck on
+    'Loading…' (both stale to assistive tech)."""
+    src = TEMPLATE.read_text(encoding='utf-8')
+    catch = src.split('.catch(', 1)[1].split('});', 1)[0]
+    assert "setAttribute('aria-busy', 'false')" in catch
+    assert 'notifSummary' in catch
