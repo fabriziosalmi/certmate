@@ -183,12 +183,39 @@ class PrivateCAGenerator:
             # Create CA directory if it doesn't exist
             self.ca_dir.mkdir(parents=True, exist_ok=True)
 
+            cert_exists = self.ca_cert_path.exists()
+            key_exists = self.ca_key_path.exists()
+
             # Check if CA already exists
-            if self.ca_cert_path.exists() and self.ca_key_path.exists() and not force:
+            if cert_exists and key_exists and not force:
                 logger.info("CA already exists, loading from disk")
                 return self._load_ca()
 
-            # Generate new CA
+            # Exactly one of the two present, and not a deliberate force: this is
+            # a partial/damaged CA — a masked restore that brought back ca.crt
+            # without ca.key (key material is excluded from share-safe backups),
+            # a failed extraction, a file-level backup of one file, operator
+            # error. Falling through to _generate_ca() would overwrite the
+            # surviving half with a brand-new CA and NO backup (the backup is
+            # gated on force below), silently destroying either the ca.crt every
+            # deployed client already trusts, or the ONLY copy of the signing key
+            # (after which no CRL can ever be signed for the old CA again — every
+            # outstanding client cert becomes permanently unrevocable). Refuse,
+            # and tell the operator to restore the missing half.
+            if (cert_exists or key_exists) and not force:
+                present = 'ca.crt' if cert_exists else 'ca.key'
+                missing = 'ca.key' if cert_exists else 'ca.crt'
+                logger.error(
+                    "Partial CA on disk: %s is present but %s is missing. "
+                    "Refusing to regenerate — that would destroy the surviving "
+                    "%s with no backup. Restore %s from your backup and "
+                    "restart. To deliberately discard this CA and generate a "
+                    "new one, start once with force regeneration (which backs "
+                    "up the existing files first).",
+                    present, missing, present, missing)
+                return False
+
+            # Generate new CA (first run, or a forced regeneration).
             if force:
                 logger.warning("Force regenerating CA - backing up existing CA")
                 self._backup_existing_ca()
@@ -436,7 +463,12 @@ class PrivateCAGenerator:
             True if successful
         """
         try:
-            if not self.ca_cert_path.exists():
+            # Nothing to back up only when BOTH files are absent. Guarding on
+            # ca.crt alone skipped the backup for a key-only partial CA, so a
+            # force=True regeneration from that state would overwrite the only
+            # copy of ca.key with no backup. The per-file copies below already
+            # handle whichever files are present.
+            if not self.ca_cert_path.exists() and not self.ca_key_path.exists():
                 return True
 
             # Create backup directory
