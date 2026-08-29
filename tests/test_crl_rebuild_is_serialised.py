@@ -22,10 +22,12 @@ from modules.core.private_ca import PrivateCAGenerator
 pytestmark = [pytest.mark.unit]
 
 
-@pytest.fixture
-def ca(tmp_path):
-    d = tmp_path / 'ca'
-    d.mkdir()
+@pytest.fixture(scope='module')
+def ca(tmp_path_factory):
+    """Module-scoped: generating a 4096-bit CA is expensive and these tests
+    only need one. Each test fully rewrites crl.pem and reads it back, so they
+    do not depend on each other's CRL state (Copilot)."""
+    d = tmp_path_factory.mktemp('ca')
     g = PrivateCAGenerator(d)
     assert g.initialize()
     return g
@@ -59,6 +61,7 @@ def test_the_crl_lock_serialises_the_rebuild(ca):
     tA = threading.Thread(target=revoke_a)
     tB = threading.Thread(target=revoke_b)
     tA.start(); tB.start(); tA.join(5); tB.join(5)
+    assert not tA.is_alive() and not tB.is_alive(), "threads did not finish"
 
     assert _serials(ca) == [1001, 2002]
 
@@ -88,3 +91,19 @@ def test_update_crl_holds_the_crl_lock():
     from modules.core.ocsp_crl import CRLManager
     src = inspect.getsource(CRLManager.update_crl)
     assert 'self.private_ca.crl_lock()' in src
+
+
+def test_two_instances_for_the_same_ca_dir_share_the_lock(tmp_path):
+    """The lock must be process-wide for a CA, not per instance: a second
+    PrivateCAGenerator for the same ca_dir must serialise against the first,
+    or two of them could race the same crl.pem."""
+    d = tmp_path / 'ca'
+    d.mkdir()
+    a = PrivateCAGenerator(d)
+    b = PrivateCAGenerator(d)
+    assert a._crl_lock is b._crl_lock
+
+    other = tmp_path / 'ca2'
+    other.mkdir()
+    c = PrivateCAGenerator(other)
+    assert a._crl_lock is not c._crl_lock

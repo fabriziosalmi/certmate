@@ -97,7 +97,7 @@ class PrivateCAGenerator:
         self._ca_key = None
         self._ca_cert = None
         self._ca_loaded = False
-        # One process-wide lock for the whole CRL read-modify-write. generate_crl
+        # One lock per ca_dir for the whole CRL read-modify-write. generate_crl
         # rebuilds crl.pem from the ENTIRE revoked set, and its callers
         # (ClientCertificateManager.revoke_certificate, CRLManager.update_crl)
         # each read that set and then regenerate. The per-identifier lock on a
@@ -108,7 +108,27 @@ class PrivateCAGenerator:
         # say revoked and both calls returned success. Relying parties then
         # accept B's leaf until next_update. Hold this lock around
         # "list revoked -> generate_crl" in every caller so the rebuild is atomic.
-        self._crl_lock = threading.Lock()
+        #
+        # Keyed on the resolved ca_dir in a class-level registry, not stored per
+        # instance: the factory makes one PrivateCAGenerator, but nothing stops a
+        # second instance for the same ca_dir in the same process, and a per-
+        # instance lock would let those two race the same crl.pem. Sharing by
+        # path makes the guarantee actually process-wide for a given CA.
+        self._crl_lock = self._crl_lock_for(self.ca_dir)
+
+    # ca_dir (resolved, as str) -> the shared CRL lock for that CA.
+    _crl_locks: Dict[str, "threading.Lock"] = {}
+    _crl_locks_mutex = threading.Lock()
+
+    @classmethod
+    def _crl_lock_for(cls, ca_dir: Path) -> "threading.Lock":
+        key = str(Path(ca_dir).resolve())
+        with cls._crl_locks_mutex:
+            lock = cls._crl_locks.get(key)
+            if lock is None:
+                lock = threading.Lock()
+                cls._crl_locks[key] = lock
+            return lock
 
     @contextmanager
     def crl_lock(self):
