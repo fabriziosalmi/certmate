@@ -724,10 +724,12 @@ class FileOperations:
     @staticmethod
     def _revalidate_restored_deploy_hooks(settings_data):
         """Run the current ``DeployManager._validate_hook`` over every
-        hook present in the restored ``settings_data``. Returns ``None``
-        if every hook passes, or a human-readable error string naming
-        the offending hook otherwise. A restore that would install
-        even one rejectable hook is refused (audit finding M1)."""
+        hook present in the restored ``settings_data`` — both
+        ``deploy_hooks.global_hooks`` and every list under
+        ``deploy_hooks.domain_hooks``, since both execute on renewal. Returns
+        ``None`` if every hook passes, or a human-readable error string naming
+        the offending hook otherwise. A restore that would install even one
+        rejectable hook is refused (audit finding M1)."""
         try:
             from .deployer import DeployManager
         except Exception as imp_err:
@@ -740,6 +742,19 @@ class FileOperations:
             global_hooks = deploy_block.get('global_hooks') or []
             if isinstance(global_hooks, list):
                 hooks.extend(h for h in global_hooks if isinstance(h, dict))
+            # domain_hooks is {domain: [hook, ...]} and every one of those runs
+            # on the next renewal of that domain, exactly like a global hook
+            # (deployer.py executes both). Validating only global_hooks left the
+            # per-domain hooks unchecked: a tampered archive could smuggle a
+            # command the current validator rejects under domain_hooks and the
+            # restore would install it — the gate covered half the surface it
+            # claimed. Validate both.
+            domain_hooks = deploy_block.get('domain_hooks') or {}
+            if isinstance(domain_hooks, dict):
+                for per_domain in domain_hooks.values():
+                    if isinstance(per_domain, list):
+                        hooks.extend(
+                            h for h in per_domain if isinstance(h, dict))
         if not hooks:
             return None
 

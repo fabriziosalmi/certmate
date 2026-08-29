@@ -2710,7 +2710,21 @@ def create_api_resources(api, models, managers):
                 data = api.payload
                 backup_type = data.get('type', 'unified')  # Default to unified
                 reason = data.get('reason', 'manual')
-                include_secrets = bool(data.get('include_secrets', False))
+                # `include_secrets` decides between a share-safe masked archive
+                # and a plaintext dump of every credential and private key, so
+                # it MUST be a real JSON boolean. bool() coercion was the trap:
+                # bool("false") is True, so a client sending the value as a
+                # string — trivial in a shell or an untyped template —
+                # asked for masked and got the plaintext dump. Accept only a
+                # JSON boolean; anything else is refused rather than guessed,
+                # and the safe default (masked) applies only when it is absent.
+                raw_include = data.get('include_secrets', False)
+                if not isinstance(raw_include, bool):
+                    return {
+                        'error': 'include_secrets must be a JSON boolean '
+                                 '(true or false), not a string or number'
+                    }, 400
+                include_secrets = raw_include
 
                 created_backups = []
 
