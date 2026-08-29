@@ -57,12 +57,32 @@ def test_no_hooks_at_all_passes():
     assert _revalidate({}) is None
 
 
-def test_malformed_domain_hooks_do_not_crash():
-    """domain_hooks that is not a dict, or holds non-list values, must be
-    tolerated (an archive can carry anything), not raise."""
+def test_malformed_domain_hooks_are_refused_not_tolerated():
+    """A malformed domain_hooks shape is exactly what save_config rejects, so
+    the restore must reject it too — accepting it would install a config that
+    crashes DeployManager on the next deploy. The validator is shared with
+    save_config, so the two cannot drift again."""
     for shape in (
         {'deploy_hooks': {'domain_hooks': 'not-a-dict'}},
         {'deploy_hooks': {'domain_hooks': {'d': 'not-a-list'}}},
-        {'deploy_hooks': {'domain_hooks': {'d': [None, 42]}}},
+        {'deploy_hooks': {'domain_hooks': {'d': [None]}}},
     ):
-        assert _revalidate(shape) is None
+        assert _revalidate(shape) is not None, (
+            f"malformed shape was tolerated: {shape}")
+
+
+def test_the_restore_validator_is_the_save_config_validator():
+    """Regression guard for the root cause of this whole finding: the restore
+    gate and the normal save path must run the SAME validator, or they drift
+    (they had, and per-domain hooks slipped through). Both must reject a
+    per-domain hook the other rejects."""
+    from unittest.mock import MagicMock
+
+    from modules.core.deployer import DeployManager
+
+    block = {'domain_hooks': {'d': [_BAD]}}
+    dm = DeployManager.__new__(DeployManager)
+    dm.settings_manager = MagicMock()
+    save_ok, save_err = dm.save_config({'enabled': True, **block})
+    restore_err = _revalidate({'deploy_hooks': {'enabled': True, **block}})
+    assert save_ok is False and restore_err is not None

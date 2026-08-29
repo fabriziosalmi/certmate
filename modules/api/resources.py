@@ -2722,7 +2722,7 @@ def create_api_resources(api, models, managers):
                 if not isinstance(raw_include, bool):
                     return {
                         'error': 'include_secrets must be a JSON boolean '
-                                 '(true or false), not a string or number'
+                                 '(true or false)'
                     }, 400
                 include_secrets = raw_include
 

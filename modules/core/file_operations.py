@@ -723,57 +723,37 @@ class FileOperations:
 
     @staticmethod
     def _revalidate_restored_deploy_hooks(settings_data):
-        """Run the current ``DeployManager._validate_hook`` over every
-        hook present in the restored ``settings_data`` — both
-        ``deploy_hooks.global_hooks`` and every list under
-        ``deploy_hooks.domain_hooks``, since both execute on renewal. Returns
-        ``None`` if every hook passes, or a human-readable error string naming
-        the offending hook otherwise. A restore that would install even one
-        rejectable hook is refused (audit finding M1)."""
+        """Validate the restored ``deploy_hooks`` block with the SAME validator
+        the normal save path uses (``DeployManager._validate_deploy_config``),
+        so a restore cannot install a config the UI would reject: global hooks,
+        every per-domain hook, the shape of ``domain_hooks``, and typed targets
+        (audit finding M1). Returns ``None`` when the block is absent or valid,
+        or a human-readable error string naming the offending piece.
+
+        Best-effort by design: if ``DeployManager`` cannot be imported or
+        constructed, this returns ``None`` (does not block the restore) and
+        logs a warning. That is a deliberate trade — a restore should not be
+        held hostage by an import error — so this is a strong check, not a hard
+        guarantee. The value is that it stays in lock-step with save_config;
+        the previous version reimplemented a weaker check inline and drifted
+        (it skipped per-domain hooks entirely)."""
+        deploy_block = settings_data.get('deploy_hooks')
+        if not deploy_block:
+            return None
         try:
             from .deployer import DeployManager
-        except Exception as imp_err:
-            logger.warning(f"Could not import DeployManager for restore validation: {imp_err}")
-            return None
-
-        hooks = []
-        deploy_block = settings_data.get('deploy_hooks') or {}
-        if isinstance(deploy_block, dict):
-            global_hooks = deploy_block.get('global_hooks') or []
-            if isinstance(global_hooks, list):
-                hooks.extend(h for h in global_hooks if isinstance(h, dict))
-            # domain_hooks is {domain: [hook, ...]} and every one of those runs
-            # on the next renewal of that domain, exactly like a global hook
-            # (deployer.py executes both). Validating only global_hooks left the
-            # per-domain hooks unchecked: a tampered archive could smuggle a
-            # command the current validator rejects under domain_hooks and the
-            # restore would install it — the gate covered half the surface it
-            # claimed. Validate both.
-            domain_hooks = deploy_block.get('domain_hooks') or {}
-            if isinstance(domain_hooks, dict):
-                for per_domain in domain_hooks.values():
-                    if isinstance(per_domain, list):
-                        hooks.extend(
-                            h for h in per_domain if isinstance(h, dict))
-        if not hooks:
-            return None
-
-        # Instantiate without a settings_manager argument — _validate_hook
-        # only reads from the hook dict itself, so a bare instance works.
-        try:
             dm = DeployManager.__new__(DeployManager)
-        except Exception as ctor_err:
-            logger.warning(f"Could not construct DeployManager for hook re-validation: {ctor_err}")
+        except Exception as imp_err:
+            logger.warning(
+                f"Could not load DeployManager for restore validation "
+                f"({imp_err}); skipping deploy-hook revalidation")
             return None
 
-        for hook in hooks:
-            try:
-                ok, err = dm._validate_hook(hook)
-            except Exception as ve:
-                return f"hook validator raised {type(ve).__name__}: {ve}"
-            if not ok:
-                return err or "hook failed current validator"
-        return None
+        try:
+            ok, err = dm._validate_deploy_config(deploy_block)
+        except Exception as ve:
+            return f"deploy config validator raised {type(ve).__name__}: {ve}"
+        return None if ok else (err or "deploy config failed current validator")
 
     def _refuse_keyless_restore_over_certificates(self, zipf):
         """Return a reason string when *zipf* is a share-safe archive
