@@ -1,3 +1,102 @@
+## v2.26.2 (A security-hardening patch: seventeen fixes)
+
+A patch release. It adds no features and changes nothing about how you operate
+CertMate in normal use. What several of these fixes do change, deliberately, is
+what happens in the failure and edge cases they target: an instance that cannot
+read its own credentials now refuses to serve instead of coming up open, a
+restore that is interrupted aborts instead of half-completing, a private CA with
+a mismatched key refuses to sign. Failing closed in those moments is the point.
+
+It closes a batch of defects found in an internal adversarial audit, each one
+verified by reproducing it against the shipped code and then again against the
+fix. They cluster in the places a certificate manager cannot afford to be wrong:
+how it authenticates, how it backs up and restores, how the private CA loads its
+key, how issuance and renewal write to disk, and where a webhook is allowed to
+send its credentials.
+
+### Authentication fails closed
+
+The API bearer token is derived from settings at startup. When that read failed,
+on a corrupt or unreadable settings file, the failure was swallowed and the
+instance came up on a default that authenticated no one. The derivation now
+raises instead of falling back, so an instance that cannot establish its own
+credentials refuses to serve rather than serving everyone. The diagnostic that
+warns when a stored token hash has gone stale now validates the token before it
+speaks, and names the source it read, so the warning cannot point at the wrong
+thing.
+
+### Backup and restore stop losing, and stop leaking, the secrets they exist to protect
+
+Restoring from a backup extracted each archived file in place, so an interruption
+partway through could leave a certificate directory with a new certificate beside
+a truncated private key. Restore now stages every member and moves it into place
+atomically, and validates the archive before it touches live state, so a failed
+restore leaves the running instance exactly as it was.
+
+Two masking defects on the same path are fixed together. A backup taken with
+secrets masked is meant to be safe to share; the identity used to put secrets
+back on restore was positional, which could reattach a secret to the wrong entry
+after the list had changed. That identity is now the entry's own type and name,
+ambiguous duplicates are dropped rather than guessed, and the webhook URL, which
+for several providers is itself the credential, is masked and cannot cross-leak
+between entries. The switch that asks for secrets in an export now requires an
+explicit boolean and rejects anything else, so a stray value cannot be read as
+"yes".
+
+### The private CA refuses to run on a key pair that does not match
+
+The internal CA loaded its certificate and its private key without checking that
+they belong together. It now compares the two public keys and refuses a
+mismatched pair rather than signing with a key that does not correspond to the
+certificate it presents. A CA directory holding exactly one of the two files is
+treated as damaged, not absent: initialization no longer regenerates over a
+half-present CA, which would have stranded everything issued under the original.
+The revocation-list lock is keyed on the resolved CA directory, so two managers
+pointed at the same CA serialize their CRL writes instead of racing.
+
+### Issuance and renewal write as a unit, and reconcile state left behind
+
+Publishing the four PEM files to the served directory is staged and promoted as
+one unit, closing a window where a new certificate could sit beside the previous
+private key. A renewal that finds a certificate not yet due now reconciles
+anything downstream that an earlier partial run left behind, a backend copy that
+a failed store never retried and the PKCS#12 bundle, instead of returning early
+and booking the domain as done forever. Metadata read-modify-write on the update
+path is taken under a per-domain lock, and turning auto-renew on or off no longer
+rewrites the whole domain list to change one field.
+
+### Webhooks stop following redirects into places that leak their credentials
+
+A webhook delivery followed HTTP redirects without re-checking them, so a
+redirect could carry the request, with its Authorization header and signature,
+somewhere the SSRF guard would have refused up front. The redirect handler now
+re-applies the guard on every hop and strips credentials when a redirect crosses
+to a different scheme, host or port. Separately, a failed deploy hook is the
+event an operator most needs to hear about, and it could be suppressed by an
+event filter; that class of alert now bypasses the filters.
+
+### DNS account selection resolves the account you configured
+
+On a fresh install the account model is seeded with an empty placeholder marked
+as the provider default. Because a real account added afterwards did not displace
+that placeholder, issuance could resolve the empty entry and hand certbot a blank
+credential. A newly added account now claims the default when the current default
+is unconfigured, and both add-account endpoints honour the "set as default"
+choice the settings page already offered. The check that decides whether an
+account is configured now understands every provider's credential fields rather
+than a fixed list of six, so providers outside that list are recognised.
+
+### Smaller fixes
+
+The notifications page turned a failed load of the certificate list into an empty
+list, which it rendered as "all certificates are healthy", on the one page whose
+job is to warn; a failed load now says so, and clears its own loading state
+instead of leaving the row stuck for assistive tech. The release script refuses
+to run its gates against a local checkout that is behind its own remote, so a
+release cannot be cut from stale code.
+
+---
+
 ## v2.26.1 (Five fixes, and a security record that had stopped being one)
 
 A patch release. Nothing here changes what CertMate does; it changes things it
