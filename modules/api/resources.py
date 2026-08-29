@@ -1718,17 +1718,26 @@ def create_api_resources(api, models, managers):
                     return {'error': f'Certificate not found for domain: {domain}'}, 404
 
                 # Best-effort: drop the domain from settings so the dashboard
-                # stops listing it.
+                # stops listing it. Do it as a read-modify-write under the lock
+                # (settings_manager.update), NOT load_settings()+atomic_update
+                # with a whole 'domains' list: the load here is a request-cache
+                # HIT (the rate-limit before_request primed flask.g), and
+                # delete_certificate above can span a storage-backend network
+                # round-trip, so a concurrent registration that lands in that
+                # window is absent from the cached list. atomic_update replaces
+                # 'domains' wholesale (it is not a deep-merge key), so the stale
+                # list would win and silently drop the freshly-registered
+                # domain from renewals. The mutator filters the fresh on-disk
+                # list instead, removing only this domain.
                 try:
-                    settings = settings_manager.load_settings()
-                    domains = settings.get('domains', []) or []
-                    new_domains = [
-                        d for d in domains
-                        if (isinstance(d, str) and d != domain)
-                        or (isinstance(d, dict) and d.get('domain') != domain)
-                    ]
-                    if len(new_domains) != len(domains):
-                        settings_manager.atomic_update({'domains': new_domains})
+                    def _drop_domain(s):
+                        current = s.get('domains', []) or []
+                        s['domains'] = [
+                            d for d in current
+                            if (isinstance(d, str) and d != domain)
+                            or (isinstance(d, dict) and d.get('domain') != domain)
+                        ]
+                    settings_manager.update(_drop_domain, reason='certificate_delete')
                 except Exception as e:
                     logger.warning(f"Removed cert for {domain} but failed to update settings: {e}")
 
