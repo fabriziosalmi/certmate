@@ -1701,27 +1701,25 @@ class CertificateManager:
                 safe_stderr = sanitize_certbot_stderr(result.stderr)
                 raise RuntimeError(f"Certificate creation failed: {safe_stderr}")
             
-            # Move certificates to standard location
+            # Move certificates to standard location. Publish live/ to the flat
+            # directory through the SAME staged-promote helper the renew path
+            # uses: stage all four to <name>.staging, then promote by rename,
+            # rolling back the staged set on any error. The previous in-place
+            # loop wrote each served file directly, in CERTIFICATE_FILES order
+            # with privkey.pem last and no rollback, so a failure on the fourth
+            # write (ENOSPC, a container killed mid-write) left a new cert.pem
+            # beside the old privkey.pem — a pair that cannot handshake, served
+            # straight off disk. This is the create AND the replace=True reissue
+            # path, i.e. it overwrites a certificate that is currently served.
+            # _publish_flat_files returns {filename: bytes}, the same shape the
+            # rest of this method expects from cert_files.
             live_dir = cert_output_dir / 'live' / domain
             cert_files = {}
-            
+
             if live_dir.exists():
-                for cert_file in CERTIFICATE_FILES:
-                    src_file = live_dir / cert_file
-                    dst_file = cert_output_dir / cert_file
-                    if src_file.exists():
-                        # Single content read: copy bytes once and reuse them
-                        # for cert_files instead of re-opening the destination.
-                        src_real = os.path.realpath(src_file)
-                        data = Path(src_real).read_bytes()
-                        dst_file.write_bytes(data)
-                        # Preserve the source mode bits. shutil.copy did this
-                        # implicitly; without it privkey.pem (often 0600) would
-                        # be created under the umask (e.g. 0644), exposing the
-                        # private key — a security regression.
-                        shutil.copymode(src_real, dst_file)
-                        logger.info(f"Copied {cert_file} to {dst_file}")
-                        cert_files[cert_file] = data
+                cert_files = self._publish_flat_files(live_dir, cert_output_dir)
+                for name in cert_files:
+                    logger.info(f"Published {name} to {cert_output_dir / name}")
             
             # certbot exited 0 — but verify a certificate actually materialised
             # before reporting success. A missing or empty live dir (a suffixed
