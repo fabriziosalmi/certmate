@@ -54,12 +54,15 @@ def test_identity_match_survives_reorder_and_delete():
     assert new[0]['token'] == 'TB'  # identity, not index, picks the right secret
 
 
-def test_index_fallback_when_identity_changed():
+def test_a_renamed_webhook_drops_the_masked_secret_not_guesses_it():
+    """When the identity (type, name) no longer matches any prior entry, the
+    masked secret is DROPPED — never restored by list position. Guessing by
+    position copied a different webhook's credential into the survivor and sent
+    it to the wrong endpoint (#11)."""
     old = [{'name': 'old-name', 'type': 'gotify', 'url': 'https://g', 'token': 'KEEP'}]
-    # User renamed the webhook but left the token masked -> fall back to index.
     new = [{'name': 'new-name', 'type': 'gotify', 'url': 'https://g', 'token': MASK}]
     _restore_masked_list_secrets(old, new)
-    assert new[0]['token'] == 'KEEP'
+    assert 'token' not in new[0] or new[0]['token'] != 'KEEP'
 
 
 def test_non_secret_fields_untouched():
