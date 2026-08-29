@@ -7,6 +7,8 @@ import logging
 import os
 import json
 import tempfile
+import threading
+from contextlib import contextmanager
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
@@ -95,6 +97,47 @@ class PrivateCAGenerator:
         self._ca_key = None
         self._ca_cert = None
         self._ca_loaded = False
+        # One lock per ca_dir for the whole CRL read-modify-write. generate_crl
+        # rebuilds crl.pem from the ENTIRE revoked set, and its callers
+        # (ClientCertificateManager.revoke_certificate, CRLManager.update_crl)
+        # each read that set and then regenerate. The per-identifier lock on a
+        # revocation does NOT serialise this global rebuild: two revocations of
+        # different certs take different identifier locks, so A can read the
+        # revoked set before B commits and A's crl.pem write can land after B's,
+        # dropping B's serial from the signed CRL even though both metadata files
+        # say revoked and both calls returned success. Relying parties then
+        # accept B's leaf until next_update. Hold this lock around
+        # "list revoked -> generate_crl" in every caller so the rebuild is atomic.
+        #
+        # Keyed on the resolved ca_dir in a class-level registry, not stored per
+        # instance: the factory makes one PrivateCAGenerator, but nothing stops a
+        # second instance for the same ca_dir in the same process, and a per-
+        # instance lock would let those two race the same crl.pem. Sharing by
+        # path makes the guarantee actually process-wide for a given CA.
+        self._crl_lock = self._crl_lock_for(self.ca_dir)
+
+    # ca_dir (resolved, as str) -> the shared CRL lock for that CA.
+    _crl_locks: Dict[str, "threading.Lock"] = {}
+    _crl_locks_mutex = threading.Lock()
+
+    @classmethod
+    def _crl_lock_for(cls, ca_dir: Path) -> "threading.Lock":
+        key = str(Path(ca_dir).resolve())
+        with cls._crl_locks_mutex:
+            lock = cls._crl_locks.get(key)
+            if lock is None:
+                lock = threading.Lock()
+                cls._crl_locks[key] = lock
+            return lock
+
+    @contextmanager
+    def crl_lock(self):
+        """Serialise the whole CRL read-modify-write (list revoked ->
+        generate_crl -> write crl.pem). Callers hold it around BOTH the read of
+        the revoked set and the generate_crl call, so a concurrent rebuild
+        cannot interleave and drop a serial."""
+        with self._crl_lock:
+            yield
 
     @staticmethod
     def _atomic_write_bytes(path: Path, content: bytes, mode: int) -> None:
@@ -140,12 +183,39 @@ class PrivateCAGenerator:
             # Create CA directory if it doesn't exist
             self.ca_dir.mkdir(parents=True, exist_ok=True)
 
+            cert_exists = self.ca_cert_path.exists()
+            key_exists = self.ca_key_path.exists()
+
             # Check if CA already exists
-            if self.ca_cert_path.exists() and self.ca_key_path.exists() and not force:
+            if cert_exists and key_exists and not force:
                 logger.info("CA already exists, loading from disk")
                 return self._load_ca()
 
-            # Generate new CA
+            # Exactly one of the two present, and not a deliberate force: this is
+            # a partial/damaged CA — a masked restore that brought back ca.crt
+            # without ca.key (key material is excluded from share-safe backups),
+            # a failed extraction, a file-level backup of one file, operator
+            # error. Falling through to _generate_ca() would overwrite the
+            # surviving half with a brand-new CA and NO backup (the backup is
+            # gated on force below), silently destroying either the ca.crt every
+            # deployed client already trusts, or the ONLY copy of the signing key
+            # (after which no CRL can ever be signed for the old CA again — every
+            # outstanding client cert becomes permanently unrevocable). Refuse,
+            # and tell the operator to restore the missing half.
+            if (cert_exists or key_exists) and not force:
+                present = 'ca.crt' if cert_exists else 'ca.key'
+                missing = 'ca.key' if cert_exists else 'ca.crt'
+                logger.error(
+                    "Partial CA on disk: %s is present but %s is missing. "
+                    "Refusing to regenerate — that would destroy the surviving "
+                    "%s with no backup. Restore %s from your backup and "
+                    "restart. To deliberately discard this CA and generate a "
+                    "new one, start once with force regeneration (which backs "
+                    "up the existing files first).",
+                    present, missing, present, missing)
+                return False
+
+            # Generate new CA (first run, or a forced regeneration).
             if force:
                 logger.warning("Force regenerating CA - backing up existing CA")
                 self._backup_existing_ca()
@@ -296,6 +366,33 @@ class PrivateCAGenerator:
                     backend=default_backend()
                 )
 
+            # The key and the certificate are loaded from two separate files,
+            # and nothing guarantees they are the same generation. A share-safe
+            # backup carries ca.crt but not ca.key (key material is excluded),
+            # so restoring one over a node whose ca.key was regenerated leaves
+            # a matched-by-filename, mismatched-by-content pair. Loading it and
+            # signing anyway is silent corruption: leaf certs then fail
+            # `verify_directly_issued_by(published_ca_cert)`, and a CRL signed
+            # with the wrong key is discarded as unauthentic — revocation fails
+            # open. Refuse the pair unless the public keys actually match.
+            cert_pub = self._ca_cert.public_key().public_bytes(
+                serialization.Encoding.PEM,
+                serialization.PublicFormat.SubjectPublicKeyInfo)
+            key_pub = self._ca_key.public_key().public_bytes(
+                serialization.Encoding.PEM,
+                serialization.PublicFormat.SubjectPublicKeyInfo)
+            if cert_pub != key_pub:
+                logger.error(
+                    "CA private key does not match CA certificate — the pair is "
+                    "from different generations (e.g. a share-safe backup "
+                    "restored ca.crt without ca.key). Refusing to load: signing "
+                    "with a mismatched key silently produces certificates and "
+                    "CRLs that no relying party will accept.")
+                self._ca_loaded = False
+                self._ca_key = None
+                self._ca_cert = None
+                return False
+
             # Check CA certificate expiry
             if datetime.now(timezone.utc) > self._ca_cert.not_valid_after_utc:
                 logger.error("CA certificate has expired — cannot sign new certificates")
@@ -366,7 +463,12 @@ class PrivateCAGenerator:
             True if successful
         """
         try:
-            if not self.ca_cert_path.exists():
+            # Nothing to back up only when BOTH files are absent. Guarding on
+            # ca.crt alone skipped the backup for a key-only partial CA, so a
+            # force=True regeneration from that state would overwrite the only
+            # copy of ca.key with no backup. The per-file copies below already
+            # handle whichever files are present.
+            if not self.ca_cert_path.exists() and not self.ca_key_path.exists():
                 return True
 
             # Create backup directory

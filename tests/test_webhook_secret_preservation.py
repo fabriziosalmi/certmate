@@ -54,12 +54,15 @@ def test_identity_match_survives_reorder_and_delete():
     assert new[0]['token'] == 'TB'  # identity, not index, picks the right secret
 
 
-def test_index_fallback_when_identity_changed():
+def test_a_renamed_webhook_drops_the_masked_secret_not_guesses_it():
+    """When the identity (type, name) no longer matches any prior entry, the
+    masked secret is DROPPED — never restored by list position. Guessing by
+    position copied a different webhook's credential into the survivor and sent
+    it to the wrong endpoint (#11)."""
     old = [{'name': 'old-name', 'type': 'gotify', 'url': 'https://g', 'token': 'KEEP'}]
-    # User renamed the webhook but left the token masked -> fall back to index.
     new = [{'name': 'new-name', 'type': 'gotify', 'url': 'https://g', 'token': MASK}]
     _restore_masked_list_secrets(old, new)
-    assert new[0]['token'] == 'KEEP'
+    assert 'token' not in new[0] or new[0]['token'] != 'KEEP'
 
 
 def test_non_secret_fields_untouched():
@@ -70,16 +73,19 @@ def test_non_secret_fields_untouched():
     assert new[0]['token'] == 'T'          # secret restored
 
 
-def test_duplicate_identity_webhooks_keep_distinct_secrets():
-    # Two webhooks sharing (type, url, name): each masked secret must restore
-    # from its OWN prior (consume-once), not both collapse onto the first.
+def test_duplicate_identity_webhooks_drop_masked_secrets():
+    # Two webhooks sharing (type, name) are AMBIGUOUS: with no stable id, list
+    # order is all that is left to match on, and a reorder/deletion would
+    # restore the wrong one's secret — the cross-endpoint leak (type,name) was
+    # chosen to avoid. So masked secrets are dropped, not guessed by position.
     old = [
-        {'name': 'dup', 'type': 'generic', 'url': 'https://x', 'secret': 'S1'},
-        {'name': 'dup', 'type': 'generic', 'url': 'https://x', 'secret': 'S2'},
+        {'name': 'dup', 'type': 'generic', 'url': 'https://a', 'secret': 'S1'},
+        {'name': 'dup', 'type': 'generic', 'url': 'https://b', 'secret': 'S2'},
     ]
     new = [
-        {'name': 'dup', 'type': 'generic', 'url': 'https://x', 'secret': MASK},
-        {'name': 'dup', 'type': 'generic', 'url': 'https://x', 'secret': MASK},
+        {'name': 'dup', 'type': 'generic', 'url': MASK, 'secret': MASK},
+        {'name': 'dup', 'type': 'generic', 'url': MASK, 'secret': MASK},
     ]
     _restore_masked_list_secrets(old, new)
-    assert [w['secret'] for w in new] == ['S1', 'S2']
+    assert all('secret' not in w or w['secret'] != 'S1' for w in new)
+    assert all('secret' not in w or w['secret'] != 'S2' for w in new)

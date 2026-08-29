@@ -492,11 +492,45 @@ class DeployManager:
         if not isinstance(config.get('enabled'), bool):
             config['enabled'] = False
 
+        ok, err = self._validate_deploy_config(config)
+        if not ok:
+            return False, err
+
+        # Atomic via settings_manager.update so two concurrent admin saves
+        # (e.g. one editing deploy hooks, another editing DNS providers)
+        # cannot lose each other's changes.
+        def _mutate(settings):
+            settings['deploy_hooks'] = config
+        self.settings_manager.update(_mutate, "deploy_hooks_save")
+        return True, None
+
+    def _validate_deploy_config(self, config):
+        """Pure validation of a deploy_hooks config block — no side effects.
+
+        The single source of truth for "is this deploy_hooks config safe to
+        install": save_config calls it before persisting, and the restore path
+        (_revalidate_restored_deploy_hooks in file_operations) calls it before
+        accepting an archive. Keeping one validator is the point — the restore
+        gate used to check only global_hooks and skip per-domain hooks, so a
+        command the normal save path rejects could arrive through a restore.
+
+        Returns (ok, error|None). Validates global_hooks, the shape of
+        domain_hooks (an object of lists — save_config used to call .items()
+        on it unguarded and would crash on a non-object), every per-domain
+        hook, and typed targets.
+        """
+        if not isinstance(config, dict):
+            return False, "Configuration must be an object"
+
         for hook in config.get('global_hooks', []):
             ok, err = self._validate_hook(hook)
             if not ok:
                 return False, f"Global hook rejected: {err}"
-        for domain, hooks in config.get('domain_hooks', {}).items():
+
+        domain_hooks = config.get('domain_hooks', {})
+        if not isinstance(domain_hooks, dict):
+            return False, "domain_hooks must be an object of domain -> [hooks]"
+        for domain, hooks in domain_hooks.items():
             if not isinstance(hooks, list):
                 return False, f"Hooks for domain '{domain}' must be a list"
             for hook in hooks:
@@ -512,12 +546,6 @@ class DeployManager:
                 if not ok:
                     return False, f"Deploy target rejected: {err}"
 
-        # Atomic via settings_manager.update so two concurrent admin saves
-        # (e.g. one editing deploy hooks, another editing DNS providers)
-        # cannot lose each other's changes.
-        def _mutate(settings):
-            settings['deploy_hooks'] = config
-        self.settings_manager.update(_mutate, "deploy_hooks_save")
         return True, None
 
     @staticmethod

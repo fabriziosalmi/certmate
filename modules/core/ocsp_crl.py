@@ -203,8 +203,14 @@ class CRLManager:
             CRL as PEM bytes or None if error
         """
         try:
-            revoked_records = self.get_revoked_records()
-            crl_pem = self.private_ca.generate_crl(revoked_records)
+            # Same global CRL lock revoke_certificate holds: read the revoked
+            # set and regenerate crl.pem as one unit, so this rebuild (reachable
+            # from the unauthenticated CRL endpoint when the on-disk CRL is
+            # missing or stale) cannot interleave with a revocation's rebuild and
+            # drop a serial.
+            with self.private_ca.crl_lock():
+                revoked_records = self.get_revoked_records()
+                crl_pem = self.private_ca.generate_crl(revoked_records)
 
             if crl_pem:
                 logger.info(f"Updated CRL with {len(revoked_records)} revoked certificates")

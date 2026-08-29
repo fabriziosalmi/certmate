@@ -178,13 +178,26 @@
             var content = document.getElementById('notifContent');
             content.setAttribute('aria-busy', 'true');
             fetch('/api/certificates', { credentials: 'same-origin' })
-                .then(function(r) { return r.ok ? r.json() : []; })
+                // An HTTP error (401/403/500) must NOT become an empty list —
+                // render() would paint "All certificates are healthy." over a
+                // failed load, on the one page whose job is to warn about
+                // expiring certs. Reject so the .catch shows the load failed.
+                // Same pattern as crypto_report.html / inventory.js.
+                .then(function(r) { return r.ok ? r.json() : Promise.reject(r.status); })
                 .then(function(certs) {
                     _certs = Array.isArray(certs) ? certs : [];
                     render();
                 })
                 .catch(function() {
-                    document.getElementById('notifContent').innerHTML =
+                    // Reset the same busy/summary state render() would have —
+                    // otherwise the failure path leaves aria-busy="true" and
+                    // the summary strip stuck on "Loading…", stale to both
+                    // sighted users and assistive tech.
+                    var node = document.getElementById('notifContent');
+                    node.setAttribute('aria-busy', 'false');
+                    document.getElementById('notifSummary').innerHTML =
+                        '<i class="fas fa-triangle-exclamation text-gray-400 mr-2"></i>Could not load certificates.';
+                    node.innerHTML =
                         '<div class="px-6 py-12 flex flex-col items-center gap-3 text-muted"><i class="fas fa-triangle-exclamation text-2xl text-gray-300 dark:text-gray-600" aria-hidden="true"></i><p>Could not load certificates.</p></div>';
                 });
         };

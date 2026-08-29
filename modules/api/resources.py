@@ -25,6 +25,7 @@ from ..core.constants import CERTIFICATE_FILES, iter_cert_domain_dirs
 from ..core.auth import ROLE_HIERARCHY
 from ..core.utils import utc_now_iso, classify_renewal_error
 from ..core.certificates import DomainOperationInProgress
+from ..core.file_operations import RestoreIncompleteError
 from ..core.cert_service import CertificateService, DomainOutOfScope
 from ..core.audit_context import audit_context_from_request
 from ..core.inventory_view import build_inventory_view, record_in_scope
@@ -1593,72 +1594,72 @@ def create_api_resources(api, models, managers):
             try:
                 import json as _json
 
-                # 1. Update on-disk metadata.json
-                metadata_file = cert_dir / 'metadata.json'
-                metadata = {}
-                if metadata_file.exists():
-                    try:
-                        with open(metadata_file, 'r') as f:
-                            metadata = _json.load(f)
-                    except Exception as e:
-                        logger.warning("Failed to load metadata.json for domain %s: %s", domain, e)
+                # Serialise this metadata read-modify-write against an in-flight
+                # renewal (which carries a pre-renewal metadata snapshot across
+                # its whole certbot run and would otherwise clobber this write).
+                with certificate_manager.domain_lock(domain):
+                    # 1. Update on-disk metadata.json. Read through the manager
+                    # (which builds the path from the already-validated domain
+                    # and quarantines corrupt JSON instead of silently returning
+                    # {}) rather than opening cert_dir/'metadata.json' directly.
+                    metadata = certificate_manager._load_metadata(domain)
 
-                old_provider = metadata.get('dns_provider')
-                if new_dns_provider:
-                    metadata['dns_provider'] = new_dns_provider
-                if new_account_id:
-                    metadata['account_id'] = new_account_id
-                if new_alias_dns_provider:
-                    metadata['alias_dns_provider'] = new_alias_dns_provider
+                    old_provider = metadata.get('dns_provider')
+                    if new_dns_provider:
+                        metadata['dns_provider'] = new_dns_provider
+                    if new_account_id:
+                        metadata['account_id'] = new_account_id
+                    if new_alias_dns_provider:
+                        metadata['alias_dns_provider'] = new_alias_dns_provider
 
-                # --- deployment probe config ---
-                # Only touch probe config when the caller actually sends the
-                # key: an ABSENT key leaves existing config intact, an explicit
-                # null deletes it. Keying off `is not None` instead would let a
-                # DNS-only PATCH silently wipe a cert's probe config.
-                if 'deployment_port' in data:
-                    if new_deploy_port is not None:
-                        try:
-                            port = int(new_deploy_port)
-                            if port < 1 or port > 65535:
-                                return {'error': 'deployment_port must be 1-65535'}, 400
-                            metadata['deployment_port'] = port
-                        except (TypeError, ValueError):
-                            return {'error': 'deployment_port must be an integer'}, 400
-                    else:
-                        metadata.pop('deployment_port', None)
+                    # --- deployment probe config ---
+                    # Only touch probe config when the caller actually sends the
+                    # key: an ABSENT key leaves existing config intact, an explicit
+                    # null deletes it. Keying off `is not None` instead would let a
+                    # DNS-only PATCH silently wipe a cert's probe config.
+                    if 'deployment_port' in data:
+                        if new_deploy_port is not None:
+                            try:
+                                port = int(new_deploy_port)
+                                if port < 1 or port > 65535:
+                                    return {'error': 'deployment_port must be 1-65535'}, 400
+                                metadata['deployment_port'] = port
+                            except (TypeError, ValueError):
+                                return {'error': 'deployment_port must be an integer'}, 400
+                        else:
+                            metadata.pop('deployment_port', None)
 
-                if 'deployment_protocol' in data:
-                    if new_deploy_protocol is not None:
-                        if new_deploy_protocol not in _PROBE_PROTOCOLS:
-                            return {
-                                'error': f"deployment_protocol must be one of {_PROBE_PROTOCOLS!r}"
-                            }, 400
-                        metadata['deployment_protocol'] = new_deploy_protocol
-                    else:
-                        metadata.pop('deployment_protocol', None)
+                    if 'deployment_protocol' in data:
+                        if new_deploy_protocol is not None:
+                            if new_deploy_protocol not in _PROBE_PROTOCOLS:
+                                return {
+                                    'error': f"deployment_protocol must be one of {_PROBE_PROTOCOLS!r}"
+                                }, 400
+                            metadata['deployment_protocol'] = new_deploy_protocol
+                        else:
+                            metadata.pop('deployment_protocol', None)
 
-                if 'deployment_host' in data:
-                    if new_deploy_host is not None:
-                        if not isinstance(new_deploy_host, str):
-                            return {'error': 'deployment_host must be a string'}, 400
-                        host = new_deploy_host.strip()
-                        # A probe target is a bare hostname: no scheme, no path,
-                        # no whitespace, and no wildcard label (you deploy a
-                        # cert on a concrete name, not on "*.").
-                        if (not host or len(host) > 253 or host.startswith('*.')
-                                or any(c in host for c in ' \t/\\')
-                                or '://' in host):
-                            return {
-                                'error': 'deployment_host must be a bare hostname '
-                                         '(no scheme, path, whitespace, or wildcard)'
-                            }, 400
-                        metadata['deployment_host'] = host
-                    else:
-                        metadata.pop('deployment_host', None)
+                    if 'deployment_host' in data:
+                        if new_deploy_host is not None:
+                            if not isinstance(new_deploy_host, str):
+                                return {'error': 'deployment_host must be a string'}, 400
+                            host = new_deploy_host.strip()
+                            # A probe target is a bare hostname: no scheme, no path,
+                            # no whitespace, and no wildcard label (you deploy a
+                            # cert on a concrete name, not on "*.").
+                            if (not host or len(host) > 253 or host.startswith('*.')
+                                    or any(c in host for c in ' \t/\\')
+                                    or '://' in host):
+                                return {
+                                    'error': 'deployment_host must be a bare hostname '
+                                             '(no scheme, path, whitespace, or wildcard)'
+                                }, 400
+                            metadata['deployment_host'] = host
+                        else:
+                            metadata.pop('deployment_host', None)
 
-                if not certificate_manager._save_metadata(domain, metadata):
-                    return {'error': f'Failed to update metadata for domain: {domain}'}, 500
+                    if not certificate_manager._save_metadata(domain, metadata):
+                        return {'error': f'Failed to update metadata for domain: {domain}'}, 500
                 logger.info(
                     f"Updated DNS provider for {domain}: "
                     f"{old_provider} → {new_dns_provider or old_provider}"
@@ -1689,6 +1690,14 @@ def create_api_resources(api, models, managers):
                     response['deployment_host'] = metadata.get('deployment_host')
                 return response, 200
 
+            except DomainOperationInProgress:
+                # A create/renew holds the per-domain lock; the config change
+                # cannot safely interleave with it. Same 409 the create/renew
+                # routes return, so the client can retry once issuance settles.
+                return {
+                    'error': f'An operation is in progress for {domain}; '
+                             f'retry once it completes'
+                }, 409
             except Exception as e:
                 logger.error(f"Failed to update certificate config for {domain}: {e}")
                 return {'error': 'Failed to update certificate config'}, 500
@@ -1717,17 +1726,38 @@ def create_api_resources(api, models, managers):
                     return {'error': f'Certificate not found for domain: {domain}'}, 404
 
                 # Best-effort: drop the domain from settings so the dashboard
-                # stops listing it.
-                try:
-                    settings = settings_manager.load_settings()
-                    domains = settings.get('domains', []) or []
-                    new_domains = [
-                        d for d in domains
+                # stops listing it. Do it as a read-modify-write under the lock
+                # (settings_manager.update), NOT load_settings()+atomic_update
+                # with a whole 'domains' list: the load here is a request-cache
+                # HIT (the rate-limit before_request primed flask.g), and
+                # delete_certificate above can span a storage-backend network
+                # round-trip, so a concurrent registration that lands in that
+                # window is absent from the cached list. atomic_update replaces
+                # 'domains' wholesale (it is not a deep-merge key), so the stale
+                # list would win and silently drop the freshly-registered
+                # domain from renewals. The mutator filters the fresh on-disk
+                # list instead, removing only this domain.
+                class _AlreadyAbsent(Exception):
+                    pass
+
+                def _drop_domain(s):
+                    current = s.get('domains', []) or []
+                    kept = [
+                        d for d in current
                         if (isinstance(d, str) and d != domain)
                         or (isinstance(d, dict) and d.get('domain') != domain)
                     ]
-                    if len(new_domains) != len(domains):
-                        settings_manager.atomic_update({'domains': new_domains})
+                    # Nothing to remove — do not persist (and do not trigger an
+                    # automatic backup) for a no-op, matching the previous
+                    # `if len(new_domains) != len(domains)` guard.
+                    if len(kept) == len(current):
+                        raise _AlreadyAbsent
+                    s['domains'] = kept
+
+                try:
+                    settings_manager.update(_drop_domain, reason='certificate_delete')
+                except _AlreadyAbsent:
+                    pass
                 except Exception as e:
                     logger.warning(f"Removed cert for {domain} but failed to update settings: {e}")
 
@@ -2709,7 +2739,21 @@ def create_api_resources(api, models, managers):
                 data = api.payload
                 backup_type = data.get('type', 'unified')  # Default to unified
                 reason = data.get('reason', 'manual')
-                include_secrets = bool(data.get('include_secrets', False))
+                # `include_secrets` decides between a share-safe masked archive
+                # and a plaintext dump of every credential and private key, so
+                # it MUST be a real JSON boolean. bool() coercion was the trap:
+                # bool("false") is True, so a client sending the value as a
+                # string — trivial in a shell or an untyped template —
+                # asked for masked and got the plaintext dump. Accept only a
+                # JSON boolean; anything else is refused rather than guessed,
+                # and the safe default (masked) applies only when it is absent.
+                raw_include = data.get('include_secrets', False)
+                if not isinstance(raw_include, bool):
+                    return {
+                        'error': 'include_secrets must be a JSON boolean '
+                                 '(true or false)'
+                    }, 400
+                include_secrets = raw_include
 
                 created_backups = []
 
@@ -2785,11 +2829,17 @@ def create_api_resources(api, models, managers):
                 name = data.get('name') or data.get('account_id')
                 req_provider = provider or data.get('provider')
                 config = data.get('config', {})
+                set_as_default = data.get('set_as_default', False)
 
                 if not name or not req_provider:
                     return {'error': 'Account name and provider required'}, 400
 
                 if dns_manager.add_account(name, req_provider, config):
+                    # Honour the operator's explicit "set as default" choice on
+                    # create, mirroring the update path — the flag the UI sends
+                    # was previously dropped here.
+                    if set_as_default:
+                        dns_manager.set_default_account(req_provider, name)
                     if audit_logger:
                         user = getattr(request, 'current_user', None) or {}
                         audit_logger.log_operation(
@@ -3045,6 +3095,22 @@ def create_api_resources(api, models, managers):
                     # with the restore entry below.
                     pre_restore_backup = file_ops.create_unified_backup(
                         current_settings, "pre_restore", include_secrets=True)
+                    # create_unified_backup returns None on failure (e.g. the
+                    # backups directory is not writable). The operator asked for
+                    # a pre-restore backup precisely so the restore is
+                    # reversible; if we cannot make one, proceeding would
+                    # overwrite settings and certificates with no way back. Fail
+                    # closed instead of silently doing the irreversible thing.
+                    if not pre_restore_backup:
+                        return {
+                            'error': 'Refusing to restore: the pre-restore '
+                                     'backup could not be created, so the '
+                                     'restore would not be reversible. Check '
+                                     'that the backup directory is writable, or '
+                                     'retry with '
+                                     'create_backup_before_restore=false to '
+                                     'proceed without a safety net.'
+                        }, 500
                     logger.info(f"Created pre-restore backup: {pre_restore_backup}")
 
                 # Restore from unified backup
@@ -3091,6 +3157,20 @@ def create_api_resources(api, models, managers):
 
             except FileNotFoundError:
                 return {'error': 'Backup file not found'}, 404
+            except RestoreIncompleteError as e:
+                # Some members restored, at least one did not. The failed ones
+                # kept their pre-existing files (atomic extract), so nothing was
+                # truncated — but the instance is now a mix of old and new and
+                # must not be reported as a clean restore. Name the members so
+                # the operator knows what to check before rolling back.
+                logger.error(f"Restore incomplete: {e}")
+                return {
+                    'error': 'Restore incomplete — some files could not be '
+                             'restored and were left unchanged; the instance '
+                             'is in a mixed state. Roll back with the '
+                             'pre-restore backup.',
+                    'failed': e.failed,
+                }, 500
             except ValueError as e:
                 logger.warning(f"Backup restore validation error: {e}")
                 return {'error': 'Invalid backup data'}, 400

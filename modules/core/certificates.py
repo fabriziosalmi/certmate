@@ -15,6 +15,7 @@ import tempfile
 import time
 import logging
 import shutil
+from contextlib import contextmanager
 import threading
 import urllib.error
 import urllib.parse
@@ -443,6 +444,27 @@ class CertificateManager:
             if domain not in self._domain_locks:
                 self._domain_locks[domain] = threading.Lock()
             return self._domain_locks[domain]
+
+    @contextmanager
+    def domain_lock(self, domain: str):
+        """Hold the per-domain lock for the duration of the block.
+
+        The same lock create_certificate / renew_certificate take, so any
+        caller that mutates a domain's on-disk state (metadata.json, the flat
+        PEMs) serialises against an in-flight issuance instead of racing it —
+        e.g. the PATCH config handler, whose metadata read-modify-write was
+        otherwise clobbered by a renewal that carries a pre-renewal metadata
+        snapshot across its whole certbot run. Raises DomainOperationInProgress
+        if the lock cannot be taken within the configured timeout, which the
+        API turns into a 409 exactly as create/renew do.
+        """
+        lock = self._get_domain_lock(domain)
+        if not lock.acquire(timeout=self._domain_lock_timeout()):
+            raise DomainOperationInProgress(domain)
+        try:
+            yield
+        finally:
+            lock.release()
 
     def _metadata_path(self, domain: str) -> Path:
         return self.cert_dir / domain / 'metadata.json'
@@ -1270,6 +1292,23 @@ class CertificateManager:
                 omitting the flags makes certbot keep the existing key
                 type.
         """
+        # Path-safety gate at the sink. `domain` becomes cert_dir/<domain>/…,
+        # the certbot --config-dir/--cert-name, and the target of
+        # _seed_acme_account — and it keys the per-domain lock just below. Every
+        # caller is supposed to hand a bare hostname; a URL-form value whose
+        # netloc passed validate_domain but was kept raw ("https://x/../y")
+        # would escape cert_dir here and drop the ACME account private key under
+        # the public /.well-known/acme-challenge webroot. The create sources
+        # normalise to the bare hostname now, but this is the last line that
+        # every path — including the batch route, which does not go through
+        # prepare_create — must cross, so a future caller cannot reintroduce the
+        # escape. Reject rather than normalise: normalisation is the source's
+        # job; reaching the sink with path characters means something upstream
+        # failed and the request must not proceed.
+        if (not domain or '/' in domain or '\\' in domain
+                or '..' in domain or '\x00' in domain):
+            raise ValueError('Invalid domain name')
+
         # Acquire per-domain lock to prevent concurrent create/renew operations
         domain_lock = self._get_domain_lock(domain)
         if not domain_lock.acquire(timeout=self._domain_lock_timeout()):
@@ -1419,14 +1458,23 @@ class CertificateManager:
             # Build list of all domains (primary + SANs)
             all_domains = [domain]
             if san_domains:
-                # Filter and validate SAN domains
+                # Filter and validate SAN domains. validate_domain returns the
+                # normalised name (URL netloc extracted, lowercased) as its
+                # second value; append THAT, not the raw entry, so a SAN never
+                # reaches certbot's -d as a URL form or a case variant. De-dup
+                # is against the normalised value and the already-normalised
+                # primary, so "Example.com" as a SAN of "example.com" collapses
+                # instead of producing a duplicate -d.
                 for san in san_domains:
                     san = san.strip()
-                    if san and san != domain and san not in all_domains:
-                        is_valid, validation_msg = validate_domain(san)
-                        if not is_valid:
-                            raise ValueError(f"Invalid SAN domain '{san}': {validation_msg}")
-                        all_domains.append(san)
+                    if not san:
+                        continue
+                    is_valid, san_normalized = validate_domain(san)
+                    if not is_valid:
+                        raise ValueError(
+                            f"Invalid SAN domain '{san}': {san_normalized}")
+                    if san_normalized != domain and san_normalized not in all_domains:
+                        all_domains.append(san_normalized)
                 logger.info(f"Creating SAN certificate with domains: {', '.join(all_domains)}")
 
             # HTTP-01 does not support wildcard domains
@@ -1675,27 +1723,30 @@ class CertificateManager:
                 safe_stderr = sanitize_certbot_stderr(result.stderr)
                 raise RuntimeError(f"Certificate creation failed: {safe_stderr}")
             
-            # Move certificates to standard location
+            # Move certificates to standard location. Publish live/ to the flat
+            # directory through the SAME staged-promote helper the renew path
+            # uses: stage all four to <name>.staging, then promote by rename.
+            # A failure while STAGING rolls the staged set back, so the served
+            # copy is left exactly as it was. (The promote loop is four renames
+            # and is not itself transactional — a crash between renames leaves a
+            # mixed generation — but the next renewal check reconciles that,
+            # which the old in-place loop's state was permanent past.) The
+            # previous loop wrote each served file directly, privkey.pem last,
+            # with no staging at all, so a failure on the fourth write left a new
+            # cert.pem beside the old privkey.pem — a pair that cannot handshake,
+            # served straight off disk. This is the create AND the replace=True
+            # reissue path. _publish_flat_files returns {filename: bytes}, the
+            # same shape the rest of this method expects from cert_files.
             live_dir = cert_output_dir / 'live' / domain
             cert_files = {}
-            
+
             if live_dir.exists():
-                for cert_file in CERTIFICATE_FILES:
-                    src_file = live_dir / cert_file
-                    dst_file = cert_output_dir / cert_file
-                    if src_file.exists():
-                        # Single content read: copy bytes once and reuse them
-                        # for cert_files instead of re-opening the destination.
-                        src_real = os.path.realpath(src_file)
-                        data = Path(src_real).read_bytes()
-                        dst_file.write_bytes(data)
-                        # Preserve the source mode bits. shutil.copy did this
-                        # implicitly; without it privkey.pem (often 0600) would
-                        # be created under the umask (e.g. 0644), exposing the
-                        # private key — a security regression.
-                        shutil.copymode(src_real, dst_file)
-                        logger.info(f"Copied {cert_file} to {dst_file}")
-                        cert_files[cert_file] = data
+                cert_files = self._publish_flat_files(live_dir, cert_output_dir)
+                # No domain in the message: the surrounding logs already carry
+                # it, and interpolating a user-influenced value tripped CodeQL's
+                # log-injection rule for no added signal here.
+                logger.info(
+                    "Published %d flat certificate files", len(cert_files))
             
             # certbot exited 0 — but verify a certificate actually materialised
             # before reporting success. A missing or empty live dir (a suffixed
@@ -2089,14 +2140,51 @@ class CertificateManager:
                                 f"{domain} is serving files that do not match "
                                 f"its certificate and they could not be "
                                 f"repaired: {republish_error}") from republish_error
+                    # Reconcile the external copy too. _store_in_backend is
+                    # otherwise reached only from create and the renewed=True
+                    # branch, so a store that failed once (an expired Vault
+                    # token, a transient 5xx) was never retried: the local cert
+                    # was fresh but the backend stayed on the OLD generation, and
+                    # because get_certificate_info reads the backend copy when a
+                    # storage backend is configured, needs_renewal stayed True
+                    # forever, every run landed here, and the store was never
+                    # tried again. And when the reconcile above republished
+                    # the flat PEMs, the new generation reached /download and the
+                    # deploy hooks but not the backend or the PFX. Push here
+                    # when the external copy is behind — a prior store failed
+                    # (storage_warning persisted) or we just republished — so
+                    # downstream is not stranded on the old certificate.
+                    reconcile_warning = None
+                    if self.storage_manager and (stale or metadata.get('storage_warning')):
+                        cert_files = {
+                            name: (domain_dir / name).read_bytes()
+                            for name in CERTIFICATE_FILES
+                            if (domain_dir / name).exists()
+                        }
+                        reconcile_warning = self._store_in_backend(
+                            domain, cert_files, metadata)
+                        try:
+                            self._apply_storage_warning(metadata, reconcile_warning)
+                            self._save_metadata(domain, metadata)
+                        except Exception as e:
+                            logger.warning(
+                                "Failed to persist storage state for %s: %s",
+                                domain, e)
+                        if stale:
+                            # The served pair rotated a generation; rebuild the
+                            # PFX so Windows automation polling cert.pfx sees it.
+                            self._write_pfx(domain)
                     self._invalidate_certificate_info_cache(domain)
-                    return {
+                    result = {
                         'success': True,
                         'renewed': False,
                         'domain': domain,
                         'repaired': stale or None,
                         'message': 'Certificate not yet due for renewal',
                     }
+                    if reconcile_warning:
+                        result['storage_warning'] = reconcile_warning
+                    return result
 
                 # Copy renewed certificates from the correct live directory
                 src_dir = domain_dir / 'live' / domain
@@ -2409,24 +2497,36 @@ class CertificateManager:
         otherwise. Legacy string-form entries are upgraded to dict form so the
         flag can be persisted.
         """
-        settings = self.settings_manager.load_settings()
-        # Migrate so every entry is a dict and the flag has somewhere to live.
-        settings = self.settings_manager.migrate_domains_format(settings)
+        # Flip the flag as a read-modify-write on the FRESH on-disk list, under
+        # the lock. The previous shape — load_settings() (a request-cache hit)
+        # then atomic_update({'domains': whole_list}) — replaced 'domains'
+        # wholesale from a possibly-stale snapshot: any concurrent registration
+        # or deletion that landed after the cache was primed was silently
+        # dropped. atomic_update guards the WRITE but not the staleness of the
+        # list it is handed. The mutator sees the current list and touches only
+        # this domain's entry, and raises _DomainNotInSettings when the domain
+        # is absent so nothing is persisted (preserving the old "return False,
+        # no write" behaviour rather than saving the migration for a no-op).
+        class _DomainNotInSettings(Exception):
+            pass
 
-        new_domains = []
-        found = False
-        for entry in settings.get('domains', []):
-            if isinstance(entry, dict) and entry.get('domain') == domain:
-                entry = {**entry, 'auto_renew': bool(enabled)}
-                found = True
-            new_domains.append(entry)
+        def _flip(s):
+            self.settings_manager.migrate_domains_format(s)
+            new_domains = []
+            found = False
+            for entry in s.get('domains', []):
+                if isinstance(entry, dict) and entry.get('domain') == domain:
+                    entry = {**entry, 'auto_renew': bool(enabled)}
+                    found = True
+                new_domains.append(entry)
+            if not found:
+                raise _DomainNotInSettings
+            s['domains'] = new_domains
 
-        if not found:
+        try:
+            self.settings_manager.update(_flip, reason='set_auto_renew')
+        except _DomainNotInSettings:
             return False
-
-        # atomic_update merges under a lock, avoiding a load/mutate/save race
-        # with concurrent settings writes.
-        self.settings_manager.atomic_update({'domains': new_domains})
         logger.info(f"auto_renew set to {bool(enabled)} for {domain}")
         return True
 

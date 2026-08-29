@@ -227,7 +227,9 @@ def test_auth_fields_and_every_custom_header_are_masked_on_read():
     assert wh['auth_token'] == MASK and wh['auth_password'] == MASK
     assert wh['auth_username'] == 'u'
     assert set(wh['headers'].values()) == {MASK}
-    assert wh['url'] == 'https://h'
+    # A webhook url is the incoming-webhook credential (Slack/Discord/
+    # Gotify), so it is masked on read too (#16).
+    assert wh['url'] == MASK
 
 
 def test_masked_header_values_are_restored_on_round_trip():

@@ -104,15 +104,20 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
                     continue
                 # Structural validation BEFORE scope check so a poisoned
                 # entry (e.g. "../escape") never even reaches the cert
-                # manager or settings.json. Same gate the single-cert path
-                # now applies.
-                d_valid, d_msg = validate_domain(domain)
+                # manager or settings.json. This route calls create_certificate
+                # directly — it does NOT go through prepare_create — so it must
+                # normalise the domain itself: validate_domain returns the bare
+                # hostname (netloc extracted, lowercased) as its second value,
+                # and we use it from here on rather than the raw entry, which
+                # could be a URL form whose path component escapes cert_dir.
+                d_valid, d_normalized = validate_domain(domain)
                 if not d_valid:
                     results.append({
                         'domain': domain, 'success': False,
-                        'message': f'Invalid domain: {d_msg}',
+                        'message': f'Invalid domain: {d_normalized}',
                     })
                     continue
+                domain = d_normalized
                 if not auth_manager.domain_matches_scope(domain, scope):
                     if audit_logger:
                         audit_logger.log_authz_denied(

@@ -18,7 +18,9 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from pathlib import Path
 from typing import Optional, Dict, Any, List
-from urllib.request import Request, urlopen
+from urllib.request import (
+    Request, build_opener, HTTPRedirectHandler, HTTPSHandler, HTTPHandler,
+)
 from urllib.error import URLError
 from urllib.parse import urlparse
 
@@ -56,6 +58,81 @@ def _webhook_url_is_internal(url: str) -> bool:
     return False
 
 
+class _GuardedRedirectHandler(HTTPRedirectHandler):
+    """Re-apply the SSRF guard on every redirect hop.
+
+    _webhook_url_is_internal was checked once, on the configured URL, and then
+    the default opener followed 3xx redirects with no further check — so an
+    external (allowed) receiver answering `302 Location: http://169.254.169.254/…`
+    turned CertMate into a confused deputy: the follow-up request went to the
+    internal target from inside the trust boundary, carrying the webhook's
+    Authorization header and X-CertMate-Signature (urllib forwards every header
+    except Content-Length/Content-Type across a redirect). This handler rejects
+    a redirect whose target resolves internal (unless internal targets are
+    explicitly allowed), and strips the sensitive headers when the redirect
+    crosses to a different host so a token never leaves for a host the operator
+    did not configure.
+    """
+
+    def __init__(self, allow_internal: bool):
+        super().__init__()
+        self._allow_internal = allow_internal
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        if (not self._allow_internal) and _webhook_url_is_internal(newurl):
+            raise URLError(
+                f"redirect to internal/loopback target refused (SSRF guard): "
+                f"{urlparse(newurl).hostname}")
+        new = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if new is not None and self._crosses_origin(req.full_url, newurl):
+            # Do not carry credentials to an origin the operator did not name.
+            # Origin is scheme+host+port, not host alone: a redirect that keeps
+            # the host but downgrades https->http, or moves to a different port,
+            # would otherwise send the bearer token over an insecure channel or
+            # to a service the operator never configured. Match the stored
+            # header keys case-insensitively — add_header capitalises
+            # ('X-CertMate-Signature' -> 'X-certmate-signature') while
+            # remove_header does not, so remove by the actual key.
+            sensitive = {'authorization', 'x-certmate-signature',
+                         'proxy-authorization'}
+            for key in list(new.headers.keys()):
+                if key.lower() in sensitive:
+                    new.remove_header(key)
+        return new
+
+    @staticmethod
+    def _crosses_origin(old_url, new_url):
+        """True when the redirect changes scheme, host, or port. Default ports
+        are normalised (https:443, http:80) so an explicit :443 is not treated
+        as a different origin from the implicit one."""
+        def origin(u):
+            p = urlparse(u)
+            port = p.port or (443 if p.scheme == 'https' else 80)
+            return (p.scheme, (p.hostname or '').lower(), port)
+        return origin(old_url) != origin(new_url)
+
+
+def _webhook_opener(allow_internal: bool):
+    """An opener that follows redirects only to non-internal hosts and never
+    forwards webhook credentials across a host change (see
+    _GuardedRedirectHandler)."""
+    return build_opener(
+        _GuardedRedirectHandler(allow_internal), HTTPHandler(), HTTPSHandler())
+
+
+def urlopen(req, timeout=None):
+    """The single HTTP egress point for webhooks — and the symbol tests patch.
+
+    Keeps urllib.request.urlopen's (req, timeout) signature, but routes through
+    _webhook_opener so every redirect hop is re-checked against the SSRF guard
+    and credentials are dropped on a cross-host redirect. allow_internal is read
+    from the environment here so the signature stays drop-in.
+    """
+    allow_internal = os.getenv(
+        'CERTMATE_ALLOW_INTERNAL_WEBHOOKS', '').lower() in ('true', '1', 'yes')
+    return _webhook_opener(allow_internal).open(req, timeout=timeout)
+
+
 # --- Generic webhook: method, authentication, payload template (#218) ------ #
 #
 # A generic webhook used to be "POST this fixed JSON, optionally signed, with
@@ -77,6 +154,12 @@ def _webhook_url_is_internal(url: str) -> bool:
 #
 # Every secret-bearing field name matches the settings secret regex (token,
 # password), so it is masked on GET and restored on a round-trip save.
+
+# Events that are always delivered, whatever the operator's event filter, because
+# they report a failure the operator must not be able to silence by accident.
+# deploy_hook_failed is the one that motivated this: it is not among the five
+# certificate_* events the UI offers, so any filter drops it — see notify().
+_ALWAYS_NOTIFY_EVENTS = frozenset({'deploy_hook_failed'})
 
 WEBHOOK_METHODS = ('POST', 'PUT', 'PATCH')
 WEBHOOK_AUTH_TYPES = ('none', 'bearer', 'basic', 'header')
@@ -273,8 +356,18 @@ class Notifier:
         if not config.get('enabled', False):
             return {'skipped': 'notifications disabled'}
 
+        # Critical failure events bypass the event filter. deploy_hook_failed is
+        # the silent-deploy alarm: a renewal succeeds but its deploy hook (nginx
+        # reload, LB push) exits non-zero, so the service keeps serving the OLD
+        # certificate while the dashboard says success. The events UI only
+        # offers the five certificate_* events, so an operator who ticks any of
+        # them sets a filter that does not include deploy_hook_failed and
+        # permanently silences exactly the alert it exists to raise — with no way
+        # to re-enable it. An operator must never be able to filter away a
+        # failure they need to see, so these are always delivered.
         events_filter = config.get('events', [])
-        if events_filter and event not in events_filter:
+        if (events_filter and event not in events_filter
+                and event not in _ALWAYS_NOTIFY_EVENTS):
             return {'skipped': 'event not in filter'}
 
         results = {}
@@ -289,9 +382,11 @@ class Notifier:
         for wh in channels.get('webhooks', []):
             if not wh.get('enabled', False):
                 continue
-            # Per-webhook event filtering
+            # Per-webhook event filtering — same critical-event exemption as
+            # the global filter above.
             wh_events = wh.get('events', [])
-            if wh_events and event not in wh_events:
+            if (wh_events and event not in wh_events
+                    and event not in _ALWAYS_NOTIFY_EVENTS):
                 continue
             name = wh.get('name', 'webhook')
             results[name] = self._send_webhook_with_retry(wh, event, title, message, details)
@@ -601,8 +696,10 @@ class Notifier:
                 return {'error': 'Webhook URL must use http or https scheme'}
             # SSRF guard: refuse targets that resolve to internal/loopback/
             # metadata addresses unless an operator explicitly allows them.
-            if _webhook_url_is_internal(url) and \
-                    os.getenv('CERTMATE_ALLOW_INTERNAL_WEBHOOKS', '').lower() not in ('true', '1', 'yes'):
+            allow_internal = os.getenv(
+                'CERTMATE_ALLOW_INTERNAL_WEBHOOKS', '').lower() in (
+                    'true', '1', 'yes')
+            if _webhook_url_is_internal(url) and not allow_internal:
                 logger.warning("Refused webhook to internal/loopback target: %s",
                                urlparse(url).hostname)
                 return {'error': 'Webhook target resolves to an internal/loopback address; '
@@ -625,6 +722,9 @@ class Notifier:
             for hdr_name, hdr_value in headers.items():
                 req.add_header(hdr_name, hdr_value)
 
+            # urlopen here is this module's guarded egress point: it re-checks
+            # the SSRF guard on every redirect hop and drops credentials on a
+            # cross-host redirect, unlike urllib's default opener.
             with urlopen(req, timeout=timeout) as resp:  # nosec B310
                 status = resp.status
                 logger.info(f"Webhook '{cfg.get('name', 'webhook')}' ({wh_type}) sent: HTTP {status}")

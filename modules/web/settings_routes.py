@@ -321,11 +321,17 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
             name = data.get('name') or data.get('account_id')
             req_provider = provider or data.get('provider')
             config = data.get('config', {})
+            set_as_default = data.get('set_as_default', False)
 
             if not name or not req_provider:
                 return jsonify({'error': 'Account name and provider required'}), 400
 
             if dns_manager.add_account(name, req_provider, config):
+                # Honour the operator's explicit "set as default" choice on
+                # create, mirroring the update path — the flag the UI sends was
+                # previously dropped here.
+                if set_as_default:
+                    dns_manager.set_default_account(req_provider, name)
                 if audit_logger:
                     user = getattr(request, 'current_user', None) or {}
                     audit_logger.log_operation(
