@@ -15,6 +15,7 @@ import tempfile
 import time
 import logging
 import shutil
+from contextlib import contextmanager
 import threading
 import urllib.error
 import urllib.parse
@@ -443,6 +444,27 @@ class CertificateManager:
             if domain not in self._domain_locks:
                 self._domain_locks[domain] = threading.Lock()
             return self._domain_locks[domain]
+
+    @contextmanager
+    def domain_lock(self, domain: str):
+        """Hold the per-domain lock for the duration of the block.
+
+        The same lock create_certificate / renew_certificate take, so any
+        caller that mutates a domain's on-disk state (metadata.json, the flat
+        PEMs) serialises against an in-flight issuance instead of racing it —
+        e.g. the PATCH config handler, whose metadata read-modify-write was
+        otherwise clobbered by a renewal that carries a pre-renewal metadata
+        snapshot across its whole certbot run. Raises DomainOperationInProgress
+        if the lock cannot be taken within the configured timeout, which the
+        API turns into a 409 exactly as create/renew do.
+        """
+        lock = self._get_domain_lock(domain)
+        if not lock.acquire(timeout=self._domain_lock_timeout()):
+            raise DomainOperationInProgress(domain)
+        try:
+            yield
+        finally:
+            lock.release()
 
     def _metadata_path(self, domain: str) -> Path:
         return self.cert_dir / domain / 'metadata.json'
