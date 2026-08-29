@@ -2140,14 +2140,51 @@ class CertificateManager:
                                 f"{domain} is serving files that do not match "
                                 f"its certificate and they could not be "
                                 f"repaired: {republish_error}") from republish_error
+                    # Reconcile the external copy too. _store_in_backend is
+                    # otherwise reached only from create and the renewed=True
+                    # branch, so a store that failed once (an expired Vault
+                    # token, a transient 5xx) was never retried: the local cert
+                    # was fresh but the backend stayed on the OLD generation, and
+                    # because get_certificate_info reads the backend copy when a
+                    # storage backend is configured, needs_renewal stayed True
+                    # forever, every run landed here, and the store was never
+                    # tried again. And when the reconcile above republished
+                    # the flat PEMs, the new generation reached /download and the
+                    # deploy hooks but not the backend or the PFX. Push here
+                    # when the external copy is behind — a prior store failed
+                    # (storage_warning persisted) or we just republished — so
+                    # downstream is not stranded on the old certificate.
+                    reconcile_warning = None
+                    if self.storage_manager and (stale or metadata.get('storage_warning')):
+                        cert_files = {
+                            name: (domain_dir / name).read_bytes()
+                            for name in CERTIFICATE_FILES
+                            if (domain_dir / name).exists()
+                        }
+                        reconcile_warning = self._store_in_backend(
+                            domain, cert_files, metadata)
+                        try:
+                            self._apply_storage_warning(metadata, reconcile_warning)
+                            self._save_metadata(domain, metadata)
+                        except Exception as e:
+                            logger.warning(
+                                "Failed to persist storage state for %s: %s",
+                                domain, e)
+                        if stale:
+                            # The served pair rotated a generation; rebuild the
+                            # PFX so Windows automation polling cert.pfx sees it.
+                            self._write_pfx(domain)
                     self._invalidate_certificate_info_cache(domain)
-                    return {
+                    result = {
                         'success': True,
                         'renewed': False,
                         'domain': domain,
                         'repaired': stale or None,
                         'message': 'Certificate not yet due for renewal',
                     }
+                    if reconcile_warning:
+                        result['storage_warning'] = reconcile_warning
+                    return result
 
                 # Copy renewed certificates from the correct live directory
                 src_dir = domain_dir / 'live' / domain
