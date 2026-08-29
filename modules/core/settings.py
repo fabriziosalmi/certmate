@@ -164,7 +164,28 @@ def _is_secret_key(name: str) -> bool:
 # behalf of the user's domain. Both must be masked.
 _PROVIDER_SPECIFIC_SECRET_FIELDS = {
     'acme-dns': frozenset({'username', 'subdomain'}),
+    # A webhook's `url` is not a "url" in the harmless sense: for Slack,
+    # Discord, ntfy and Gotify the incoming-webhook URL embeds the bearer
+    # secret in its path, so anyone who reads it can post to the channel. The
+    # name 'url' matches no secret pattern, so without this it was returned in
+    # cleartext to the viewer role by GET /api/web/settings and written into the
+    # share-safe backup ZIP. Masked like any other secret; restored on a save.
+    'webhooks': frozenset({'url'}),
 }
+
+# List keys whose items carry secrets keyed by the LIST name rather than the
+# container's provider context. webhooks[*] is the case: its items live under
+# notifications.channels.webhooks, so the ordinary list-context propagation
+# would hand them parent_key='channels'; we want 'webhooks' so the entry above
+# applies. (acme-dns.accounts[*] deliberately keeps the provider context and is
+# NOT listed here.)
+_LIST_NAME_CONTEXTS = frozenset({'webhooks'})
+
+# Secret-bearing fields on a webhook list item whose names do not match the
+# generic secret regex — currently just `url` (the incoming-webhook URL is the
+# credential). Used by _restore_masked_list_secrets so a masked url survives a
+# round-trip save the same way auth_token does.
+_WEBHOOK_LIST_SECRET_FIELDS = _PROVIDER_SPECIFIC_SECRET_FIELDS['webhooks']
 
 # Parents under which EVERY string value is a credential, whatever the
 # operator named the key. A webhook's custom ``headers`` map is the case:
@@ -217,10 +238,16 @@ def mask_secrets_in_settings(settings_dict):
                     # For list values, propagate the CURRENT dict's
                     # parent_key down so list items inherit the
                     # provider context (e.g. ``acme-dns.accounts[*]``
-                    # is still acme-dns-context). For dict values,
-                    # the new parent is the key we are descending
-                    # into.
-                    next_parent = parent_key if isinstance(value, list) else key
+                    # is still acme-dns-context) — unless the list key
+                    # opts into its own name as the context
+                    # (``webhooks[*]`` masks by 'webhooks', not the
+                    # 'channels' container). For dict values, the new
+                    # parent is the key we are descending into.
+                    if isinstance(value, list):
+                        next_parent = (key if key in _LIST_NAME_CONTEXTS
+                                       else parent_key)
+                    else:
+                        next_parent = key
                     out[key] = _walk(value, parent_key=next_parent)
             return out
         if isinstance(node, list):
@@ -288,40 +315,55 @@ def _restore_masked_list_secrets(old_list, new_list):
     the literal sentinel — clobbering the real token/secret on disk.
 
     For every dict in ``new_list``, any secret-named field still equal to the
-    sentinel is restored from the matching dict in ``old_list`` — matched first
-    by identity ``(type, url, name)`` (robust to reordering/deletion), then by
-    position. Each prior dict is consumed at most once, so two webhooks sharing
-    an identity keep their own distinct secrets (the Nth new maps to the Nth
-    prior) instead of both collapsing onto the first. With no prior match the
-    masked field is dropped (no value to keep). A blank secret is left as-is, so
-    a deliberately cleared field stays cleared. Mutates and returns ``new_list``.
+    sentinel is restored from the matching dict in ``old_list`` — matched by
+    identity ``(type, name)`` only. Each prior dict is consumed at most once, so
+    two entries sharing an identity keep their own distinct secrets (the Nth new
+    maps to the Nth prior). With no identity match the masked field is dropped
+    (the operator must re-enter it) — there is NO position fallback: matching by
+    list position copied a DIFFERENT entry's credential into the survivor when a
+    save both shifted positions and changed an identity field (e.g. deleting one
+    webhook and fixing another's URL), and then transmitted it to the wrong
+    endpoint. A blank secret is left as-is, so a deliberately cleared field stays
+    cleared. Mutates and returns ``new_list``.
+
+    ``url`` counts as a secret field here (via _WEBHOOK_LIST_SECRET_FIELDS): a
+    Slack/Discord/Gotify incoming-webhook URL is the bearer credential, so it is
+    masked on read and must survive the round-trip too — and, being masked, it
+    can no longer be part of the identity, which is why the identity is
+    (type, name).
     """
     if not isinstance(new_list, list):
         return new_list
     old_list = old_list if isinstance(old_list, list) else []
 
     def _identity(d):
-        return (d.get('type'), d.get('url'), d.get('name'))
+        return (d.get('type'), d.get('name'))
 
-    # Queue prior dicts per identity so duplicate-identity webhooks are matched
-    # one-to-one rather than every duplicate resolving to the first.
+    def _field_is_secret(key):
+        return _is_secret_key(key) or key in _WEBHOOK_LIST_SECRET_FIELDS
+
     by_identity = {}
     for old in old_list:
         if isinstance(old, dict):
             by_identity.setdefault(_identity(old), deque()).append(old)
+    # An identity shared by more than one prior entry is AMBIGUOUS: with no
+    # stable per-webhook id, list order is the only thing left to match on, and
+    # a reorder or a deletion would then restore the wrong entry's secret — the
+    # same cross-endpoint credential leak (type,name) was chosen to avoid. So a
+    # masked secret whose identity is ambiguous is dropped (the operator
+    # re-enters it), never guessed by position.
+    ambiguous = {ident for ident, q in by_identity.items() if len(q) > 1}
 
-    for i, item in enumerate(new_list):
+    for item in new_list:
         if not isinstance(item, dict):
             continue
-        queue = by_identity.get(_identity(item))
-        if queue:
-            prior = queue.popleft()
-        elif i < len(old_list) and isinstance(old_list[i], dict):
-            prior = old_list[i]
-        else:
-            prior = {}
+        ident = _identity(item)
+        queue = by_identity.get(ident)
+        # Unique identity match, or nothing — never a positional guess, and
+        # never an ambiguous duplicate (see above and the docstring).
+        prior = queue.popleft() if (queue and ident not in ambiguous) else {}
         for key in list(item.keys()):
-            if _is_secret_key(key) and item.get(key) == SECRET_MASK_SENTINEL:
+            if _field_is_secret(key) and item.get(key) == SECRET_MASK_SENTINEL:
                 if key in prior:
                     item[key] = prior[key]
                 else:
