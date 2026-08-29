@@ -7,6 +7,8 @@ import logging
 import os
 import json
 import tempfile
+import threading
+from contextlib import contextmanager
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
@@ -95,6 +97,27 @@ class PrivateCAGenerator:
         self._ca_key = None
         self._ca_cert = None
         self._ca_loaded = False
+        # One process-wide lock for the whole CRL read-modify-write. generate_crl
+        # rebuilds crl.pem from the ENTIRE revoked set, and its callers
+        # (ClientCertificateManager.revoke_certificate, CRLManager.update_crl)
+        # each read that set and then regenerate. The per-identifier lock on a
+        # revocation does NOT serialise this global rebuild: two revocations of
+        # different certs take different identifier locks, so A can read the
+        # revoked set before B commits and A's crl.pem write can land after B's,
+        # dropping B's serial from the signed CRL even though both metadata files
+        # say revoked and both calls returned success. Relying parties then
+        # accept B's leaf until next_update. Hold this lock around
+        # "list revoked -> generate_crl" in every caller so the rebuild is atomic.
+        self._crl_lock = threading.Lock()
+
+    @contextmanager
+    def crl_lock(self):
+        """Serialise the whole CRL read-modify-write (list revoked ->
+        generate_crl -> write crl.pem). Callers hold it around BOTH the read of
+        the revoked set and the generate_crl call, so a concurrent rebuild
+        cannot interleave and drop a serial."""
+        with self._crl_lock:
+            yield
 
     @staticmethod
     def _atomic_write_bytes(path: Path, content: bytes, mode: int) -> None:

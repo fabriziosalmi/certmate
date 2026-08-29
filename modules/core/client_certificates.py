@@ -454,21 +454,29 @@ class ClientCertificateManager:
                 # not bare serials: otherwise generate_crl would stamp every
                 # entry (including previously-revoked certs) with today's date,
                 # rewriting older entries' revocation_date on each regeneration.
-                all_revoked = self.list_client_certificates(revoked=True)
-                revoked_records = []
-                for cert in all_revoked:
-                    try:
-                        sn = int(cert.get('serial_number', 0))
-                    except (ValueError, TypeError):
-                        continue
-                    if sn > 0:
-                        revoked_records.append({
-                            'serial_number': sn,
-                            'revoked_at': cert.get('revoked_at'),
-                            'reason_revoked': cert.get('reason_revoked'),
-                        })
-                if revoked_records:
-                    self.private_ca.generate_crl(revoked_records)
+                #
+                # Read the revoked set AND regenerate under the CA's global CRL
+                # lock. The per-identifier lock above serialises this cert's
+                # metadata, but the CRL is rebuilt from every revoked cert, so a
+                # concurrent revocation of a DIFFERENT identifier (a different
+                # per-identifier lock) could otherwise read the set and write
+                # crl.pem in an order that drops this serial from the signed CRL.
+                with self.private_ca.crl_lock():
+                    all_revoked = self.list_client_certificates(revoked=True)
+                    revoked_records = []
+                    for cert in all_revoked:
+                        try:
+                            sn = int(cert.get('serial_number', 0))
+                        except (ValueError, TypeError):
+                            continue
+                        if sn > 0:
+                            revoked_records.append({
+                                'serial_number': sn,
+                                'revoked_at': cert.get('revoked_at'),
+                                'reason_revoked': cert.get('reason_revoked'),
+                            })
+                    if revoked_records:
+                        self.private_ca.generate_crl(revoked_records)
 
                 return True, None
 
