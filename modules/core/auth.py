@@ -976,6 +976,52 @@ class AuthManager:
             self._operator_bearer_token = cached
         return cached
 
+    def warn_if_bearer_token_hash_is_stale(self):
+        """At startup, diagnose the one failure that otherwise looks like a
+        wrong token: an api_bearer_token_hash that no longer matches SECRET_KEY.
+
+        The stored hash is HMAC-SHA256 keyed on SECRET_KEY. Restoring a backup
+        onto a host with a different SECRET_KEY leaves the hash unverifiable, so
+        the operator's own token — the right one — 401s on every request, and
+        nothing says why (the instance is not world-open thanks to the bearer
+        fail-closed, it just rejects). If the operator supplied a token via
+        API_BEARER_TOKEN(_FILE) and it does not verify against the stored HMAC
+        hash, log the likely cause and the fix. Best-effort and read-only: it
+        never changes the stored hash (a wrong token must not overwrite it) and
+        never raises into startup.
+        """
+        try:
+            token_file = os.getenv('API_BEARER_TOKEN_FILE')
+            if token_file:
+                try:
+                    from pathlib import Path
+                    env_token = Path(token_file).read_text().strip()
+                except Exception:
+                    return
+            else:
+                env_token = (os.getenv('API_BEARER_TOKEN') or '').strip()
+            if not env_token:
+                return  # operator supplied no token — nothing to diagnose
+
+            stored = self.settings_manager.load_settings().get(
+                'api_bearer_token_hash')
+            if not stored or not stored.startswith('hmac-sha256:'):
+                return  # no HMAC hash to compare against (fresh or legacy)
+            if self._verify_api_token(env_token, stored):
+                return  # the token matches the hash — nothing wrong
+
+            logger.warning(
+                "The API_BEARER_TOKEN supplied does not match the stored "
+                "api_bearer_token_hash. That hash is bound to SECRET_KEY "
+                "(HMAC-SHA256), so the usual cause is a SECRET_KEY different "
+                "from the one in effect when the token was hashed — typically "
+                "after restoring a backup onto a new host. API requests will "
+                "401 until this is resolved. Fix: provide the original "
+                "SECRET_KEY (SECRET_KEY or SECRET_KEY_FILE), or reset the "
+                "bearer token via the API Keys UI / a fresh settings save.")
+        except Exception as e:
+            logger.debug(f"bearer-token staleness check skipped: {e}")
+
     def _is_oidc_configured(self):
         """True iff the operator fully configured OIDC (enabled + issuer_url +
         client_id). That is an operator-controlled credential exactly like
