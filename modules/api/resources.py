@@ -1598,15 +1598,11 @@ def create_api_resources(api, models, managers):
                 # renewal (which carries a pre-renewal metadata snapshot across
                 # its whole certbot run and would otherwise clobber this write).
                 with certificate_manager.domain_lock(domain):
-                    # 1. Update on-disk metadata.json
-                    metadata_file = cert_dir / 'metadata.json'
-                    metadata = {}
-                    if metadata_file.exists():
-                        try:
-                            with open(metadata_file, 'r') as f:
-                                metadata = _json.load(f)
-                        except Exception as e:
-                            logger.warning("Failed to load metadata.json for domain %s: %s", domain, e)
+                    # 1. Update on-disk metadata.json. Read through the manager
+                    # (which builds the path from the already-validated domain
+                    # and quarantines corrupt JSON instead of silently returning
+                    # {}) rather than opening cert_dir/'metadata.json' directly.
+                    metadata = certificate_manager._load_metadata(domain)
 
                     old_provider = metadata.get('dns_provider')
                     if new_dns_provider:
