@@ -78,6 +78,12 @@ def _webhook_url_is_internal(url: str) -> bool:
 # Every secret-bearing field name matches the settings secret regex (token,
 # password), so it is masked on GET and restored on a round-trip save.
 
+# Events that are always delivered, whatever the operator's event filter, because
+# they report a failure the operator must not be able to silence by accident.
+# deploy_hook_failed is the one that motivated this: it is not among the five
+# certificate_* events the UI offers, so any filter drops it — see notify().
+_ALWAYS_NOTIFY_EVENTS = frozenset({'deploy_hook_failed'})
+
 WEBHOOK_METHODS = ('POST', 'PUT', 'PATCH')
 WEBHOOK_AUTH_TYPES = ('none', 'bearer', 'basic', 'header')
 WEBHOOK_DEFAULT_TIMEOUT = 10
@@ -273,8 +279,18 @@ class Notifier:
         if not config.get('enabled', False):
             return {'skipped': 'notifications disabled'}
 
+        # Critical failure events bypass the event filter. deploy_hook_failed is
+        # the silent-deploy alarm: a renewal succeeds but its deploy hook (nginx
+        # reload, LB push) exits non-zero, so the service keeps serving the OLD
+        # certificate while the dashboard says success. The events UI only
+        # offers the five certificate_* events, so an operator who ticks any of
+        # them sets a filter that does not include deploy_hook_failed and
+        # permanently silences exactly the alert it exists to raise — with no way
+        # to re-enable it. An operator must never be able to filter away a
+        # failure they need to see, so these are always delivered.
         events_filter = config.get('events', [])
-        if events_filter and event not in events_filter:
+        if (events_filter and event not in events_filter
+                and event not in _ALWAYS_NOTIFY_EVENTS):
             return {'skipped': 'event not in filter'}
 
         results = {}
@@ -289,9 +305,11 @@ class Notifier:
         for wh in channels.get('webhooks', []):
             if not wh.get('enabled', False):
                 continue
-            # Per-webhook event filtering
+            # Per-webhook event filtering — same critical-event exemption as
+            # the global filter above.
             wh_events = wh.get('events', [])
-            if wh_events and event not in wh_events:
+            if (wh_events and event not in wh_events
+                    and event not in _ALWAYS_NOTIFY_EVENTS):
                 continue
             name = wh.get('name', 'webhook')
             results[name] = self._send_webhook_with_retry(wh, event, title, message, details)
