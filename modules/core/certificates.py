@@ -2438,24 +2438,36 @@ class CertificateManager:
         otherwise. Legacy string-form entries are upgraded to dict form so the
         flag can be persisted.
         """
-        settings = self.settings_manager.load_settings()
-        # Migrate so every entry is a dict and the flag has somewhere to live.
-        settings = self.settings_manager.migrate_domains_format(settings)
+        # Flip the flag as a read-modify-write on the FRESH on-disk list, under
+        # the lock. The previous shape — load_settings() (a request-cache hit)
+        # then atomic_update({'domains': whole_list}) — replaced 'domains'
+        # wholesale from a possibly-stale snapshot: any concurrent registration
+        # or deletion that landed after the cache was primed was silently
+        # dropped. atomic_update guards the WRITE but not the staleness of the
+        # list it is handed. The mutator sees the current list and touches only
+        # this domain's entry, and raises _DomainNotInSettings when the domain
+        # is absent so nothing is persisted (preserving the old "return False,
+        # no write" behaviour rather than saving the migration for a no-op).
+        class _DomainNotInSettings(Exception):
+            pass
 
-        new_domains = []
-        found = False
-        for entry in settings.get('domains', []):
-            if isinstance(entry, dict) and entry.get('domain') == domain:
-                entry = {**entry, 'auto_renew': bool(enabled)}
-                found = True
-            new_domains.append(entry)
+        def _flip(s):
+            self.settings_manager.migrate_domains_format(s)
+            new_domains = []
+            found = False
+            for entry in s.get('domains', []):
+                if isinstance(entry, dict) and entry.get('domain') == domain:
+                    entry = {**entry, 'auto_renew': bool(enabled)}
+                    found = True
+                new_domains.append(entry)
+            if not found:
+                raise _DomainNotInSettings
+            s['domains'] = new_domains
 
-        if not found:
+        try:
+            self.settings_manager.update(_flip, reason='set_auto_renew')
+        except _DomainNotInSettings:
             return False
-
-        # atomic_update merges under a lock, avoiding a load/mutate/save race
-        # with concurrent settings writes.
-        self.settings_manager.atomic_update({'domains': new_domains})
         logger.info(f"auto_renew set to {bool(enabled)} for {domain}")
         return True
 
