@@ -84,20 +84,32 @@ class _GuardedRedirectHandler(HTTPRedirectHandler):
                 f"redirect to internal/loopback target refused (SSRF guard): "
                 f"{urlparse(newurl).hostname}")
         new = super().redirect_request(req, fp, code, msg, headers, newurl)
-        if new is not None:
-            old_host = urlparse(req.full_url).hostname
-            new_host = urlparse(newurl).hostname
-            if old_host != new_host:
-                # Do not carry credentials to a host the operator did not name.
-                # Match the stored header keys case-insensitively: add_header
-                # capitalises ('X-CertMate-Signature' -> 'X-certmate-signature')
-                # while remove_header does not, so remove by the actual key.
-                sensitive = {'authorization', 'x-certmate-signature',
-                             'proxy-authorization'}
-                for key in list(new.headers.keys()):
-                    if key.lower() in sensitive:
-                        new.remove_header(key)
+        if new is not None and self._crosses_origin(req.full_url, newurl):
+            # Do not carry credentials to an origin the operator did not name.
+            # Origin is scheme+host+port, not host alone: a redirect that keeps
+            # the host but downgrades https->http, or moves to a different port,
+            # would otherwise send the bearer token over an insecure channel or
+            # to a service the operator never configured. Match the stored
+            # header keys case-insensitively — add_header capitalises
+            # ('X-CertMate-Signature' -> 'X-certmate-signature') while
+            # remove_header does not, so remove by the actual key.
+            sensitive = {'authorization', 'x-certmate-signature',
+                         'proxy-authorization'}
+            for key in list(new.headers.keys()):
+                if key.lower() in sensitive:
+                    new.remove_header(key)
         return new
+
+    @staticmethod
+    def _crosses_origin(old_url, new_url):
+        """True when the redirect changes scheme, host, or port. Default ports
+        are normalised (https:443, http:80) so an explicit :443 is not treated
+        as a different origin from the implicit one."""
+        def origin(u):
+            p = urlparse(u)
+            port = p.port or (443 if p.scheme == 'https' else 80)
+            return (p.scheme, (p.hostname or '').lower(), port)
+        return origin(old_url) != origin(new_url)
 
 
 def _webhook_opener(allow_internal: bool):

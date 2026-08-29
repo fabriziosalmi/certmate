@@ -66,6 +66,7 @@ class _Recorder:
 
     def stop(self):
         self.srv.shutdown()
+        self.srv.server_close()
 
 
 @pytest.fixture
@@ -152,3 +153,39 @@ def test_a_same_host_redirect_keeps_the_credentials(server):
     with _webhook_opener(True).open(_req(server.url('/samehost')), timeout=5) as r:
         assert r.status == 200
     assert 'SECRET-TOKEN' in server.hits.get('/final', {}).get('Authorization', '')
+
+
+def test_a_scheme_downgrade_strips_credentials():
+    """origin is scheme+host+port: https->http on the same host must drop the
+    token so it never goes over an insecure channel."""
+    from urllib.request import Request
+    from modules.core.notifier import _GuardedRedirectHandler
+    h = _GuardedRedirectHandler(allow_internal=True)
+    req = Request('https://x.example/hook', data=b'{}', method='POST')
+    req.add_header('Authorization', 'Bearer SECRET')
+    new = h.redirect_request(req, None, 302, 'Found', {}, 'http://x.example/hook')
+    assert not new.has_header('Authorization')
+
+
+def test_a_port_change_strips_credentials():
+    from urllib.request import Request
+    from modules.core.notifier import _GuardedRedirectHandler
+    h = _GuardedRedirectHandler(allow_internal=True)
+    req = Request('https://x.example/hook', data=b'{}', method='POST')
+    req.add_header('Authorization', 'Bearer SECRET')
+    new = h.redirect_request(req, None, 302, 'Found', {},
+                             'https://x.example:8443/hook')
+    assert not new.has_header('Authorization')
+
+
+def test_an_explicit_default_port_is_the_same_origin():
+    """CONTROL: https://x:443 must not be treated as a different origin from
+    https://x, or a legitimate same-origin redirect would lose its token."""
+    from urllib.request import Request
+    from modules.core.notifier import _GuardedRedirectHandler
+    h = _GuardedRedirectHandler(allow_internal=True)
+    req = Request('https://x.example/hook', data=b'{}', method='POST')
+    req.add_header('Authorization', 'Bearer SECRET')
+    new = h.redirect_request(req, None, 302, 'Found', {},
+                             'https://x.example:443/hook2')
+    assert new.has_header('Authorization')
