@@ -1723,27 +1723,30 @@ class CertificateManager:
                 safe_stderr = sanitize_certbot_stderr(result.stderr)
                 raise RuntimeError(f"Certificate creation failed: {safe_stderr}")
             
-            # Move certificates to standard location
+            # Move certificates to standard location. Publish live/ to the flat
+            # directory through the SAME staged-promote helper the renew path
+            # uses: stage all four to <name>.staging, then promote by rename.
+            # A failure while STAGING rolls the staged set back, so the served
+            # copy is left exactly as it was. (The promote loop is four renames
+            # and is not itself transactional — a crash between renames leaves a
+            # mixed generation — but the next renewal check reconciles that,
+            # which the old in-place loop's state was permanent past.) The
+            # previous loop wrote each served file directly, privkey.pem last,
+            # with no staging at all, so a failure on the fourth write left a new
+            # cert.pem beside the old privkey.pem — a pair that cannot handshake,
+            # served straight off disk. This is the create AND the replace=True
+            # reissue path. _publish_flat_files returns {filename: bytes}, the
+            # same shape the rest of this method expects from cert_files.
             live_dir = cert_output_dir / 'live' / domain
             cert_files = {}
-            
+
             if live_dir.exists():
-                for cert_file in CERTIFICATE_FILES:
-                    src_file = live_dir / cert_file
-                    dst_file = cert_output_dir / cert_file
-                    if src_file.exists():
-                        # Single content read: copy bytes once and reuse them
-                        # for cert_files instead of re-opening the destination.
-                        src_real = os.path.realpath(src_file)
-                        data = Path(src_real).read_bytes()
-                        dst_file.write_bytes(data)
-                        # Preserve the source mode bits. shutil.copy did this
-                        # implicitly; without it privkey.pem (often 0600) would
-                        # be created under the umask (e.g. 0644), exposing the
-                        # private key — a security regression.
-                        shutil.copymode(src_real, dst_file)
-                        logger.info(f"Copied {cert_file} to {dst_file}")
-                        cert_files[cert_file] = data
+                cert_files = self._publish_flat_files(live_dir, cert_output_dir)
+                # No domain in the message: the surrounding logs already carry
+                # it, and interpolating a user-influenced value tripped CodeQL's
+                # log-injection rule for no added signal here.
+                logger.info(
+                    "Published %d flat certificate files", len(cert_files))
             
             # certbot exited 0 — but verify a certificate actually materialised
             # before reporting success. A missing or empty live dir (a suffixed
@@ -2457,24 +2460,36 @@ class CertificateManager:
         otherwise. Legacy string-form entries are upgraded to dict form so the
         flag can be persisted.
         """
-        settings = self.settings_manager.load_settings()
-        # Migrate so every entry is a dict and the flag has somewhere to live.
-        settings = self.settings_manager.migrate_domains_format(settings)
+        # Flip the flag as a read-modify-write on the FRESH on-disk list, under
+        # the lock. The previous shape — load_settings() (a request-cache hit)
+        # then atomic_update({'domains': whole_list}) — replaced 'domains'
+        # wholesale from a possibly-stale snapshot: any concurrent registration
+        # or deletion that landed after the cache was primed was silently
+        # dropped. atomic_update guards the WRITE but not the staleness of the
+        # list it is handed. The mutator sees the current list and touches only
+        # this domain's entry, and raises _DomainNotInSettings when the domain
+        # is absent so nothing is persisted (preserving the old "return False,
+        # no write" behaviour rather than saving the migration for a no-op).
+        class _DomainNotInSettings(Exception):
+            pass
 
-        new_domains = []
-        found = False
-        for entry in settings.get('domains', []):
-            if isinstance(entry, dict) and entry.get('domain') == domain:
-                entry = {**entry, 'auto_renew': bool(enabled)}
-                found = True
-            new_domains.append(entry)
+        def _flip(s):
+            self.settings_manager.migrate_domains_format(s)
+            new_domains = []
+            found = False
+            for entry in s.get('domains', []):
+                if isinstance(entry, dict) and entry.get('domain') == domain:
+                    entry = {**entry, 'auto_renew': bool(enabled)}
+                    found = True
+                new_domains.append(entry)
+            if not found:
+                raise _DomainNotInSettings
+            s['domains'] = new_domains
 
-        if not found:
+        try:
+            self.settings_manager.update(_flip, reason='set_auto_renew')
+        except _DomainNotInSettings:
             return False
-
-        # atomic_update merges under a lock, avoiding a load/mutate/save race
-        # with concurrent settings writes.
-        self.settings_manager.atomic_update({'domains': new_domains})
         logger.info(f"auto_renew set to {bool(enabled)} for {domain}")
         return True
 
