@@ -111,6 +111,22 @@ cmd_prepare() {
   [ -z "$(git status --porcelain)" ] || die "working tree is dirty - commit or stash first"
   git fetch origin --quiet
   git rev-parse --verify origin/main >/dev/null 2>&1 || die "no origin/main"
+  # The gates below run against the CHECKED-OUT tree, but the real-cert policy
+  # is computed from origin/main and the release branch is cut from origin/main
+  # (see below). If the local checkout is behind origin/main — the ordinary
+  # state right after merging a PR on GitHub — the tree that is gated and the
+  # tree that is released are different: a commit on origin/main that is not in
+  # the local checkout is never seen by flake8/bandit/pytest/the real-cert E2E,
+  # and "ALL GATES PASSED" would then vouch for a tree no gate examined. Refuse
+  # unless HEAD is exactly origin/main so the gated tree IS the released tree.
+  local head_sha origin_sha
+  head_sha="$(git rev-parse HEAD)"
+  origin_sha="$(git rev-parse origin/main)"
+  [ "$head_sha" = "$origin_sha" ] || die "local HEAD ($head_sha) is not origin/main ($origin_sha).
+The gates run against the checked-out tree but the release is cut from origin/main,
+so they would test a different tree than the one released. Align first:
+  git checkout main && git pull --ff-only
+then re-run prepare."
   local cur; cur="$("$PY" -c 'from modules import __version__; print(__version__)')"
   version_gt "$version" "$cur" || die "version $version is not greater than current $cur"
 
