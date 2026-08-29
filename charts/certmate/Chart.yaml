@@ -10,8 +10,8 @@ type: application
 # in the application's repository and only ever ships that application, so it
 # tracks it: one number, bumped by scripts/release.sh, pinned by
 # tests/test_helm_chart.py. A chart-only fix rides the next release.
-version: 2.26.1
-appVersion: "2.26.1"
+version: 2.26.2
+appVersion: "2.26.2"
 home: https://www.certmate.org
 sources:
   - https://github.com/fabriziosalmi/certmate
