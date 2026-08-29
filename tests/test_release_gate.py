@@ -267,3 +267,27 @@ def test_release_tooling_does_not_hardcode_an_author():
         + "\nA generated commit should not claim an author the generator "
           "cannot know."
     )
+
+
+def test_prepare_refuses_a_stale_local_checkout():
+    """cmd_prepare gates the checked-out tree but cuts the release branch from
+    origin/main. If the local checkout is behind origin/main (the ordinary
+    state after merging a PR on GitHub), the gated tree and the released tree
+    differ and a commit on origin/main is never tested. prepare must refuse
+    unless HEAD == origin/main, BEFORE any gate runs.
+    """
+    src = RELEASE_SH.read_text(encoding="utf-8")
+
+    # the check compares HEAD to origin/main and dies on mismatch
+    assert 'git rev-parse HEAD' in src
+    assert 'git rev-parse origin/main' in src
+    head_check = re.search(
+        r'\[ "\$head_sha" = "\$origin_sha" \] \|\| die', src)
+    assert head_check, "no HEAD==origin/main fail-closed check in release.sh"
+
+    # and it runs before the first gate, or a stale tree would still be gated
+    check_pos = head_check.start()
+    first_gate = src.find('gate "flake8')
+    assert first_gate != -1
+    assert check_pos < first_gate, \
+        "the HEAD==origin/main check must precede the gates"
