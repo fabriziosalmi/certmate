@@ -26,9 +26,14 @@ def _pub(obj):
         serialization.PublicFormat.SubjectPublicKeyInfo)
 
 
-@pytest.fixture
-def two_generations(tmp_path):
-    g1, g2 = tmp_path / 'g1', tmp_path / 'g2'
+@pytest.fixture(scope='module')
+def two_generations(tmp_path_factory):
+    """Two independently generated CAs, shared across the module: generating a
+    4096-bit RSA CA is expensive and these are only ever read from (each test
+    copies key/cert out into its own per-test dir), so one pair per module is
+    enough (Copilot review)."""
+    root = tmp_path_factory.mktemp('cas')
+    g1, g2 = root / 'g1', root / 'g2'
     g1.mkdir()
     g2.mkdir()
     assert PrivateCAGenerator(g1).initialize()
