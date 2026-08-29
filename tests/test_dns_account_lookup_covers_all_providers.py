@@ -69,3 +69,12 @@ def test_an_unknown_provider_accepts_any_non_empty_value(dm):
         'some_field': 'value'}}}}}
     cfg, _ = _resolve(dm, settings, 'weirdns')
     assert cfg is not None
+
+
+def test_a_partial_account_does_not_resolve(dm):
+    """Consistency with test_provider(): ALL required fields must be present.
+    rfc2136 with nameserver but no tsig_secret is not usable, so it must not
+    resolve (it would only fail later at certbot with a vaguer error)."""
+    settings = {'dns_providers': {'rfc2136': {'accounts': {'default': {
+        'nameserver': '1.2.3.4', 'tsig_key': 'k'}}}}}  # tsig_secret missing
+    assert _resolve(dm, settings, 'rfc2136') == (None, None)

@@ -72,7 +72,11 @@ class DNSManager:
             return False
         required = _DNS_PROVIDER_CREDENTIALS.get(provider)
         if required:
-            return any(acc_config.get(field) for field in required)
+            # ALL required fields must be present — the same rule test_provider()
+            # enforces (it reports each missing field). A partial account that
+            # passed here would resolve, then fail at certbot with a less
+            # specific error; consistency keeps "configured" meaning one thing.
+            return all(acc_config.get(field) for field in required)
         # Unknown provider: treat any non-empty value as "configured" rather
         # than rejecting it (the old allowlist would have).
         return any(v for v in acc_config.values())
