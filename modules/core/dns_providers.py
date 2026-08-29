@@ -54,6 +54,29 @@ class DNSManager:
             })
         return result
 
+    @staticmethod
+    def _account_has_credentials(provider, acc_config):
+        """True when *acc_config* looks like a configured account for *provider*.
+
+        Replaces a hardcoded 6-key allowlist (api_token / access_key_id /
+        api_key / api_url / username / token) that did not cover the real
+        credential fields of rfc2136 (nameserver/tsig_key/tsig_secret),
+        scaleway (application_token), azure, google, ovh, edgedns and more — so
+        a fully configured account for one of those resolved to (None, None) and
+        issuance died with "account not configured" naming credentials that were
+        already there. Now checks the provider's OWN required fields
+        (_DNS_PROVIDER_CREDENTIALS); for a provider not in that registry, any
+        non-empty value counts, so an unknown provider is not silently rejected.
+        """
+        if not isinstance(acc_config, dict):
+            return False
+        required = _DNS_PROVIDER_CREDENTIALS.get(provider)
+        if required:
+            return any(acc_config.get(field) for field in required)
+        # Unknown provider: treat any non-empty value as "configured" rather
+        # than rejecting it (the old allowlist would have).
+        return any(v for v in acc_config.values())
+
     def get_dns_provider_account_config(self, provider, account_id=None, settings=None):
         """Get DNS provider account configuration
         
@@ -105,17 +128,13 @@ class DNSManager:
                 
                 # If we get here and no account_id was specified, try to use the first available account
                 for acc_id, acc_config in accounts.items():
-                    if isinstance(acc_config, dict) and any(key in acc_config for key in [
-                        'api_token', 'access_key_id', 'api_key', 'api_url', 'username', 'token'
-                    ]):
+                    if self._account_has_credentials(provider, acc_config):
                         return acc_config, acc_id
                 
                 return None, None
             else:
                 # Check if this is old single-account format (has direct config keys)
-                if any(key in provider_config for key in [
-                    'api_token', 'access_key_id', 'api_key', 'api_url', 'username', 'token'
-                ]):
+                if self._account_has_credentials(provider, provider_config):
                     # This is old single-account format
                     return provider_config, 'default'
                 
@@ -142,9 +161,7 @@ class DNSManager:
                     
                     # Fall back to first available account
                     for acc_id, acc_config in provider_config.items():
-                        if isinstance(acc_config, dict) and any(key in acc_config for key in [
-                            'api_token', 'access_key_id', 'api_key', 'api_url', 'username', 'token'
-                        ]):
+                        if self._account_has_credentials(provider, acc_config):
                             return acc_config, acc_id
                 
                 return None, None
@@ -182,10 +199,8 @@ class DNSManager:
                         'account_id': account_id,
                         'name': account_config.get('name', account_id.title()),
                         'description': account_config.get('description', ''),
-                        'configured': bool(any(account_config.get(key) for key in [
-                            'api_token', 'access_key_id', 'api_key', 'api_url', 'username', 'token',
-                            'nameserver', 'tsig_key', 'tsig_secret', 'secret_key', 'password'
-                        ]))
+                        'configured': self._account_has_credentials(
+                            provider, account_config)
                     })
             elif provider_config:
                 # Legacy single-account format
@@ -193,10 +208,8 @@ class DNSManager:
                     'account_id': 'default',
                     'name': f'Default {provider.title()} Account',
                     'description': 'Legacy single-account configuration',
-                    'configured': bool(any(provider_config.get(key) for key in [
-                        'api_token', 'access_key_id', 'api_key', 'api_url', 'username', 'token',
-                        'nameserver', 'tsig_key', 'tsig_secret', 'secret_key', 'password'
-                    ]))
+                    'configured': self._account_has_credentials(
+                        provider, provider_config)
                 })
                 
             return accounts
