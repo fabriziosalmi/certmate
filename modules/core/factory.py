@@ -836,14 +836,24 @@ def setup_scheduler(container: AppContainer):
         scheduler = BackgroundScheduler(jobstores=jobstores, job_defaults=job_defaults)
         scheduler.start()
 
+        # Spread the renewal sweeps across a window instead of firing every
+        # instance at exactly HH:00:00. Without this, every CertMate in the
+        # world hits its ACME CA at the same wall-clock second, a synchronised
+        # load spike the CA has to absorb; Let's Encrypt asks integrators to
+        # renew at randomised times for precisely this reason. APScheduler's
+        # cron `jitter` adds a random +/- offset (seconds) to each fire, so the
+        # 02:00 certificate sweep lands anywhere in 01:00-03:00 and the 03:00
+        # client-certificate sweep in 02:00-04:00 — the same overnight window,
+        # de-synchronised. It composes with the misfire grace above.
+        renewal_jitter = 3600  # +/- 1 hour
         scheduler.add_job(
             func=_certificate_renewal_job,
-            trigger="cron", hour=2, minute=0,
+            trigger="cron", hour=2, minute=0, jitter=renewal_jitter,
             id='certificate_renewal_check', replace_existing=True
         )
         scheduler.add_job(
             func=_client_certificate_renewal_job,
-            trigger="cron", hour=3, minute=0,
+            trigger="cron", hour=3, minute=0, jitter=renewal_jitter,
             id='client_certificate_renewal_check', replace_existing=True
         )
         scheduler.add_job(

@@ -222,6 +222,13 @@ def test_scheduler_renewal_jobs_have_misfire_grace(monkeypatch, tmp_path):
                 f"APScheduler 1s default that silently drops a missed day"
             )
             assert job.coalesce is True
+            # Renewal sweeps must be jittered, not fire at exactly HH:00:00 on
+            # every install at once — a synchronised load spike on the ACME CA
+            # that Let's Encrypt asks integrators to avoid.
+            assert getattr(job.trigger, 'jitter', None) == 3600, (
+                f"{job_id} must carry cron jitter to de-synchronise renewals "
+                f"across installs"
+            )
     finally:
         if container.scheduler:
             container.scheduler.shutdown(wait=False)
