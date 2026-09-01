@@ -8,8 +8,9 @@ The scheduled renewal jobs fired on a fixed cron: the certificate sweep at
 exactly 02:00:00, the client-certificate sweep at 03:00:00. On a single
 instance that is unremarkable. Across every CertMate in the world it means each
 one contacts its ACME certificate authority at the same wall-clock second, a
-synchronised load spike the CA has to absorb every hour on the hour. Let's
-Encrypt asks integrators to renew at randomised times for exactly this reason.
+synchronised load spike the CA has to absorb at those two fixed times every
+day. Let's Encrypt asks integrators to renew at randomised times for exactly
+this reason.
 
 Both renewal jobs now carry a cron jitter of plus-or-minus one hour, so the
 02:00 certificate sweep lands somewhere in 01:00-03:00 and the 03:00
