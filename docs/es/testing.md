@@ -108,7 +108,7 @@ redes restringidas), apunte la suite a una instancia ya en ejecución:
 
 ```bash
 # Terminal 1: ejecute CertMate como prefiera
-gunicorn --bind 127.0.0.1:18888 --workers 1 --threads 8 app:app
+gunicorn --bind 127.0.0.1:18888 --workers 1 --threads 8 --timeout 300 app:app
 
 # Terminal 2: apunte a esa instancia (omite toda la gestión del ciclo de vida Docker)
 CERTMATE_E2E_BASE_URL=http://localhost:18888 pytest -m "e2e and not ui"

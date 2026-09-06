@@ -108,7 +108,7 @@ eingeschränkte Netzwerke), kann die Suite auf eine bereits laufende Instanz gez
 
 ```bash
 # Terminal 1: CertMate beliebig starten
-gunicorn --bind 127.0.0.1:18888 --workers 1 --threads 8 app:app
+gunicorn --bind 127.0.0.1:18888 --workers 1 --threads 8 --timeout 300 app:app
 
 # Terminal 2: auf diese Instanz zeigen (überspringt die gesamte Docker-Lifecycle-Verwaltung)
 CERTMATE_E2E_BASE_URL=http://localhost:18888 pytest -m "e2e and not ui"
