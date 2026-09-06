@@ -112,9 +112,15 @@ jobs:
         # into the number, inflating it and hiding the real app coverage.
         # --cov-fail-under is a FLOOR, not a target (#428): before it, project
         # and patch statuses were both informational and fail_ci_if_error was
-        # false, so coverage could fall to zero with CI still green. 65 is
-        # comfortably below the current number; raise it as a ratchet, never
-        # lower it to make a red build pass.
+        # false, so coverage could fall to zero with CI still green.
+        # RATCHET IT UP, NEVER DOWN to make a red build pass. It had been
+        # left far below the coverage actually achieved, so entire modules
+        # could lose their tests with CI still green — the one thing a
+        # coverage floor exists to prevent (#651). Keep it just under the
+        # measured number: close enough to catch a module going dark, with a
+        # small margin for run-to-run skip variance. Re-measure and raise it
+        # when coverage climbs; do not record the measurement here, where it
+        # would age into a false claim.
         # `not network`: the CA-reachability checks in
         # tests/test_ca_endpoints_are_live.py fetch five external ACME
         # directories. They found two real defects (a DigiCert host that no
@@ -122,7 +128,7 @@ jobs:
         # another name) — but as a required check they would turn every PR red
         # on someone else's outage. They run on the weekly schedule below
         # instead, where a failure is news rather than a blocked merge.
-        pytest -v --tb=short --cov=modules --cov-report=xml --cov-report=html --cov-fail-under=65 -m "not ui and not network"
+        pytest -v --tb=short --cov=modules --cov-report=xml --cov-report=html --cov-fail-under=75 -m "not ui and not network"
 
     - name: Upload coverage reports
       if: matrix.python-version == '3.12'
