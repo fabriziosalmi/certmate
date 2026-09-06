@@ -249,6 +249,31 @@ def _make_dir_arbitrary_uid_ready(directory: Path):
         pass
 
 
+def _data_dir_is_on_its_own_mount(data_dir: Path) -> bool:
+    """True when *data_dir* lives on a mount other than the container root.
+
+    A Docker volume, a bind mount and a Kubernetes PVC all appear as a mount
+    point at or above the data directory; the container's writable layer does
+    not. Walking up to '/' covers the case where the operator mounted a parent
+    (e.g. /app) rather than /app/data itself, which would otherwise read as
+    ephemeral and produce a false alarm.
+    """
+    try:
+        current = Path(data_dir).resolve()
+    except OSError:
+        return False
+    root = Path('/')
+    while True:
+        try:
+            if current != root and os.path.ismount(current):
+                return True
+        except OSError:
+            return False
+        if current == root or current.parent == current:
+            return False
+        current = current.parent
+
+
 def setup_directories(container: AppContainer, test_config=None):
     _base = Path(__file__).resolve().parent.parent.parent
     container.cert_dir = (_base / "certificates").resolve()
@@ -310,23 +335,57 @@ def setup_directories(container: AppContainer, test_config=None):
     # to mount ./data:/app/data in docker-compose.yml.
     _in_docker = Path('/.dockerenv').exists() or os.getenv('container') is not None
     if _in_docker:
-        sentinel = container.data_dir / '.certmate_persistent'
-        if sentinel.exists():
-            logger.info("Persistent volume verified — data directory survives container restarts")
+        # Ask the filesystem which of the persistent directories are actually
+        # on a mount, instead of inferring it from a marker file.
+        #
+        # The marker only ever proved "something wrote here before". A plain
+        # `docker restart` keeps the container's writable layer, so the marker
+        # survived and the check reported a verified volume on an instance with
+        # NO volume mounted at all — the reassuring line appeared precisely
+        # while the data was ephemeral, and stayed right until the container was
+        # recreated and everything was gone. A mount point cannot be faked that
+        # way: if any ancestor below '/' is a mount, the directory lives on a
+        # volume or bind mount and survives recreation.
+        #
+        # Every directory is checked, and the warning names only the ones that
+        # are actually ephemeral. Warning about certificates and the CA key on
+        # the strength of /app/data alone would be false for the operator who
+        # mounted /app/certificates and forgot /app/data — a message must not
+        # claim more than the check established.
+        _persistent_dirs = (
+            ('/app/data (settings, admin account, private CA key)',
+             container.data_dir),
+            ('/app/certificates (issued certificates and their keys)',
+             container.cert_dir),
+            ('/app/backups (restore points)', container.backup_dir),
+            ('/app/logs', container.logs_dir),
+        )
+        ephemeral = [label for label, directory in _persistent_dirs
+                     if not _data_dir_is_on_its_own_mount(directory)]
+
+        if not ephemeral:
+            logger.info(
+                "Persistent storage detected — every data directory is on a "
+                "mounted volume and survives container recreation"
+            )
+            sentinel = container.data_dir / '.certmate_persistent'
+            if not sentinel.exists():
+                try:
+                    sentinel.write_text('1')
+                except OSError:
+                    pass
         else:
-            # First boot on this volume: create sentinel. If the sentinel
-            # doesn't survive the next restart, the volume wasn't mounted.
-            try:
-                sentinel.write_text('1')
-            except OSError:
-                pass
+            # f-string, not %-args: these loggers are StructuredLogger, whose
+            # level methods take (msg, **kwargs). A positional %-arg raises
+            # TypeError at the call site — which here would mean the warning
+            # about a misconfigured deployment blew up instead of appearing.
             logger.warning(
-                "PERSISTENCE CHECK: This appears to be the first boot on this data directory. "
-                "If you see this message on every restart, your /app/data volume is NOT "
-                "persistent and ALL configuration (admin account, settings, certificates) "
-                "will be LOST on container recreation. Mount a persistent volume: "
-                "-v ./data:/app/data:rw (Docker) or a PVC (Kubernetes). "
-                "Required volumes: /app/data, /app/certificates, /app/logs, /app/backups"
+                "PERSISTENCE CHECK: the following are on the container's "
+                "writable layer, not a mounted volume. They survive `docker "
+                "restart`, but everything they hold is LOST when the container "
+                f"is recreated: {'; '.join(ephemeral)}. Mount a persistent "
+                "volume for each (-v ./data:/app/data:rw with Docker, or a "
+                "PVC in Kubernetes)."
             )
 
 
