@@ -21,6 +21,7 @@ from modules.core import (
     RateLimitConfig, SimpleRateLimiter,
     get_certmate_logger
 )
+from modules.core.metrics import metrics_collector
 from modules.core.shell import ShellExecutor
 from modules.core.notifier import Notifier
 from modules.core.events import EventBus
@@ -653,6 +654,14 @@ def _run_manager_job(manager_key: str, method_name: str):
                 manager_key=manager_key,
             )
             return
+        # Record that this job actually ran, on both the success and the
+        # failure path. Without this the renewal sweep is unobservable: the
+        # collector exposes certmate_background_job_last_run_timestamp but
+        # nothing ever set it, so a scheduler that silently stopped looked
+        # identical to one that was working, and the single alert an operator
+        # most needs ("the sweep has not run in N days") could not be written.
+        job_type = f"{manager_key}.{method_name}"
+        started = time.time()
         try:
             getattr(manager, method_name)()
         except Exception:
@@ -661,6 +670,14 @@ def _run_manager_job(manager_key: str, method_name: str):
                 manager_key=manager_key,
                 method_name=method_name,
             )
+        finally:
+            try:
+                metrics_collector.record_background_job(
+                    job_type, time.time() - started)
+            except Exception:
+                # Telemetry must never be the reason a renewal run is lost.
+                logger.debug("Failed to record background-job metrics",
+                             job_type=job_type)
 
 
 @contextmanager

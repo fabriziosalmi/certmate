@@ -195,6 +195,33 @@ class CertificateManager:
         except Exception:  # pragma: no cover - defensive
             logger.debug("Failed to emit scheduled-renew audit for a domain")
 
+    def _record_renewal_metrics(self, domain, cert_info, success, duration,
+                                error=None):
+        """Emit renewal outcome + duration to the Prometheus collector.
+
+        The collector has always exposed certmate_certificate_renewals_total
+        and the renewal duration histogram, but nothing incremented them, so
+        every renewal series was permanently empty: a scheduler that had
+        silently stopped renewing looked exactly like one that was working.
+        Recording here — where check_renewals already knows the outcome —
+        keeps it out of the issuance hot path and off its many return points.
+
+        Never raises: telemetry must not be the reason a renewal run aborts.
+        """
+        try:
+            from .metrics import metrics_collector
+            provider = (cert_info or {}).get('dns_provider') or 'unknown'
+            metrics_collector.record_certificate_renewal(
+                domain, provider, success)
+            metrics_collector.record_certificate_renewal_time(
+                provider, duration)
+            if not success:
+                metrics_collector.record_acme_error(
+                    type(error).__name__ if error else 'unknown',
+                    domain, provider)
+        except Exception:  # pragma: no cover - defensive
+            logger.debug("Failed to record renewal metrics for a domain")
+
     @staticmethod
     def _certificate_info_cache_ttl() -> int:
         try:
@@ -2371,6 +2398,7 @@ class CertificateManager:
 
                 if cert_info and cert_info.get('needs_renewal'):
                     logger.info(f"Renewing certificate for {domain}")
+                    renew_started = time.time()
                     try:
                         res = self.renew_certificate(domain)
                         # certbot can report "not yet due" (renewed=False) when
@@ -2383,6 +2411,9 @@ class CertificateManager:
                         else:
                             summary['renewed'] += 1
                             logger.info(f"Successfully renewed certificate for {domain}")
+                            self._record_renewal_metrics(
+                                domain, cert_info, True,
+                                time.time() - renew_started)
                             self._audit_scheduled_renew(domain, 'success')
                             # Fire deploy hooks for background renewals too (#329):
                             # the manual path publishes this via the executor, the
@@ -2391,6 +2422,9 @@ class CertificateManager:
                     except Exception as e:
                         summary['failed'] += 1
                         logger.error(f"Failed to renew certificate for {domain}: {e}")
+                        self._record_renewal_metrics(
+                            domain, cert_info, False,
+                            time.time() - renew_started, error=e)
                         self._audit_scheduled_renew(domain, 'failure', error=e)
                         # Notify (#417): without this the operator's configured
                         # email/Slack channels stay silent while the cert
