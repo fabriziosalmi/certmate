@@ -108,7 +108,7 @@ reti con restrizioni), puntare la suite su un'istanza già in esecuzione:
 
 ```bash
 # Terminale 1: avviare CertMate come si preferisce
-gunicorn --bind 127.0.0.1:18888 --workers 1 --threads 8 app:app
+gunicorn --bind 127.0.0.1:18888 --workers 1 --threads 8 --timeout 300 app:app
 
 # Terminale 2: puntare all'istanza (ignora tutta la gestione del ciclo di vita Docker)
 CERTMATE_E2E_BASE_URL=http://localhost:18888 pytest -m "e2e and not ui"

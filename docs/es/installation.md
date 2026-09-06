@@ -281,7 +281,7 @@ Mantenga `BEHIND_PROXY=true` en el servicio CertMate: Zion añade `X-Forwarded-F
 
 ```bash
 pip install gunicorn
-gunicorn --bind 0.0.0.0:8000 --workers 1 --threads 8 app:app
+gunicorn --bind 0.0.0.0:8000 --workers 1 --threads 8 --timeout 300 app:app
 ```
 
 ### Usar systemd
@@ -298,7 +298,8 @@ Type=simple
 User=certmate
 WorkingDirectory=/opt/certmate
 Environment=PATH=/opt/certmate/venv/bin
-ExecStart=/opt/certmate/venv/bin/gunicorn --bind 0.0.0.0:8000 --workers 1 --threads 8 app:app
+Environment=GUNICORN_TIMEOUT=300
+ExecStart=/opt/certmate/venv/bin/gunicorn --bind 0.0.0.0:8000 --workers 1 --threads 8 --timeout ${GUNICORN_TIMEOUT} app:app
 Restart=always
 
 [Install]
@@ -427,7 +428,7 @@ Si NFS es inevitable, monte con `soft,timeo=30,retrans=3` (o el equivalente de s
 ### Usar Gunicorn
 
 ```bash
-gunicorn --bind 0.0.0.0:8000 --workers 1 --threads 8 app:app
+gunicorn --bind 0.0.0.0:8000 --workers 1 --threads 8 --timeout 300 app:app
 ```
 
 ### Usar systemd
@@ -444,7 +445,8 @@ Type=simple
 User=certmate
 WorkingDirectory=/opt/certmate
 Environment=PATH=/opt/certmate/venv/bin
-ExecStart=/opt/certmate/venv/bin/gunicorn --bind 0.0.0.0:8000 --workers 1 --threads 8 app:app
+Environment=GUNICORN_TIMEOUT=300
+ExecStart=/opt/certmate/venv/bin/gunicorn --bind 0.0.0.0:8000 --workers 1 --threads 8 --timeout ${GUNICORN_TIMEOUT} app:app
 Restart=always
 
 [Install]
