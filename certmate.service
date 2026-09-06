@@ -10,14 +10,23 @@ User=certmate
 Group=certmate
 WorkingDirectory=/opt/certmate
 Environment=PATH=/opt/certmate/venv/bin
-Environment=API_BEARER_TOKEN=change-this-secure-token
+# Worker timeout. DNS-01 issuance waits on propagation and routinely runs for
+# minutes; gunicorn's default is 30s, which reaps the worker mid-certbot and
+# fails the issuance for no reason the operator can see. The container image
+# sets the same value (Dockerfile: GUNICORN_TIMEOUT=300) — keep them in step.
+Environment=GUNICORN_TIMEOUT=300
+# Operator-supplied secrets (API_BEARER_TOKEN, provider credentials). The unit
+# ships no credential of its own: a value committed here would be identical on
+# every installation that never changed it. Leading '-' means the file is
+# optional; with no token supplied the application derives one at startup.
+EnvironmentFile=-/etc/certmate/certmate.env
 # Single worker + threads, matching the Dockerfile (#411). Sessions, session
 # revocation and the login rate limiter are per-process in-memory state: with
 # 4 workers, revoking a compromised admin's session only took effect on the
 # worker that handled the request (so ~3 requests in 4 still validated), the
 # login rate limit was multiplied by the worker count, and APScheduler ran a
 # duplicate renewal job per worker.
-ExecStart=/opt/certmate/venv/bin/gunicorn --bind 0.0.0.0:8000 --workers 1 --threads 8 app:app
+ExecStart=/opt/certmate/venv/bin/gunicorn --bind 0.0.0.0:8000 --workers 1 --threads 8 --timeout ${GUNICORN_TIMEOUT} app:app
 ExecReload=/bin/kill -s HUP $MAINPID
 Restart=always
 RestartSec=10
@@ -28,7 +37,11 @@ TimeoutStopSec=5
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/opt/certmate/certificates /opt/certmate/data
+# All four directories the startup writeability probe requires. It checks
+# certificates, data, backups AND logs and raises at boot if any is not
+# writable, so omitting the last two under ProtectSystem=strict stopped the
+# service from starting at all.
+ReadWritePaths=/opt/certmate/certificates /opt/certmate/data /opt/certmate/backups /opt/certmate/logs
 PrivateTmp=true
 ProtectKernelTunables=true
 ProtectKernelModules=true
