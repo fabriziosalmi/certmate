@@ -22,6 +22,7 @@ from flask_restx import Resource, fields
 
 from ..core.metrics import get_metrics_summary, is_prometheus_available
 from ..core.constants import CERTIFICATE_FILES, iter_cert_domain_dirs
+from .resources_cache import create_cache_resources
 from .resource_context import (
     build_context, wants_async, job_accepted, check_domain_scope,
     is_record_in_scope, scope_filter_records, user_has_role,
@@ -347,6 +348,9 @@ def create_api_resources(api, models, managers):
     # local names below are aliases kept during the decomposition: call sites
     # move group by group, not all at once.
     ctx = build_context(managers)
+    # Groups that have moved into modules of their own build here and
+    # are merged into the returned mapping below (#669).
+    extracted = create_cache_resources(api, models, ctx)
     auth_manager = ctx.auth
     settings_manager = ctx.settings
     certificate_manager = ctx.certificates
@@ -860,63 +864,7 @@ def create_api_resources(api, models, managers):
                 return {'error': 'Failed to load DNS providers'}, 500
 
     # Cache management endpoints
-    class CacheStats(Resource):
-        @api.doc(security='Bearer')
-        @api.marshal_with(models['cache_stats_model'])
-        @auth_manager.require_role('viewer')
-        def get(self):
-            """Get cache statistics"""
-            try:
-                stats = cache_manager.get_cache_stats()
-                return stats
-            except Exception as e:
-                logger.error(f"Error getting cache stats: {e}")
-                return {'error': 'Failed to get cache statistics'}, 500
 
-    class CacheClear(Resource):
-        @api.doc(security='Bearer')
-        @api.marshal_with(models['cache_clear_response_model'])
-        @auth_manager.require_role('admin')
-        def post(self):
-            """Clear deployment cache"""
-            try:
-                cleared_count = cache_manager.clear_cache()
-                if audit_logger:
-                    user = getattr(request, 'current_user', None) or {}
-                    audit_logger.log_operation(
-                        operation='clear',
-                        resource_type='cache',
-                        resource_id='deployment_cache',
-                        status='success',
-                        details={
-                            'cleared_entries': cleared_count
-                        },
-                        user=user.get('username'),
-                        ip_address=request.remote_addr,
-                    )
-                return {
-                    'success': True,
-                    'message': 'Cache cleared successfully',
-                    'cleared_entries': cleared_count
-                }
-            except Exception as e:
-                logger.error(f"Error clearing cache: {e}")
-                if audit_logger:
-                    user = getattr(request, 'current_user', None) or {}
-                    audit_logger.log_operation(
-                        operation='clear',
-                        resource_type='cache',
-                        resource_id='deployment_cache',
-                        status='failure',
-                        user=user.get('username'),
-                        ip_address=request.remote_addr,
-                        error=str(e)
-                    )
-                return {
-                    'success': False,
-                    'message': 'Failed to clear cache',
-                    'cleared_entries': 0
-                }, 500
 
     # Certificate endpoints
     class CertificateList(Resource):
@@ -3943,13 +3891,12 @@ def create_api_resources(api, models, managers):
 
     # Return all resource classes (CA provider test will be registered in app.py)
     return {
+        **extracted,
         'HealthCheck': HealthCheck,
         'MetricsList': MetricsList,
         'DiagnosticsSnapshot': DiagnosticsSnapshot,
         'Settings': Settings,
         'DNSProviders': DNSProviders,
-        'CacheStats': CacheStats,
-        'CacheClear': CacheClear,
         'CertificateList': CertificateList,
         'InventoryList': InventoryList,
         'InventoryConfig': InventoryConfig,
