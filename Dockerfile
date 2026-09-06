@@ -76,7 +76,27 @@ WORKDIR /app
 # its login shell on the line below, and (b) operator-provided deploy hooks
 # routinely start with `#!/bin/bash` — without bash the kernel cannot resolve
 # the shebang and the script returns exit 127 (issue #207).
-# apt-get upgrade pulls security patches for glibc, zlib, etc.
+#
+# No `apt-get upgrade` here, deliberately. It upgraded EVERY package in the
+# image to whatever the mirror served at that moment, so the whole OS layer
+# varied build to build — contradicting, in the same RUN instruction, the
+# reproducibility rationale written below for pinning pip and above for
+# pinning the base image by digest.
+#
+# Be precise about what this buys, because it is not full reproducibility:
+# `apt-get install` below is still unpinned, so the three packages it names can
+# differ between builds. What changes is that the variance goes from unbounded
+# (every package in the image) to bounded (three named ones). Pinning those
+# versions too would break on every base-image bump, and a genuinely
+# reproducible OS layer needs a snapshot mirror — a separate trade, not this
+# one.
+#
+# OS security patches now arrive the way every other dependency does: as a
+# base-image digest bump. Dependabot watches the docker ecosystem weekly and
+# ignores only python's semver-major/minor, so digest updates are proposed as
+# reviewable PRs — auditable and tied to a commit, rather than an invisible
+# build-time upgrade. The cost is real: a digest bump has to actually be merged
+# when one lands (#659).
 #
 # The pip upgrade is this stage's, not the builder's. The builder already runs
 # `pip install -U pip`, but that only patches the BUILDER's interpreter — the
@@ -92,7 +112,6 @@ WORKDIR /app
 # same commit could differ. Bump this deliberately when a pip CVE lands.
 ARG PIP_VERSION=26.1.2
 RUN apt-get update && \
-    apt-get upgrade -y -o Acquire::Retries=3 && \
     apt-get install -y -o Acquire::Retries=3 bash curl tini && \
     rm -rf /var/lib/apt/lists/* && \
     pip install --no-cache-dir "pip==${PIP_VERSION}" && \

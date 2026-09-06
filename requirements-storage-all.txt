@@ -6,9 +6,19 @@ azure-keyvault-secrets>=4.11.1
 azure-keyvault-certificates>=4.11.1
 azure-identity>=1.25.3
 
-# Needed by the Azure KV Certificate-object code path
-# (`load_pem_x509_certificates` + PKCS12 builder).
-cryptography>=41.0.0
+# Floor: the Azure Key Vault Certificate-object path uses
+# `load_pem_x509_certificates` (plural, added in 36.0) and the PKCS12 builder,
+# so a layered install onto a stripped-down base should fail with a clear
+# constraint error rather than an opaque ImportError at runtime.
+#
+# Ceiling: the ACME stack holds cryptography below 47 (pyopenssl==26.0.0
+# requires cryptography>=46.0.0,<47; above it, `certbot --version` dies). This
+# file is documented as installable on its own, and standalone nothing else
+# constrains cryptography — it would resolve to the newest release and break
+# issuance. Until now that only held by accident of Docker's install order.
+# The authoritative reason for the hold lives beside the pin in
+# requirements.txt; raise this ceiling only when that moves (#103).
+cryptography>=41.0.0,<47
 
 # AWS Secrets Manager
 boto3>=1.43.87
