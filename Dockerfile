@@ -76,7 +76,20 @@ WORKDIR /app
 # its login shell on the line below, and (b) operator-provided deploy hooks
 # routinely start with `#!/bin/bash` — without bash the kernel cannot resolve
 # the shebang and the script returns exit 127 (issue #207).
-# apt-get upgrade pulls security patches for glibc, zlib, etc.
+#
+# No `apt-get upgrade` here, deliberately. It pulled whatever Debian happened
+# to serve at build time, so two builds of the same commit produced different
+# OS package sets — contradicting, in the same RUN instruction, the
+# reproducibility rationale written below for pinning pip and above for
+# pinning the base image by digest.
+#
+# OS security patches now arrive the same way every other dependency does: as
+# a base-image digest bump. Dependabot watches the docker ecosystem weekly and
+# ignores only python's semver-major/minor, so digest updates are proposed as
+# reviewable PRs. That is strictly better than an invisible build-time upgrade:
+# the change is auditable, it is tied to a commit, and the resulting image is
+# reproducible from that commit. It does mean a digest bump must actually be
+# merged when one lands — that is the cost of the trade (#659).
 #
 # The pip upgrade is this stage's, not the builder's. The builder already runs
 # `pip install -U pip`, but that only patches the BUILDER's interpreter — the
@@ -92,7 +105,6 @@ WORKDIR /app
 # same commit could differ. Bump this deliberately when a pip CVE lands.
 ARG PIP_VERSION=26.1.2
 RUN apt-get update && \
-    apt-get upgrade -y -o Acquire::Retries=3 && \
     apt-get install -y -o Acquire::Retries=3 bash curl tini && \
     rm -rf /var/lib/apt/lists/* && \
     pip install --no-cache-dir "pip==${PIP_VERSION}" && \
