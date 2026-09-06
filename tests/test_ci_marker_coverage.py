@@ -9,9 +9,13 @@ by *every* CI ``-m`` expression, this test fails.
 import pathlib
 import re
 
+import pytest
+
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 WF_DIR = ROOT / ".github" / "workflows"
 TESTS_DIR = ROOT / "tests"
+
+pytestmark = [pytest.mark.unit]
 
 
 def _declared_markers():
@@ -85,8 +89,17 @@ def _test_files():
 
 
 def _declares_a_marker(src):
-    return "pytestmark" in src or re.search(
-        r"@pytest\.mark\.(" + "|".join(_declared_markers()) + r")\b", src)
+    """True when the file really declares a marker.
+
+    Looks for an actual ``pytestmark`` assignment rather than the substring
+    anywhere in the file: the word appears in comments and docstrings that
+    discuss marking, and treating those as evidence would let a genuinely
+    unmarked file slip past the guard.
+    """
+    if re.search(r"^pytestmark\s*=", src, re.M):
+        return True
+    return bool(re.search(
+        r"@pytest\.mark\.(" + "|".join(_declared_markers()) + r")\b", src))
 
 
 def test_every_test_file_declares_a_marker():
@@ -111,6 +124,24 @@ def test_every_test_file_declares_a_marker():
     )
 
 
+def _markers_in_use():
+    """Marker names any test file actually applies.
+
+    Read from the sources rather than by shelling out to pytest once per
+    marker: that was slower, and it judged a run by grepping stdout for a
+    message pytest can also emit on stderr — a check that can miss its own
+    signal is not one worth keeping.
+    """
+    used = set()
+    declared = _declared_markers()
+    for path in _test_files():
+        src = path.read_text(encoding="utf-8")
+        for match in re.finditer(r"pytest\.mark\.(\w+)", src):
+            if match.group(1) in declared:
+                used.add(match.group(1))
+    return used
+
+
 def test_no_marker_is_declared_without_tests():
     """The other blind spot: a category nobody is in.
 
@@ -118,18 +149,7 @@ def test_no_marker_is_declared_without_tests():
     so a reader filtering by them got silence and concluded there was nothing
     to run — indistinguishable from a suite where those tests had rotted away.
     """
-    import subprocess
-    import sys
-
-    empty = []
-    for marker in sorted(_declared_markers()):
-        result = subprocess.run(
-            [sys.executable, "-m", "pytest", "--collect-only", "-q",
-             "-m", marker, "-p", "no:cacheprovider"],
-            cwd=ROOT, capture_output=True, text=True,
-        )
-        if "no tests collected" in result.stdout:
-            empty.append(marker)
+    empty = sorted(_declared_markers() - _markers_in_use())
     assert not empty, (
         "these markers are declared but no test carries them, so they name "
         "categories that do not exist: " + ", ".join(empty)
