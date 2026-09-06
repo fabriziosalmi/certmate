@@ -15,6 +15,9 @@ import pytest
 
 from modules import __version__
 
+
+pytestmark = [pytest.mark.unit]
+
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 # Globbed, not enumerated: a translation added later is covered the day it

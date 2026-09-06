@@ -20,6 +20,9 @@ import pytest
 from modules.api.resources import _https_proxy_for, _probe_tls_certificate
 
 
+pytestmark = [pytest.mark.unit]
+
+
 # ---- _https_proxy_for -----------------------------------------------------
 
 

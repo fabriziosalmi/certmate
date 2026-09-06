@@ -11,6 +11,9 @@ from cryptography.hazmat.primitives.asymmetric import rsa, ec, ed25519
 from modules.api.resources import _privkey_to_pkcs1
 
 
+pytestmark = [pytest.mark.unit]
+
+
 def _pkcs8_pem(key):
     return key.private_bytes(
         encoding=serialization.Encoding.PEM,

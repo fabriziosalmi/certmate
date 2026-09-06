@@ -9,6 +9,9 @@ from modules.core.deployer import DeployManager
 from modules.core.shell import MockShellExecutor
 
 
+pytestmark = [pytest.mark.unit]
+
+
 @pytest.fixture
 def shell_executor():
     return MockShellExecutor()

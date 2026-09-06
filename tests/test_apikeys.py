@@ -8,6 +8,9 @@ from unittest.mock import MagicMock
 from modules.core.auth import AuthManager
 
 
+pytestmark = [pytest.mark.unit]
+
+
 @pytest.fixture
 def settings_store():
     """Shared mutable settings dict."""

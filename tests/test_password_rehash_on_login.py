@@ -3,6 +3,9 @@ import pytest
 
 from tests.test_auth_manager_coverage import _mk_settings_manager  # noqa: E402
 
+
+pytestmark = [pytest.mark.unit]
+
 # Fixed fixtures, not values recomputed with hashlib at test time.
 #
 # Recomputing them would mean the test derives the expected hash with the same

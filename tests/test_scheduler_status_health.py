@@ -27,6 +27,9 @@ from flask import Flask
 from modules.web.misc_routes import register_misc_routes
 
 
+pytestmark = [pytest.mark.unit]
+
+
 def _build_app(managers: dict) -> Flask:
     """Mount /health against a stub auth_manager and the given managers dict."""
     app = Flask(__name__)

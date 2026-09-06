@@ -9,6 +9,9 @@ from pathlib import Path
 from modules.core.digest import WeeklyDigest
 
 
+pytestmark = [pytest.mark.unit]
+
+
 @pytest.fixture
 def mock_managers():
     """Create mock managers for digest tests."""

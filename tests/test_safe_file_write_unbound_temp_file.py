@@ -26,6 +26,9 @@ import pytest
 from modules.core.file_operations import FileOperations
 
 
+pytestmark = [pytest.mark.unit]
+
+
 @pytest.fixture
 def file_ops(tmp_path):
     return FileOperations(

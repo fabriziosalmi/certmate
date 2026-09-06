@@ -64,6 +64,10 @@ def test_json_formatter_sanitizes_inline_assignments():
 
 import io
 
+import pytest
+
+pytestmark = [pytest.mark.unit]
+
 def test_logger_integration():
     # Setup test logger
     logger = logging.getLogger("test_sanitizer")

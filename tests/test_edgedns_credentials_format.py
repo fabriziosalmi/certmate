@@ -20,6 +20,9 @@ import pytest
 from modules.core.utils import create_edgedns_config
 
 
+pytestmark = [pytest.mark.unit]
+
+
 @pytest.fixture
 def edgedns_ini(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)

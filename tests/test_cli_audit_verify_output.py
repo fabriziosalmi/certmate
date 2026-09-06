@@ -5,6 +5,10 @@ from typer.testing import CliRunner
 
 from certmate_cli.main import app
 
+import pytest
+
+pytestmark = [pytest.mark.unit]
+
 runner = CliRunner()
 
 
