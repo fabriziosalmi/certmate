@@ -107,7 +107,17 @@ def test_two_processes_publishing_never_leave_a_split_generation(tmp_path):
 
     for w in workers:
         w.join(timeout=120)
-        assert w.exitcode is not None, 'publisher process hung' 
+        if w.is_alive():
+            w.terminate()
+            w.join(timeout=10)
+            raise AssertionError('publisher process hung and was terminated')
+        # Exit status, not merely "it stopped": a child that crashed after
+        # putting its result on the queue would otherwise be indistinguishable
+        # from one that finished cleanly.
+        assert w.exitcode == 0, (
+            f'publisher exited with status {w.exitcode}; the race outcome '
+            f'below cannot be trusted'
+        )
     assert set(reported) == {'AAAA', 'BBBB'}, (
         f'both publishers must report back; got {reported} — a worker that '
         f'died on import would make this test pass without racing'
