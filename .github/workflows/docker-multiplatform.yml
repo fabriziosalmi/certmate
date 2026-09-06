@@ -25,8 +25,10 @@ env:
 
 # Default to read-only. The build job authenticates to Docker Hub via the
 # DOCKERHUB_TOKEN secret, not the workflow GITHUB_TOKEN, so no write
-# permission on the repo is needed for the push. If we ever add SLSA
-# attestation here (Phase 2), `id-token: write` lands at the job level.
+# permission on the repo is needed for the push. The build publishes BuildKit
+# SBOM and provenance attestations, which travel with the image in the registry
+# and need no extra token; a keyless-signing scheme (cosign / GitHub
+# attestations) would be what requires `id-token: write` at the job level.
 permissions: read-all
 
 jobs:
@@ -137,6 +139,23 @@ jobs:
         labels: ${{ steps.meta.outputs.labels }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
+        # A bill of materials and build provenance, pushed alongside the image
+        # as OCI attestations. Without them the published artefact says nothing
+        # about what is inside it or where it came from, which for a container
+        # that custodies private keys is the one artefact most worth being able
+        # to audit after the fact. `mode=max` records the full build context
+        # (base image digests, build args, the source commit) rather than the
+        # minimal summary.
+        #
+        # Inspect a published tag with:
+        #   docker buildx imagetools inspect <image> --format '{{ json .SBOM }}'
+        #   docker buildx imagetools inspect <image> --format '{{ json .Provenance }}'
+        #
+        # BuildKit writes these as extra manifests in the image index. The
+        # image is already a multi-arch index, so this is additive: `docker
+        # pull` and `--platform` selection are unaffected.
+        sbom: true
+        provenance: mode=max
         build-args: |
           REQUIREMENTS_FILE=requirements.txt
           
