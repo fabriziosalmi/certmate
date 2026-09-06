@@ -195,8 +195,15 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
             logger.error(f"Audit export API error: {e}")
             return jsonify({'error': 'Failed to export audit bundle'}), 500
 
+    # Viewer, not admin. This is a read-only scrape target whose sibling
+    # '/api/metrics' already serves the same class of information (domain
+    # names, counts, expiry) at viewer level, so requiring admin here bought
+    # no confidentiality — it only forced an operator to put ADMIN credentials
+    # into a Prometheus scrape config to collect anything at all, or to
+    # collect nothing. It is not public either: the series enumerate every
+    # managed domain, which is infrastructure disclosure.
     @app.route('/metrics')
-    @auth_manager.require_role('admin')
+    @auth_manager.require_role('viewer')
     def metrics():
         """Prometheus metrics endpoint.
 
