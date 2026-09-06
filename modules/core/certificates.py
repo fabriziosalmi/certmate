@@ -16,6 +16,11 @@ import time
 import logging
 import shutil
 from contextlib import contextmanager
+
+try:  # POSIX only; the lock degrades to a no-op without it
+    import fcntl
+except ImportError:  # pragma: no cover - non-POSIX
+    fcntl = None
 import threading
 import urllib.error
 import urllib.parse
@@ -394,6 +399,51 @@ class CertificateManager:
                 stale.append(file_name)
         return stale
 
+    @staticmethod
+    @contextmanager
+    def _publish_lock(dest_dir: Path):
+        """Serialise the stage-and-promote window across PROCESSES.
+
+        The per-domain lock held by callers is a threading.Lock, so it orders
+        threads inside one worker and nothing else. Promote is four independent
+        renames and the staging files are named after their destination, so two
+        processes publishing the same domain shared both the temporaries and
+        the rename sequence. A cross-process race could therefore leave
+        cert.pem from one issuance beside privkey.pem from another — a pair
+        that cannot complete a handshake, served straight off disk by the
+        download endpoint and pushed to every deploy hook.
+
+        Reproduced before fixing: two processes publishing distinguishable
+        generations produced a split bundle roughly one run in six.
+
+        Keyed on the destination directory, so different domains never
+        contend. Best-effort by design, matching the renewal lock: where flock
+        is unavailable (some network filesystems) this yields rather than
+        refusing to publish — no worse than the previous behaviour, and
+        failing closed here would mean declining to install a certificate the
+        CA has already issued.
+        """
+        lock_path = Path(dest_dir) / '.publish.lock'
+        handle = None
+        try:
+            lock_path.parent.mkdir(parents=True, exist_ok=True)
+            handle = open(lock_path, 'w')
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        except (OSError, NameError, AttributeError) as exc:
+            logger.debug("Publish lock unavailable for %s (%s); proceeding",
+                         dest_dir, exc)
+            if handle is not None:
+                handle.close()
+                handle = None
+        try:
+            yield
+        finally:
+            if handle is not None:
+                try:
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+                finally:
+                    handle.close()
+
     def _publish_flat_files(self, src_dir: Path, dest_dir: Path) -> dict:
         """Copy live/ to the flat directory as one unit, not four.
 
@@ -429,28 +479,33 @@ class CertificateManager:
         # attempt and not from a publish in flight. Four known names, no
         # wildcard: this is a delete, and the set of files it can ever touch
         # is spelled out here rather than matched.
-        for file_name in CERTIFICATE_FILES:
-            (dest_dir / f"{file_name}.staging").unlink(missing_ok=True)
-        staged = []
-        try:
+        # Everything from the staging cleanup to the last rename happens under
+        # a cross-process lock: the staging names are shared, and the promote
+        # is four separate renames, so a second process could otherwise
+        # interleave and leave a split bundle.
+        with self._publish_lock(dest_dir):
             for file_name in CERTIFICATE_FILES:
-                src_file = src_dir / file_name
-                if not src_file.exists():
-                    continue
-                staging = dest_dir / f"{file_name}.staging"
-                staging.write_bytes(src_file.read_bytes())
-                shutil.copymode(src_file, staging)
-                staged.append((staging, dest_dir / file_name))
-        except Exception:
-            for staging, _dest in staged:
-                staging.unlink(missing_ok=True)
-            raise
+                (dest_dir / f"{file_name}.staging").unlink(missing_ok=True)
+            staged = []
+            try:
+                for file_name in CERTIFICATE_FILES:
+                    src_file = src_dir / file_name
+                    if not src_file.exists():
+                        continue
+                    staging = dest_dir / f"{file_name}.staging"
+                    staging.write_bytes(src_file.read_bytes())
+                    shutil.copymode(src_file, staging)
+                    staged.append((staging, dest_dir / file_name))
+            except Exception:
+                for staging, _dest in staged:
+                    staging.unlink(missing_ok=True)
+                raise
 
-        published = {}
-        for staging, dest_file in staged:
-            staging.replace(dest_file)
-            published[dest_file.name] = dest_file.read_bytes()
-        return published
+            published = {}
+            for staging, dest_file in staged:
+                staging.replace(dest_file)
+                published[dest_file.name] = dest_file.read_bytes()
+            return published
 
     @staticmethod
     def _atomic_json_write(path: Path, data: dict) -> None:
