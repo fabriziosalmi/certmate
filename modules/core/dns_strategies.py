@@ -17,8 +17,7 @@ from .utils import (
     create_powerdns_config, create_digitalocean_config, create_linode_config,
     create_gandi_config, create_ovh_config, create_namecheap_config,
     create_arvancloud_config, create_infomaniak_config, create_acme_dns_config,
-    create_duckdns_config, create_edgedns_config, create_multi_provider_config,
-    _create_config_file
+    create_duckdns_config, create_edgedns_config, create_multi_provider_config
 )
 
 logger = logging.getLogger(__name__)
@@ -48,13 +47,11 @@ class DNSProviderStrategy(ABC):
     @abstractmethod
     def create_config_file(self, config_data: Dict[str, Any]) -> Optional[Path]:
         """Create the configuration file for the provider"""
-        pass
     
     @property
     @abstractmethod
     def plugin_name(self) -> str:
         """Return the Certbot plugin name"""
-        pass
     
     @property
     def default_propagation_seconds(self) -> int:
@@ -113,11 +110,9 @@ class DNSProviderStrategy(ABC):
 
     def prepare_environment(self, env: Dict[str, str], config_data: Dict[str, Any]) -> None:
         """Set up environment variables if needed"""
-        pass
 
     def cleanup_environment(self, env: Dict[str, str]) -> None:
         """Clean up environment variables"""
-        pass
 
 class CloudflareStrategy(DNSProviderStrategy):
     def create_config_file(self, config_data: Dict[str, Any]) -> Optional[Path]:

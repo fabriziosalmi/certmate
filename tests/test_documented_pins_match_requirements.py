@@ -28,7 +28,6 @@ not tell the difference would have to be silenced to let that stand.
 import pathlib
 import re
 
-import pytest
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 

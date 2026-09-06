@@ -40,7 +40,6 @@ class DNSManager:
         """
         settings = self.settings_manager.load_settings()
         settings = self.settings_manager.migrate_dns_providers_to_multi_account(settings)
-        dns_providers = settings.get('dns_providers', {})
 
         result = []
         for provider in self.SUPPORTED_PROVIDERS:

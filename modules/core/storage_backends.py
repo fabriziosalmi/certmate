@@ -12,7 +12,6 @@ import shutil
 import tempfile
 import threading
 import time
-import zipfile
 from abc import ABC, abstractmethod
 from pathlib import Path
 from datetime import datetime
@@ -187,12 +186,10 @@ class CertificateStorageBackend(ABC):
     @abstractmethod
     def store_certificate(self, domain: str, cert_files: Dict[str, bytes], metadata: Dict[str, Any]) -> bool:
         """Store certificate files and metadata for a domain"""
-        pass
     
     @abstractmethod
     def retrieve_certificate(self, domain: str) -> Optional[Tuple[Dict[str, bytes], Dict[str, Any]]]:
         """Retrieve certificate files and metadata for a domain"""
-        pass
 
     def retrieve_certificate_info(self, domain: str) -> Optional[Tuple[Dict[str, bytes], Dict[str, Any]]]:
         """Retrieve only the certificate material needed by list/info views.
@@ -213,22 +210,18 @@ class CertificateStorageBackend(ABC):
     @abstractmethod
     def list_certificates(self) -> List[str]:
         """List all stored certificate domains"""
-        pass
     
     @abstractmethod
     def delete_certificate(self, domain: str) -> bool:
         """Delete certificate for a domain"""
-        pass
     
     @abstractmethod
     def certificate_exists(self, domain: str) -> bool:
         """Check if certificate exists for a domain"""
-        pass
 
     @abstractmethod
     def get_backend_name(self) -> str:
         """Get the name of this storage backend"""
-        pass
 
 
 class LocalFileSystemBackend(CertificateStorageBackend):

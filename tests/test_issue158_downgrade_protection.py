@@ -101,7 +101,7 @@ def test_load_settings_info_on_same_version(settings_manager, caplog):
     )
 
     with caplog.at_level("INFO"):
-        settings = settings_manager.load_settings()
+        settings_manager.load_settings()
 
     assert "continuing normally" in caplog.text
     assert "DOWNGRADE DETECTED" not in caplog.text
@@ -132,7 +132,7 @@ def test_load_settings_logs_critical_when_users_missing_with_backups(
     )
 
     with caplog.at_level("ERROR"):
-        settings = settings_manager.load_settings()
+        settings_manager.load_settings()
 
     assert "CRITICAL: settings.json has no users" in caplog.text
     assert "backup_20260512_test.zip" in caplog.text
@@ -157,7 +157,7 @@ def test_load_settings_logs_critical_when_users_missing_no_backups(
     )
 
     with caplog.at_level("ERROR"):
-        settings = settings_manager.load_settings()
+        settings_manager.load_settings()
 
     assert "CRITICAL: settings.json has no users" in caplog.text
     assert "no backups were found" in caplog.text
@@ -187,7 +187,7 @@ def test_load_settings_logs_warning_when_domains_missing_but_certs_exist(
     )
 
     with caplog.at_level("WARNING"):
-        settings = settings_manager.load_settings()
+        settings_manager.load_settings()
 
     assert "settings.json has no domains but certificates exist on disk" in caplog.text
     assert "example.com" in caplog.text

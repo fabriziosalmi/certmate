@@ -9,7 +9,6 @@ Phase 1 of the agentic cert-lifecycle audit trail (l0 #408):
 - attribution of unattended, scheduler-driven renewals.
 """
 
-import json
 
 import pytest
 

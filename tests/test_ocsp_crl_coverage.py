@@ -263,7 +263,6 @@ class TestCRLLifecycle:
         assert not der.startswith(b"-----BEGIN")
         # And must parse back as a CRL.
         from cryptography import x509 as _x
-        from cryptography.hazmat.primitives import serialization as _s
         crl = _x.load_der_x509_crl(der)
         assert 7 in {e.serial_number for e in crl}
 

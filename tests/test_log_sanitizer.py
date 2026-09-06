@@ -1,6 +1,5 @@
 import json
 import logging
-import pytest
 from modules.core.structured_logging import JSONFormatter, StructuredLogger
 
 def test_json_formatter_sanitizes_dict():
@@ -99,7 +98,7 @@ def test_logger_integration():
     # Test logging an exception with a secret in message
     try:
         raise ValueError("Failed login with password = 'admin123'")
-    except Exception as e:
+    except Exception:
         s_logger.exception("Error during authentication")
         
     log_stream.seek(0)

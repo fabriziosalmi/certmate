@@ -181,7 +181,6 @@ class TestSettingsGetRoleNormalization:
         remains. The full Flask integration is exercised by the docker
         fixture in tests/test_auth.py."""
         from modules.web import settings_routes
-        src = settings_routes.register_settings_routes.__code__
         # The handler names live as closures inside register_settings_routes;
         # we approximate by reading the function source text to confirm both
         # handlers and roles are present.

@@ -134,7 +134,7 @@ def register_cert_routes(app, managers, require_web_auth, auth_manager,
                     })
                     continue
                 try:
-                    result = certificate_manager.create_certificate(
+                    certificate_manager.create_certificate(
                         domain=domain, email=email,
                         dns_provider=dns_provider, ca_provider=ca_provider,
                         challenge_type=challenge_type,

@@ -272,7 +272,7 @@ Hooks umfassen: Code-Formatierung (black, isort), Linting (flake8), Sicherheitsp
 
 ## Coverage-Anforderungen
 
-- Die CI erzwingt eine Untergrenze von **65%** über `modules/`
+- Die CI erzwingt eine Untergrenze von **75%** über `modules/`
   (`--cov-fail-under`, eine Ratsche: anheben, niemals senken, damit ein Build
   durchgeht). Der aktuelle Wert liegt komfortabel darüber.
 - Alle neuen Funktionen müssen Tests enthalten.

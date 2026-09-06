@@ -5,7 +5,6 @@ command-builder tests use the same MagicMock pattern as
 ``tests/test_san_domains.py`` (no Docker, no real certbot needed).
 """
 import json
-from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest

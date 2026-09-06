@@ -65,7 +65,7 @@ catch something:
 |---|---|
 | Syntax + bug-class lint (**fails CI**) | `flake8 . --count --select=E9,F63,F7,F82,F811,F632,E711,E712,E713,E714 --show-source` |
 | Security scan (**fails CI**) | `bandit -r modules/ app.py --severity-level medium` |
-| Tests + coverage floor of 65% on `modules/` | `pytest -m "not ui" --cov=modules --cov-fail-under=65` |
+| Tests + coverage floor of 75% on `modules/` | `pytest -m "not ui" --cov=modules --cov-fail-under=75` |
 | Theme tokens | `python3 scripts/theme_codemod.py --check` |
 | CSS bundle freshness | `npm ci && npm run css:build`, then commit `static/css/tailwind.min.css` |
 | No emoji in `RELEASE_NOTES.md` | `.github/workflows/lint-emoji.yml` |

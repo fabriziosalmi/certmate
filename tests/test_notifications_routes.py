@@ -13,7 +13,6 @@ future tightening doesn't silently regress these endpoints.
 """
 
 import pytest
-import requests
 
 pytestmark = [pytest.mark.e2e]
 

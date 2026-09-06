@@ -23,7 +23,7 @@ import pytest
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from flask import Flask, request
+from flask import Flask
 from flask_restx import Api, Namespace
 
 from modules.api.models import create_api_models

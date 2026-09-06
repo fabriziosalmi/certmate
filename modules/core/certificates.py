@@ -21,11 +21,10 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
-from datetime import datetime, timedelta
 from cryptography import x509
 from .shell import ShellExecutor
 from .dns_strategies import DNSStrategyFactory, HTTP01Strategy, acme_webroot_dir, check_certbot_plugin_installed
-from .constants import CERTIFICATE_FILES, get_domain_name
+from .constants import CERTIFICATE_FILES
 from .utils import (
     DeploymentStatusCache, validate_domain, utc_now, utc_now_iso, validate_key_options,
     repair_certbot_lineage_symlinks,

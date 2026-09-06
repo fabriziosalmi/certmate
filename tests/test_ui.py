@@ -32,7 +32,7 @@ if _REQUIRE_BROWSER:
 else:
     pytest.importorskip("playwright")
 
-from playwright.sync_api import Page, expect
+from playwright.sync_api import expect
 
 pytestmark = [pytest.mark.e2e, pytest.mark.ui]
 

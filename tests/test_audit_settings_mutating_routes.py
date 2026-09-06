@@ -48,7 +48,7 @@ from unittest.mock import MagicMock
 from pathlib import Path
 
 from flask import Flask
-from flask_restx import Api, Namespace
+from flask_restx import Api
 
 from modules.api.models import create_api_models
 from modules.api.resources import create_api_resources
