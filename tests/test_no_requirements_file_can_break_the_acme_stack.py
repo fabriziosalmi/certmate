@@ -30,7 +30,7 @@ PACKAGE = 'cryptography'
 # Versions that are known to kill `certbot --version` through the pyopenssl
 # route. If the stack is ever moved (#103) these stop being forbidden — which
 # is a deliberate change, and this list is where it gets made.
-BREAKS_THE_STACK = ['47.0.0', '48.0.1', '49.0.0', '50.0.0']
+BREAKS_THE_STACK = ['47.0.0', '48.0.1', '49.0.0', '50.0.0', '50.0.1']
 
 
 def _requirements_files():
@@ -66,6 +66,26 @@ def test_every_file_accepts_the_held_version(path):
     assert spec.contains(Version(held)), (
         f"{path.name} declares {PACKAGE}{spec}, which excludes the held "
         f"version {held}"
+    )
+
+
+@pytest.mark.parametrize('path', _requirements_files(), ids=lambda p: p.name)
+def test_every_constraint_is_bounded_above(path):
+    """The defect class, independent of which versions exist today.
+
+    Listing known-bad versions can only describe the past: a release published
+    tomorrow would slip through an unbounded floor while this file still looked
+    green. What made the storage sets dangerous was not version 50 in
+    particular, it was `>=41` with nothing on the right-hand side.
+    """
+    spec = _constraint(path)
+    if spec is None:
+        pytest.skip(f'{path.name} does not constrain {PACKAGE}')
+    bounded = any(s.operator in ('==', '<', '<=', '~=') for s in spec)
+    assert bounded, (
+        f"{path.name} declares {PACKAGE}{spec} with no upper bound, so it "
+        f"resolves to whatever is newest — including releases that do not "
+        f"exist yet and cannot be listed here"
     )
 
 
