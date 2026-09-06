@@ -63,17 +63,57 @@ def test_metrics_requires_viewer_not_admin():
     )
 
 
-def test_metrics_matches_the_sibling_json_summary_gate():
-    """CONTROL: the two metrics surfaces must not disagree.
+def _metrics_list_declared_role():
+    """The role `/api/metrics` (MetricsList) declares.
 
-    `/api/metrics` (MetricsList) is gated at viewer. If the scrape route drifts
-    to a different role again, one of the two comments explaining the split
-    becomes false — which is exactly the state this fixed.
+    MetricsList is defined inside create_api_resources, so reaching it means
+    constructing the whole resource graph — there is no cheaper way in, which
+    is itself the point of #669.
+    """
+    from flask_restx import Api
+
+    from modules.api.models import create_api_models
+    from modules.api.resources import create_api_resources
+
+    app = Flask(__name__)
+    app.config['TESTING'] = True
+    api = Api(app, prefix='/api')
+
+    auth_manager = MagicMock()
+
+    def _recording_require_role(role):
+        def deco(fn):
+            fn._declared_role = role
+            return fn
+        return deco
+
+    auth_manager.require_role = _recording_require_role
+
+    class _Managers(dict):
+        """Supplies a stub for any manager the closure reaches for, so the
+        test does not have to enumerate the whole graph."""
+
+        def __missing__(self, key):
+            value = MagicMock()
+            self[key] = value
+            return value
+
+    managers = _Managers(auth=auth_manager)
+    resources = create_api_resources(api, create_api_models(api), managers)
+    return resources['MetricsList'].get._declared_role
+
+
+def test_the_two_metrics_surfaces_declare_the_same_gate():
+    """CONTROL: the scrape route and the JSON summary must not disagree.
+
+    They serve the same class of information. When they drifted apart, the
+    comment on one of them explaining the split became false — which is the
+    state this change fixed, so it is the state worth pinning.
     """
     app = _app_recording_declared_roles()
-    activity_role = app.view_functions['activity_api']._declared_role
-    metrics_role = app.view_functions['metrics']._declared_role
-    assert metrics_role == activity_role == 'viewer', (
-        "read-only informational endpoints should share one gate; "
-        f"/metrics={metrics_role} vs /api/activity={activity_role}"
+    scrape_role = app.view_functions['metrics']._declared_role
+    json_role = _metrics_list_declared_role()
+    assert scrape_role == json_role == 'viewer', (
+        "the two metrics surfaces must declare one gate; "
+        f"/metrics={scrape_role} vs /api/metrics={json_role}"
     )
