@@ -105,12 +105,14 @@ jobs:
         # --cov-fail-under is a FLOOR, not a target (#428): before it, project
         # and patch statuses were both informational and fail_ci_if_error was
         # false, so coverage could fall to zero with CI still green.
-        # RATCHET IT UP, NEVER DOWN to make a red build pass. It sat at 65
-        # while the real number was 77, so twelve points of coverage — entire
-        # modules losing their tests — could evaporate with CI still green,
-        # which is the one thing a coverage floor exists to prevent (#651).
-        # 75 keeps a small margin for run-to-run skip variance while leaving
-        # no room for a module to go dark unnoticed.
+        # RATCHET IT UP, NEVER DOWN to make a red build pass. It had been
+        # left far below the coverage actually achieved, so entire modules
+        # could lose their tests with CI still green — the one thing a
+        # coverage floor exists to prevent (#651). Keep it just under the
+        # measured number: close enough to catch a module going dark, with a
+        # small margin for run-to-run skip variance. Re-measure and raise it
+        # when coverage climbs; do not record the measurement here, where it
+        # would age into a false claim.
         # `not network`: the CA-reachability checks in
         # tests/test_ca_endpoints_are_live.py fetch five external ACME
         # directories. They found two real defects (a DigiCert host that no
