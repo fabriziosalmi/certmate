@@ -335,9 +335,8 @@ def setup_directories(container: AppContainer, test_config=None):
     # to mount ./data:/app/data in docker-compose.yml.
     _in_docker = Path('/.dockerenv').exists() or os.getenv('container') is not None
     if _in_docker:
-        sentinel = container.data_dir / '.certmate_persistent'
-        # Ask the filesystem whether the data directory is on a mount of its
-        # own, instead of inferring persistence from a marker file.
+        # Ask the filesystem which of the persistent directories are actually
+        # on a mount, instead of inferring it from a marker file.
         #
         # The marker only ever proved "something wrote here before". A plain
         # `docker restart` keeps the container's writable layer, so the marker
@@ -345,27 +344,48 @@ def setup_directories(container: AppContainer, test_config=None):
         # NO volume mounted at all — the reassuring line appeared precisely
         # while the data was ephemeral, and stayed right until the container was
         # recreated and everything was gone. A mount point cannot be faked that
-        # way: if any ancestor below '/' is a mount, the data lives on a volume
-        # or bind mount and survives recreation.
-        if _data_dir_is_on_its_own_mount(container.data_dir):
+        # way: if any ancestor below '/' is a mount, the directory lives on a
+        # volume or bind mount and survives recreation.
+        #
+        # Every directory is checked, and the warning names only the ones that
+        # are actually ephemeral. Warning about certificates and the CA key on
+        # the strength of /app/data alone would be false for the operator who
+        # mounted /app/certificates and forgot /app/data — a message must not
+        # claim more than the check established.
+        _persistent_dirs = (
+            ('/app/data (settings, admin account, private CA key)',
+             container.data_dir),
+            ('/app/certificates (issued certificates and their keys)',
+             container.cert_dir),
+            ('/app/backups (restore points)', container.backup_dir),
+            ('/app/logs', container.logs_dir),
+        )
+        ephemeral = [label for label, directory in _persistent_dirs
+                     if not _data_dir_is_on_its_own_mount(directory)]
+
+        if not ephemeral:
             logger.info(
-                "Persistent storage detected — the data directory is on a "
+                "Persistent storage detected — every data directory is on a "
                 "mounted volume and survives container recreation"
             )
+            sentinel = container.data_dir / '.certmate_persistent'
             if not sentinel.exists():
                 try:
                     sentinel.write_text('1')
                 except OSError:
                     pass
         else:
+            # f-string, not %-args: these loggers are StructuredLogger, whose
+            # level methods take (msg, **kwargs). A positional %-arg raises
+            # TypeError at the call site — which here would mean the warning
+            # about a misconfigured deployment blew up instead of appearing.
             logger.warning(
-                "PERSISTENCE CHECK: the data directory is on the container's "
-                "writable layer, not a mounted volume. It survives `docker "
-                "restart` but ALL configuration (admin account, settings, "
-                "certificates, the private CA key) is LOST when the container "
-                "is recreated. Mount a persistent volume: -v ./data:/app/data:rw "
-                "(Docker) or a PVC (Kubernetes). Required volumes: /app/data, "
-                "/app/certificates, /app/logs, /app/backups"
+                "PERSISTENCE CHECK: the following are on the container's "
+                "writable layer, not a mounted volume. They survive `docker "
+                "restart`, but everything they hold is LOST when the container "
+                f"is recreated: {'; '.join(ephemeral)}. Mount a persistent "
+                "volume for each (-v ./data:/app/data:rw with Docker, or a "
+                "PVC in Kubernetes)."
             )
 
 

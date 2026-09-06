@@ -21,11 +21,23 @@ from modules.core.factory import _data_dir_is_on_its_own_mount
 pytestmark = [pytest.mark.unit]
 
 
+def _only_root_is_mounted():
+    """Pin the mount layout so these controls do not depend on the host.
+
+    pytest's tmp_path frequently sits under a directory that is its own mount
+    (/tmp is tmpfs on many Linux hosts), which would report "persistent" for
+    reasons unrelated to the behaviour being tested.
+    """
+    return patch('modules.core.factory.os.path.ismount',
+                 side_effect=lambda p: Path(p) == Path('/'))
+
+
 def test_a_plain_directory_is_not_reported_as_persistent(tmp_path):
     """The failure the old marker could not see: ordinary container storage."""
     data_dir = tmp_path / 'data'
     data_dir.mkdir()
-    assert _data_dir_is_on_its_own_mount(data_dir) is False
+    with _only_root_is_mounted():
+        assert _data_dir_is_on_its_own_mount(data_dir) is False
 
 
 def test_a_marker_left_by_a_previous_boot_does_not_make_it_persistent(tmp_path):
@@ -37,7 +49,8 @@ def test_a_marker_left_by_a_previous_boot_does_not_make_it_persistent(tmp_path):
     data_dir = tmp_path / 'data'
     data_dir.mkdir()
     (data_dir / '.certmate_persistent').write_text('1')
-    assert _data_dir_is_on_its_own_mount(data_dir) is False
+    with _only_root_is_mounted():
+        assert _data_dir_is_on_its_own_mount(data_dir) is False
 
 
 def test_the_old_marker_rule_answers_wrongly_on_that_same_input(tmp_path):
@@ -52,7 +65,8 @@ def test_the_old_marker_rule_answers_wrongly_on_that_same_input(tmp_path):
     (data_dir / '.certmate_persistent').write_text('1')
 
     old_rule_says_persistent = (data_dir / '.certmate_persistent').exists()
-    new_rule_says_persistent = _data_dir_is_on_its_own_mount(data_dir)
+    with _only_root_is_mounted():
+        new_rule_says_persistent = _data_dir_is_on_its_own_mount(data_dir)
 
     assert old_rule_says_persistent is True
     assert new_rule_says_persistent is False, (
