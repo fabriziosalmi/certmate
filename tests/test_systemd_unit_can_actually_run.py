@@ -15,6 +15,7 @@ and nothing ran it. It had drifted into a state where it could not work:
 These tests pin the unit against the application's own requirements rather than
 against a copy of them (#653, #654).
 """
+import ast
 import re
 from pathlib import Path
 
@@ -47,11 +48,30 @@ def _dirs_the_startup_probe_requires():
     Read from the application rather than restated here: if a fifth directory
     is ever added to that probe, this test fails until the unit grants it,
     which is the drift that stopped the service booting.
+
+    Parsed with ast rather than a regex so that reformatting the source (quote
+    style, wrapping) cannot make this silently stop deriving the real list.
     """
-    src = FACTORY.read_text(encoding='utf-8')
-    block = re.search(r'required = \[(.*?)\]', src, re.S)
-    assert block, "could not find the startup writeability probe's directory list"
-    return re.findall(r"\('([a-z_]+)',", block.group(1))
+    tree = ast.parse(FACTORY.read_text(encoding='utf-8'))
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Assign):
+            continue
+        if not any(isinstance(t, ast.Name) and t.id == 'required'
+                   for t in node.targets):
+            continue
+        if not isinstance(node.value, ast.List):
+            continue
+        labels = [
+            elt.elts[0].value
+            for elt in node.value.elts
+            if isinstance(elt, ast.Tuple) and elt.elts
+            and isinstance(elt.elts[0], ast.Constant)
+            and isinstance(elt.elts[0].value, str)
+        ]
+        if labels:
+            return labels
+    raise AssertionError(
+        "could not find the startup writeability probe's directory list")
 
 
 def test_gunicorn_is_given_a_timeout_long_enough_for_issuance():
@@ -62,27 +82,56 @@ def test_gunicorn_is_given_a_timeout_long_enough_for_issuance():
     )
 
 
+def _effective_exec_start_timeout():
+    """The timeout ExecStart actually passes to gunicorn.
+
+    Resolves a ${VAR} reference through the unit's own Environment=, because
+    asserting only that the variable is declared would pass while ExecStart
+    hard-coded a different value and left the service misconfigured.
+    """
+    directives = _unit_directives()
+    exec_start = directives['ExecStart'][0]
+    match = re.search(r'--timeout\s+(\S+)', exec_start)
+    assert match, "ExecStart passes no --timeout"
+    value = match.group(1)
+
+    ref = re.fullmatch(r'\$\{(\w+)\}|\$(\w+)', value)
+    if ref:
+        name = ref.group(1) or ref.group(2)
+        for env in directives.get('Environment', []):
+            key, _, env_value = env.partition('=')
+            if key.strip() == name:
+                return env_value.strip()
+        raise AssertionError(
+            f"ExecStart references ${{{name}}} but the unit never sets it, so "
+            f"gunicorn would receive an empty timeout"
+        )
+    return value
+
+
 def test_the_unit_timeout_matches_the_container():
     """CONTROL: the two deployment surfaces must not disagree on this value."""
-    directives = _unit_directives()
-    unit_timeout = None
-    for env in directives.get('Environment', []):
-        if env.startswith('GUNICORN_TIMEOUT='):
-            unit_timeout = env.split('=', 1)[1].strip()
-    assert unit_timeout, "the unit should state its worker timeout explicitly"
+    unit_timeout = _effective_exec_start_timeout()
 
     dockerfile = (ROOT / 'Dockerfile').read_text(encoding='utf-8')
     container_timeout = re.search(r'ENV GUNICORN_TIMEOUT=(\d+)', dockerfile)
     assert container_timeout, "Dockerfile no longer states GUNICORN_TIMEOUT"
     assert unit_timeout == container_timeout.group(1), (
-        f"systemd says {unit_timeout}, the image says "
+        f"systemd effectively passes {unit_timeout}, the image says "
         f"{container_timeout.group(1)} — the same workload needs the same "
         f"budget on both surfaces"
     )
 
 
 def test_readwritepaths_covers_every_directory_the_app_requires_at_boot():
-    granted = ' '.join(_unit_directives().get('ReadWritePaths', []))
+    # Whole paths, not substrings: granting only /opt/certmate/backups/unified
+    # would satisfy a substring check while the directory the probe actually
+    # writes to stayed read-only.
+    granted = {
+        Path(token).name
+        for directive in _unit_directives().get('ReadWritePaths', [])
+        for token in directive.split()
+    }
     missing = [d for d in _dirs_the_startup_probe_requires()
                if d not in granted]
     assert not missing, (
