@@ -24,6 +24,7 @@ from tests.e2e_support import (
     E2E_CA_PROVIDER,
     assert_staging_issuer,
     configure_e2e_provider,
+    skip_if_the_ca_was_unavailable,
 )
 
 pytestmark = [pytest.mark.e2e, pytest.mark.slow]
@@ -38,33 +39,6 @@ def configure_cloudflare(api, cloudflare_token):
     configure_e2e_provider(api, cloudflare_token, "e2e-async")
     yield
     api.delete("/api/dns/cloudflare/accounts/e2e-async")
-
-
-# Failures that come from the certificate authority, not from CertMate.
-# An e2e failure has to mean "CertMate is broken"; when it can also mean
-# "Let's Encrypt was busy", the reliable response becomes re-running until
-# green, which is how a real regression gets waved through. These phrases are
-# the CA declining to serve, and are reported as skips rather than failures.
-_CA_TRANSIENTS = (
-    "service busy",
-    "too many requests",
-    "rate limit",
-    "timeout during connect",
-    "internal error",
-)
-
-
-def _skip_if_the_ca_was_unavailable(job):
-    """Turn a CA-side refusal into a skip, naming what happened."""
-    if not isinstance(job, dict) or job.get("status") != "failed":
-        return
-    error = str(job.get("error") or "").lower()
-    for phrase in _CA_TRANSIENTS:
-        if phrase in error:
-            pytest.skip(
-                f"Let's Encrypt staging declined the order ({phrase}); this is "
-                f"the CA refusing to serve, not a CertMate defect"
-            )
 
 
 def _poll_job(api, status_url, timeout=240):
@@ -126,7 +100,7 @@ class TestAsyncIssuance:
         assert body["status_url"].endswith(body["job_id"])
 
         job = _poll_job(api, body["status_url"])
-        _skip_if_the_ca_was_unavailable(job)
+        skip_if_the_ca_was_unavailable(job)
         assert job["status"] == "succeeded", f"job failed: {job.get('error')}"
         assert domain in _domains(api), f"{domain} not listed after async create"
         # Prove the async path also stayed on staging (never silently prod).
@@ -171,5 +145,5 @@ class TestAsyncIssuance:
 
         for url in status_urls:
             job = _poll_job(api, url)
-            _skip_if_the_ca_was_unavailable(job)
+            skip_if_the_ca_was_unavailable(job)
             assert job["status"] == "succeeded", f"job failed: {job.get('error')}"

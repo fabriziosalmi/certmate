@@ -15,7 +15,7 @@ These tests pin both directions.
 """
 import pytest
 
-from tests.test_async_issuance_e2e import _skip_if_the_ca_was_unavailable
+from tests.e2e_support import skip_if_the_ca_was_unavailable
 
 pytestmark = [pytest.mark.unit]
 
@@ -33,7 +33,7 @@ def _failed(error):
 ])
 def test_a_refusal_by_the_certificate_authority_is_a_skip(error):
     with pytest.raises(pytest.skip.Exception):
-        _skip_if_the_ca_was_unavailable(_failed(error))
+        skip_if_the_ca_was_unavailable(_failed(error))
 
 
 @pytest.mark.parametrize('error', [
@@ -42,6 +42,11 @@ def test_a_refusal_by_the_certificate_authority_is_a_skip(error):
     'certbot: error: unrecognized arguments: --dns-nope',
     'Failed to store certificate in backend: permission denied',
     'expected certificate files are missing after a successful certbot run',
+    # Caught in review: a bare 'internal error' phrase in the matcher would
+    # have skipped these, converting a CertMate regression into silence — the
+    # exact failure mode the narrow classification exists to prevent.
+    'An internal error occurred while writing metadata',
+    'Internal error: the storage backend returned no bundle',
     '',
     None,
 ])
@@ -51,14 +56,14 @@ def test_a_certmate_defect_still_fails(error):
     If this ever starts skipping, the suite has stopped reporting the defects
     it exists to catch — silence instead of a red build.
     """
-    _skip_if_the_ca_was_unavailable(_failed(error))  # must not raise
+    skip_if_the_ca_was_unavailable(_failed(error))  # must not raise
 
 
 def test_a_succeeded_job_is_never_skipped():
-    _skip_if_the_ca_was_unavailable({'status': 'succeeded', 'error': None})
+    skip_if_the_ca_was_unavailable({'status': 'succeeded', 'error': None})
 
 
 def test_a_malformed_result_is_not_treated_as_a_ca_refusal():
     """CONTROL: only an explicit CA phrase may excuse a failure."""
     for value in (None, 'failed', 42, {'status': 'failed'}):
-        _skip_if_the_ca_was_unavailable(value)  # must not raise
+        skip_if_the_ca_was_unavailable(value)  # must not raise

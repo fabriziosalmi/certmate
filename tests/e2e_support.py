@@ -68,3 +68,42 @@ def assert_staging_issuer(cert_pem):
     assert "STAGING" in issuer.upper(), \
         f"certificate was NOT issued by Let's Encrypt staging — issuer={issuer!r}"
     return issuer
+
+
+# Failures that come from the certificate authority, not from CertMate.
+# An e2e failure has to mean "CertMate is broken"; when it can also mean
+# "Let's Encrypt was busy", the reliable response becomes re-running until
+# green, which is how a real regression gets waved through.
+#
+# Every phrase here is CA wording, matched as specifically as possible. A bare
+# "internal error" was rejected during review for good reason: CertMate raises
+# its own internal errors, and skipping one would convert a regression into
+# silence — worse than the flakiness this replaces.
+_CA_TRANSIENTS = (
+    "service busy",
+    "too many requests",
+    "urn:ietf:params:acme:error:ratelimited",
+    "rate limit",
+    "timeout during connect",
+    "the server experienced an internal error",
+    "server experienced an internal error",
+)
+
+
+def skip_if_the_ca_was_unavailable(job):
+    """Turn a CA-side refusal into a skip, naming what happened.
+
+    Deliberately narrow: only an explicit CA phrase excuses a failed job.
+    Anything else is CertMate's problem and must stay a failure.
+    """
+    import pytest
+
+    if not isinstance(job, dict) or job.get("status") != "failed":
+        return
+    error = str(job.get("error") or "").lower()
+    for phrase in _CA_TRANSIENTS:
+        if phrase in error:
+            pytest.skip(
+                f"Let's Encrypt staging declined the order ({phrase}); this is "
+                f"the CA refusing to serve, not a CertMate defect"
+            )
