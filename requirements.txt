@@ -117,12 +117,17 @@ gunicorn==26.2.0
 # Monitoring and metrics
 prometheus_client==0.26.0
 
-# Not a test-only dependency, despite the name, and not removable: the
-# certbot Hetzner/Porkbun plugins declare `requests-mock` as a RUNTIME
-# requirement, so it lands in the image whatever this file says. Pinned here
-# so the version in the image is one we chose rather than one a plugin's
-# floating lower bound picked. The test-suite copy lives in
-# requirements-test.txt.
+# Not a test-only dependency, despite the name, and not removable today: the
+# certbot arvancloud, hetzner and infomaniak plugins each declare
+# `requests-mock` as an unconditional RUNTIME requirement, so it lands in the
+# image whatever this file says. Pinned here so the version shipped is one we
+# chose rather than one a plugin's floating lower bound picked; dropping the
+# line would not remove the package, only un-pin it. The test-suite copy lives
+# in requirements-test.txt.
+#
+# tests/test_requests_mock_is_not_ours_to_remove.py keeps this claim honest and
+# watches for the day it stops being true: if every plugin drops the
+# requirement upstream, that test fails and says the line can go.
 requests_mock==1.12.1
 # APScheduler's SQLAlchemyJobStore backs the persistent renewal schedule.
 # Cap below 3.0.0: a major SQLAlchemy bump can break create_engine / the
