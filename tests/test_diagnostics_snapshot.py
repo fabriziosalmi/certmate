@@ -27,6 +27,9 @@ from modules.api.resources import create_api_resources
 import modules.api.resources as api_resources_module
 
 
+pytestmark = [pytest.mark.unit]
+
+
 def _passthrough_decorator(_min_role):
     def deco(fn):
         return fn

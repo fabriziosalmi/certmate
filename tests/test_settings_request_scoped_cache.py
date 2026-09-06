@@ -32,6 +32,9 @@ from modules.core.file_operations import FileOperations
 from modules.core.settings import SettingsManager
 
 
+pytestmark = [pytest.mark.unit]
+
+
 @pytest.fixture
 def settings_manager(tmp_path):
     cert_dir = tmp_path / "certificates"

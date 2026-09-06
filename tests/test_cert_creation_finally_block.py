@@ -16,6 +16,9 @@ import pytest
 from modules.core.certificates import CertificateManager
 
 
+pytestmark = [pytest.mark.unit]
+
+
 def _make_manager(tmp_path):
     settings_mgr = MagicMock()
     settings_mgr.load_settings.return_value = {

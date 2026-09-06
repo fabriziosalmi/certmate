@@ -24,6 +24,9 @@ from modules.core import audit_chain
 from modules.core.audit import AuditLogger
 
 
+pytestmark = [pytest.mark.unit]
+
+
 def _read_chain(path):
     return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
 

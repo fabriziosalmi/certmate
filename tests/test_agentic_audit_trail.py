@@ -21,6 +21,9 @@ from modules.core.cert_service import CertificateService
 from modules.core.certificates import CertificateManager
 
 
+pytestmark = [pytest.mark.unit]
+
+
 @pytest.fixture
 def audit(tmp_path):
     """An AuditLogger whose handler is detached again after the test so the

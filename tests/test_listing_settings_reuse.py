@@ -35,6 +35,9 @@ import pytest
 from modules.core.certificates import CertificateManager
 
 
+pytestmark = [pytest.mark.unit]
+
+
 def _make_manager(tmp_path, domains, load_call_counter):
     """Build a CertificateManager whose load_settings tracks call count."""
     settings_mgr = MagicMock()

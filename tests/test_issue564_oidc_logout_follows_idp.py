@@ -16,6 +16,10 @@ from flask import Flask
 
 from modules.web.auth_routes import register_auth_routes
 
+import pytest
+
+pytestmark = [pytest.mark.unit]
+
 REPO = Path(__file__).resolve().parent.parent
 
 

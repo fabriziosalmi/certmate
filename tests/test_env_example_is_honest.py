@@ -27,6 +27,9 @@ import re
 
 import pytest
 
+
+pytestmark = [pytest.mark.unit]
+
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 ENV_EXAMPLE = REPO_ROOT / ".env.example"
 

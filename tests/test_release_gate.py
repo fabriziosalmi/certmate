@@ -29,6 +29,9 @@ import subprocess
 
 import pytest
 
+
+pytestmark = [pytest.mark.unit]
+
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 RELEASE_SH = REPO_ROOT / "scripts" / "release.sh"
 

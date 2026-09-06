@@ -33,6 +33,9 @@ import pytest
 from modules.web import routes as login_module
 
 
+pytestmark = [pytest.mark.unit]
+
+
 @pytest.fixture(autouse=True)
 def reset_buckets():
     """Each test starts with empty dicts so we don't carry state across."""

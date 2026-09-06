@@ -25,6 +25,9 @@ import pytest
 from modules.web import routes as web_routes
 
 
+pytestmark = [pytest.mark.unit]
+
+
 # --- F-7 per-username + per-IP rate limit -----------------------------------
 
 @pytest.fixture(autouse=True)

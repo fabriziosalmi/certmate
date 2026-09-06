@@ -6,6 +6,10 @@ Unit tests — no Docker container required.
 from unittest.mock import MagicMock
 from pathlib import Path
 
+import pytest
+
+pytestmark = [pytest.mark.unit]
+
 
 class TestBuildCertbotCommandSanDomains:
     """Test that CAManager.build_certbot_command accepts san_domains."""

@@ -23,6 +23,9 @@ import pytest
 from modules.core.constants import iter_cert_domain_dirs
 
 
+pytestmark = [pytest.mark.unit]
+
+
 @pytest.fixture
 def populated_cert_dir(tmp_path: Path) -> Path:
     # Real cert directories (have cert.pem)

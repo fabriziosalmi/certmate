@@ -15,6 +15,9 @@ from modules.core import audit_verify
 from modules.web.misc_routes import register_misc_routes
 
 
+pytestmark = [pytest.mark.unit]
+
+
 @pytest.fixture
 def make_audit():
     """Factory that builds AuditLoggers and detaches their shared-logger

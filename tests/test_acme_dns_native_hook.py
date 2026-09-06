@@ -22,6 +22,9 @@ from modules.core.dns_strategies import AcmeDNSStrategy
 # account shape stays defined in exactly one place.
 from tests.test_domain_alias import _manager, _provider_config
 
+
+pytestmark = [pytest.mark.unit]
+
 ACME_DNS_SUBDOMAIN = 'certmate-validation.example.net'
 
 
