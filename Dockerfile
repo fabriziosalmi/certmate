@@ -77,19 +77,26 @@ WORKDIR /app
 # routinely start with `#!/bin/bash` — without bash the kernel cannot resolve
 # the shebang and the script returns exit 127 (issue #207).
 #
-# No `apt-get upgrade` here, deliberately. It pulled whatever Debian happened
-# to serve at build time, so two builds of the same commit produced different
-# OS package sets — contradicting, in the same RUN instruction, the
+# No `apt-get upgrade` here, deliberately. It upgraded EVERY package in the
+# image to whatever the mirror served at that moment, so the whole OS layer
+# varied build to build — contradicting, in the same RUN instruction, the
 # reproducibility rationale written below for pinning pip and above for
 # pinning the base image by digest.
 #
-# OS security patches now arrive the same way every other dependency does: as
-# a base-image digest bump. Dependabot watches the docker ecosystem weekly and
+# Be precise about what this buys, because it is not full reproducibility:
+# `apt-get install` below is still unpinned, so the three packages it names can
+# differ between builds. What changes is that the variance goes from unbounded
+# (every package in the image) to bounded (three named ones). Pinning those
+# versions too would break on every base-image bump, and a genuinely
+# reproducible OS layer needs a snapshot mirror — a separate trade, not this
+# one.
+#
+# OS security patches now arrive the way every other dependency does: as a
+# base-image digest bump. Dependabot watches the docker ecosystem weekly and
 # ignores only python's semver-major/minor, so digest updates are proposed as
-# reviewable PRs. That is strictly better than an invisible build-time upgrade:
-# the change is auditable, it is tied to a commit, and the resulting image is
-# reproducible from that commit. It does mean a digest bump must actually be
-# merged when one lands — that is the cost of the trade (#659).
+# reviewable PRs — auditable and tied to a commit, rather than an invisible
+# build-time upgrade. The cost is real: a digest bump has to actually be merged
+# when one lands (#659).
 #
 # The pip upgrade is this stage's, not the builder's. The builder already runs
 # `pip install -U pip`, but that only patches the BUILDER's interpreter — the
