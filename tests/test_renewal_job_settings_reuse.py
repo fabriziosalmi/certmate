@@ -20,7 +20,6 @@ This test pins:
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -67,7 +66,6 @@ def test_check_renewals_reads_settings_once_for_many_domains(tmp_path):
     # `settings=` so the renewal loop is honouring the new signature.
     seen_kwargs = []
 
-    real_get_cert_info = mgr.get_certificate_info
 
     def spy_get_cert_info(domain, settings=None, use_cache=True):
         seen_kwargs.append({'domain': domain, 'settings': settings, 'use_cache': use_cache})

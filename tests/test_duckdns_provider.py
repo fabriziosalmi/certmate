@@ -9,7 +9,6 @@ expects, and the provider is registered in every validation surface.
 
 No external network access; no Docker required.
 """
-import pytest
 
 from modules.core.dns_strategies import (
     DNSStrategyFactory,

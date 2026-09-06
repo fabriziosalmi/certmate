@@ -16,7 +16,6 @@ The pins that matter:
   certbot replays manual_auth_hook from its own renewal conf
 """
 import json
-import os
 from unittest.mock import MagicMock, patch
 
 import pytest

@@ -1,4 +1,3 @@
-import copy
 import logging
 import re
 
@@ -20,7 +19,6 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
     auth_manager_ref = auth_manager
     deploy_manager = managers.get('deployer')
     audit_logger = managers.get('audit')
-    file_ops = managers.get('file_ops')
 
     @app.route('/api/settings', methods=['GET'])
     @app.route('/api/web/settings', methods=['GET'])

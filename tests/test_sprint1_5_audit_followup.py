@@ -15,7 +15,6 @@ exercised end-to-end and lives in a separate Flask test client class.
 No Docker; runs in-process.
 """
 
-import json
 import pytest
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -23,10 +22,9 @@ from unittest.mock import MagicMock
 from flask import Flask, request
 from flask_restx import Api, Namespace
 
-from modules.core.auth import AuthManager, ROLE_HIERARCHY
+from modules.core.auth import AuthManager
 from modules.api.models import create_api_models
 from modules.api.resources import create_api_resources
-import modules.api.resources as api_resources_module
 
 
 # --- _authenticate_request (F-1 refactor) -----------------------------------
@@ -293,7 +291,7 @@ def _attach_user(app, role):
     the given role. Equivalent to a successful auth path."""
     @app.before_request
     def _set_user():
-        from flask import g, request as _r
+        from flask import request as _r
         _r.current_user = {'username': f'fake_{role}', 'role': role,
                            'allowed_domains': None}
 

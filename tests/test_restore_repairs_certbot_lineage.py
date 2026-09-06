@@ -17,7 +17,6 @@ themselves on the next renewal attempt).
 import os
 # NOTE (#582): these tests exercise the disaster-recovery archive, which is the
 # one that carries key material; the default (share-safe) archive no longer does.
-import zipfile
 
 import pytest
 

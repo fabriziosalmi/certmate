@@ -9,7 +9,6 @@ UnboundLocalError would mask the real exception and prevent meaningful
 error reporting to API clients. These tests pin the contract: early
 failures must surface their actual exception, not UnboundLocalError.
 """
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest

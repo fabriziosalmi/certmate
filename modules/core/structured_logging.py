@@ -27,10 +27,8 @@ Usage:
 import json
 import logging
 import time
-import threading
 import os
 import re
-from datetime import datetime
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from .utils import utc_now

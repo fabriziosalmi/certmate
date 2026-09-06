@@ -22,7 +22,6 @@ test pins one silent-failure mode a certificate manager must never regress on:
 import json
 import os
 import stat
-import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 

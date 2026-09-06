@@ -15,7 +15,6 @@ Environment variables:
 
 import os
 import time
-import json
 import subprocess
 import pytest
 import requests
