@@ -37,6 +37,29 @@ def scheduled_app(monkeypatch, tmp_path):
         container.scheduler.shutdown(wait=False)
 
 
+def _renewal_job(container, job_id):
+    """The scheduled job, asserting its presence rather than crashing on it.
+
+    Without this, a missing job surfaced as an AttributeError on None and a
+    removed jitter as a TypeError doing arithmetic with None — failures that
+    name the symptom instead of the defect.
+    """
+    job = container.scheduler.get_job(job_id)
+    assert job is not None, (
+        f'{job_id} is not scheduled at all, so nothing would ever renew'
+    )
+    return job
+
+
+def _jitter_of(job, job_id):
+    jitter = getattr(job.trigger, 'jitter', None)
+    assert jitter, (
+        f'{job_id} carries no cron jitter, so every install would contact the '
+        f'CA at the same wall-clock second'
+    )
+    return jitter
+
+
 def _fire_times(trigger, count, start=None):
     """The times *trigger* would actually fire, in order."""
     now = start or datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc)
@@ -55,8 +78,7 @@ def _fire_times(trigger, count, start=None):
 
 @pytest.mark.parametrize('job_id', RENEWAL_JOBS)
 def test_the_renewal_sweep_would_fire_about_once_a_day(scheduled_app, job_id):
-    job = scheduled_app.scheduler.get_job(job_id)
-    assert job is not None, f'{job_id} is not scheduled'
+    job = _renewal_job(scheduled_app, job_id)
 
     times = _fire_times(job.trigger, 15)
     gaps = [(b - a).total_seconds() for a, b in zip(times, times[1:])]
@@ -76,7 +98,7 @@ def test_the_fire_times_are_actually_jittered(scheduled_app, job_id):
     Configuration said jitter=3600. This asks whether the times it produces
     genuinely differ, rather than trusting the number.
     """
-    job = scheduled_app.scheduler.get_job(job_id)
+    job = _renewal_job(scheduled_app, job_id)
     times = _fire_times(job.trigger, 15)
     seconds_into_day = {t.hour * 3600 + t.minute * 60 + t.second for t in times}
 
@@ -94,8 +116,9 @@ def test_the_jitter_stays_inside_its_window(scheduled_app, job_id):
     Unbounded randomisation would eventually renew in the middle of the
     working day. The sweep must stay in the overnight window it advertises.
     """
-    job = scheduled_app.scheduler.get_job(job_id)
-    trigger, jitter = job.trigger, job.trigger.jitter
+    job = _renewal_job(scheduled_app, job_id)
+    trigger = job.trigger
+    jitter = _jitter_of(job, job_id)
     base_hour = int(str(trigger.fields[trigger.FIELD_NAMES.index('hour')]))
 
     for fire in _fire_times(trigger, 15):
@@ -114,7 +137,7 @@ def test_the_sweep_stays_overnight(scheduled_app, job_id):
     with it. This pins the property an operator actually cares about: the
     sweep runs while the estate is quiet, not in the middle of the day.
     """
-    job = scheduled_app.scheduler.get_job(job_id)
+    job = _renewal_job(scheduled_app, job_id)
     for fire in _fire_times(job.trigger, 20):
         assert fire.hour < 6, (
             f'{job_id} would fire at {fire.strftime("%H:%M")}; the renewal '
