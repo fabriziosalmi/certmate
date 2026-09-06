@@ -9,6 +9,9 @@ from modules.core import dns_alias_hook
 from modules.core.shell import MockShellExecutor
 
 
+pytestmark = [pytest.mark.unit]
+
+
 CORE_ALIAS_PROVIDERS = [
     'cloudflare', 'route53', 'azure', 'google', 'powerdns', 'digitalocean',
     'linode', 'edgedns', 'gandi', 'ovh', 'namecheap', 'arvancloud',

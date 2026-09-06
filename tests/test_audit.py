@@ -6,6 +6,10 @@ import json
 
 from modules.core.audit import AuditLogger
 
+import pytest
+
+pytestmark = [pytest.mark.unit]
+
 
 def _audit_line(ts: str, payload: dict) -> str:
     return f"{ts} - certmate.audit - INFO - {json.dumps(payload)}\n"

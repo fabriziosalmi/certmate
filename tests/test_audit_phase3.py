@@ -18,6 +18,9 @@ from modules.core import audit_chain, audit_verify
 from modules.web.misc_routes import register_misc_routes
 
 
+pytestmark = [pytest.mark.unit]
+
+
 @pytest.fixture
 def make_audit():
     created = []

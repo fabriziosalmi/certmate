@@ -21,6 +21,9 @@ import pytest
 from modules.core.deployer import DeployManager, DEFAULT_TIMEOUT
 
 
+pytestmark = [pytest.mark.unit]
+
+
 class _CapturedShell:
     """Stand-in for ShellExecutor that records the timeout it was called with."""
 

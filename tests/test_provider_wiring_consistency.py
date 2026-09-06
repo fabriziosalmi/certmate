@@ -21,6 +21,10 @@ from modules.core.dns_strategies import DNSStrategyFactory
 from modules.core.utils import _DNS_PROVIDER_CREDENTIALS, _MULTI_PROVIDER_PLUGIN_FILES
 from modules.core.settings import SettingsManager
 
+import pytest
+
+pytestmark = [pytest.mark.unit]
+
 
 # Strategies registered in the factory but intentionally NOT a real DNS
 # provider (e.g. HTTP-01 webroot). They must not appear in the DNS

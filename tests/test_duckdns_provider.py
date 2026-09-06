@@ -20,6 +20,10 @@ from modules.core.utils import (
     validate_dns_provider_account,
 )
 
+import pytest
+
+pytestmark = [pytest.mark.unit]
+
 
 class TestDuckDNSStrategy:
     def test_factory_returns_duckdns_strategy(self):

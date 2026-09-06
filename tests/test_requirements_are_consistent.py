@@ -32,6 +32,9 @@ import re
 
 import pytest
 
+
+pytestmark = [pytest.mark.unit]
+
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 

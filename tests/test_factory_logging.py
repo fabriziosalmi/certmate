@@ -6,6 +6,10 @@ import threading
 
 from modules.core.factory import _env_float, _format_thread_stack
 
+import pytest
+
+pytestmark = [pytest.mark.unit]
+
 
 def test_env_float_falls_back_on_invalid_value(monkeypatch):
     monkeypatch.setenv('CERTMATE_SLOW_REQUEST_THRESHOLD_SECONDS', 'not-a-number')

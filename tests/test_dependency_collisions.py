@@ -22,6 +22,9 @@ from collections import defaultdict
 
 import pytest
 
+
+pytestmark = [pytest.mark.unit]
+
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 # Distributions known to collide with something else we depend on. Keyed by
