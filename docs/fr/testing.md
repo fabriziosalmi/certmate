@@ -272,7 +272,7 @@ Les hooks incluent : formatage de code (black, isort), linting (flake8), vérifi
 
 ## Exigences de couverture
 
-- La CI impose un plancher de **65%** sur `modules/` (`--cov-fail-under`, un
+- La CI impose un plancher de **75%** sur `modules/` (`--cov-fail-under`, un
   cliquet : à relever, jamais à abaisser pour faire passer une build). Le
   chiffre actuel est confortablement au-dessus.
 - Toutes les nouvelles fonctionnalités doivent inclure des tests.
