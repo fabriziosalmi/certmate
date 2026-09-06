@@ -14,10 +14,7 @@ from .utils import utc_now
 from typing import Optional, List, Dict, Any, Tuple
 from uuid import uuid4
 
-from cryptography import x509
-from cryptography.hazmat.primitives import serialization, hashes
-from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization
 
 from .private_ca import PrivateCAGenerator
 from .csr_handler import CSRHandler

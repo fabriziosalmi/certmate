@@ -13,7 +13,7 @@ import pytest
 
 from modules.core.auth import AuthManager
 from modules.core.file_operations import FileOperations
-from modules.core.oidc import OIDCManager, OIDCConfigError, SECRET_MASK_SENTINEL
+from modules.core.oidc import OIDCManager, SECRET_MASK_SENTINEL
 from modules.core.settings import SettingsManager
 
 

@@ -6,13 +6,11 @@ email via the existing Notifier SMTP channel.
 
 import logging
 import smtplib
-import time
-from datetime import datetime, timedelta
+from datetime import timedelta
 from .utils import utc_now
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 
 from .constants import iter_cert_domain_dirs
 

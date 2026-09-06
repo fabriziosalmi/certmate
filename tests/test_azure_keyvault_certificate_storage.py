@@ -355,10 +355,7 @@ class TestTagTruncation:
 
 class TestRetrieveCertificateMode:
     def test_export_certificate_reconstructs_pem_files(self, vault_config, cert_files, metadata):
-        from cryptography.hazmat.primitives.serialization import pkcs12, NoEncryption
-        from cryptography.hazmat.primitives import serialization
         from modules.core.storage_backends import (
-            AzureKeyVaultBackend,
             _AzureKeyVaultCertificateImporter,
             _build_pfx,
         )

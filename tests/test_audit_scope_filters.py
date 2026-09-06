@@ -155,7 +155,7 @@ class TestSettingsGetFiltersDomainsByScope:
         app, _ = settings_get_app
         _as_user(app, 'viewer', ['*.tenant-a.example'])
         r = app.test_client().get('/api/settings')
-        body = r.get_json()
+        r.get_json()
         # Defensive: no part of the response carries tenant-b or
         # tenant-c domain names.
         assert b'tenant-b' not in r.data

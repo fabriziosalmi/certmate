@@ -4,8 +4,8 @@ These run without Docker — they mock the settings manager.
 """
 
 import pytest
-from unittest.mock import MagicMock, patch
-from modules.core.auth import AuthManager, ROLE_HIERARCHY
+from unittest.mock import MagicMock
+from modules.core.auth import AuthManager
 
 
 @pytest.fixture

@@ -5,7 +5,7 @@ Provides an interface for executing shell commands, enabling easier testing and 
 
 import subprocess
 import logging
-from typing import List, Optional, Union, Dict, Any
+from typing import List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +43,7 @@ class ShellExecutor:
                 timeout=timeout,
                 **kwargs
             )
-        except subprocess.TimeoutExpired as e:
+        except subprocess.TimeoutExpired:
             logger.error(f"Command timed out: {' '.join(cmd)}")
             raise
         except Exception as e:

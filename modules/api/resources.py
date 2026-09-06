@@ -285,7 +285,6 @@ def _probe_smtp_starttls(host, port, context, timeout):
     SMTP wire: banner → ``EHLO certmate.local`` → ``STARTTLS`` →
     220 response → ``context.wrap_socket``.
     """
-    import socket as _socket
 
     recv_timeout = max(1.0, timeout * 0.5)
     with socket.create_connection((host, port), timeout=timeout) as raw_sock:
@@ -825,7 +824,6 @@ def create_api_resources(api, models, managers):
             from ..core.settings import (
                 validate_settings_post,
                 diff_settings_keys,
-                SETTINGS_REJECT_KEYS,
             )
             try:
                 new_settings = api.payload
@@ -1592,7 +1590,7 @@ def create_api_resources(api, models, managers):
                     }, 400
 
             try:
-                import json as _json
+                pass
 
                 # Serialise this metadata read-modify-write against an in-flight
                 # renewal (which carries a pre-renewal metadata snapshot across

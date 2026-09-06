@@ -173,7 +173,7 @@ def test_per_domain_reload_when_settings_not_threaded(tmp_path):
         (domain_dir / "cert.pem").write_bytes(b"-----BEGIN CERTIFICATE-----\nfake\n")
 
     # Simulate the OLD listing loop: load once, then DO NOT thread settings.
-    settings = mgr.settings_manager.load_settings()
+    mgr.settings_manager.load_settings()
     assert counter[0] == 1
 
     with patch.object(mgr, '_parse_certificate_info', return_value={'domain': 'x', 'exists': True}):

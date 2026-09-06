@@ -96,7 +96,6 @@ def test_sans_are_normalised_before_reaching_certbot(bare_manager, monkeypatch):
     form or a case variant went straight into the -d list. It now appends the
     normalised value and de-dups against it.
     """
-    captured = {}
 
     def _fake_all_domains(domain, sans):
         # Reproduce just the SAN-collection loop's outcome by calling through

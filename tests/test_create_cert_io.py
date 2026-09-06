@@ -22,7 +22,6 @@ runs in the container.
 """
 import os
 import stat
-import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 

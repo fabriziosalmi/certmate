@@ -3,8 +3,7 @@ Tests for SAN domains support and DNS provider fallback (Issue #56).
 
 Unit tests — no Docker container required.
 """
-import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 from pathlib import Path
 
 

@@ -15,7 +15,6 @@ correctness contract is:
 No Docker; runs in-process via Flask's test client.
 """
 
-import json
 from pathlib import Path
 from unittest.mock import MagicMock
 
