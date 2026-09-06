@@ -32,6 +32,7 @@ BOOT_CRITICAL = {
     "flask-cors",
     "flask-restx",
     "certbot",
+    "acme",           # the protocol client; certbot bounds it not at all
     "cryptography",
     "requests",
     "urllib3",
