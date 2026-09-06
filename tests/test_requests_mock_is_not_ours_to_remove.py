@@ -73,14 +73,19 @@ def test_something_really_does_require_it_at_runtime():
     if not _is_pinned_in_requirements():
         pytest.skip('requests-mock is no longer pinned; nothing to justify')
 
-    requirers = _runtime_requirers()
-    if not metadata.distributions():
+    # `metadata.distributions()` returns a generator and is therefore always
+    # truthy — the previous guard could never fire, so an environment without
+    # metadata would have produced a confusing assertion failure instead of a
+    # skip. Materialise it to ask the question that was actually intended.
+    if not list(metadata.distributions()):
         pytest.skip('no distribution metadata available in this environment')
 
     try:
         metadata.version('requests-mock')
     except metadata.PackageNotFoundError:
         pytest.skip('requests-mock is not installed in this environment')
+
+    requirers = _runtime_requirers()
 
     assert requirers, (
         "requirements.txt pins requests-mock on the grounds that certbot DNS "
