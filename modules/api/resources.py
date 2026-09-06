@@ -1590,8 +1590,6 @@ def create_api_resources(api, models, managers):
                     }, 400
 
             try:
-                pass
-
                 # Serialise this metadata read-modify-write against an in-flight
                 # renewal (which carries a pre-renewal metadata snapshot across
                 # its whole certbot run and would otherwise clobber this write).

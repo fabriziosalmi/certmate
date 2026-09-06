@@ -302,9 +302,6 @@ class CertMateMetricsCollector:
     def _collect_certificate_metrics(self, app_context):
         """Collect certificate-related metrics."""
         try:
-            # Import here to avoid circular imports
-            pass
-            
             settings = app_context.get('settings', {})
             cert_dir = app_context.get('cert_dir')
             get_certificate_info = app_context.get('get_certificate_info')
