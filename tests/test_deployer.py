@@ -3,10 +3,8 @@ Unit tests for the DeployManager module.
 These run without Docker — they mock the managers.
 """
 
-import json
 import pytest
 from unittest.mock import MagicMock
-from pathlib import Path
 from modules.core.deployer import DeployManager
 from modules.core.shell import MockShellExecutor
 
@@ -121,7 +119,7 @@ class TestHookExecution:
             'id': 'h4', 'name': 'Env', 'command': 'env',
             'enabled': True, 'timeout': 10, 'on_events': ['created'],
         }
-        result = deploy_manager._run_hook(hook, 'mysite.com', 'renewed')
+        deploy_manager._run_hook(hook, 'mysite.com', 'renewed')
         # Check shell_executor received env kwarg with our vars
         assert len(shell_executor.commands_executed) == 1
         assert 'sh -c env' in shell_executor.commands_executed[0]

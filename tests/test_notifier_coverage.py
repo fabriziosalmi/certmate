@@ -5,9 +5,6 @@ mocked — no live HTTP calls, no SMTP connections. The Notifier was at
 ~14% coverage before this file landed.
 """
 
-import hashlib
-import hmac
-import io
 import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch

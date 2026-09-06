@@ -16,7 +16,6 @@ provider, the test breaks until every wiring point is updated.
 """
 import inspect
 
-import pytest
 
 from modules.core.dns_strategies import DNSStrategyFactory
 from modules.core.utils import _DNS_PROVIDER_CREDENTIALS, _MULTI_PROVIDER_PLUGIN_FILES

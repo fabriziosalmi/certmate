@@ -6,8 +6,6 @@ These are fast unit tests that do NOT require Docker.
 """
 
 import json
-from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 

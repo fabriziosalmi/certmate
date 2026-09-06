@@ -10,7 +10,6 @@ import os
 import subprocess
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
 
 from .structured_logging import sanitize_text, JSONFormatter
 from .utils import utc_now_iso

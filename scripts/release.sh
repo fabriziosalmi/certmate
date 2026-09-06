@@ -168,8 +168,8 @@ $(echo "$changed" | grep -E "$SENSITIVE_RE" | sed 's/^/  /')"
   docker info >/dev/null 2>&1 || die "Docker daemon is not running (needed for UI + real-cert gates)"
   export FLASK_ENV=testing TESTING=true
 
-  gate "flake8 (syntax / undefined names)" bash -c '
-    "'"$PY"'" -m flake8 . --count --select=E9,F63,F7,F82,F811,F632,E711,E712,E713,E714 --show-source --statistics'
+  gate "flake8 (syntax, undefined names, dead code, bare excepts)" bash -c '
+    "'"$PY"'" -m flake8 . --count --select=E9,F63,F7,F82,F811,F632,E711,E712,E713,E714,F401,F841,E722 --show-source --statistics'
   gate "bandit (medium+)" bash -c '"'"$PY"'" -m bandit -r modules/ app.py --severity-level medium -q'
   gate "unit + integration suite (incl. version + marker-coverage guards)" \
     "$PY" -m pytest -q -m "not ui and not e2e" -p no:cacheprovider

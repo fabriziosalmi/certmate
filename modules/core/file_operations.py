@@ -10,7 +10,6 @@ import re
 import json
 import tempfile
 import zipfile
-import shutil
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import fcntl

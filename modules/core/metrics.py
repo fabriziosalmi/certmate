@@ -6,9 +6,7 @@ SSL certificate infrastructure health and status.
 """
 
 import time
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
-from typing import Dict, List, Any, Optional
+from datetime import datetime, timezone
 import logging
 
 from .constants import iter_cert_domain_dirs
@@ -35,8 +33,7 @@ logger = logging.getLogger(__name__)
 try:
     from prometheus_client import (
         Counter, Gauge, Histogram, Info, 
-        generate_latest, CONTENT_TYPE_LATEST,
-        CollectorRegistry, REGISTRY
+        generate_latest, CONTENT_TYPE_LATEST
     )
     PROMETHEUS_AVAILABLE = True
     logger.info("Prometheus client library loaded successfully")
@@ -305,9 +302,6 @@ class CertMateMetricsCollector:
     def _collect_certificate_metrics(self, app_context):
         """Collect certificate-related metrics."""
         try:
-            # Import here to avoid circular imports
-            from . import utils
-            
             settings = app_context.get('settings', {})
             cert_dir = app_context.get('cert_dir')
             get_certificate_info = app_context.get('get_certificate_info')

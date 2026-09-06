@@ -13,7 +13,7 @@ def register_backup_cache_routes(app, managers, require_web_auth,
         try:
             backups = file_ops.list_backups()
             return jsonify(backups)
-        except Exception as e:
+        except Exception:
             return jsonify({'error': 'Failed to list backups'}), 500
 
     @app.route('/api/web/backups/create', methods=['POST'])
@@ -39,7 +39,7 @@ def register_backup_cache_routes(app, managers, require_web_auth,
                 'filename': filename,
                 'secrets_masked': not include_secrets,
             })
-        except Exception as e:
+        except Exception:
             return jsonify({'error': 'Backup creation failed'}), 500
 
     @app.route('/api/cache/stats', methods=['GET'])
@@ -50,7 +50,7 @@ def register_backup_cache_routes(app, managers, require_web_auth,
         try:
             stats = cache_manager.get_cache_stats()
             return jsonify(stats)
-        except Exception as e:
+        except Exception:
             return jsonify({'error': 'Failed to get cache stats'}), 500
 
     @app.route('/api/cache/clear', methods=['POST'])
@@ -61,5 +61,5 @@ def register_backup_cache_routes(app, managers, require_web_auth,
         try:
             cache_manager.clear_cache()
             return jsonify({'message': 'Cache cleared'})
-        except Exception as e:
+        except Exception:
             return jsonify({'error': 'Failed to clear cache'}), 500

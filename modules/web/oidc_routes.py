@@ -23,7 +23,7 @@ distinguish them only where it actually matters.
 import logging
 from urllib.parse import urlparse
 
-from flask import jsonify, redirect, request, url_for
+from flask import jsonify, redirect, request
 
 from modules.core.oidc import SECRET_MASK_SENTINEL
 

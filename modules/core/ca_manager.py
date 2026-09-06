@@ -5,7 +5,6 @@ Handles different CA providers including Let's Encrypt, DigiCert, and Private CA
 
 import logging
 import tempfile
-import os
 from typing import Dict, Any, Optional, Tuple
 from pathlib import Path
 

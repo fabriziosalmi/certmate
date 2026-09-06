@@ -59,7 +59,7 @@ def _expand(pattern):
     groups, nested one level. Anything else raises rather than being silently
     ignored — a branch this cannot understand must not be reported as covered.
     """
-    depth, start, branches, current = 0, None, [], ""
+    depth, start, current = 0, None, ""
     i = 0
     while i < len(pattern):
         ch = pattern[i]

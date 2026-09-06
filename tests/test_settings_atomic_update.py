@@ -12,7 +12,6 @@ M3: the deploy hook command denylist (_DANGEROUS_SHELL) must reject
 embedded newlines, since `sh -c` treats them as `;`.
 """
 
-from pathlib import Path
 import threading
 
 import pytest
