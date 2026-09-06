@@ -56,10 +56,15 @@ def test_the_dependency_rationale_names_the_version_that_is_pinned(path):
     acme_version = _pinned_version('acme', path)
     assert acme_version, "acme must be pinned before this can be checked"
 
+    # Case-insensitive throughout: 'PyOpenSSL' and 'pyopenssl' are the same
+    # requirement, and a rationale that said 'ACME' would be just as binding.
+    # A guard that silently stops matching on a capitalisation change is the
+    # kind of instrument this milestone exists to remove.
     text = path.read_text(encoding='utf-8')
     rationale_lines = [
         line for line in text.splitlines()
-        if line.startswith(('cryptography==', 'pyopenssl==')) and 'acme' in line
+        if re.match(r'^(cryptography|pyopenssl)==', line, re.IGNORECASE)
+        and 'acme' in line.lower()
     ]
     assert rationale_lines, (
         "the cryptography/pyopenssl pins no longer explain themselves in terms "
@@ -67,9 +72,11 @@ def test_the_dependency_rationale_names_the_version_that_is_pinned(path):
         "deliberately rather than letting it pass vacuously"
     )
 
-    stale = [line.split('#', 1)[0].strip() for line in rationale_lines
+    # Report the WHOLE line, comment included. Stripping the comment would hide
+    # the stale rationale — the one thing a reader needs to fix this.
+    stale = [line.strip() for line in rationale_lines
              if acme_version not in line]
     assert not stale, (
         f"acme is pinned to {acme_version} but these pins justify themselves "
-        f"against a different acme version: {stale}"
+        f"against a different acme version:\n  " + "\n  ".join(stale)
     )
