@@ -266,7 +266,7 @@ real certificate issued against Let's Encrypt staging, and a Docker build.
 
 ## Coverage Requirements
 
-- CI enforces a floor of **65%** over `modules/` (`--cov-fail-under`, a ratchet
+- CI enforces a floor of **75%** over `modules/` (`--cov-fail-under`, a ratchet
   — raise it, never lower it to make a build pass). The number today is
   comfortably above it.
 - All new features must include tests.
