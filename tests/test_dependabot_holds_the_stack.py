@@ -53,14 +53,23 @@ HELD = {
     "cryptography": 'SECURITY.md "Known dependency constraint"',
     "dns-lexicon": "dns-lexicon",
     "cloudflare": "#568",
+    # Promoted from DEFENSIVE (#657). It used to arrive only as certbot's own
+    # dependency, and certbot bounds it not at all — so the version was
+    # whatever PyPI served, while the pyopenssl and cryptography reasons above
+    # are stated in terms of a specific acme version. The two most carefully
+    # reasoned pins in the tree rested on a number nothing enforced.
+    "acme": "ACME protocol client",
 }
 
-# Ignored defensively rather than held: `acme` is not pinned anywhere — it
-# arrives as certbot's own dependency — but an entry costs nothing and stops a
-# future direct pin from being bumped past the stack the moment it is added.
-# Kept separate from HELD so the "still pinned" check does not fail on it, and
-# so nobody reads it as a pin that exists.
-DEFENSIVE = {"acme"}
+# Ignored defensively rather than held: entries for packages that carry no
+# direct pin of their own. An entry costs nothing and stops a future direct pin
+# from being bumped past the stack the moment it is added. Kept separate from
+# HELD so the "still pinned" check does not fail on them.
+#
+# Empty since acme was promoted to HELD (#657): it acquired a direct pin, which
+# is exactly the transition test_a_defensive_entry_really_is_unpinned exists to
+# force rather than let happen silently.
+DEFENSIVE: set = set()
 
 # Wildcards cover a family; each needs at least one pinned member to be real.
 HELD_FAMILIES = {
