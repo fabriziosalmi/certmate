@@ -337,3 +337,70 @@ def test_both_paths_build_the_delete_list_the_same_way():
             f'{method.__qualname__} deletes temp files itself again; that '
             f'belongs to _remove_temp_files, or the two lists drift'
         )
+
+
+def test_writing_dns_credentials_has_one_home():
+    """The three lines that write the credentials file and remember the
+    provider's side files existed in create and in renew (#666).
+
+    The middle one is the one that matters: a provider may write files the ini
+    only REFERENCES, and Google's is the service-account JSON — a live cloud
+    private key. Two copies of "remember what to delete" is how one of them
+    ends up not remembering.
+    """
+    import inspect
+    import re
+
+    from modules.core.certificates import CertificateManager
+
+    writes = re.compile(r'\.create_config_file\(')
+    for method in (CertificateManager.create_certificate,
+                   CertificateManager.renew_certificate,
+                   CertificateManager._build_issuance_command):
+        src = inspect.getsource(method)
+        assert not writes.search(src), (
+            f'{method.__qualname__} writes the credentials file itself again; '
+            f'that belongs to _write_dns_credentials, which is also what puts '
+            f'the side files on the cleanup record'
+        )
+
+
+def test_the_shared_writer_records_side_files_on_the_record(tmp_path):
+    """Asserted on the helper directly, because this is the line a careless
+    edit drops: the ini is obvious, the files beside it are not."""
+    from modules.core.certificates import _IssuanceArtifacts
+
+    class _Strategy:
+        extra_credential_files = ['/tmp/service-account.json']
+
+        def create_config_file(self, config):
+            return '/tmp/creds.ini'
+
+    manager = _manager(tmp_path)
+    artifacts = _IssuanceArtifacts()
+    returned = manager._write_dns_credentials(
+        _Strategy(), artifacts, 'google', {'x': 1}, 'example.com',
+        san_domains=None)
+
+    assert returned == '/tmp/creds.ini'
+    assert artifacts.credentials_file == '/tmp/creds.ini'
+    assert artifacts.extra_credential_files == ['/tmp/service-account.json']
+    assert '/tmp/service-account.json' in artifacts.temp_paths()
+
+
+def test_a_provider_without_side_files_records_an_empty_list(tmp_path):
+    """CONTROL: most providers have none, and the record must not carry a
+    stale list from the strategy object or a None that breaks temp_paths."""
+    from modules.core.certificates import _IssuanceArtifacts
+
+    class _Strategy:
+        def create_config_file(self, config):
+            return '/tmp/creds.ini'
+
+    artifacts = _IssuanceArtifacts()
+    _manager(tmp_path)._write_dns_credentials(
+        _Strategy(), artifacts, 'cloudflare', {'x': 1}, 'example.com',
+        san_domains=None)
+
+    assert artifacts.extra_credential_files == []
+    assert list(artifacts.temp_paths())  # does not raise

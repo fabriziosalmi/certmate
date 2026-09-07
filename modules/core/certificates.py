@@ -1777,6 +1777,37 @@ class CertificateManager:
         )
 
 
+
+    def _write_dns_credentials(self, strategy, artifacts, dns_provider,
+                               dns_config, domain, san_domains):
+        """Write the provider's credentials file and record what it created.
+
+        Three lines, written twice (#666): once in the create path and once in
+        renew. The second of the three is the one that matters — a provider may
+        write SIDE files the ini only references, and Google's is the
+        service-account JSON, a live cloud private key. Reading them off the
+        strategy and putting them on the record is what makes the caller's
+        cleanup able to remove them.
+
+        Both copies also passed the SAN list, for the same reason and from
+        different sources: the discovery path (Azure today) resolves every cert
+        FQDN against the account's hosted zones in one pass, so a wildcard SAN
+        under a parent zone is invisible without it. Create takes the SANs from
+        the request, renew from metadata; that difference stays at the call
+        sites, where it is a fact about the caller rather than about writing a
+        credentials file.
+
+        Returns the credentials path, which is None for providers that
+        authenticate through environment variables (route53 and friends).
+        """
+        strategy_config = self._dns_config_for_strategy(
+            dns_provider, dns_config, domain, san_domains=san_domains,
+        )
+        artifacts.credentials_file = strategy.create_config_file(strategy_config)
+        artifacts.extra_credential_files = list(
+            getattr(strategy, 'extra_credential_files', []) or [])
+        return artifacts.credentials_file
+
     def _build_issuance_command(self, prepared, artifacts, *, domain, email,
                                 account_id, domain_alias, alias_dns_provider,
                                 replace):
@@ -1958,13 +1989,10 @@ class CertificateManager:
             # Create Config File. Pass the SAN list so the discovery
             # path (Azure today) can resolve every cert FQDN against
             # the account's hosted zones in one pass.
-            strategy_config = self._dns_config_for_strategy(
-                dns_provider, dns_config, domain,
+            self._write_dns_credentials(
+                strategy, artifacts, dns_provider, dns_config, domain,
                 san_domains=all_domains[1:] if len(all_domains) > 1 else None,
             )
-            artifacts.credentials_file = strategy.create_config_file(strategy_config)
-            artifacts.extra_credential_files = list(
-                getattr(strategy, 'extra_credential_files', []) or [])
 
             # Configure Args
             strategy.configure_certbot_arguments(certbot_cmd, artifacts.credentials_file, domain_alias=domain_alias)
@@ -2407,14 +2435,10 @@ class CertificateManager:
                     # the same FQDN set the cert was originally issued with;
                     # otherwise a wildcard SAN under a parent zone would
                     # be invisible at renew time.
-                    renew_sans = metadata.get('san_domains') or None
-                    strategy_config = self._dns_config_for_strategy(
-                        dns_provider, dns_config, domain, san_domains=renew_sans,
+                    self._write_dns_credentials(
+                        strategy, artifacts, dns_provider, dns_config, domain,
+                        san_domains=metadata.get('san_domains') or None,
                     )
-                    artifacts.credentials_file = strategy.create_config_file(
-                        strategy_config)
-                    artifacts.extra_credential_files = list(
-                        getattr(strategy, 'extra_credential_files', []) or [])
                     # Pass the authenticator + credentials explicitly at renew
                     # (mirrors the create path) so renewal does not depend on the
                     # credentials path certbot baked into renewal/<domain>.conf at
