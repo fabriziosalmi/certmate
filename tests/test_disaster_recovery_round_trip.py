@@ -249,3 +249,108 @@ def test_a_corrupt_settings_file_with_no_usable_backup_refuses_to_boot(tmp_path)
     with _pytest.raises(SettingsUnreadableError):
         sm.load_settings()
     assert 'password_hash' in settings_file.read_text(), "the operator's only copy must survive"
+
+
+# --------------------------------------------------------------------------
+# With a passphrase configured (#655)
+#
+# Everything above runs on an instance with no CERTMATE_BACKUP_PASSPHRASE, and
+# stays true there: without one, automatic backups are still masked and still
+# cannot restore. What follows is the other branch, which did not exist when
+# this file was written — with a passphrase set, the automatic path takes a
+# complete archive encrypted at rest, so the newest backup on disk IS a restore
+# point. The two are tied together deliberately: a complete archive that could
+# not be encrypted would be a plaintext credential dump written on every save.
+# --------------------------------------------------------------------------
+
+BACKUP_PASSPHRASE = 'operator-chosen-passphrase'
+
+
+def _empty_instance(tmp_path, name):
+    """A brand-new install: the machine you rebuild onto after losing a volume."""
+    dirs = {n: tmp_path / name / n for n in
+            ("certificates", "data", "backups", "logs")}
+    for directory in dirs.values():
+        directory.mkdir(parents=True)
+    file_ops = FileOperations(
+        cert_dir=dirs["certificates"], data_dir=dirs["data"],
+        backup_dir=dirs["backups"], logs_dir=dirs["logs"],
+    )
+    settings_manager = SettingsManager(
+        file_ops=file_ops, settings_file=dirs["data"] / "settings.json")
+    settings_manager.load_settings()
+    return type('Instance', (), {
+        'settings': settings_manager, 'file_ops': file_ops,
+        'auth': AuthManager(settings_manager),
+        'data': dirs["data"], 'backups': dirs["backups"],
+    })
+
+
+def test_with_a_passphrase_the_automatic_backup_does_bring_it_back(
+        instance, monkeypatch):
+    """The change #655 asked for, measured the way this file measures things:
+    not "the flag says restorable" but "the admin can log in afterwards"."""
+    monkeypatch.setenv('CERTMATE_BACKUP_PASSPHRASE', BACKUP_PASSPHRASE)
+    instance.settings.save_settings(instance.settings.load_settings())
+
+    archive = _unified(instance)[-1]
+    assert archive.name.endswith('.zip.enc'), (
+        f'{archive.name} is not encrypted, so a complete archive would be '
+        f'sitting in plaintext on disk'
+    )
+    listed = next(e for e in instance.file_ops.list_backups()['unified']
+                  if e['filename'] == archive.name)
+    assert listed['can_restore'] is True, listed['restore_blocked_reason']
+
+    # Lose the configuration, then restore from that automatic backup.
+    (instance.data / "settings.json").unlink()
+    assert instance.file_ops.restore_unified_backup(str(archive)) is True
+
+    recovered = instance.settings.load_settings(use_cache=False)
+    assert _credential_survived(recovered), 'the DNS credential did not come back'
+    assert _can_log_in(instance), (
+        'the instance was restored but the admin cannot log in, which is the '
+        'only definition of recovered that matters'
+    )
+
+
+def test_an_archive_carried_off_the_host_restores_a_new_machine(
+        instance, tmp_path, monkeypatch):
+    """The loop closed end to end, across two machines.
+
+    Restore only ever read files already on disk, so losing the volume meant
+    needing access to a filesystem that no longer existed. Nothing is shared
+    between these two instances except the bytes an operator copied.
+    """
+    monkeypatch.setenv('CERTMATE_BACKUP_PASSPHRASE', BACKUP_PASSPHRASE)
+    instance.settings.save_settings(instance.settings.load_settings())
+    carried = _unified(instance)[-1].read_bytes()
+
+    replacement = _empty_instance(tmp_path, 'replacement')
+    assert not _can_log_in(replacement), (
+        'the replacement already accepts the old password, so restoring it '
+        'would prove nothing'
+    )
+
+    filename, err = replacement.file_ops.ingest_backup(carried)
+    assert err is None, f'the carried archive was refused: {err}'
+    assert replacement.file_ops.restore_unified_backup(
+        str(replacement.backups / 'unified' / filename)) is True
+
+    assert _credential_survived(
+        replacement.settings.load_settings(use_cache=False))
+    assert _can_log_in(replacement), (
+        'the replacement machine was restored but the admin cannot log in'
+    )
+
+
+def test_the_carried_archive_does_not_hand_over_its_secrets(
+        instance, monkeypatch):
+    """Operators are told to keep this file off the host. That is only a
+    reasonable thing to ask if finding it does not hand over everything."""
+    monkeypatch.setenv('CERTMATE_BACKUP_PASSPHRASE', BACKUP_PASSPHRASE)
+    instance.settings.save_settings(instance.settings.load_settings())
+
+    raw = _unified(instance)[-1].read_bytes()
+    assert b'cf-real-token-value' not in raw
+    assert PASSWORD.encode() not in raw
