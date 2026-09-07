@@ -1141,7 +1141,17 @@ class CertificateManager:
                 if storage_result:
                     cert_files, metadata = storage_result
                     if 'cert.pem' in cert_files:
-                        info = self._parse_certificate_info(domain, cert_files['cert.pem'], metadata, settings=cache_settings)
+                        # 'unknown', NOT 'missing'. retrieve_certificate_info
+                        # deliberately returns cert.pem alone — its whole point
+                        # is to avoid pulling private keys out of a secrets
+                        # backend for a listing view. Reading the absent key as
+                        # a missing key would mark every storage-backed
+                        # certificate as needing renewal (#608).
+                        info = self._parse_certificate_info(
+                            domain, cert_files['cert.pem'], metadata,
+                            settings=cache_settings,
+                            key_state=('present' if cert_files.get('privkey.pem')
+                                       else 'unknown'))
                         if cache_enabled:
                             self._set_cached_certificate_info(domain, info, cache_settings)
                         return info
@@ -1181,12 +1191,66 @@ class CertificateManager:
         try:
             with open(cert_file, 'rb') as f:
                 cert_content = f.read()
-            return self._parse_certificate_info(domain, cert_content, metadata, settings=settings)
+            return self._parse_certificate_info(
+                domain, cert_content, metadata, settings=settings,
+                key_state=self.private_key_state(domain, cert_content))
         except Exception as e:
             logger.error(f"Failed to read certificate file for {domain}: {e}")
             return self._create_empty_cert_info(domain)
     
-    def _parse_certificate_info(self, domain, cert_content, metadata=None, settings=None):
+    def private_key_state(self, domain, cert_content=None):
+        """Is there a usable private key beside this certificate? (#608)
+
+        Returns one of ``'present'``, ``'missing'`` or ``'mismatched'``.
+
+        `get_certificate_info` decided a certificate existed by looking at
+        cert.pem alone, so a directory holding a certificate and no key was
+        reported healthy with `needs_renewal: false` — and the scheduler then
+        left it alone until an expiry that does not matter, because the
+        instance cannot serve TLS for that name at all.
+
+        That state is not hypothetical: it is exactly what restoring a
+        share-safe backup produces, since those deliberately carry no key
+        material. An operator verifying a recovery the obvious way — the API
+        lists my certificates with sane expiries — is told the node is fine.
+
+        The mismatch case is checked too, and is the cheaper half of the same
+        question: cert.pem from one issuance beside privkey.pem from another
+        cannot complete a handshake either, and comparing public numbers
+        catches it for RSA and EC alike without needing to know the key type.
+        """
+        key_file = self.cert_dir / domain / 'privkey.pem'
+        if not key_file.exists():
+            return 'missing'
+        if cert_content is None:
+            return 'present'
+
+        try:
+            from cryptography.hazmat.primitives import serialization
+            from cryptography import x509
+
+            private_key = serialization.load_pem_private_key(
+                key_file.read_bytes(), password=None)
+            certificate = x509.load_pem_x509_certificate(cert_content)
+        except Exception as e:
+            # An unreadable or encrypted key is not a usable one. Say so
+            # rather than reporting the certificate as fine.
+            logger.warning(
+                "Could not verify the private key for %s: %s",
+                str(domain).replace(chr(10), ' ').replace(chr(13), ' '), e)
+            return 'mismatched'
+
+        try:
+            matches = (private_key.public_key().public_numbers()
+                       == certificate.public_key().public_numbers())
+        except Exception:
+            # Different key types have incomparable public_numbers; that is
+            # itself a mismatch.
+            matches = False
+        return 'present' if matches else 'mismatched'
+
+    def _parse_certificate_info(self, domain, cert_content, metadata=None,
+                                settings=None, key_state='present'):
         """Parse certificate information from certificate content.
 
         ``settings`` mirrors the get_certificate_info parameter: callers
@@ -1242,7 +1306,21 @@ class CertificateManager:
                 # Inclusive boundary: a cert with exactly renewal_threshold_days
                 # left must renew. Using `<` skipped the boundary, delaying
                 # renewal by a day; digest.py and metrics.py already use `<=`.
-                'needs_renewal': days_left <= renewal_threshold_days,
+                # A certificate with no usable private key cannot serve TLS,
+                # so it needs attention now rather than at its expiry — which
+                # is what let a restored keyless certificate sit untouched
+                # while reporting itself healthy (#608).
+                # 'unknown' is not evidence of a problem: the storage-backed
+                # listing path never fetches the key, so only a key we looked
+                # for and did not find (or one that does not match) forces
+                # attention here.
+                'needs_renewal': (days_left <= renewal_threshold_days
+                                  or key_state in ('missing', 'mismatched')),
+                'private_key_present': (None if key_state == 'unknown'
+                                        else key_state != 'missing'),
+                'private_key_state': key_state,
+                'usable': (None if key_state == 'unknown'
+                           else key_state == 'present'),
                 'dns_provider': dns_provider,
                 'domain_alias': domain_alias,
                 'alias_dns_provider': alias_dns_provider,
@@ -1272,6 +1350,10 @@ class CertificateManager:
             'days_left': None,
             'days_until_expiry': None,
             'needs_renewal': True,
+            'private_key_present': (None if key_state == 'unknown'
+                                    else key_state != 'missing'),
+            'private_key_state': key_state,
+            'usable': False,
             'dns_provider': dns_provider,
             'domain_alias': domain_alias,
             'alias_dns_provider': alias_dns_provider,
