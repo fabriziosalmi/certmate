@@ -1597,6 +1597,63 @@
     // Refresh backup list
     // =============================================
 
+    // Bring in an archive kept off this machine. Without it, recovering a lost
+    // volume needed filesystem access to a filesystem that no longer existed:
+    // restore only ever reads files already in backups/unified (#655).
+    //
+    // Uploading stores; it does not restore. That stays a separate, explicit
+    // action, so an upload can never be destructive by itself.
+    function uploadBackup(buttonElement) {
+        var input = document.getElementById('backup-upload-input');
+        var file = input && input.files && input.files[0];
+        if (!file) {
+            showMessage('Choose a backup file to upload first.', 'warning');
+            return;
+        }
+
+        var button = buttonElement || (window.event && window.event.target);
+        var originalText = button ? button.innerHTML : '';
+        if (button) {
+            button.disabled = true;
+            button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Uploading...';
+        }
+
+        var payload = new FormData();
+        payload.append('file', file);
+
+        // No Content-Type header on purpose: the browser sets it along with the
+        // multipart boundary, and setting it by hand produces a body the server
+        // cannot parse.
+        fetch('/api/backups/upload', { method: 'POST', body: payload })
+            .then(function (response) {
+                return response.json().then(function (result) {
+                    if (!response.ok) {
+                        var err = new Error(result.error || ('HTTP ' + response.status));
+                        err.responseStatus = response.status;
+                        throw err;
+                    }
+                    return result;
+                });
+            })
+            .then(function (result) {
+                addDebugLog('Backup uploaded and stored as ' + result.filename, 'info');
+                showMessage('Backup uploaded. It is stored, not restored — check it in the ' +
+                    'list below, then restore it explicitly.', 'success');
+                if (input) { input.value = ''; }
+                return refreshBackupList();
+            })
+            .catch(function (error) {
+                addDebugLog('Backup upload failed: ' + error.message, 'error');
+                showMessage('Upload failed: ' + error.message, 'error');
+            })
+            .finally(function () {
+                if (button) {
+                    button.disabled = false;
+                    button.innerHTML = originalText;
+                }
+            });
+    }
+
     function refreshBackupList() {
         addDebugLog('Refreshing backup list...', 'info');
 
@@ -3318,6 +3375,7 @@
     window.createUser = createUser;
     window.refreshUserList = refreshUserList;
     window.createBackup = createBackup;
+    window.uploadBackup = uploadBackup;
     window.refreshBackupList = refreshBackupList;
     window.downloadBackup = downloadBackup;
     window.restoreBackup = restoreBackup;

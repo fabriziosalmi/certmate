@@ -1038,6 +1038,7 @@ def setup_api(container: AppContainer, app):
     ns_certificates.add_resource(api_resources['CertificateRunDeploy'], '/<string:domain>/deploy')
     ns_backups.add_resource(api_resources['BackupList'], '')
     ns_backups.add_resource(api_resources['BackupCreate'], '/create')
+    ns_backups.add_resource(api_resources['BackupUpload'], '/upload')
     ns_backups.add_resource(api_resources['BackupDownload'], '/download/<backup_type>/<filename>')
     ns_backups.add_resource(api_resources['BackupRestore'], '/restore/<backup_type>')
     ns_backups.add_resource(api_resources['BackupDelete'], '/delete/<backup_type>/<filename>')
