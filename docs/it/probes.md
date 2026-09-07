@@ -9,10 +9,27 @@ Configura le probe per dominio in **Impostazioni → Probe di deployment**.
 | Campo | Descrizione |
 |---|---|
 | Dominio | Il dominio del certificato da sondare |
+| Host | Nome host a cui connettersi e da inviare come SNI. Opzionale — di default il dominio. **Obbligatorio per i wildcard** (vedi sotto) |
 | Porta | Porta TCP (default: 443 per HTTPS/TLS, 587 per SMTP STARTTLS) |
 | Protocollo | `HTTPS/TLS` — handshake HTTPS standard, `TLS` — TLS grezzo senza HTTP, `SMTP STARTTLS` — SMTP semplice con upgrade a TLS |
 
-Il protocollo e la porta sono memorizzati nel `metadata.json` del certificato sotto le chiavi `deployment_protocol` e `deployment_port`.
+Host, porta e protocollo sono memorizzati nel `metadata.json` del certificato
+sotto le chiavi `deployment_host`, `deployment_port` e `deployment_protocol`.
+
+### Certificati wildcard
+
+Un certificato wildcard **non può essere sondato senza un host**, perché un
+wildcard non copre il proprio apex: `*.example.com` non è valido per
+`example.com`, quindi connettersi all'apex confronterebbe il nome sbagliato.
+Invece di segnalare un rosso «Certificato errato» per ogni wildcard, CertMate
+riporta uno stato neutro **Non verificabile** finché non viene impostato un host.
+
+Imposta **Host** su un nome che il certificato copre davvero — `www.example.com`
+per `*.example.com` — e la verifica funziona normalmente. Il campo ne suggerisce
+uno.
+
+Svuotare il campo Host lo rimuove, così un host impostato per errore si corregge
+senza cancellare e ricreare la probe.
 
 ## Funzionamento
 

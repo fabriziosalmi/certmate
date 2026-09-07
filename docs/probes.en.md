@@ -9,10 +9,26 @@ Configure probes per-domain in **Settings → Deployment Probes**.
 | Field | Description |
 |---|---|
 | Domain | The certificate domain to probe |
+| Host | Hostname to connect to and send as SNI. Optional — defaults to the domain. **Required for wildcards** (see below) |
 | Port | TCP port (default: 443 for HTTPS/TLS, 587 for SMTP STARTTLS) |
 | Protocol | `HTTPS/TLS` — standard HTTPS handshake, `TLS` — raw TLS without HTTP, `SMTP STARTTLS` — plain SMTP upgraded to TLS |
 
-Protocol and port are stored in the certificate's `metadata.json` under `deployment_protocol` and `deployment_port`.
+All three are stored in the certificate's `metadata.json` under
+`deployment_host`, `deployment_port` and `deployment_protocol`.
+
+### Wildcard certificates
+
+A wildcard certificate **cannot be probed without a host**, because a wildcard
+does not cover its own apex: `*.example.com` is not valid for `example.com`, so
+connecting to the apex would compare against the wrong name. Rather than report
+a red "Wrong Cert" for every wildcard, CertMate reports a neutral **Not
+Verifiable** status until a host is set.
+
+Set **Host** to any name the certificate actually covers — `www.example.com` for
+`*.example.com` — and the probe verifies normally. The field suggests one.
+
+Clearing the Host field removes it, so a host set by mistake can be corrected
+without deleting and recreating the probe.
 
 ## How probing works
 

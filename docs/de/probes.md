@@ -9,10 +9,28 @@ Konfigurieren Sie Probes pro Domain unter **Einstellungen → Deployment Probes*
 | Feld | Beschreibung |
 |---|---|
 | Domain | Die zu prüfende Zertifikatsdomain |
+| Host | Hostname für die Verbindung und als SNI. Optional — standardmäßig die Domain. **Bei Wildcards erforderlich** (siehe unten) |
 | Port | TCP-Port (Standard: 443 für HTTPS/TLS, 587 für SMTP STARTTLS) |
 | Protokoll | `HTTPS/TLS` — Standard-HTTPS-Handshake, `TLS` — reines TLS ohne HTTP, `SMTP STARTTLS` — SMTP mit TLS-Upgrade |
 
-Protokoll und Port werden in der `metadata.json` des Zertifikats unter den Schlüsseln `deployment_protocol` und `deployment_port` gespeichert.
+Host, Port und Protokoll werden in der `metadata.json` des Zertifikats unter
+`deployment_host`, `deployment_port` und `deployment_protocol` gespeichert.
+
+### Wildcard-Zertifikate
+
+Ein Wildcard-Zertifikat **kann ohne Host nicht geprüft werden**, denn ein
+Wildcard deckt seinen eigenen Apex nicht ab: `*.example.com` gilt nicht für
+`example.com`, eine Verbindung zum Apex würde also gegen den falschen Namen
+vergleichen. Statt für jedes Wildcard ein rotes „Falsches Zertifikat" zu melden,
+zeigt CertMate den neutralen Status **Nicht überprüfbar**, bis ein Host gesetzt
+ist.
+
+Setzen Sie **Host** auf einen Namen, den das Zertifikat tatsächlich abdeckt —
+`www.example.com` für `*.example.com` — und die Prüfung läuft normal. Das Feld
+schlägt einen vor.
+
+Wird das Host-Feld geleert, wird der Host entfernt; ein versehentlich gesetzter
+Host lässt sich so korrigieren, ohne die Probe zu löschen und neu anzulegen.
 
 ## Funktionsweise
 
