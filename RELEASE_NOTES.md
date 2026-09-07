@@ -1,3 +1,93 @@
+## v2.27.1 (Six fixes, four of them things that were quietly wrong)
+
+A patch release. No new endpoints and no new capability — but four of these
+were failures an operator could hit without ever seeing an error, and two came
+from user reports.
+
+### A certificate with no private key was reported as healthy
+
+`get_certificate_info` decided a certificate existed by looking at `cert.pem`
+alone. A domain directory holding a valid certificate and no key came back as
+`exists: true, days_left: 74, needs_renewal: false` — and the renewal sweep
+left it for another six weeks, for an instance that cannot complete a TLS
+handshake for that name.
+
+That is exactly the state restoring a share-safe backup produces, because those
+deliberately carry no key material. An operator verifying a recovery the obvious
+way — *the API lists my certificates with sane expiries* — was told the node was
+fine.
+
+Certificates now report `private_key_present`, `private_key_state` and `usable`,
+and a missing or mismatched key forces renewal instead of waiting for an expiry
+that is irrelevant. A key that does not *match* the certificate counts as
+unusable too: cert.pem from one issuance beside privkey.pem from another cannot
+handshake either.
+
+One deliberate exception, because getting it wrong would have been worse than
+the bug: the storage-backend listing path fetches the certificate without the
+key on purpose, to avoid pulling private keys out of a secrets backend for a
+dashboard. It reports `unknown`, not `missing`, and does not force renewal.
+
+### Configuring a second DNS provider deleted the first
+
+Reported by a user. Saving one provider replaced the whole `dns_providers`
+subtree, so configuring Route53 removed the Cloudflare credential. The provider
+stayed selectable on the certificate form, so the failure surfaced later as an
+issuance that could not find credentials. Providers are now merged. Removal is
+unaffected — it has its own endpoint.
+
+### Single sign-on could fail permanently after an IdP change
+
+Reported by a user connecting Authentik: every login failed with *"Algorithm of
+'RS256' is not allowed"*, and every algorithm they tried failed in turn.
+
+The accepted signing algorithms come from the identity provider's discovery
+document, which was fetched once and cached for the life of the process — and
+the cached client was keyed on the issuer URL alone. So changing the signing
+algorithm at the IdP, or rotating the client secret in CertMate, had no effect
+until the container restarted.
+
+The cache now follows the whole configuration, and a failure on the algorithm
+drops the cached document so the next attempt refetches. The log names both the
+algorithm and what the IdP advertises, and the login page says which IdP setting
+to check.
+
+### Adding an API_BEARER_TOKEN to an existing install locked the operator out
+
+Enforcement asked whether the operator had supplied a token; authentication
+checked the token that was stored. Those agree on a fresh install. They diverge
+for anyone who ran once without a token — one was generated — and then added or
+rotated `API_BEARER_TOKEN`: the first-run screen asked for the token they had
+just configured and answered 401, and the way out was a reset script.
+
+The supplied token is now authoritative and is reconciled at startup.
+**This is a behaviour change:** an operator who rotated the token through the UI
+while leaving a stale `API_BEARER_TOKEN` set will find the variable winning.
+
+### The backup list says which archives carry private keys
+
+Every backup made before v2.26.0 contains the private key of every certificate,
+while its manifest says `secrets_masked: true`. That has been a published
+advisory since v2.26.0 — something an operator has to go and read, while the
+archives sit on their disk described by a manifest that says the wrong thing.
+
+The list now reads the archive itself and marks those rows. An archive that
+cannot be inspected reports *unknown*, never *no keys*: conflating those would
+be the same false reassurance the old manifests gave.
+
+### Rebuilt on a current base image
+
+66 fewer container CVEs (216 to 150 on the built image, nothing new introduced).
+The three remaining criticals are `perl-base` and Debian has no fix for them
+yet.
+
+### Upgrading
+
+Nothing to do, with one thing worth knowing: if you set `API_BEARER_TOKEN` and
+have since rotated the token in the UI, the environment variable now wins.
+
+---
+
 ## v2.27.0 (Backups you can actually restore from)
 
 A minor release: it adds an endpoint and a capability. The theme is disaster
