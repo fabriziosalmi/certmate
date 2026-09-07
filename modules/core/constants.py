@@ -66,6 +66,13 @@ DEFAULT_RENEWAL_THRESHOLD_DAYS = 30
 # value here is now the one shipped installs have always run.
 DEFAULT_SESSION_TIMEOUT_HOURS = 8
 
+# Shape of settings.json, bumped ONLY when that shape changes — unlike
+# `certmate_version`, which is the product version and moves on every release
+# (#669). A file whose schema is NEWER than this is refused rather than read:
+# an older process writing to a shape it does not understand is the failure
+# rollback actually produces, and it is silent.
+SETTINGS_SCHEMA_VERSION = 1
+
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it
 # lived in the API layer, which core could not reach without importing api and
