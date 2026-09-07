@@ -135,18 +135,28 @@
                             
                             <!-- SAN Domains (optional) -->
                             <div>
-                                <label for="san_domains" class="block text-sm font-semibold text-label mb-2">
+                                <label for="san_entry" class="block text-sm font-semibold text-label mb-2">
                                     <i class="fas fa-plus-circle mr-2 text-indigo-500"></i>
                                     Additional Domains (SAN)
                                     <span class="font-normal text-xs text-muted ml-1">Optional</span>
                                 </label>
-                                <input type="text" id="san_domains" name="san_domains"
-                                       autocomplete="off"
-                                       class="block w-full border border-border bg-input text-foreground rounded-lg shadow-sm py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors duration-200 placeholder-gray-400"
-                                       placeholder="www.example.com, mail.example.com, *.api.example.com">
-                                <p class="mt-1 text-xs text-muted">
+                                <!-- Chip editor (#725). #san_domains stays the single source of
+                                     truth as a hidden field holding the comma-joined value, so
+                                     every existing reader and writer of `.value` is unaffected;
+                                     the chips are a view over it. -->
+                                <div id="san_editor"
+                                     class="flex flex-wrap items-center gap-2 w-full border border-border bg-input rounded-lg shadow-sm py-2 px-3 max-h-40 overflow-y-auto focus-within:ring-2 focus-within:ring-primary focus-within:border-primary transition-colors duration-200">
+                                    <span id="san_chips" class="contents"></span>
+                                    <input type="text" id="san_entry"
+                                           autocomplete="off" spellcheck="false"
+                                           aria-describedby="san_help"
+                                           class="flex-1 min-w-[14rem] bg-transparent border-0 p-0 py-1 text-foreground focus:outline-none focus:ring-0 placeholder-gray-400"
+                                           placeholder="www.example.com, mail.example.com, *.api.example.com">
+                                </div>
+                                <input type="hidden" id="san_domains" name="san_domains">
+                                <p id="san_help" class="mt-1 text-xs text-muted">
                                     <i class="fas fa-info-circle mr-1"></i>
-                                    Comma-separated list of Subject Alternative Names (SANs) to include in the certificate
+                                    Press <kbd class="px-1 border border-border rounded">Enter</kbd> or type a comma to add each name. Paste a whole list — commas, spaces and line breaks all work.
                                 </p>
                             </div>
                             
