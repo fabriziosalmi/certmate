@@ -11,7 +11,7 @@ argument, so the thin wrappers the closure prologue defines are reproduced here
 rather than rewriting every call site — the call sites move verbatim, which is
 the property that makes an extraction reviewable.
 """
-from flask import Response, request
+from flask import Response, current_app, request
 from flask_restx import Resource
 
 import logging
@@ -255,6 +255,31 @@ def create_inventory_resources(api, models, ctx: ApiContext) -> dict:
                 return {'error': 'Adoption failed during issuance'}, 500
 
             inventory.mark_managed(fingerprint, plan['domain'])
+
+            # Adoption is a real issuance, so it has to announce itself like
+            # every other one (#640). Three subscribers hang off this event —
+            # the notifier bridge, the deploy hooks, and the deployment-status
+            # cache — and without the publish an adopted certificate ran no
+            # hook and left the dashboard reporting a stale "deployed &
+            # matching" verdict while the load balancer still served the OLD
+            # certificate, with nothing to tell the operator.
+            #
+            # It reuses 'certificate_created' rather than introducing
+            # 'certificate_adopted' precisely because all three subscribers
+            # filter on the name and ignore what they do not know: a new name
+            # would have to reach all of them, and missing one would restore
+            # the silence. The 'adopted' marker keeps the alert truthful —
+            # see factory.build_notification_message.
+            event_bus = current_app.config.get('EVENT_BUS')
+            if event_bus:
+                event_bus.publish('certificate_created', {
+                    'domain': plan['domain'],
+                    'san_domains': plan['san_domains'],
+                    'dns_provider': plan['dns_provider'],
+                    'adopted': True,
+                    'fingerprint': fingerprint,
+                })
+
             return {'status': 'adopted', 'domain': plan['domain'],
                     'managed': True}, 201
 

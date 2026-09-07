@@ -500,6 +500,51 @@ def configure_app(container: AppContainer, app, test_config=None):
          max_age=3600)
 
 
+_EVENT_TITLES = {
+    'certificate_created': 'Certificate Created',
+    'certificate_renewed': 'Certificate Renewed',
+    'certificate_failed': 'Certificate Failed',
+    'certificate_revoked': 'Certificate Revoked',
+    'certificate_deployed': 'Certificate Deployed',
+    'deploy_hook_failed': 'Deploy Hook Failed',
+}
+
+
+def build_notification_message(event, data):
+    """Render ``(title, message)`` for a bus event, or ``None`` when the event
+    is not one operators are notified about.
+
+    Module-level rather than inline in the listener so the rendering can be
+    asserted without building the whole manager graph.
+
+    Adoption (#640) publishes ``certificate_created`` rather than an event of
+    its own. Three subscribers filter on the event NAME and each silently
+    ignores what it does not recognise — this listener, ``DeployManager`` and
+    ``CacheManager`` — so a dedicated name would have to be taught to all
+    three, and missing one would restore exactly the silent deploy hooks the
+    fix is for. The ``adopted`` marker in the payload carries the distinction
+    instead, so the alert still says what actually happened while the operator
+    keeps the single toggle they already have.
+    """
+    data = data or {}
+    title = _EVENT_TITLES.get(event)
+    if not title:
+        return None
+    if event == 'certificate_created' and data.get('adopted'):
+        title = 'Certificate Adopted'
+    domain = data.get('domain', 'unknown')
+    message = f"{title}: {domain}"
+    # Deploy-hook failures carry the hook name and the error; surface both
+    # so the alert is actionable without opening the audit log.
+    hook_name = data.get('hook_name')
+    if hook_name:
+        message += f" (hook: {hook_name})"
+    err = data.get('error')
+    if err:
+        message += f" — {err}"
+    return title, message
+
+
 def initialize_managers(container: AppContainer, app):
     file_ops = FileOperations(
         cert_dir=container.cert_dir,
@@ -588,27 +633,10 @@ def initialize_managers(container: AppContainer, app):
     event_bus = EventBus()
 
     def _on_event(event, data):
-        event_titles = {
-            'certificate_created': 'Certificate Created',
-            'certificate_renewed': 'Certificate Renewed',
-            'certificate_failed': 'Certificate Failed',
-            'certificate_revoked': 'Certificate Revoked',
-            'certificate_deployed': 'Certificate Deployed',
-            'deploy_hook_failed': 'Deploy Hook Failed',
-        }
-        title = event_titles.get(event)
-        if not title:
+        rendered = build_notification_message(event, data)
+        if rendered is None:
             return
-        domain = data.get('domain', 'unknown')
-        message = f"{title}: {domain}"
-        # Deploy-hook failures carry the hook name and the error; surface both
-        # so the alert is actionable without opening the audit log.
-        hook_name = data.get('hook_name')
-        if hook_name:
-            message += f" (hook: {hook_name})"
-        err = data.get('error')
-        if err:
-            message += f" — {err}"
+        title, message = rendered
         notifier.notify(event, title, message, details=data)
 
     event_bus.add_listener(_on_event)
