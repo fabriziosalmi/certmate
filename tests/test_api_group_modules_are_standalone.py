@@ -19,6 +19,7 @@ from modules.api.resource_context import ApiContext
 from modules.api.resources_backup import create_backup_resources
 from modules.api.resources_cache import create_cache_resources
 from modules.api.resources_health import create_health_resources
+from modules.api.resources_inventory import create_inventory_resources
 from modules.api.resources_storage import create_storage_resources
 
 pytestmark = [pytest.mark.unit]
@@ -219,3 +220,61 @@ def test_the_storage_group_reaches_the_storage_manager_by_the_right_name(api):
         f'mapping, so its lookup key is wrong: {body}'
     )
     assert body['current_backend'] == 'local_filesystem'
+
+
+def test_the_inventory_group_builds_from_a_minimal_context(api):
+    ctx = _minimal_context(managers={})
+    resources = create_inventory_resources(api, {}, ctx)
+
+    assert set(resources) == {
+        'InventoryList', 'InventoryConfig', 'InventoryScan',
+        'InventoryCryptoReport', 'InventoryAdopt'}
+    for name, cls in resources.items():
+        assert issubclass(cls, Resource), f'{name} is not a Resource'
+
+
+def test_the_inventory_group_applies_scope_through_the_shared_helper(api):
+    """The first group whose classes use the scope helpers.
+
+    The closure defined thin wrappers over the context-taking functions in
+    resource_context; this module reproduces them so the call sites could move
+    verbatim. If a wrapper were wired to the wrong function — or dropped so a
+    call resolved to the module-level one with the wrong arity — the endpoint
+    would either crash or, far worse, stop filtering and return the whole
+    inventory to a scoped caller. So this calls it and checks what comes back.
+    """
+    inventory = MagicMock()
+    inventory.list_all.return_value = [
+        {'subject_cn': 'mine.example.com', 'sans': []},
+        {'subject_cn': 'theirs.example.net', 'sans': []},
+    ]
+    ctx = _minimal_context(managers={'cert_inventory': inventory})
+    # Scope the caller to one of the two records.
+    ctx.auth.domain_matches_scope = lambda domain, scope: (
+        scope is None or domain in scope)
+
+    resources = create_inventory_resources(api, {}, ctx)
+    app = Flask(__name__)
+    with app.test_request_context('/'):
+        from flask import request as flask_request
+        flask_request.current_user = {
+            'username': 'someone', 'allowed_domains': ['mine.example.com']}
+        result = resources['InventoryList']().get()
+
+    status = result[1] if isinstance(result, tuple) else 200
+    body = result[0] if isinstance(result, tuple) else result
+    assert status != 503, f'the inventory manager was not resolved: {body}'
+
+    # Read the subjects out of the response rather than searching its repr: a
+    # substring match would also be satisfied by a domain that merely contains
+    # the expected one, and would report the wrong thing when it failed.
+    returned = sorted(
+        entry.get('subject_cn')
+        for group in body.values() if isinstance(group, list)
+        for entry in group if isinstance(entry, dict)
+    )
+    assert returned == ['mine.example.com'], (
+        f'the scoped caller should see exactly its own record; got {returned}. '
+        f'Anything else means the scope helper is not being applied — which '
+        f'would hand a restricted caller the whole inventory.'
+    )
