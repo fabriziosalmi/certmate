@@ -108,6 +108,34 @@ _KNOWN_METADATA_KEYS = _REISSUE_OWNED_METADATA_KEYS | frozenset({
 })
 
 
+def _propagation_seconds(settings, dns_provider, strategy):
+    """How long to wait for a DNS-01 TXT record to propagate, in seconds.
+
+    One formula with one home (#666). It existed twice — once in
+    ``create_certificate`` for every provider, once in ``renew_certificate``
+    narrowed to ``custom-script`` — with identical arithmetic and a comment on
+    the second saying "Mirror the create path". Two copies that must agree, one
+    of which announces that it is a copy, is the shape this issue is about.
+
+    Falls back to the strategy default when the settings map has no entry, when
+    the entry will not parse, or when settings cannot be read at all, and
+    clamps to 1 second .. 1 hour so a typo cannot make an issuance hang or
+    return before the record is visible.
+    """
+    try:
+        propagation_map = (settings or {}).get('dns_propagation_seconds', {}) or {}
+    except Exception as e:
+        logger.debug("Failed to read dns_propagation_seconds: %s", e)
+        propagation_map = {}
+
+    default_seconds = strategy.default_propagation_seconds
+    try:
+        seconds = int(propagation_map.get(dns_provider, default_seconds))
+    except (ValueError, TypeError):
+        seconds = default_seconds
+    return max(1, min(3600, seconds))
+
+
 def _reject_path_escaping_domain(domain):
     """Refuse a domain that could escape ``cert_dir`` when used as a path.
 
@@ -1844,22 +1872,13 @@ class CertificateManager:
         # Set propagation time (DNS-01 only; HTTP-01 has no propagation)
         propagation_time = None
         if challenge_type != 'http-01':
-            try:
-                if settings is None:
+            if settings is None:
+                try:
                     settings = self.settings_manager.load_settings()
-                propagation_map = settings.get('dns_propagation_seconds', {}) or {}
-            except Exception as e:
-                logger.debug("Failed to load settings in issue_certificate for propagation time: %s", e)
-                propagation_map = {}
-
-            # Default to strategy default if not in settings map
-            default_seconds = strategy.default_propagation_seconds
-            try:
-                propagation_time = int(propagation_map.get(dns_provider, default_seconds))
-            except (ValueError, TypeError):
-                propagation_time = default_seconds
-            # Ensure propagation time is within reasonable bounds (1 second to 1 hour)
-            propagation_time = max(1, min(3600, propagation_time))
+                except Exception as e:
+                    logger.debug("Failed to load settings for propagation time: %s", e)
+                    settings = {}
+            propagation_time = _propagation_seconds(settings, dns_provider, strategy)
 
             # --manual has no propagation flag: surface the configured
             # per-provider value to custom-script hooks via env instead.
@@ -2316,12 +2335,8 @@ class CertificateManager:
                 # Inject provider env vars (e.g. AWS credentials) for alias renewals too
                 strategy.prepare_environment(process_env, dns_config)
 
-                propagation_map = settings.get('dns_propagation_seconds', {}) or {}
-                try:
-                    propagation_time = int(propagation_map.get(alias_provider, strategy.default_propagation_seconds))
-                except (ValueError, TypeError):
-                    propagation_time = strategy.default_propagation_seconds
-                propagation_time = max(1, min(3600, propagation_time))
+                propagation_time = _propagation_seconds(
+                    settings, alias_provider, strategy)
 
                 alias_hook_config = self._create_dns_alias_hook_config(
                     alias_provider,
@@ -2352,12 +2367,14 @@ class CertificateManager:
                     # without a metadata migration.
                     strategy = DNSStrategyFactory.get_strategy(dns_provider)
                     strategy.prepare_environment(process_env, dns_config)
-                    propagation_map = settings.get('dns_propagation_seconds', {}) or {}
-                    try:
-                        renew_propagation = int(propagation_map.get(
-                            dns_provider, strategy.default_propagation_seconds))
-                    except (ValueError, TypeError):
-                        renew_propagation = strategy.default_propagation_seconds
+                    # BEHAVIOUR CHANGE, deliberate: this copy never clamped.
+                    # A dns_propagation_seconds of 0 asked the hook to validate
+                    # before the TXT record existed; 86400 held the per-domain
+                    # lock for a day. The other three copies bounded it to
+                    # 1..3600 and this one did not — which is what "two copies
+                    # that drift" looks like in practice.
+                    renew_propagation = _propagation_seconds(
+                        settings, dns_provider, strategy)
                     alias_hook_config = self._create_dns_alias_hook_config(
                         dns_provider,
                         dns_config,
@@ -2397,14 +2414,10 @@ class CertificateManager:
                     if dns_provider == 'custom-script':
                         # Mirror the create path: expose the propagation
                         # setting to the hooks certbot replays at renewal.
-                        propagation_map = settings.get('dns_propagation_seconds', {}) or {}
-                        try:
-                            renew_propagation = int(propagation_map.get(dns_provider, strategy.default_propagation_seconds))
-                        except (ValueError, TypeError):
-                            renew_propagation = strategy.default_propagation_seconds
                         process_env.setdefault(
                             'CERTMATE_DNS_PROPAGATION_SECONDS',
-                            str(max(1, min(3600, renew_propagation))))
+                            str(_propagation_seconds(settings, dns_provider,
+                                                     strategy)))
                     logger.info(f"Prepared DNS environment for renewal of {domain} with {dns_provider}")
                 else:
                     # The DNS account this cert was issued with is gone from
