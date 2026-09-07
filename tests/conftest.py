@@ -20,6 +20,62 @@ import pytest
 import requests
 
 # ---------------------------------------------------------------------------
+# Test isolation
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(scope="session", autouse=True)
+def _isolate_runtime_dirs(tmp_path_factory):
+    """Keep `create_app()` out of the checkout's real runtime directories.
+
+    `setup_directories` resolves cert/data/backup/log paths from
+    `modules.core.factory.__file__` — three levels up — and honours no
+    override. So any in-process `create_app()` reads and writes the working
+    tree's own `data/`, `certificates/`, `backups/` and `logs/`, whatever
+    tmp_path the test set up. Thirteen test files do that, and a suite run was
+    measurably changing three of those four directories (#702).
+
+    Two consequences, and the second is the dangerous one: running the tests
+    mutates the developer's instance, and a test can pass on state an earlier
+    run left behind. An assertion that passes for that reason looks exactly
+    like one that passes because the code is right.
+
+    Anchoring `__file__` at a temporary tree is the pattern this repo already
+    uses in test_csp_img_src_airgap.py and test_advertised_endpoints_exist.py;
+    doing it here applies it everywhere without touching production paths, and
+    the container image and systemd unit keep resolving exactly as before.
+
+    `templates/` and `static/` are linked back to the real ones, because the
+    same `__file__` also locates them (factory.py:1305) — an anchor without
+    them would break every test that renders a page, silently at first, since
+    a missing template directory is only a warning at startup.
+    """
+    # Applied to every test, including the container-backed ones: those talk to
+    # CertMate over HTTP and never build an app in this process, so the anchor
+    # is inert for them. An earlier version skipped `slow` tests on the
+    # assumption they were all container-backed. They are not — several run
+    # in-process, and they were the ones still writing to the checkout.
+    root = tmp_path_factory.mktemp("runtime")
+    module_dir = root / "modules" / "core"
+    module_dir.mkdir(parents=True)
+    anchor = module_dir / "factory.py"
+    anchor.write_text("# test path anchor\n", encoding="utf-8")
+    for shared in ("templates", "static"):
+        source = os.path.join(PROJECT_ROOT, shared)
+        if os.path.isdir(source):
+            os.symlink(source, root / shared)
+
+    # Session-scoped, and that is the whole point. As a function-scoped
+    # fixture this lost a race: a fixture defined in a test module runs BEFORE
+    # a function-scoped autouse fixture from conftest, so the app was already
+    # built against the real tree by the time the anchor was applied. Measured,
+    # not assumed — the two fixtures were made to print their order.
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr("modules.core.factory.__file__", str(anchor),
+                      raising=False)
+        yield
+
+
+# ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 TEST_PORT = int(os.environ.get("CERTMATE_TEST_PORT", "18888"))
