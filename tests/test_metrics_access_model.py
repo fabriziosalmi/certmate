@@ -68,7 +68,7 @@ def _metrics_list_declared_role():
 
     MetricsList is defined inside create_api_resources, so reaching it means
     constructing the whole resource graph — there is no cheaper way in, which
-    is itself the point of #669.
+    is itself the point of #667.
     """
     from flask_restx import Api
 

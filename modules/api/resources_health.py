@@ -1,6 +1,6 @@
 """Liveness, metrics and the diagnostics snapshot.
 
-Extracted from the `create_api_resources` closure (#669). The classes are
+Extracted from the `create_api_resources` closure (#667). The classes are
 unchanged; the managers they used to capture now arrive as an explicit
 `ApiContext`, which is what lets them be imported — and tested — without
 building the whole graph.

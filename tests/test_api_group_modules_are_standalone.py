@@ -3,7 +3,7 @@
 That is the entire point of the decomposition. While all 41 classes lived
 inside `create_api_resources`, reaching one route meant constructing every
 manager, which is why the HTTP layer ended up both the largest module and the
-least covered (#662, #669).
+least covered (#662, #667).
 
 This asserts the property directly for each group as it moves out, so a later
 change that quietly reintroduces a dependency on the full graph fails here
