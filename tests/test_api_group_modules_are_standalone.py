@@ -302,3 +302,106 @@ def test_the_settings_group_builds_from_a_minimal_context(api):
         'Settings', 'DNSProviders', 'DNSAccounts', 'DNSAccountDetail'}
     for name, cls in resources.items():
         assert issubclass(cls, Resource), f'{name} is not a Resource'
+
+
+def test_the_download_group_builds_from_a_minimal_context(api):
+    """The group the decomposition could not reach until #667's helper move."""
+    from modules.api.resources_downloads import create_download_resources
+
+    ctx = _minimal_context(file_ops=MagicMock(), audit=MagicMock(), managers={})
+    resources = create_download_resources(api, {}, ctx, lambda pem: pem)
+
+    assert set(resources) == {'DownloadCertificate', 'DownloadCertificateFile'}
+    for name, cls in resources.items():
+        assert issubclass(cls, Resource), f'{name} is not a Resource'
+
+
+def test_a_viewer_cannot_download_a_private_key(api, tmp_path):
+    """The access rule this group exists to enforce, exercised not read.
+
+    `_PRIVATE_KEY_FILES` decides which downloads require operator rather than
+    viewer. A viewer reaching a private key is the worst failure in this file,
+    and moving the endpoints into their own module is exactly the kind of
+    change that could drop the check while every build-only test stayed green.
+    """
+    from flask import request as flask_request
+    from modules.api.resources_downloads import create_download_resources
+
+    domain = 'example.com'
+    cert_dir = tmp_path / 'certs' / domain
+    cert_dir.mkdir(parents=True)
+    for name in ('cert.pem', 'privkey.pem'):
+        (cert_dir / name).write_text(f'-----BEGIN {name}-----\n')
+
+    file_ops = MagicMock()
+    file_ops.cert_dir = tmp_path / 'certs'
+    ctx = _minimal_context(file_ops=file_ops, audit=None, managers={})
+    ctx.auth.user_can_access_domain = lambda user, d: True
+
+    endpoint = create_download_resources(
+        api, {}, ctx, lambda pem: pem)['DownloadCertificateFile']
+
+    app = Flask(__name__)
+    with app.test_request_context('/'):
+        flask_request.current_user = {'username': 'v', 'role': 'viewer'}
+        result = endpoint().get(domain, 'privkey')
+    status = result[1] if isinstance(result, tuple) else 200
+    assert status == 403, (
+        f'a viewer was served a private key ({status}); the operator gate on '
+        f'_PRIVATE_KEY_FILES is not being applied'
+    )
+
+    with app.test_request_context('/'):
+        flask_request.current_user = {'username': 'v', 'role': 'viewer'}
+        public = endpoint().get(domain, 'cert')
+    public_status = public[1] if isinstance(public, tuple) else 200
+    assert public_status != 403, (
+        f'CONTROL: a viewer must still be able to download a public file, '
+        f'got {public_status} — an endpoint that refuses everything would '
+        f'satisfy the assertion above while being broken'
+    )
+
+
+def test_a_viewer_cannot_download_a_private_key_from_the_bundle_endpoint(
+        api, tmp_path):
+    """The other download endpoint, whose gate the test above cannot see.
+
+    `DownloadCertificate` is the larger of the two and gates per file as well:
+    `?file=privkey.pem` needs operator, and so does the default ZIP and the
+    JSON form. Covering only `DownloadCertificateFile` left this one able to
+    lose its check silently — which is what happened when the first mutation
+    run was aimed here and nothing failed.
+    """
+    from flask import request as flask_request
+    from modules.api.resources_downloads import create_download_resources
+
+    domain = 'example.com'
+    cert_dir = tmp_path / 'certs' / domain
+    cert_dir.mkdir(parents=True)
+    for name in ('cert.pem', 'chain.pem', 'fullchain.pem', 'privkey.pem'):
+        (cert_dir / name).write_text(f'-----BEGIN {name}-----\n')
+
+    file_ops = MagicMock()
+    file_ops.cert_dir = tmp_path / 'certs'
+    ctx = _minimal_context(file_ops=file_ops, audit=None, managers={})
+    ctx.auth.user_can_access_domain = lambda user, d: True
+
+    endpoint = create_download_resources(
+        api, {}, ctx, lambda pem: pem)['DownloadCertificate']
+
+    app = Flask(__name__)
+    with app.test_request_context('/?file=privkey.pem'):
+        flask_request.current_user = {'username': 'v', 'role': 'viewer'}
+        result = endpoint().get(domain)
+    status = result[1] if isinstance(result, tuple) else 200
+    assert status == 403, (
+        f'a viewer pulled privkey.pem from the bundle endpoint ({status})'
+    )
+
+    with app.test_request_context('/?file=cert.pem'):
+        flask_request.current_user = {'username': 'v', 'role': 'viewer'}
+        allowed = endpoint().get(domain)
+    allowed_status = allowed[1] if isinstance(allowed, tuple) else 200
+    assert allowed_status != 403, (
+        f'CONTROL: a viewer must still reach cert.pem, got {allowed_status}'
+    )
