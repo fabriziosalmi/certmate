@@ -161,7 +161,9 @@ class TestBackupDownloadAudit:
                 return Path('/outside/directory/backup_outside.zip')
             return real_resolve(self, *args, **kwargs)
 
-        with patch('modules.api.resources.Path.resolve', fake_resolve):
+        # The backup download endpoint moved into resources_backup (#667),
+        # and resources.py no longer imports Path at all.
+        with patch('modules.api.resources_backup.Path.resolve', fake_resolve):
             response = client.get('/api/backups/download/unified/backup_outside.zip')
             assert response.status_code == 403
 

@@ -80,7 +80,7 @@ def test_slow_probe_logs_warning(caplog):
         raise ConnectionRefusedError("simulated unreachable")
 
     with caplog.at_level(logging.WARNING, logger="modules.api.resources"):
-        with patch('modules.api.resources.socket.create_connection',
+        with patch('modules.api.tls_probe.socket.create_connection',
                    side_effect=slow_create_connection):
             with pytest.raises(ConnectionRefusedError):
                 _probe_tls_certificate('example.com', timeout=2)
@@ -107,9 +107,9 @@ def test_fast_probe_does_not_log_warning(caplog):
     mock_context.wrap_socket.return_value = mock_tls_sock
 
     with caplog.at_level(logging.WARNING, logger="modules.api.resources"):
-        with patch('modules.api.resources.socket.create_connection',
+        with patch('modules.api.tls_probe.socket.create_connection',
                    return_value=mock_sock):
-            with patch('modules.api.resources.ssl.create_default_context',
+            with patch('modules.api.tls_probe.ssl.create_default_context',
                        return_value=mock_context):
                 result = _probe_tls_certificate('fast.example.com', timeout=2)
 
@@ -132,7 +132,7 @@ def test_probe_uses_env_var_when_timeout_not_passed(monkeypatch):
         captured_timeout['value'] = timeout
         raise ConnectionRefusedError("simulated")
 
-    with patch('modules.api.resources.socket.create_connection',
+    with patch('modules.api.tls_probe.socket.create_connection',
                side_effect=capturing_create_connection):
         with pytest.raises(ConnectionRefusedError):
             _probe_tls_certificate('example.com')  # timeout=None

@@ -8,7 +8,12 @@ from flask_restx import Api, Namespace
 
 from modules.api.models import create_api_models
 from modules.api.resources import create_api_resources
-import modules.api.resources as api_resources_module
+# The deployment endpoints moved out of the create_api_resources closure
+# into resources_deployment (#667). These stubs must be installed in the
+# module that CALLS the probe: resources.py still re-exports the helpers,
+# but rebinding that copy would leave the call site untouched and every
+# test below would pass while stubbing nothing.
+import modules.api.resources_deployment as api_resources_module
 
 
 pytestmark = [pytest.mark.unit]

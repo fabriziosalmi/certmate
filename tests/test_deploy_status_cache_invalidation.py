@@ -18,7 +18,10 @@ from flask_restx import Api, Namespace
 
 from modules.api.models import create_api_models
 from modules.api.resources import create_api_resources
-import modules.api.resources as api_resources_module
+# Stubs go in the module that CALLS the probe. The endpoint moved into
+# resources_deployment (#667); resources.py still re-exports these names,
+# but patching that copy leaves the call site untouched.
+import modules.api.resources_deployment as api_resources_module
 from modules.core.cache import CacheManager
 from modules.core.events import EventBus
 
