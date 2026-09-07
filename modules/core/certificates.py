@@ -2345,6 +2345,35 @@ class CertificateManager:
         except OSError:
             return None
 
+
+    def _renewal_happened(self, result, fingerprint_check, live_cert_file,
+                          pre_renew_fingerprint):
+        """Did that certbot run actually renew anything? (#666)
+
+        ``certbot renew`` exits 0 both when it renews and when nothing is due,
+        so the exit code cannot answer this. Getting it wrong stamps
+        ``renewed_at`` and reports a renewal that did not happen — false
+        telemetry that masks a genuinely stuck renewal, which is worse than
+        reporting nothing.
+
+        The signal that cannot lie is the artifact: fingerprint the live
+        certificate before and after. The output sentinel is the FALLBACK,
+        for executors that stage no real files, and must never be primary —
+        certbot suppresses those messages under ``--quiet``.
+
+        Extracted so this decision can be tested directly instead of only
+        through a renewal that has to be staged end to end.
+        """
+        if fingerprint_check:
+            post_renew_fingerprint = self._cert_fingerprint(live_cert_file)
+            return (post_renew_fingerprint is not None
+                    and post_renew_fingerprint != pre_renew_fingerprint)
+
+        output = f"{result.stdout or ''}\n{result.stderr or ''}".lower()
+        sentinel_no_op = ('not yet due for renewal' in output
+                          or 'no renewals were attempted' in output)
+        return not sentinel_no_op
+
     def renew_certificate(self, domain, force=False):
         """Renew a certificate"""
         domain_lock = self._get_domain_lock(domain)
@@ -2576,15 +2605,9 @@ class CertificateManager:
                 # is the fallback for non-artifact-producing executors and a
                 # belt-and-braces cross-check; it MUST NOT be the primary
                 # signal because certbot suppresses it under --quiet.
-                _out = f"{result.stdout or ''}\n{result.stderr or ''}".lower()
-                sentinel_no_op = ('not yet due for renewal' in _out
-                                  or 'no renewals were attempted' in _out)
-                if fingerprint_check:
-                    post_renew_fingerprint = self._cert_fingerprint(live_cert_file)
-                    renewed = (post_renew_fingerprint is not None
-                               and post_renew_fingerprint != pre_renew_fingerprint)
-                else:
-                    renewed = not sentinel_no_op
+                renewed = self._renewal_happened(
+                    result, fingerprint_check, live_cert_file,
+                    pre_renew_fingerprint)
 
                 if not renewed:
                     logger.info(f"Certificate for {domain} is not yet due for renewal; no action taken")
