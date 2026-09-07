@@ -1,3 +1,71 @@
+## v2.27.0 (Backups you can actually restore from)
+
+A minor release: it adds an endpoint and a capability. The theme is disaster
+recovery — the case where you have lost the machine, not the case where
+everything is working.
+
+### Automatic backups could not restore the instance
+
+Every automatic backup was taken with its credentials masked, because a leaked
+archive must not also be a credential dump. That default is right. What made it
+a problem is that it was the *only* thing the automatic path produced: the
+newest restore point on disk was one that, installed, would write the mask in
+place of every password hash, token and credential. The restore path knew this
+and refused; the backup list did not say so, and offered an identical Restore
+button on every row. The entry you would reach for first was the one that could
+not help you.
+
+Three changes close that.
+
+**The list tells you.** Each backup now carries `can_restore` and, when false, a
+reason stated as an outcome rather than a mechanism. The UI marks those rows and
+disables their Restore action. The answer comes from the same predicate the
+restore path applies, so the two cannot drift apart. Anything that cannot be
+inspected — an unreadable file, an encrypted archive whose passphrase this
+instance does not hold — reports as *not* restorable, because presenting an
+unknown archive as a restore point is the harm itself.
+
+**Automatic backups can now restore, when they can be encrypted.** With
+`CERTMATE_BACKUP_PASSPHRASE` set, the automatic path takes a complete archive,
+encrypted at rest. Without it, it stays masked. The two are deliberately tied:
+a complete archive that cannot be encrypted would be a plaintext credential dump
+written to disk on every settings change, and that combination is now
+unreachable from the automatic path. A manual backup can still opt into
+plaintext — an explicit, audited operator choice, unchanged.
+
+CertMate does not generate or store that passphrase, and will not. Keeping it
+beside the archive it protects would make the encryption meaningless. An
+instance without one logs a notice, once.
+
+**A backup kept off this machine can come back.** `POST /api/backups/upload`
+(admin), and a *Restore From Elsewhere* control in Settings. Restore only ever
+read files already present on disk, so recovering a lost volume required access
+to a filesystem that no longer existed. Uploading stores the archive and does
+not restore it — that stays a separate, explicit step, so an upload is never
+destructive on its own. The filename you send is discarded and a name is
+generated; an archive is identified by its content, not its extension.
+
+### Usernames are checked where they are created
+
+A username is a key in settings, a name in the UI, and a value in every audit
+record for that session. Nothing constrained it, and one of the two ways one can
+be created is not an operator typing it — the OIDC path takes it from an IdP
+claim. Control characters and empties are now refused, with a length cap.
+
+Deliberately narrow: there is no character allowlist, because IdPs legitimately
+issue addresses, dots, apostrophes and non-ASCII names, and an allowlist would
+lock real people out of a working SSO deployment to prevent a problem they do
+not cause. Existing accounts are untouched.
+
+### Upgrading
+
+Nothing to do. If you want automatic backups you can restore from, set
+`CERTMATE_BACKUP_PASSPHRASE` and keep a copy of an archive off the host —
+archives on the host are pruned after 30 days, and a lost volume takes them
+with it.
+
+---
+
 ## v2.26.4 (The API layer becomes something you can test a piece of)
 
 A patch release. Nothing about how you operate CertMate changes, and no
