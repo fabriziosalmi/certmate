@@ -33,6 +33,7 @@ from urllib.parse import urlparse, urlencode
 
 from flask import session as flask_session
 
+from .auth import validate_username
 from .settings import _strip_masked_values
 from .utils import utc_now
 
@@ -420,6 +421,13 @@ class OIDCManager:
         email_claim = cfg.get('email_claim') or 'email'
         username_value = claims.get(username_claim) or claims.get('preferred_username') \
             or claims.get('email') or sub
+        # This is the one username CertMate does not get from an operator, so
+        # it is the one that has to be checked. A claim carrying control
+        # characters would become a key in settings['users'], a name in the UI
+        # and a value in every audit record written for that session.
+        username_value, username_err = validate_username(username_value)
+        if username_err:
+            return None, 'invalid_username'
         email = claims.get(email_claim) or claims.get('email') or ''
         # OIDC Core §5.1 specifies ``email_verified`` as a boolean. Some
         # IdPs serialise it as the string "true"/"false"; accept either

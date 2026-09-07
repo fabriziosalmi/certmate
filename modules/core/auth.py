@@ -56,6 +56,38 @@ def _bcrypt_input(password):
     """The bytes bcrypt will actually consider, whatever the caller passed."""
     return password.encode()[:_BCRYPT_MAX_BYTES]
 
+
+# A username is a key in settings['users']; it is also rendered in the UI, put
+# in audit records, and interpolated into log messages. Nothing constrained it,
+# and the OIDC path takes it from an IdP claim rather than from an operator.
+USERNAME_MAX_LENGTH = 256
+
+
+def validate_username(username):
+    """Normalise and check a username. Returns ``(clean, error)``.
+
+    Deliberately narrow. It rejects control characters and nothing else about
+    the character set: an IdP legitimately issues addresses, dots, apostrophes
+    and non-ASCII names as ``preferred_username``, and an allowlist would lock
+    real people out of a working SSO deployment to prevent a problem they do
+    not cause. No name a person chooses contains a control character.
+
+    Surrounding whitespace is stripped rather than refused. Nobody intends a
+    trailing space as part of their identity, and normalising means " alice "
+    now collides with an existing "alice" instead of creating a second,
+    visually identical account.
+    """
+    if not isinstance(username, str):
+        return None, 'Username is required'
+    clean = username.strip()
+    if not clean:
+        return None, 'Username is required'
+    if any(ord(ch) < 32 or ord(ch) == 127 for ch in clean):
+        return None, 'Username cannot contain control characters'
+    if len(clean) > USERNAME_MAX_LENGTH:
+        return None, f'Username cannot exceed {USERNAME_MAX_LENGTH} characters'
+    return clean, None
+
 class AuthManager:
     """Class to handle authentication and authorization"""
     
@@ -609,6 +641,10 @@ class AuthManager:
     def create_user(self, username, password, role='operator', email=None):
         """Create a new user"""
         try:
+            username, err = validate_username(username)
+            if err:
+                return False, err
+
             users = self._get_users()
 
             if username in users:
