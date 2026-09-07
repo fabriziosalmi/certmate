@@ -107,6 +107,26 @@ def sanitize_text(s: str) -> str:
     return s
 
 
+def scrub_log_value(value):
+    """Strip CR/LF from an attacker-influenced value bound into a log message,
+    so it cannot forge a second log record (CodeQL py/log-injection).
+
+    Lives here, in the logging module, because it was previously an idiom
+    copy-pasted inline at a dozen call sites — and the one denial path that did
+    not receive the copy is exactly the one code scanning flagged.
+
+    Note this is NOT made unnecessary by the JSON formatter. JSON escapes a
+    newline inside a string, so the default configuration is immune; but
+    ``CERTMATE_LOG_JSON=false`` (app.py) selects a plain line formatter where a
+    newline in a username produces a fully attacker-chosen log line, timestamp
+    and level included. The defence has to sit at the call site, not in one of
+    the two formatters.
+    """
+    if value is None:
+        return value
+    return str(value).replace('\r', '').replace('\n', '')
+
+
 class JSONFormatter(logging.Formatter):
     """JSON log formatter for structured logging"""
     

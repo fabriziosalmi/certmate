@@ -17,18 +17,15 @@ adapters map to HTTP 403.
 """
 import logging
 
+from .structured_logging import scrub_log_value
 from .utils import validate_domain, validate_key_options
 
 logger = logging.getLogger(__name__)
 
 
-def _scrub_log(value):
-    """Strip CR/LF from a value before it goes into a log line, so a crafted
-    domain / username / scope cannot forge or inject log entries
-    (CodeQL py/log-injection)."""
-    if value is None:
-        return value
-    return str(value).replace('\r', '').replace('\n', '')
+# Kept as a local alias: this module's call sites read better with the short
+# name, but the implementation now lives once, in the logging module.
+_scrub_log = scrub_log_value
 
 
 class DomainOutOfScope(PermissionError):

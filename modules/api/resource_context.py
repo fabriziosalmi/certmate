@@ -23,6 +23,7 @@ from flask import request
 from modules.core.auth import ROLE_HIERARCHY
 from modules.core.cert_service import CertificateService
 from modules.core.inventory_view import record_in_scope
+from modules.core.structured_logging import scrub_log_value
 import logging
 
 logger = logging.getLogger(__name__)
@@ -119,9 +120,14 @@ def check_domain_scope(ctx: ApiContext, domain, operation):
     user = getattr(request, 'current_user', None) or {}
     if ctx.auth.user_can_access_domain(user, domain):
         return None
+    # Scrubbed exactly as cert_service does for the same denial log: the
+    # username can carry a newline (create_user does not constrain it, and the
+    # OIDC path takes it from an IdP claim), which under the non-JSON log
+    # format forges a second, fully attacker-chosen record.
     logger.warning(
         "Scope denial: user=%s op=%s domain=%s scope=%s",
-        user.get('username'), operation, domain, user.get('allowed_domains'),
+        scrub_log_value(user.get('username')), scrub_log_value(operation),
+        scrub_log_value(domain), scrub_log_value(user.get('allowed_domains')),
     )
     if ctx.audit:
         ctx.audit.log_authz_denied(
