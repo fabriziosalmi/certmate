@@ -17,6 +17,7 @@ from flask_restx import Api, Resource
 
 from modules.api.resource_context import ApiContext
 from modules.api.resources_cache import create_cache_resources
+from modules.api.resources_health import create_health_resources
 
 pytestmark = [pytest.mark.unit]
 
@@ -67,3 +68,29 @@ def test_the_cache_group_needs_no_certificate_manager(api):
     ctx = _minimal_context(cache=MagicMock(), certificates=None)
     resources = create_cache_resources(api, models, ctx)
     assert resources, 'the group must build with no certificate manager at all'
+
+
+def test_the_health_group_builds_from_a_minimal_context(api):
+    """Diagnostics reaches across the application by nature, so its context
+    carries the manager mapping — but it must still build without the closure.
+    """
+    models = {'health_model': MagicMock(), 'metrics_model': MagicMock()}
+    ctx = _minimal_context(
+        settings=MagicMock(), certificates=MagicMock(), file_ops=MagicMock(),
+        managers={},
+    )
+    resources = create_health_resources(api, models, ctx)
+
+    assert set(resources) == {
+        'HealthCheck', 'MetricsList', 'DiagnosticsSnapshot'}
+    for name, cls in resources.items():
+        assert issubclass(cls, Resource), f'{name} is not a Resource'
+
+
+def test_the_health_group_tolerates_an_empty_manager_mapping(api):
+    """CONTROL: the long-tail managers are optional, as they were in the
+    closure — a diagnostics endpoint must degrade, not refuse to build."""
+    models = {'health_model': MagicMock(), 'metrics_model': MagicMock()}
+    ctx = _minimal_context(settings=MagicMock(), certificates=MagicMock(),
+                           file_ops=MagicMock(), managers={})
+    assert create_health_resources(api, models, ctx)
