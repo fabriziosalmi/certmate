@@ -16,7 +16,7 @@ import time
 import logging
 import shutil
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 try:  # POSIX only; the lock degrades to a no-op without it
     import fcntl
@@ -130,6 +130,20 @@ def _reject_path_escaping_domain(domain):
     if (not domain or '/' in domain or '\\' in domain
             or '..' in domain or '\x00' in domain):
         raise ValueError('Invalid domain name')
+
+
+@dataclass
+class _IssuanceArtifacts:
+    """Temp files an issuance creates, which its caller must remove.
+
+    Mutable on purpose, and populated as each file appears rather than handed
+    back at the end: the builder can raise after writing a credentials file,
+    and a live cloud private key must not outlive the operation because the
+    failure came one line too early.
+    """
+    ca_extra_env: dict = field(default_factory=dict)
+    credentials_file: str | None = None
+    extra_credential_files: list = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -1701,6 +1715,213 @@ class CertificateManager:
             elliptic_curve=elliptic_curve,
         )
 
+
+    def _build_issuance_command(self, prepared, artifacts, *, domain, email,
+                                account_id, domain_alias, alias_dns_provider,
+                                replace):
+        """Turn a prepared request into the certbot argv and its environment.
+
+        Extracted from create_certificate (#666): the CA/EAB flags, the reissue
+        flags, the DNS credentials file, and the DNS-alias manual hook.
+
+        *artifacts* is not a return value — it IS where the temp-file paths
+        live, written the moment each file is created. The caller's ``finally``
+        removes whatever it holds, and this method can raise between writing a
+        credentials file and finishing the command (a plugin config that fails
+        validation, an alias zone the provider does not support). Handing the
+        paths back only on success would leave a live cloud private key on disk
+        for exactly those failures. Before this the guarantee existed, but as
+        three locals assigned partway down a 590-line function; now it is a
+        record with one owner.
+
+        Returns ``(certbot_cmd, process_env)``.
+        """
+        # Same reasoning as _prepare_issuance: this builds --cert-name and log
+        # lines from `domain`, so it enforces its own precondition rather than
+        # trusting the one caller that happens to have checked already.
+        _reject_path_escaping_domain(domain)
+        all_domains = prepared.all_domains
+        ca_account_config = prepared.ca_account_config
+        ca_provider = prepared.ca_provider
+        cert_dir = prepared.cert_dir
+        cert_output_dir = prepared.cert_output_dir
+        challenge_type = prepared.challenge_type
+        dns_config = prepared.dns_config
+        dns_provider = prepared.dns_provider
+        elliptic_curve = prepared.elliptic_curve
+        key_size = prepared.key_size
+        key_type = prepared.key_type
+        # Carried, not reloaded: _prepare_issuance already resolved it
+        # lazily. Without it the propagation lookup below raises
+        # NameError, which its `except Exception` swallows into the
+        # strategy default — a wrong value with no error (#671).
+        settings = prepared.settings
+        staging = prepared.staging
+        strategy = prepared.strategy
+
+        # Build certbot command (artifacts.ca_extra_env was hoisted above the try
+        # so the finally block can clean up safely on early failure)
+        san_list = all_domains[1:] if len(all_domains) > 1 else None
+        if self.ca_manager and ca_account_config:
+            try:
+                certbot_cmd, artifacts.ca_extra_env = self.ca_manager.build_certbot_command(
+                    domain, email, ca_provider, dns_provider, dns_config,
+                    ca_account_config, staging, cert_dir, san_domains=san_list,
+                    key_type=key_type, key_size=key_size, elliptic_curve=elliptic_curve,
+                )
+            except TypeError as e:
+                # Defensive fallback: older build_certbot_command without san_domains
+                logger.warning(f"build_certbot_command does not accept san_domains, adding manually: {e}")
+                result = self.ca_manager.build_certbot_command(
+                    domain, email, ca_provider, dns_provider, dns_config,
+                    ca_account_config, staging, cert_dir
+                )
+                if isinstance(result, tuple):
+                    certbot_cmd, artifacts.ca_extra_env = result
+                else:
+                    certbot_cmd = result
+                # Manually append SAN domains
+                if san_list:
+                    for san in san_list:
+                        certbot_cmd.extend(['-d', san])
+                # Fallback path also needs the key flags appended manually
+                # so a stale ca_manager doesn't silently downgrade certs.
+                if key_type == 'rsa' and key_size:
+                    certbot_cmd.extend(['--key-type', 'rsa', '--rsa-key-size', str(key_size)])
+                elif key_type == 'ecdsa' and elliptic_curve:
+                    certbot_cmd.extend(['--key-type', 'ecdsa', '--elliptic-curve', elliptic_curve])
+        else:
+            certbot_cmd = [
+                'certbot', 'certonly',
+                '--non-interactive',
+                '--agree-tos',
+                '--email', email,
+                '--cert-name', domain,
+                '--config-dir', str(cert_output_dir),
+                '--work-dir', str(cert_output_dir / 'work'),
+                '--logs-dir', str(cert_output_dir / 'logs'),
+            ]
+
+            # Add all domains
+            for d in all_domains:
+                certbot_cmd.extend(['-d', d])
+
+            if staging:
+                certbot_cmd.append('--staging')
+
+            # No-ca_manager path: still honour the resolved key shape so
+            # this branch produces the same cert as the main path.
+            if key_type == 'rsa' and key_size:
+                certbot_cmd.extend(['--key-type', 'rsa', '--rsa-key-size', str(key_size)])
+            elif key_type == 'ecdsa' and elliptic_curve:
+                certbot_cmd.extend(['--key-type', 'ecdsa', '--elliptic-curve', elliptic_curve])
+
+        if replace:
+            # If the existing lineage is broken (stale paths / non-symlink
+            # live cert after a data-dir move or backup restore), move it
+            # aside first so certbot rebuilds a clean lineage rather than
+            # parsefailing on the broken conf — this is what makes "Edit &
+            # Reissue" a reliable repair for the RENEWAL_CONFIG_BROKEN case.
+            self._quarantine_broken_lineage(cert_output_dir, domain)
+            # Reissue over the existing lineage: a different -d set with
+            # the same --cert-name replaces the lineage's domains (expand
+            # and shrink). --renew-with-new-domains makes that
+            # confirmation deterministic. --force-renewal is load-bearing
+            # for the UNCHANGED-set case (config-only edits: CA switch,
+            # provider change, alias clear, same-type re-key): without it
+            # certbot hits _handle_identical_cert_request outside the
+            # renewal window, takes the keep-existing default, and exits 0
+            # WITHOUT issuing — and CertMate would then rewrite metadata
+            # with configuration that was never applied. A reissue must
+            # always issue.
+            certbot_cmd.extend(['--renew-with-new-domains', '--force-renewal'])
+
+        # Build per-request environment (avoid race conditions with os.environ)
+        process_env = os.environ.copy()
+        process_env.update(artifacts.ca_extra_env)
+        strategy.prepare_environment(process_env, dns_config)
+
+        # Set propagation time (DNS-01 only; HTTP-01 has no propagation)
+        propagation_time = None
+        if challenge_type != 'http-01':
+            try:
+                if settings is None:
+                    settings = self.settings_manager.load_settings()
+                propagation_map = settings.get('dns_propagation_seconds', {}) or {}
+            except Exception as e:
+                logger.debug("Failed to load settings in issue_certificate for propagation time: %s", e)
+                propagation_map = {}
+
+            # Default to strategy default if not in settings map
+            default_seconds = strategy.default_propagation_seconds
+            try:
+                propagation_time = int(propagation_map.get(dns_provider, default_seconds))
+            except (ValueError, TypeError):
+                propagation_time = default_seconds
+            # Ensure propagation time is within reasonable bounds (1 second to 1 hour)
+            propagation_time = max(1, min(3600, propagation_time))
+
+            # --manual has no propagation flag: surface the configured
+            # per-provider value to custom-script hooks via env instead.
+            # An account-level propagation_seconds (exported earlier by
+            # prepare_environment) wins over the global setting.
+            if dns_provider == 'custom-script':
+                process_env.setdefault('CERTMATE_DNS_PROPAGATION_SECONDS', str(propagation_time))
+
+        alias_hook_provider = alias_dns_provider or dns_provider
+        # acme-dns is always driven by the native hook, with the configured
+        # subdomain standing in as the alias target when the caller did not
+        # ask for alias mode explicitly (issue #466).
+        effective_domain_alias = domain_alias or self._acme_dns_native_alias(
+            dns_provider, dns_config
+        )
+        use_dns_alias_hook = (
+            challenge_type != 'http-01'
+            and effective_domain_alias
+            and alias_hook_provider in DNS_ALIAS_SUPPORTED_PROVIDERS
+        )
+
+        if use_dns_alias_hook:
+            # The TXT records land on the ALIAS zone, so the hook must run
+            # with the account that controls that zone — which renewals
+            # already honour via metadata alias_dns_provider (issue #129).
+            alias_hook_config = dns_config
+            if alias_hook_provider != dns_provider:
+                alias_hook_config, _ = self._get_dns_config(alias_hook_provider, account_id)
+                if not alias_hook_config:
+                    raise ValueError(
+                        f"Alias DNS provider '{alias_hook_provider}' is not configured"
+                    )
+            logger.info(
+                f"DNS alias '{effective_domain_alias}' requested for {domain}; "
+                f"using {alias_hook_provider} manual hook to create TXT records on the alias zone."
+            )
+            artifacts.credentials_file = self._create_dns_alias_hook_config(
+                alias_hook_provider, alias_hook_config, effective_domain_alias,
+                propagation_time or strategy.default_propagation_seconds
+            )
+            self._configure_dns_alias_arguments(certbot_cmd, artifacts.credentials_file)
+        else:
+            # Create Config File. Pass the SAN list so the discovery
+            # path (Azure today) can resolve every cert FQDN against
+            # the account's hosted zones in one pass.
+            strategy_config = self._dns_config_for_strategy(
+                dns_provider, dns_config, domain,
+                san_domains=all_domains[1:] if len(all_domains) > 1 else None,
+            )
+            artifacts.credentials_file = strategy.create_config_file(strategy_config)
+            artifacts.extra_credential_files = list(
+                getattr(strategy, 'extra_credential_files', []) or [])
+
+            # Configure Args
+            strategy.configure_certbot_arguments(certbot_cmd, artifacts.credentials_file, domain_alias=domain_alias)
+
+            # Some plugins (e.g. certbot-dns-route53 >= 1.22) do not accept a
+            # --{plugin}-propagation-seconds flag and handle propagation internally.
+            if challenge_type != 'http-01' and strategy.supports_propagation_seconds_flag:
+                certbot_cmd.extend([f'--{strategy.plugin_name}-propagation-seconds', str(propagation_time)])
+        return certbot_cmd, process_env
+
     def create_certificate(self, domain, email, dns_provider=None, dns_config=None, account_id=None, staging=False, ca_provider=None, ca_account_id=None, domain_alias=None, alias_dns_provider=None, san_domains=None, challenge_type=None, key_type=None, key_size=None, elliptic_curve=None, replace=False):
         """Create SSL certificate using configurable CA with DNS challenge
 
@@ -1761,16 +1982,15 @@ class CertificateManager:
 
         # Track timing for metrics
         start_time = time.time()
-        credentials_file = None
-        # Secret files created NEXT TO the credentials file (Google's SA JSON,
-        # which the ini only references): the finally block must delete these
-        # too, or a live cloud private key outlives the operation on disk.
-        extra_credential_files = []
-        # Initialized early: the finally block reads ca_extra_env to clean up
-        # the REQUESTS_CA_BUNDLE temp file, and an exception raised before the
-        # ca_manager.build_certbot_command call (e.g. plugin-not-installed)
-        # would otherwise surface as UnboundLocalError, masking the real cause.
-        ca_extra_env = {}
+        # Created before the try so the finally can always clean up, whatever
+        # failed. The builder writes into this record as each temp file
+        # appears: the DNS credentials file, the side files a provider writes
+        # next to it (Google's service-account JSON — a live cloud private key
+        # that must not outlive the operation), and the CA bundle the CA
+        # manager materialises for REQUESTS_CA_BUNDLE. Previously three
+        # separately hoisted locals, one of which existed only so an early
+        # failure would not surface as UnboundLocalError and mask its cause.
+        artifacts = _IssuanceArtifacts()
 
         try:
             prepared = self._prepare_issuance(
@@ -1783,15 +2003,12 @@ class CertificateManager:
                 key_type=key_type, key_size=key_size,
                 elliptic_curve=elliptic_curve, replace=replace,
             )
-            settings = prepared.settings
             ca_provider = prepared.ca_provider
             staging = prepared.staging
-            ca_account_config = prepared.ca_account_config
             used_ca_account_id = prepared.used_ca_account_id
             challenge_type = prepared.challenge_type
             dns_provider = prepared.dns_provider
             dns_config = prepared.dns_config
-            strategy = prepared.strategy
             all_domains = prepared.all_domains
             cert_dir = prepared.cert_dir
             cert_output_dir = prepared.cert_output_dir
@@ -1799,167 +2016,12 @@ class CertificateManager:
             key_size = prepared.key_size
             elliptic_curve = prepared.elliptic_curve
 
-            # Build certbot command (ca_extra_env was hoisted above the try
-            # so the finally block can clean up safely on early failure)
-            san_list = all_domains[1:] if len(all_domains) > 1 else None
-            if self.ca_manager and ca_account_config:
-                try:
-                    certbot_cmd, ca_extra_env = self.ca_manager.build_certbot_command(
-                        domain, email, ca_provider, dns_provider, dns_config,
-                        ca_account_config, staging, cert_dir, san_domains=san_list,
-                        key_type=key_type, key_size=key_size, elliptic_curve=elliptic_curve,
-                    )
-                except TypeError as e:
-                    # Defensive fallback: older build_certbot_command without san_domains
-                    logger.warning(f"build_certbot_command does not accept san_domains, adding manually: {e}")
-                    result = self.ca_manager.build_certbot_command(
-                        domain, email, ca_provider, dns_provider, dns_config,
-                        ca_account_config, staging, cert_dir
-                    )
-                    if isinstance(result, tuple):
-                        certbot_cmd, ca_extra_env = result
-                    else:
-                        certbot_cmd = result
-                    # Manually append SAN domains
-                    if san_list:
-                        for san in san_list:
-                            certbot_cmd.extend(['-d', san])
-                    # Fallback path also needs the key flags appended manually
-                    # so a stale ca_manager doesn't silently downgrade certs.
-                    if key_type == 'rsa' and key_size:
-                        certbot_cmd.extend(['--key-type', 'rsa', '--rsa-key-size', str(key_size)])
-                    elif key_type == 'ecdsa' and elliptic_curve:
-                        certbot_cmd.extend(['--key-type', 'ecdsa', '--elliptic-curve', elliptic_curve])
-            else:
-                certbot_cmd = [
-                    'certbot', 'certonly',
-                    '--non-interactive',
-                    '--agree-tos',
-                    '--email', email,
-                    '--cert-name', domain,
-                    '--config-dir', str(cert_output_dir),
-                    '--work-dir', str(cert_output_dir / 'work'),
-                    '--logs-dir', str(cert_output_dir / 'logs'),
-                ]
-
-                # Add all domains
-                for d in all_domains:
-                    certbot_cmd.extend(['-d', d])
-
-                if staging:
-                    certbot_cmd.append('--staging')
-
-                # No-ca_manager path: still honour the resolved key shape so
-                # this branch produces the same cert as the main path.
-                if key_type == 'rsa' and key_size:
-                    certbot_cmd.extend(['--key-type', 'rsa', '--rsa-key-size', str(key_size)])
-                elif key_type == 'ecdsa' and elliptic_curve:
-                    certbot_cmd.extend(['--key-type', 'ecdsa', '--elliptic-curve', elliptic_curve])
-
-            if replace:
-                # If the existing lineage is broken (stale paths / non-symlink
-                # live cert after a data-dir move or backup restore), move it
-                # aside first so certbot rebuilds a clean lineage rather than
-                # parsefailing on the broken conf — this is what makes "Edit &
-                # Reissue" a reliable repair for the RENEWAL_CONFIG_BROKEN case.
-                self._quarantine_broken_lineage(cert_output_dir, domain)
-                # Reissue over the existing lineage: a different -d set with
-                # the same --cert-name replaces the lineage's domains (expand
-                # and shrink). --renew-with-new-domains makes that
-                # confirmation deterministic. --force-renewal is load-bearing
-                # for the UNCHANGED-set case (config-only edits: CA switch,
-                # provider change, alias clear, same-type re-key): without it
-                # certbot hits _handle_identical_cert_request outside the
-                # renewal window, takes the keep-existing default, and exits 0
-                # WITHOUT issuing — and CertMate would then rewrite metadata
-                # with configuration that was never applied. A reissue must
-                # always issue.
-                certbot_cmd.extend(['--renew-with-new-domains', '--force-renewal'])
-
-            # Build per-request environment (avoid race conditions with os.environ)
-            process_env = os.environ.copy()
-            process_env.update(ca_extra_env)
-            strategy.prepare_environment(process_env, dns_config)
-
-            # Set propagation time (DNS-01 only; HTTP-01 has no propagation)
-            propagation_time = None
-            if challenge_type != 'http-01':
-                try:
-                    if settings is None:
-                        settings = self.settings_manager.load_settings()
-                    propagation_map = settings.get('dns_propagation_seconds', {}) or {}
-                except Exception as e:
-                    logger.debug("Failed to load settings in issue_certificate for propagation time: %s", e)
-                    propagation_map = {}
-
-                # Default to strategy default if not in settings map
-                default_seconds = strategy.default_propagation_seconds
-                try:
-                    propagation_time = int(propagation_map.get(dns_provider, default_seconds))
-                except (ValueError, TypeError):
-                    propagation_time = default_seconds
-                # Ensure propagation time is within reasonable bounds (1 second to 1 hour)
-                propagation_time = max(1, min(3600, propagation_time))
-
-                # --manual has no propagation flag: surface the configured
-                # per-provider value to custom-script hooks via env instead.
-                # An account-level propagation_seconds (exported earlier by
-                # prepare_environment) wins over the global setting.
-                if dns_provider == 'custom-script':
-                    process_env.setdefault('CERTMATE_DNS_PROPAGATION_SECONDS', str(propagation_time))
-
-            alias_hook_provider = alias_dns_provider or dns_provider
-            # acme-dns is always driven by the native hook, with the configured
-            # subdomain standing in as the alias target when the caller did not
-            # ask for alias mode explicitly (issue #466).
-            effective_domain_alias = domain_alias or self._acme_dns_native_alias(
-                dns_provider, dns_config
-            )
-            use_dns_alias_hook = (
-                challenge_type != 'http-01'
-                and effective_domain_alias
-                and alias_hook_provider in DNS_ALIAS_SUPPORTED_PROVIDERS
+            certbot_cmd, process_env = self._build_issuance_command(
+                prepared, artifacts, domain=domain, email=email,
+                account_id=account_id, domain_alias=domain_alias,
+                alias_dns_provider=alias_dns_provider, replace=replace,
             )
 
-            if use_dns_alias_hook:
-                # The TXT records land on the ALIAS zone, so the hook must run
-                # with the account that controls that zone — which renewals
-                # already honour via metadata alias_dns_provider (issue #129).
-                alias_hook_config = dns_config
-                if alias_hook_provider != dns_provider:
-                    alias_hook_config, _ = self._get_dns_config(alias_hook_provider, account_id)
-                    if not alias_hook_config:
-                        raise ValueError(
-                            f"Alias DNS provider '{alias_hook_provider}' is not configured"
-                        )
-                logger.info(
-                    f"DNS alias '{effective_domain_alias}' requested for {domain}; "
-                    f"using {alias_hook_provider} manual hook to create TXT records on the alias zone."
-                )
-                credentials_file = self._create_dns_alias_hook_config(
-                    alias_hook_provider, alias_hook_config, effective_domain_alias,
-                    propagation_time or strategy.default_propagation_seconds
-                )
-                self._configure_dns_alias_arguments(certbot_cmd, credentials_file)
-            else:
-                # Create Config File. Pass the SAN list so the discovery
-                # path (Azure today) can resolve every cert FQDN against
-                # the account's hosted zones in one pass.
-                strategy_config = self._dns_config_for_strategy(
-                    dns_provider, dns_config, domain,
-                    san_domains=all_domains[1:] if len(all_domains) > 1 else None,
-                )
-                credentials_file = strategy.create_config_file(strategy_config)
-                extra_credential_files = list(
-                    getattr(strategy, 'extra_credential_files', []) or [])
-
-                # Configure Args
-                strategy.configure_certbot_arguments(certbot_cmd, credentials_file, domain_alias=domain_alias)
-
-                # Some plugins (e.g. certbot-dns-route53 >= 1.22) do not accept a
-                # --{plugin}-propagation-seconds flag and handle propagation internally.
-                if challenge_type != 'http-01' and strategy.supports_propagation_seconds_flag:
-                    certbot_cmd.extend([f'--{strategy.plugin_name}-propagation-seconds', str(propagation_time)])
 
             logger.info(f"Running certbot command for {domain} with {dns_provider}")
             # Redact sensitive arguments before logging
@@ -2116,14 +2178,15 @@ class CertificateManager:
             # create_google_config only mops up crashed runs, not live ones.
             # (Google needs no side file since #385: its credentials file IS the
             # service-account JSON, so it is unlinked as the main one.)
-            for cred_path in [credentials_file, *extra_credential_files]:
+            for cred_path in [artifacts.credentials_file,
+                              *artifacts.extra_credential_files]:
                 if cred_path:
                     try:
                         os.unlink(cred_path)
                     except (FileNotFoundError, OSError):
                         pass
             # Clean up CA bundle temp file if created
-            ca_bundle = ca_extra_env.get('REQUESTS_CA_BUNDLE')
+            ca_bundle = artifacts.ca_extra_env.get('REQUESTS_CA_BUNDLE')
             if ca_bundle:
                 try:
                     os.unlink(ca_bundle)
