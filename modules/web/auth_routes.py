@@ -70,7 +70,11 @@ def register_auth_routes(app, managers, require_web_auth, auth_manager,
             response.set_cookie(
                 'certmate_session', session_id, httponly=True,
                 secure=request.is_secure, samesite='Strict', path='/',
-                max_age=8 * 60 * 60
+                # Follows SESSION_TIMEOUT_HOURS (#590). Hardcoded at eight
+                # hours, this ignored the setting entirely: the server kept
+                # the session for as long as configured and the browser threw
+                # the cookie away at eight.
+                max_age=auth_manager.session_timeout_seconds
             )
             return response
         except Exception as e:

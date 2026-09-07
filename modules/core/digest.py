@@ -12,7 +12,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from typing import Dict, Any, List
 
-from .constants import iter_cert_domain_dirs
+from .constants import DEFAULT_RENEWAL_THRESHOLD_DAYS, iter_cert_domain_dirs
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +54,8 @@ class WeeklyDigest:
         expired = 0
         expiring_domains: List[str] = []
 
-        renewal_threshold = settings.get('renewal_threshold_days', 30)
+        renewal_threshold = settings.get(
+            'renewal_threshold_days', DEFAULT_RENEWAL_THRESHOLD_DAYS)
 
         for domain in sorted(all_domains):
             info = self.certificate_manager.get_certificate_info(domain)

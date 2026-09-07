@@ -9,7 +9,7 @@ import time
 from datetime import datetime, timezone
 import logging
 
-from .constants import iter_cert_domain_dirs
+from .constants import DEFAULT_RENEWAL_THRESHOLD_DAYS, iter_cert_domain_dirs
 
 
 def _iso_to_epoch(value):
@@ -310,7 +310,8 @@ class CertMateMetricsCollector:
                 return
                 
             # Get configurable renewal threshold (default 30 days for backward compatibility)
-            renewal_threshold_days = settings.get('renewal_threshold_days', 30)
+            renewal_threshold_days = settings.get(
+                'renewal_threshold_days', DEFAULT_RENEWAL_THRESHOLD_DAYS)
                 
             domains = settings.get('domains', [])
             total_domains.set(len(domains))

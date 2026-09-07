@@ -170,13 +170,14 @@ def register_oidc_routes(app, managers, auth_manager, oidc_manager,
 
         next_url = oidc_manager.consume_next_url()
         response = redirect(next_url)
-        # Match local-login cookie attributes verbatim
-        # (auth_routes.py:64-68): HttpOnly, Secure when over HTTPS,
-        # SameSite=Strict, path=/, 8h max_age.
+        # Match local-login cookie attributes: HttpOnly, Secure when over
+        # HTTPS, SameSite=Strict, path=/, and the same lifetime. "Verbatim"
+        # used to mean a copied `8 * 60 * 60`, which is how one hardcoded
+        # duration became two (#590); both now ask the AuthManager.
         response.set_cookie(
             'certmate_session', session_id, httponly=True,
             secure=request.is_secure, samesite='Strict', path='/',
-            max_age=8 * 60 * 60,
+            max_age=auth_manager.session_timeout_seconds,
         )
 
         if audit_logger:
