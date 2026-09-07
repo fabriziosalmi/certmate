@@ -389,6 +389,26 @@ class CertInventory:
             )
             return cur.rowcount > 0
 
+    def delete(self, fingerprint):
+        """Forget a certificate and every endpoint observed for it (#634).
+
+        Returns True if a record existed and was removed, so the caller can
+        answer 404 rather than reporting a deletion that did not happen.
+
+        The endpoint rows go with it via ``ON DELETE CASCADE``, which SQLite
+        applies only because ``_connect`` enables ``PRAGMA foreign_keys``.
+
+        This forgets an observation; it is not a blocklist. A certificate whose
+        domain is still in the discovery configuration will be recorded again
+        on the next scan, which is why the configuration is the thing to edit
+        when the intent is "stop looking at this".
+        """
+        with self._write_conn() as conn:
+            cur = conn.execute(
+                "DELETE FROM certificates WHERE fingerprint = ?", (fingerprint,)
+            )
+            return cur.rowcount > 0
+
     def count(self):
         """Return the number of distinct certificates in the inventory."""
         with self._read_conn() as conn:

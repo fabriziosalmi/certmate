@@ -69,16 +69,30 @@
     }
 
     function actionsCell(r) {
-        // Only unmanaged (discovered) certificates can be adopted, and only by
-        // an operator+. Managed certs and viewers get no button.
-        if (r.managed || !roleAtLeast('operator')) { return ''; }
-        // Pass the fingerprint via a data attribute (read in adoptFromEl) rather
-        // than interpolating it into an inline onclick JS-string.
-        return '<button type="button" data-fp="' + escapeHtml(r.fingerprint) + '" '
-            + 'onclick="InventoryPage.adoptFromEl(this)" '
-            + 'class="px-2 py-1 text-xs bg-surface-2 text-primary rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition" '
-            + 'title="Take over issuance/renewal of this certificate">'
-            + '<i class="fas fa-hand-holding-medical mr-1"></i>Adopt</button>';
+        // Viewers get no buttons at all.
+        if (!roleAtLeast('operator')) { return ''; }
+        // Pass the fingerprint via a data attribute (read in adoptFromEl /
+        // forgetFromEl) rather than interpolating it into an inline onclick
+        // JS-string.
+        var fp = escapeHtml(r.fingerprint);
+        var html = '';
+        // Only unmanaged (discovered) certificates can be adopted.
+        if (!r.managed) {
+            html += '<button type="button" data-fp="' + fp + '" '
+                + 'onclick="InventoryPage.adoptFromEl(this)" '
+                + 'class="px-2 py-1 text-xs bg-surface-2 text-primary rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition" '
+                + 'title="Take over issuance/renewal of this certificate">'
+                + '<i class="fas fa-hand-holding-medical mr-1"></i>Adopt</button>';
+        }
+        // Forget removes the inventory row (#634). Offered for managed records
+        // too: the certificate itself is untouched, so the only consequence is
+        // that CertMate stops listing this observation.
+        html += '<button type="button" data-fp="' + fp + '" '
+            + 'onclick="InventoryPage.forgetFromEl(this)" '
+            + 'class="ml-1 px-2 py-1 text-xs bg-surface-2 text-muted rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition" '
+            + 'title="Remove this certificate from the inventory">'
+            + '<i class="fas fa-eraser mr-1"></i>Forget</button>';
+        return html;
     }
 
     function passesFilters(r) {
@@ -151,6 +165,29 @@
                     });
             })
             .catch(function (err) { window.alert('Could not load adoption plan (' + err + ').'); });
+    }
+
+    function forget(fingerprint, label) {
+        // Removing an inventory row is not the same as stopping discovery, and
+        // the difference is the whole of #634: say it in the confirmation so an
+        // operator does not delete the same row after every scan.
+        var name = label || fingerprint;
+        if (!window.confirm(
+            'Remove "' + name + '" from the inventory?\n\n'
+            + 'The certificate itself is not touched — CertMate only forgets '
+            + 'that it observed it.\n\n'
+            + 'If this domain is still in the discovery configuration it will '
+            + 'be recorded again on the next scan. Remove it there first to '
+            + 'stop looking at it.')) { return; }
+
+        fetch('/api/inventory/' + encodeURIComponent(fingerprint),
+            { method: 'DELETE', headers: API_HEADERS, credentials: 'same-origin' })
+            .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+            .then(function (res) {
+                if (res.ok) { load(); }
+                else { window.alert('Could not remove it: ' + (res.j.error || 'unknown error')); }
+            })
+            .catch(function (err) { window.alert('Could not remove it (' + err + ').'); });
     }
 
     function setSummary(s) {
@@ -274,9 +311,22 @@
         if (fp) { adopt(fp); }
     }
 
+    function forgetFromEl(elm) {
+        var fp = elm && elm.getAttribute('data-fp');
+        if (!fp) { return; }
+        // Name the certificate in the prompt by its subject, not its
+        // fingerprint: the operator recognises the hostname.
+        var match = null;
+        for (var i = 0; i < records.length; i++) {
+            if (records[i].fingerprint === fp) { match = records[i]; break; }
+        }
+        forget(fp, match && match.subject_cn);
+    }
+
     window.InventoryPage = {
         load: load, render: render, saveConfig: saveConfig,
-        runScan: runScan, adopt: adopt, adoptFromEl: adoptFromEl
+        runScan: runScan, adopt: adopt, adoptFromEl: adoptFromEl,
+        forget: forget, forgetFromEl: forgetFromEl
     };
 
     document.addEventListener('DOMContentLoaded', function () {

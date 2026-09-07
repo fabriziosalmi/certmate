@@ -64,6 +64,42 @@ def create_inventory_resources(api, models, ctx: ApiContext) -> dict:
                 logger.error(f"Error listing inventory: {e}")
                 return {'error': 'Failed to list inventory'}, 500
 
+    class InventoryRecord(Resource):
+        @api.doc(security='Bearer')
+        @ctx.auth.require_role('operator')
+        def delete(self, fingerprint):
+            """Forget a discovered certificate (#634).
+
+            The inventory was append-only: taking a domain out of the discovery
+            configuration stopped future scans from finding it, but every row
+            already recorded stayed, with no way to remove it.
+
+            This forgets an observation rather than suppressing one. A
+            certificate whose domain is still configured for discovery will be
+            recorded again on the next scan, so the response says so instead of
+            leaving the operator to discover it by repeating the deletion.
+            """
+            inventory = ctx.managers.get('cert_inventory')
+            if inventory is None:
+                return {'error': 'Certificate inventory not available'}, 503
+
+            record = inventory.get(fingerprint)
+            # Scope first: an out-of-scope record must be indistinguishable
+            # from one that does not exist, exactly as the read paths treat it.
+            if record is None or not _record_in_scope(record):
+                return {'error': 'Certificate not found in inventory'}, 404
+
+            if not inventory.delete(fingerprint):
+                return {'error': 'Certificate not found in inventory'}, 404
+
+            return {
+                'status': 'deleted',
+                'fingerprint': fingerprint,
+                'note': ('Removed from the inventory. It will be recorded '
+                         'again on the next scan if its domain is still in '
+                         'the discovery configuration.'),
+            }, 200
+
     class InventoryConfig(Resource):
         @api.doc(security='Bearer')
         @ctx.auth.require_role('viewer')
@@ -224,6 +260,7 @@ def create_inventory_resources(api, models, ctx: ApiContext) -> dict:
 
     return {
         'InventoryList': InventoryList,
+        'InventoryRecord': InventoryRecord,
         'InventoryConfig': InventoryConfig,
         'InventoryScan': InventoryScan,
         'InventoryCryptoReport': InventoryCryptoReport,
