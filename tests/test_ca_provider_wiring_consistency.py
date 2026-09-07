@@ -166,7 +166,7 @@ def test_dashboard_js_provider_info_covers_every_provider():
 
 
 def test_test_endpoint_handles_every_provider():
-    src = _read('modules/api/resources.py')
+    src = _read('modules/api/resources_ca.py')
     start = src.index('class CAProviderTest')
     next_class = re.search(r'\n    class \w+', src[start + 1:])
     body = src[start:start + 1 + next_class.start()] if next_class else src[start:]
