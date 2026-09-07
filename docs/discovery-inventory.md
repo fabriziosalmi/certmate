@@ -213,6 +213,20 @@ subject/SAN falls within their `allowed_domains`.
 | GET | `/api/inventory/crypto-report` | viewer | Readiness report (`?format=csv`) |
 | GET | `/api/inventory/<fingerprint>/adopt` | viewer | Adoption plan (feasibility + pre-fill) |
 | POST | `/api/inventory/<fingerprint>/adopt` | operator | Adopt & manage the certificate |
+| DELETE | `/api/inventory/<fingerprint>` | operator | Forget a record (the certificate itself is untouched) |
+
+### Forgetting a record
+
+`DELETE /api/inventory/<fingerprint>` removes a certificate and every endpoint
+observed for it. The certificate itself is not touched — CertMate only forgets
+that it saw it — so this is how you clean up after a mistaken scan, a
+decommissioned host, or a name that was never yours. The **Forget** button on
+each inventory row does the same thing.
+
+It forgets an observation; it is not a blocklist. If the domain is still in the
+discovery configuration the certificate will be recorded again on the next
+sweep, so remove it from **Discovery configuration** first when the intent is
+"stop looking at this".
 
 ---
 

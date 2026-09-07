@@ -1093,6 +1093,11 @@ def setup_api(container: AppContainer, app):
     ns_inventory.add_resource(api_resources['InventoryScan'], '/scan')
     ns_inventory.add_resource(api_resources['InventoryCryptoReport'], '/crypto-report')
     ns_inventory.add_resource(api_resources['InventoryAdopt'], '/<string:fingerprint>/adopt')
+    # '/<string:fingerprint>' sits at the same depth as '/config', '/scan' and
+    # '/crypto-report'. Werkzeug weights static segments above converters, so
+    # those keep winning regardless of registration order — verified, not
+    # assumed, and pinned by test_inventory_records_can_be_removed (#634).
+    ns_inventory.add_resource(api_resources['InventoryRecord'], '/<string:fingerprint>')
 
     container.api = api
 

@@ -35,7 +35,7 @@ EXPECTED_RESOURCES = {
     'RenewCertificate', 'CertificateReissue',
     'CertificateJob', 'CertificateJobs', 'CertificateAutoRenew',
     'CertificateRunDeploy', 'CheckDNSAlias', 'CertificateDNSAliasCheck',
-    'InventoryList', 'InventoryConfig', 'InventoryScan',
+    'InventoryList', 'InventoryRecord', 'InventoryConfig', 'InventoryScan',
     'InventoryCryptoReport', 'InventoryAdopt', 'ZombieScan',
     'BackupList', 'BackupCreate', 'BackupDownload', 'BackupRestore',
     'BackupDelete',
