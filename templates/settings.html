@@ -115,6 +115,30 @@
                 </p>
             </div>
 
+            <!-- Upload a backup kept off this node. Without this, recovering a
+                 lost volume needed filesystem access to a filesystem that was
+                 gone: restore only ever read files already on disk. -->
+            <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 mb-6">
+                <h4 class="font-medium text-foreground mb-1 flex items-center">
+                    <i class="fas fa-upload mr-2 text-info-fg"></i>
+                    Restore From Elsewhere
+                </h4>
+                <p class="text-sm text-muted mb-4">
+                    Bring in an archive you keep off this machine — after losing the volume, this is
+                    the only way back. Uploading only stores it; you restore it explicitly afterwards.
+                </p>
+                <div class="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+                    <label for="backup-upload-input" class="sr-only">Backup archive to upload</label>
+                    <input type="file" id="backup-upload-input" accept=".zip,.enc"
+                           aria-label="Backup archive to upload"
+                           class="text-sm text-muted file:mr-3 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:bg-surface-2 file:text-foreground hover:file:bg-hover">
+                    <button type="button" onclick="uploadBackup(this)" class="btn btn-secondary w-full sm:w-auto">
+                        <i class="fas fa-upload mr-2"></i>
+                        Upload Backup
+                    </button>
+                </div>
+            </div>
+
             <!-- Existing Backups Section -->
             <div class="border-t border-border pt-6">
                 <div class="flex items-center justify-between mb-4">

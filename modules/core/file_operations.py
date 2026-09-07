@@ -672,6 +672,67 @@ class FileOperations:
 
 
 
+    # A generous ceiling on an uploaded archive, well under the 50 MB Flask
+    # itself enforces via MAX_CONTENT_LENGTH. Stated here too so the rule holds
+    # for any caller, not only one that arrived over HTTP.
+    MAX_INGEST_BYTES = 40 * 1024 * 1024
+
+    def ingest_backup(self, raw):
+        """Take an archive from outside this node. Returns ``(filename, error)``.
+
+        This is the missing half of disaster recovery: restore reads a file
+        that is already in ``backups/unified``, so after losing the volume
+        there was no way to bring a backup back — recovery required
+        out-of-band access to a filesystem that no longer existed (#655).
+
+        The stored name is generated here and the uploaded one is discarded
+        entirely. A name supplied by the caller is the classic way to steer a
+        write out of the directory, and nothing about the upload needs it: the
+        archive's own manifest carries what it is.
+
+        The kind of archive is decided from its CONTENT, never its extension,
+        because the restore path branches on the suffix — an encrypted archive
+        stored as ``.zip`` would simply fail to open later, at the moment it
+        was most needed.
+        """
+        if not raw:
+            return None, 'The uploaded file is empty'
+        if len(raw) > self.MAX_INGEST_BYTES:
+            return None, (f'Backup exceeds the {self.MAX_INGEST_BYTES // (1024 * 1024)} MB '
+                          f'limit for an upload')
+
+        try:
+            _parse_encrypted_backup(raw)
+            suffix = _BACKUP_ENC_SUFFIX
+        except ValueError:
+            # Not an encrypted container; it must then be a readable archive
+            # that at least looks like one of ours. Refusing here means a
+            # corrupt or unrelated file is rejected at upload rather than
+            # sitting in the list until someone tries to restore from it.
+            try:
+                with zipfile.ZipFile(io.BytesIO(raw)) as zipf:
+                    if 'settings.json' not in zipf.namelist():
+                        return None, ('The archive contains no settings.json, so it is '
+                                      'not a CertMate backup')
+            except (zipfile.BadZipFile, OSError):
+                return None, ('The file is neither a CertMate encrypted backup nor a '
+                              'readable ZIP archive')
+            suffix = '.zip'
+
+        timestamp = utc_now().strftime("%Y%m%d_%H%M%S_%f")
+        filename = f"backup_{timestamp}_{_safe_backup_reason('uploaded')}{suffix}"
+        target = self.backup_dir / "unified" / filename
+        target.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            target.write_bytes(raw)
+            os.chmod(target, 0o600)
+        except OSError as e:
+            logger.error(f"Could not store uploaded backup: {e}")
+            return None, 'Could not write the uploaded backup to disk'
+
+        logger.info(f"Backup ingested from upload: {filename} ({len(raw)} bytes)")
+        return filename, None
+
     def _backup_restorability(self, backup_file):
         """Can this archive actually bring the instance back? ``(bool, reason)``.
 

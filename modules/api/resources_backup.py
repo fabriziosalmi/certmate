@@ -395,7 +395,57 @@ def create_backup_resources(api, models, ctx: ApiContext) -> dict:
                 logger.error(f"Error deleting backup: {e}")
                 return {'error': 'Failed to delete backup'}, 500
 
+    class BackupUpload(Resource):
+        @api.doc(security='Bearer')
+        @ctx.auth.require_role('admin')
+        def post(self):
+            """Upload a backup archive taken off this node.
+
+            The other half of disaster recovery: restore reads a file already
+            present in backups/unified, so after losing the volume there was no
+            way to bring a backup back (#655).
+
+            Deliberately two steps. This stores the archive; restoring it is a
+            separate, audited call the operator makes afterwards — so an upload
+            is never itself a destructive action, and the uploaded file is
+            assessed by the same listing that judges every other archive.
+            """
+            try:
+                uploaded = request.files.get('file')
+                if uploaded is None:
+                    return {'error': 'No file was uploaded (expected a "file" part)'}, 400
+
+                filename, err = ctx.file_ops.ingest_backup(uploaded.read())
+                if err:
+                    return {'error': err}, 400
+
+                if ctx.audit:
+                    user = getattr(request, 'current_user', None) or {}
+                    ctx.audit.log_operation(
+                        operation='upload',
+                        resource_type='backup',
+                        resource_id=filename,
+                        status='success',
+                        # The name the client sent is not what was stored; keep
+                        # both so an operator can tie the two together.
+                        details={'stored_as': filename,
+                                 'uploaded_name': uploaded.filename},
+                        user=user.get('username'),
+                        ip_address=request.remote_addr,
+                    )
+
+                return {
+                    'message': 'Backup uploaded',
+                    'filename': filename,
+                    'note': ('Stored under a generated name. Restore it explicitly '
+                             'once you have checked it is the archive you meant.'),
+                }, 201
+            except Exception as e:
+                logger.error(f"Error uploading backup: {e}")
+                return {'error': 'Failed to store the uploaded backup'}, 500
+
     return {
+        'BackupUpload': BackupUpload,
         'BackupList': BackupList,
         'BackupCreate': BackupCreate,
         'BackupDownload': BackupDownload,

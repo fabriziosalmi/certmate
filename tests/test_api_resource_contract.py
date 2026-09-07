@@ -39,6 +39,7 @@ EXPECTED_RESOURCES = {
     'InventoryCryptoReport', 'InventoryAdopt', 'ZombieScan',
     'BackupList', 'BackupCreate', 'BackupDownload', 'BackupRestore',
     'BackupDelete',
+    'BackupUpload',
 }
 
 
