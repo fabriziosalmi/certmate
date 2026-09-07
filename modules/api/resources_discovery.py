@@ -10,7 +10,7 @@ import logging
 from flask import request
 from flask_restx import Resource
 
-from ..core.constants import iter_cert_domain_dirs
+from ..core.inventory_sources import collect_domain_sources
 from .path_validation import validate_domain_path as _validate_domain_path
 from .resource_context import ApiContext, check_domain_scope
 
@@ -36,22 +36,9 @@ def create_discovery_resources(api, models, ctx: ApiContext) -> dict:
                 settings = ctx.settings.load_settings()
                 certificates = []
 
-                all_domains = set()
-
-                # Add domains from settings
-                for domain_entry in settings.get('domains', []):
-                    if isinstance(domain_entry, str):
-                        domain = domain_entry
-                    elif isinstance(domain_entry, dict):
-                        domain = domain_entry.get('domain')
-                    else:
-                        continue
-                    if domain:
-                        all_domains.add(domain)
-
-                # Also check for certificates that exist on disk but might not be in settings
-                for cert_dir_path in iter_cert_domain_dirs(ctx.certificates.cert_dir):
-                    all_domains.add(cert_dir_path.name)
+                # Same single answer the certificate list uses (#670).
+                all_domains = list(collect_domain_sources(
+                    settings, ctx.certificates.cert_dir))
 
                 # Get certificate info for all domains
                 for domain in all_domains:

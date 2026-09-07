@@ -11,7 +11,10 @@ from flask import current_app, request
 from flask_restx import Resource
 
 from ..core.certificates import DomainOperationInProgress
-from ..core.constants import iter_cert_domain_dirs
+from ..core.inventory_sources import (
+    auto_renew_for,
+    collect_domain_sources,
+)
 from .path_validation import validate_domain_path as _validate_domain_path
 from .resource_context import ApiContext, check_domain_scope
 
@@ -41,31 +44,16 @@ def create_certificates_resources(api, models, ctx: ApiContext) -> dict:
                 settings = ctx.settings.load_settings()
                 certificates = []
 
-                # Map domain -> per-cert auto_renew flag (default True). Domains
-                # that exist only on disk and are not in settings get True too.
-                auto_renew_by_domain = {}
-                all_domains = set()
-
-                # Add domains from settings
-                for domain_entry in settings.get('domains', []):
-                    if isinstance(domain_entry, str):
-                        domain = domain_entry
-                        per_cert_auto_renew = True
-                    elif isinstance(domain_entry, dict):
-                        domain = domain_entry.get('domain')
-                        per_cert_auto_renew = domain_entry.get('auto_renew', True)
-                    else:
-                        continue
-                    if domain:
-                        all_domains.add(domain)
-                        auto_renew_by_domain[domain] = bool(per_cert_auto_renew)
-
-                # Also check for certificates that exist on disk but might not be in settings.
-                # Use iter_cert_domain_dirs so FS artifacts (lost+found, hidden dirs,
-                # non-cert subdirectories when cert_dir is a volume mount point) don't
-                # surface as ghost "Not Found" entries in the dashboard.
-                for cert_dir_path in iter_cert_domain_dirs(ctx.certificates.cert_dir):
-                    all_domains.add(cert_dir_path.name)
+                # One implementation of "what certificates exist" (#670).
+                # Both this and the discovery scan rebuilt the union inline,
+                # with the same tolerance for a domain entry being a string or
+                # a dict, and could disagree about ordering because both
+                # iterated a set.
+                sources = collect_domain_sources(
+                    settings, ctx.certificates.cert_dir)
+                auto_renew_by_domain = {
+                    name: s.auto_renew for name, s in sources.items()}
+                all_domains = list(sources)
 
                 # Get certificate info for all domains, filtered by the
                 # caller's API-key scope. domain_matches_scope(d, None) is
@@ -116,13 +104,8 @@ def create_certificates_resources(api, models, ctx: ApiContext) -> dict:
                     return {'error': f'Certificate not found for domain: {domain}'}, 404
                 # Mirror CertificateList.get's per-domain auto_renew enrichment so
                 # the single-domain response shape matches the list response.
-                settings = ctx.settings.load_settings()
-                auto_renew = True
-                for entry in settings.get('domains', []):
-                    if isinstance(entry, dict) and entry.get('domain') == domain:
-                        auto_renew = bool(entry.get('auto_renew', True))
-                        break
-                cert_info['auto_renew'] = auto_renew
+                cert_info['auto_renew'] = auto_renew_for(
+                    ctx.settings.load_settings(), domain)
                 return cert_info
             except Exception as e:
                 logger.error(f"Error fetching certificate for {domain}: {e}")
