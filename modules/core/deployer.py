@@ -463,6 +463,24 @@ class DeployManager:
 
         cert_path = self.cert_dir / domain / 'fullchain.pem'
         key_path = self.cert_dir / domain / 'privkey.pem'
+        if cert_path.exists() and not key_path.exists():
+            # A CSR-only certificate (#599). Every typed target ships the key
+            # along with the certificate, so none of them can serve one — and
+            # the generic "certificate files unreadable" this used to produce
+            # would fire on every renewal, reading as a broken instance rather
+            # than an incompatible pairing.
+            message = (
+                f'{domain} has no private key on this node: it was issued from '
+                f'a CSR and the key stays on the device that generated it. '
+                f'Typed deploy targets publish the key with the certificate, '
+                f'so use a shell hook that fetches only the certificate '
+                f'instead.')
+            logger.warning("Deploy targets skipped for %s: no local key", domain)
+            failure = {'success': False, 'target': None, 'type': None,
+                       'domain': domain, 'status_code': None,
+                       'message': message}
+            self._record_target(failure, domain, event_type)
+            return [failure]
         try:
             cert_pem = cert_path.read_bytes()
             key_pem = key_path.read_bytes()
@@ -541,7 +559,19 @@ class DeployManager:
         deploy_env = os.environ.copy()
         deploy_env['CERTMATE_DOMAIN'] = domain
         deploy_env['CERTMATE_CERT_PATH'] = str(self.cert_dir / domain / 'cert.pem')
-        deploy_env['CERTMATE_KEY_PATH'] = str(self.cert_dir / domain / 'privkey.pem')
+        # A CSR-only certificate has no private key here — the device that
+        # generated it kept it (#599). The variable is left UNSET rather than
+        # pointed at a file that does not exist, because the path would be a
+        # statement that is not true. Both shapes fail visibly if a hook uses
+        # it (`cp` errors either way), so this is not about catching a silent
+        # failure; it is so a hook can ask `[ -n "$CERTMATE_KEY_PATH" ]` and
+        # get a truthful answer. Nothing changes for a key-managed
+        # certificate, which is every existing one.
+        key_path = self.cert_dir / domain / 'privkey.pem'
+        if key_path.exists():
+            deploy_env['CERTMATE_KEY_PATH'] = str(key_path)
+        else:
+            deploy_env.pop('CERTMATE_KEY_PATH', None)
         deploy_env['CERTMATE_FULLCHAIN_PATH'] = str(self.cert_dir / domain / 'fullchain.pem')
         # Intermediate chain on its own — some targets reject a chained cert
         # (fullchain) and want the leaf and intermediates as separate files

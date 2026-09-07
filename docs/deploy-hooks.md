@@ -107,7 +107,7 @@ Every invocation sets these in the hook's process environment:
 |---|---|
 | `CERTMATE_DOMAIN` | `api.example.com` |
 | `CERTMATE_CERT_PATH` | `/app/certificates/api.example.com/cert.pem` |
-| `CERTMATE_KEY_PATH` | `/app/certificates/api.example.com/privkey.pem` |
+| `CERTMATE_KEY_PATH` | `/app/certificates/api.example.com/privkey.pem` — **not set** for a [CSR-only certificate](csr-only-certificates.md), whose key stays on the device |
 | `CERTMATE_FULLCHAIN_PATH` | `/app/certificates/api.example.com/fullchain.pem` |
 | `CERTMATE_CHAIN_PATH` | `/app/certificates/api.example.com/chain.pem` (intermediates only, no leaf — for targets that want the chain as a separate file) |
 | `CERTMATE_EVENT` | `created` / `renewed` / `revoked` / `manual` |

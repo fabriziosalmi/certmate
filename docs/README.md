@@ -22,7 +22,8 @@ Welcome to the CertMate documentation. This folder contains comprehensive guides
 - **[Architecture](./architecture.md)** — System design, components, data flow
 - **[Testing Guide](./testing.md)** — Test framework, CI/CD, coverage
 - **[Certificate Discovery & Inventory](./discovery-inventory.md)** — probe/CT-log discovery, inventory, adopt, crypto readiness
-- **[Deploy Hooks](./deploy-hooks.md)** — post-issuance hooks: configuration, testing, output redaction
+- **[Deploy Hooks](./deploy-hooks.md)** — post-issuance hooks: configuration, testing, output redaction, maintenance windows
+- **[CSR-only certificates](./csr-only-certificates.md)** — issuing and renewing when the private key stays on the device
 - **[Webhooks](./webhooks.md)** — generic webhooks: payload templates, authentication, signature verification
 - **[Compliance](./compliance.md)** — audit chain, actor attribution, NIS2/eIDAS posture
 - **[Deployment Probes](./probes.en.md)** — verifying a renewed certificate is actually served
@@ -159,6 +160,7 @@ docs/
   architecture.md         system architecture
   ca-providers.md         certificate authorities
   compliance.md           audit chain, attribution, NIS2/eIDAS
+  csr-only-certificates.md  issuing when the key stays on the device
   deploy-hooks.md         post-issuance deploy hooks
   webhooks.md             generic webhooks: payload templates, auth, signature
   discovery-inventory.md  discovery, inventory, adopt, crypto readiness

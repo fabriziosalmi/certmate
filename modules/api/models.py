@@ -178,7 +178,15 @@ def create_api_models(api):
                 'reported rather than assumed.'
             )),
         'private_key_state': fields.String(
-            description="One of 'present', 'missing', 'mismatched' or 'unknown'."),
+            description=(
+                "One of 'present', 'missing', 'mismatched', 'unknown' or "
+                "'external'. 'external' is a CSR-only certificate (#599): the "
+                "key was generated on the device that will serve it and was "
+                "never sent here, so its absence is the design rather than a "
+                "fault. Unlike 'missing' it does not force needs_renewal, and "
+                "`usable` is null because this node cannot answer for a key it "
+                "does not hold."
+            )),
         'auto_renew': fields.Boolean(description='Whether automatic renewal is enabled for this certificate'),
         'dns_provider': fields.String(description='DNS provider used for the certificate'),
         'domain_alias': fields.String(description='DNS alias target used for DNS-01 validation'),
@@ -260,6 +268,16 @@ def create_api_models(api):
             description="ECDSA curve — required when key_type='ecdsa'.",
             enum=['secp256r1', 'secp384r1']
         ),
+        'csr': fields.String(
+            description=(
+                "PEM certificate signing request generated elsewhere (#599). "
+                "When given, CertMate never sees or stores the private key: "
+                "the certificate covers the names inside the CSR, so "
+                "san_domains and the key options must be omitted, and the "
+                "primary `domain` must be one of them. These certificates "
+                "report private_key_state='external' and are renewed by "
+                "re-submitting the stored CSR to the CA."
+            )),
         # Declared here because callers already send it and the server already
         # honours it (`_wants_async`, resources.py). certmate-sdk has sent
         # `async: True` on every create since 0.1.x; leaving it out of the model

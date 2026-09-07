@@ -69,6 +69,7 @@ def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
                         key_type=data.get('key_type'),
                         key_size=data.get('key_size'),
                         elliptic_curve=data.get('elliptic_curve'),
+                        csr_pem=data.get('csr'),
                         user=user,
                         ip_address=request.remote_addr,
                         audit_ctx=audit_ctx,
@@ -90,6 +91,12 @@ def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
                     key_type=data.get('key_type'),
                     key_size=data.get('key_size'),
                     elliptic_curve=data.get('elliptic_curve'),
+                    # A CSR the caller generated elsewhere (#599). When given,
+                    # CertMate never holds the private key: the names come from
+                    # the CSR and the certificate is filed with
+                    # key_management=external so nothing later reads the absent
+                    # key as a lost one.
+                    csr_pem=data.get('csr'),
                     user=user,
                     ip_address=request.remote_addr,
                     audit_ctx=audit_ctx,

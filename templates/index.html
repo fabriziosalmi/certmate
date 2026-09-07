@@ -160,6 +160,44 @@
                                 </p>
                             </div>
                             
+                            <!-- CSR from a device (#599). Collapsed by default:
+                                 almost every certificate is key-managed here,
+                                 and an always-open textarea would suggest a CSR
+                                 is expected. Opening it disables the fields a
+                                 CSR already decides — the names and the key
+                                 shape — rather than letting the request be
+                                 refused by the server for asking two things at
+                                 once. -->
+                            <div class="border border-border rounded-lg overflow-hidden">
+                                <button type="button" id="csr_toggle"
+                                        aria-expanded="false" aria-controls="csr_panel"
+                                        class="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-700/30 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition text-left">
+                                    <span class="font-medium text-foreground text-sm">
+                                        <i class="fas fa-file-signature mr-2 text-purple-500"></i>
+                                        The private key stays on the device
+                                        <span class="font-normal text-xs text-muted ml-1">Optional</span>
+                                    </span>
+                                    <i id="csr_chevron" class="fas fa-chevron-down text-gray-400"></i>
+                                </button>
+                                <div id="csr_panel" class="hidden p-4">
+                                    <p class="text-xs text-muted mb-2">
+                                        For appliances that generate their key on the device and cannot
+                                        export it. Paste the CSR: CertMate obtains the certificate and
+                                        manages the chain, and never sees the private key. The
+                                        certificate covers the names inside the CSR, and
+                                        <strong>one of them must be the domain above</strong>.
+                                    </p>
+                                    <textarea id="cert_csr" name="csr" rows="6"
+                                              spellcheck="false" aria-label="Certificate signing request"
+                                              class="w-full text-xs font-mono border border-border bg-input text-foreground rounded-lg py-2 px-3 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                                              placeholder="-----BEGIN CERTIFICATE REQUEST-----"></textarea>
+                                    <p class="mt-1 text-xs text-muted">
+                                        These certificates are renewed by re-submitting this CSR to the CA.
+                                        Submit a new one here if the device rotates its key.
+                                    </p>
+                                </div>
+                            </div>
+
                             <div>
                                 <label for="ca_provider_select" class="block text-sm font-semibold text-label mb-2">
                                     <i class="fas fa-certificate mr-2 text-green-500"></i>

@@ -31,6 +31,10 @@ from cryptography import x509
 from .shell import ShellExecutor
 from .dns_strategies import DNSStrategyFactory, HTTP01Strategy, acme_webroot_dir, check_certbot_plugin_installed
 from .constants import CERTIFICATE_FILES, DEFAULT_RENEWAL_THRESHOLD_DAYS
+from .csr_issuance import (
+    CSR_OUTPUT_DIRNAME, CSRError, csr_domains, csr_fingerprint, read_csr,
+    to_csr_command,
+)
 from .domain_paths import reject_unsafe_domain
 from .utils import (
     DeploymentStatusCache, validate_domain, utc_now, utc_now_iso, validate_key_options,
@@ -299,6 +303,32 @@ class _PreparedIssuance:
     key_type: str | None
     key_size: int | None
     elliptic_curve: str | None
+
+
+def _private_key_present(key_state):
+    """Was a private key found beside the certificate?
+
+    Four states, three answers, so it is written out rather than derived from a
+    comparison. `'unknown'` means nobody looked — the storage-backend listing
+    path fetches the certificate without the key on purpose. `'external'` means
+    we looked and there is none, deliberately: the appliance holds it (#599).
+    """
+    if key_state == 'unknown':
+        return None
+    return key_state not in ('missing', 'external')
+
+
+def _usable(key_state):
+    """Can this instance complete a TLS handshake with this certificate?
+
+    `'external'` is None rather than False: the certificate IS usable, on the
+    appliance that holds the key. Reporting False would put a CSR-only
+    certificate in the same bucket as one whose key was lost, which is the
+    distinction the state exists to draw.
+    """
+    if key_state in ('unknown', 'external'):
+        return None
+    return key_state == 'present'
 
 
 class CertificateManager:
@@ -644,6 +674,54 @@ class CertificateManager:
                     fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
                 finally:
                     handle.close()
+
+    def _store_csr(self, domain, cert_output_dir, csr_pem):
+        """Validate the CSR, refuse the cases that would silently mislead, and
+        write it where renewal can find it again (#599).
+
+        Returns ``(csr_path, all_domains)``. The domains come from the CSR, not
+        from the request: a CSR is signed over its own subject and SANs, so the
+        CA issues for those names whatever the caller asked for. Deriving them
+        anywhere else would let the stored metadata disagree with the
+        certificate on disk.
+        """
+        try:
+            csr = read_csr(csr_pem)
+        except CSRError as e:
+            raise RuntimeError(f'Certificate creation failed: {e}')
+
+        all_domains = csr_domains(csr)
+        if domain not in all_domains:
+            # The directory is named for `domain`, and every later lookup —
+            # renewal, the health check, deploy hooks — goes through that name.
+            # A CSR for other names would produce a certificate filed under a
+            # domain it does not cover.
+            raise RuntimeError(
+                f'Certificate creation failed: the CSR does not cover '
+                f'{domain}. It requests {", ".join(all_domains)}.')
+        # Primary first, so metadata's san_domains means the same thing here as
+        # everywhere else.
+        all_domains = [domain] + [d for d in all_domains if d != domain]
+
+        # Converting a key-managed certificate into a CSR-only one would leave
+        # the old privkey.pem beside a certificate it cannot serve — the exact
+        # unusable pair `_publish_flat_files` exists to prevent, and one that
+        # would then be reported as 'mismatched' forever. Refuse instead.
+        existing_key = self.cert_dir / domain / 'privkey.pem'
+        if existing_key.exists():
+            raise RuntimeError(
+                f'Certificate creation failed: {domain} already has a private '
+                f'key managed by CertMate. Delete the certificate first if you '
+                f'want to move its key onto the device.')
+
+        cert_output_dir.mkdir(parents=True, exist_ok=True)
+        csr_path = cert_output_dir / 'csr.pem'
+        csr_bytes = csr_pem.encode() if isinstance(csr_pem, str) else csr_pem
+        csr_path.write_bytes(csr_bytes)
+        logger.info(
+            "Stored the submitted CSR for %d name(s); the private key stays "
+            "on the requesting device", len(all_domains))
+        return csr_path, all_domains
 
     def _publish_flat_files(self, src_dir: Path, dest_dir: Path) -> dict:
         """Copy live/ to the flat directory as one unit, not four.
@@ -1394,15 +1472,23 @@ class CertificateManager:
                 cert_content = f.read()
             return self._parse_certificate_info(
                 domain, cert_content, metadata, settings=settings,
-                key_state=self.private_key_state(domain, cert_content))
+                key_state=self.private_key_state(
+                    domain, cert_content, metadata))
         except Exception as e:
             logger.error(f"Failed to read certificate file for {domain}: {e}")
             return self._create_empty_cert_info(domain)
     
-    def private_key_state(self, domain, cert_content=None):
+    def private_key_state(self, domain, cert_content=None, metadata=None):
         """Is there a usable private key beside this certificate? (#608)
 
-        Returns one of ``'present'``, ``'missing'`` or ``'mismatched'``.
+        Returns one of ``'present'``, ``'missing'``, ``'mismatched'`` or
+        ``'external'``.
+
+        ``'external'`` is a CSR-only certificate (#599): the appliance generated
+        the key and cannot export it, so its absence here is the feature rather
+        than the symptom. Distinguishing it matters because ``'missing'`` forces
+        `needs_renewal`, and a CSR-only certificate reissued every renewal sweep
+        would burn CA rate limit for a problem that does not exist.
 
         `get_certificate_info` decided a certificate existed by looking at
         cert.pem alone, so a directory holding a certificate and no key was
@@ -1422,6 +1508,12 @@ class CertificateManager:
         """
         key_file = self.cert_dir / domain / 'privkey.pem'
         if not key_file.exists():
+            # A key that was never ours to hold is not a key we lost. Note the
+            # order: a CSR-only certificate that somehow DOES have a key beside
+            # it falls through to the comparison below rather than being
+            # excused — that is an anomaly worth reporting, not hiding.
+            if (metadata or {}).get('key_management') == 'external':
+                return 'external'
             return 'missing'
         if cert_content is None:
             return 'present'
@@ -1517,11 +1609,9 @@ class CertificateManager:
                 # attention here.
                 'needs_renewal': (days_left <= renewal_threshold_days
                                   or key_state in ('missing', 'mismatched')),
-                'private_key_present': (None if key_state == 'unknown'
-                                        else key_state != 'missing'),
+                'private_key_present': _private_key_present(key_state),
                 'private_key_state': key_state,
-                'usable': (None if key_state == 'unknown'
-                           else key_state == 'present'),
+                'usable': _usable(key_state),
                 'dns_provider': dns_provider,
                 'domain_alias': domain_alias,
                 'alias_dns_provider': alias_dns_provider,
@@ -1551,8 +1641,7 @@ class CertificateManager:
             'days_left': None,
             'days_until_expiry': None,
             'needs_renewal': True,
-            'private_key_present': (None if key_state == 'unknown'
-                                    else key_state != 'missing'),
+            'private_key_present': _private_key_present(key_state),
             'private_key_state': key_state,
             'usable': False,
             'dns_provider': dns_provider,
@@ -2080,7 +2169,7 @@ class CertificateManager:
                 certbot_cmd.extend([f'--{strategy.plugin_name}-propagation-seconds', str(propagation_time)])
         return certbot_cmd, process_env
 
-    def create_certificate(self, domain, email, dns_provider=None, dns_config=None, account_id=None, staging=False, ca_provider=None, ca_account_id=None, domain_alias=None, alias_dns_provider=None, san_domains=None, challenge_type=None, key_type=None, key_size=None, elliptic_curve=None, replace=False):
+    def create_certificate(self, domain, email, dns_provider=None, dns_config=None, account_id=None, staging=False, ca_provider=None, ca_account_id=None, domain_alias=None, alias_dns_provider=None, san_domains=None, challenge_type=None, key_type=None, key_size=None, elliptic_curve=None, replace=False, csr_pem=None):
         """Create SSL certificate using configurable CA with DNS challenge
 
         Args:
@@ -2106,6 +2195,13 @@ class CertificateManager:
                 per-domain.
             key_size: RSA key size in bits (only valid with key_type='rsa').
             elliptic_curve: ECDSA curve (only valid with key_type='ecdsa').
+            csr_pem: A PEM certificate signing request generated elsewhere
+                (#599). When given, CertMate never sees or stores a private
+                key: certbot runs in ``--csr`` mode, the domains come from the
+                CSR rather than from ``domain``/``san_domains``, and the key
+                stays on the appliance that made it. These certificates have no
+                certbot lineage, so ``certbot renew`` will not touch them —
+                renewal re-runs this command with the stored CSR.
             replace: Reissue over the existing certbot lineage (#267). The
                 same ``--cert-name`` with a different ``-d`` set makes
                 certbot replace the lineage's domain set (expand AND
@@ -2180,6 +2276,19 @@ class CertificateManager:
                 alias_dns_provider=alias_dns_provider, replace=replace,
             )
 
+            # CSR mode (#599). The command above is reused wholesale — the CA,
+            # the EAB credentials, the DNS plugin and its credentials file are
+            # identical in both modes — and only the parts that describe a key
+            # or a lineage are rewritten. See modules/core/csr_issuance.
+            csr_output_dir = None
+            if csr_pem is not None:
+                csr_path, all_domains = self._store_csr(
+                    domain, cert_output_dir, csr_pem)
+                csr_output_dir = cert_output_dir / CSR_OUTPUT_DIRNAME
+                csr_output_dir.mkdir(parents=True, exist_ok=True)
+                certbot_cmd = to_csr_command(
+                    certbot_cmd, csr_path, csr_output_dir)
+
 
             logger.info(f"Running certbot command for {domain} with {dns_provider}")
             # Redact sensitive arguments before logging
@@ -2242,7 +2351,14 @@ class CertificateManager:
             # served straight off disk. This is the create AND the replace=True
             # reissue path. _publish_flat_files returns {filename: bytes}, the
             # same shape the rest of this method expects from cert_files.
-            live_dir = cert_output_dir / 'live' / domain
+            # In CSR mode certbot writes no lineage at all — no `live/`, no
+            # `renewal/`; certbot says so on success. Verified against Let's
+            # Encrypt staging, not read from the documentation. So the publish
+            # source is the directory it was told to write to. The staged
+            # promote is the same one either way, and it skips files that do
+            # not exist, which is what leaves privkey.pem alone.
+            live_dir = (csr_output_dir if csr_output_dir is not None
+                        else cert_output_dir / 'live' / domain)
             cert_files = {}
 
             if live_dir.exists():
@@ -2260,7 +2376,12 @@ class CertificateManager:
             # success=True, audit "created", satisfy monitoring, AND push an
             # empty file set to the external DR backend — all while no usable
             # certificate exists on disk. Fail loudly instead.
-            required_files = ('cert.pem', 'privkey.pem')
+            # A CSR-only certificate has no private key on this node, by
+            # design. Demanding one here would fail every such issuance after
+            # it had already succeeded at the CA — burning rate limit for a
+            # file that must not exist.
+            required_files = (('cert.pem',) if csr_pem is not None
+                              else ('cert.pem', 'privkey.pem'))
             missing_files = [f for f in required_files if not cert_files.get(f)]
             if missing_files and getattr(self.shell_executor, 'produces_artifacts', True):
                 raise RuntimeError(
@@ -2284,6 +2405,15 @@ class CertificateManager:
                 'ca_provider': ca_provider,
                 'ca_account_id': used_ca_account_id
             }
+            if csr_pem is not None:
+                # `key_management` is what stops the health check from reading
+                # the absent key as a lost one (#608 forces needs_renewal on
+                # 'missing'), and what tells the renewal path to re-run the CSR
+                # command instead of `certbot renew`, which will never touch a
+                # certificate issued this way.
+                metadata['key_management'] = 'external'
+                metadata['csr_fingerprint'] = csr_fingerprint(csr_pem)
+                metadata['san_domains'] = all_domains[1:]
             if domain_alias:
                 metadata['domain_alias'] = domain_alias
                 metadata['alias_dns_provider'] = alias_dns_provider or dns_provider
@@ -2378,8 +2508,87 @@ class CertificateManager:
                           or 'no renewals were attempted' in output)
         return not sentinel_no_op
 
+    def _csr_renewal_request(self, domain):
+        """The stored CSR for a CSR-only certificate, or None (#599).
+
+        None means "renew this the ordinary way". Both halves have to hold —
+        the metadata marker AND the file — because a CSR-only certificate whose
+        csr.pem went missing cannot be renewed at all, and falling through to
+        `certbot renew` would report a clean no-op every night while the
+        certificate marched to expiry. Better to raise where an operator can
+        see it.
+        """
+        metadata = self._load_metadata(domain) or {}
+        if metadata.get('key_management') != 'external':
+            return None
+        csr_path = self.cert_dir / domain / 'csr.pem'
+        if not csr_path.exists():
+            raise RuntimeError(
+                f"Cannot renew {domain}: it was issued from a CSR this "
+                f"instance no longer has ({csr_path}). Submit the CSR again "
+                f"from the device that holds the private key."
+            )
+        return {'metadata': metadata, 'csr_pem': csr_path.read_bytes()}
+
+    def _renew_from_stored_csr(self, domain, request):
+        """Re-run issuance with the stored CSR, and report it as a renewal.
+
+        Everything the ordinary renewal re-derives from metadata — the CA, the
+        DNS provider and account, the alias — is passed straight through, so a
+        CSR renewal reaches the CA the same way its issuance did. `replace` is
+        not passed: there is no lineage to replace.
+        """
+        metadata = request['metadata']
+        before = self._cert_fingerprint(self.cert_dir / domain / 'cert.pem')
+
+        result = self.create_certificate(
+            domain=domain,
+            email=metadata.get('email'),
+            dns_provider=metadata.get('dns_provider'),
+            account_id=metadata.get('account_id'),
+            ca_provider=metadata.get('ca_provider'),
+            ca_account_id=metadata.get('ca_account_id'),
+            domain_alias=metadata.get('domain_alias'),
+            alias_dns_provider=metadata.get('alias_dns_provider'),
+            challenge_type=metadata.get('challenge_type'),
+            csr_pem=request['csr_pem'],
+        )
+
+        success = bool(result[0] if isinstance(result, tuple) else result)
+        if not success:
+            message = (result[1] if isinstance(result, tuple) and len(result) > 1
+                       else 'certificate issuance failed')
+            return False, message
+
+        # Same question the ordinary path asks, answered the same way: the
+        # artifact, not the exit code. A CA that returns the SAME certificate
+        # for an unchanged CSR — which is exactly what a repeat request inside
+        # the CA's own reuse window produces — must not be reported as a
+        # renewal, or `renewed_at` would advance while the expiry did not.
+        after = self._cert_fingerprint(self.cert_dir / domain / 'cert.pem')
+        if after is not None and after == before:
+            return True, (
+                f'{domain} was reissued from its stored CSR but the '
+                f'certificate did not change; the CA returned the same one.')
+        return True, f'Certificate renewed from the stored CSR for {domain}'
+
     def renew_certificate(self, domain, force=False):
         """Renew a certificate"""
+        # A CSR-only certificate has no certbot lineage, so `certbot renew`
+        # will never touch it — certbot says so on issuance: "Certificates
+        # created using --csr will not be renewed automatically by Certbot. You
+        # will need to renew the certificate before it expires, by running the
+        # same Certbot command again." So that is what this does (#599).
+        #
+        # Before the lock, deliberately: the per-domain lock is a plain Lock,
+        # not an RLock, and create_certificate takes it too. Acquiring here and
+        # delegating there would deadlock every CSR renewal — silently, since
+        # the acquire has a timeout and would surface as
+        # DomainOperationInProgress against no other operation.
+        csr_renewal = self._csr_renewal_request(domain)
+        if csr_renewal is not None:
+            return self._renew_from_stored_csr(domain, csr_renewal)
+
         domain_lock = self._get_domain_lock(domain)
         if not domain_lock.acquire(timeout=self._domain_lock_timeout()):
             raise DomainOperationInProgress(domain)
