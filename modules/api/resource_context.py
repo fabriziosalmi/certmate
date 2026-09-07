@@ -50,6 +50,12 @@ class ApiContext:
     audit: Optional[Any]
     cert_service: Any
     cert_executor: Optional[Any]
+    # The full manager mapping, for the long tail a diagnostics endpoint
+    # legitimately reaches across (scheduler, storage, oidc, shell_executor...).
+    # The named fields above stay the contract for everything else: enumerating
+    # every optional manager as a field would be a fiction, since a diagnostics
+    # snapshot is by nature a view over the whole application.
+    managers: Any = None
 
 
 def build_context(managers) -> ApiContext:
@@ -86,6 +92,7 @@ def build_context(managers) -> ApiContext:
         # Absent in minimal-managers unit tests, in which case create and renew
         # stay synchronous.
         cert_executor=managers.get('cert_executor'),
+        managers=managers,
     )
 
 
