@@ -1794,12 +1794,16 @@
         // shell one-liners emit them. Each token is normalized via
         // normalizeHostname; duplicates after normalization are dropped.
         if (!value) return [];
-        var seen = Object.create(null);
+        // A Set rather than an object used as a map: the keys here come
+        // straight from user input, and writing a user-controlled property
+        // name is remote property injection even when the map is
+        // prototype-less. A Set has no property surface at all.
+        var seen = new Set();
         var out = [];
         String(value).split(/[,;\s]+/).forEach(function (raw) {
             var d = normalizeHostname(raw);
-            if (!d || seen[d]) return;
-            seen[d] = true;
+            if (!d || seen.has(d)) return;
+            seen.add(d);
             out.push(d);
         });
         return out;
@@ -1924,6 +1928,11 @@
         entry.addEventListener('blur', commitSanEntry);
 
         renderSanChips();
+        // The keydown/paste handlers above are what make this an editor rather
+        // than a plain box. Until they are attached, typing a name and pressing
+        // Enter does nothing at all — so publish a readiness flag instead of
+        // leaving callers (and tests) to guess from the element being visible.
+        editor.dataset.ready = '1';
     }
 
     function buildRequestedDomains(primaryDomain, sanDomains, wildcardEnabled) {

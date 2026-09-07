@@ -61,6 +61,12 @@ def _open_form(page):
         "() => !document.getElementById('createCertFormContainer')"
         "        .classList.contains('translate-x-full')")
     page.wait_for_selector('#san_entry', state='visible')
+    # A visible entry field is not a wired one. initSanEditor attaches the
+    # keydown and paste handlers that make this an editor, and on a slower
+    # machine a test can reach the field first — which is exactly how the first
+    # test in this file failed in CI while passing locally. Wait for the flag
+    # the initialiser sets, not for the element to appear.
+    page.wait_for_selector('#san_editor[data-ready="1"]')
     return page.locator('#san_entry')
 
 
