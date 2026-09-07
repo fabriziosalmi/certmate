@@ -4,7 +4,7 @@
 closures over ten managers and a handful of helpers. Nothing in it can be
 imported on its own, which is why the HTTP layer is both the largest module in
 the project and the least covered: reaching one route means constructing the
-whole graph (#669).
+whole graph (#667).
 
 This is the first step out of that: the state those classes capture becomes an
 object that can be built and inspected, and the helpers that captured it become

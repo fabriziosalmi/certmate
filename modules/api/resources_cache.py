@@ -1,6 +1,6 @@
 """Cache inspection and invalidation endpoints.
 
-Extracted from the `create_api_resources` closure (#669). The classes are
+Extracted from the `create_api_resources` closure (#667). The classes are
 unchanged; what used to be captured from the enclosing scope now arrives as an
 explicit `ApiContext`, which is what makes them importable — and therefore
 testable — without constructing the whole manager graph.

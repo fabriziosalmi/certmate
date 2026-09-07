@@ -1,6 +1,6 @@
 """ACME CA provider connectivity checks.
 
-Extracted from the `create_api_resources` closure (#669). The class is
+Extracted from the `create_api_resources` closure (#667). The class is
 unchanged; what used to be captured from the enclosing scope now arrives as an
 explicit `ApiContext`, which is what makes it importable — and therefore
 testable — without constructing the whole manager graph.

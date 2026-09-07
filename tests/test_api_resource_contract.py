@@ -3,7 +3,7 @@
 `create_api_resources` is a single 3,700-line function holding 41 classes as
 closures, which is why no route can be imported or tested without constructing
 the whole manager graph — and therefore why the HTTP layer is the least covered
-code in the project (#662, #669).
+code in the project (#662, #667).
 
 Breaking it up moves thousands of lines. This exists so that the move is
 verifiable rather than hopeful: whatever the internal arrangement, the factory

@@ -339,12 +339,12 @@ def create_api_resources(api, models, managers):
 
     # The manager set and the helpers that used to be captured here now live
     # in modules/api/resource_context.py, so a resource class can be moved into
-    # a module of its own without dragging this closure with it (#669). The
+    # a module of its own without dragging this closure with it (#667). The
     # local names below are aliases kept during the decomposition: call sites
     # move group by group, not all at once.
     ctx = build_context(managers)
     # Groups that have moved into modules of their own build here and
-    # are merged into the returned mapping below (#669).
+    # are merged into the returned mapping below (#667).
     settings_resources = create_settings_resources(api, models, ctx)
     extracted = {
         # Only the two factory.py registers from the returned mapping; the
@@ -1980,12 +1980,12 @@ def create_api_resources(api, models, managers):
     # Register storage backend endpoints. Unlike the health, cache and backup
     # groups — which factory.py registers from the returned mapping — these
     # build their namespace here, so the classes are taken from `extracted`
-    # rather than from the local scope they no longer occupy (#669).
+    # rather than from the local scope they no longer occupy (#667).
     # Built here rather than merged into `extracted` above: unlike the health,
     # cache and backup groups, these are registered on a namespace of their own
     # right here instead of by factory.py from the returned mapping. Adding
     # them to that mapping would change what create_api_resources hands back,
-    # which the resource contract test pins deliberately (#669).
+    # which the resource contract test pins deliberately (#667).
     storage_resources = create_storage_resources(api, models, ctx)
     storage_ns = api.namespace('storage', description='Storage Backend Operations')
     storage_ns.add_resource(storage_resources['StorageBackendInfo'], '/info')
