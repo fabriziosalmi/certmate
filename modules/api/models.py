@@ -375,6 +375,16 @@ def create_api_models(api):
                 'credential. Decided with the same predicate the restore path '
                 'applies, and false whenever the archive cannot be inspected.'
             )),
+        'contains_key_material': fields.Boolean(
+            description=(
+                'Whether this archive carries private keys, read from the '
+                'archive itself rather than from its manifest. Every backup '
+                'made before v2.26.0 says secrets_masked: true and carries '
+                'them anyway. Null when the archive could not be inspected — '
+                'which is not the same as carrying none.'
+            )),
+        'key_file_count': fields.Integer(
+            description='How many key files were found; null when uninspectable.'),
         'restore_blocked_reason': fields.String(
             description='Why it cannot restore; null when it can.'),
         'metadata': fields.Raw(description='Backup metadata')
