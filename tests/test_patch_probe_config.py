@@ -191,3 +191,79 @@ def test_patch_null_deletes_deployment_host(tmp_path):
     )
     assert resp.status_code == 200
     assert 'deployment_host' not in saved
+
+
+# ---------------------------------------------------------------------------
+# The adapter's only job (#672)
+# ---------------------------------------------------------------------------
+#
+# The read-modify-write, its validation and its lock moved into
+# CertificateService. What is left in the route is turning the request into a
+# change set and turning the service's errors into status codes — so that is
+# what these test, at the HTTP boundary where the mapping actually happens.
+
+def test_an_invalid_value_becomes_a_400(tmp_path):
+    saved = {}
+    app = _build_app(_managers(tmp_path, saved))
+    resp = app.test_client().patch('/api/certificates/example.com',
+                                   json={'deployment_port': 70000})
+
+    assert resp.status_code == 400, resp.get_json()
+    assert 'deployment_port' in resp.get_json()['error']
+    assert not saved, 'a refused change was persisted anyway'
+
+
+def test_an_unknown_protocol_becomes_a_400(tmp_path):
+    app = _build_app(_managers(tmp_path, {}))
+    resp = app.test_client().patch('/api/certificates/example.com',
+                                   json={'deployment_protocol': 'gopher'})
+    assert resp.status_code == 400
+    assert 'deployment_protocol' in resp.get_json()['error']
+
+
+def test_a_hostname_with_a_scheme_becomes_a_400(tmp_path):
+    app = _build_app(_managers(tmp_path, {}))
+    resp = app.test_client().patch('/api/certificates/example.com',
+                                   json={'deployment_host': 'https://example.com'})
+    assert resp.status_code == 400
+    assert 'bare hostname' in resp.get_json()['error']
+
+
+def test_a_failed_write_becomes_a_500_not_a_200(tmp_path):
+    """The mapping that had no test. A save that returns False must not be
+    reported to the caller as a successful configuration change — they would
+    walk away believing the certificate now renews with the new provider.
+    """
+    managers = _managers(tmp_path, {})
+    managers['certificates']._save_metadata = MagicMock(return_value=False)
+    app = _build_app(managers)
+
+    resp = app.test_client().patch('/api/certificates/example.com',
+                                   json={'dns_provider': 'route53'})
+
+    assert resp.status_code == 500, resp.get_json()
+    assert 'Failed to update metadata' in resp.get_json()['error']
+
+
+def test_a_successful_change_updates_the_settings_entry_too(tmp_path):
+    """metadata.json is what renewal reads; settings.json is what the UI lists.
+    A change that lands in one and not the other is the shape of the bug this
+    handler's lock exists for.
+    """
+    managers = _managers(tmp_path, {})
+    app = _build_app(managers)
+
+    resp = app.test_client().patch('/api/certificates/example.com',
+                                   json={'dns_provider': 'route53'})
+
+    assert resp.status_code == 200, resp.get_json()
+    managers['settings'].update.assert_called_once()
+    mutate, reason = managers['settings'].update.call_args[0]
+    assert reason == 'dns_provider_change'
+
+    # Apply the mutation the route handed to the settings manager and check it
+    # actually rewrites the entry — asserting only that update() was called
+    # would pass for a closure that does nothing.
+    state = {'domains': [{'domain': 'example.com', 'dns_provider': 'cloudflare'}]}
+    mutate(state)
+    assert state['domains'][0]['dns_provider'] == 'route53'

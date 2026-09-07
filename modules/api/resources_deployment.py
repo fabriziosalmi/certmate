@@ -82,7 +82,8 @@ def create_deployment_resources(api, models, ctx: ApiContext) -> dict:
             # defaults. Stored via PATCH /api/certificates/<domain> as
             # ``deployment_port``, ``deployment_protocol`` and (optional)
             # ``deployment_host``.
-            metadata = ctx.certificates._load_metadata(domain) if hasattr(ctx.certificates, '_load_metadata') else {}
+            # Through the service, not the manager's private method (#672).
+            metadata = ctx.cert_service.read_metadata(domain)
             raw_port = metadata.get('deployment_port')
             deploy_port = raw_port if raw_port is not None else 0
             deploy_protocol = metadata.get('deployment_protocol') or 'https-tls'

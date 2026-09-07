@@ -14,7 +14,6 @@ from ..core.certificates import DomainOperationInProgress
 from ..core.constants import iter_cert_domain_dirs
 from .path_validation import validate_domain_path as _validate_domain_path
 from .resource_context import ApiContext, check_domain_scope
-from .tls_probe import _PROBE_PROTOCOLS
 
 logger = logging.getLogger(__name__)
 
@@ -160,9 +159,6 @@ def create_certificates_resources(api, models, ctx: ApiContext) -> dict:
             new_dns_provider = data.get('dns_provider')
             new_account_id = data.get('account_id')
             new_alias_dns_provider = data.get('alias_dns_provider')
-            new_deploy_port = data.get('deployment_port')
-            new_deploy_protocol = data.get('deployment_protocol')
-            new_deploy_host = data.get('deployment_host')
 
             # Allow requests that only set deployment probe fields
             # (deployment_port / deployment_protocol / deployment_host) without
@@ -213,72 +209,31 @@ def create_certificates_resources(api, models, ctx: ApiContext) -> dict:
                     }, 400
 
             try:
-                # Serialise this metadata read-modify-write against an in-flight
-                # renewal (which carries a pre-renewal metadata snapshot across
-                # its whole certbot run and would otherwise clobber this write).
-                with ctx.certificates.domain_lock(domain):
-                    # 1. Update on-disk metadata.json. Read through the manager
-                    # (which builds the path from the already-validated domain
-                    # and quarantines corrupt JSON instead of silently returning
-                    # {}) rather than opening cert_dir/'metadata.json' directly.
-                    metadata = ctx.certificates._load_metadata(domain)
+                # The read-modify-write, its validation, and the domain
+                # lock that serialises it against an in-flight renewal all
+                # live in the service now (#672). This is the adapter: shape
+                # the request into a change set, map the service's errors onto
+                # status codes.
+                changes = {
+                    'dns_provider': new_dns_provider,
+                    'account_id': new_account_id,
+                    'alias_dns_provider': new_alias_dns_provider,
+                }
+                # Probe keys are forwarded only when the caller SENT them:
+                # absent means "leave it alone", explicit null means "delete
+                # it", and the service depends on telling them apart.
+                for key in ('deployment_port', 'deployment_protocol',
+                            'deployment_host'):
+                    if key in data:
+                        changes[key] = data[key]
 
-                    old_provider = metadata.get('dns_provider')
-                    if new_dns_provider:
-                        metadata['dns_provider'] = new_dns_provider
-                    if new_account_id:
-                        metadata['account_id'] = new_account_id
-                    if new_alias_dns_provider:
-                        metadata['alias_dns_provider'] = new_alias_dns_provider
-
-                    # --- deployment probe config ---
-                    # Only touch probe config when the caller actually sends the
-                    # key: an ABSENT key leaves existing config intact, an explicit
-                    # null deletes it. Keying off `is not None` instead would let a
-                    # DNS-only PATCH silently wipe a cert's probe config.
-                    if 'deployment_port' in data:
-                        if new_deploy_port is not None:
-                            try:
-                                port = int(new_deploy_port)
-                                if port < 1 or port > 65535:
-                                    return {'error': 'deployment_port must be 1-65535'}, 400
-                                metadata['deployment_port'] = port
-                            except (TypeError, ValueError):
-                                return {'error': 'deployment_port must be an integer'}, 400
-                        else:
-                            metadata.pop('deployment_port', None)
-
-                    if 'deployment_protocol' in data:
-                        if new_deploy_protocol is not None:
-                            if new_deploy_protocol not in _PROBE_PROTOCOLS:
-                                return {
-                                    'error': f"deployment_protocol must be one of {_PROBE_PROTOCOLS!r}"
-                                }, 400
-                            metadata['deployment_protocol'] = new_deploy_protocol
-                        else:
-                            metadata.pop('deployment_protocol', None)
-
-                    if 'deployment_host' in data:
-                        if new_deploy_host is not None:
-                            if not isinstance(new_deploy_host, str):
-                                return {'error': 'deployment_host must be a string'}, 400
-                            host = new_deploy_host.strip()
-                            # A probe target is a bare hostname: no scheme, no path,
-                            # no whitespace, and no wildcard label (you deploy a
-                            # cert on a concrete name, not on "*.").
-                            if (not host or len(host) > 253 or host.startswith('*.')
-                                    or any(c in host for c in ' \t/\\')
-                                    or '://' in host):
-                                return {
-                                    'error': 'deployment_host must be a bare hostname '
-                                             '(no scheme, path, whitespace, or wildcard)'
-                                }, 400
-                            metadata['deployment_host'] = host
-                        else:
-                            metadata.pop('deployment_host', None)
-
-                    if not ctx.certificates._save_metadata(domain, metadata):
-                        return {'error': f'Failed to update metadata for domain: {domain}'}, 500
+                try:
+                    metadata, old_provider = ctx.cert_service.update_config(
+                        domain, changes)
+                except ValueError as e:
+                    return {'error': str(e)}, 400
+                except RuntimeError as e:
+                    return {'error': str(e)}, 500
                 logger.info(
                     f"Updated DNS provider for {domain}: "
                     f"{old_provider} → {new_dns_provider or old_provider}"
