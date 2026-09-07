@@ -672,6 +672,52 @@ class FileOperations:
 
 
 
+    def _backup_restorability(self, backup_file):
+        """Can this archive actually bring the instance back? ``(bool, reason)``.
+
+        Answered with the same predicate the restore path uses, so the two
+        cannot drift apart — the listing calling an archive a restore point
+        while restore refuses it is the failure being closed here (#655).
+
+        Conservative by construction: anything that cannot be inspected is
+        reported as NOT restorable. Presenting an unknown archive as a restore
+        point is the exact harm, so an unreadable file must never be optimistic.
+        """
+        from .settings import backup_can_restore
+
+        try:
+            if backup_file.name.endswith(_BACKUP_ENC_SUFFIX):
+                passphrase = _backup_passphrase()
+                if not passphrase:
+                    return False, ('encrypted, and CERTMATE_BACKUP_PASSPHRASE is '
+                                   'not set on this instance, so it cannot be '
+                                   'opened or verified here')
+                payload = _decrypt_backup_payload(
+                    backup_file.read_bytes(), passphrase)
+                source = io.BytesIO(payload)
+            else:
+                source = backup_file
+
+            with zipfile.ZipFile(source, 'r') as zipf:
+                names = zipf.namelist()
+                if "settings.json" not in names:
+                    return False, 'the archive contains no settings.json'
+                raw = json.loads(zipf.read("settings.json").decode('utf-8'))
+                settings = (raw.get('settings')
+                            if isinstance(raw, dict) and 'settings' in raw
+                            else raw)
+                if not isinstance(settings, dict) or not settings:
+                    return False, 'the archive contains no usable settings'
+                if not backup_can_restore(zipf, names, settings):
+                    return False, ('secrets are masked, so restoring it would '
+                                   'install the mask in place of every '
+                                   'credential and lock this instance out')
+        except Exception as e:
+            logger.debug(f"Could not assess {backup_file.name}: {e}")
+            return False, 'the archive could not be read'
+
+        return True, None
+
     def list_backups(self):
         """List all available unified backups with metadata"""
         try:
@@ -707,8 +753,17 @@ class FileOperations:
                         except Exception as e:
                             logger.debug(f"Could not read ZIP metadata from {backup_file}: {e}")
 
+                        can_restore, reason = self._backup_restorability(backup_file)
                         backups["unified"].append({
                             "filename": backup_file.name,
+                            # Stated per entry rather than left to be inferred
+                            # from `metadata.secrets_masked`: that field names
+                            # the mechanism, and the operator needs the
+                            # consequence. An archive listed as a restore point
+                            # that the restore path then refuses is the whole
+                            # of #655.
+                            "can_restore": can_restore,
+                            "restore_blocked_reason": reason,
                             "metadata": metadata
                         })
                     except Exception as e:

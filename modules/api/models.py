@@ -348,6 +348,17 @@ def create_api_models(api):
         'filename': fields.String(description='Backup filename'),
         'size': fields.Integer(description='File size in bytes'),
         'created': fields.String(description='Creation timestamp'),
+        'can_restore': fields.Boolean(
+            description=(
+                'Whether this archive can actually restore the instance. '
+                'Automatic backups are taken with secrets masked so a leaked '
+                'archive is not also a credential dump, and those cannot '
+                'restore: installing one writes the mask in place of every '
+                'credential. Decided with the same predicate the restore path '
+                'applies, and false whenever the archive cannot be inspected.'
+            )),
+        'restore_blocked_reason': fields.String(
+            description='Why it cannot restore; null when it can.'),
         'metadata': fields.Raw(description='Backup metadata')
     })
 

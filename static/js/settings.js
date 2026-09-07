@@ -1667,6 +1667,19 @@
                 var safeFilename = escapeHtml(backup.filename);
                 var safeReason = escapeHtml(reason);
                 var iconBtn = 'p-1.5 rounded transition-colors';
+                // Whether this archive can actually bring the instance back.
+                // Automatic backups are taken with secrets masked and cannot,
+                // and the restore endpoint refuses them — so offering an
+                // identical Restore button on every row made the newest entry
+                // a decoy restore point (#655). Treated as false unless the
+                // API explicitly says true: an older server that does not send
+                // the field must not be read as a promise that it can.
+                var canRestore = backup.can_restore === true;
+                var blockedReason = escapeHtml(backup.restore_blocked_reason ||
+                    'this archive cannot restore the instance');
+                var restoreBadge = canRestore ? '' :
+                    '<span aria-hidden="true">·</span>' +
+                    '<span class="px-1.5 py-0.5 rounded bg-warning-surface border border-warning-line text-warning-strong text-[11px]" title="' + blockedReason + '">cannot restore</span>';
                 return '<div class="flex items-center gap-3 px-3 py-2 rounded-lg border border-border hover:bg-hover transition-colors">' +
                     '<i class="fas fa-file-zipper text-success-fg text-sm shrink-0" aria-hidden="true"></i>' +
                     '<div class="flex-1 min-w-0">' +
@@ -1679,11 +1692,14 @@
                             '<span>' + domains + ' domains</span>' +
                             '<span aria-hidden="true">·</span>' +
                             '<span class="px-1.5 py-0.5 rounded bg-surface-2 text-[11px]">' + safeReason + '</span>' +
+                            restoreBadge +
                         '</div>' +
                     '</div>' +
                     '<div class="flex items-center gap-0.5 shrink-0">' +
                         '<button data-action="download-backup" data-backup-type="unified" data-filename="' + safeFilename + '" class="' + iconBtn + ' text-info-fg hover:bg-blue-50 dark:hover:bg-blue-900/30" title="Download backup" aria-label="Download ' + safeFilename + '"><i class="fas fa-download text-sm"></i></button>' +
-                        '<button data-action="restore-backup" data-backup-type="unified" data-filename="' + safeFilename + '" class="' + iconBtn + ' text-success-fg hover:bg-green-50 dark:hover:bg-green-900/30" title="Restore backup" aria-label="Restore ' + safeFilename + '"><i class="fas fa-rotate-left text-sm"></i></button>' +
+                        (canRestore
+                            ? '<button data-action="restore-backup" data-backup-type="unified" data-filename="' + safeFilename + '" class="' + iconBtn + ' text-success-fg hover:bg-green-50 dark:hover:bg-green-900/30" title="Restore backup" aria-label="Restore ' + safeFilename + '"><i class="fas fa-rotate-left text-sm"></i></button>'
+                            : '<button disabled data-backup-type="unified" data-filename="' + safeFilename + '" class="' + iconBtn + ' text-muted opacity-40 cursor-not-allowed" title="Cannot restore: ' + blockedReason + '" aria-label="Cannot restore ' + safeFilename + ': ' + blockedReason + '"><i class="fas fa-rotate-left text-sm"></i></button>') +
                         '<button data-action="delete-backup" data-backup-type="unified" data-filename="' + safeFilename + '" class="' + iconBtn + ' text-danger-fg hover:bg-red-50 dark:hover:bg-red-900/30" title="Delete backup" aria-label="Delete ' + safeFilename + '"><i class="fas fa-trash text-sm"></i></button>' +
                     '</div>' +
                 '</div>';

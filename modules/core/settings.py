@@ -602,6 +602,38 @@ def _bearer_token_from_env_or_generate():
     return generate_secure_token()
 
 
+def backup_can_restore(zf, names, settings):
+    """True iff this backup's secrets are real and not the mask sentinel.
+
+    Module-level rather than a method so the backup LISTING can apply the
+    identical predicate the restore path applies. A listing that presents an
+    archive as a restore point while the restore path refuses it is the
+    specific failure this must make impossible (#655).
+
+    Every AUTOMATIC backup is masked: `save_settings` calls
+    `create_unified_backup(settings, reason)` and `include_secrets`
+    defaults to False, which writes SECRET_MASK_SENTINEL in place of every
+    credential. That default is right — a leaked backup must not also be a
+    credential dump — but it means the newest backup on disk is almost
+    always one that CANNOT restore this instance.
+
+    The manifest has said so since unified backups existed
+    (`secrets_masked` in backup_metadata.json). Nothing read it. Older or
+    hand-made archives may not carry the field, so a missing flag falls
+    back to looking for the sentinel in the settings themselves rather
+    than assuming the archive is usable.
+    """
+    import json
+    if "backup_metadata.json" in names:
+        try:
+            metadata = json.loads(zf.read("backup_metadata.json").decode("utf-8"))
+            if isinstance(metadata, dict) and "secrets_masked" in metadata:
+                return not metadata["secrets_masked"]
+        except (ValueError, KeyError, UnicodeDecodeError):
+            pass                       # fall through to the content check
+    return SECRET_MASK_SENTINEL not in json.dumps(settings)
+
+
 class SettingsManager:
     """Class to handle settings management and migrations"""
 
@@ -726,33 +758,6 @@ class SettingsManager:
                     del merged[key]
             return self.save_settings(merged)
 
-    @staticmethod
-    def _backup_can_restore_credentials(zf, names, settings):
-        """True iff this backup's secrets are real and not the mask sentinel.
-
-        Every AUTOMATIC backup is masked: `save_settings` calls
-        `create_unified_backup(settings, reason)` and `include_secrets`
-        defaults to False, which writes SECRET_MASK_SENTINEL in place of every
-        credential. That default is right — a leaked backup must not also be a
-        credential dump — but it means the newest backup on disk is almost
-        always one that CANNOT restore this instance.
-
-        The manifest has said so since unified backups existed
-        (`secrets_masked` in backup_metadata.json). Nothing read it. Older or
-        hand-made archives may not carry the field, so a missing flag falls
-        back to looking for the sentinel in the settings themselves rather
-        than assuming the archive is usable.
-        """
-        import json
-        if "backup_metadata.json" in names:
-            try:
-                metadata = json.loads(zf.read("backup_metadata.json").decode("utf-8"))
-                if isinstance(metadata, dict) and "secrets_masked" in metadata:
-                    return not metadata["secrets_masked"]
-            except (ValueError, KeyError, UnicodeDecodeError):
-                pass                       # fall through to the content check
-        return SECRET_MASK_SENTINEL not in json.dumps(settings)
-
     def _try_restore_from_backup(self):
         """Restore settings from the most recent backup that can actually restore.
 
@@ -791,7 +796,7 @@ class SettingsManager:
                         raw = json.loads(zf.read("settings.json").decode('utf-8'))
                         settings = raw.get('settings') if isinstance(raw, dict) and 'settings' in raw else raw
                         if isinstance(settings, dict) and settings:
-                            if not self._backup_can_restore_credentials(zf, names, settings):
+                            if not backup_can_restore(zf, names, settings):
                                 masked_only.append(backup_path.name)
                                 continue
                             logger.info(f"Restored settings from backup: {backup_path.name}")
