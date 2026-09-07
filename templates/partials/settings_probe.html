@@ -47,6 +47,11 @@
                                 <template x-if="editingDomain === cert.domain">
                                     <div class="flex-1 flex flex-wrap items-center gap-3">
                                         <span class="font-mono text-sm text-foreground font-medium" x-text="cert.domain"></span>
+                                        <input type="text" x-model="editHost"
+                                               aria-label="Probe host"
+                                               :placeholder="cert.domain.indexOf('*.') === 0 ? 'www' + cert.domain.slice(1) : 'host (optional)'"
+                                               class="w-44 text-sm border border-border rounded px-2 py-1 bg-input text-foreground focus:ring-2 focus:ring-primary focus:border-primary outline-none flex-shrink-0"
+                                               title="Hostname the probe connects to and sends as SNI. Required to verify a wildcard certificate.">
                                         <input type="number" x-model="editPort" placeholder="Port" min="1" max="65535"
                                                class="w-20 text-sm border border-border rounded px-2 py-1 bg-input text-foreground focus:ring-2 focus:ring-primary focus:border-primary outline-none flex-shrink-0"
                                                title="TCP port (empty for default)">
@@ -87,6 +92,9 @@
                                             <span x-show="cert.deployment_port"
                                                   class="text-xs bg-surface-2 text-label px-2 py-0.5 rounded-full font-mono"
                                                   x-text="'port ' + cert.deployment_port"></span>
+                                            <span x-show="cert.deployment_host"
+                                                  class="text-xs bg-surface-2 text-label px-2 py-0.5 rounded-full font-mono"
+                                                  x-text="'host ' + cert.deployment_host"></span>
                                         </div>
                                         <div class="flex items-center gap-2">
                                             <button type="button" @click="startEdit(cert)"
@@ -126,6 +134,20 @@
                                     <option :value="cert.domain"></option>
                                 </template>
                             </datalist>
+                        </div>
+                        <!-- Host is what makes a wildcard verifiable (#635): a
+                             wildcard does not cover its apex, so the probe needs
+                             a concrete name the certificate does cover. -->
+                        <div class="flex-1 min-w-0">
+                            <label class="block text-xs text-muted mb-1">
+                                Host
+                                <span class="text-muted/70" x-text="addDomain.indexOf('*.') === 0 ? '(required for wildcards)' : '(optional)'"></span>
+                            </label>
+                            <input type="text" x-model="addHost"
+                                   aria-label="Probe host"
+                                   :placeholder="addDomain.indexOf('*.') === 0 ? 'www' + addDomain.slice(1) : 'defaults to the domain'"
+                                   class="w-full text-sm border border-border rounded px-3 py-2 bg-input text-foreground focus:ring-2 focus:ring-primary focus:border-primary outline-none"
+                                   title="Hostname the probe connects to and sends as SNI. A wildcard certificate cannot be verified without one, because a wildcard does not cover its own apex.">
                         </div>
                         <div class="flex-shrink-0">
                             <label class="block text-xs text-muted mb-1">Port</label>

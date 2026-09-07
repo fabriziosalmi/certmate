@@ -9,10 +9,27 @@ Configurez les sondes par domaine dans **Paramètres → Sondes de déploiement*
 | Champ | Description |
 |---|---|
 | Domaine | Le domaine du certificat à sonder |
+| Hôte | Nom d'hôte auquel se connecter et envoyé comme SNI. Optionnel — le domaine par défaut. **Requis pour les wildcards** (voir ci-dessous) |
 | Port | Port TCP (défaut : 443 pour HTTPS/TLS, 587 pour SMTP STARTTLS) |
 | Protocole | `HTTPS/TLS` — handshake HTTPS standard, `TLS` — TLS brut sans HTTP, `SMTP STARTTLS` — SMTP puis mise à niveau TLS |
 
-Le protocole et le port sont stockés dans le `metadata.json` du certificat sous les clés `deployment_protocol` et `deployment_port`.
+L'hôte, le port et le protocole sont stockés dans le `metadata.json` du
+certificat sous `deployment_host`, `deployment_port` et `deployment_protocol`.
+
+### Certificats wildcard
+
+Un certificat wildcard **ne peut pas être sondé sans hôte**, car un wildcard ne
+couvre pas son propre apex : `*.example.com` n'est pas valide pour
+`example.com`, donc se connecter à l'apex comparerait le mauvais nom. Plutôt que
+de signaler un « Mauvais certificat » rouge pour chaque wildcard, CertMate
+rapporte un état neutre **Non vérifiable** tant qu'aucun hôte n'est défini.
+
+Réglez **Hôte** sur un nom que le certificat couvre réellement —
+`www.example.com` pour `*.example.com` — et la vérification fonctionne
+normalement. Le champ en suggère un.
+
+Vider le champ Hôte le supprime : un hôte défini par erreur se corrige sans
+supprimer ni recréer la sonde.
 
 ## Fonctionnement
 

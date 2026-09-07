@@ -9,10 +9,27 @@ Configure las sondas por dominio en **Ajustes → Sondas de despliegue**.
 | Campo | Descripción |
 |---|---|
 | Dominio | El dominio del certificado a sondear |
+| Host | Nombre de host al que conectarse y enviar como SNI. Opcional — por defecto el dominio. **Obligatorio para comodines** (véase más abajo) |
 | Puerto | Puerto TCP (por defecto: 443 para HTTPS/TLS, 587 para SMTP STARTTLS) |
 | Protocolo | `HTTPS/TLS` — handshake HTTPS estándar, `TLS` — TLS sin HTTP, `SMTP STARTTLS` — SMTP con actualización a TLS |
 
-El protocolo y el puerto se almacenan en el `metadata.json` del certificado bajo las claves `deployment_protocol` y `deployment_port`.
+El host, el puerto y el protocolo se almacenan en el `metadata.json` del
+certificado bajo `deployment_host`, `deployment_port` y `deployment_protocol`.
+
+### Certificados comodín
+
+Un certificado comodín **no puede sondearse sin un host**, porque un comodín no
+cubre su propio apex: `*.example.com` no es válido para `example.com`, así que
+conectarse al apex compararía contra el nombre equivocado. En lugar de informar
+un «Certificado incorrecto» rojo para cada comodín, CertMate informa un estado
+neutro **No verificable** hasta que se establece un host.
+
+Establece **Host** en un nombre que el certificado cubra realmente —
+`www.example.com` para `*.example.com` — y la verificación funciona con
+normalidad. El campo sugiere uno.
+
+Vaciar el campo Host lo elimina, de modo que un host puesto por error se corrige
+sin borrar y recrear la sonda.
 
 ## Funcionamiento
 

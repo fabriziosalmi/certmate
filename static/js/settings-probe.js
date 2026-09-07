@@ -19,11 +19,13 @@
             search: '',
             // "Add probe" section state
             addDomain: '',
+            addHost: '',
             addPort: '',
             addProtocol: 'https-tls',
             addProtoOpen: false,
             // "Edit" state
             editingDomain: null,
+            editHost: '',
             editPort: '',
             editProtocol: 'https-tls',
             editProtoOpen: false,
@@ -54,7 +56,8 @@
                 var conf = [];
                 var unconf = [];
                 self.certificates.forEach(function (cert) {
-                    if (cert.deployment_port || cert.deployment_protocol) {
+                    if (cert.deployment_port || cert.deployment_protocol
+                            || cert.deployment_host) {
                         conf.push(cert);
                     } else {
                         unconf.push(cert);
@@ -96,6 +99,12 @@
                 if (this.addProtocol) {
                     body.deployment_protocol = this.addProtocol;
                 }
+                // The whole point of #635: a wildcard cannot be verified
+                // without a concrete name it covers. Sent only when given,
+                // so adding a plain probe is unchanged.
+                if (this.addHost.trim()) {
+                    body.deployment_host = this.addHost.trim();
+                }
 
                 fetch('/api/certificates/' + encodeURIComponent(domain), {
                     method: 'PATCH',
@@ -109,6 +118,7 @@
                             CertMate.toast('Probe configured for ' + domain, 'success');
                             addDebugLog('Probe configured for ' + domain, 'info');
                             self.addDomain = '';
+                            self.addHost = '';
                             self.addPort = '';
                             self.addProtocol = 'https-tls';
                             self.loadCertificates();
@@ -125,12 +135,14 @@
 
             startEdit: function (cert) {
                 this.editingDomain = cert.domain;
+                this.editHost = cert.deployment_host || '';
                 this.editPort = cert.deployment_port || '';
                 this.editProtocol = cert.deployment_protocol || 'https-tls';
             },
 
             cancelEdit: function () {
                 this.editingDomain = null;
+                this.editHost = '';
                 this.editPort = '';
                 this.editProtocol = 'https-tls';
             },
@@ -151,6 +163,9 @@
                 if (this.editProtocol) {
                     body.deployment_protocol = this.editProtocol;
                 }
+                // null clears it, so an operator can undo a host they set by
+                // mistake without deleting and recreating the probe.
+                body.deployment_host = this.editHost.trim() || null;
 
                 fetch('/api/certificates/' + encodeURIComponent(domain), {
                     method: 'PATCH',
@@ -186,7 +201,8 @@
                             credentials: 'same-origin',
                             body: JSON.stringify({
                                 deployment_port: null,
-                                deployment_protocol: null
+                                deployment_protocol: null,
+                                deployment_host: null
                             })
                         })
                             .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, body: d }; }); })

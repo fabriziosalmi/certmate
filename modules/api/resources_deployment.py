@@ -125,9 +125,10 @@ def create_deployment_resources(api, models, ctx: ApiContext) -> dict:
                     f"Wildcard certificate {domain} cannot be verified "
                     f"automatically: a wildcard does not cover its apex "
                     f"({apex}), so probing {apex} would compare against the "
-                    f"wrong host. Set a deployment_host that this wildcard "
-                    f"covers (for example www.{apex}) via "
-                    f"PATCH /api/certificates/{domain} to enable the check."
+                    f"wrong host. Set the probe host to a name this wildcard "
+                    f"covers (for example www.{apex}) to enable the check: "
+                    f"Settings → Probe in the UI, or deployment_host via "
+                    f"PATCH /api/certificates/{domain}."
                 )
                 persisted_status = ctx.certificates.get_deployment_status_record(domain)
                 if isinstance(persisted_status, dict) and persisted_status.get('browser'):
