@@ -121,6 +121,19 @@ CertMate solves the complexity of SSL certificate management in modern distribut
 - **Unified Backup System** - Atomic backups of settings and certificates ensuring data consistency
 - **Real-Time Dashboard** - SSE-powered live updates, command palette, keyboard shortcuts, dark mode
 
+> **CertMate runs as a single instance.** Its renewal scheduler runs inside the
+> web process, so a second replica is a second scheduler issuing against the
+> same certificate store — duplicate ACME orders, and the CA's
+> duplicate-certificate rate limit. The Helm chart refuses to render more than
+> one replica rather than let that happen quietly.
+>
+> This is a deliberate design choice, not a missing feature: one writer is what
+> makes certificate state safe without a distributed lock service. It scales
+> *up* (a single instance manages thousands of certificates across many
+> datacenters), not *out*. For availability, run active/standby with the data
+> volume on shared storage and fail over — see
+> [Availability and failover](docs/architecture.md#availability-and-failover).
+
 ## Key Features
 
 ### **Certificate Management**
@@ -405,7 +418,9 @@ curl -X POST "http://localhost:8000/api/certificates/create" \
 Choose the installation method that best fits your environment:
 
 ### Docker (Recommended)
-Perfect for production deployments with isolation and easy scaling. **Supports multiple architectures**: AMD64 (Intel/AMD), ARM64 (Apple Silicon, ARM servers), and ARM v7 (Raspberry Pi).
+Isolated, reproducible, and the way CertMate is tested and released. Run **one**
+container (see the single-instance note above); give it more CPU and memory
+rather than more replicas. **Supports multiple architectures**: AMD64 (Intel/AMD), ARM64 (Apple Silicon, ARM servers), and ARM v7 (Raspberry Pi).
 
 ```bash
 # Quick start with Docker Compose
@@ -453,7 +468,9 @@ python app.py
 ```
 
 ### Kubernetes
-For container orchestration and high availability deployments.
+For container orchestration and managed rollouts. **`replicas: 1` is not an
+example value** — it is the supported configuration, and the Helm chart fails at
+template time if you change it.
 
 ```yaml
 # Example Kubernetes deployment

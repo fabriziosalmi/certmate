@@ -776,20 +776,44 @@ Chaque certificat a un fichier `metadata.json` contenant :
 
 ### Recommandations pour la production
 
-- Utiliser un backend de stockage (Azure, AWS, Vault) pour la haute disponibilité
+- Utiliser un backend de stockage (Azure, AWS, Vault) pour que le matériel des certificats survive au nœud
 - Activer la journalisation d'audit pour la conformité
 - Configurer la limitation de débit en fonction de la charge
 - Mises à jour régulières de la CRL (quotidiennes ou lors des révocations)
 - Sauvegarder les clés CA et les métadonnées
 - Surveiller les journaux d'audit pour les activités suspectes
 
-### Haute disponibilité
+### Disponibilité et bascule
 
-Pour les déploiements multi-instances :
-1. Utiliser un backend de stockage partagé pour les certificats
-2. Synchroniser les journaux d'audit vers un emplacement central
-3. Utiliser un équilibreur de charge avec sessions persistantes
-4. Surveiller les compteurs de limitation de débit entre les instances
+**CertMate ne fonctionne pas en plusieurs instances.** Son ordonnanceur de
+renouvellement (APScheduler) s'exécute dans le processus web et gunicorn n'a
+qu'un seul worker à dessein : une deuxième réplique est un deuxième
+ordonnanceur qui émet et renouvelle sur le même magasin de certificats — d'où
+des commandes ACME dupliquées et la limite de débit de l'AC sur les certificats
+dupliqués. Le chart Helm échoue au moment du template si `replicaCount` vaut
+autre chose que `1`.
+
+
+À quoi ressemble la disponibilité ici — **actif/veille** :
+
+1. Placer `DATA_DIR` sur un stockage réattachable (un volume réseau ou un
+   système de fichiers répliqué). C'est l'état qui compte : réglages, chaîne
+   d'audit, AC privée et les certificats eux-mêmes.
+2. Configurer un [backend de stockage](#backends-de-stockage) (Azure Key Vault,
+   AWS Secrets Manager, Vault, Infisical) pour que le matériel des certificats
+   vive lui aussi indépendamment du nœud.
+3. Exécuter **une seule** instance. En cas de panne, démarrer un remplaçant sur
+   les mêmes données et y pointer l'ingress. Une fenêtre de renouvellement
+   manquée n'est pas urgente : le renouvellement commence 30 jours avant
+   l'expiration, une bascule dispose donc de semaines de marge.
+4. Conserver des [sauvegardes de reprise après sinistre](./guide.md) avec
+   `CERTMATE_BACKUP_PASSPHRASE` définie, pour qu'une reconstruction complète
+   reste possible même si le volume est perdu.
+
+Ce sont les consommateurs des certificats qui doivent être hautement
+disponibles. CertMate émet et distribue ; il n'est pas dans le chemin des
+requêtes des services pour lesquels il émet, et son indisponibilité pendant une
+heure n'entraîne rien d'autre avec elle.
 
 ---
 

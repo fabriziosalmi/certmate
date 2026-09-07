@@ -775,20 +775,43 @@ Cada certificado tiene un archivo `metadata.json` que contiene:
 
 ### Recomendaciones para producción
 
-- Usar un backend de almacenamiento (Azure, AWS, Vault) para alta disponibilidad
+- Usar un backend de almacenamiento (Azure, AWS, Vault) para que el material de los certificados sobreviva al nodo
 - Habilitar el registro de auditoría para cumplimiento normativo
 - Configurar la limitación de tasa en función de la carga
 - Actualizaciones regulares de la CRL (diarias o en cada revocación)
 - Hacer copia de seguridad de las claves CA y los metadatos
 - Monitorizar los registros de auditoría en busca de actividad sospechosa
 
-### Alta disponibilidad
+### Disponibilidad y conmutación por error
 
-Para despliegues multi-instancia:
-1. Usar un backend de almacenamiento compartido para los certificados
-2. Sincronizar los registros de auditoría en una ubicación central
-3. Usar un balanceador de carga con sesiones persistentes
-4. Monitorizar los contadores de limitación de tasa entre instancias
+**CertMate no se ejecuta en varias instancias.** Su planificador de renovaciones
+(APScheduler) corre dentro del proceso web y gunicorn usa un único worker a
+propósito: una segunda réplica es un segundo planificador emitiendo y renovando
+contra el mismo almacén de certificados — pedidos ACME duplicados y el límite de
+tasa de la AC por certificados duplicados. El chart de Helm falla en tiempo de
+plantilla si `replicaCount` no es `1`.
+
+
+Cómo se consigue la disponibilidad aquí — **activo/en espera**:
+
+1. Situar `DATA_DIR` en almacenamiento reconectable (un volumen de red o un
+   sistema de archivos replicado). Ese es el estado que importa: ajustes,
+   cadena de auditoría, AC privada y los certificados en sí.
+2. Configurar un [backend de almacenamiento](#backends-de-almacenamiento)
+   (Azure Key Vault, AWS Secrets Manager, Vault, Infisical) para que el
+   material de los certificados también viva con independencia del nodo.
+3. Ejecutar **una** instancia. Ante un fallo, arrancar un reemplazo contra los
+   mismos datos y apuntar el ingress hacia él. Perder una ventana de renovación
+   no es urgente: la renovación empieza 30 días antes del vencimiento, así que
+   una conmutación tiene semanas de margen.
+4. Mantener [copias de recuperación ante desastres](./guide.md) con
+   `CERTMATE_BACKUP_PASSPHRASE` establecida, para que una reconstrucción desde
+   cero siga siendo posible aunque se pierda el volumen.
+
+Quienes deben tener alta disponibilidad son los consumidores de los
+certificados. CertMate emite y distribuye; no está en la ruta de las peticiones
+de los servicios para los que emite, y que esté caído una hora no arrastra nada
+más consigo.
 
 ---
 
