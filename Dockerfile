@@ -56,12 +56,27 @@ ARG PIP_VERSION=26.1.2
 # already there — verified, including downgrading 26.2.1 to 26.1.2 — so the
 # flag only muddies the intent (Copilot, #553). setuptools and wheel keep
 # theirs; they are build-time only and never reach the runtime stage.
+#
+# `-c ${REQUIREMENTS_FILE}` on the extras layer is load-bearing, not tidiness
+# (#686). Each extras install is a separate pip resolution that knows nothing
+# about what the first one pinned, so it is free to move those pins — measured,
+# not theorised: with the base stack installed, `pip install "cryptography<46"`
+# as a second layer silently downgrades 46.0.7 to 45.0.7, below the floor
+# pyopenssl==26.0.0 needs, and the image ships an interpreter where
+# `certbot --version` no longer answers. The extras files reach that same edge
+# by a longer route: they carry unbounded `>=` requirements (azure-identity,
+# boto3, azure-keyvault-*), and a future release of any of them that wants a
+# newer `cryptography` gets it.
+#
+# With the constraint, pip refuses at build time and names the conflict. That
+# is the trade: a variant build that would have shipped a broken stack now
+# fails loudly instead. All documented combinations above resolve under it.
 RUN pip install "pip==${PIP_VERSION}" -U setuptools wheel && \
     pip install --no-cache-dir -r ${REQUIREMENTS_FILE} && \
     if [ -n "${EXTRA_REQUIREMENTS}" ]; then \
         for req in ${EXTRA_REQUIREMENTS}; do \
             echo "==> Installing extras from ${req}"; \
-            pip install --no-cache-dir -r "${req}"; \
+            pip install --no-cache-dir -c "${REQUIREMENTS_FILE}" -r "${req}"; \
         done; \
     fi
 

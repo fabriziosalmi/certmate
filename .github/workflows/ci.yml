@@ -252,12 +252,21 @@ jobs:
       if: matrix.python-version == '3.12'
       run: |
         set -euo pipefail
+        # Kept in step with what the Dockerfile, docker-compose.yml and the
+        # README actually advertise —
+        # tests/test_requirements_are_consistent.py fails if one of them names
+        # a combination this list does not resolve. The storage entries below
+        # arrived that way: the comment above claimed "every combination the
+        # Dockerfile advertises", and two of the three it advertises were not
+        # here (#686).
         combos=(
           "requirements-minimal.txt requirements-extended.txt"
           "requirements.txt requirements-aws.txt"
           "requirements.txt requirements-gcp.txt"
           "requirements.txt requirements-azure.txt"
           "requirements.txt requirements-aws.txt requirements-gcp.txt"
+          "requirements.txt requirements-storage-all.txt"
+          "requirements.txt requirements-azure.txt requirements-storage-all.txt"
         )
         pinned=$(grep -oE '^certbot==[0-9.]+' requirements.txt | cut -d= -f3)
         echo "certbot is pinned at $pinned"
@@ -296,6 +305,45 @@ jobs:
           echo "$combo -> certbot $got"
           echo "::endgroup::"
         done
+
+    # The images are published for amd64 AND arm64, and every check above runs
+    # on exactly one of them. That is how `infisical-python>=2.3.6` sat in two
+    # advertised requirements files: 2.3.6 ships an aarch64 wheel, macOS wheels
+    # and Windows wheels, but no manylinux x86_64 wheel and no sdist. It
+    # installs on the arm64 image and cannot be installed on the amd64 one at
+    # all. A resolver running on either architecture alone sees nothing wrong.
+    #
+    # pip can resolve FOR another platform without emulating it. The check is
+    # not "does it resolve" — with --only-binary a source-only distribution
+    # fails everywhere, and most certbot plugins are source-only — but "do the
+    # two architectures AGREE". A file that fails on both is inconclusive, not
+    # broken, and is reported as such rather than counted as covered.
+    - name: Resolve the optional requirements for both published architectures
+      if: matrix.python-version == '3.12'
+      run: |
+        set -euo pipefail
+        skew=0
+        for req in requirements*.txt; do
+          case "$req" in requirements-test.txt) continue;; esac
+          verdicts=""
+          for plat in manylinux_2_28_x86_64 manylinux_2_28_aarch64; do
+            if python -m pip install --dry-run --quiet --no-cache-dir \
+                 --ignore-installed --only-binary=:all: \
+                 --platform "$plat" --python-version 3.12 \
+                 --target "$(mktemp -d)" -r "$req" >/dev/null 2>&1; then
+              verdicts="$verdicts $plat=ok"
+            else
+              verdicts="$verdicts $plat=no"
+            fi
+          done
+          case "$verdicts" in
+            *x86_64=ok*aarch64=ok*) echo "$req: both architectures resolve";;
+            *x86_64=no*aarch64=no*) echo "$req: inconclusive (source-only distributions; not covered by this check)";;
+            *) echo "::error::$req resolves on one published architecture and not the other:$verdicts. An image built for the other architecture cannot install it."
+               skew=1;;
+          esac
+        done
+        [ "$skew" -eq 0 ]
 
   # Every CA in the registry, asked whether its ACME directory still exists.
   #
