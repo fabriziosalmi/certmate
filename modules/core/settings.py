@@ -12,7 +12,7 @@ from pathlib import Path
 
 from modules import __version__ as _CERTMATE_VERSION
 from .constants import iter_cert_domain_dirs
-from .file_operations import FileOperations
+from .file_operations import FileOperations, _backup_passphrase
 from .utils import (
     generate_secure_token, validate_email, validate_api_token, validate_domain,
     validate_key_options,
@@ -758,6 +758,25 @@ class SettingsManager:
                     del merged[key]
             return self.save_settings(merged)
 
+    def _warn_no_restore_point_once(self):
+        """Say once, per process, that automatic backups cannot restore.
+
+        Rate-limited deliberately. `save_settings` runs on nearly every write,
+        and a warning repeated on every write is one an operator learns to
+        scroll past — which is how the condition it describes goes unnoticed
+        for months. Once is a notice; every time is noise.
+        """
+        if getattr(self, '_warned_no_restore_point', False):
+            return
+        self._warned_no_restore_point = True
+        logger.warning(
+            "CERTMATE_BACKUP_PASSPHRASE is not set, so automatic backups are "
+            "taken with secrets masked and CANNOT restore this instance. They "
+            "remain useful as configuration snapshots. Set a passphrase to get "
+            "automatic backups that are complete and encrypted at rest, and "
+            "keep a copy off this node."
+        )
+
     def _try_restore_from_backup(self):
         """Restore settings from the most recent backup that can actually restore.
 
@@ -1272,10 +1291,26 @@ class SettingsManager:
                 # API key last_used_at updates).
                 if backup_reason is not None and self.settings_file.exists():
                     try:
-                        result = self.file_ops.create_unified_backup(settings, backup_reason)
+                        # An automatic backup is complete — and therefore able
+                        # to restore this instance — only when a passphrase is
+                        # configured to encrypt it (#655).
+                        #
+                        # `include_secrets` and encryption are independent in
+                        # create_unified_backup: complete WITHOUT a passphrase
+                        # writes a plaintext credential dump to disk on every
+                        # settings save. Masked WITH one is merely a wasted
+                        # opportunity. So the two are tied together here, and
+                        # this path never produces the dangerous combination.
+                        # A manual backup can still opt into plaintext; that is
+                        # a deliberate, audit-logged operator choice.
+                        can_encrypt = bool(_backup_passphrase())
+                        result = self.file_ops.create_unified_backup(
+                            settings, backup_reason, include_secrets=can_encrypt)
                         if not result:
                             logger.warning("Pre-save backup failed (disk full or permission error?). "
                                            "Proceeding with save, but no restore point was created.")
+                        elif not can_encrypt:
+                            self._warn_no_restore_point_once()
                     except Exception as backup_err:
                         logger.warning("Pre-save backup raised an exception: %s. "
                                        "Proceeding with save.", backup_err)
