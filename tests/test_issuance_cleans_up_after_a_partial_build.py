@@ -227,3 +227,113 @@ def test_a_busy_domain_raises_before_any_artifact_exists(tmp_path,
             _issue(manager)
     finally:
         lock.release()
+
+
+# ---------------------------------------------------------------------------
+# Renewal uses the same record, and the same deletion loop
+# ---------------------------------------------------------------------------
+#
+# Renewal kept its own four locals and its own loop, and the two sets had
+# already diverged: renew tracked the DNS-alias hook config separately while
+# create folded it into `credentials_file`, and only renew knew the CA bundle
+# as a path rather than as an environment value. A file one path removes and
+# the other forgets is a secret left on disk — so both now build the list the
+# same way, and these assert it for the renew side, which nothing covered.
+
+def _seed_renewable(cm, domain='example.com', **metadata_over):
+    import json
+
+    metadata = {
+        'domain': domain,
+        'dns_provider': 'cloudflare',
+        'challenge_type': 'dns-01',
+        'ca_provider': 'letsencrypt',
+    }
+    metadata.update(metadata_over)
+    domain_dir = cm.cert_dir / domain
+    domain_dir.mkdir(parents=True, exist_ok=True)
+    (domain_dir / 'cert.pem').write_text('placeholder')
+    (domain_dir / 'metadata.json').write_text(json.dumps(metadata))
+    return domain_dir
+
+
+def test_renewal_removes_its_credentials_file(tmp_path, monkeypatch):
+    written = []
+    from modules.core.dns_strategies import CloudflareStrategy
+
+    original = CloudflareStrategy.create_config_file
+
+    def spy(self, config):
+        path = original(self, config)
+        written.append(path)
+        return path
+
+    monkeypatch.setattr(CloudflareStrategy, 'create_config_file', spy)
+
+    manager = _manager(tmp_path)
+    manager.dns_manager.get_dns_provider_account_config.return_value = (
+        {'api_token': 'cf-token'}, 'default')
+    _seed_renewable(manager)
+
+    try:
+        manager.renew_certificate('example.com', force=True)
+    except Exception:
+        pass          # the shell double reports no renewal; cleanup is the point
+
+    assert written, 'renewal wrote no credentials file, so this proves nothing'
+    for path in written:
+        assert not pathlib.Path(path).exists(), (
+            f'{path} outlived a renewal'
+        )
+
+
+def test_renewal_removes_the_ca_bundle(tmp_path, monkeypatch):
+    """The private-CA trust bundle. Renewal is the path where forgetting it
+    used to mean every renewal against such a CA failed TLS verification
+    silently until the certificate expired — the bundle is now tracked in the
+    same record as everything else."""
+    bundle = tmp_path / 'renewal-ca-bundle.pem'
+    bundle.write_text('-----BEGIN CERTIFICATE-----')
+
+    manager = _manager(tmp_path)
+    monkeypatch.setattr(manager, '_renewal_ca_bundle', lambda metadata: str(bundle))
+    _seed_renewable(manager, ca_provider='private_ca')
+
+    try:
+        manager.renew_certificate('example.com', force=True)
+    except Exception:
+        pass
+
+    assert not bundle.exists(), (
+        'the renewal trust bundle was not cleaned up'
+    )
+
+
+def test_both_paths_build_the_delete_list_the_same_way():
+    """The asymmetry that made this worth doing, asserted directly.
+
+    create and renew each had their own deletion loop over their own locals.
+    Now there is one `temp_paths`, and neither writes its own.
+    """
+    import inspect
+    import re
+
+    from modules.core.certificates import CertificateManager, _IssuanceArtifacts
+
+    record = _IssuanceArtifacts()
+    record.credentials_file = '/tmp/creds.ini'
+    record.alias_hook_config = '/tmp/alias.json'
+    record.extra_credential_files = ['/tmp/sa.json']
+    record.ca_extra_env['REQUESTS_CA_BUNDLE'] = '/tmp/bundle.pem'
+
+    assert set(p for p in record.temp_paths() if p) == {
+        '/tmp/creds.ini', '/tmp/alias.json', '/tmp/sa.json', '/tmp/bundle.pem'}
+
+    unlink = re.compile(r'os\.unlink\(')
+    for method in (CertificateManager.create_certificate,
+                   CertificateManager.renew_certificate):
+        src = inspect.getsource(method)
+        assert not unlink.search(src), (
+            f'{method.__qualname__} deletes temp files itself again; that '
+            f'belongs to _remove_temp_files, or the two lists drift'
+        )
