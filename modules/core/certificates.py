@@ -108,6 +108,21 @@ _KNOWN_METADATA_KEYS = _REISSUE_OWNED_METADATA_KEYS | frozenset({
 })
 
 
+def _remove_temp_files(artifacts):
+    """Delete every temp file an issuance or renewal created.
+
+    Never raises: a cleanup failure must not turn a successful issuance into a
+    reported error, and must not mask the real exception on the failure path.
+    """
+    for path in artifacts.temp_paths():
+        if not path:
+            continue
+        try:
+            os.unlink(path)
+        except (FileNotFoundError, OSError):
+            pass
+
+
 def _propagation_seconds(settings, dns_provider, strategy):
     """How long to wait for a DNS-01 TXT record to propagate, in seconds.
 
@@ -172,6 +187,24 @@ class _IssuanceArtifacts:
     ca_extra_env: dict = field(default_factory=dict)
     credentials_file: str | None = None
     extra_credential_files: list = field(default_factory=list)
+    alias_hook_config: str | None = None
+
+    def temp_paths(self):
+        """Every path whose file must be removed when the operation ends.
+
+        One list with one owner. Create and renew each had their own deletion
+        loop over their own set of locals, and the sets had already diverged:
+        renew tracked the DNS-alias hook config separately while create folded
+        it into ``credentials_file``, and only renew knew about the CA bundle
+        as a path rather than as an environment value. A file that one path
+        removes and the other forgets is a secret left on disk.
+        """
+        return [
+            self.credentials_file,
+            self.alias_hook_config,
+            *self.extra_credential_files,
+            self.ca_extra_env.get('REQUESTS_CA_BUNDLE'),
+        ]
 
 
 @dataclass(frozen=True)
@@ -1915,11 +1948,12 @@ class CertificateManager:
                 f"DNS alias '{effective_domain_alias}' requested for {domain}; "
                 f"using {alias_hook_provider} manual hook to create TXT records on the alias zone."
             )
-            artifacts.credentials_file = self._create_dns_alias_hook_config(
+            artifacts.alias_hook_config = self._create_dns_alias_hook_config(
                 alias_hook_provider, alias_hook_config, effective_domain_alias,
                 propagation_time or strategy.default_propagation_seconds
             )
-            self._configure_dns_alias_arguments(certbot_cmd, artifacts.credentials_file)
+            self._configure_dns_alias_arguments(certbot_cmd,
+                                                artifacts.alias_hook_config)
         else:
             # Create Config File. Pass the SAN list so the discovery
             # path (Azure today) can resolve every cert FQDN against
@@ -2197,20 +2231,7 @@ class CertificateManager:
             # create_google_config only mops up crashed runs, not live ones.
             # (Google needs no side file since #385: its credentials file IS the
             # service-account JSON, so it is unlinked as the main one.)
-            for cred_path in [artifacts.credentials_file,
-                              *artifacts.extra_credential_files]:
-                if cred_path:
-                    try:
-                        os.unlink(cred_path)
-                    except (FileNotFoundError, OSError):
-                        pass
-            # Clean up CA bundle temp file if created
-            ca_bundle = artifacts.ca_extra_env.get('REQUESTS_CA_BUNDLE')
-            if ca_bundle:
-                try:
-                    os.unlink(ca_bundle)
-                except (FileNotFoundError, OSError):
-                    pass
+            _remove_temp_files(artifacts)
 
     @staticmethod
     def _cert_fingerprint(cert_path):
@@ -2228,12 +2249,11 @@ class CertificateManager:
         domain_lock = self._get_domain_lock(domain)
         if not domain_lock.acquire(timeout=self._domain_lock_timeout()):
             raise DomainOperationInProgress(domain)
-        alias_hook_config = None
-        credentials_file = None
-        ca_bundle_path = None
-        # Secret side files the credentials ini references (Google's SA
-        # JSON); deleted in the finally alongside the ini.
-        extra_credential_files = []
+        # The same record create_certificate uses (#666). Renewal kept its own
+        # four locals and its own deletion loop, and the two sets had already
+        # diverged — a file one path removes and the other forgets is a secret
+        # left on disk.
+        artifacts = _IssuanceArtifacts()
         try:
             # Use the same config/work/log directories as during creation
             cert_dir = self.cert_dir
@@ -2310,6 +2330,7 @@ class CertificateManager:
             ca_bundle_path = self._renewal_ca_bundle(metadata)
             if ca_bundle_path:
                 process_env['REQUESTS_CA_BUNDLE'] = ca_bundle_path
+                artifacts.ca_extra_env['REQUESTS_CA_BUNDLE'] = ca_bundle_path
 
             dns_provider = metadata.get('dns_provider')
             challenge_type = metadata.get('challenge_type', 'dns-01')
@@ -2338,13 +2359,13 @@ class CertificateManager:
                 propagation_time = _propagation_seconds(
                     settings, alias_provider, strategy)
 
-                alias_hook_config = self._create_dns_alias_hook_config(
+                artifacts.alias_hook_config = self._create_dns_alias_hook_config(
                     alias_provider,
                     dns_config,
                     domain_alias,
                     propagation_time,
                 )
-                self._configure_dns_alias_arguments(cmd, alias_hook_config)
+                self._configure_dns_alias_arguments(cmd, artifacts.alias_hook_config)
                 logger.info(
                     f"Renewing {domain} with DNS alias '{domain_alias}' "
                     f"using {alias_provider} manual hook."
@@ -2367,21 +2388,13 @@ class CertificateManager:
                     # without a metadata migration.
                     strategy = DNSStrategyFactory.get_strategy(dns_provider)
                     strategy.prepare_environment(process_env, dns_config)
-                    # BEHAVIOUR CHANGE, deliberate: this copy never clamped.
-                    # A dns_propagation_seconds of 0 asked the hook to validate
-                    # before the TXT record existed; 86400 held the per-domain
-                    # lock for a day. The other three copies bounded it to
-                    # 1..3600 and this one did not — which is what "two copies
-                    # that drift" looks like in practice.
-                    renew_propagation = _propagation_seconds(
-                        settings, dns_provider, strategy)
-                    alias_hook_config = self._create_dns_alias_hook_config(
+                    artifacts.alias_hook_config = self._create_dns_alias_hook_config(
                         dns_provider,
                         dns_config,
                         acme_dns_alias,
-                        max(1, min(3600, renew_propagation)),
+                        _propagation_seconds(settings, dns_provider, strategy),
                     )
-                    self._configure_dns_alias_arguments(cmd, alias_hook_config)
+                    self._configure_dns_alias_arguments(cmd, artifacts.alias_hook_config)
                     # Strip CR/LF so a crafted domain cannot forge log entries
                     # (CodeQL py/log-injection), matching modules/web/cert_routes.py.
                     safe_domain = str(domain).replace('\r', ' ').replace('\n', ' ')
@@ -2398,8 +2411,9 @@ class CertificateManager:
                     strategy_config = self._dns_config_for_strategy(
                         dns_provider, dns_config, domain, san_domains=renew_sans,
                     )
-                    credentials_file = strategy.create_config_file(strategy_config)
-                    extra_credential_files = list(
+                    artifacts.credentials_file = strategy.create_config_file(
+                        strategy_config)
+                    artifacts.extra_credential_files = list(
                         getattr(strategy, 'extra_credential_files', []) or [])
                     # Pass the authenticator + credentials explicitly at renew
                     # (mirrors the create path) so renewal does not depend on the
@@ -2409,8 +2423,9 @@ class CertificateManager:
                     # broke renewal for file-based DNS providers. Env-based
                     # providers (route53) return no credentials file and keep
                     # using the stored authenticator + prepared env vars.
-                    if credentials_file:
-                        strategy.configure_certbot_arguments(cmd, credentials_file)
+                    if artifacts.credentials_file:
+                        strategy.configure_certbot_arguments(
+                            cmd, artifacts.credentials_file)
                     if dns_provider == 'custom-script':
                         # Mirror the create path: expose the propagation
                         # setting to the hooks certbot replays at renewal.
@@ -2602,23 +2617,7 @@ class CertificateManager:
             logger.error(f"Exception during certificate renewal for {domain}: {error_msg}")
             raise RuntimeError(f"Exception: {error_msg}")
         finally:
-            if alias_hook_config:
-                try:
-                    os.unlink(alias_hook_config)
-                except (FileNotFoundError, OSError):
-                    pass
-            # Includes side files the ini references (Google's SA JSON).
-            for cred_path in [credentials_file, *extra_credential_files]:
-                if cred_path:
-                    try:
-                        os.unlink(cred_path)
-                    except (FileNotFoundError, OSError):
-                        pass
-            if ca_bundle_path:
-                try:
-                    os.unlink(ca_bundle_path)
-                except (FileNotFoundError, OSError):
-                    pass
+            _remove_temp_files(artifacts)
             domain_lock.release()
 
     def _renewal_ca_bundle(self, metadata):

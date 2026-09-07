@@ -6,11 +6,12 @@ in `renew_certificate` (the alias branch, the acme-dns alias branch, and
 path": a copy that announces it is a copy is exactly the drift this issue is
 about.
 
-And they had already drifted. Three clamped the result to 1..3600; the
-acme-dns alias branch did not, so a `dns_propagation_seconds` of 0 there asked
-the hook to validate before the TXT record existed, and 86400 held the
-per-domain lock for a day. Unifying them fixes that, which is a behaviour
-change and is called out as one.
+All four clamped to 1..3600, but not in the same place: three clamped where
+the value was computed, the acme-dns alias branch clamped at the call site. I
+first read that as one copy having drifted into not clamping at all, and said
+so in #736 — wrongly. The clamp was there, four lines further down. Unifying
+them changes no behaviour; what it removes is four chances for the next edit
+to move one of those clamps and not the others.
 
 There is one `_propagation_seconds` now. These pin what it must do, because the
 bounds are the interesting part: too small and certbot asks the CA to validate
