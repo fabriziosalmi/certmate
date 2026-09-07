@@ -29,6 +29,15 @@ def _validate_backup_filename(filename):
         return 'Filename is required'
     if '..' in filename or '/' in filename or '\\' in filename or '\x00' in filename:
         return 'Invalid filename'
+    # NUL was rejected above but the other control characters were not, so a
+    # name like "x\nFORGED.zip" passed and reached the log lines that report
+    # the filename back — under the non-JSON log format that forges a record.
+    # Every backup this application writes is named backup_<timestamp>.zip, so
+    # a control character in one is never legitimate: refuse it here, at the
+    # single point all five endpoints already go through, rather than scrubbing
+    # each log site and waiting for the next one to be added without it.
+    if any(ord(ch) < 32 or ord(ch) == 127 for ch in filename):
+        return 'Invalid filename'
     # .zip = cleartext backup, .zip.enc = encrypted-at-rest backup
     # (CERTMATE_BACKUP_PASSPHRASE).
     if not (filename.endswith('.zip') or filename.endswith('.zip.enc')):
