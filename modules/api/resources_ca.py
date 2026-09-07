@@ -248,13 +248,13 @@ def create_ca_resources(api, models, ctx: ApiContext) -> dict:
                                 'message': 'Connection timeout - ACME endpoint is not accessible',
                                 'ca_provider': ca_provider
                             }
-                        except requests.exceptions.ConnectionError:
-                            return {
-                                'success': False,
-                                'message': 'Connection failed - ACME endpoint is not accessible. '
-                                           'Ensure the CertMate server can reach the ACME host on the required port.',
-                                'ca_provider': ca_provider
-                            }
+                        # SSLError BEFORE ConnectionError: requests' SSLError
+                        # subclasses ConnectionError, so with the handlers the
+                        # other way round the SSL branch was unreachable and a
+                        # private CA whose certificate could not be verified
+                        # was reported as "cannot reach the host on the
+                        # required port" — sending the operator to check
+                        # firewalls for a trust-anchor problem.
                         except requests.exceptions.SSLError:
                             hint = (
                                 ' Provide CA cert for verification.' if not ca_cert else
@@ -263,6 +263,13 @@ def create_ca_resources(api, models, ctx: ApiContext) -> dict:
                             return {
                                 'success': False,
                                 'message': f'SSL verification failed.{hint}',
+                                'ca_provider': ca_provider
+                            }
+                        except requests.exceptions.ConnectionError:
+                            return {
+                                'success': False,
+                                'message': 'Connection failed - ACME endpoint is not accessible. '
+                                           'Ensure the CertMate server can reach the ACME host on the required port.',
                                 'ca_provider': ca_provider
                             }
                         except Exception as conn_error:
