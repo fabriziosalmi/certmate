@@ -647,8 +647,14 @@ class AuthManager:
                                 s['api_keys'] = keys
                         try:
                             self.settings_manager.update(_touch, None)
-                        except Exception:
-                            pass  # Non-critical, don't fail auth on last_used update
+                        except Exception as e:
+                            # Non-critical: never fail auth over a last_used
+                            # write. But never silent either — this swallow
+                            # already hid one defect (see the comment above:
+                            # json.dump refused a datetime and the column
+                            # stayed empty for every key, forever).
+                            logger.debug(
+                                "Could not persist last_used_at for an API key: %s", e)
                     return {
                         'username': 'api_key:' + key_data.get('name', key_id),
                         'role': self._normalize_role(key_data.get('role', 'viewer')),

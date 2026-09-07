@@ -1081,8 +1081,14 @@ class AzureKeyVaultBackend(CertificateStorageBackend):
                 secret_name = self._sanitize_secret_name(f"cert-{domain}-cert-pem")
                 client.get_secret(secret_name)
                 return True
-            except Exception:
-                pass
+            except Exception as e:
+                # A transient auth or network failure here is reported to the
+                # caller as "the certificate does not exist", which is how a
+                # present certificate gets re-issued. Cannot be narrowed
+                # without importing the Azure SDK exceptions, so at least say
+                # so out loud.
+                logger.debug(
+                    "Azure Key Vault secret lookup failed for %s: %s", domain, e)
         if self.writes_certificate:
             try:
                 return self._get_cert_importer().exists(domain)

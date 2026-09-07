@@ -89,6 +89,10 @@ if __name__ == '__main__':
             try:
                 container.scheduler.shutdown()
                 print("📅 Background scheduler stopped")
-            except Exception:
-                pass
+            except Exception as e:
+                # Ctrl-C is already on its way out; a scheduler that will not
+                # stop cleanly must not turn that into a traceback. But it is
+                # worth one line, because "stopped" printing and "stopped"
+                # happening were previously indistinguishable (#671).
+                print(f"⚠️  Background scheduler did not stop cleanly: {e}")
         sys.exit(0)

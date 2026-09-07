@@ -326,8 +326,16 @@ def setup_directories(container: AppContainer, test_config=None):
                         logger.debug(f"Cleaned up orphan temp file: {_tmp}")
                     except OSError:
                         pass
-        except Exception:
-            pass
+        except OSError as e:
+            # The inner handler covers a single unlink; this one covers the
+            # scan itself (an unreadable directory). Cleaning orphan temp
+            # files is best-effort, but "best-effort" and "invisible" are
+            # different things.
+            # f-string, not %-args: this module's logger is a StructuredLogger
+            # whose level methods are (msg, **kwargs), so the stdlib idiom
+            # raises TypeError exactly when the code wanted to report a
+            # problem — the same failure shape #671 is about.
+            logger.debug(f"Could not sweep orphan temp files: {e}")
 
     # Docker volume persistence check (#130). Warn loudly if /app/data
     # appears to be ephemeral container storage rather than a persistent
