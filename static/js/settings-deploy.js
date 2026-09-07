@@ -151,6 +151,52 @@
                 else hook.on_events.splice(idx, 1);
             },
 
+            // --- Maintenance windows (#632) ---------------------------------
+            // Absent means "deploy immediately", which is what every existing
+            // hook does. The toggle adds and removes the whole object rather
+            // than leaving an empty one behind: the server treats any window
+            // object as a reason to defer, so a leftover {} would hold every
+            // deploy for a window with no hours in it.
+
+            windowDays: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'],
+
+            toggleWindow: function (hook) {
+                if (hook.window) {
+                    delete hook.window;
+                } else {
+                    // Defaults to the small hours, every day, in the browser's
+                    // own zone — the answer an operator opening this almost
+                    // always wants, and the zone they are thinking in.
+                    var zone = 'UTC';
+                    try {
+                        zone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+                    } catch (e) {
+                        zone = 'UTC';
+                    }
+                    hook.window = {
+                        start: '02:00', end: '04:00', days: [], timezone: zone
+                    };
+                }
+            },
+
+            toggleWindowDay: function (hook, day) {
+                if (!hook.window) return;
+                if (!hook.window.days) hook.window.days = [];
+                var idx = hook.window.days.indexOf(day);
+                if (idx === -1) hook.window.days.push(day);
+                else hook.window.days.splice(idx, 1);
+            },
+
+            describeWindow: function (hook) {
+                if (!hook.window) return 'Runs as soon as the certificate is issued or renewed.';
+                var w = hook.window;
+                var days = (w.days && w.days.length) ? w.days.join(', ') : 'every day';
+                var wraps = w.start > w.end
+                    ? ' (crosses midnight into the next morning)' : '';
+                return 'Held until ' + w.start + '-' + w.end + ' ' +
+                    (w.timezone || 'UTC') + ', ' + days + wraps + '.';
+            },
+
             testHook: function (hook) {
                 var hookLabel = hook.name || hook.id || 'unnamed';
                 var btn = event && event.target ? event.target.closest('button') : null;

@@ -113,6 +113,56 @@
                                         <span>Renewed</span>
                                     </label>
                                 </div>
+                                <!-- Maintenance window (#632). Absent means "deploy immediately",
+                                     which is what every hook did before this existed. -->
+                                <div class="mt-2 pt-2 border-t border-border">
+                                    <label class="flex items-center gap-2 text-xs text-muted">
+                                        <input type="checkbox" :checked="!!hook.window" @change="toggleWindow(hook)"
+                                               class="rounded border-gray-300 text-primary focus:ring-primary">
+                                        <span class="font-medium text-foreground">Only deploy during a maintenance window</span>
+                                    </label>
+                                    <p class="text-xs text-muted mt-1" x-text="describeWindow(hook)"></p>
+                                    <!-- x-if, not x-show: x-show keeps the inner bindings alive, so
+                                         `hook.window.start` is evaluated for every hook that has no
+                                         window and Alpine logs an error per binding per hook. -->
+                                    <template x-if="hook.window">
+                                    <div class="mt-2 space-y-2">
+                                        <div class="flex flex-wrap items-center gap-2 text-xs">
+                                            <label class="flex items-center gap-1 text-muted">
+                                                <span>From</span>
+                                                <input type="time" x-model="hook.window.start" aria-label="Maintenance window start"
+                                                       class="border border-border bg-input text-foreground rounded px-2 py-1 text-xs">
+                                            </label>
+                                            <label class="flex items-center gap-1 text-muted">
+                                                <span>to</span>
+                                                <input type="time" x-model="hook.window.end" aria-label="Maintenance window end"
+                                                       class="border border-border bg-input text-foreground rounded px-2 py-1 text-xs">
+                                            </label>
+                                            <label class="flex items-center gap-1 text-muted">
+                                                <span>Timezone</span>
+                                                <input type="text" x-model="hook.window.timezone" placeholder="Europe/Rome"
+                                                       aria-label="Maintenance window timezone"
+                                                       class="w-40 border border-border bg-input text-foreground rounded px-2 py-1 text-xs">
+                                            </label>
+                                        </div>
+                                        <div class="flex flex-wrap items-center gap-2 text-xs">
+                                            <span class="text-muted">Days:</span>
+                                            <template x-for="day in windowDays" :key="day">
+                                                <label class="flex items-center gap-1 text-muted">
+                                                    <input type="checkbox" @change="toggleWindowDay(hook, day)"
+                                                           :checked="hook.window.days && hook.window.days.indexOf(day) !== -1"
+                                                           :aria-label="'Maintenance window on ' + day"
+                                                           class="rounded border-gray-300 text-primary focus:ring-primary">
+                                                    <span x-text="day"></span>
+                                                </label>
+                                            </template>
+                                            <span class="text-muted italic" x-show="!hook.window.days || !hook.window.days.length">
+                                                none selected means every day
+                                            </span>
+                                        </div>
+                                    </div>
+                                    </template>
+                                </div>
                             </div>
                         </template>
                         <button type="button" @click="addGlobalHook()"
@@ -183,6 +233,56 @@
                                                        @change="toggleEvent(hook, 'renewed')" class="rounded border-gray-300 text-primary focus:ring-primary" title="Trigger on renewed">
                                                 <span>Renewed</span>
                                             </label>
+                                        </div>
+                                        <!-- Maintenance window (#632). Absent means "deploy immediately",
+                                             which is what every hook did before this existed. -->
+                                        <div class="mt-2 pt-2 border-t border-border">
+                                            <label class="flex items-center gap-2 text-xs text-muted">
+                                                <input type="checkbox" :checked="!!hook.window" @change="toggleWindow(hook)"
+                                                       class="rounded border-gray-300 text-primary focus:ring-primary">
+                                                <span class="font-medium text-foreground">Only deploy during a maintenance window</span>
+                                            </label>
+                                            <p class="text-xs text-muted mt-1" x-text="describeWindow(hook)"></p>
+                                            <!-- x-if, not x-show: x-show keeps the inner bindings alive, so
+                                                 `hook.window.start` is evaluated for every hook that has no
+                                                 window and Alpine logs an error per binding per hook. -->
+                                            <template x-if="hook.window">
+                                            <div class="mt-2 space-y-2">
+                                                <div class="flex flex-wrap items-center gap-2 text-xs">
+                                                    <label class="flex items-center gap-1 text-muted">
+                                                        <span>From</span>
+                                                        <input type="time" x-model="hook.window.start" aria-label="Maintenance window start"
+                                                               class="border border-border bg-input text-foreground rounded px-2 py-1 text-xs">
+                                                    </label>
+                                                    <label class="flex items-center gap-1 text-muted">
+                                                        <span>to</span>
+                                                        <input type="time" x-model="hook.window.end" aria-label="Maintenance window end"
+                                                               class="border border-border bg-input text-foreground rounded px-2 py-1 text-xs">
+                                                    </label>
+                                                    <label class="flex items-center gap-1 text-muted">
+                                                        <span>Timezone</span>
+                                                        <input type="text" x-model="hook.window.timezone" placeholder="Europe/Rome"
+                                                               aria-label="Maintenance window timezone"
+                                                               class="w-40 border border-border bg-input text-foreground rounded px-2 py-1 text-xs">
+                                                    </label>
+                                                </div>
+                                                <div class="flex flex-wrap items-center gap-2 text-xs">
+                                                    <span class="text-muted">Days:</span>
+                                                    <template x-for="day in windowDays" :key="day">
+                                                        <label class="flex items-center gap-1 text-muted">
+                                                            <input type="checkbox" @change="toggleWindowDay(hook, day)"
+                                                                   :checked="hook.window.days && hook.window.days.indexOf(day) !== -1"
+                                                                   :aria-label="'Maintenance window on ' + day"
+                                                                   class="rounded border-gray-300 text-primary focus:ring-primary">
+                                                            <span x-text="day"></span>
+                                                        </label>
+                                                    </template>
+                                                    <span class="text-muted italic" x-show="!hook.window.days || !hook.window.days.length">
+                                                        none selected means every day
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            </template>
                                         </div>
                                     </div>
                                 </template>

@@ -4,16 +4,22 @@ Runs shell commands after certificate issuance or renewal.
 Hooks are configured in settings under 'deploy_hooks'.
 """
 
+import datetime
 import json
 import logging
 import os
 import subprocess
+import threading
 import time
 from pathlib import Path
 
 from .structured_logging import sanitize_text, JSONFormatter
 from .utils import utc_now_iso
 from .deploy_targets import run_targets, target_applies, TARGET_TYPES
+from .deploy_window import (
+    STALE_AFTER_DAYS, WindowError, describe as describe_window, is_open,
+    next_open, normalize_window,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +33,11 @@ MAX_HISTORY_ENTRIES = 500
 _HISTORY_SANITIZER = JSONFormatter(include_hostname=False, include_pid=False)
 
 
+def _utc_now():
+    """Wall-clock now, aware. One definition so tests can pin it in one place."""
+    return datetime.datetime.now(datetime.timezone.utc)
+
+
 class DeployManager:
     """Manages post-issuance deploy hooks."""
 
@@ -38,6 +49,12 @@ class DeployManager:
         self.event_bus = event_bus
         self.cert_dir = Path(cert_dir)
         self._history_path = Path(data_dir) / 'deploy_history.jsonl'
+        # Deploys held for a maintenance window (#632). On disk because the
+        # window is typically hours away and a restart in between must not
+        # lose the deploy; guarded by a lock because the queue is written from
+        # the EventBus listener threads and read by the scheduler's drain.
+        self._pending_path = Path(data_dir) / 'pending_deploys.json'
+        self._pending_lock = threading.Lock()
 
     # ------------------------------------------------------------------
     # EventBus listener
@@ -79,6 +96,11 @@ class DeployManager:
         hooks applicable to this domain right now", regardless of whether
         they'd normally only run on create or renew. Hooks see
         CERTMATE_EVENT=manual so they can branch if they care.
+
+        Maintenance windows (#632) are ignored for the same reason. An operator
+        who presses Deploy Now has chosen this moment; holding the deploy until
+        02:00 would make the button do nothing visible, which is worse than
+        deploying outside the window they configured for the automatic path.
 
         Returns a dict {ok, total, succeeded, failed, results} with
         per-hook results. ok is True iff all hooks exited 0 and at least
@@ -129,7 +151,12 @@ class DeployManager:
         }
 
     def _execute_hooks(self, domain, event_type):
-        """Collect and run all matching hooks for a domain/event."""
+        """Collect and run all matching hooks for a domain/event.
+
+        A hook or target carrying a maintenance window that is closed right now
+        is not run and not skipped — it is queued, and `drain_pending` runs it
+        when the window next opens (#632).
+        """
         config = self.get_config()
         if not config.get('enabled'):
             return []
@@ -144,23 +171,293 @@ class DeployManager:
             if hook.get('enabled') and event_type in hook.get('on_events', []):
                 hooks.append(hook)
 
+        now = _utc_now()
         results = []
         for hook in hooks:
-            result = self._run_hook(hook, domain, event_type)
-            results.append(result)
-        # Typed deploy targets fire from the same lifecycle points (#475).
-        results.extend(self._execute_targets(domain, event_type, config))
+            if self._defer_if_closed('hook', hook, domain, event_type, now):
+                continue
+            results.append(self._run_hook(hook, domain, event_type))
+
+        # Typed deploy targets fire from the same lifecycle points (#475), and
+        # take the same windows — a Kubernetes secret rollout is exactly the
+        # kind of deploy an operator wants inside a maintenance window.
+        targets = [t for t in (config.get('targets') or [])
+                   if target_applies(t, domain, event_type)]
+        runnable = [t for t in targets
+                    if not self._defer_if_closed('target', t, domain,
+                                                 event_type, now)]
+        results.extend(
+            self._execute_targets(domain, event_type, config, targets=runnable))
         return results
 
-    def _execute_targets(self, domain, event_type, config=None):
+    # ------------------------------------------------------------------
+    # Maintenance windows (#632)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _entity_id(kind, entity):
+        """Stable identity for a queue entry.
+
+        Hooks carry an id; targets are identified by name, which is what
+        `target_applies` and the history already key on.
+        """
+        return entity.get('id') if kind == 'hook' else entity.get('name')
+
+    def _defer_if_closed(self, kind, entity, domain, event_type, now):
+        """Queue this deploy if its window is shut. True when it was queued.
+
+        A window that cannot be read is treated as absent — deploying at the
+        wrong hour is a disruption, but never deploying at all is an expired
+        certificate. `save_config` refuses an invalid window, so reaching this
+        means the file was edited by hand.
+        """
+        window = entity.get('window')
+        if not window:
+            return False
+        try:
+            if is_open(window, now):
+                return False
+        except WindowError as e:
+            logger.warning(
+                "Deploy %s %r for %s has an unusable maintenance window (%s); "
+                "running it now rather than holding it indefinitely.",
+                kind, self._entity_id(kind, entity), domain, e)
+            return False
+
+        identity = self._entity_id(kind, entity)
+        if not identity:
+            logger.warning(
+                "Deploy %s for %s has a maintenance window but no %s to queue "
+                "it under; running it now.", kind, domain,
+                'id' if kind == 'hook' else 'name')
+            return False
+
+        key = f'{kind}:{identity}:{domain}'
+        with self._pending_lock:
+            pending = self._read_pending()
+            existing = pending.get(key)
+            # A second renewal before the window opens must not queue a second
+            # deploy: the hook reads the certificate from disk when it runs, so
+            # one deferred run always publishes the newest one.
+            # Stamped from the same `now` the window was judged against, not
+            # from a second call to the clock. `_warn_if_stale` compares these
+            # against the drain's `now`, and two clocks that can disagree is
+            # how a queue entry ends up looking as if it were made in the
+            # future — which is silent, because a negative age is never stale.
+            stamp = now.isoformat()
+            pending[key] = {
+                'kind': kind,
+                'id': identity,
+                'domain': domain,
+                'event': event_type,
+                'queued_at': (existing or {}).get('queued_at') or stamp,
+                'last_event_at': stamp,
+            }
+            self._write_pending(pending)
+
+        logger.info(
+            "Deploy %s %r for %s held for its maintenance window (%s); "
+            "next opening %s", kind, identity, domain,
+            describe_window(window),
+            (next_open(window, now) or 'never').isoformat()
+            if next_open(window, now) else 'never')
+        return True
+
+    def _read_pending(self):
+        """The queue as a dict, or {}. Callers hold `_pending_lock`."""
+        try:
+            with open(self._pending_path) as f:
+                data = json.load(f)
+        except FileNotFoundError:
+            return {}
+        except (OSError, ValueError) as e:
+            # A corrupt queue must not stop the drain from running the entries
+            # that come after it, and it must not be silent — a lost queue is
+            # a deploy that never happens.
+            logger.error(
+                "Pending deploy queue at %s is unreadable (%s); starting from "
+                "an empty queue. Certificates are unaffected, but any deploy "
+                "waiting for a maintenance window has been lost and will not "
+                "run until the next renewal.", self._pending_path, e)
+            return {}
+        return data if isinstance(data, dict) else {}
+
+    def _write_pending(self, pending):
+        """Replace the queue atomically. Callers hold `_pending_lock`."""
+        import tempfile as _tmpmod
+        try:
+            self._pending_path.parent.mkdir(parents=True, exist_ok=True)
+            if not pending:
+                # An empty file and no file mean the same thing; removing it
+                # keeps the drain a true no-op on an instance that uses no
+                # windows.
+                try:
+                    self._pending_path.unlink()
+                except FileNotFoundError:
+                    pass
+                return
+            tmp_fd, tmp_path = _tmpmod.mkstemp(
+                dir=str(self._pending_path.parent), suffix='.tmp')
+            try:
+                with os.fdopen(tmp_fd, 'w') as f:
+                    json.dump(pending, f, indent=2)
+                os.replace(tmp_path, str(self._pending_path))
+            except Exception:
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
+                raise
+        except OSError as e:
+            logger.error(
+                "Cannot write the pending deploy queue to %s: %s. A deploy "
+                "waiting for a maintenance window will be lost on restart. "
+                "Check that the data volume is writable by uid 1000.",
+                self._pending_path, e)
+
+    def get_pending(self, now=None):
+        """Queued deploys, newest event first, annotated for display."""
+        now = now or _utc_now()
+        config = self.get_config()
+        with self._pending_lock:
+            pending = self._read_pending()
+
+        rows = []
+        for key, entry in pending.items():
+            entity = self._find_windowed(config, entry)
+            window = (entity or {}).get('window')
+            try:
+                when = next_open(window, now) if window else now
+                description = describe_window(window)
+            except WindowError:
+                when, description = None, 'unusable window'
+            rows.append({
+                **entry,
+                'key': key,
+                'window': description,
+                'next_run': when.isoformat() if when else None,
+                'orphaned': entity is None,
+            })
+        rows.sort(key=lambda r: r.get('last_event_at') or '', reverse=True)
+        return rows
+
+    def _find_windowed(self, config, entry):
+        """The hook or target an entry refers to, or None if it is gone."""
+        if entry.get('kind') == 'hook':
+            return self._find_hook(config, entry.get('id'))
+        for target in config.get('targets') or []:
+            if target.get('name') == entry.get('id'):
+                return target
+        return None
+
+    def drain_pending(self, now=None):
+        """Run every queued deploy whose window is open. Scheduler entry point.
+
+        Returns a summary dict. Never raises: it runs from a scheduler job, and
+        one bad entry must not stop the rest of the queue.
+        """
+        now = now or _utc_now()
+        with self._pending_lock:
+            pending = self._read_pending()
+        if not pending:
+            return {'ran': 0, 'held': 0, 'dropped': 0, 'results': []}
+
+        config = self.get_config()
+        enabled = bool(config.get('enabled'))
+        remaining, results, dropped = {}, [], 0
+
+        for key, entry in pending.items():
+            entity = self._find_windowed(config, entry)
+            if entity is None or not enabled or (
+                    entry.get('kind') == 'hook' and not entity.get('enabled')):
+                # The hook was deleted, disabled, or deploy hooks were turned
+                # off while this waited. Dropping is the honest answer: the
+                # operator's current configuration says do not run it.
+                logger.info(
+                    "Dropping queued deploy %s: its %s is gone or disabled.",
+                    key, entry.get('kind'))
+                dropped += 1
+                continue
+
+            window = entity.get('window')
+            try:
+                open_now = is_open(window, now) if window else True
+            except WindowError:
+                open_now = True
+
+            if not open_now:
+                self._warn_if_stale(key, entry, now)
+                remaining[key] = entry
+                continue
+
+            domain, event_type = entry.get('domain'), entry.get('event')
+            try:
+                if entry.get('kind') == 'hook':
+                    results.append(self._run_hook(entity, domain, event_type))
+                else:
+                    results.extend(self._execute_targets(
+                        domain, event_type, config, targets=[entity]))
+            except Exception as e:
+                # Failure-isolated like every other deploy path: record it and
+                # move on. It is NOT re-queued — a hook that fails inside its
+                # window would otherwise retry at every drain for a week.
+                logger.error("Queued deploy %s failed: %s", key, e)
+                results.append({'success': False, 'hook': entry.get('id'),
+                                'domain': domain, 'error': str(e)})
+
+        with self._pending_lock:
+            current = self._read_pending()
+            # Only drop what this drain actually handled. An event that queued
+            # a deploy while the loop above was running keeps its entry.
+            for key in pending:
+                if key not in remaining:
+                    current.pop(key, None)
+            for key, entry in remaining.items():
+                current.setdefault(key, entry)
+            self._write_pending(current)
+
+        succeeded = sum(1 for r in results if r.get('success'))
+        for domain in {r.get('domain') for r in results if r.get('success')}:
+            self.event_bus.publish('certificate_deployed', {
+                'domain': domain, 'event': 'window', 'count': succeeded,
+            })
+        return {'ran': len(results), 'held': len(remaining),
+                'dropped': dropped, 'results': results}
+
+    def _warn_if_stale(self, key, entry, now):
+        """A deploy that has waited a week is not waiting, it is stuck."""
+        queued_at = entry.get('queued_at')
+        if not queued_at:
+            return
+        try:
+            queued = datetime.datetime.fromisoformat(
+                queued_at.replace('Z', '+00:00'))
+        except ValueError:
+            return
+        if queued.tzinfo is None:
+            queued = queued.replace(tzinfo=datetime.timezone.utc)
+        if now - queued > datetime.timedelta(days=STALE_AFTER_DAYS):
+            logger.warning(
+                "Queued deploy %s has been waiting since %s — more than %s "
+                "days. Its maintenance window has not opened in that time; "
+                "check the window's days and timezone.",
+                key, queued_at, STALE_AFTER_DAYS)
+
+    def _execute_targets(self, domain, event_type, config=None, targets=None):
         """Run every applicable typed deploy target for a domain/event.
 
         Failure-isolated (like shell hooks): reads the current fullchain +
         private key from disk and applies them via each configured target,
         recording audit + history per target. Never raises into the caller.
+
+        *targets*, when given, is an already-filtered list — the caller has
+        applied `target_applies` and removed anything held for a maintenance
+        window (#632). Passing it is not an optimisation: re-deriving the list
+        here would run the targets the caller deliberately deferred.
         """
         config = config if config is not None else self.get_config()
-        targets = config.get('targets') or []
+        if targets is None:
+            targets = config.get('targets') or []
         if not any(target_applies(t, domain, event_type) for t in targets):
             return []
 
@@ -485,6 +782,15 @@ class DeployManager:
         identifies the offending hook + reason when validation fails so the
         UI can show why a save was rejected (issue #102) instead of a
         generic "save failed".
+
+        A key the payload does not mention is left as it was. This is not
+        politeness: `deploy_hooks` also holds `targets`, the typed deploy
+        targets from #475, and the Settings -> Deploy screen has no editor for
+        them — `loadConfig` never reads them and `saveConfig` posts a body
+        without them. Replacing the whole block therefore meant that opening
+        that screen and pressing Save silently deleted every configured
+        Kubernetes secret target. Absent leaves alone; an explicit value,
+        including an empty list, replaces.
         """
         if not isinstance(config, dict):
             return False, "Configuration must be an object"
@@ -499,7 +805,10 @@ class DeployManager:
         # (e.g. one editing deploy hooks, another editing DNS providers)
         # cannot lose each other's changes.
         def _mutate(settings):
-            settings['deploy_hooks'] = config
+            existing = settings.get('deploy_hooks')
+            merged = dict(existing) if isinstance(existing, dict) else {}
+            merged.update(config)
+            settings['deploy_hooks'] = merged
         self.settings_manager.update(_mutate, "deploy_hooks_save")
         return True, None
 
@@ -555,6 +864,15 @@ class DeployManager:
         ttype = target.get('type')
         if ttype not in TARGET_TYPES:
             return False, f"unknown target type {ttype!r} (expected one of {TARGET_TYPES})"
+        # Same window rule as a shell hook, refused at the same moment (#632).
+        try:
+            window = normalize_window(target.get('window'))
+        except WindowError as e:
+            return False, f"target {target.get('name')!r} window: {e}"
+        if window is None:
+            target.pop('window', None)
+        else:
+            target['window'] = window
         cfg = target.get('config') or {}
         if not isinstance(cfg, dict):
             return False, "target.config must be an object"
@@ -673,6 +991,19 @@ class DeployManager:
             hook['on_events'] = ['created', 'renewed']
         if not isinstance(hook.get('enabled'), bool):
             hook['enabled'] = True
+
+        # A maintenance window is refused here, at save time, rather than
+        # discovered when the queue is drained (#632). A window that cannot be
+        # read is one that never opens, and the symptom — deploys silently not
+        # happening — would surface days after the change that caused it.
+        try:
+            window = normalize_window(hook.get('window'))
+        except WindowError as e:
+            return False, f"hook '{hook_label}' window: {e}"
+        if window is None:
+            hook.pop('window', None)
+        else:
+            hook['window'] = window
         return True, None
 
     # ------------------------------------------------------------------

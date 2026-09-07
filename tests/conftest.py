@@ -295,39 +295,59 @@ def _no_browser(reason):
     pytest.skip(reason)
 
 
-@pytest.fixture(scope="module")
-def browser_page(docker_container):
-    """Provide a Playwright browser page."""
+@pytest.fixture(scope="session")
+def ui_session_cookie(docker_container):
+    """Log the UI suite in ONCE, for every module.
+
+    This used to run per module, and that coupled the suite to the login rate
+    limit: `modules/web/routes` allows 5 attempts per IP per 60 seconds, the
+    whole UI suite runs in about two minutes, and every test module logged in
+    again. The sixth UI test module therefore made the sixth login inside that
+    window, which was refused — so the fixture got no cookie, every page
+    redirected to /login, and the LAST module in alphabetical order failed with
+    "the panel is empty" while the change that broke it was the addition of an
+    unrelated test file.
+
+    Session-scoped, so the number of UI modules no longer has anything to do
+    with it. And a login that fails now fails the run loudly rather than
+    yielding a cookie-less page: a browser suite silently testing the login
+    screen is worse than a red fixture.
+    """
     import requests
 
-    session_cookie = None
-    try:
-        # Step 1: Create admin user (no auth required in setup mode)
-        requests.post(f"{BASE_URL}/api/web/settings/users", json={
-            "username": "admin", "password": "Password123!", "role": "admin"
-        })
+    # Setup mode: no auth required for these two.
+    requests.post(f"{BASE_URL}/api/web/settings/users", json={
+        "username": "admin", "password": "Password123!", "role": "admin"
+    })
+    requests.post(f"{BASE_URL}/api/auth/config", json={
+        "local_auth_enabled": True
+    })
 
-        # Step 2: Enable local auth (still bypassed -- auth not enabled yet)
-        requests.post(f"{BASE_URL}/api/auth/config", json={
-            "local_auth_enabled": True
-        })
+    login_r = requests.post(f"{BASE_URL}/api/auth/login", json={
+        "username": "admin", "password": "Password123!"
+    })
+    session_cookie = login_r.cookies.get("certmate_session")
+    if not session_cookie:
+        pytest.fail(
+            f"UI suite could not log in (HTTP {login_r.status_code}): "
+            f"{login_r.text[:200]}. Without a session every page redirects to "
+            f"/login and the tests would silently exercise the login screen."
+        )
 
-        # Step 3: Login to get session cookie (auth is now enabled)
-        login_r = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "username": "admin", "password": "Password123!"
-        })
-        session_cookie = login_r.cookies.get("certmate_session")
+    s = requests.Session()
+    s.cookies.set("certmate_session", session_cookie)
+    r = s.get(f"{BASE_URL}/api/web/settings")
+    if r.status_code == 200:
+        data = r.json()
+        data["setup_completed"] = True
+        s.post(f"{BASE_URL}/api/web/settings", json=data)
+    return session_cookie
 
-        # Step 4: Mark setup as completed (using session cookie)
-        s = requests.Session()
-        s.cookies.set("certmate_session", session_cookie)
-        r = s.get(f"{BASE_URL}/api/web/settings")
-        if r.status_code == 200:
-            data = r.json()
-            data["setup_completed"] = True
-            s.post(f"{BASE_URL}/api/web/settings", json=data)
-    except Exception as e:
-        print(f"Warning: could not complete setup via API: {e}")
+
+@pytest.fixture(scope="module")
+def browser_page(docker_container, ui_session_cookie):
+    """Provide a Playwright browser page, already logged in."""
+    session_cookie = ui_session_cookie
 
     from playwright.sync_api import sync_playwright
     pw = sync_playwright().start()

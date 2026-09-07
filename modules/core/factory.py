@@ -899,6 +899,24 @@ def _ct_monitor_job():
         _run_manager_job('ct_monitor', 'run_poll')
 
 
+def _deploy_window_drain_job():
+    """Run deploys held for a maintenance window (#632).
+
+    Every minute, and deliberately so. A window is at least one minute long —
+    `normalize_window` refuses start == end — so minute polling means no window
+    can ever be missed entirely. At a coarser interval a short window would be
+    stepped over and its deploy held until the next day, which is exactly the
+    kind of silent, hours-late failure the feature exists to prevent.
+
+    It costs nothing on an instance that configures no windows: the queue file
+    does not exist, and `drain_pending` returns without reading anything else.
+    No process lock, unlike the renewal jobs — running a queued deploy twice is
+    the same shape as the manual Deploy Now button, whereas a lock held by a
+    dead process would silently stop deploys altogether.
+    """
+    _run_manager_job('deployer', 'drain_pending')
+
+
 def setup_scheduler(container: AppContainer):
     """Set up APScheduler for background tasks with persistent store."""
     assert _flask_app is not None, "setup_scheduler called before _flask_app was set"
@@ -992,6 +1010,16 @@ def setup_scheduler(container: AppContainer):
             func=_ct_monitor_job,
             trigger="cron", hour=5, minute=0,
             id='ct_log_monitor', replace_existing=True
+        )
+        # Deploy maintenance windows (#632). See the job's docstring for why
+        # this is every minute. `coalesce` from job_defaults collapses a burst
+        # of missed fires into one, and the 6-hour misfire grace would let a
+        # long-delayed drain still run — both harmless here, because the drain
+        # re-reads the window and does nothing when it is shut.
+        scheduler.add_job(
+            func=_deploy_window_drain_job,
+            trigger="cron", minute='*',
+            id='deploy_window_drain', replace_existing=True
         )
         container.scheduler = scheduler
         container.managers['scheduler'] = scheduler
