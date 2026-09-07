@@ -1786,14 +1786,17 @@
     }
 
     function parseSanDomainsInput(value) {
-        // Accept comma, semicolon, newline, or tab as separators — users
+        // Accept comma, semicolon, or any whitespace as separators — users
         // routinely paste from spreadsheets, CLI output, or notepads where
-        // the delimiter isn't always a comma. Each token is normalized via
+        // the delimiter isn't always a comma. A hostname cannot contain
+        // whitespace, so splitting on it is safe and covers space-separated
+        // lists (`a.example.com b.example.com`), which is how `dig` and most
+        // shell one-liners emit them. Each token is normalized via
         // normalizeHostname; duplicates after normalization are dropped.
         if (!value) return [];
         var seen = Object.create(null);
         var out = [];
-        String(value).split(/[,;\n\t]+/).forEach(function (raw) {
+        String(value).split(/[,;\s]+/).forEach(function (raw) {
             var d = normalizeHostname(raw);
             if (!d || seen[d]) return;
             seen[d] = true;
@@ -1806,6 +1809,121 @@
         if (domain && domains.indexOf(domain) === -1) {
             domains.push(domain);
         }
+    }
+
+    // --- SAN chip editor (#725) ------------------------------------------- //
+    // The SAN field was one text input holding a comma-separated string. With
+    // three names that is awkward; at the ~20 real certificates carry it is
+    // unusable — you cannot see what you typed, and changing one in the middle
+    // means retyping the lot.
+    //
+    // #san_domains stays exactly what it was, a field whose `.value` is the
+    // comma-joined list, only now hidden. Every existing reader and writer
+    // (submit, reissue pre-fill, the two form resets, the DNS-alias listener)
+    // keeps working untouched; the chips are a view over that value. Writers
+    // go through setSanDomains so the view is told to re-render, because
+    // assigning `.value` fires no event.
+
+    function sanDomainsList() {
+        var field = document.getElementById('san_domains');
+        return field ? parseSanDomainsInput(field.value) : [];
+    }
+
+    function setSanDomains(value) {
+        // Accepts a list or a raw string; normalizes and de-duplicates both.
+        var field = document.getElementById('san_domains');
+        if (!field) return;
+        var list = Array.isArray(value)
+            ? parseSanDomainsInput(value.join(','))
+            : parseSanDomainsInput(value);
+        field.value = list.join(', ');
+        renderSanChips();
+        // updateDnsAliasHelp listens for 'input' on this field, and a
+        // programmatic assignment does not fire one.
+        field.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
+    function renderSanChips() {
+        var host = document.getElementById('san_chips');
+        if (!host) return;
+        var list = sanDomainsList();
+        host.textContent = '';
+        list.forEach(function (domain) {
+            var chip = document.createElement('span');
+            chip.className = 'inline-flex items-center gap-1 rounded bg-surface-2 '
+                + 'text-foreground text-xs px-2 py-1 max-w-full';
+
+            var label = document.createElement('span');
+            label.className = 'truncate';
+            // textContent, not innerHTML: a SAN reaches here from a server
+            // response on the reissue path as well as from typing.
+            label.textContent = domain;
+            chip.appendChild(label);
+
+            var remove = document.createElement('button');
+            remove.type = 'button';
+            remove.className = 'text-muted hover:text-danger leading-none';
+            remove.setAttribute('aria-label', 'Remove ' + domain);
+            remove.textContent = '×';
+            remove.addEventListener('click', function () {
+                setSanDomains(sanDomainsList().filter(function (d) {
+                    return d !== domain;
+                }));
+                var entry = document.getElementById('san_entry');
+                if (entry) entry.focus();
+            });
+            chip.appendChild(remove);
+
+            host.appendChild(chip);
+        });
+    }
+
+    function commitSanEntry() {
+        var entry = document.getElementById('san_entry');
+        if (!entry || !entry.value.trim()) return false;
+        setSanDomains(sanDomainsList().concat(parseSanDomainsInput(entry.value)));
+        entry.value = '';
+        return true;
+    }
+
+    function initSanEditor() {
+        var editor = document.getElementById('san_editor');
+        var entry = document.getElementById('san_entry');
+        if (!editor || !entry) return;
+
+        // Clicking the padding focuses the entry, so the whole box behaves
+        // like the single input it replaces.
+        editor.addEventListener('click', function (e) {
+            if (e.target === editor || e.target.id === 'san_chips') entry.focus();
+        });
+
+        entry.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' || e.key === ',' || e.key === ';') {
+                // Enter must not submit the create form from this field.
+                e.preventDefault();
+                commitSanEntry();
+            } else if (e.key === 'Backspace' && entry.value === '') {
+                var list = sanDomainsList();
+                if (list.length) {
+                    e.preventDefault();
+                    setSanDomains(list.slice(0, -1));
+                }
+            }
+        });
+
+        // Pasting a list is the case this exists for: a widget that took one
+        // name at a time would be worse than the old text field at 20 SANs.
+        entry.addEventListener('paste', function (e) {
+            var text = (e.clipboardData || window.clipboardData).getData('text');
+            if (!text) return;
+            e.preventDefault();
+            setSanDomains(sanDomainsList().concat(parseSanDomainsInput(text)));
+        });
+
+        // Leaving the field must not silently discard what was typed.
+        entry.addEventListener('blur', commitSanEntry);
+
+        renderSanChips();
     }
 
     function buildRequestedDomains(primaryDomain, sanDomains, wildcardEnabled) {
@@ -2026,7 +2144,7 @@
         });
         document.getElementById('wildcard-cert').checked = wildcardIndex !== -1;
         if (wildcardIndex !== -1) sans.splice(wildcardIndex, 1);
-        document.getElementById('san_domains').value = sans.join(', ');
+        setSanDomains(sans);
 
         if (cert.challenge_type) document.getElementById('challenge_type_select').value = cert.challenge_type;
         if (cert.dns_provider) document.getElementById('dns_provider_select').value = cert.dns_provider;
@@ -2113,7 +2231,7 @@
         var domainField = document.getElementById('domain');
         domainField.readOnly = false;
         domainField.value = '';
-        document.getElementById('san_domains').value = '';
+        setSanDomains([]);
         document.getElementById('wildcard-cert').checked = false;
         document.getElementById('challenge_type_select').value = '';
         document.getElementById('dns_provider_select').value = '';
@@ -2355,7 +2473,7 @@
     // (shared by the sync-success and async-accepted paths).
     function clearCreateFormAfterSubmit() {
         document.getElementById('domain').value = '';
-        document.getElementById('san_domains').value = '';
+        setSanDomains([]);
         document.getElementById('wildcard-cert').checked = false;
         document.getElementById('challenge_type_select').value = '';
         document.getElementById('dns_provider_select').value = '';
@@ -2992,6 +3110,7 @@
         // free-text search moved to the ⌘K palette. No select listener needed.
         document.getElementById('domain').addEventListener('input', updateDnsAliasHelp);
         document.getElementById('san_domains').addEventListener('input', updateDnsAliasHelp);
+        initSanEditor();
         document.getElementById('wildcard-cert').addEventListener('change', updateDnsAliasHelp);
         document.getElementById('dns_alias_domain').addEventListener('input', updateDnsAliasHelp);
         document.getElementById('check_dns_alias_button').addEventListener('click', checkDnsAliasFromForm);
