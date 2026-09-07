@@ -108,6 +108,30 @@ _KNOWN_METADATA_KEYS = _REISSUE_OWNED_METADATA_KEYS | frozenset({
 })
 
 
+def _reject_path_escaping_domain(domain):
+    """Refuse a domain that could escape ``cert_dir`` when used as a path.
+
+    ``domain`` becomes a directory name under the certificate root, the certbot
+    ``--config-dir``, and the key of the per-domain lock. A URL-form value whose
+    netloc passed ``validate_domain`` but was kept raw ("https://x/../y") would
+    escape ``cert_dir`` and drop the ACME account private key under the public
+    ``/.well-known/acme-challenge`` webroot.
+
+    Reject rather than normalise: normalisation is the source's job, and
+    reaching this sink with path characters means something upstream failed, so
+    the request must not proceed.
+
+    Module-level and called from every entry point rather than written inline
+    once (#666). While it lived at the top of ``create_certificate`` it
+    protected the code below it by position; extracting that code into
+    ``_prepare_issuance`` produced a unit that did not enforce its own
+    precondition, which is exactly the shape CodeQL flags — and it was right.
+    """
+    if (not domain or '/' in domain or '\\' in domain
+            or '..' in domain or '\x00' in domain):
+        raise ValueError('Invalid domain name')
+
+
 @dataclass(frozen=True)
 class _PreparedIssuance:
     """Everything ``create_certificate`` resolves before it builds a command.
@@ -1468,6 +1492,11 @@ class CertificateManager:
         Raises the same exceptions the inline code did — FileExistsError,
         ValueError, RuntimeError — so the caller's handlers are unchanged.
         """
+        # create_certificate rejects these before taking the per-domain lock,
+        # and this repeats it rather than trusting the caller: `domain` is used
+        # here to build cert_dir paths, and a unit that assumes its caller
+        # validated is only safe by position.
+        _reject_path_escaping_domain(domain)
         settings = None
         # Settings are loaded lazily and at most once: several branches
         # below need settings (CA default, challenge type, DNS provider,
@@ -1723,9 +1752,7 @@ class CertificateManager:
         # escape. Reject rather than normalise: normalisation is the source's
         # job; reaching the sink with path characters means something upstream
         # failed and the request must not proceed.
-        if (not domain or '/' in domain or '\\' in domain
-                or '..' in domain or '\x00' in domain):
-            raise ValueError('Invalid domain name')
+        _reject_path_escaping_domain(domain)
 
         # Acquire per-domain lock to prevent concurrent create/renew operations
         domain_lock = self._get_domain_lock(domain)
