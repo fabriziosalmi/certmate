@@ -188,6 +188,10 @@ def _resolve_all_domains(domain, san_domains, challenge_type):
     part with no dependency on settings, the CA, or the filesystem — which is
     also what makes it worth testing exhaustively.
     """
+    # Same reasoning as the other units in this file: the value ends up as a
+    # certbot -d argument and in a log line, so this enforces its own
+    # precondition rather than trusting whichever caller it acquires next.
+    _reject_path_escaping_domain(domain)
     all_domains = [domain]
     if san_domains:
         # Filter and validate SAN domains. validate_domain returns the
