@@ -18,10 +18,10 @@ from datetime import datetime
 from typing import Dict, List, Optional, Tuple, Any
 
 from .constants import CERTIFICATE_FILES
+from .domain_paths import STORAGE_DOMAIN_RE, reject_unsafe_domain
 
 logger = logging.getLogger(__name__)
 
-_SAFE_DOMAIN_RE = re.compile(r'^(\*\.)?[a-zA-Z0-9]([a-zA-Z0-9._-]{0,253}[a-zA-Z0-9])?$')
 
 
 def _is_transient(exc):
@@ -126,9 +126,9 @@ def _as_text(filename: str, content: bytes) -> str:
 def _validate_storage_domain(domain: str) -> str:
     """Validate domain name for use in storage backend paths/keys.
     Raises ValueError if domain contains path traversal or invalid chars."""
-    if not domain or '..' in domain or '/' in domain or '\\' in domain or '\x00' in domain:
-        raise ValueError(f"Invalid domain for storage: contains illegal characters")
-    if not _SAFE_DOMAIN_RE.match(domain):
+    reject_unsafe_domain(
+        domain, "Invalid domain for storage: contains illegal characters")
+    if not STORAGE_DOMAIN_RE.match(domain):
         raise ValueError(f"Invalid domain for storage: does not match domain pattern")
     return domain
 

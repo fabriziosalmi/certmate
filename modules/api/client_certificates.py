@@ -1,23 +1,21 @@
 import logging
-import re
 from flask import request, send_file, Response
+from ..core.domain_paths import IDENTIFIER_RE, is_path_safe_segment
 from werkzeug.exceptions import HTTPException
 from flask_restx import Resource, fields, abort
 from io import BytesIO
 
 logger = logging.getLogger(__name__)
 
-# Validation pattern for client certificate identifiers
-_SAFE_IDENTIFIER_RE = re.compile(r'^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$')
-
-
 def _validate_identifier(identifier):
-    """Validate client certificate identifier to prevent path traversal."""
-    if not identifier or '..' in identifier or '/' in identifier or '\\' in identifier or '\x00' in identifier:
-        return False
-    if not _SAFE_IDENTIFIER_RE.match(identifier):
-        return False
-    return True
+    """Validate client certificate identifier to prevent path traversal.
+
+    The character rule and the pattern both live in ``core.domain_paths`` (#672).
+    They were written here as a fourth copy, and carried the same `$` anchor the
+    other copies had.
+    """
+    return (is_path_safe_segment(identifier)
+            and bool(IDENTIFIER_RE.match(identifier)))
 
 
 def create_client_certificate_models(api):
