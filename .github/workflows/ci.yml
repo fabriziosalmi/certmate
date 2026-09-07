@@ -128,7 +128,20 @@ jobs:
         # another name) — but as a required check they would turn every PR red
         # on someone else's outage. They run on the weekly schedule below
         # instead, where a failure is news rather than a blocked merge.
-        pytest -v --tb=short --cov=modules --cov-report=xml --cov-report=html --cov-fail-under=75 -m "not ui and not network"
+        pytest -v --tb=short --cov=modules --cov-report=xml --cov-report=html --cov-report=json:coverage.json --cov-fail-under=75 -m "not ui and not network"
+
+    - name: Coverage floors for the HTTP layer
+      if: matrix.python-version == '3.12'
+      run: |
+        # One project-wide number cannot protect a layer. resources_ca.py
+        # sat at 11% while the project figure stayed above its floor,
+        # because 3,800 well-covered statements elsewhere absorbed it —
+        # which is the failure #662 describes: the network-exposed
+        # request-handling and settings-mutation code was the least
+        # covered part and nothing in the everyday gate said so.
+        # The script also fails when a module with a floor vanishes from
+        # the report, and when a new HTTP module arrives without one.
+        python scripts/check_coverage_floors.py coverage.json
 
     - name: Upload coverage reports
       if: matrix.python-version == '3.12'
