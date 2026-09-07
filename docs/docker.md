@@ -105,7 +105,7 @@ docker run -d --name certmate \
 | `API_BEARER_TOKEN` | No (auto-generated) | API auth token. Auto-generated if unset, but set it before exposing a not-yet-onboarded instance to a network; when set, paste it once on the first-run screen to create the admin |
 | `API_BEARER_TOKEN_FILE` | No | Path to a file containing the API bearer token (takes precedence over `API_BEARER_TOKEN`) |
 | `LOG_LEVEL` | No | `INFO` (default), `DEBUG`, `WARNING`, `ERROR` |
-| `CERTMATE_BACKUP_PASSPHRASE` | No | When set, unified backups are encrypted at rest (`.zip.enc`, PBKDF2-SHA256 + Fernet). The same passphrase is required to restore them. Unset = legacy cleartext `.zip` backups |
+| `CERTMATE_BACKUP_PASSPHRASE` | **Set it if you want automatic backups you can restore from** | Encrypts unified backups at rest (`.zip.enc`, PBKDF2-SHA256 + Fernet), and is what makes automatic backups *complete* — with it they can restore this instance, without it they keep their credentials masked and cannot. The same passphrase is required to restore them, and CertMate never stores it for you. Keep it somewhere other than the machine holding the backups |
 | `CLOUDFLARE_API_TOKEN` | No | Cloudflare DNS provider token |
 | `AWS_ACCESS_KEY_ID` | No | AWS Route53 access key |
 | `AWS_SECRET_ACCESS_KEY` | No | AWS Route53 secret key |
