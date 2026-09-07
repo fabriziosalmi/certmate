@@ -222,11 +222,16 @@ class AuthManager:
 
     # --- Scoped API Key management ---
 
-    # Domain pattern used by allowed_domains validation. Mirrors the existing
-    # _DOMAIN_RE in modules/api/resources.py but also accepts the bare
-    # wildcard form "*.example.com" (no leading label before the asterisk).
+    # Domain pattern used by allowed_domains validation. Mirrors DOMAIN_RE in
+    # modules/api/path_validation.py but also accepts the bare wildcard form
+    # "*.example.com" (no leading label before the asterisk).
+    #
+    # `\Z`, not `$`: in Python `$` also matches before a trailing newline, so
+    # the previous expression treated "example.com\n" as a valid pattern. That
+    # was inert here because the caller strips each entry before matching — but
+    # it is inert by accident, and the next caller need not strip.
     _ALLOWED_DOMAIN_RE = __import__('re').compile(
-        r'^(\*\.)?([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$'
+        r'^(\*\.)?([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}\Z'
     )
 
     @classmethod
