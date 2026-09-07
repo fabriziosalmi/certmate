@@ -16,11 +16,19 @@ import os
 import re
 from pathlib import Path
 
-# Kept identical to the expression the endpoints used. Note the leading
-# `*.` alternative: a wildcard certificate's directory is named for the
-# wildcard, so refusing it here would make those certificates unreachable.
+# Note the leading `*.` alternative: a wildcard certificate's directory is
+# named for the wildcard, so refusing it here would make those certificates
+# unreachable.
+#
+# `\Z`, not `$`. In Python `$` also matches immediately BEFORE a trailing
+# newline, so the previous expression accepted "example.com\n" as a valid
+# domain — and the character check below does not screen newlines either,
+# so nothing else caught it. That name is not a traversal (the resolved path
+# still sits under the certificate directory) but it is not a domain, and a
+# validator that reports "Invalid domain format" for everything else should
+# not make an exception for it.
 DOMAIN_RE = re.compile(
-    r'^(\*\.)?([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$')
+    r'^(\*\.)?([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}\Z')
 
 
 def validate_domain_path(domain, cert_base_dir):
