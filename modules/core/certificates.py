@@ -31,6 +31,7 @@ from cryptography import x509
 from .shell import ShellExecutor
 from .dns_strategies import DNSStrategyFactory, HTTP01Strategy, acme_webroot_dir, check_certbot_plugin_installed
 from .constants import CERTIFICATE_FILES, DEFAULT_RENEWAL_THRESHOLD_DAYS
+from .domain_paths import reject_unsafe_domain
 from .utils import (
     DeploymentStatusCache, validate_domain, utc_now, utc_now_iso, validate_key_options,
     repair_certbot_lineage_symlinks,
@@ -240,9 +241,7 @@ def _reject_path_escaping_domain(domain):
     ``_prepare_issuance`` produced a unit that did not enforce its own
     precondition, which is exactly the shape CodeQL flags — and it was right.
     """
-    if (not domain or '/' in domain or '\\' in domain
-            or '..' in domain or '\x00' in domain):
-        raise ValueError('Invalid domain name')
+    reject_unsafe_domain(domain)
 
 
 @dataclass

@@ -17,6 +17,7 @@ from flask_restx import Resource, fields
 
 import logging
 
+from ..core.domain_paths import is_path_safe_segment
 from ..core.file_operations import RestoreIncompleteError
 from .resource_context import ApiContext
 
@@ -27,7 +28,7 @@ def _validate_backup_filename(filename):
     """Reject path traversal attempts in backup filenames. Returns error string or None."""
     if not filename:
         return 'Filename is required'
-    if '..' in filename or '/' in filename or '\\' in filename or '\x00' in filename:
+    if not is_path_safe_segment(filename):
         return 'Invalid filename'
     # NUL was rejected above but the other control characters were not, so a
     # name like "x\nFORGED.zip" passed and reached the log lines that report

@@ -5,12 +5,12 @@ Handles web interface routes and form-based endpoints
 
 import logging
 import os
-import re
 from functools import wraps
-from pathlib import Path
 from collections import defaultdict
 from time import time
 from flask import request, redirect, url_for, send_from_directory
+
+from ..core.domain_paths import validate_domain_path
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +93,6 @@ def _sweep_empty_buckets():
 
 
 # Domain name validation pattern
-_DOMAIN_RE = re.compile(r'^(\*\.)?([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$')
 
 
 def _trim_attempts(bucket, key, window):
@@ -151,21 +150,12 @@ def _record_login_attempt(ip_address, username=None):
 
 
 def _sanitize_domain(domain, cert_base_dir):
-    """Validate domain name and prevent path traversal."""
-    if not domain or '..' in domain or '/' in domain or '\\' in domain or '\x00' in domain:
-        return None, 'Invalid domain name'
-    if not _DOMAIN_RE.match(domain):
-        return None, 'Invalid domain format'
-    cert_dir = Path(cert_base_dir) / domain
-    # Verify resolved path is within cert_base_dir
-    try:
-        resolved = cert_dir.resolve()
-        base_resolved = Path(cert_base_dir).resolve()
-        if not str(resolved).startswith(str(base_resolved) + os.sep) and resolved != base_resolved:
-            return None, 'Invalid domain path'
-    except (OSError, ValueError):
-        return None, 'Invalid domain path'
-    return cert_dir, None
+    """Validate domain name and prevent path traversal.
+
+    Delegates to the one implementation (#672). This used to be a second copy
+    of it with its own regex, and the two had drifted.
+    """
+    return validate_domain_path(domain, cert_base_dir)
 
 
 def register_web_routes(app, managers):
