@@ -3,7 +3,7 @@
 # moving target on Docker Hub, the digest is content-addressed and
 # guarantees byte-identical bytes. Bump deliberately when there's a
 # CVE fix or feature reason — not implicitly on every rebuild.
-FROM python:3.12-slim-trixie@sha256:2c941e860699f878900b0edc2403613c234d4b32eda3cc9fa7036991a2a63c4a AS builder
+FROM python:3.12-slim-trixie@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea AS builder
 
 # Set working directory for build stage
 WORKDIR /build
@@ -66,7 +66,7 @@ RUN pip install "pip==${PIP_VERSION}" -U setuptools wheel && \
     fi
 
 # Production stage — same digest pin as the builder stage above.
-FROM python:3.12-slim-trixie@sha256:2c941e860699f878900b0edc2403613c234d4b32eda3cc9fa7036991a2a63c4a
+FROM python:3.12-slim-trixie@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea
 
 # Set working directory
 WORKDIR /app
@@ -105,6 +105,16 @@ WORKDIR /app
 # copy is what the Trivy scan keeps reporting (CVE-2026-8643, CVE-2026-6357,
 # CVE-2026-3219 against pip 25.0.1); the app itself runs from /opt/venv and
 # never uses it. See issue #403.
+#
+# NOT bumped past 26.1.2 on purpose. 26.2.1 fixes CVE-2026-13346 in pip
+# itself, but vendors msgpack 1.1.2 and setuptools 70.3.0, which a scan then
+# reports as three findings of its own. Measured on this image, same scanner,
+# same day: base-image bump alone 216 -> 150 with nothing new; base bump plus
+# pip 26.2.1 -> 151, the difference being those three vendored packages.
+# All four live in pip, which this image never uses at runtime — the app runs
+# from /opt/venv and installs nothing. Trading one unreachable finding for
+# three is chasing the number rather than the risk (#403). Revisit when pip's
+# vendor tree catches up.
 #
 # Pinned, for the same reason the base image is pinned by digest a few lines
 # up: an unpinned `--upgrade pip` would make the runtime stage's contents
