@@ -102,7 +102,7 @@ docker run -d --name certmate \
 |----------|----------|-------------|
 | `SECRET_KEY` | No | Flask secret key for sessions (auto-generated if unset) |
 | `SECRET_KEY_FILE` | No | Path to a file containing the Flask secret key (takes precedence over `SECRET_KEY`) |
-| `API_BEARER_TOKEN` | No (auto-generated) | API auth token. Auto-generated if unset, but set it before exposing a not-yet-onboarded instance to a network; when set, paste it once on the first-run screen to create the admin |
+| `API_BEARER_TOKEN` | No (auto-generated) | API auth token. Auto-generated if unset, but set it before exposing a not-yet-onboarded instance to a network; when set, paste it once on the first-run screen to create the admin. **This value is authoritative:** if it differs from the token already stored, the stored one is replaced at startup and stops working. That is what makes adding or rotating the variable on an existing install take effect — previously enforcement used this value while authentication still checked the old one, and the first-run screen asked for a token it then rejected |
 | `API_BEARER_TOKEN_FILE` | No | Path to a file containing the API bearer token (takes precedence over `API_BEARER_TOKEN`) |
 | `LOG_LEVEL` | No | `INFO` (default), `DEBUG`, `WARNING`, `ERROR` |
 | `CERTMATE_BACKUP_PASSPHRASE` | **Set it if you want automatic backups you can restore from** | Encrypts unified backups at rest (`.zip.enc`, PBKDF2-SHA256 + Fernet), and is what makes automatic backups *complete* — with it they can restore this instance, without it they keep their credentials masked and cannot. The same passphrase is required to restore them, and CertMate never stores it for you. Keep it somewhere other than the machine holding the backups |

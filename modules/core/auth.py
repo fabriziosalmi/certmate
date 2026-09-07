@@ -1017,6 +1017,90 @@ class AuthManager:
             self._operator_bearer_token = cached
         return cached
 
+    def _operator_supplied_token(self):
+        """The token from API_BEARER_TOKEN(_FILE), or '' if none was given."""
+        token_file = os.getenv('API_BEARER_TOKEN_FILE')
+        if token_file:
+            try:
+                from pathlib import Path
+                return Path(token_file).read_text().strip()
+            except Exception:
+                return ''
+        return (os.getenv('API_BEARER_TOKEN') or '').strip()
+
+    def reconcile_bearer_token_from_env(self):
+        """Make the env/file bearer token authoritative at startup (#401).
+
+        Two different pieces of code decided two different things about the
+        same token. `is_setup_mode()` asked whether the OPERATOR supplied one
+        via API_BEARER_TOKEN(_FILE); `authenticate_api_token()` checked the
+        presented token against the STORED hash. On a fresh install those agree,
+        because the stored value is seeded from the env one.
+
+        They diverge for an operator who ran once without a token — a value was
+        generated and stored — and then added or rotated API_BEARER_TOKEN and
+        restarted. The essential-keys merge never overwrites a token that is
+        already there, so enforcement saw the new token while authentication
+        still checked the old one: the first-run screen asked the operator to
+        paste the token they had just configured, and answered 401. The
+        documented way out was a reset script.
+
+        This closes it by making the supplied token authoritative, which is how
+        `has_operator_bearer_token()` already treats it for enforcement.
+
+        Deliberately narrow. It acts only when a token was supplied, that token
+        is well-formed, and it does NOT already authenticate — so an instance
+        where the two agree is never rewritten, and a malformed token is left to
+        the fail-closed bearer path rather than being stored.
+
+        It cannot open an instance: the token still has to be presented. What it
+        changes is WHICH token opens it, and that is the operator's own.
+        """
+        try:
+            env_token = self._operator_supplied_token()
+            if not env_token:
+                return False
+
+            from .utils import validate_api_token
+            is_valid, cleaned = validate_api_token(env_token)
+            if not is_valid:
+                # Not ours to store. The bearer path already fails closed on a
+                # malformed token, and writing one here would turn a
+                # configuration mistake into a persisted one.
+                return False
+
+            settings = self.settings_manager.load_settings()
+            stored_hash = settings.get('api_bearer_token_hash')
+            stored_plain = settings.get('api_bearer_token')
+
+            if stored_hash and self._verify_api_token(cleaned, stored_hash):
+                return False   # already the same token
+            if not stored_hash and stored_plain == cleaned:
+                return False   # legacy plaintext, already the same
+
+            if not stored_hash and not stored_plain:
+                return False   # nothing stored yet; the normal seeding covers it
+
+            source = ('API_BEARER_TOKEN_FILE'
+                      if os.getenv('API_BEARER_TOKEN_FILE')
+                      else 'API_BEARER_TOKEN')
+            self.settings_manager.atomic_update({'api_bearer_token': cleaned})
+            logger.warning(
+                "Reconciled the stored API bearer token from %s: the value "
+                "supplied there did not match what was stored, so enforcement "
+                "and authentication disagreed and every request with the "
+                "supplied token answered 401. The supplied token is now the "
+                "one that authenticates; any previously stored token no longer "
+                "does. If you did not expect this, the usual causes are a "
+                "token added or rotated after first run, or a settings backup "
+                "restored onto a host with a different SECRET_KEY — in that "
+                "second case other SECRET_KEY-bound values may also need "
+                "attention.", source)
+            return True
+        except Exception as e:
+            logger.debug(f"Bearer token reconciliation skipped: {e}")
+            return False
+
     def warn_if_bearer_token_hash_is_stale(self):
         """At startup, diagnose the one failure that otherwise looks like a
         wrong token: an api_bearer_token_hash that no longer matches SECRET_KEY.

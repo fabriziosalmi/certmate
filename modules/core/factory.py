@@ -519,6 +519,10 @@ def initialize_managers(container: AppContainer, app):
     # Let SettingsManager hash the legacy api_bearer_token on save using the
     # same HMAC scheme as scoped API keys.
     settings_manager.set_token_hasher(auth_manager.hash_api_token)
+    # AFTER the hasher is installed, and only then: reconciliation writes the
+    # token through a normal save, and that save is what hashes it. Called
+    # earlier it would persist the plaintext (#401).
+    auth_manager.reconcile_bearer_token_from_env()
     cache_manager = CacheManager(settings_manager)
     storage_manager = StorageManager(settings_manager)
     ca_manager = CAManager(settings_manager)
