@@ -360,7 +360,7 @@ PORT=8000
 
 > **Storage Backends**: By default, certificates are stored locally. For enterprise deployments, you can configure Azure Key Vault, AWS Secrets Manager, HashiCorp Vault, Infisical, or any S3-compatible object storage via the web interface after startup. See [Storage Backends](#certificate-storage-configuration) for details.
 
-> **Backup Best Practices**: CertMate includes a unified backup system that creates atomic snapshots of both settings and certificates. After setup, create a **disaster-recovery** backup — `POST /api/backups/create` with `{"include_secrets": true}` and `CERTMATE_BACKUP_PASSPHRASE` set — and keep it off the host. The default (and every automatic) backup is *share-safe*: credentials masked and no private keys, so it cannot restore an instance on its own.
+> **Backup Best Practices**: CertMate includes a unified backup system that creates atomic snapshots of both settings and certificates. **Set `CERTMATE_BACKUP_PASSPHRASE`.** With it, every automatic backup is complete and encrypted at rest, so it can actually restore this instance; without it, automatic backups keep their credentials masked and are configuration snapshots that cannot. The backup list marks which archives can restore, and refuses to offer the ones that cannot. Then keep a copy off the host — archives on the host are pruned after 30 days, and a lost volume takes them with it. `POST /api/backups/upload` brings one back.
 
 ### 3. Deploy
 
@@ -985,7 +985,10 @@ Content-Type: application/json
 
 #### Backup Management
 ```bash
-# List all available backups
+# List all available backups.
+# Each entry carries `can_restore` and, when false, `restore_blocked_reason`:
+# an archive with masked credentials, or one this instance cannot open, is
+# not a restore point and is not offered as one.
 GET /api/backups
 Authorization: Bearer your_token_here
 
@@ -1004,6 +1007,18 @@ Authorization: Bearer your_token_here
 
 # Example:
 GET /api/backups/download/unified/unified_backup_20241225_120000.zip
+
+# Upload a backup kept off this machine (admin).
+# This is how you recover after losing the volume: restore only ever reads
+# files already present on disk. Uploading STORES the archive under a name
+# CertMate generates — the filename you send is discarded — and does not
+# restore it. Restore it afterwards with the call below, once you have
+# checked the listing agrees it can restore.
+POST /api/backups/upload
+Authorization: Bearer your_token_here
+Content-Type: multipart/form-data
+
+file=@disaster-recovery-backup.zip.enc
 
 # Restore from backup
 POST /api/backups/restore/unified
@@ -2045,11 +2060,29 @@ CertMate provides comprehensive backup and recovery capabilities built directly 
 - **Simplified Management**: One file per snapshot. A disaster-recovery archive (`include_secrets=true`) contains everything needed for complete restoration; the default share-safe archive contains certificates, chains, metadata, the audit chain and the inventory — no credentials and no private keys
 
 **Two kinds of archive:**
-- **Share-safe** (the default, and what every automatic backup is): settings with every credential masked, and **no private keys** — no ACME `privkey.pem`, no ACME account key, no private-CA key, no `.pfx`. Certificates, chains, metadata, the audit chain and the inventory are all there. The manifest says so (`secrets_masked`, `key_material_excluded`). Such an archive cannot restore an instance on its own, and the restore path refuses to pretend otherwise.
-- **Disaster recovery**: `POST /api/backups/create` with `{"include_secrets": true}` (admin, audited) — plaintext settings and every key. Set `CERTMATE_BACKUP_PASSPHRASE` so it is encrypted at rest; that is the archive to keep off-site.
+- **Share-safe**: settings with every credential masked, and **no private keys** — no ACME `privkey.pem`, no ACME account key, no private-CA key, no `.pfx`. Certificates, chains, metadata, the audit chain and the inventory are all there. The manifest says so (`secrets_masked`, `key_material_excluded`). Such an archive cannot restore an instance on its own, and neither the restore path nor the backup list pretends otherwise.
+- **Disaster recovery**: plaintext settings and every key — encrypted at rest when `CERTMATE_BACKUP_PASSPHRASE` is set. This is the archive to keep off-site.
+
+**Which one you get automatically depends on one thing:** whether a backup passphrase is
+configured. With `CERTMATE_BACKUP_PASSPHRASE` set, automatic backups are disaster-recovery
+archives, encrypted at rest. Without it they stay share-safe, because a complete archive
+that cannot be encrypted would be a plaintext credential dump written to disk on every
+settings change. The instance logs a notice once at startup when it has no passphrase.
+
+CertMate never generates or stores that passphrase: keeping it beside the archive it
+protects would make the encryption meaningless. It is yours to set and to keep.
+
+`POST /api/backups/create` with `{"include_secrets": true}` (admin, audited) still takes a
+disaster-recovery archive on demand, passphrase or not — a deliberate opt-in.
+
+**Getting a backup back onto a new instance:** `POST /api/backups/upload` (admin,
+`multipart/form-data`, field `file`), or the *Restore From Elsewhere* control in Settings.
+Uploading only stores the archive under a name CertMate generates — the name you send is
+discarded. Restoring it is a separate, explicit step, so an upload is never destructive on
+its own.
 
 **Automatic Backups:**
-- **Unified Snapshots** - Automatically created when DNS providers, domains, certificates, or application settings are modified (share-safe, see above)
+- **Unified Snapshots** - Automatically created when DNS providers, domains, certificates, or application settings are modified. Disaster-recovery archives when `CERTMATE_BACKUP_PASSPHRASE` is set, share-safe otherwise (see above)
 - **Retention** - Two rules, whichever hits first: the 50 most recent archives per type are kept (`MAX_BACKUPS_PER_TYPE`), **and any archive older than 30 days is deleted regardless of how few there are** (`BACKUP_RETENTION_DAYS`). Both are constants, not settings. This is why a disaster-recovery archive must be kept off the host: one left in `backups/unified/` is deleted after 30 days like any other. Logging in no longer writes a backup, so routine sign-ins do not consume restore points
 - **Automatic Cleanup** - Pruning runs after every backup, applying both rules above
 
