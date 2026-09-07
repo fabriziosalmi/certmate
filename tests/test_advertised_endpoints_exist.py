@@ -48,11 +48,17 @@ def url_map(tmp_path_factory):
         patch.setattr("modules.core.factory.__file__", str(anchor))
         result = create_app()
     app = result[0] if isinstance(result, tuple) else result
-    return {
-        _normalise(str(rule)): {m for m in rule.methods
-                                if m not in ("HEAD", "OPTIONS")}
-        for rule in app.url_map.iter_rules()
-    }
+    # Union the verbs, do not overwrite them. Several paths are served by more
+    # than one rule — `/api/settings` by three, with GET and POST on separate
+    # endpoints — and a dict comprehension keeps only whichever rule iterated
+    # last. That silently reports a documented `GET /api/settings` as a route
+    # that "accepts POST", which is how a correct piece of documentation gets
+    # reported as a defect (or, the other way round, a real one gets missed).
+    merged = {}
+    for rule in app.url_map.iter_rules():
+        verbs = {m for m in rule.methods if m not in ("HEAD", "OPTIONS")}
+        merged.setdefault(_normalise(str(rule)), set()).update(verbs)
+    return merged
 
 
 def _normalise(path):
@@ -81,8 +87,42 @@ def _match(path, routes):
     return None
 
 
+def _readme_advertised():
+    """(source, verb, path) for every endpoint the README shows in a code block.
+
+    The README is where the phantom `/{domain}/tls` appeared twice, and it was
+    never checked — this file only ever read the help page, so a wrong path in
+    the file most people read first passed unnoticed (#706).
+
+    Fences are walked line by line rather than paired with a regex. Pairing the
+    whole document with a non-greedy pattern looks correct and is not: one
+    unbalanced or unexpectedly-formatted fence shifts every pair after it, and
+    the extractor then returns nothing at all while still passing.
+    """
+    found = []
+    for name in ("README.md", "README.dockerhub.md"):
+        path = REPO_ROOT / name
+        if not path.exists():
+            continue
+        inside = False
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if line.startswith("```"):
+                inside = not inside
+                continue
+            if not inside:
+                continue
+            match = re.match(r"^\s*(GET|POST|PUT|PATCH|DELETE)\s+(/[^\s\\]*)",
+                             line)
+            if match:
+                # A worked example may carry a query string; the route table
+                # knows nothing about those.
+                found.append((name, match.group(1),
+                              match.group(2).split("?")[0]))
+    return found
+
+
 def _advertised():
-    """(source, verb, path) for every endpoint the help page lists."""
+    """(source, verb, path) for every endpoint the product advertises."""
     html = (REPO_ROOT / "templates" / "help.html").read_text(encoding="utf-8")
     found = []
     for match in re.finditer(
@@ -96,6 +136,7 @@ def _advertised():
         verb = (re.search(r"-X\s+([A-Z]+)", text) or [None, "GET"])[1]
         for url in re.finditer(r'http://localhost:8000(/[^\s<\\"\']+)', text):
             found.append(("templates/help.html (curl)", verb, url.group(1)))
+    found.extend(_readme_advertised())
     return found
 
 
@@ -108,8 +149,46 @@ def test_the_help_page_advertises_something():
     )
 
 
+def test_the_readme_advertises_something():
+    """The check this file most needed and did not have.
+
+    An extractor that quietly parses nothing passes every case below while
+    verifying no endpoint at all — and a green gate that reads nothing is worse
+    than no gate, because its existence reads as coverage. A first attempt at
+    this really did return zero from a plausible-looking regex.
+    """
+    listed = _readme_advertised()
+    assert len(listed) >= 20, (
+        f"parsed {len(listed)} endpoints out of the README — the fenced-block "
+        f"walk stopped matching and this file is no longer checking it."
+    )
+
+
+def test_the_readme_and_the_help_page_are_both_covered():
+    """CONTROL: neither source may quietly drop out of the combined list."""
+    sources = {source for source, _v, _p in _advertised()}
+    assert any("help.html" in s for s in sources), sources
+    assert any("README" in s for s in sources), sources
+
+
 def test_the_route_map_is_populated(url_map):
     assert len(url_map) > 50, f"only {len(url_map)} routes — did the app boot?"
+
+
+def test_a_path_served_by_several_rules_keeps_every_verb(url_map):
+    """CONTROL for the map itself, not for what is advertised.
+
+    `/api/settings` is served by three rules, GET and POST on separate
+    endpoints. Built with a dict comprehension the map kept only the last one,
+    so a documented `GET /api/settings` was reported as a route that "accepts
+    POST" — a correct piece of documentation flagged as a defect, and the
+    reverse just as possible.
+    """
+    settings = url_map.get("/api/settings")
+    assert settings and {"GET", "POST"} <= settings, (
+        f"/api/settings resolved to {settings}; the route map is losing verbs "
+        f"where more than one rule serves the same path"
+    )
 
 
 @pytest.mark.parametrize("source,verb,path", _advertised(),
