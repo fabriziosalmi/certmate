@@ -19,7 +19,9 @@ visible from the JS source:
 * clearing the field clears the stored host, so a wrong host can be undone
   without deleting and recreating the probe.
 """
+import json
 import os
+from urllib.parse import unquote, urlparse
 
 import pytest
 
@@ -51,7 +53,7 @@ def _open_probe_tab(page, certificates):
         '**/api/certificates',
         lambda route: route.fulfill(
             status=200, content_type='application/json',
-            body=__import__('json').dumps(certificates)),
+            body=json.dumps(certificates)),
     )
     page.add_init_script(
         "try { window.localStorage.setItem('certmate_wizard_skipped', '1'); }"
@@ -90,10 +92,17 @@ def test_the_host_reaches_the_patch_body(browser_page):
 
     assert patches, 'no PATCH was sent at all'
     url, body = patches[-1]
-    assert WILDCARD.replace('*', '%2A') in url or 'example.com' in url
-    assert '"deployment_host": "www.example.com"' in (body or '').replace(
-        '"deployment_host":"www.example.com"',
-        '"deployment_host": "www.example.com"'), (
+
+    # Compare the decoded path exactly. A substring check ("example.com" is in
+    # the URL) would pass for any path that merely contains the name — and it
+    # is the shape CodeQL calls incomplete URL sanitization, correctly: it
+    # asserts almost nothing.
+    path = unquote(urlparse(url).path)
+    assert path == f'/api/certificates/{WILDCARD}', (
+        f'the PATCH went to {path!r}, not to the wildcard certificate'
+    )
+
+    assert json.loads(body or '{}').get('deployment_host') == 'www.example.com', (
         f'the host did not reach the request body: {body}'
     )
 
