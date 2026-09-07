@@ -19,6 +19,7 @@ from modules.api.resource_context import ApiContext
 from modules.api.resources_backup import create_backup_resources
 from modules.api.resources_cache import create_cache_resources
 from modules.api.resources_health import create_health_resources
+from modules.api.resources_storage import create_storage_resources
 
 pytestmark = [pytest.mark.unit]
 
@@ -168,3 +169,53 @@ def test_the_backup_group_builds_without_an_audit_logger(api):
     ctx = _minimal_context(settings=MagicMock(), file_ops=MagicMock(),
                            audit=None, managers={})
     assert create_backup_resources(api, BACKUP_MODELS, ctx)
+
+
+STORAGE_MODELS = {
+    'storage_config_model': MagicMock(),
+    'storage_test_config_model': MagicMock(),
+    'storage_migration_config_model': MagicMock(),
+}
+
+
+def test_the_storage_group_builds_from_a_minimal_context(api):
+    ctx = _minimal_context(settings=MagicMock(), audit=MagicMock(),
+                           managers={})
+    resources = create_storage_resources(api, STORAGE_MODELS, ctx)
+
+    assert set(resources) == {
+        'StorageBackendInfo', 'StorageBackendConfig', 'StorageBackendTest',
+        'StorageBackendMigrate', 'StorageAzureKeyVaultBackfill'}
+    for name, cls in resources.items():
+        assert issubclass(cls, Resource), f'{name} is not a Resource'
+
+
+def test_the_storage_group_reaches_the_storage_manager_by_the_right_name(api):
+    """Building the group says nothing about the key it reads at request time.
+
+    These endpoints take the storage manager out of the mapping by string, and
+    answer 503 when it is missing — so a wrong key is a total outage that looks
+    exactly like an unconfigured backend. test_manager_lookup_keys_are_real.py
+    checks every such key statically; this confirms the endpoint really does
+    resolve one and get past the 503 guard.
+    """
+    storage = MagicMock()
+    storage.get_backend_name.return_value = 'local_filesystem'
+    settings = MagicMock()
+    settings.load_settings.return_value = {'certificate_storage': {}}
+
+    ctx = _minimal_context(settings=settings, audit=None,
+                           managers={'storage': storage})
+    resources = create_storage_resources(api, STORAGE_MODELS, ctx)
+
+    app = Flask(__name__)
+    with app.test_request_context('/'):
+        result = resources['StorageBackendInfo']().get()
+
+    body = result[0] if isinstance(result, tuple) else result
+    status = result[1] if isinstance(result, tuple) else 200
+    assert status != 503, (
+        f'the endpoint could not resolve the storage manager from the context '
+        f'mapping, so its lookup key is wrong: {body}'
+    )
+    assert body['current_backend'] == 'local_filesystem'

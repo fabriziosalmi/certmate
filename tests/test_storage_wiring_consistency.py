@@ -75,32 +75,32 @@ def test_api_model_enum_matches_dispatch():
 
 
 def test_resources_available_backends_matches_dispatch():
-    src = _read('modules/api/resources.py')
+    src = _read('modules/api/resources_storage.py')
     available = _literal_after(src, "'available_backends': [", '[', ']')
     canonical = _canonical()
     assert available == canonical, (
-        f"resources.py StorageBackendInfo available_backends != dispatchable: "
+        f"resources_storage.py StorageBackendInfo available_backends != dispatchable: "
         f"missing={sorted(canonical - available)} extra={sorted(available - canonical)}"
     )
 
 
 def test_resources_valid_backends_matches_dispatch():
-    src = _read('modules/api/resources.py')
+    src = _read('modules/api/resources_storage.py')
     valid = _literal_after(src, "valid_backends = [", '[', ']')
     canonical = _canonical()
     assert valid == canonical, (
-        f"resources.py StorageBackendConfig valid_backends != dispatchable: "
+        f"resources_storage.py StorageBackendConfig valid_backends != dispatchable: "
         f"missing={sorted(canonical - valid)} extra={sorted(valid - canonical)}"
     )
 
 
 def test_resources_migrate_backend_classes_matches_dispatch():
-    src = _read('modules/api/resources.py')
+    src = _read('modules/api/resources_storage.py')
     classes = _literal_after(src, "backend_classes = {", '{', '}')
     canonical = _canonical()
     # local_filesystem is built specially in _build_backend, not via backend_classes.
     assert classes == canonical - {'local_filesystem'} or classes == canonical, (
-        f"resources.py migrate backend_classes != dispatchable: "
+        f"resources_storage.py migrate backend_classes != dispatchable: "
         f"missing={sorted((canonical - {'local_filesystem'}) - classes)} extra={sorted(classes - canonical)}"
     )
 
