@@ -259,6 +259,20 @@
             try {
                 var err = new URLSearchParams(window.location.search).get('error');
                 if (!err) return;
+                // One code gets a real sentence, because the generic
+                // rendering ("token exchange algorithm") tells an operator
+                // nothing and this failure is almost always a stale discovery
+                // document rather than a broken login (#647).
+                if (err === 'oidc_token_exchange_algorithm') {
+                    showError('Single sign-on failed: the identity provider ' +
+                        'signed the token with an algorithm its discovery ' +
+                        'document does not advertise. CertMate has dropped ' +
+                        'the cached document — try again. If it keeps ' +
+                        'failing, check id_token_signing_alg_values_supported ' +
+                        'at the identity provider. The server log names both ' +
+                        'the algorithm and the advertised list.');
+                    return;
+                }
                 var label = err.replace(/^oidc_/, '').replace(/_/g, ' ');
                 showError('Single sign-on failed: ' + label);
             } catch (e) { /* no-op */ }
