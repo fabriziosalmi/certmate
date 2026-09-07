@@ -79,6 +79,7 @@ htmlcov/
 .pytest_cache/
 .coverage
 coverage.xml
+coverage.json
 test_results.json
 
 # Local dev / debug scripts (kept on developer machines only)
