@@ -489,3 +489,77 @@ def test_a_real_domain_still_reaches_its_files(api, tmp_path):
         f'a legitimate download was refused ({status}); the traversal '
         f'assertions above would pass on a dead endpoint'
     )
+
+
+FINAL_GROUP_MODELS = {
+    'certificate_model': MagicMock(),
+    'create_cert_model': MagicMock(),
+    'reissue_cert_model': MagicMock(),
+    'deployment_status_model': MagicMock(),
+    'browser_deployment_reports_model': MagicMock(),
+}
+
+FINAL_GROUPS = {
+    'lifecycle': ('modules.api.resources_lifecycle',
+                  'create_lifecycle_resources',
+                  {'CreateCertificate', 'RenewCertificate', 'CertificateReissue',
+                   'CertificateJob', 'CertificateJobs', 'CertificateAutoRenew'}),
+    'certificates': ('modules.api.resources_certificates',
+                     'create_certificates_resources',
+                     {'CertificateList', 'CertificateDetail'}),
+    'deployment': ('modules.api.resources_deployment',
+                   'create_deployment_resources',
+                   {'CertificateDeploymentStatus',
+                    'CertificateDeploymentBrowserReports',
+                    'CertificateRunDeploy'}),
+    'discovery': ('modules.api.resources_discovery',
+                  'create_discovery_resources',
+                  {'ZombieScan', 'CheckDNSAlias', 'CertificateDNSAliasCheck'}),
+}
+
+
+@pytest.mark.parametrize('group', sorted(FINAL_GROUPS))
+def test_the_last_groups_build_from_a_minimal_context(api, group):
+    """The four that emptied the closure (#667).
+
+    With these out, `create_api_resources` holds no resource classes at all —
+    it builds the groups and binds two namespaces. Every endpoint in the
+    project can now be constructed without the others.
+    """
+    import importlib
+
+    module_name, factory_name, expected = FINAL_GROUPS[group]
+    factory = getattr(importlib.import_module(module_name), factory_name)
+
+    ctx = _minimal_context(
+        settings=MagicMock(), certificates=MagicMock(), file_ops=MagicMock(),
+        dns=MagicMock(), deployer=MagicMock(), cert_service=MagicMock(),
+        audit=MagicMock(), managers={})
+    resources = factory(api, FINAL_GROUP_MODELS, ctx)
+
+    assert set(resources) == expected
+    for name, cls in resources.items():
+        assert issubclass(cls, Resource), f'{name} is not a Resource'
+
+
+def test_the_closure_no_longer_holds_any_resource_class():
+    """What #667 was actually for, stated as a property rather than a count.
+
+    `create_api_resources` was 3,708 lines holding 42 Resource classes, each a
+    closure over ten managers — which is why no endpoint could be reached
+    without building the entire application. It is now composition only.
+    """
+    import ast
+    import inspect
+
+    from modules.api import resources
+
+    tree = ast.parse(inspect.getsource(resources.create_api_resources))
+    func = tree.body[0]
+    classes = [n.name for n in func.body if isinstance(n, ast.ClassDef)]
+
+    assert classes == [], (
+        f'{len(classes)} resource classes are back inside the closure: '
+        f'{classes}. Each one there is an endpoint that cannot be built, or '
+        f'tested, without the whole manager graph.'
+    )

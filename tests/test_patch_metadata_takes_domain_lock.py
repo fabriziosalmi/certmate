@@ -82,8 +82,22 @@ def test_renew_uses_the_same_lock_object(cm):
 
 
 def test_patch_handler_wraps_the_metadata_write_in_the_lock():
+    """The handler moved out of the create_api_resources closure (#667).
+
+    It now lives in resources_certificates, and the manager it reaches through
+    is named `ctx.certificates` rather than the closure's `certificate_manager`
+    — so both the module this reads and the expression it looks for changed
+    with the move. The property is the same one: the metadata write happens
+    inside the per-domain lock, and a concurrent operation surfaces as
+    DomainOperationInProgress rather than a lost update.
+    """
     import inspect
-    from modules.api import resources
-    src = inspect.getsource(resources.create_api_resources)
-    assert 'certificate_manager.domain_lock(domain)' in src
-    assert 'except DomainOperationInProgress' in src
+    from modules.api import resources_certificates
+
+    src = inspect.getsource(resources_certificates.create_certificates_resources)
+    assert 'ctx.certificates.domain_lock(domain)' in src, (
+        'the PATCH handler no longer takes the per-domain lock'
+    )
+    assert 'except DomainOperationInProgress' in src, (
+        'the handler no longer reports a concurrent operation'
+    )

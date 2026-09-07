@@ -143,7 +143,11 @@ def test_set_auto_renew_uses_a_locked_read_modify_write():
 
 def test_delete_handler_uses_a_locked_read_modify_write():
     import inspect
-    from modules.api import resources
-    src = inspect.getsource(resources.create_api_resources)
+    from modules.api import resources_certificates
+
+    # The handler moved out of the create_api_resources closure into
+    # resources_certificates (#667); the property is unchanged.
+    src = inspect.getsource(
+        resources_certificates.create_certificates_resources)
     # the delete path drops the domain via the mutator, not a whole-list replace
     assert '_drop_domain' in src

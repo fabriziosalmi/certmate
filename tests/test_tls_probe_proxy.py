@@ -93,11 +93,11 @@ def test_probe_tunnels_via_connect_when_proxy_set(monkeypatch):
     mock_conn = MagicMock()
     mock_conn.sock = MagicMock()
 
-    with patch('modules.api.resources.http.client.HTTPConnection',
+    with patch('modules.api.tls_probe.http.client.HTTPConnection',
                return_value=mock_conn) as mock_http, \
-            patch('modules.api.resources.ssl.create_default_context',
+            patch('modules.api.tls_probe.ssl.create_default_context',
                   return_value=_mock_tls_context(b'tunnelled-cert')), \
-            patch('modules.api.resources.socket.create_connection') as mock_direct:
+            patch('modules.api.tls_probe.socket.create_connection') as mock_direct:
         result = _probe_tls_certificate('example.com', timeout=2)
 
     mock_http.assert_called_once_with('proxy.internal', 3128, timeout=2)
@@ -122,9 +122,9 @@ def test_proxy_tunnel_uses_configured_port(monkeypatch):
     mock_conn = MagicMock()
     mock_conn.sock = MagicMock()
 
-    with patch('modules.api.resources.http.client.HTTPConnection',
+    with patch('modules.api.tls_probe.http.client.HTTPConnection',
                return_value=mock_conn), \
-            patch('modules.api.resources.ssl.create_default_context',
+            patch('modules.api.tls_probe.ssl.create_default_context',
                   return_value=_mock_tls_context(b'cert')):
         result = _probe_tls_certificate('example.com', port=8443, protocol='tls', timeout=2)
 
@@ -142,11 +142,11 @@ def test_probe_direct_when_no_proxy(monkeypatch):
     mock_sock.__enter__ = MagicMock(return_value=mock_sock)
     mock_sock.__exit__ = MagicMock(return_value=False)
 
-    with patch('modules.api.resources.socket.create_connection',
+    with patch('modules.api.tls_probe.socket.create_connection',
                return_value=mock_sock), \
-            patch('modules.api.resources.ssl.create_default_context',
+            patch('modules.api.tls_probe.ssl.create_default_context',
                   return_value=_mock_tls_context(b'direct-cert')), \
-            patch('modules.api.resources.http.client.HTTPConnection') as mock_http:
+            patch('modules.api.tls_probe.http.client.HTTPConnection') as mock_http:
         result = _probe_tls_certificate('example.com', timeout=2)
 
     mock_http.assert_not_called()
