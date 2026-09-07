@@ -776,20 +776,42 @@ Ogni certificato ha un file `metadata.json` contenente:
 
 ### Raccomandazioni per la produzione
 
-- Utilizzare un backend di archiviazione (Azure, AWS, Vault) per l'alta disponibilità
+- Utilizzare un backend di archiviazione (Azure, AWS, Vault) perché il materiale dei certificati sopravviva al nodo
 - Abilitare la registrazione di audit per la conformità
 - Configurare il rate limiting in base al carico
 - Aggiornamenti regolari della CRL (giornalieri o alla revoca)
 - Effettuare il backup delle chiavi CA e dei metadati
 - Monitorare i registri di audit per attività sospette
 
-### Alta disponibilità
+### Disponibilità e failover
 
-Per i deployment multi-istanza:
-1. Utilizzare un backend di archiviazione condiviso per i certificati
-2. Sincronizzare i registri di audit in una posizione centrale
-3. Utilizzare un load balancer con sessioni persistenti
-4. Monitorare i contatori di rate limiting tra le istanze
+**CertMate non gira in più istanze.** Lo scheduler dei rinnovi (APScheduler)
+gira dentro il processo web e gunicorn usa un solo worker di proposito: una
+seconda replica è un secondo scheduler che emette e rinnova sullo stesso
+archivio di certificati, quindi ordini ACME duplicati e il rate limit della CA
+sui certificati duplicati. Il chart Helm fallisce in fase di template se
+`replicaCount` è diverso da `1`.
+
+
+Come si ottiene invece la disponibilità — **attivo/standby**:
+
+1. Mettere `DATA_DIR` su storage riagganciabile (un volume di rete o un
+   filesystem replicato). È questo lo stato che conta: impostazioni, catena di
+   audit, CA privata e i certificati stessi.
+2. Configurare un [backend di archiviazione](#backend-di-archiviazione) (Azure Key
+   Vault, AWS Secrets Manager, Vault, Infisical) perché anche il materiale dei
+   certificati viva indipendentemente dal nodo.
+3. Far girare **una** istanza. In caso di guasto, avviarne una di ricambio
+   sugli stessi dati e puntarci l'ingress. Una finestra di rinnovo mancata non
+   è urgente: il rinnovo parte 30 giorni prima della scadenza, quindi un
+   failover ha settimane di margine.
+4. Mantenere [backup di disaster recovery](./guide.md) con
+   `CERTMATE_BACKUP_PASSPHRASE` impostata, così una ricostruzione da zero resta
+   possibile anche perdendo il volume.
+
+Ad essere altamente disponibili devono essere i consumatori dei certificati.
+CertMate emette e distribuisce; non sta nel percorso delle richieste dei
+servizi per cui emette, e se resta giù un'ora non trascina giù nient'altro.
 
 ---
 

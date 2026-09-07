@@ -798,20 +798,41 @@ Each certificate has a `metadata.json` file containing:
 
 ### Production Recommendations
 
-- Use storage backend (Azure, AWS, Vault) for HA
+- Use a storage backend (Azure, AWS, Vault) so certificate material survives the node
 - Enable audit logging for compliance
 - Configure rate limiting based on load
 - Regular CRL updates (daily or on revocation)
 - Back up CA keys and metadata with a disaster-recovery archive (`include_secrets=true` + `CERTMATE_BACKUP_PASSPHRASE`); the default share-safe backup deliberately leaves the CA key out
 - Monitor audit logs for suspicious activity
 
-### High Availability
+### Availability and failover
 
-For multi-instance deployments:
-1. Use shared storage backend for certificates
-2. Synchronize audit logs to central location
-3. Use load balancer with sticky sessions
-4. Monitor rate limit counters across instances
+**CertMate does not run multiple instances.** The renewal scheduler
+(APScheduler) runs inside the web process and gunicorn runs a single worker on
+purpose, so a second replica is a second scheduler issuing and renewing against
+the same certificate store: duplicate ACME orders, and the CA's
+duplicate-certificate rate limit. The Helm chart fails at template time if
+`replicaCount` is anything but `1`.
+
+
+What availability looks like instead — **active/standby**:
+
+1. Put `DATA_DIR` on storage that can be reattached (a network volume, or a
+   replicated filesystem). This is the state that matters: settings, the audit
+   chain, the private CA, and the certificates themselves.
+2. Configure a [storage backend](#storage-backends) (Azure Key Vault, AWS
+   Secrets Manager, Vault, Infisical) so certificate material also lives
+   somewhere independent of the node.
+3. Run **one** instance. On failure, start a replacement against the same data
+   and point the ingress at it. A missed renewal window is not urgent — renewal
+   begins 30 days before expiry, so a failover has weeks of slack.
+4. Keep [disaster-recovery backups](./guide.md) with
+   `CERTMATE_BACKUP_PASSPHRASE` set, so a rebuild from scratch is possible when
+   the volume itself is lost.
+
+The consumers of certificates are what should be highly available. CertMate
+issues and distributes; it is not in the request path of the services it issues
+for, and it being down for an hour does not take anything else down with it.
 
 ---
 

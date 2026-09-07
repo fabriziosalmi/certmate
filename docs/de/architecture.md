@@ -775,20 +775,42 @@ Jedes Zertifikat besitzt eine `metadata.json`-Datei mit folgenden Inhalten:
 
 ### Empfehlungen für den Produktionsbetrieb
 
-- Storage-Backend (Azure, AWS, Vault) für Hochverfügbarkeit verwenden
+- Storage-Backend (Azure, AWS, Vault) verwenden, damit Zertifikatsmaterial den Knoten überlebt
 - Audit-Protokollierung zur Compliance aktivieren
 - Rate Limiting entsprechend der Last konfigurieren
 - Regelmäßige CRL-Aktualisierungen (täglich oder bei Sperrungen)
 - CA-Schlüssel und Metadaten sichern
 - Audit-Protokolle auf verdächtige Aktivitäten überwachen
 
-### Hochverfügbarkeit
+### Verfügbarkeit und Failover
 
-Für Multi-Instanz-Deployments:
-1. Gemeinsames Storage-Backend für Zertifikate verwenden
-2. Audit-Protokolle an einen zentralen Speicherort synchronisieren
-3. Load Balancer mit Sticky Sessions einsetzen
-4. Rate-Limiting-Zähler instanzübergreifend überwachen
+**CertMate läuft nicht in mehreren Instanzen.** Der Erneuerungs-Scheduler
+(APScheduler) läuft im Web-Prozess, und gunicorn verwendet absichtlich einen
+einzigen Worker: eine zweite Replik ist ein zweiter Scheduler, der gegen
+denselben Zertifikatsspeicher ausstellt und erneuert — doppelte ACME-Bestellungen
+und das Duplicate-Certificate-Rate-Limit der CA. Das Helm-Chart schlägt zur
+Template-Zeit fehl, wenn `replicaCount` nicht `1` ist.
+
+
+So sieht Verfügbarkeit stattdessen aus — **aktiv/standby**:
+
+1. `DATA_DIR` auf wieder anhängbaren Speicher legen (ein Netzwerk-Volume oder
+   ein repliziertes Dateisystem). Das ist der Zustand, auf den es ankommt:
+   Einstellungen, Audit-Kette, private CA und die Zertifikate selbst.
+2. Ein [Storage-Backend](#storage-backends) (Azure Key Vault, AWS Secrets
+   Manager, Vault, Infisical) konfigurieren, damit auch Zertifikatsmaterial
+   unabhängig vom Knoten liegt.
+3. **Eine** Instanz betreiben. Bei einem Ausfall einen Ersatz gegen dieselben
+   Daten starten und den Ingress darauf zeigen lassen. Ein verpasstes
+   Erneuerungsfenster ist nicht dringend: die Erneuerung beginnt 30 Tage vor
+   Ablauf, ein Failover hat also Wochen Spielraum.
+4. [Disaster-Recovery-Backups](./guide.md) mit gesetztem
+   `CERTMATE_BACKUP_PASSPHRASE` pflegen, damit ein Neuaufbau von Grund auf
+   möglich bleibt, wenn das Volume selbst verloren geht.
+
+Hochverfügbar sein sollten die Verbraucher der Zertifikate. CertMate stellt aus
+und verteilt; es liegt nicht im Anfragepfad der Dienste, für die es ausstellt,
+und wenn es eine Stunde ausfällt, reißt es nichts anderes mit.
 
 ---
 
