@@ -1,3 +1,114 @@
+## v2.28.0 (Two silent failures, and two things you can now do without curl)
+
+A minor release: `DELETE /api/inventory/<fingerprint>` is a new endpoint, which
+is what makes it minor rather than a patch. Four of the six changes came from
+user reports.
+
+### Adopting a certificate ran no deploy hook, and said nothing
+
+Adoption is a real issuance. `POST /api/inventory/<fingerprint>/adopt` reads the
+observed certificate, then issues a new one over ACME and brings the domain
+under management — it does not import the certificate you already had.
+
+Every other issuance path announces itself on the event bus afterwards. The
+adopt handler did not, and three subscribers hang off that bus, each of which
+silently ignores what it does not recognise: notifications, **deploy hooks**,
+and the deployment-status cache.
+
+The missing notification is the visible half. The dangerous half is that no
+deploy hook ran, so the load balancer kept serving the OLD certificate — and the
+cached "deployed & matching" verdict was not evicted, so the dashboard agreed
+with it for up to `cache_ttl`. Nothing told the operator.
+
+Reported by @ratiugtun, who diagnosed it correctly down to the call site and
+asked which of two designs we wanted. Adoption now publishes
+`certificate_created`, which every subscriber already honours, and carries an
+`adopted` marker so the alert reads **Certificate Adopted** rather than
+"Created". A dedicated `certificate_adopted` event would have had to be taught
+to five places, and missing any one would have fixed the notification while
+leaving the deploy hooks dead — the shape of the original bug.
+
+### The inventory could not forget anything
+
+Reported by @SpeeDFireCZE: add a domain to the discovery configuration, scan,
+remove the domain again, and the discovered certificates stay in the list with
+no way to remove them.
+
+That was not a filtering bug. The inventory had **no delete at all** — no
+manager method, no route. Removing a domain from the discovery configuration
+correctly stops future scans finding it, but every row already recorded stayed
+forever, and the only way to clear one was deleting `inventory.db`.
+
+There is now a **Forget** button on every inventory row and a
+`DELETE /api/inventory/<fingerprint>` endpoint. The certificate itself is never
+touched; CertMate only forgets that it observed it, and the endpoint observations
+go with the record.
+
+It forgets an observation rather than suppressing one: a domain still in the
+discovery configuration is recorded again on the next sweep. Both the dialog and
+the API response say so, so nobody deletes the same row after every scan.
+
+### `SESSION_TIMEOUT_HOURS` did not reach the browser
+
+The session lifetime existed as three numbers: a constant nothing read, the
+environment variable, and a cookie `max_age` hardcoded to eight hours in two
+places. Only the environment variable was configurable, and it governed only the
+server-side record.
+
+So `SESSION_TIMEOUT_HOURS=24` still logged you out after eight. The shorter
+direction is quieter and it is the one the documentation recommends —
+`SESSION_TIMEOUT_HOURS=1` for high-security deployments left a cookie alive
+seven hours after the session it named was already dead.
+
+Both cookie mint sites now take the lifetime from the AuthManager, so the record
+and the cookie cannot drift. The default is unchanged at 8 hours;
+`SESSION_TIMEOUT_HOURS` is now in `.env.example`.
+
+### SAN entry is a chip editor
+
+Asked for twice, independently, by @Peter-A-Tech. The SAN field was one text
+input holding a comma-separated string — awkward at three names, unusable at the
+~20 real certificates carry, because you could not see what you typed and
+changing one in the middle meant retyping the lot.
+
+Names are now chips: Enter or a comma adds one, each has its own remove button,
+Backspace on an empty field removes the last. **Pasting a list works** — commas,
+semicolons, spaces or line breaks, de-duplicated and normalised — which is the
+case the request was actually about. A widget that took one name at a time would
+have been worse than the field it replaces at exactly that size.
+
+Nothing changed underneath: the API already accepted `san_domains` as a list.
+
+### A wildcard's probe host is settable from the UI
+
+Also reported by @SpeeDFireCZE. A wildcard certificate reports "cannot be
+verified" — correctly, because a wildcard does not cover its own apex, so
+probing `example.com` for `*.example.com` compares against the wrong name. The
+fix was a `deployment_host`, and the only way to set it was the API.
+
+**Settings → Probe** now has a Host field, next to the Port and Protocol it
+already had. For a wildcard it suggests a covered name (`www.<apex>`), shows the
+host in the configured list, and clearing it removes the host so a wrong one is
+correctable in place.
+
+### The README no longer promises what the chart refuses to render
+
+CertMate is single-instance by design: the renewal scheduler runs inside the web
+process, so a second replica is a second scheduler issuing against the same
+store. The Helm chart already enforced this — it fails at template time when
+`replicaCount != 1`.
+
+The README led with "easy scaling" and "high availability deployments" while the
+constraint sat in a docker-compose comment about 73% of the way down. Worse,
+`docs/architecture.md` carried a **High Availability** section giving operational
+steps for multi-instance deployments — shared storage, a load balancer with
+sticky sessions — replicated verbatim into all four translations. Following it
+produces duplicate ACME orders, not availability.
+
+All five now describe active/standby, which is what works, and say the part that
+makes single-instance acceptable out loud: renewal begins 30 days before expiry,
+so a failover has weeks of slack.
+
 ## v2.27.1 (Six fixes, four of them things that were quietly wrong)
 
 A patch release. No new endpoints and no new capability — but four of these
