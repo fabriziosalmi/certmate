@@ -235,6 +235,54 @@ can be closed. Until then they remain open by choice, not by oversight, and
 this section is the record of that choice: an advisory against `cryptography`
 that is not listed here has not been assessed, and should be treated as new.
 
+## Supply-chain posture for Python dependencies
+
+This section exists so the absence of hash pinning is a **decision on record**
+rather than an oversight (issue #686). What CertMate does and does not claim
+about the packages in its images:
+
+**What is guaranteed.** Every direct dependency in `requirements.txt` and
+`requirements-minimal.txt` is pinned to an exact version, and CI fails if a
+package is pinned to two different versions across files, if a certbot plugin
+is pinned above the certbot pin, or if any advertised
+`EXTRA_REQUIREMENTS` combination stops resolving. The base image is pinned by
+digest. Published images carry an SPDX SBOM and SLSA provenance, so what
+shipped is auditable after the fact. Extras layers install under
+`-c ${REQUIREMENTS_FILE}`, so an optional backend cannot move a pin the base
+layer holds deliberately.
+
+**What is not guaranteed.** There is no `--require-hashes`, no lockfile
+carrying hashes, and nothing that verifies the wheels installed are the wheels
+that were reviewed. A version pin does not defend against a **re-published or
+compromised artifact at that same version**. PyPI does not allow re-uploading a
+filename, so this requires a compromise of the index or of the maintainer's
+account — but it is a real class of attack and this project does not currently
+detect it.
+
+**Why not, specifically.** `--require-hashes` is all-or-nothing per install:
+every requirement, including every transitive one, must carry a hash or pip
+refuses the file. That collides with how these images are built — 12
+requirements files, a layered `EXTRA_REQUIREMENTS` model whose documented
+combinations would multiply rather than compose, two architectures resolving
+different binary wheels, and a resolved set of 121 packages for
+`requirements.txt` plus `requirements-storage-all.txt` alone — every one of
+which would need a hash, per variant, per platform.
+Doing it partially is worse than not doing it: a half-hashed set fails installs
+with errors that name the wrong cause, and the reliable response is to route
+around the mechanism with `--no-deps` or a second unhashed install. The project
+would then carry the maintenance cost of lockfiles *and* the false confidence
+of a guard people bypass.
+
+**What would change the decision.** A generated-lockfile design: pip-tools or
+uv producing hash-locked files per variant per platform in CI rather than by
+hand, a refresh cadence so the lockfiles do not become a reason not to patch,
+and a drift guard tying each lockfile to its requirements file. That is a
+project, not a cleanup, and it is tracked rather than half-started.
+
+**If you are threat-modelling against this**, the honest summary is:
+auditability, not integrity. The SBOM tells you what you got; it does not prove
+it is what was intended.
+
 ## Coordinated disclosure
 
 We coordinate disclosure with the reporter. For high or critical severity:

@@ -252,12 +252,21 @@ jobs:
       if: matrix.python-version == '3.12'
       run: |
         set -euo pipefail
+        # Kept in step with what the Dockerfile, docker-compose.yml and the
+        # README actually advertise —
+        # tests/test_requirements_are_consistent.py fails if one of them names
+        # a combination this list does not resolve. The storage entries below
+        # arrived that way: the comment above claimed "every combination the
+        # Dockerfile advertises", and two of the three it advertises were not
+        # here (#686).
         combos=(
           "requirements-minimal.txt requirements-extended.txt"
           "requirements.txt requirements-aws.txt"
           "requirements.txt requirements-gcp.txt"
           "requirements.txt requirements-azure.txt"
           "requirements.txt requirements-aws.txt requirements-gcp.txt"
+          "requirements.txt requirements-storage-all.txt"
+          "requirements.txt requirements-azure.txt requirements-storage-all.txt"
         )
         pinned=$(grep -oE '^certbot==[0-9.]+' requirements.txt | cut -d= -f3)
         echo "certbot is pinned at $pinned"
