@@ -27,4 +27,10 @@ boto3>=1.43.87
 hvac>=2.4.0
 
 # Infisical
-infisical-python>=2.3.6
+# Pinned, and not to the latest. infisical-python 2.3.6 ships no
+# manylinux x86_64 wheel and no sdist — only aarch64, macOS and Windows —
+# so `>=2.3.6` cannot be installed on the amd64 image at all, while the
+# arm64 image installs it fine. 2.3.5 is the last release with complete
+# platform coverage. This is the only compiled dependency in the storage
+# extras; the rest ship pure-Python wheels and are architecture-neutral.
+infisical-python==2.3.5

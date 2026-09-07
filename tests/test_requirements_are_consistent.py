@@ -249,3 +249,39 @@ def test_every_advertised_combination_is_resolved_in_ci():
         "resolved by the CI step, so nothing proves they can be installed:\n  "
         + "\n  ".join(missing)
     )
+
+
+def test_the_architecture_check_covers_every_published_architecture():
+    """The other half of the same drift.
+
+    `infisical-python>=2.3.6` sat in two advertised files because 2.3.6 ships
+    an aarch64 wheel and no manylinux x86_64 wheel: it installs on the arm64
+    image and cannot be installed on the amd64 one, and a resolver running on
+    either architecture alone sees nothing wrong. CI now resolves the optional
+    files for both — which only stays true while "both" means the same two
+    architectures the release publishes.
+    """
+    published = re.search(
+        r"default:\s*'([^']*linux/[^']*)'",
+        (REPO_ROOT / ".github" / "workflows"
+         / "docker-multiplatform.yml").read_text(encoding="utf-8"))
+    assert published, (
+        "could not find the published platform list in "
+        "docker-multiplatform.yml — this test is checking nothing"
+    )
+    architectures = {p.strip().split("/")[-1]
+                     for p in published.group(1).split(",")}
+
+    ci = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(
+        encoding="utf-8")
+    # manylinux_2_28_x86_64 -> amd64, manylinux_2_28_aarch64 -> arm64.
+    tag_for = {"amd64": "x86_64", "arm64": "aarch64"}
+    uncovered = [
+        arch for arch in sorted(architectures)
+        if f"manylinux_2_28_{tag_for.get(arch, arch)}" not in ci
+    ]
+    assert not uncovered, (
+        f"the release publishes images for {sorted(architectures)} but CI "
+        f"only resolves the requirements for some of them; {uncovered} could "
+        f"carry a dependency that does not exist for that platform"
+    )
