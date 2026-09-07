@@ -1736,6 +1736,10 @@ class CertificateManager:
 
         Returns ``(certbot_cmd, process_env)``.
         """
+        # Same reasoning as _prepare_issuance: this builds --cert-name and log
+        # lines from `domain`, so it enforces its own precondition rather than
+        # trusting the one caller that happens to have checked already.
+        _reject_path_escaping_domain(domain)
         all_domains = prepared.all_domains
         ca_account_config = prepared.ca_account_config
         ca_provider = prepared.ca_provider
