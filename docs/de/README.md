@@ -241,7 +241,7 @@ CertMate steht unter der MIT-Lizenz. Siehe die LICENSE-Datei im Repository.
 
 ---
 
-**Aktuelle Version**: 2.26.4
+**Aktuelle Version**: 2.27.0
 
 <div align="center">
 
