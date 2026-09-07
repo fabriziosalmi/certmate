@@ -16,6 +16,7 @@ import time
 import logging
 import shutil
 from contextlib import contextmanager
+from dataclasses import dataclass
 
 try:  # POSIX only; the lock degrades to a no-op without it
     import fcntl
@@ -105,6 +106,31 @@ _KNOWN_METADATA_KEYS = _REISSUE_OWNED_METADATA_KEYS | frozenset({
     'renewed_at', 'deployment_host', 'deployment_port', 'deployment_protocol',
     'deployment_status', 'key_type', 'key_size', 'elliptic_curve',
 })
+
+
+@dataclass(frozen=True)
+class _PreparedIssuance:
+    """Everything ``create_certificate`` resolves before it builds a command.
+
+    A frozen record rather than fourteen locals threaded through a 517-line
+    function: the point of splitting the phases is that what crosses between
+    them is visible and cannot be reassigned halfway down.
+    """
+    settings: dict | None
+    ca_provider: str
+    staging: bool
+    ca_account_config: dict | None
+    used_ca_account_id: str | None
+    challenge_type: str
+    dns_provider: str | None
+    dns_config: dict | None
+    strategy: object
+    all_domains: list
+    cert_dir: Path
+    cert_output_dir: Path
+    key_type: str | None
+    key_size: int | None
+    elliptic_curve: str | None
 
 
 class CertificateManager:
@@ -1419,6 +1445,233 @@ class CertificateManager:
             f"{quarantine.name}; reissue will rebuild it from scratch"
         )
 
+
+    def _prepare_issuance(self, *, domain, email, dns_provider, dns_config,
+                          account_id, staging, ca_provider, ca_account_id,
+                          domain_alias, alias_dns_provider, san_domains,
+                          challenge_type, key_type, key_size, elliptic_curve,
+                          replace):
+        """Validate and resolve everything an issuance needs, before any
+        command is built (#666).
+
+        Extracted verbatim from the first third of ``create_certificate``'s
+        517-line try block. It answers the questions the command builder then
+        assumes are settled: which CA, which challenge, which DNS provider and
+        account, which key shape, which domains, and whether this domain is
+        already issued.
+
+        Named "prepare" rather than "resolve" because it is not pure: it
+        creates the per-domain output directory and, for HTTP-01, the webroot
+        challenge directory. Both were side effects of this stretch of code
+        before the extraction and stay where they were.
+
+        Raises the same exceptions the inline code did — FileExistsError,
+        ValueError, RuntimeError — so the caller's handlers are unchanged.
+        """
+        settings = None
+        # Settings are loaded lazily and at most once: several branches
+        # below need settings (CA default, challenge type, DNS provider,
+        # key shape, propagation time) but a fully-specified HTTP-01 caller
+        # needs none, so we keep the load conditional and reuse the result.
+
+        # Return conflict if cert already exists (use renew to refresh it,
+        # or replace=True to reissue with a changed domain set — #267).
+        # This existence check runs *under* the per-domain lock acquired
+        # above so two concurrent creates for the same domain can't both
+        # pass the check and race to issue duplicate certificates.
+        existing_cert = self.cert_dir / domain / 'cert.pem'
+        if existing_cert.exists() and not replace:
+            raise FileExistsError(f"Certificate for {domain} already exists. Use renew to refresh it.")
+
+        logger.info(f"Starting certificate {'reissue' if replace else 'creation'} for domain: {domain}")
+        
+        # ... (Validation and CA setup remains the same until DNS config)
+        
+        # Validate inputs
+        if not domain or not email:
+            raise ValueError("Domain and email are required")
+        
+        # Get CA provider configuration
+        if not ca_provider:
+            if settings is None:
+                settings = self.settings_manager.load_settings()
+            ca_provider = settings.get('default_ca', 'letsencrypt')
+
+        # Back-compat (#279): the legacy per-cert staging boolean maps
+        # onto the dedicated staging CA entry, and the boolean is derived
+        # from the entry from here on. Keeping both views coherent means
+        # the no-ca_manager fallback below (which only knows --staging)
+        # and metadata stay correct whichever way the caller asked.
+        if staging and ca_provider == 'letsencrypt':
+            ca_provider = 'letsencrypt_staging'
+        staging = staging or ca_provider == 'letsencrypt_staging'
+
+        logger.info(f"Using CA provider: {ca_provider}")
+
+        # Get CA account configuration if CA manager is available
+        ca_account_config = None
+        used_ca_account_id = None
+        if self.ca_manager:
+            try:
+                ca_account_config, used_ca_account_id = self.ca_manager.get_ca_config(ca_provider, ca_account_id)
+                logger.info(f"Using CA account: {used_ca_account_id}")
+            except Exception as e:
+                if ca_provider in ('letsencrypt', 'letsencrypt_staging'):
+                    # Let's Encrypt needs no per-account credentials; with
+                    # no saved CA config the plain-certbot branch below
+                    # handles it (staging via --staging). Do NOT reset the
+                    # provider — that would silently flip a staging
+                    # request to production issuance.
+                    logger.info(f"No saved CA config for {ca_provider}; using certbot defaults: {e}")
+                else:
+                    # Preserve the caller's staging intent across the
+                    # fallback: resetting to production letsencrypt here
+                    # would turn a test request into trusted production
+                    # issuance (and burn real rate limits).
+                    ca_provider = 'letsencrypt_staging' if staging else 'letsencrypt'
+                    logger.warning(f"Could not get CA config, falling back to {ca_provider}: {e}")
+        
+        # Resolve challenge type from settings if not provided
+        if not challenge_type:
+            if settings is None:
+                settings = self.settings_manager.load_settings()
+            challenge_type = settings.get('challenge_type', 'dns-01')
+
+        # HTTP-01 path: skip DNS config entirely
+        if challenge_type == 'http-01':
+            strategy = HTTP01Strategy()
+            dns_config = dns_config or {}
+            dns_provider = dns_provider or 'http-01'
+            # Ensure webroot directory exists (same path the serving route
+            # reads — see acme_webroot_dir).
+            challenge_dir = acme_webroot_dir() / '.well-known' / 'acme-challenge'
+            challenge_dir.mkdir(parents=True, exist_ok=True)
+            logger.info("Using HTTP-01 challenge (webroot)")
+        else:
+            # DNS-01 path: get DNS configuration
+            if not dns_config:
+                if not dns_provider:
+                    if settings is None:
+                        settings = self.settings_manager.load_settings()
+                    dns_provider = self.settings_manager.get_domain_dns_provider(domain, settings)
+
+                if not dns_provider:
+                    raise ValueError("No DNS provider configured. Go to Settings and select a DNS provider.")
+
+                dns_config, used_account_id = self._get_dns_config(
+                    dns_provider, account_id
+                )
+
+                if not dns_config:
+                    raise ValueError(f"DNS provider '{dns_provider}' account '{account_id or 'default'}' not configured")
+
+                logger.info(f"Using DNS provider: {dns_provider} with account: {used_account_id}")
+
+            # Get Strategy
+            strategy = DNSStrategyFactory.get_strategy(dns_provider)
+
+            if domain_alias and (alias_dns_provider or dns_provider) not in DNS_ALIAS_SUPPORTED_PROVIDERS:
+                raise RuntimeError(
+                    "DNS alias mode does not support this DNS provider yet. "
+                    "Use a supported account that controls the alias zone, "
+                    "or omit domain_alias for the provider's normal DNS-01 flow."
+                )
+
+            # Alias mode uses CertMate's manual DNS hook instead of the
+            # provider certbot authenticator, so the plugin is only needed
+            # for the normal non-alias DNS-01 flow. 'manual' is a certbot
+            # core feature (custom-script provider), never an installable
+            # plugin — skip the preflight for it. acme-dns always takes the
+            # native hook (see _acme_dns_native_alias) and has no certbot
+            # plugin to check for either.
+            if (not domain_alias and strategy.plugin_name != 'manual'
+                    and dns_provider != 'acme-dns'):
+                plugin = strategy.plugin_name
+                if not check_certbot_plugin_installed(plugin):
+                    pkg = f"certbot-{plugin}"
+                    raise RuntimeError(
+                        f"The certbot plugin '{plugin}' is not installed. "
+                        f"Install it with: pip install {pkg}  "
+                        f"(Docker users: rebuild with REQUIREMENTS_FILE=requirements.txt)"
+                    )
+
+        # Build list of all domains (primary + SANs)
+        all_domains = [domain]
+        if san_domains:
+            # Filter and validate SAN domains. validate_domain returns the
+            # normalised name (URL netloc extracted, lowercased) as its
+            # second value; append THAT, not the raw entry, so a SAN never
+            # reaches certbot's -d as a URL form or a case variant. De-dup
+            # is against the normalised value and the already-normalised
+            # primary, so "Example.com" as a SAN of "example.com" collapses
+            # instead of producing a duplicate -d.
+            for san in san_domains:
+                san = san.strip()
+                if not san:
+                    continue
+                is_valid, san_normalized = validate_domain(san)
+                if not is_valid:
+                    raise ValueError(
+                        f"Invalid SAN domain '{san}': {san_normalized}")
+                if san_normalized != domain and san_normalized not in all_domains:
+                    all_domains.append(san_normalized)
+            logger.info(f"Creating SAN certificate with domains: {', '.join(all_domains)}")
+
+        # HTTP-01 does not support wildcard domains
+        if challenge_type == 'http-01':
+            for d in all_domains:
+                if d.startswith('*.'):
+                    raise ValueError("HTTP-01 challenge does not support wildcard domains. Use DNS-01 instead.")
+
+        # Create output directory
+        cert_dir = self.cert_dir
+        cert_output_dir = cert_dir / domain
+        cert_output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Resolve key shape. If the caller did not pick anything we fall
+        # back to the global default from settings — this lets legacy
+        # callers (web routes, scripts, tests) get the configured
+        # default for free without having to fetch it themselves. If
+        # the caller did pick something, validate the triple here too
+        # so the cert is never built with an inconsistent shape (the
+        # API endpoint validates earlier, but renew_certificate also
+        # routes through this method and can pass values from disk).
+        # On reissue (#267) the defaults are deliberately NOT applied:
+        # metadata does not record the lineage's key shape, so forwarding
+        # settings defaults as explicit flags would silently re-key the
+        # certificate. With no key flags certbot keeps the existing key
+        # type; an explicit key option on reissue is an intentional re-key.
+        if not replace and key_type is None and key_size is None and elliptic_curve is None:
+            if settings is None:
+                settings = self.settings_manager.load_settings()
+            key_type = settings.get('default_key_type')
+            if key_type == 'rsa':
+                key_size = settings.get('default_key_size')
+            elif key_type == 'ecdsa':
+                elliptic_curve = settings.get('default_elliptic_curve')
+        if key_type is not None:
+            ok, err = validate_key_options(key_type, key_size, elliptic_curve)
+            if not ok:
+                raise ValueError(f"Invalid key options for {domain}: {err}")
+
+        return _PreparedIssuance(
+            settings=settings,
+            ca_provider=ca_provider,
+            staging=staging,
+            ca_account_config=ca_account_config,
+            used_ca_account_id=used_ca_account_id,
+            challenge_type=challenge_type,
+            dns_provider=dns_provider,
+            dns_config=dns_config,
+            strategy=strategy,
+            all_domains=all_domains,
+            cert_dir=cert_dir,
+            cert_output_dir=cert_output_dir,
+            key_type=key_type,
+            key_size=key_size,
+            elliptic_curve=elliptic_curve,
+        )
+
     def create_certificate(self, domain, email, dns_provider=None, dns_config=None, account_id=None, staging=False, ca_provider=None, ca_account_id=None, domain_alias=None, alias_dns_provider=None, san_domains=None, challenge_type=None, key_type=None, key_size=None, elliptic_curve=None, replace=False):
         """Create SSL certificate using configurable CA with DNS challenge
 
@@ -1493,191 +1746,31 @@ class CertificateManager:
         ca_extra_env = {}
 
         try:
-            # Settings are loaded lazily and at most once: several branches
-            # below need settings (CA default, challenge type, DNS provider,
-            # key shape, propagation time) but a fully-specified HTTP-01 caller
-            # needs none, so we keep the load conditional and reuse the result.
-            settings = None
-
-            # Return conflict if cert already exists (use renew to refresh it,
-            # or replace=True to reissue with a changed domain set — #267).
-            # This existence check runs *under* the per-domain lock acquired
-            # above so two concurrent creates for the same domain can't both
-            # pass the check and race to issue duplicate certificates.
-            existing_cert = self.cert_dir / domain / 'cert.pem'
-            if existing_cert.exists() and not replace:
-                raise FileExistsError(f"Certificate for {domain} already exists. Use renew to refresh it.")
-
-            logger.info(f"Starting certificate {'reissue' if replace else 'creation'} for domain: {domain}")
-            
-            # ... (Validation and CA setup remains the same until DNS config)
-            
-            # Validate inputs
-            if not domain or not email:
-                raise ValueError("Domain and email are required")
-            
-            # Get CA provider configuration
-            if not ca_provider:
-                if settings is None:
-                    settings = self.settings_manager.load_settings()
-                ca_provider = settings.get('default_ca', 'letsencrypt')
-
-            # Back-compat (#279): the legacy per-cert staging boolean maps
-            # onto the dedicated staging CA entry, and the boolean is derived
-            # from the entry from here on. Keeping both views coherent means
-            # the no-ca_manager fallback below (which only knows --staging)
-            # and metadata stay correct whichever way the caller asked.
-            if staging and ca_provider == 'letsencrypt':
-                ca_provider = 'letsencrypt_staging'
-            staging = staging or ca_provider == 'letsencrypt_staging'
-
-            logger.info(f"Using CA provider: {ca_provider}")
-
-            # Get CA account configuration if CA manager is available
-            ca_account_config = None
-            used_ca_account_id = None
-            if self.ca_manager:
-                try:
-                    ca_account_config, used_ca_account_id = self.ca_manager.get_ca_config(ca_provider, ca_account_id)
-                    logger.info(f"Using CA account: {used_ca_account_id}")
-                except Exception as e:
-                    if ca_provider in ('letsencrypt', 'letsencrypt_staging'):
-                        # Let's Encrypt needs no per-account credentials; with
-                        # no saved CA config the plain-certbot branch below
-                        # handles it (staging via --staging). Do NOT reset the
-                        # provider — that would silently flip a staging
-                        # request to production issuance.
-                        logger.info(f"No saved CA config for {ca_provider}; using certbot defaults: {e}")
-                    else:
-                        # Preserve the caller's staging intent across the
-                        # fallback: resetting to production letsencrypt here
-                        # would turn a test request into trusted production
-                        # issuance (and burn real rate limits).
-                        ca_provider = 'letsencrypt_staging' if staging else 'letsencrypt'
-                        logger.warning(f"Could not get CA config, falling back to {ca_provider}: {e}")
-            
-            # Resolve challenge type from settings if not provided
-            if not challenge_type:
-                if settings is None:
-                    settings = self.settings_manager.load_settings()
-                challenge_type = settings.get('challenge_type', 'dns-01')
-
-            # HTTP-01 path: skip DNS config entirely
-            if challenge_type == 'http-01':
-                strategy = HTTP01Strategy()
-                dns_config = dns_config or {}
-                dns_provider = dns_provider or 'http-01'
-                # Ensure webroot directory exists (same path the serving route
-                # reads — see acme_webroot_dir).
-                challenge_dir = acme_webroot_dir() / '.well-known' / 'acme-challenge'
-                challenge_dir.mkdir(parents=True, exist_ok=True)
-                logger.info("Using HTTP-01 challenge (webroot)")
-            else:
-                # DNS-01 path: get DNS configuration
-                if not dns_config:
-                    if not dns_provider:
-                        if settings is None:
-                            settings = self.settings_manager.load_settings()
-                        dns_provider = self.settings_manager.get_domain_dns_provider(domain, settings)
-
-                    if not dns_provider:
-                        raise ValueError("No DNS provider configured. Go to Settings and select a DNS provider.")
-
-                    dns_config, used_account_id = self._get_dns_config(
-                        dns_provider, account_id
-                    )
-
-                    if not dns_config:
-                        raise ValueError(f"DNS provider '{dns_provider}' account '{account_id or 'default'}' not configured")
-
-                    logger.info(f"Using DNS provider: {dns_provider} with account: {used_account_id}")
-
-                # Get Strategy
-                strategy = DNSStrategyFactory.get_strategy(dns_provider)
-
-                if domain_alias and (alias_dns_provider or dns_provider) not in DNS_ALIAS_SUPPORTED_PROVIDERS:
-                    raise RuntimeError(
-                        "DNS alias mode does not support this DNS provider yet. "
-                        "Use a supported account that controls the alias zone, "
-                        "or omit domain_alias for the provider's normal DNS-01 flow."
-                    )
-
-                # Alias mode uses CertMate's manual DNS hook instead of the
-                # provider certbot authenticator, so the plugin is only needed
-                # for the normal non-alias DNS-01 flow. 'manual' is a certbot
-                # core feature (custom-script provider), never an installable
-                # plugin — skip the preflight for it. acme-dns always takes the
-                # native hook (see _acme_dns_native_alias) and has no certbot
-                # plugin to check for either.
-                if (not domain_alias and strategy.plugin_name != 'manual'
-                        and dns_provider != 'acme-dns'):
-                    plugin = strategy.plugin_name
-                    if not check_certbot_plugin_installed(plugin):
-                        pkg = f"certbot-{plugin}"
-                        raise RuntimeError(
-                            f"The certbot plugin '{plugin}' is not installed. "
-                            f"Install it with: pip install {pkg}  "
-                            f"(Docker users: rebuild with REQUIREMENTS_FILE=requirements.txt)"
-                        )
-
-            # Build list of all domains (primary + SANs)
-            all_domains = [domain]
-            if san_domains:
-                # Filter and validate SAN domains. validate_domain returns the
-                # normalised name (URL netloc extracted, lowercased) as its
-                # second value; append THAT, not the raw entry, so a SAN never
-                # reaches certbot's -d as a URL form or a case variant. De-dup
-                # is against the normalised value and the already-normalised
-                # primary, so "Example.com" as a SAN of "example.com" collapses
-                # instead of producing a duplicate -d.
-                for san in san_domains:
-                    san = san.strip()
-                    if not san:
-                        continue
-                    is_valid, san_normalized = validate_domain(san)
-                    if not is_valid:
-                        raise ValueError(
-                            f"Invalid SAN domain '{san}': {san_normalized}")
-                    if san_normalized != domain and san_normalized not in all_domains:
-                        all_domains.append(san_normalized)
-                logger.info(f"Creating SAN certificate with domains: {', '.join(all_domains)}")
-
-            # HTTP-01 does not support wildcard domains
-            if challenge_type == 'http-01':
-                for d in all_domains:
-                    if d.startswith('*.'):
-                        raise ValueError("HTTP-01 challenge does not support wildcard domains. Use DNS-01 instead.")
-
-            # Create output directory
-            cert_dir = self.cert_dir
-            cert_output_dir = cert_dir / domain
-            cert_output_dir.mkdir(parents=True, exist_ok=True)
-
-            # Resolve key shape. If the caller did not pick anything we fall
-            # back to the global default from settings — this lets legacy
-            # callers (web routes, scripts, tests) get the configured
-            # default for free without having to fetch it themselves. If
-            # the caller did pick something, validate the triple here too
-            # so the cert is never built with an inconsistent shape (the
-            # API endpoint validates earlier, but renew_certificate also
-            # routes through this method and can pass values from disk).
-            # On reissue (#267) the defaults are deliberately NOT applied:
-            # metadata does not record the lineage's key shape, so forwarding
-            # settings defaults as explicit flags would silently re-key the
-            # certificate. With no key flags certbot keeps the existing key
-            # type; an explicit key option on reissue is an intentional re-key.
-            if not replace and key_type is None and key_size is None and elliptic_curve is None:
-                if settings is None:
-                    settings = self.settings_manager.load_settings()
-                key_type = settings.get('default_key_type')
-                if key_type == 'rsa':
-                    key_size = settings.get('default_key_size')
-                elif key_type == 'ecdsa':
-                    elliptic_curve = settings.get('default_elliptic_curve')
-            if key_type is not None:
-                ok, err = validate_key_options(key_type, key_size, elliptic_curve)
-                if not ok:
-                    raise ValueError(f"Invalid key options for {domain}: {err}")
+            prepared = self._prepare_issuance(
+                domain=domain, email=email, dns_provider=dns_provider,
+                dns_config=dns_config, account_id=account_id, staging=staging,
+                ca_provider=ca_provider, ca_account_id=ca_account_id,
+                domain_alias=domain_alias,
+                alias_dns_provider=alias_dns_provider,
+                san_domains=san_domains, challenge_type=challenge_type,
+                key_type=key_type, key_size=key_size,
+                elliptic_curve=elliptic_curve, replace=replace,
+            )
+            settings = prepared.settings
+            ca_provider = prepared.ca_provider
+            staging = prepared.staging
+            ca_account_config = prepared.ca_account_config
+            used_ca_account_id = prepared.used_ca_account_id
+            challenge_type = prepared.challenge_type
+            dns_provider = prepared.dns_provider
+            dns_config = prepared.dns_config
+            strategy = prepared.strategy
+            all_domains = prepared.all_domains
+            cert_dir = prepared.cert_dir
+            cert_output_dir = prepared.cert_output_dir
+            key_type = prepared.key_type
+            key_size = prepared.key_size
+            elliptic_curve = prepared.elliptic_curve
 
             # Build certbot command (ca_extra_env was hoisted above the try
             # so the finally block can clean up safely on early failure)
