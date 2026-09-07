@@ -14,6 +14,7 @@ Patching a name re-exported somewhere else rebinds that copy and leaves the
 call site untouched — a test that still runs and no longer tests anything.
 """
 import base64
+from ..core.constants import PROBE_PROTOCOLS
 import http.client
 import logging
 import os
@@ -104,7 +105,9 @@ def _tls_probe_timeout_seconds():
         return 3.0
     return max(1.0, min(value, 30.0))
 
-_PROBE_PROTOCOLS = ('https-tls', 'tls', 'smtp-starttls')
+# Moved to core.constants (#672); re-exported so the existing
+# imports of `_PROBE_PROTOCOLS` from here keep working.
+_PROBE_PROTOCOLS = PROBE_PROTOCOLS
 
 def _https_proxy_for(host):
     """Return (proxy_host, proxy_port, auth_headers) for tunneling to *host*.

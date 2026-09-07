@@ -81,23 +81,65 @@ def test_renew_uses_the_same_lock_object(cm):
     assert a is b
 
 
-def test_patch_handler_wraps_the_metadata_write_in_the_lock():
-    """The handler moved out of the create_api_resources closure (#667).
+def test_update_config_takes_the_lock_and_reports_contention(tmp_path):
+    """Where the lock lives now, asserted by BEHAVIOUR rather than by source.
 
-    It now lives in resources_certificates, and the manager it reaches through
-    is named `ctx.certificates` rather than the closure's `certificate_manager`
-    — so both the module this reads and the expression it looks for changed
-    with the move. The property is the same one: the metadata write happens
-    inside the per-domain lock, and a concurrent operation surfaces as
-    DomainOperationInProgress rather than a lost update.
+    The handler moved out of the closure in #667, and the read-modify-write
+    moved again in #672 — from the route into CertificateService.update_config.
+    Each move broke a source-scanning version of this test, which is the
+    argument for not writing another one: hold the lock, call the service, and
+    require it to refuse.
+    """
+    from unittest.mock import MagicMock
+
+    from modules.core.cert_service import CertificateService
+
+    manager = CertificateManager.__new__(CertificateManager)
+    manager._domain_locks = {}
+    manager._domain_locks_mutex = threading.Lock()
+    manager._domain_lock_timeout = lambda: 0.2
+    manager._load_metadata = lambda domain: {}
+    manager._save_metadata = lambda domain, metadata: True
+
+    service = CertificateService(manager, MagicMock(), MagicMock())
+
+    with manager.domain_lock('example.com'):
+        with pytest.raises(DomainOperationInProgress):
+            service.update_config('example.com', {'dns_provider': 'route53'})
+
+
+def test_update_config_writes_when_nothing_holds_the_lock(tmp_path):
+    """CONTROL: a test that only proves refusal would pass on a service that
+    always refuses."""
+    from unittest.mock import MagicMock
+
+    from modules.core.cert_service import CertificateService
+
+    written = {}
+    manager = CertificateManager.__new__(CertificateManager)
+    manager._domain_locks = {}
+    manager._domain_locks_mutex = threading.Lock()
+    manager._domain_lock_timeout = lambda: 0.2
+    manager._load_metadata = lambda domain: {'dns_provider': 'cloudflare'}
+    manager._save_metadata = lambda domain, metadata: written.update(metadata) or True
+
+    service = CertificateService(manager, MagicMock(), MagicMock())
+    metadata, old = service.update_config('example.com',
+                                          {'dns_provider': 'route53'})
+
+    assert old == 'cloudflare'
+    assert metadata['dns_provider'] == 'route53'
+    assert written['dns_provider'] == 'route53'
+
+
+def test_the_route_still_turns_contention_into_409():
+    """The half that stays at the HTTP layer: the service raises, the adapter
+    maps it. Source-level, because the mapping IS the route's only job here.
     """
     import inspect
     from modules.api import resources_certificates
 
     src = inspect.getsource(resources_certificates.create_certificates_resources)
-    assert 'ctx.certificates.domain_lock(domain)' in src, (
-        'the PATCH handler no longer takes the per-domain lock'
-    )
     assert 'except DomainOperationInProgress' in src, (
-        'the handler no longer reports a concurrent operation'
+        'the handler no longer reports a concurrent operation as 409'
     )

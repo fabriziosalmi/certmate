@@ -66,6 +66,12 @@ DEFAULT_RENEWAL_THRESHOLD_DAYS = 30
 # value here is now the one shipped installs have always run.
 DEFAULT_SESSION_TIMEOUT_HOURS = 8
 
+# Protocols the deployment probe can speak. A domain fact, not an API one: the
+# service validates against it and modules/api/tls_probe drives it (#672 — it
+# lived in the API layer, which core could not reach without importing api and
+# deepening #668).
+PROBE_PROTOCOLS = ('https-tls', 'tls', 'smtp-starttls')
+
 # Default deployment-status cache TTL, in seconds. Read by CacheManager as the
 # fallback when settings.json carries no cache_ttl.
 DEFAULT_CACHE_TTL = 300

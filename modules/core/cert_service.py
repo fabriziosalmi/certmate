@@ -18,6 +18,7 @@ adapters map to HTTP 403.
 import logging
 
 from .structured_logging import scrub_log_value
+from .constants import PROBE_PROTOCOLS
 from .utils import validate_domain, validate_key_options
 
 logger = logging.getLogger(__name__)
@@ -261,6 +262,98 @@ class CertificateService:
             'san_count': len(prepared.get('san_domains') or []),
         })
         return result
+
+
+    # ------------------------------------------------------------------
+    # Configuration, as opposed to issuance
+    # ------------------------------------------------------------------
+
+    def read_metadata(self, domain):
+        """The certificate's stored metadata, or ``{}``.
+
+        A public read (#672). Route handlers were calling
+        ``certificate_manager._load_metadata`` — a private method — which meant
+        the manager could not change how it stores metadata without breaking
+        them. Reading through the manager still matters, though, and this keeps
+        that: it builds the path from the validated domain and quarantines
+        corrupt JSON rather than silently returning ``{}``.
+        """
+        return self._certs._load_metadata(domain) or {}
+
+    def update_config(self, domain, changes):
+        """Apply a configuration change to a certificate's metadata.
+
+        Takes the raw change set — not keyword arguments — because the
+        semantics depend on a key being ABSENT versus present-and-null: an
+        absent key leaves existing config alone, an explicit ``None`` deletes
+        it. Keyword defaults cannot express that, and getting it wrong lets a
+        DNS-only edit silently wipe a certificate's probe configuration.
+
+        Validation lives here rather than in the route so both HTTP layers get
+        the same answer, and raises :class:`ValueError` with the message the
+        caller should surface.
+
+        Returns ``(metadata, old_dns_provider)``.
+        """
+        # The whole read-modify-write happens under the domain lock, so an
+        # in-flight renewal — which carries a pre-renewal metadata snapshot
+        # across its entire certbot run — cannot clobber this write.
+        with self._certs.domain_lock(domain):
+            metadata = self.read_metadata(domain)
+            old_dns_provider = metadata.get('dns_provider')
+
+            for key in ('dns_provider', 'account_id', 'alias_dns_provider'):
+                value = changes.get(key)
+                if value:
+                    metadata[key] = value
+
+            if 'deployment_port' in changes:
+                port = changes['deployment_port']
+                if port is None:
+                    metadata.pop('deployment_port', None)
+                else:
+                    try:
+                        port = int(port)
+                    except (TypeError, ValueError):
+                        raise ValueError('deployment_port must be an integer')
+                    if port < 1 or port > 65535:
+                        raise ValueError('deployment_port must be 1-65535')
+                    metadata['deployment_port'] = port
+
+            if 'deployment_protocol' in changes:
+                protocol = changes['deployment_protocol']
+                if protocol is None:
+                    metadata.pop('deployment_protocol', None)
+                elif protocol not in PROBE_PROTOCOLS:
+                    raise ValueError(
+                        f"deployment_protocol must be one of {PROBE_PROTOCOLS!r}")
+                else:
+                    metadata['deployment_protocol'] = protocol
+
+            if 'deployment_host' in changes:
+                host = changes['deployment_host']
+                if host is None:
+                    metadata.pop('deployment_host', None)
+                else:
+                    if not isinstance(host, str):
+                        raise ValueError('deployment_host must be a string')
+                    host = host.strip()
+                    # A probe target is a bare hostname: no scheme, no path, no
+                    # whitespace, and no wildcard label — you deploy a
+                    # certificate on a concrete name, not on "*.".
+                    if (not host or len(host) > 253 or host.startswith('*.')
+                            or any(c in host for c in ' \t/\\')
+                            or '://' in host):
+                        raise ValueError(
+                            'deployment_host must be a bare hostname '
+                            '(no scheme, path, whitespace, or wildcard)')
+                    metadata['deployment_host'] = host
+
+            if not self._certs._save_metadata(domain, metadata):
+                raise RuntimeError(
+                    f'Failed to update metadata for domain: {domain}')
+
+        return metadata, old_dns_provider
 
     def prepare_reissue(self, *, domain, san_domains=None, dns_provider=None,
                         account_id=None, ca_provider=None, challenge_type=None,
