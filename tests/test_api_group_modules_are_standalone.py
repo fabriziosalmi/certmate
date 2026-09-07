@@ -16,6 +16,7 @@ from flask import Flask
 from flask_restx import Api, Resource
 
 from modules.api.resource_context import ApiContext
+from modules.api.resources_backup import create_backup_resources
 from modules.api.resources_cache import create_cache_resources
 from modules.api.resources_health import create_health_resources
 
@@ -94,3 +95,76 @@ def test_the_health_group_tolerates_an_empty_manager_mapping(api):
     ctx = _minimal_context(settings=MagicMock(), certificates=MagicMock(),
                            file_ops=MagicMock(), managers={})
     assert create_health_resources(api, models, ctx)
+
+
+BACKUP_MODELS = {'backup_model': MagicMock(), 'backup_list_model': MagicMock()}
+
+
+def test_the_backup_group_builds_from_a_minimal_context(api):
+    ctx = _minimal_context(settings=MagicMock(), file_ops=MagicMock(),
+                           audit=MagicMock(), managers={})
+    resources = create_backup_resources(api, BACKUP_MODELS, ctx)
+
+    assert set(resources) == {
+        'BackupList', 'BackupCreate', 'BackupDownload', 'BackupRestore',
+        'BackupDelete'}
+    for name, cls in resources.items():
+        assert issubclass(cls, Resource), f'{name} is not a Resource'
+
+
+def test_the_backup_group_needs_no_certificate_manager(api):
+    """CONTROL: backups are taken through file_ops, not the cert manager.
+
+    In the closure every class could reach `certificate_manager` regardless of
+    whether it used one, so this coupling was invisible. If it returns, the
+    group stops being movable and this fails.
+    """
+    ctx = _minimal_context(settings=MagicMock(), file_ops=MagicMock(),
+                           audit=MagicMock(), certificates=None, managers={})
+    assert create_backup_resources(api, BACKUP_MODELS, ctx)
+
+
+def test_the_backup_group_resolves_the_managers_it_looks_up_by_name(api, tmp_path):
+    """Building a group proves nothing about the names it reads at request time.
+
+    BackupDelete does not use the named `file_ops` field; it looks the manager
+    up out of the mapping by string key, and answers 503 when that lookup comes
+    back empty. Every test above would pass with that key misspelt, because
+    none of them call the method — which is exactly how a broken key survived
+    the move here once already.
+
+    So this one calls it, with a real file to delete, and asserts the endpoint
+    actually did the work.
+    """
+    backup_dir = tmp_path / 'unified'
+    backup_dir.mkdir()
+    victim = backup_dir / 'backup_20260101_120000.zip'
+    victim.write_bytes(b'PK\x03\x04')
+
+    file_ops = MagicMock()
+    file_ops.backup_dir = tmp_path
+    ctx = _minimal_context(settings=MagicMock(), file_ops=file_ops,
+                           audit=None, managers={'file_ops': file_ops})
+
+    resources = create_backup_resources(api, BACKUP_MODELS, ctx)
+    app = Flask(__name__)
+    with app.test_request_context('/'):
+        body, status = resources['BackupDelete']().delete(
+            'unified', 'backup_20260101_120000.zip')
+
+    assert status != 503, (
+        f'the endpoint could not find the file_ops manager in the context '
+        f'mapping, so a lookup key is wrong: {body}'
+    )
+    assert status == 200, f'expected the delete to succeed, got {status}: {body}'
+    assert not victim.exists(), 'the endpoint returned 200 without deleting'
+
+
+def test_the_backup_group_builds_without_an_audit_logger(api):
+    """CONTROL: the audit logger is optional in the manager set, and the
+    closure guarded every use with `if audit_logger`. Building without one has
+    to keep working, or the extraction changed behaviour rather than location.
+    """
+    ctx = _minimal_context(settings=MagicMock(), file_ops=MagicMock(),
+                           audit=None, managers={})
+    assert create_backup_resources(api, BACKUP_MODELS, ctx)
