@@ -161,6 +161,24 @@ def create_api_models(api):
         'days_left': fields.Integer(description='Days until expiry'),
         'days_until_expiry': fields.Integer(description='Days until expiry (alias for days_left)'),
         'needs_renewal': fields.Boolean(description='Whether certificate needs renewal'),
+        'usable': fields.Boolean(
+            description=(
+                'Whether this certificate can actually serve TLS: it exists AND '
+                'a matching private key is beside it. Null on the '
+                'storage-backend listing path, which fetches the certificate '
+                'without the key on purpose and therefore cannot say. A false '
+                'here also forces needs_renewal, because a keyless certificate '
+                'has nothing to wait for.'
+            )),
+        'private_key_present': fields.Boolean(
+            description=(
+                'Whether a private key was found beside the certificate. Null '
+                'when it was not looked for. Restoring a share-safe backup '
+                'produces certificates with no key, which is why this is '
+                'reported rather than assumed.'
+            )),
+        'private_key_state': fields.String(
+            description="One of 'present', 'missing', 'mismatched' or 'unknown'."),
         'auto_renew': fields.Boolean(description='Whether automatic renewal is enabled for this certificate'),
         'dns_provider': fields.String(description='DNS provider used for the certificate'),
         'domain_alias': fields.String(description='DNS alias target used for DNS-01 validation'),
