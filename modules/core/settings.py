@@ -11,7 +11,7 @@ from collections import deque
 from pathlib import Path
 
 from modules import __version__ as _CERTMATE_VERSION
-from .constants import iter_cert_domain_dirs
+from .constants import SETTINGS_SCHEMA_VERSION, iter_cert_domain_dirs
 from .file_operations import FileOperations, _backup_passphrase
 from .utils import (
     generate_secure_token, validate_email, validate_api_token, validate_domain,
@@ -132,6 +132,21 @@ _NON_SECRET_KEY_NAMES = frozenset({
     'default_key_size',
     'default_elliptic_curve',
 })
+
+
+class SettingsSchemaTooNewError(SettingsUnreadableError):
+    """settings.json declares a schema this build does not understand (#669).
+
+    Subclasses SettingsUnreadableError so app.py stops the process rather than
+    starting an instance that will write a shape it cannot read back. The
+    alternative — logging and continuing — is what the product-version check
+    did, and it leaves an older process free to overwrite fields it does not
+    know about.
+
+    Escapable on purpose: ``CERTMATE_ALLOW_SCHEMA_DOWNGRADE=1`` proceeds
+    anyway, for an operator who has read the release notes and accepts the
+    consequence. Safe by default, deliberate to override.
+    """
 
 
 class BearerTokenUnusableError(SettingsUnreadableError):
@@ -876,6 +891,10 @@ class SettingsManager:
 
         with self._lock:
             default_settings = {
+                # The shape a fresh install writes (#669). Present here as well
+                # as in the stamping below because a fresh install never
+                # reaches that path — it has no file to migrate.
+                'settings_schema_version': SETTINGS_SCHEMA_VERSION,
                 'cloudflare_token': '',
                 'domains': [],
                 'email': '',
@@ -968,6 +987,9 @@ class SettingsManager:
 
             # Only create full template for first-time setup
             first_time_template = {
+                # Same reason as default_settings: a first boot writes
+                # this dict and never reaches the stamping path (#669).
+                'settings_schema_version': SETTINGS_SCHEMA_VERSION,
                 'cloudflare_token': '',
                 'domains': [],
                 'email': '',
@@ -1081,6 +1103,36 @@ class SettingsManager:
                             disk_version, _CERTMATE_VERSION
                         )
 
+                # Schema gate (#669). `certmate_version` above is the PRODUCT
+                # version: it moves on every release, so it cannot say whether
+                # the shape changed. This one moves only when it does.
+                #
+                # A file from the future is refused rather than read. The
+                # shape-sniffing migrations below still run at every version —
+                # they are not only migrations, they are also the defence
+                # against a stale settings tab POSTing an old payload shape and
+                # reintroducing a retired field.
+                disk_schema = settings.get('settings_schema_version')
+                if isinstance(disk_schema, int) and disk_schema > SETTINGS_SCHEMA_VERSION:
+                    if os.getenv('CERTMATE_ALLOW_SCHEMA_DOWNGRADE') == '1':
+                        logger.error(
+                            "settings.json declares schema v%s and this build "
+                            "understands v%s. Continuing because "
+                            "CERTMATE_ALLOW_SCHEMA_DOWNGRADE=1 — this process "
+                            "may overwrite fields it does not know about.",
+                            disk_schema, SETTINGS_SCHEMA_VERSION)
+                    else:
+                        raise SettingsSchemaTooNewError(
+                            f"settings.json declares schema v{disk_schema} but "
+                            f"this build understands v{SETTINGS_SCHEMA_VERSION}. "
+                            f"Refusing to start: an older process writing this "
+                            f"file can drop fields it cannot read. Run the "
+                            f"newer version, restore a matching backup from "
+                            f"{self.file_ops.backup_dir / 'unified'}, or set "
+                            f"CERTMATE_ALLOW_SCHEMA_DOWNGRADE=1 to proceed "
+                            f"anyway."
+                        )
+
                 # Apply migrations for backward compatibility
                 settings, was_migrated = self._migrate_settings_format(settings)
 
@@ -1157,6 +1209,12 @@ class SettingsManager:
                 # a write when the version actually changed.
                 if settings.get('certmate_version') != _CERTMATE_VERSION:
                     settings['certmate_version'] = _CERTMATE_VERSION
+                    was_migrated = True
+                # Stamp the schema too. A file that predates versioning has
+                # just been through the shape migrations above, so it is now v1
+                # whatever it was before.
+                if settings.get('settings_schema_version') != SETTINGS_SCHEMA_VERSION:
+                    settings['settings_schema_version'] = SETTINGS_SCHEMA_VERSION
                     was_migrated = True
 
                 # If the save fails (disk full, permission denied, validation
@@ -1334,6 +1392,17 @@ class SettingsManager:
                 if not isinstance(settings, dict):
                     logger.error("Settings must be a dictionary")
                     return False
+
+                # Every write declares the schema it wrote (#669).
+                #
+                # Stamping only on load is not enough: a caller that hands over
+                # a payload without the key — which POST /api/settings does,
+                # and which any future route may do — drops it from the file,
+                # and a file with no declared schema is one an older build
+                # reads happily. The gate in load_settings can only refuse what
+                # is written down, so it is written here, where every write
+                # passes.
+                settings['settings_schema_version'] = SETTINGS_SCHEMA_VERSION
 
                 # Validate critical settings before saving
                 if 'email' in settings and settings['email']:
