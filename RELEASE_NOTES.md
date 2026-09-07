@@ -1,3 +1,53 @@
+## v2.26.4 (The API layer becomes something you can test a piece of)
+
+A patch release. Nothing about how you operate CertMate changes, and no
+endpoint behaves differently — with one deliberate exception, noted below.
+
+### Backup filenames now refuse control characters
+
+`_validate_backup_filename` guards the five backup endpoints. It rejected path
+separators, `..` and NUL, but no other control character, so a name carrying
+one could pass and reach the log output that reports the filename back. Under
+the default JSON log format that is harmless, because a line break inside a JSON
+string is escaped; under the plain line format `CERTMATE_LOG_JSON=false`
+selects, it is not.
+
+Control characters are now refused at the validator rather than handled at each
+log site, because that validator is the single point all five endpoints already
+pass through — so a log line added there later is covered without anyone
+remembering to. Every backup CertMate writes is named `backup_<timestamp>.zip`,
+so this cannot reject a filename the application itself produced. The related
+scope-denial log in the API layer scrubs its values the same way the equivalent
+path in the certificate service already did.
+
+### Half of the API layer now lives in modules of its own
+
+`modules/api/resources.py` held 41 endpoint classes inside a single function,
+each one closing over ten managers. Nothing in it could be imported on its own,
+which is why the HTTP layer was simultaneously the largest module in the project
+and the least covered: reaching one route meant constructing the entire manager
+graph.
+
+Eight groups have moved out — cache, health and diagnostics, backups, storage
+backends, inventory, settings and DNS accounts, and the CA provider check — each
+into a module that takes an explicit context object instead of capturing one.
+
+| | before | now |
+|---|---|---|
+| `create_api_resources` complexity | 559 | 249 |
+| `resources.py` | 4040 lines | 2023 |
+
+The remaining sixteen classes are mapped and the grouping is decided; the next
+step is a shared home for the domain-path validator they share, which is a
+deliberate change to a helper on thirteen call sites rather than another
+mechanical move.
+
+For operators this is invisible. What it buys is that an endpoint can now be
+built and exercised without the rest of the application, which is the
+prerequisite for the API coverage this release does not yet add.
+
+---
+
 ## v2.26.3 (Renewals stop arriving at the certificate authority all at once)
 
 A patch release. One change, and it is about timing, not correctness.
