@@ -9,10 +9,11 @@ This guide walks through:
 1. [What a hook is](#what-a-hook-is)
 2. [Configuring hooks (UI + JSON)](#configuring-hooks)
 3. [Environment variables passed to your command](#environment-variables-passed-to-your-command)
-4. [Manual triggering](#manual-triggering)
-5. [Security model: why some commands are rejected](#security-model)
-6. [Common recipes](#common-recipes)
-7. [Audit, history, and debugging](#audit-history-and-debugging)
+4. [Maintenance windows](#maintenance-windows)
+5. [Manual triggering](#manual-triggering)
+6. [Security model: why some commands are rejected](#security-model)
+7. [Common recipes](#common-recipes)
+8. [Audit, history, and debugging](#audit-history-and-debugging)
 
 ---
 
@@ -28,6 +29,7 @@ A hook is a JSON object with five fields:
 | `enabled` | boolean | no | Defaults to `true`. Disabled hooks are skipped during automatic firing but can still be tested manually. |
 | `timeout` | integer | no | Seconds. Default 30, capped at the system `MAX_TIMEOUT` (currently 300). |
 | `on_events` | string array | no | Subset of `["created", "renewed", "revoked"]`. If absent, the hook runs on all three. |
+| `window` | object | no | A [maintenance window](#maintenance-windows). If absent, the hook runs as soon as the certificate is issued or renewed — the behaviour every hook has had until now. |
 
 Hooks live under two keys in `deploy_hooks`:
 
@@ -114,6 +116,66 @@ Every invocation sets these in the hook's process environment:
 Your command can reference these as `$CERTMATE_DOMAIN`, `"$CERTMATE_FULLCHAIN_PATH"`, etc. The values are passed by environment, not by string interpolation, so quoting works the same as in any normal shell.
 
 The hook runs as the CertMate process user (in the Docker image: `certmate`, UID/GID 1000:1000) inside the container. Anything you `cp`, `curl`, `ssh`, etc. needs to be reachable from there.
+
+---
+
+## Maintenance windows
+
+Closes [#632](https://github.com/fabriziosalmi/certmate/issues/632).
+
+A certificate renews when it is due, which is a time nobody chose: the renewal sweep runs at 02:00 with an hour of jitter, and only for the certificates inside the threshold that night. The hook then ran immediately. For a hook that restarts a database or reloads a load balancer, that is an outage at an unpredictable hour.
+
+A `window` separates the two. The certificate still renews whenever it is due — that is driven by expiry and is not negotiable — but the **deploy** is held until the next time the window is open.
+
+```jsonc
+"window": {
+  "start": "02:00",          // required, 24-hour HH:MM
+  "end": "04:00",            // required, exclusive
+  "days": ["sat", "sun"],    // optional; omit or leave empty for every day
+  "timezone": "Europe/Rome"  // optional IANA name, defaults to UTC
+}
+```
+
+The same field works on typed deploy targets, which is usually where you want it: a Kubernetes secret rollout is exactly the kind of deploy that belongs in a maintenance window.
+
+### What the rules are
+
+- **`end` is exclusive.** `02:00`–`04:00` and `04:00`–`06:00` are adjacent, not overlapping.
+- **A window may cross midnight**, and belongs to the day it **starts** on. A `22:00`–`04:00` window on `["fri"]` is open at 02:00 on Saturday morning. Reading it the other way would silently require you to tick Saturday as well.
+- **`start` and `end` may not be equal.** That reads equally well as "always open" and "never open", so it is refused rather than guessed. Use `00:00`–`23:59` for a whole day.
+- **The timezone is an IANA name** (`Europe/Rome`, `America/New_York`), validated when you save. A typo is refused at that moment rather than silently holding every deploy for a window that never opens.
+- **Daylight saving is handled by the zone, not by arithmetic.** On the spring-forward day a `02:00`–`04:00` Rome window opens at the local 03:00, because 02:00–02:59 does not happen; on the autumn day it is open across both passes of 02:00–02:59.
+
+### What happens while a deploy is held
+
+The queue lives at `data/pending_deploys.json` and survives a restart — the window is typically hours away.
+
+- A second renewal before the window opens does **not** queue a second deploy. The hook reads the certificate from disk when it runs, so one deferred run always publishes the newest one.
+- If the hook is deleted or disabled, or deploy hooks are switched off entirely, the queued deploy is **dropped** at the next drain. Your current configuration says not to run it.
+- If you remove the window, the deploy is released at the next drain rather than waiting one more time.
+- A hook that fails inside its window is **not** re-queued. It is recorded in the history like any other failure; re-queuing would retry every minute for as long as the window stayed open.
+- A deploy still waiting after seven days is logged as a warning. That is not a limit — waiting is the feature — but a week means the window has not opened at all, which usually means the days or the timezone are not what you meant.
+
+Deploys held for a window are invisible everywhere else: the certificate renewed, the history shows nothing, and nothing failed. `GET /api/deploy/pending` lists them with the window they are waiting for and when it next opens.
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" https://certmate.local/api/deploy/pending
+```
+
+```json
+[
+  {
+    "kind": "hook", "id": "6f0…", "domain": "api.example.com",
+    "event": "renewed", "queued_at": "2026-09-08T13:12:04+00:00",
+    "window": "02:00-04:00 Europe/Rome (sat, sun)",
+    "next_run": "2026-09-12T00:00:00+00:00", "orphaned": false
+  }
+]
+```
+
+### What ignores the window
+
+**Deploy Now** does. Pressing it is choosing this moment; holding the deploy until 02:00 would make the button do nothing visible. The same is true of `POST /api/deploy/test/<id>`.
 
 ---
 

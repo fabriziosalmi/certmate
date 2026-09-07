@@ -651,6 +651,27 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
             logger.error(f"Failed to test deploy hook {hook_id}: {e}")
             return jsonify({'error': 'Failed to test deploy hook'}), 500
 
+    @app.route('/api/deploy/pending', methods=['GET'])
+    @auth_manager_ref.require_role('admin')
+    def api_deploy_pending():
+        """Deploys held for a maintenance window (#632).
+
+        A held deploy is invisible everywhere else: the certificate renewed,
+        the history has no entry, and nothing failed. Without this an operator
+        cannot tell "waiting for 02:00" from "the hook never fired", which are
+        the same picture and very different problems.
+
+        Returns a bare list, like the sibling history endpoint.
+        """
+        if not deploy_manager:
+            return jsonify({'error': 'Deploy manager not available'}), 503
+
+        try:
+            return jsonify(deploy_manager.get_pending())
+        except Exception as e:
+            logger.error(f"Failed to list pending deploys: {e}")
+            return jsonify({'error': 'Failed to list pending deploys'}), 500
+
     @app.route('/api/deploy/history', methods=['GET'])
     @auth_manager_ref.require_role('admin')
     def api_deploy_history():
