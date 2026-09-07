@@ -22,13 +22,16 @@ from flask_restx import Resource, fields
 
 from ..core.metrics import get_metrics_summary, is_prometheus_available
 from ..core.constants import CERTIFICATE_FILES, iter_cert_domain_dirs
-from ..core.auth import ROLE_HIERARCHY
+from .resource_context import (
+    build_context, wants_async, job_accepted, check_domain_scope,
+    is_record_in_scope, scope_filter_records, user_has_role,
+)
 from ..core.utils import utc_now_iso, classify_renewal_error
 from ..core.certificates import DomainOperationInProgress
 from ..core.file_operations import RestoreIncompleteError
-from ..core.cert_service import CertificateService, DomainOutOfScope
+from ..core.cert_service import DomainOutOfScope
 from ..core.audit_context import audit_context_from_request
-from ..core.inventory_view import build_inventory_view, record_in_scope
+from ..core.inventory_view import build_inventory_view
 
 _DOMAIN_RE = re.compile(r'^(\*\.)?([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$')
 
@@ -338,98 +341,38 @@ def create_api_resources(api, models, managers):
         managers: Dictionary of manager instances (auth, settings, certificates, etc.)
     """
 
-    auth_manager = managers['auth']
-    settings_manager = managers['settings']
-    certificate_manager = managers['certificates']
-    file_ops = managers['file_ops']
-    cache_manager = managers['cache']
-    dns_manager = managers['dns']
-    deploy_manager = managers.get('deployer')
-    audit_logger = managers.get('audit')
-    # Shared create/renew orchestration. Production wires a single instance via
-    # the container (factory.py); the ``or`` fallback builds one from the
-    # manager set so tests that call create_api_resources with a minimal
-    # managers dict (no 'cert_service'/'events') keep working.
-    cert_service = managers.get('cert_service') or CertificateService(
-        certificate_manager, settings_manager, auth_manager,
-        audit_logger=audit_logger,
-    )
-    # Optional async issuance executor (single-instance, in-process). Absent in
-    # minimal-managers unit tests, in which case create/renew stay synchronous.
-    cert_executor = managers.get('cert_executor')
-
-    _ASYNC_TRUTHY = (True, 1, '1', 'true', 'yes', 'on')
+    # The manager set and the helpers that used to be captured here now live
+    # in modules/api/resource_context.py, so a resource class can be moved into
+    # a module of its own without dragging this closure with it (#669). The
+    # local names below are aliases kept during the decomposition: call sites
+    # move group by group, not all at once.
+    ctx = build_context(managers)
+    auth_manager = ctx.auth
+    settings_manager = ctx.settings
+    certificate_manager = ctx.certificates
+    file_ops = ctx.file_ops
+    cache_manager = ctx.cache
+    dns_manager = ctx.dns
+    deploy_manager = ctx.deployer
+    audit_logger = ctx.audit
+    cert_service = ctx.cert_service
+    cert_executor = ctx.cert_executor
 
     def _wants_async(payload):
-        """True when the caller opted into async issuance via the ``async``
-        body flag or the ``?async=`` query param."""
-        if isinstance(payload, dict) and payload.get('async') in _ASYNC_TRUTHY:
-            return True
-        return request.args.get('async', '').strip().lower() in ('1', 'true', 'yes', 'on')
+        return wants_async(payload)
 
     def _job_accepted(job_id, operation, domain):
-        return {
-            'job_id': job_id,
-            'status': 'queued',
-            'operation': operation,
-            'domain': domain,
-            'status_url': f'/api/certificates/jobs/{job_id}',
-        }
+        return job_accepted(job_id, operation, domain,
+                            f'/api/certificates/jobs/{job_id}')
 
     def _check_domain_scope(domain, operation):
-        """Reject the request if the caller's API-key allowed_domains does
-        not cover *domain*. Returns (response_body, http_status) on denial,
-        or None when access is permitted.
-
-        Sessions and legacy bearer tokens have no allowed_domains set on
-        request.current_user → unrestricted (existing behavior preserved).
-        Only scoped API keys, which now carry an allowed_domains list,
-        will hit a 403.
-        """
-        user = getattr(request, 'current_user', None) or {}
-        if auth_manager.user_can_access_domain(user, domain):
-            return None
-        logger.warning(
-            "Scope denial: user=%s op=%s domain=%s scope=%s",
-            user.get('username'), operation, domain,
-            user.get('allowed_domains'),
-        )
-        if audit_logger:
-            audit_logger.log_authz_denied(
-                operation=operation,
-                resource_type='certificate',
-                resource_id=domain,
-                reason='domain outside scoped key allowed_domains',
-                user=user.get('username'),
-                ip_address=request.remote_addr,
-            )
-        return {
-            'error': f'API key not authorized for domain {domain}',
-            'code': 'DOMAIN_OUT_OF_SCOPE',
-        }, 403
+        return check_domain_scope(ctx, domain, operation)
 
     def _record_in_scope(record):
-        """True if the caller's API-key scope covers any domain the inventory
-        *record* names (subject CN or a SAN). Unrestricted callers (sessions,
-        legacy tokens, unscoped keys) always pass; a scoped key only sees
-        discovered/managed certs within its allowed_domains, matching the
-        boundary CertificateList already enforces. A record with no names is
-        visible only to unrestricted callers.
-
-        Matches CertificateList exactly: scope comes from the user's
-        allowed_domains and is fed to domain_matches_scope, so an unrestricted
-        caller (scope None — including a request whose current_user is unset)
-        sees everything. Using user_can_access_domain here instead would be a
-        regression: it returns False for an empty user dict and would hide the
-        WHOLE inventory from a legitimate unrestricted caller."""
-        user = getattr(request, 'current_user', None) or {}
-        scope = user.get('allowed_domains')
-        return record_in_scope(
-            record, lambda d: auth_manager.domain_matches_scope(d, scope)
-        )
+        return is_record_in_scope(ctx, record)
 
     def _scope_filter_records(records):
-        return [r for r in records if _record_in_scope(r)]
+        return scope_filter_records(ctx, records)
 
     # Health check endpoint
     class HealthCheck(Resource):
@@ -1791,8 +1734,7 @@ def create_api_resources(api, models, managers):
     _PUBLIC_DOWNLOAD_FILES = frozenset({'cert.pem', 'chain.pem', 'fullchain.pem'})
 
     def _user_has_role(user, min_role):
-        level = ROLE_HIERARCHY.get((user or {}).get('role'), -1)
-        return level >= ROLE_HIERARCHY.get(min_role, 999)
+        return user_has_role(user, min_role)
 
     class CertificateDeploymentStatus(Resource):
         @api.doc(security='Bearer')
