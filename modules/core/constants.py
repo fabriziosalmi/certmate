@@ -53,18 +53,28 @@ MAX_CERTIFICATE_VALIDITY_DAYS = 3650  # ~10 years
 # Minimum validity period for certificates
 MIN_CERTIFICATE_VALIDITY_DAYS = 1
 
-# Default renewal threshold (days before expiry to trigger renewal)
+# Default renewal threshold (days before expiry to trigger renewal).
+# Read by certificates.py, digest.py and metrics.py as the fallback when
+# settings.json carries no renewal_threshold_days.
 DEFAULT_RENEWAL_THRESHOLD_DAYS = 30
 
-# Rate limiting defaults
-DEFAULT_LOGIN_RATE_LIMIT = 5  # attempts
-DEFAULT_LOGIN_RATE_WINDOW = 60  # seconds
+# Default session lifetime, in hours. Overridden by SESSION_TIMEOUT_HOURS.
+# Read by AuthManager, which is also what both cookie mint sites ask for their
+# max_age — so the server record and the browser cookie cannot drift apart.
+#
+# This said 24 while the code used 8 and nothing read the file (#590). The
+# value here is now the one shipped installs have always run.
+DEFAULT_SESSION_TIMEOUT_HOURS = 8
 
-# Session defaults
-DEFAULT_SESSION_TIMEOUT_HOURS = 24
+# Default deployment-status cache TTL, in seconds. Read by CacheManager as the
+# fallback when settings.json carries no cache_ttl.
+DEFAULT_CACHE_TTL = 300
 
-# API defaults
-DEFAULT_CACHE_TTL = 300  # seconds
+# Login rate-limiting defaults deliberately do NOT live here. There is no
+# single pair any more: routes.py runs two buckets with four values (5 attempts
+# / 60s per IP, 10 / 300s per username), and a lone DEFAULT_LOGIN_RATE_LIMIT
+# could only misdescribe them. They stay next to the algorithm that reads
+# them.
 
 
 def get_domain_name(domain_config):

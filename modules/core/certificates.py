@@ -29,7 +29,7 @@ from pathlib import Path
 from cryptography import x509
 from .shell import ShellExecutor
 from .dns_strategies import DNSStrategyFactory, HTTP01Strategy, acme_webroot_dir, check_certbot_plugin_installed
-from .constants import CERTIFICATE_FILES
+from .constants import CERTIFICATE_FILES, DEFAULT_RENEWAL_THRESHOLD_DAYS
 from .utils import (
     DeploymentStatusCache, validate_domain, utc_now, utc_now_iso, validate_key_options,
     repair_certbot_lineage_symlinks,
@@ -243,7 +243,9 @@ class CertificateManager:
             return 5.0
 
     @staticmethod
-    def _coerce_renewal_threshold_days(settings: dict | None, default: int = 30) -> int:
+    def _coerce_renewal_threshold_days(
+            settings: dict | None,
+            default: int = DEFAULT_RENEWAL_THRESHOLD_DAYS) -> int:
         """Return a usable renewal threshold in days from settings.
 
         A non-int, zero, or negative ``renewal_threshold_days`` (a typo via

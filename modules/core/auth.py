@@ -104,11 +104,32 @@ class AuthManager:
         self._last_used_persist_ts = {}
         self._last_used_lock = threading.Lock()
         import os
-        _timeout_hours = int(os.getenv('SESSION_TIMEOUT_HOURS', '8'))
+        from .constants import DEFAULT_SESSION_TIMEOUT_HOURS
+        try:
+            _timeout_hours = int(os.getenv(
+                'SESSION_TIMEOUT_HOURS', str(DEFAULT_SESSION_TIMEOUT_HOURS)))
+        except ValueError:
+            logger.warning(
+                "SESSION_TIMEOUT_HOURS is not an integer; using the default "
+                "of %d hours", DEFAULT_SESSION_TIMEOUT_HOURS)
+            _timeout_hours = DEFAULT_SESSION_TIMEOUT_HOURS
+        # max(1, ...) so a zero or negative value cannot expire every session
+        # at the moment it is created and lock everyone out.
         self._session_timeout = max(1, _timeout_hours) * 60 * 60
         if not BCRYPT_AVAILABLE:
             logger.warning("bcrypt not available; using the scrypt KDF fallback. "
                            "Install bcrypt for the preferred password hashing.")
+
+    @property
+    def session_timeout_seconds(self) -> int:
+        """How long a session lives, in seconds.
+
+        Public because the cookie has to agree with it (#590): both mint sites
+        set ``max_age`` from this rather than repeating a literal, so an
+        operator who changes SESSION_TIMEOUT_HOURS gets a browser cookie that
+        expires with the server-side record instead of eight hours later.
+        """
+        return self._session_timeout
 
     def set_audit_logger(self, audit_logger):
         """Inject the AuditLogger so authorization denials emit a real audit

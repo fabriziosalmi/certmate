@@ -3,6 +3,7 @@ Cache management module for CertMate
 Handles deployment status caching and cache operations
 """
 
+from .constants import DEFAULT_CACHE_TTL
 import logging
 from .utils import DeploymentStatusCache
 
@@ -21,7 +22,7 @@ class CacheManager:
         """Update cache settings from configuration"""
         try:
             settings = self.settings_manager.load_settings()
-            cache_ttl = settings.get('cache_ttl', 300)
+            cache_ttl = settings.get('cache_ttl', DEFAULT_CACHE_TTL)
             self.deployment_cache.set_ttl(cache_ttl)
             logger.info(f"Updated deployment cache TTL to {cache_ttl} seconds")
         except Exception as e:
