@@ -26,6 +26,9 @@ from modules.core.settings import (
 from modules.core.auth import AuthManager
 
 
+pytestmark = [pytest.mark.unit]
+
+
 # --- POST /api/settings whitelist ------------------------------------------
 
 class TestValidateSettingsPost:

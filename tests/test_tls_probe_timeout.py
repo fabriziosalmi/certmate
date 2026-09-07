@@ -27,6 +27,9 @@ import pytest
 from modules.api.resources import _tls_probe_timeout_seconds, _probe_tls_certificate
 
 
+pytestmark = [pytest.mark.unit]
+
+
 @pytest.fixture(autouse=True)
 def _no_proxy_env(monkeypatch):
     """These tests exercise the direct-socket probe path. Clear proxy env so a

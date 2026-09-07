@@ -27,6 +27,9 @@ from modules.api.models import create_api_models
 from modules.api.resources import create_api_resources
 
 
+pytestmark = [pytest.mark.unit]
+
+
 # --- _authenticate_request (F-1 refactor) -----------------------------------
 
 @pytest.fixture

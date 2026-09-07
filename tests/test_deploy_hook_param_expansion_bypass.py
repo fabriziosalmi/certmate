@@ -28,6 +28,9 @@ import pytest
 from modules.core.deployer import DeployManager
 
 
+pytestmark = [pytest.mark.unit]
+
+
 # Parameter expansion bypass attempts that were silently accepted before the fix.
 BYPASS_CASES = [
     "echo ${CERTMATE_FOO:-/etc/passwd}",          # default value (most exploitable)

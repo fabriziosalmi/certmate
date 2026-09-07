@@ -28,6 +28,9 @@ import pytest
 from modules.core.certificates import CertificateManager
 
 
+pytestmark = [pytest.mark.unit]
+
+
 def _make_manager(tmp_path: Path) -> CertificateManager:
     return CertificateManager(
         cert_dir=tmp_path,

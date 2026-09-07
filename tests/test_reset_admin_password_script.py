@@ -11,6 +11,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
+pytestmark = [pytest.mark.unit]
+
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "reset_admin_password.py"
 
 PASSWORD = "SuperSecretPassw0rd!"
