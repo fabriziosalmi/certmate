@@ -446,8 +446,8 @@ class Notifier:
             finally:
                 try:
                     server.quit()
-                except Exception:
-                    pass
+                except (smtplib.SMTPException, OSError) as e:
+                    logger.debug("SMTP quit failed after sending notification: %s", e)
 
         except Exception as e:
             logger.error(f"Email notification failed: {e}")

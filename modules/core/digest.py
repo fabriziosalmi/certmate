@@ -260,8 +260,11 @@ Generated {digest['generated_at']} by CertMate
             finally:
                 try:
                     server.quit()
-                except Exception:
-                    pass
+                except (smtplib.SMTPException, OSError) as e:
+                    # The mail is already sent; a failure closing the session
+                    # changes nothing for the caller. Narrow, and logged, so
+                    # it is not indistinguishable from a send that failed.
+                    logger.debug("SMTP quit failed after sending digest: %s", e)
 
         except Exception as e:
             logger.error(f"Weekly digest email failed: {e}")

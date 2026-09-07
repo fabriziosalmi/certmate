@@ -1194,8 +1194,11 @@ class SettingsManager:
                             # produced seconds ago by this boot and don't help
                             # the operator recover from pre-existing data loss.
                             backups = [b for b in backups if '_migration' not in b]
-                    except Exception:
-                        pass
+                    except OSError as e:
+                        # A failure here makes the message say "no backups
+                        # found", which is what an operator reads as "there is
+                        # nothing to restore from".
+                        logger.warning("Could not list unified backups: %s", e)
                     if backups:
                         logger.error(
                             "CRITICAL: settings.json has no users. If this is "
@@ -1215,8 +1218,11 @@ class SettingsManager:
                     if cert_dir and cert_dir.exists():
                         try:
                             cert_domains = [d.name for d in iter_cert_domain_dirs(cert_dir)]
-                        except Exception:
-                            pass
+                        except OSError as e:
+                            # Same shape: silence here turns "I could not look"
+                            # into "there is nothing there".
+                            logger.warning(
+                                "Could not enumerate certificate directories: %s", e)
                     if cert_domains:
                         logger.warning(
                             "settings.json has no domains but certificates exist "
