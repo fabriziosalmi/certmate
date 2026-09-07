@@ -527,6 +527,11 @@ class CertificateManager:
         the run proceeds unchanged — this is an optimisation on the issuance
         path, and the issuance path must not acquire a new way to fail.
         """
+        # `domain` becomes a directory name three lines down. Its one caller
+        # already screens it, but a unit that builds paths from a parameter
+        # enforces its own precondition rather than relying on where it is
+        # called from (#672).
+        _reject_path_escaping_domain(domain)
         try:
             target = Path(cert_dir) / domain / 'accounts'
             if target.exists() and any(target.rglob('*.json')):

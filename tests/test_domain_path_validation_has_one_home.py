@@ -213,3 +213,50 @@ def test_no_module_writes_the_character_rule_itself_again():
         'domain_paths; that is how one copy gets fixed and the rest do '
         f'not:\n  ' + '\n  '.join(offenders)
     )
+
+
+def test_every_unit_that_builds_a_path_from_a_domain_screens_it():
+    """The rule that keeps CodeQL's finding true rather than just quiet.
+
+    Each of these takes a caller-supplied domain and turns it into a directory
+    name. Their callers screen it, but "safe because of where it is called
+    from" is what stopped being true every time this session moved code — so
+    each one screens its own input, and this says so by executing them.
+    """
+    import threading
+    from unittest.mock import MagicMock
+
+    from modules.core.certificates import CertificateManager
+
+    manager = CertificateManager.__new__(CertificateManager)
+    manager._domain_locks = {}
+    manager._domain_locks_mutex = threading.Lock()
+    manager.cert_dir = Path(tempfile.mkdtemp())
+    manager.settings_manager = MagicMock()
+
+    escapes = ['../etc', 'a/b', 'a\\b', 'x\x00y', '']
+    for bad in escapes:
+        with pytest.raises(ValueError):
+            manager._seed_acme_account(bad, manager.cert_dir, 'letsencrypt', None)
+
+
+def test_the_seed_still_runs_for_an_ordinary_domain():
+    """CONTROL: a guard that refused everything would satisfy the test above
+    while breaking ACME account reuse — 50 domains in one batch becoming 50
+    registrations from one IP, which is what that function exists to prevent.
+    """
+    import threading
+    from unittest.mock import MagicMock
+
+    from modules.core.certificates import CertificateManager
+
+    manager = CertificateManager.__new__(CertificateManager)
+    manager._domain_locks = {}
+    manager._domain_locks_mutex = threading.Lock()
+    cert_dir = Path(tempfile.mkdtemp())
+    manager.cert_dir = cert_dir
+    manager.settings_manager = MagicMock()
+
+    # No donor on disk, so it returns None — the point is that it got there.
+    assert manager._seed_acme_account(
+        'example.com', cert_dir, 'letsencrypt', None) is None
