@@ -1734,6 +1734,17 @@
                 var canRestore = backup.can_restore === true;
                 var blockedReason = escapeHtml(backup.restore_blocked_reason ||
                     'this archive cannot restore the instance');
+                // Archives written before v2.26.0 carry every private key while
+                // their manifest claims to be share-safe, so this is read from
+                // the archive rather than from that claim (#595). Only a
+                // definite true warns: null means it could not be inspected,
+                // and crying wolf on those would train people to ignore it.
+                var carriesKeys = backup.contains_key_material === true;
+                var keyCount = backup.key_file_count;
+                var keyBadge = !carriesKeys ? '' :
+                    '<span aria-hidden="true">·</span>' +
+                    '<span class="px-1.5 py-0.5 rounded bg-danger-surface border border-danger-line text-danger-strong text-[11px]" ' +
+                    'title="This archive contains ' + (keyCount || 'private') + ' private key file(s). If it was ever shared or copied off this host, treat those keys as exposed and reissue.">contains private keys</span>';
                 var restoreBadge = canRestore ? '' :
                     '<span aria-hidden="true">·</span>' +
                     '<span class="px-1.5 py-0.5 rounded bg-warning-surface border border-warning-line text-warning-strong text-[11px]" title="' + blockedReason + '">cannot restore</span>';
@@ -1750,6 +1761,7 @@
                             '<span aria-hidden="true">·</span>' +
                             '<span class="px-1.5 py-0.5 rounded bg-surface-2 text-[11px]">' + safeReason + '</span>' +
                             restoreBadge +
+                            keyBadge +
                         '</div>' +
                     '</div>' +
                     '<div class="flex items-center gap-0.5 shrink-0">' +

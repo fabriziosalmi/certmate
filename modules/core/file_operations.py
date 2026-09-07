@@ -733,6 +733,52 @@ class FileOperations:
         logger.info(f"Backup ingested from upload: {filename} ({len(raw)} bytes)")
         return filename, None
 
+    def _archive_key_files(self, backup_file):
+        """Key files inside *backup_file*, or None if it cannot be inspected.
+
+        None is not an answer of "none": an encrypted archive this instance has
+        no passphrase for genuinely cannot be read, and reporting that as clean
+        would be the same mistake the old manifests made.
+        """
+        try:
+            if backup_file.name.endswith(_BACKUP_ENC_SUFFIX):
+                passphrase = _backup_passphrase()
+                if not passphrase:
+                    return None
+                source = io.BytesIO(_decrypt_backup_payload(
+                    backup_file.read_bytes(), passphrase))
+            else:
+                source = backup_file
+            with zipfile.ZipFile(source, 'r') as zipf:
+                return self._archive_key_material(zipf.namelist())
+        except Exception as e:
+            logger.debug(f"Could not inspect {backup_file.name} for keys: {e}")
+            return None
+
+    @staticmethod
+    def _archive_key_material(names):
+        """The key files an archive carries, from its NAME LIST alone.
+
+        Every backup made before v2.26.0 with the default settings contains the
+        private key of every certificate, while its manifest says
+        `secrets_masked: true` and the interface called it share-safe (#595).
+        Archives from v2.22.0 also carry the private CA key and every
+        client-certificate key.
+
+        An operator who shared one believing it harmless has no way to tell
+        from the listing, and the advice — unzip and grep — assumes they know
+        to look. So the listing looks for them.
+
+        Reads the name list only: no entry is decompressed, so this stays cheap
+        enough to run while rendering a page.
+        """
+        from pathlib import PurePosixPath
+
+        return sorted({
+            name for name in names
+            if not name.endswith('/') and _is_key_material(PurePosixPath(name))
+        })
+
     def _backup_restorability(self, backup_file):
         """Can this archive actually bring the instance back? ``(bool, reason)``.
 
@@ -815,8 +861,19 @@ class FileOperations:
                             logger.debug(f"Could not read ZIP metadata from {backup_file}: {e}")
 
                         can_restore, reason = self._backup_restorability(backup_file)
+                        key_files = self._archive_key_files(backup_file)
                         backups["unified"].append({
                             "filename": backup_file.name,
+                            # Whether this archive carries private keys, read
+                            # from the archive itself rather than from its
+                            # manifest — every backup made before v2.26.0 says
+                            # secrets_masked: true and carries them anyway
+                            # (#595). None when the archive cannot be opened
+                            # here, which is not the same as "no keys".
+                            "contains_key_material": (
+                                None if key_files is None else bool(key_files)),
+                            "key_file_count": (
+                                None if key_files is None else len(key_files)),
                             # Stated per entry rather than left to be inferred
                             # from `metadata.secrets_masked`: that field names
                             # the mechanism, and the operator needs the
