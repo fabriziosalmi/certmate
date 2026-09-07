@@ -26,8 +26,15 @@ from modules.core.settings import SettingsManager
 pytestmark = [pytest.mark.unit]
 
 
-def _make_cert_pem(not_after: datetime) -> bytes:
-    """Build a throwaway self-signed cert with a known notAfter."""
+def _make_cert_pem(not_after: datetime, with_key: bool = False):
+    """Build a throwaway self-signed cert with a known notAfter.
+
+    With ``with_key`` it returns ``(cert_pem, key_pem)``. These tests are about
+    expiry arithmetic, so they need a COMPLETE certificate on disk: since #608 a
+    certificate with no private key is reported as needing attention regardless
+    of its expiry, which would otherwise make a threshold assertion pass or fail
+    for a reason it is not testing.
+    """
     key = ec.generate_private_key(ec.SECP256R1())
     name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "example.com")])
     cert = (
@@ -40,7 +47,15 @@ def _make_cert_pem(not_after: datetime) -> bytes:
         .not_valid_after(not_after)
         .sign(key, hashes.SHA256())
     )
-    return cert.public_bytes(serialization.Encoding.PEM)
+    cert_pem = cert.public_bytes(serialization.Encoding.PEM)
+    if not with_key:
+        return cert_pem
+    key_pem = key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
+    )
+    return cert_pem, key_pem
 
 
 @pytest.fixture
@@ -76,15 +91,17 @@ def cert_manager(tmp_path):
     )
 
 
-def _write_cert(cert_manager, domain, pem):
+def _write_cert(cert_manager, domain, pem, key_pem=None):
     cert_path = cert_manager.cert_dir / domain
     cert_path.mkdir(parents=True, exist_ok=True)
     (cert_path / "cert.pem").write_bytes(pem)
+    if key_pem is not None:
+        (cert_path / "privkey.pem").write_bytes(key_pem)
 
 
 def test_expiry_parsed_in_process_without_openssl(cert_manager):
     not_after = datetime.now(timezone.utc) + timedelta(days=42)
-    _write_cert(cert_manager, "example.com", _make_cert_pem(not_after))
+    _write_cert(cert_manager, "example.com", *_make_cert_pem(not_after, with_key=True))
 
     info = cert_manager.get_certificate_info("example.com")
 
@@ -99,7 +116,7 @@ def test_expiry_parsed_in_process_without_openssl(cert_manager):
 
 def test_near_expiry_flags_needs_renewal(cert_manager):
     not_after = datetime.now(timezone.utc) + timedelta(days=5)
-    _write_cert(cert_manager, "soon.example.com", _make_cert_pem(not_after))
+    _write_cert(cert_manager, "soon.example.com", *_make_cert_pem(not_after, with_key=True))
 
     info = cert_manager.get_certificate_info("soon.example.com")
 
@@ -119,7 +136,7 @@ def test_renewal_boundary_is_inclusive(cert_manager):
     truncating `.days` land on exactly 30 regardless of sub-second skew.
     """
     not_after = datetime.now(timezone.utc) + timedelta(days=30, hours=12)
-    _write_cert(cert_manager, "boundary.example.com", _make_cert_pem(not_after))
+    _write_cert(cert_manager, "boundary.example.com", *_make_cert_pem(not_after, with_key=True))
 
     info = cert_manager.get_certificate_info("boundary.example.com")
 
@@ -131,7 +148,7 @@ def test_just_above_threshold_does_not_renew(cert_manager):
     """One day past the threshold must NOT renew — guards against the fix
     over-correcting into premature renewal."""
     not_after = datetime.now(timezone.utc) + timedelta(days=31, hours=12)
-    _write_cert(cert_manager, "above.example.com", _make_cert_pem(not_after))
+    _write_cert(cert_manager, "above.example.com", *_make_cert_pem(not_after, with_key=True))
 
     info = cert_manager.get_certificate_info("above.example.com")
 

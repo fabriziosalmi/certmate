@@ -428,6 +428,15 @@ _DEEP_MERGE_SETTINGS_KEYS = frozenset({
     'ca_providers',
     'notifications',
     'rate_limits',
+    # Without this a settings POST carrying one provider REPLACED the whole
+    # dns_providers subtree, so configuring a second provider silently deleted
+    # the first — the certificate could still be requested against it and the
+    # issuance then failed for missing credentials (#641).
+    #
+    # Safe to merge because removal has its own path: the UI deletes an account
+    # with DELETE /api/dns/<provider>/accounts/<id>, never by posting a
+    # settings payload that omits it.
+    'dns_providers',
 })
 
 

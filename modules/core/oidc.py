@@ -122,6 +122,7 @@ class OIDCManager:
         self._audit_logger = audit_logger
         self._oauth = None  # cached OAuth registry (Authlib)
         self._cached_issuer = None  # invalidate cache if issuer changes
+        self._cached_client_key = None
 
     # ----------------------------------------------------------------- config
 
@@ -187,11 +188,11 @@ class OIDCManager:
 
         normalized = _normalize_oidc_config(merged)
 
-        # Drop the cached OAuth client — if issuer/client_id changed, the
-        # next login must rediscover.
-        if normalized.get('issuer_url') != self._cached_issuer:
-            self._oauth = None
-            self._cached_issuer = None
+        # Drop the cached OAuth client whenever anything that shapes it
+        # changes — issuer, client id, secret or scopes. Keyed on the issuer
+        # alone, a rotated secret was silently ignored until a restart (#647).
+        if self._client_fingerprint(normalized) != self._cached_client_key:
+            self._invalidate_client()
 
         def _mutate(settings):
             settings['oidc'] = normalized
@@ -242,6 +243,48 @@ class OIDCManager:
 
     # ----------------------------------------------------------- Authlib glue
 
+    def _advertised_signing_algorithms(self):
+        """What the cached discovery document says the IdP signs with.
+
+        Read for the error message only: it is the single fact that turns
+        "Algorithm of 'RS256' is not allowed" from a dead end into something
+        an operator can act on.
+        """
+        try:
+            client = self._oauth.create_client('certmate_oidc') if self._oauth else None
+            metadata = getattr(client, 'server_metadata', None) or {}
+            return metadata.get('id_token_signing_alg_values_supported')
+        except Exception:
+            return None
+
+    def _invalidate_client(self):
+        """Forget the cached Authlib client and its discovery document."""
+        self._oauth = None
+        self._cached_issuer = None
+        self._cached_client_key = None
+
+    @staticmethod
+    def _client_fingerprint(cfg):
+        """Everything about the config that changes the Authlib client.
+
+        The cache used to be keyed on issuer_url alone, so rotating the client
+        secret or changing the scopes had no effect until the process
+        restarted — the stale client, and the discovery document cached inside
+        it, were handed back unchanged (#647).
+
+        The secret is hashed rather than kept: this value lives on the manager
+        and ends up in comparisons and, one day, in somebody's debug print.
+        """
+        import hashlib
+
+        secret = cfg.get('client_secret') or ''
+        return (
+            cfg.get('issuer_url'),
+            cfg.get('client_id'),
+            hashlib.sha256(secret.encode()).hexdigest(),
+            tuple(cfg.get('scopes') or ()),
+        )
+
     def _build_oauth_client(self, app):
         """Return a cached Authlib client bound to ``app``.
 
@@ -253,7 +296,8 @@ class OIDCManager:
         if not (cfg['enabled'] and cfg['issuer_url'] and cfg['client_id']):
             raise RuntimeError('OIDC is not enabled or fully configured')
 
-        if self._oauth is not None and self._cached_issuer == cfg['issuer_url']:
+        fingerprint = self._client_fingerprint(cfg)
+        if self._oauth is not None and self._cached_client_key == fingerprint:
             return self._oauth
 
         # Lazy import so units tests that don't exercise the flow don't
@@ -278,6 +322,7 @@ class OIDCManager:
         )
         self._oauth = oauth
         self._cached_issuer = cfg['issuer_url']
+        self._cached_client_key = fingerprint
         return oauth
 
     def _client(self, app):
@@ -321,6 +366,31 @@ class OIDCManager:
             client = self._client(current_app)
             token = client.authorize_access_token()
         except Exception as exc:
+            # An algorithm rejection is almost never a code problem: Authlib
+            # restricts the accepted signing algorithms to whatever the
+            # discovery document advertised, and that document is fetched once
+            # and cached for the life of the process. Change the signing
+            # algorithm on the IdP and CertMate keeps enforcing the old list,
+            # rejecting every login with "Algorithm of 'RS256' is not allowed"
+            # and giving the operator nothing to act on (#647).
+            #
+            # So say what the mismatch actually is, and drop the cached client
+            # so the next attempt refetches. One retry costs a discovery
+            # request; not retrying costs an SSO that never works again until
+            # somebody restarts the container.
+            if 'algorithm' in str(exc).lower() or 'alg' in str(exc).lower():
+                advertised = self._advertised_signing_algorithms()
+                logger.warning(
+                    "OIDC token exchange failed on the id_token signing "
+                    "algorithm: %s. The IdP's discovery document advertises "
+                    "%s. If the IdP was reconfigured, this cached document is "
+                    "stale — it has been dropped and the next login will "
+                    "refetch it. If the list is genuinely wrong, fix "
+                    "id_token_signing_alg_values_supported at the IdP.",
+                    str(exc).replace(chr(10), ' ').replace(chr(13), ' '),
+                    advertised or 'nothing')
+                self._invalidate_client()
+                return None, 'token_exchange_algorithm'
             logger.warning(f"OIDC token exchange failed: {exc}")
             return None, 'token_exchange'
 
