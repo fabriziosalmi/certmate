@@ -20,6 +20,49 @@ from .resource_context import ApiContext, check_domain_scope
 
 logger = logging.getLogger(__name__)
 
+# How many per-domain reads a listing runs at once. Matches the gunicorn
+# thread count the image ships with (--threads 8): these are IO-bound calls,
+# and one request should not be able to occupy more capacity than the whole
+# process has for serving.
+LISTING_CONCURRENCY = 8
+
+# Below this, threads cost more than they save. A local-filesystem instance
+# with a handful of certificates reads four small files per domain from the
+# page cache; the pool exists for the instance whose storage backend is Azure
+# Key Vault or AWS Secrets Manager, where each read is a network round trip
+# and a dashboard load was N of them, one after another.
+LISTING_CONCURRENCY_THRESHOLD = 4
+
+
+def _gather(fetch, items):
+    """Apply *fetch* to each item, concurrently, preserving order.
+
+    Order is preserved because the caller zips the results back against the
+    input: the dashboard lists certificates in settings order, and a listing
+    that reshuffled on every load would be a worse defect than the latency
+    this fixes.
+
+    A failure for one item is not allowed to lose the rest. `executor.map`
+    raises on the first result that raised, which would turn one unreadable
+    certificate into a 500 for the whole listing — so each call is wrapped and
+    a failure yields None, exactly as a missing certificate already does.
+    """
+    if len(items) < LISTING_CONCURRENCY_THRESHOLD:
+        return [_guarded(fetch, item) for item in items]
+
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=LISTING_CONCURRENCY,
+                            thread_name_prefix='cert-list') as pool:
+        return list(pool.map(lambda item: _guarded(fetch, item), items))
+
+
+def _guarded(fetch, item):
+    try:
+        return fetch(item)
+    except Exception as e:
+        logger.error("Could not read certificate info for %s: %s", item, e)
+        return None
+
 
 def create_certificates_resources(api, models, ctx: ApiContext) -> dict:
     """Build the certificates resources against *ctx*."""
@@ -58,17 +101,24 @@ def create_certificates_resources(api, models, ctx: ApiContext) -> dict:
                 # Get certificate info for all domains, filtered by the
                 # caller's API-key scope. domain_matches_scope(d, None) is
                 # always True so unrestricted callers see everything.
-                for domain in all_domains:
-                    if not domain:
-                        continue
-                    if not ctx.auth.domain_matches_scope(domain, scope):
-                        continue
-                    # Reuse the once-loaded settings dict so each per-domain
-                    # call skips its own settings deepcopy (load_settings is
-                    # already request-cached on flask.g). use_cache stays at
-                    # its default True so the storage-backend cert-info cache
-                    # is still consulted/populated during listing.
-                    cert_info = ctx.certificates.get_certificate_info(domain, settings=settings)
+                visible = [d for d in all_domains
+                           if d and ctx.auth.domain_matches_scope(d, scope)]
+
+                # Reuse the once-loaded settings dict so each per-domain call
+                # skips its own settings deepcopy — and, with the concurrency
+                # below, so that no worker thread calls load_settings at all:
+                # that function caches on flask.g behind has_request_context(),
+                # and a worker has no request context, so each one would fall
+                # back to reading settings.json from disk.
+                #
+                # use_cache stays at its default True so the storage-backend
+                # cert-info cache is still consulted and populated.
+                def _info(domain):
+                    return ctx.certificates.get_certificate_info(
+                        domain, settings=settings)
+
+                for domain, cert_info in zip(visible,
+                                             _gather(_info, visible)):
                     if cert_info:
                         cert_info['auto_renew'] = auto_renew_by_domain.get(domain, True)
                         certificates.append(cert_info)
