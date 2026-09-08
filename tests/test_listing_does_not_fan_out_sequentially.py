@@ -108,7 +108,10 @@ def test_a_failing_read_is_logged_with_the_domain():
         module_logger.removeHandler(handler)
         module_logger.setLevel(previous)
 
-    assert any('broken.example.com' in str(r.args or ()) for r in records), (
+    # Membership in the args tuple, not a substring of its repr: the exact
+    # claim is that the domain was passed as a formatting argument, and the
+    # loose version would also accept it appearing inside some other value.
+    assert any('broken.example.com' in (r.args or ()) for r in records), (
         'a certificate that could not be read vanished from the listing with '
         'nothing saying which one, or why'
     )
