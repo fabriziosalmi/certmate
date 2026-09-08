@@ -209,12 +209,17 @@ def test_a_listener_that_raises_does_not_kill_its_worker():
     bus.add_listener(listener)
 
     bus.publish('certificate_created', {'domain': 'boom.example.com'})
-    assert _eventually(lambda: 'boom.example.com' in calls)
+    assert _eventually(lambda: len(calls) == 1)
+    assert calls == ['boom.example.com']
 
     bus.publish('certificate_created', {'domain': 'after.example.com'})
-    assert _eventually(lambda: 'after.example.com' in calls), (
+    assert _eventually(lambda: len(calls) == 2), (
         'the worker died with the listener, so every later event is lost'
     )
+    # Exact, and in order: the second event must be delivered ONCE, by the
+    # worker that survived — not re-delivered by a replacement, and not
+    # swallowed. Membership would accept both.
+    assert calls == ['boom.example.com', 'after.example.com']
 
 
 def test_a_failing_listener_is_logged_at_error(caplog):
