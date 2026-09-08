@@ -186,6 +186,7 @@ def register_web_routes(app, managers):
             # successful login can bounce the user back where they
             # were trying to go (6.2 fix).
             return redirect(url_for('login_page', next=request.path))
+        decorated._certmate_protection = 'require_web_auth'
         return decorated
 
     # Expose the authenticated user to every Jinja template so base.html
