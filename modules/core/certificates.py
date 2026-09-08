@@ -926,7 +926,27 @@ class CertificateManager:
             raise
 
     def _get_domain_lock(self, domain: str) -> threading.Lock:
-        """Return the per-domain lock, creating it on first use."""
+        """Return the per-domain lock, creating it on first use.
+
+        **This lock is per-PROCESS.** Serialising issuance and renewal for a
+        domain therefore depends on there being exactly one worker — a fact
+        the image states in its CMD (`--workers 1`) and which nothing else in
+        the code that relies on it mentioned.
+
+        With two workers the lock is two locks. Two requests for the same
+        domain would run certbot concurrently against the same
+        `--config-dir`, and the four-file publish would interleave with itself
+        — the torn generation `reconcile_served_copies` exists to repair,
+        arrived at deliberately rather than by a crash.
+
+        `_publish_lock` shows the shape a cross-process version would take: an
+        `flock` on a file beside the certificate. It is not used here because
+        the whole issuance path would have to hold it, including the certbot
+        subprocess, and a stale lock file then blocks renewal for a domain
+        until someone removes it. Under one worker that cost buys nothing.
+        `warn_if_multiple_workers` in factory.py is what makes the constraint
+        loud if it is ever violated.
+        """
         with self._domain_locks_mutex:
             if domain not in self._domain_locks:
                 self._domain_locks[domain] = threading.Lock()
