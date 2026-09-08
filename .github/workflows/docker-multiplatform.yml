@@ -223,6 +223,23 @@ jobs:
         output: 'trivy-results.sarif'
         severity: 'HIGH,CRITICAL'
 
+    - name: Capture the dependency set that actually ships
+      # From inside the image, so every version is the one pip resolved.
+      # Scanning the requirements files instead resolves each transitive
+      # constraint to the lowest version it admits: on 2026-09-08 that
+      # reported pyjwt 2.9.0 with seven advisories against an image holding
+      # 2.13.0 with none, and the same for requests, idna, filelock,
+      # protobuf and a pygments that is not installed at all.
+      run: |
+        docker run --rm --entrypoint /opt/venv/bin/pip \
+          certmate:scan freeze > resolved-requirements.txt
+        wc -l < resolved-requirements.txt
+
+    - name: Every advisory against a shipped package is in SECURITY.md
+      # The other half of scripts/check_advisories.py, which reconciles
+      # SECURITY.md with Dependabot — and Dependabot reads the manifests.
+      run: python3 scripts/check_resolved_advisories.py resolved-requirements.txt
+
     - name: Fail on a fixable CRITICAL
       # The reporting step above deliberately does not gate: the image
       # carries a long tail of unfixable base-image findings tracked in #403,
