@@ -224,11 +224,17 @@ dns_provider_accounts = Gauge(
     ['provider']
 )
 
-dns_provider_api_calls = Counter(
-    'certmate_dns_provider_api_calls_total',
-    'Total DNS provider API calls',
-    ['provider', 'operation', 'status']
-)
+# There is no certmate_dns_provider_api_calls_total, and there deliberately is
+# not one. It existed here, declared and never incremented, and it cannot be
+# incremented from where the calls happen: CertMate does not talk to a DNS
+# provider's API in this process. certbot does, in its own subprocess, and the
+# one path where CertMate itself does — the DNS-alias manual hook — is a
+# separate short-lived Python process that certbot spawns, so a counter it
+# increments dies with it and never reaches this registry. Recording it would
+# need a multiprocess collector, which is a larger decision than the metric is
+# worth. Removed rather than left exported, because a series that is always
+# zero reads as "no calls are failing".
+
 
 # System health metrics
 application_uptime = Gauge(
@@ -540,15 +546,6 @@ class CertMateMetricsCollector:
         acme_rate_limit_hits.labels(
             limit_type=limit_type,
             dns_provider=dns_provider
-        ).inc()
-    
-    def record_dns_api_call(self, provider: str, operation: str, success: bool):
-        """Record a DNS provider API call."""
-        status = 'success' if success else 'failure'
-        dns_provider_api_calls.labels(
-            provider=provider,
-            operation=operation,
-            status=status
         ).inc()
     
     def record_background_job(self, job_type: str, duration: float):

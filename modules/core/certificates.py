@@ -495,8 +495,58 @@ class CertificateManager:
                 metrics_collector.record_acme_error(
                     type(error).__name__ if error else 'unknown',
                     domain, provider)
+                self._record_rate_limit_hit(error, provider, 'renewal')
         except Exception:  # pragma: no cover - defensive
             logger.debug("Failed to record renewal metrics for a domain")
+
+    def _record_creation_metrics(self, domain, dns_provider, success, duration,
+                                 error=None):
+        """Emit issuance outcome + duration to the Prometheus collector.
+
+        The renewal path has recorded its outcome since #417; the creation path
+        recorded nothing, so certmate_certificate_requests_total and the
+        creation duration histogram were exported empty at every scrape while
+        the renewal series next to them moved. An operator could not answer
+        'how many certificates did we issue this week, and how many attempts
+        failed' from /metrics at all, and a Let's Encrypt outage during a burst
+        of new issuance registered as zero ACME errors — because the only
+        record_acme_error call site was the renewal one.
+
+        Never raises: telemetry must not be the reason an issuance that already
+        obtained a certificate is reported as failed.
+        """
+        try:
+            from .metrics import metrics_collector
+            provider = dns_provider or 'unknown'
+            metrics_collector.record_certificate_request(
+                domain, provider, success)
+            metrics_collector.record_certificate_creation_time(
+                provider, duration)
+            if not success:
+                metrics_collector.record_acme_error(
+                    type(error).__name__ if error else 'unknown',
+                    domain, provider)
+                self._record_rate_limit_hit(error, provider, 'issuance')
+        except Exception:  # pragma: no cover - defensive
+            logger.debug("Failed to record issuance metrics for a domain")
+
+    @staticmethod
+    def _record_rate_limit_hit(error, provider, limit_type):
+        """Count a CA refusal that was a rate limit rather than a fault.
+
+        certmate_acme_rate_limit_hits_total is the one series an operator of
+        this software would alert on first, and it could never fire: the metric
+        was declared and no code path incremented it — monitoring/prometheus-alerts.yml
+        says so, and omits the alert for that reason. It is separated from the
+        generic ACME error counter because the two mean opposite things about
+        what to do next: an error is worth retrying, a rate limit is what
+        retrying causes.
+        """
+        from .utils import is_acme_rate_limit
+        if error is None or not is_acme_rate_limit(error):
+            return
+        from .metrics import metrics_collector
+        metrics_collector.record_rate_limit_hit(limit_type, provider)
 
     @staticmethod
     def _certificate_info_cache_ttl() -> int:
@@ -2806,6 +2856,7 @@ class CertificateManager:
 
             duration = time.time() - start_time
             logger.info(f"Certificate created successfully for {domain} in {duration:.2f} seconds")
+            self._record_creation_metrics(domain, dns_provider, True, duration)
             self._invalidate_certificate_info_cache(domain)
             self._write_pfx(domain)
 
@@ -2821,13 +2872,17 @@ class CertificateManager:
                 result['storage_warning'] = storage_warning
             return result
             
-        except subprocess.TimeoutExpired:
+        except subprocess.TimeoutExpired as e:
             logger.error(f"Certificate creation timeout for {domain}")
+            self._record_creation_metrics(
+                domain, dns_provider, False, time.time() - start_time, error=e)
             raise RuntimeError("Certificate creation timed out")
-            
+
         except Exception as e:
             duration = time.time() - start_time
             logger.error(f"Certificate creation failed for {domain}: {str(e)} (duration: {duration:.2f}s)")
+            self._record_creation_metrics(
+                domain, dns_provider, False, duration, error=e)
             raise
         finally:
             domain_lock.release()
