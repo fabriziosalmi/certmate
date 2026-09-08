@@ -2,8 +2,15 @@ name: UI tests
 
 # Runs the Playwright UI suite (-m ui) so it cannot rot silently the way two
 # settings tests did. The main CI job runs `-m "not ui"`, so without this the
-# UI tests would never execute. Path-filtered to frontend changes to spare the
-# single self-hosted host, plus a nightly run to catch drift, plus manual.
+# UI tests would never execute. Limited to frontend changes to spare the single
+# self-hosted host, plus a nightly run to catch drift, plus manual.
+#
+# That limit used to be a `paths:` filter on the trigger, which made this
+# workflow unusable as a required check: a required context that never starts
+# leaves the PR pending forever, so the suite ran on every frontend PR and
+# gated none of them. The filter now lives in the `changes` job, and `ui-gate`
+# runs unconditionally and reports the outcome — including "skipped, and that
+# is a pass". `ui-gate` is the required context; `ui` is not.
 #
 # Shares the host-global container lock with ci.yml's `test` job and
 # e2e-staging: all three bind the fixed-name test container on port 18888 and
@@ -12,13 +19,6 @@ name: UI tests
 on:
   pull_request:
     branches: [ main, develop ]
-    paths:
-      - 'templates/**'
-      - 'static/**'
-      - 'tests/test_ui.py'
-      - 'tests/conftest.py'
-      - 'Dockerfile'
-      - '.github/workflows/ui-tests.yml'
   schedule:
     - cron: '41 4 * * *'  # nightly drift catch
   workflow_dispatch:
@@ -30,8 +30,36 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    # Decides whether this PR can affect the UI. Cheap, hosted, and always
+    # runs, so `ui-gate` always has an answer. Anything that is not a pull
+    # request (nightly, manual) runs the suite unconditionally.
+    name: changes
+    runs-on: ubuntu-latest
+    outputs:
+      ui: ${{ steps.filter.outputs.ui }}
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      with:
+        fetch-depth: 0
+
+    - name: Decide whether the UI suite has anything to say about this PR
+      id: filter
+      env:
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      run: |
+        if [ "${{ github.event_name }}" != "pull_request" ]; then
+          echo "not a pull request - running the full suite"
+          echo "ui=true" >> "$GITHUB_OUTPUT"
+        else
+          python scripts/ui_paths_changed.py "$BASE_SHA" >> "$GITHUB_OUTPUT"
+        fi
+
   ui:
     name: ui
+    needs: changes
+    if: needs.changes.outputs.ui == 'true'
     runs-on: [self-hosted, Linux, X64]
     # Same host-global lock ci.yml's `test` job uses: the UI suite binds the
     # fixed-name test container on port 18888, so it must queue behind (never
@@ -121,3 +149,29 @@ jobs:
         if skipped == total:
             sys.exit("every UI test skipped - the suite proved nothing")
         PY
+
+  ui-gate:
+    # The required context. It exists because `ui` does not run on every PR,
+    # and a required context that never starts blocks the PR forever. This one
+    # always runs and translates the three outcomes an operator cares about:
+    # the suite passed, the suite had nothing to look at, or the suite failed.
+    name: ui-gate
+    needs: [changes, ui]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+    - name: Report the UI suite outcome
+      env:
+        DECISION: ${{ needs.changes.result }}
+        RESULT: ${{ needs.ui.result }}
+        RAN: ${{ needs.changes.outputs.ui }}
+      run: |
+        echo "changes=$DECISION (ui=$RAN)  ui=$RESULT"
+        if [ "$DECISION" != "success" ]; then
+          echo "::error::could not decide whether to run the UI suite"; exit 1
+        fi
+        case "$RESULT" in
+          success) echo "UI suite passed." ;;
+          skipped) echo "No frontend paths changed; UI suite not needed." ;;
+          *) echo "::error::UI suite $RESULT"; exit 1 ;;
+        esac
