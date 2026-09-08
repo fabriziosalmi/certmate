@@ -953,6 +953,23 @@ class CertificateManager:
             lock.release()
 
     def _metadata_path(self, domain: str) -> Path:
+        """Where a domain's metadata lives, screened here rather than upstream.
+
+        This is the single place the metadata path is built — every read and
+        every one of the seven `_save_metadata` call sites goes through it —
+        and it used to build the path from `domain` unchecked, leaving the
+        no-escape property distributed across those callers. The write at the
+        end of that path is `open(tmp, 'w')`, so a domain carrying path
+        characters would put attacker-influenced JSON at an arbitrary location.
+
+        Every caller does screen today. That is the problem: the guarantee is
+        only as good as the least careful of them, and this repository has
+        already shipped the same shape once — `_reject_path_escaping_domain`
+        exists because extracting code out of `create_certificate` produced a
+        unit that no longer enforced its own precondition (#666). Enforcing it
+        where the path is built makes the property local and keeps it that way.
+        """
+        _reject_path_escaping_domain(domain)
         return self.cert_dir / domain / 'metadata.json'
 
     def _store_in_backend(self, domain, cert_files, metadata):

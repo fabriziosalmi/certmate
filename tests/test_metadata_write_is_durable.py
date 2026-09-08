@@ -170,3 +170,49 @@ def test_a_failing_fsync_on_the_directory_still_closes_it(tmp_path,
 
     _fsync_directory(tmp_path)
     assert closed, 'the directory descriptor leaked when fsync failed'
+
+
+# --- where the write is allowed to land ---------------------------------
+# Durability is only half of "this write is safe". The other half is that it
+# lands where it is supposed to, and `_metadata_path` used to build the path
+# from an unchecked `domain` — leaving the no-escape property spread across
+# the seven `_save_metadata` call sites. CodeQL flagged the sink; every caller
+# did in fact screen, which is exactly the problem: the guarantee was only as
+# good as the least careful of them, and this repository has already shipped
+# that shape once (#666).
+
+class _Screened:
+    """A manager built without touching the filesystem."""
+
+    def __init__(self, tmp_path):
+        self.cert_dir = tmp_path
+
+
+def _path_for(tmp_path, domain):
+    return CertificateManager._metadata_path(_Screened(tmp_path), domain)
+
+
+def test_a_normal_domain_still_resolves_where_it_always_did(tmp_path):
+    assert _path_for(tmp_path, 'example.com') == \
+        tmp_path / 'example.com' / 'metadata.json'
+
+
+def test_a_wildcard_domain_is_still_allowed(tmp_path):
+    """CONTROL: `*.example.com` is a legitimate directory name here, and a
+    screen that rejected it would break every wildcard certificate."""
+    assert _path_for(tmp_path, '*.example.com').parent.name == '*.example.com'
+
+
+@pytest.mark.parametrize('domain', [
+    '../../etc',
+    'a/../../b',
+    'x/y',
+    '/absolute',
+    '..',
+])
+def test_a_domain_that_could_escape_is_refused_where_the_path_is_built(
+        tmp_path, domain):
+    """The sink at the end of this path is `open(tmp, 'w')`, so an escape
+    means attacker-influenced JSON at an arbitrary location."""
+    with pytest.raises(ValueError):
+        _path_for(tmp_path, domain)
