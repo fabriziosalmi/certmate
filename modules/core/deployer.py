@@ -100,8 +100,59 @@ class DeployManager:
                 self.event_bus.publish('certificate_deployed', {
                     'domain': domain, 'event': event_type, 'count': succeeded,
                 })
+            self._publish_incomplete(domain, event_type, results)
         except Exception as e:
             logger.error(f"Deploy hooks failed for {domain}: {e}")
+            # The listener swallowed everything, so a renewal that reached the
+            # CA and then failed to reach the systems that serve it was
+            # reported to every other subscriber as a completed renewal. The
+            # crash path needs the same statement as the failure path.
+            self._publish_incomplete(domain, event_type, None, error=str(e))
+
+    def _publish_incomplete(self, domain, event_type, results, error=None):
+        """Say, once, that a certificate was obtained but not fully published.
+
+        `deploy_hook_failed` already fires per hook. That is the right grain
+        for "which target broke" and the wrong grain for the question an
+        operator actually asks after a renewal: *is this certificate live?* A
+        subscriber had to count per-hook failures across a stream to answer it,
+        and a notifier had no single event meaning "renewed, not deployed".
+
+        Not published when everything succeeded, and not published when there
+        was nothing to deploy: a certificate on an instance with no hooks
+        configured is not "incompletely deployed", it is a certificate nobody
+        asked to publish.
+
+        This is deliberately an EVENT and not a field on the renewal result.
+        Hooks run on the event bus, so the renewal has already returned by the
+        time any of this is known; carrying the outcome back into that result
+        would mean making issuance wait for a deploy hook, which is the one
+        thing the bounded dispatch exists to prevent.
+        """
+        if error is not None:
+            failed, total = None, None
+        else:
+            results = results or []
+            if not results:
+                return
+            failed = sum(1 for r in results if not r.get('success'))
+            total = len(results)
+            if not failed:
+                return
+
+        logger.error(
+            "Certificate for %s was %s but not fully deployed: %s. The "
+            "systems that serve it may still be presenting the previous "
+            "certificate.",
+            domain, event_type,
+            error or f"{failed} of {total} deploy target(s) failed")
+        self.event_bus.publish('certificate_deploy_incomplete', {
+            'domain': domain,
+            'event': event_type,
+            'failed': failed,
+            'total': total,
+            'error': error,
+        })
 
     # ------------------------------------------------------------------
     # Hook execution
