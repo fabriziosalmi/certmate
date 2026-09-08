@@ -123,10 +123,16 @@ _SECRET_KEY_RE = re.compile(
     r'(token|secret|password|key|credential|hmac|authorization)',
     re.IGNORECASE,
 )
-# Keys whose name matches the secret regex but whose value is NOT a secret.
-# Mirrors _NON_SECRET_KEYS in modules/web/settings_routes.py: these carry
-# the global default key-options ('rsa', 2048, 'secp256r1'), not credentials,
-# so empty values must NOT be treated as "preserve".
+# Keys whose name matches the secret regex but whose value is NOT a secret:
+# they carry the global default key-options ('rsa', 2048, 'secp256r1'), not
+# credentials, so an empty value must NOT be treated as "preserve".
+#
+# This used to be mirrored by a _NON_SECRET_KEYS list in
+# modules/web/settings_routes.py, and the two could disagree — a value masked
+# on GET but unrecognised on POST is written back as the mask, destroying the
+# secret. The routes now call this module rather than keeping a second copy,
+# so there is one definition; the comment that still pointed at the old one
+# outlived it.
 _NON_SECRET_KEY_NAMES = frozenset({
     'default_key_type',
     'default_key_size',
@@ -187,6 +193,11 @@ _PROVIDER_SPECIFIC_SECRET_FIELDS = {
     # share-safe backup ZIP. Masked like any other secret; restored on a save.
     'webhooks': frozenset({'url'}),
 }
+# Every credential field of every DNS provider must be covered by the regex
+# above or declared here. tests/test_what_counts_as_a_secret_is_declared.py
+# walks _DNS_PROVIDER_CREDENTIALS and fails on one that is neither, so a new
+# provider whose credential happens to be named something the seven words miss
+# cannot be added without someone deciding which it is.
 
 # List keys whose items carry secrets keyed by the LIST name rather than the
 # container's provider context. webhooks[*] is the case: its items live under
