@@ -150,3 +150,94 @@ class TestSecretWiring:
             "the secretRef is optional again — a non-existent Secret would let "
             "the pod start without its credentials"
         )
+
+
+@pytest.mark.skipif(shutil.which("helm") is None, reason="helm is not installed")
+class TestBackupPlacement:
+    """Backups must be able to live somewhere the primary volume's failure
+    does not reach.
+
+    The chart put `/app/backups` on the same claim as the certificates, the
+    settings store and the audit chain — the things the backups exist to
+    recover — so one volume loss destroyed the data and its restore points
+    together. That stays the default, because a second claim is a real cost
+    for a small install and because where backups belong is a fact about the
+    operator's infrastructure, not about CertMate. What changed is that it is
+    now a decision with an off switch rather than the only shape available.
+    """
+
+    def _template(self, *args):
+        return subprocess.run(
+            ["helm", "template", "t", str(CHART), *args],
+            capture_output=True, text=True,
+        )
+
+    def test_the_default_is_unchanged(self):
+        """Existing installs must render exactly as before: one claim, and
+        backups on it under a subPath."""
+        out = self._template().stdout
+        assert out.count("kind: PersistentVolumeClaim") == 1
+        assert "kind: CronJob" not in out
+        backups = out.split("mountPath: /app/backups")[1][:80]
+        assert "subPath: backups" in backups, (
+            "the default no longer puts backups on the shared volume under a "
+            "subPath, which silently relocates every existing install's "
+            "restore points"
+        )
+
+    def test_a_separate_claim_moves_the_backups_off_the_data_volume(self):
+        res = self._template("--set", "persistence.backups.separateClaim=true")
+        assert res.returncode == 0, res.stderr
+        assert res.stdout.count("kind: PersistentVolumeClaim") == 2
+        mount = res.stdout.split("mountPath: /app/backups")[1][:80]
+        assert "subPath" not in mount, (
+            "backups are on their own claim but still mounted under a "
+            "subPath, so they would land in a subdirectory of an empty volume"
+        )
+        assert "t-certmate-backups" in res.stdout
+
+    def test_an_existing_backup_claim_is_used_without_creating_one(self):
+        """The case that actually gets backups out of the failure domain:
+        a claim the operator made on different storage."""
+        res = self._template(
+            "--set", "persistence.backups.separateClaim=true",
+            "--set", "persistence.backups.existingClaim=nfs-backups")
+        assert res.returncode == 0, res.stderr
+        assert "claimName: nfs-backups" in res.stdout
+        assert res.stdout.count("kind: PersistentVolumeClaim") == 1
+
+    def test_the_backup_claim_survives_an_uninstall(self):
+        """It is what is left when the other volume is gone, so deleting it
+        with the release would defeat the whole point."""
+        res = self._template("--set", "persistence.backups.separateClaim=true")
+        pvcs = [doc for doc in res.stdout.split("---")
+                if "kind: PersistentVolumeClaim" in doc]
+        assert len(pvcs) == 2
+        assert all("helm.sh/resource-policy: keep" in doc for doc in pvcs)
+
+    def test_the_offsite_job_reads_the_backups_read_only(self):
+        """A copy job must never be able to damage the archives it exists to
+        preserve."""
+        res = self._template(
+            "--set", "persistence.backups.offsite.enabled=true",
+            "--set", "persistence.backups.offsite.command={copy,/app/backups,r:x}")
+        assert res.returncode == 0, res.stderr
+        assert "kind: CronJob" in res.stdout
+        job = res.stdout.split("kind: CronJob")[1]
+        assert "readOnly: true" in job
+
+    def test_the_offsite_job_follows_the_backup_claim(self):
+        """With a separate claim it must mount that one, and without the
+        subPath the shared layout needs."""
+        res = self._template(
+            "--set", "persistence.backups.separateClaim=true",
+            "--set", "persistence.backups.offsite.enabled=true",
+            "--set", "persistence.backups.offsite.command={copy,/app/backups,r:x}")
+        job = res.stdout.split("kind: CronJob")[1]
+        assert "t-certmate-backups" in job
+        assert "subPath" not in job
+
+    def test_no_offsite_job_without_being_asked_for(self):
+        """CONTROL: a CronJob nobody configured would run an image nobody
+        chose, on a schedule nobody set."""
+        assert "kind: CronJob" not in self._template().stdout

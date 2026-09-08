@@ -102,13 +102,26 @@ spec:
             - name: data
               mountPath: /app/logs
               subPath: logs
+            {{- if .Values.persistence.backups.separateClaim }}
+            # Backups on their own claim, so losing the primary volume does
+            # not take the restore points with it. No subPath: the claim
+            # exists for this and nothing else.
+            - name: backups
+              mountPath: /app/backups
+            {{- else }}
             - name: data
               mountPath: /app/backups
               subPath: backups
+            {{- end }}
       volumes:
         - name: data
           persistentVolumeClaim:
             claimName: {{ include "certmate.pvcName" . }}
+        {{- if .Values.persistence.backups.separateClaim }}
+        - name: backups
+          persistentVolumeClaim:
+            claimName: {{ include "certmate.backupPvcName" . }}
+        {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector: {{- toYaml . | nindent 8 }}
       {{- end }}
