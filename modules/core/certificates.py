@@ -113,6 +113,32 @@ _KNOWN_METADATA_KEYS = _REISSUE_OWNED_METADATA_KEYS | frozenset({
 })
 
 
+def _fsync_directory(directory: Path) -> None:
+    """Persist a directory entry, so a rename into it survives a power loss.
+
+    Syncing the file only persists its contents. The link between the name and
+    those contents lives in the directory, and until the directory is synced a
+    crash can replay as "the rename never happened" — or, worse on some
+    filesystems, as the new name pointing at nothing.
+
+    Never raises. Some filesystems refuse to open a directory for this
+    (Windows, a few network mounts); the write has already succeeded and
+    degrading to the old, weaker guarantee is better than failing an issuance
+    over the sync of an entry.
+    """
+    try:
+        fd = os.open(str(directory), os.O_RDONLY)
+    except OSError as error:
+        logger.debug("Cannot open %s to fsync it: %s", directory, error)
+        return
+    try:
+        os.fsync(fd)
+    except OSError as error:
+        logger.debug("Cannot fsync %s: %s", directory, error)
+    finally:
+        os.close(fd)
+
+
 def _remove_temp_files(artifacts):
     """Delete every temp file an issuance or renewal created.
 
@@ -800,14 +826,100 @@ class CertificateManager:
                 published[dest_file.name] = dest_file.read_bytes()
             return published
 
+    def reconcile_served_copies(self) -> dict:
+        """Republish any domain whose served files disagree with certbot's.
+
+        `_publish_flat_files` stages all four PEMs and then promotes them with
+        four separate renames. That is not a transaction: a crash between the
+        second and the third leaves the served directory holding a mixed
+        generation — most damagingly a new `cert.pem` beside the previous
+        `privkey.pem`, a pair that cannot complete a handshake and which is
+        served straight off local disk by `/api/certificates/<domain>/download`
+        and pushed to every deploy hook.
+
+        Until now the only thing that healed that state was the renewal check,
+        which reconciles in its not-yet-due branch. That closes the window, but
+        only at the next sweep — up to a day later. A torn promote happens
+        precisely when the process dies, and a process that dies is a process
+        about to be restarted, so startup is the first moment the state can be
+        noticed and the cheapest one at which to fix it.
+
+        Never raises. A domain that cannot be repaired is logged at ERROR and
+        the others are still attempted: refusing to start would turn a
+        one-certificate problem into a total outage, and the instance is more
+        useful serving the rest while an operator reads the log.
+        """
+        summary = {'checked': 0, 'republished': [], 'failed': {}}
+        if not self.cert_dir.is_dir():
+            return summary
+
+        for domain_dir in sorted(self.cert_dir.iterdir()):
+            if not domain_dir.is_dir():
+                continue
+            domain = domain_dir.name
+            live_dir = domain_dir / 'live' / domain
+            if not live_dir.is_dir():
+                # Imported or externally managed: nothing to reconcile against.
+                continue
+            summary['checked'] += 1
+            try:
+                stale = self._stale_flat_files(live_dir, domain_dir)
+                if not stale:
+                    continue
+                logger.warning(
+                    "Served copy for %s disagrees with certbot's on startup: "
+                    "%s. Republishing — this is the state a promote "
+                    "interrupted mid-way leaves behind, and where a new "
+                    "certificate can sit beside the previous private key.",
+                    domain, ", ".join(stale))
+                self._publish_flat_files(live_dir, domain_dir)
+                summary['republished'].append(domain)
+            except Exception as error:
+                summary['failed'][domain] = str(error)
+                logger.error(
+                    "Could not repair the served copy for %s on startup: %s. "
+                    "This domain may be serving a certificate that does not "
+                    "match its private key.", domain, error)
+
+        if summary['republished']:
+            logger.warning("Republished %d served copy(ies) on startup: %s",
+                           len(summary['republished']),
+                           ", ".join(summary['republished']))
+        return summary
+
     @staticmethod
     def _atomic_json_write(path: Path, data: dict) -> None:
-        """Write JSON atomically via a temp file + rename to avoid partial writes on crash."""
+        """Write JSON atomically and durably: temp file, fsync, rename, fsync dir.
+
+        The rename alone gives atomicity — a reader sees the old file or the
+        new one, never a half-written one. It does not give crash safety,
+        which is what this file needs: `metadata.json` records key custody
+        (`private_key_state`, the CSR fingerprint, the CA the certificate came
+        from), and a rename whose data has not reached the platter can be
+        replayed by the filesystem as a rename onto an empty or truncated
+        file. The docstring here used to claim crash safety while doing only
+        the rename.
+
+        Three syncs, each for a different loss:
+
+        * `flush()` moves the bytes out of Python's buffer;
+        * `os.fsync(file)` moves them out of the kernel's page cache, so the
+          temp file's *contents* survive;
+        * `os.fsync(directory)` persists the rename itself, so the *name*
+          survives — without it the file can be durable under a name that is
+          gone after a power loss.
+
+        Same recipe `modules.core.file_operations` uses for settings.json.
+        """
         import json
         tmp = path.with_suffix('.tmp')
         try:
-            tmp.write_text(json.dumps(data, indent=2), encoding='utf-8')
+            with open(tmp, 'w', encoding='utf-8') as handle:
+                json.dump(data, handle, indent=2)
+                handle.flush()
+                os.fsync(handle.fileno())
             tmp.replace(path)
+            _fsync_directory(path.parent)
         except Exception:
             tmp.unlink(missing_ok=True)
             raise
@@ -841,6 +953,23 @@ class CertificateManager:
             lock.release()
 
     def _metadata_path(self, domain: str) -> Path:
+        """Where a domain's metadata lives, screened here rather than upstream.
+
+        This is the single place the metadata path is built — every read and
+        every one of the seven `_save_metadata` call sites goes through it —
+        and it used to build the path from `domain` unchecked, leaving the
+        no-escape property distributed across those callers. The write at the
+        end of that path is `open(tmp, 'w')`, so a domain carrying path
+        characters would put attacker-influenced JSON at an arbitrary location.
+
+        Every caller does screen today. That is the problem: the guarantee is
+        only as good as the least careful of them, and this repository has
+        already shipped the same shape once — `_reject_path_escaping_domain`
+        exists because extracting code out of `create_certificate` produced a
+        unit that no longer enforced its own precondition (#666). Enforcing it
+        where the path is built makes the property local and keeps it that way.
+        """
+        _reject_path_escaping_domain(domain)
         return self.cert_dir / domain / 'metadata.json'
 
     def _store_in_backend(self, domain, cert_files, metadata):

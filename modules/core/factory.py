@@ -1427,5 +1427,59 @@ def create_app(test_config=None):
     # starting the scheduler so recovered misfired jobs can push an app context.
     _flask_app = app
     setup_scheduler(container)
+    reconcile_served_copies(container)
+    check_issuance_readiness(container)
 
     return app, container
+
+
+def check_issuance_readiness(container: AppContainer):
+    """Find out at startup whether certbot can run, not at the first renewal.
+
+    certbot is the one dependency without which nothing works, and it was the
+    one dependency nothing checked: a broken certbot produced an instance that
+    started, reported ready, scheduled renewals and failed at the first one.
+    The probe records its answer in `managers['issuance_status']`, which
+    /health reports and /health/ready gates on — so a certbot that cannot run
+    flips the pod out of rotation for the same reason a dead scheduler does.
+
+    See modules.core.issuance_readiness for why this runs the command rather
+    than checking that the file exists.
+    """
+    from . import issuance_readiness
+    try:
+        status = issuance_readiness.probe(
+            container.managers.get('shell_executor'))
+    except Exception as e:
+        logger.error(f"certbot readiness probe itself failed: {e}")
+        status = issuance_readiness.get_status()
+    container.managers['issuance_status'] = status
+    return status
+
+
+def reconcile_served_copies(container: AppContainer):
+    """Repair any served certificate copy that a crash left half-published.
+
+    Promoting a renewed certificate is four renames, so a process killed
+    between the second and the third leaves a mixed generation on disk — a new
+    certificate beside the previous private key, which is served and deployed
+    exactly as if it were valid. The renewal sweep already reconciles this, but
+    only when it next visits the domain. A torn promote is caused by a process
+    dying, and a process that dies gets restarted: startup is the first moment
+    anyone can notice, so it is where the repair belongs.
+
+    Never raises and never blocks startup. The manager logs each repair; this
+    wrapper exists so that a certificate manager which failed to build, or a
+    filesystem that cannot be walked, does not stop the app from serving.
+    """
+    certificates = container.managers.get('certificates')
+    if certificates is None or not hasattr(certificates,
+                                           'reconcile_served_copies'):
+        return
+    try:
+        certificates.reconcile_served_copies()
+    except Exception as e:
+        logger.error(
+            f"Could not reconcile served certificate copies at startup: {e}. "
+            f"A certificate interrupted mid-publish may still be serving a "
+            f"key that does not match it.")

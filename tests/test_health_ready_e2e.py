@@ -36,3 +36,28 @@ def test_health_ready_scheduler_running(api):
     body = r.json()
     assert body.get("ready") is True, body
     assert body.get("scheduler") == "running", body
+
+
+def test_health_ready_certbot_actually_runs(api):
+    """The other half of "this container can do its job".
+
+    A scheduler that runs and a certbot that cannot are the same outcome: no
+    certificate ever renews. The startup probe runs `certbot --version` inside
+    the container, which is the only check that catches the failure this
+    project has actually hit twice — pip resolves cleanly, the binary is
+    present, and certbot dies importing its own ACME stack because a
+    `cryptography` or `pyOpenSSL` version moved under the pinned certbot.
+
+    `skipped` is not accepted here. In the real image the shell executes, so
+    anything other than `ok` means the probe did not measure what it claims.
+    """
+    body = api.get("/health/ready").json()
+    assert body.get("certbot") == "ok", (
+        f"certbot is not usable in the built image: {body}"
+    )
+
+    health = api.get("/health").json()
+    version = health.get("checks", {}).get("certbot_version", "")
+    assert version.startswith("certbot "), (
+        f"the image reports certbot ok without a version: {health}"
+    )

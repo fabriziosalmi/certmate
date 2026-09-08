@@ -258,6 +258,19 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
             checks['scheduler'] = 'not_running'
             overall = 'degraded'
 
+        # certbot. The one dependency without which nothing works, probed
+        # once at startup because a broken certbot is invisible until the
+        # first renewal — hours later, on a certificate closer to expiry.
+        issuance = managers.get('issuance_status') or {}
+        issuance_state = issuance.get('state')
+        if issuance_state:
+            checks['certbot'] = issuance_state
+            if issuance.get('version'):
+                checks['certbot_version'] = issuance['version']
+            if issuance_state == 'failed':
+                checks['certbot_error'] = issuance.get('error')
+                overall = 'degraded'
+
         # Cert directory
         file_ops = managers.get('file_ops')
         if file_ops:
@@ -307,16 +320,31 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
         so the failure becomes loud: a deploy gate fails, a readiness probe
         flips the pod out of rotation, an alert fires.
         """
+        from modules.core import issuance_readiness
+
         scheduler = managers.get('scheduler')
         scheduler_status = managers.get('scheduler_status') or {}
         running = bool(scheduler and getattr(scheduler, 'running', False))
-        ready = running and scheduler_status.get('state') != 'failed'
+        scheduler_ok = running and scheduler_status.get('state') != 'failed'
+
+        # A scheduler that never runs means nothing renews. A certbot that
+        # cannot run means nothing renews either, and it was invisible to
+        # every probe: the instance started, said ready, and failed at the
+        # first renewal. Only a probe that RAN AND FAILED withholds readiness
+        # — `skipped` and `unknown` are absence of evidence, not evidence.
+        issuance = managers.get('issuance_status') or {}
+        issuance_ok = issuance_readiness.is_ready(issuance)
+
+        ready = scheduler_ok and issuance_ok
         body = {
             'ready': ready,
             'scheduler': 'running' if running else (scheduler_status.get('state') or 'not_running'),
+            'certbot': issuance.get('state') or 'unknown',
         }
-        if not ready and scheduler_status.get('error'):
+        if not scheduler_ok and scheduler_status.get('error'):
             body['scheduler_error'] = scheduler_status.get('error')
+        if not issuance_ok and issuance.get('error'):
+            body['certbot_error'] = issuance.get('error')
         return jsonify(body), (200 if ready else 503)
 
     @app.route('/api/events/stream')
