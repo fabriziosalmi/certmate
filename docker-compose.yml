@@ -31,6 +31,23 @@ services:
       - PORT=${PORT:-8000}                      # Internal listen port; also update ports: mapping if changed
       - GUNICORN_TIMEOUT=${GUNICORN_TIMEOUT:-300}  # Worker timeout; increase for slow DNS providers
       - LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL:-}    # Overrides the email set via the web UI when set
+      # Without this, automatic backups are masked and CANNOT restore the
+      # instance; with it they are complete and encrypted at rest. Empty by
+      # default because a passphrase this file invented would be the same on
+      # every installation that never changed it.
+      - CERTMATE_BACKUP_PASSPHRASE=${CERTMATE_BACKUP_PASSPHRASE:-}
+    # Bind mounts, so these four directories keep the HOST's ownership and
+    # shadow the permissions the image sets. Docker creates them root-owned if
+    # they do not exist, and CertMate runs as a non-root user, so on a fresh
+    # clone prepare them once before `up`:
+    #
+    #   mkdir -p ./{certificates,data,logs,backups}
+    #   chgrp -R 0 ./{certificates,data,logs,backups}
+    #   chmod -R g+rwX ./{certificates,data,logs,backups}
+    #
+    # (Named volumes need none of this — see docs/docker.md. The app refuses to
+    # start rather than half-work when a directory is not writable, and names
+    # the directory and the fix in the error.)
     volumes:
       - ./certificates:/app/certificates:rw
       - ./logs:/app/logs:rw
