@@ -1514,6 +1514,44 @@ main "$@"
 | `CERTMATE_LOG_LEVEL` |        | `INFO`         | DEBUG / INFO / WARNING / ERROR |
 | `CERTMATE_LOG_JSON` |         | `true`         | JSON log lines (set `false` for human-readable) |
 
+#### Deployment and networking
+
+| Variable           | Required | Default        | Description                         |
+| ------------------ | -------- | -------------- | ----------------------------------- |
+| `BEHIND_PROXY`     |          | `false`        | Trust `X-Forwarded-*` from one reverse proxy hop (`ProxyFix`). Set it only when a proxy actually sits in front: with it on and no proxy, a client can forge its own address, which is what the login rate limit is keyed on |
+| `PREFERRED_URL_SCHEME` |      | -              | Set to `https` when TLS terminates in front of CertMate. It marks the session cookie `Secure`, so the browser stops sending it over plain HTTP |
+| `CORS_ORIGINS`     |          | -              | Comma-separated origins allowed to call the API from a browser. Empty means the built-in default; this is not a way to open the API to everyone |
+| `ACME_CHALLENGES_DIR` |       | `<cwd>/data/acme-challenges` | Where http-01 tokens are written and served from. Override it when the webroot is somewhere else; the hook, the pre-creation and the route all read this one value |
+| `LETSENCRYPT_EMAIL` |         | -              | ACME account email. **Takes precedence over the value saved in the UI**, so an instance that keeps changing its email back is usually this |
+| `CLOUDFLARE_TOKEN` |          | -              | Seeds the default Cloudflare DNS account on first start, so a container can be brought up already able to issue. Once settings.json exists the stored value is what is used |
+
+#### Security behaviour
+
+| Variable           | Required | Default        | Description                         |
+| ------------------ | -------- | -------------- | ----------------------------------- |
+| `CERTMATE_ENABLE_HSTS` |      | `false`        | Send `Strict-Transport-Security`, and mark the session cookie `Secure`. Only set it when TLS really terminates in front — an HSTS header on a plain-HTTP instance locks browsers out of it |
+| `SESSION_TIMEOUT_HOURS` |     | `8`            | How long a login session stays valid. The server record and the browser cookie both use this value, so they cannot drift apart |
+| `CERTMATE_ALLOW_INTERNAL_WEBHOOKS` | | `false` | Allow notification webhooks to private, loopback and link-local addresses. Off by default because a webhook URL is operator-supplied and an SSRF into the host network is the obvious abuse |
+| `CERTMATE_PROBE_ALLOW_PRIVATE` | |  `false`      | Same relaxation for the deployment probe: allow it to connect to private addresses. Needed to probe a service on the same host, and it removes an SSRF guard |
+| `CERTMATE_AUDIT_CHAIN` |      | `1`            | Set `0` to stop writing the tamper-evident audit hash chain. A kill switch, not a tuning knob: with it off, `/api/audit/verify` can no longer prove the log was not edited |
+| `AUDIT_SIGNING_KEY_FILE` |    | -              | Path to an Ed25519 private key that signs audit checkpoints, so the key can live off this box. If set and unreadable, signing is DISABLED rather than a new key generated — a fresh key would fork the instance's identity and make earlier signatures unverifiable |
+| `CERTMATE_ALLOW_SCHEMA_DOWNGRADE` | | `0`       | Set `1` to let this build read and overwrite a `settings.json` or `metadata.json` written by a NEWER version. It will drop fields it does not understand — that is the whole reason it refuses by default |
+
+#### Timing and diagnostics
+
+| Variable           | Required | Default        | Description                         |
+| ------------------ | -------- | -------------- | ----------------------------------- |
+| `CERTMATE_DOMAIN_LOCK_TIMEOUT` | | `5`         | Seconds to wait for a domain's lock before answering 409 "operation in progress". Clamped to 0-60 |
+| `CERTMATE_CERT_INFO_CACHE_TTL` | | `60`        | Seconds a parsed certificate's details stay cached. `0` re-reads from disk on every request. Clamped to 0-3600 |
+| `CERTMATE_ISSUANCE_WORKERS` | | `2`            | Threads serving asynchronous issuance jobs. Clamped to 1-16; each one can be running a certbot subprocess |
+| `CERTMATE_ISSUANCE_JOB_HISTORY` | | `200`      | How many finished issuance jobs stay queryable via `/api/certificates/jobs`. Clamped to 20-2000 |
+| `CERTMATE_PROBE_TIMEOUT_SECONDS` | | `5`       | Deployment-probe connection timeout. Clamped to 1-30 |
+| `CERTMATE_LAST_USED_PERSIST_SECONDS` | | `60`  | How often a session's "last used" timestamp is written to disk. `0` writes on every request, which is the original behaviour and one write per request |
+| `CERTMATE_SLOW_REQUEST_LOGGING` | | `true`       | Log a warning, with the thread's stack, for requests that outlive the threshold below. The stack is what makes a hung request diagnosable after the fact |
+| `CERTMATE_SLOW_REQUEST_THRESHOLD_SECONDS` | | `30` | How long a request must run before it is reported |
+| `CERTMATE_SLOW_REQUEST_SCAN_SECONDS` | | `10`  | How often the watchdog looks for requests that are still running |
+| `CERTMATE_SLOW_REQUEST_REPEAT_SECONDS` | | threshold | How often a still-running request is reported again |
+
 > **Bind address is not an environment variable.** The container always binds
 > `0.0.0.0` inside its own network namespace; to expose it only on loopback,
 > publish it that way — `-p 127.0.0.1:8000:8000`. Running `app.py` directly
