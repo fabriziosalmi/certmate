@@ -31,7 +31,7 @@ from unittest.mock import MagicMock
 import pytest
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from cryptography.x509.oid import NameOID
 
 from modules.core.certificates import CertificateManager
@@ -45,14 +45,23 @@ pytestmark = [pytest.mark.unit]
 DOMAIN_COUNT = 120
 
 
-def _certificate(days_left):
+def _certificate(days_left, key_kind='rsa'):
     """One self-signed certificate and its key.
 
-    The key matters: since #608 a certificate with no private key is reported as
-    needing attention regardless of expiry, so a sweep over key-less certs would
-    measure the renewal path rather than the skip path.
+    The key matters twice over. Since #608 a certificate with no private key is
+    reported as needing attention regardless of expiry, so a sweep over key-less
+    certs would measure the renewal path rather than the skip path. And the KIND
+    of key decides most of the per-domain cost: reading a certificate's
+    information compares the key against the certificate, and loading a private
+    key is where OpenSSL validates it — measured on one machine, 51.6 ms for
+    RSA-2048 against 0.020 ms for EC P-256.
+
+    This file used to generate EC keys only. CertMate's default key shape is
+    `rsa`/2048, so the per-domain figure it recorded described an estate almost
+    nobody runs; both are measured now, and the RSA row is the default one.
     """
-    key = ec.generate_private_key(ec.SECP256R1())
+    key = (rsa.generate_private_key(public_exponent=65537, key_size=2048)
+           if key_kind == 'rsa' else ec.generate_private_key(ec.SECP256R1()))
     name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, 'example.com')])
     now = datetime.now(timezone.utc)
     cert = (x509.CertificateBuilder()
@@ -85,14 +94,16 @@ class _CountingSettings(SettingsManager):
         return super().load_settings(*args, **kwargs)
 
 
-@pytest.fixture(scope='module')
-def populated(tmp_path_factory):
+@pytest.fixture(scope='module', params=['rsa', 'ec'])
+def populated(request, tmp_path_factory):
     """One instance with DOMAIN_COUNT complete certificates on disk.
 
     Module-scoped: generating the keys is the slow part and it is setup, not
-    the thing being measured.
+    the thing being measured. Parametrised over the two key shapes CertMate
+    issues, because the counts asserted below are the same for both and the
+    timings are not — see `_certificate`.
     """
-    root = tmp_path_factory.mktemp('perf')
+    root = tmp_path_factory.mktemp(f'perf-{request.param}')
     cert_dir = root / 'certificates'
     data_dir = root / 'data'
     for directory in (cert_dir, data_dir, root / 'backups', root / 'logs'):
@@ -107,7 +118,7 @@ def populated(tmp_path_factory):
     # One key pair reused across domains: the certificates differ only in what
     # they are named, and generating 120 distinct keys would double the setup
     # for a property that does not depend on them being distinct.
-    cert_pem, key_pem = _certificate(days_left=60)
+    cert_pem, key_pem = _certificate(days_left=60, key_kind=request.param)
     domains = [f'perf-{index}.example.com' for index in range(DOMAIN_COUNT)]
     for domain in domains:
         directory = cert_dir / domain
@@ -120,21 +131,29 @@ def populated(tmp_path_factory):
     manager = CertificateManager(cert_dir=cert_dir, settings_manager=settings,
                                  dns_manager=MagicMock(),
                                  shell_executor=MagicMock())
-    return manager, settings, domains
+    return manager, settings, domains, request.param
 
 
 # --- 1. the listing at a stated domain count -----------------------------
 
 def test_a_listing_loads_settings_once_not_once_per_domain(populated):
-    """Measured at 120 domains, four runs on an M-series laptop: **0 settings
-    loads**, 30-36 ms total, 0.25-0.30 ms per domain.
+    """Measured at 120 domains on an M-series laptop: **0 settings loads**,
+    and the wall clock depends on the key shape and on whether the key states
+    are already known:
 
-    This is the property the listing route's own comment describes: workers
-    have no Flask request context, so the request-scoped settings cache does
-    not apply to them, and a per-domain load means reading settings.json off
-    disk once per domain — 120 reads for one page.
+        rsa  cold 5631 ms (46.93 ms/domain)  repeat 9 ms (0.08 ms/domain)
+        ec   cold   13 ms ( 0.11 ms/domain)  repeat 8 ms (0.06 ms/domain)
+
+    The RSA row is the default installation, and the gap between its two
+    columns is `private_key_state` remembering an answer whose inputs have not
+    changed rather than re-validating the key on every read.
+
+    This test is the settings-load property: workers have no Flask request
+    context, so the request-scoped settings cache does not apply to them, and a
+    per-domain load means reading settings.json off disk once per domain — 120
+    reads for one page.
     """
-    manager, settings, domains = populated
+    manager, settings, domains, key_kind = populated
     loaded = settings.load_settings()
     settings.loads = 0
 
@@ -143,8 +162,15 @@ def test_a_listing_loads_settings_once_not_once_per_domain(populated):
              for domain in domains]
     elapsed = time.perf_counter() - started
 
-    print(f'\nlisting {len(domains)} domains: {elapsed * 1000:.0f} ms total, '
-          f'{elapsed / len(domains) * 1000:.2f} ms/domain, '
+    started = time.perf_counter()
+    for domain in domains:
+        manager.get_certificate_info(domain, settings=loaded)
+    repeat = time.perf_counter() - started
+
+    print(f'\nlisting {len(domains)} {key_kind} domains: '
+          f'cold {elapsed * 1000:.0f} ms ({elapsed / len(domains) * 1000:.2f} '
+          f'ms/domain), repeat {repeat * 1000:.0f} ms '
+          f'({repeat / len(domains) * 1000:.2f} ms/domain), '
           f'{settings.loads} settings loads')
 
     assert all(info and info['exists'] for info in infos)
@@ -156,7 +182,7 @@ def test_a_listing_loads_settings_once_not_once_per_domain(populated):
 def test_the_listing_reads_each_certificate_once(populated):
     """CONTROL for the count above: a listing that loaded no settings because
     it also did no work would pass it. Every domain has to come back parsed."""
-    manager, settings, domains = populated
+    manager, settings, domains, key_kind = populated
     loaded = settings.load_settings()
 
     infos = [manager.get_certificate_info(domain, settings=loaded)
@@ -204,7 +230,7 @@ def test_a_remote_backed_listing_costs_one_round_trip_per_domain(populated):
     cache actually removes them on the next load, which is what makes a
     remote-backed dashboard usable at all.
     """
-    manager, settings, domains = populated
+    manager, settings, domains, key_kind = populated
     cert_pem = (manager.cert_dir / domains[0] / 'cert.pem').read_bytes()
     backend = _CountingBackend(cert_pem, {'dns_provider': 'cloudflare'})
     manager.storage_manager = backend
@@ -242,16 +268,21 @@ def test_a_remote_backed_listing_costs_one_round_trip_per_domain(populated):
 # --- 3. the renewal sweep ------------------------------------------------
 
 def test_a_sweep_loads_settings_a_fixed_number_of_times(populated):
-    """Measured at 120 certificates, none due, four runs: **1 settings load**
-    for the whole sweep, 24-67 ms. One, not 120 — the count does not move with
-    the number of certificates, which is the whole property.
+    """Measured at 120 certificates, none due: **1 settings load** for the
+    whole sweep, 13-20 ms. One, not 120 — the count does not move with the
+    number of certificates, which is the whole property.
+
+    The wall clock here is not comparable to a cold listing: this runs after
+    the listing test in the same module, against the same manager, so every
+    key state is already known. A sweep on a freshly started process pays the
+    per-domain cost of the listing's cold column once.
 
     The sweep is the one caller that visits every domain in a background
     thread, outside any request context, so nothing else is holding a cached
     settings dict for it. A per-domain load here is 120 disk reads on a timer,
     every sweep, forever.
     """
-    manager, settings, domains = populated
+    manager, settings, domains, key_kind = populated
     def _register(stored):
         stored['domains'] = [{'domain': domain, 'dns_provider': 'cloudflare'}
                              for domain in domains]
@@ -279,5 +310,5 @@ def test_the_sweep_renewed_nothing(populated):
     """CONTROL: the count above is the cost of the SKIP path. A sweep that
     tried to renew would shell out to certbot, and the number would be
     measuring a MagicMock rather than the loop."""
-    manager, _, _ = populated
+    manager, _, _, _ = populated
     manager.shell_executor.run.assert_not_called()
