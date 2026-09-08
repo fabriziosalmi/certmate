@@ -51,7 +51,12 @@ FLOORS = {
     'modules/api/resources_deployment.py': 80,
     'modules/api/resources_discovery.py': 75,
     'modules/api/resources_downloads.py': 75,
-    'modules/api/resources_health.py': 70,
+    # Raised from 70 after the closure was split into one function per check
+    # and per collector: with each one callable directly, 84.4% was reached by
+    # tests that no longer have to build an app to enter a branch. 80 rather
+    # than 84 leaves room for a collector added without its own test to be a
+    # review comment instead of a red gate.
+    'modules/api/resources_health.py': 80,
     'modules/api/resources_inventory.py': 80,
     # Raised from 55 after covering the exception-to-status arms, which is
     # where this module's behaviour is: it is the entry point for every
