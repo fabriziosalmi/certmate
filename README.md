@@ -1494,6 +1494,40 @@ main "$@"
  loop: "{{ services_to_restart | default([]) }}"
 ```
 
+### API contract version
+
+Two versions appear in API responses and they answer different questions.
+
+| | what it is | when it moves |
+|---|---|---|
+| `version` (in `/health`, in the Swagger document) | the **release** number | every release |
+| `api_contract_version` (in `/health`), `X-CertMate-API-Version` (on **every** response) | the **interface** | only when this surface changes |
+
+A client deciding whether it still works should read the second. The first moves
+on every patch whether or not anything a caller depends on moved with it.
+
+- **minor** bump — the surface grew in a way you can ignore: a new endpoint, a
+  new field on a response, a new optional request field;
+- **major** bump — something you may depend on went away or changed meaning: an
+  endpoint removed, a response field removed or retyped, a request field that
+  became required, a status code that changed for an existing condition.
+
+Deprecating something bumps **neither** — that is the point of deprecating
+rather than removing.
+
+### Deprecation
+
+An endpoint on its way out answers normally and says so in its headers, so a
+client can warn instead of failing:
+
+```
+Deprecation: @1757289600                      # RFC 9745 — when it became deprecated
+Sunset: Mon, 08 Mar 2027 00:00:00 GMT         # RFC 8594 — earliest it may stop answering
+Link: <https://…/docs/api.md#…>; rel="deprecation"
+```
+
+Nothing is deprecated today. The headers appear only on an endpoint that is.
+
 ### Request validation
 
 The API validates request bodies against the models published in

@@ -87,6 +87,26 @@ SETTINGS_SCHEMA_VERSION = 1
 # CertificateManager._save_metadata.
 METADATA_SCHEMA_VERSION = 1
 
+# Shape of the HTTP interface, on the same terms as the two schema versions
+# above: bumped only when the surface changes, never with the product version.
+#
+# `certmate_version` and the Swagger document's `version` are both the RELEASE
+# number, which moves on every patch whether or not anything a caller depends
+# on moved with it — so neither can answer "will my client still work". A
+# client that pinned the release number would refuse a patch that changed
+# nothing; one that ignored it had nothing else to read.
+#
+# Bump the MINOR when the surface grows in a way a caller can ignore: a new
+# endpoint, a new field on a response, a new optional request field. Bump the
+# MAJOR when something a caller may depend on goes away or changes meaning: an
+# endpoint removed, a response field removed or retyped, a request field that
+# becomes required, a status code that changes for an existing condition.
+#
+# Deprecating something does NOT bump either — that is the point of deprecating
+# rather than removing. It is announced with the Deprecation and Sunset headers
+# (see modules/api/deprecation.py) and the removal is what bumps the major.
+API_CONTRACT_VERSION = '1.0'
+
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it
 # lived in the API layer, which core could not reach without importing api and

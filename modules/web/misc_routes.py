@@ -299,9 +299,14 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
         # "unknown"; fall back to the canonical package version (same source
         # Swagger and the Prometheus build_info use).
         from modules import __version__
+        from modules.core.constants import API_CONTRACT_VERSION
         return jsonify({
             'status': overall,
             'version': app.config.get('VERSION') or __version__,
+            # The release number above moves on every patch. This one moves
+            # only when the interface does, so it is the field a client can
+            # actually decide compatibility on.
+            'api_contract_version': API_CONTRACT_VERSION,
             'checks': checks
         })
 
