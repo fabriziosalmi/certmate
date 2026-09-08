@@ -71,8 +71,34 @@ CertMate is a modular, pluggable SSL/TLS certificate management system built wit
 │  │          Storage Layer (Pluggable Backends)    │  │
 │  │  Local FS │ Azure KV │ AWS SM │ Vault │ Infis │  │
 │  └───────────────────────────────────────────────┘  │
+│                                                     │
+│  ┌───────────────────────────────────────────────┐  │
+│  │   Composition root — modules/core/factory.py   │  │
+│  │                                               │  │
+│  │   create_app() constructs every manager above  │  │
+│  │   and then REGISTERS the API and web layers    │  │
+│  │   onto the Flask app.                          │  │
+│  └───┬───────────────────────────────────────┬───┘  │
+│      │ constructs (downward, like the rest)  │      │
+│      └──────────────► Manager Layer          │      │
+│                                              │      │
+│      ┌───────────────────────────────────────┘      │
+│      │ imports UPWARD — the one edge in the system  │
+│      └──────────────► REST API / Web Routes         │
 └─────────────────────────────────────────────────────┘
 ```
+
+Every arrow above points down except one. `modules/core/factory.py` is the
+composition root: it builds the managers *and* imports the API and web layers
+to register them, which is an import from `core/` into `api/` and `web/` —
+upward through the layers everything else respects.
+
+That is what a composition root is for, and it is deliberate: the alternative
+is either a layer that knows how to construct itself (and therefore its
+dependencies) or a registry that hides the same edge behind indirection. It is
+drawn here because a single documented exception is a design; an undocumented
+one is something the next reader finds by tracing an import and then wonders
+whether the rest of the diagram is true.
 
 ---
 

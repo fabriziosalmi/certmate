@@ -393,3 +393,154 @@ def test_the_mcp_suites_are_run_by_ci():
     ci = (REPO_ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
     assert "working-directory: mcp" in ci, "no CI job runs anything inside mcp/"
     assert "npm test" in ci, "the mcp job does not run its test suite"
+
+
+# ---------------------------------------------------------------------------
+# Every language must know the whole documentation set exists
+# ---------------------------------------------------------------------------
+#
+# The four translated trees carry sixteen pages where English carries nineteen.
+# Nothing compared them, so a reader in those languages was not told that pages
+# exist which they cannot see — the gap was invisible from inside the tree they
+# were reading.
+#
+# The project already had an answer for one of the three: `discovery-inventory`
+# is linked from every translated index as `../discovery-inventory.md`, marked
+# as being in English. `csr-only-certificates` and `webhooks` had no such link
+# in any language, so those two topics were simply absent.
+#
+# Linking to the original, marked, rather than writing a stub page per topic
+# per language: a stub says the same thing with a file attached, and four more
+# files that also go stale. What matters is that the reader is told the topic
+# exists and where to read it.
+
+# probes.md is probes.en.md under a shorter name in the translated trees.
+TRANSLATED_NAME = {"probes.en.md": "probes.md"}
+
+# Pages that are not part of the documentation set a reader browses.
+NOT_PART_OF_THE_SET = {"THEME_MIGRATION.md", "index.md"}
+
+
+def _english_pages():
+    return {p.name for p in DOCS.glob("*.md")} - NOT_PART_OF_THE_SET - {INDEX}
+
+
+@pytest.mark.parametrize("lang", [lang for lang in LANGUAGES if lang != "en"])
+def test_a_missing_translation_is_linked_to_the_original(lang):
+    """A topic that has no page in this language must at least be reachable.
+
+    Otherwise the reader is not told it exists: they see sixteen pages and
+    have no way to know there are nineteen.
+    """
+    present = {p.name for p in _lang_dir(lang).glob("*.md")}
+    index = (_lang_dir(lang) / INDEX).read_text(encoding="utf-8")
+
+    unreachable = []
+    for page in sorted(_english_pages()):
+        if TRANSLATED_NAME.get(page, page) in present:
+            continue
+        if f"../{page}" not in index:
+            unreachable.append(page)
+
+    assert not unreachable, (
+        f"docs/{lang}/ has no page for these topics and its {INDEX} does not "
+        f"link to the English original either, so a reader in {lang} is never "
+        f"told they exist: {', '.join(unreachable)}.\n\n"
+        f"Translate the page, or add a line to docs/{lang}/{INDEX} pointing "
+        f"at ../<page>.md and marked as being in English — the convention "
+        f"discovery-inventory.md already follows."
+    )
+
+
+@pytest.mark.parametrize("lang", [lang for lang in LANGUAGES if lang != "en"])
+def test_a_link_to_an_untranslated_page_says_it_is_in_english(lang):
+    """CONTROL for the fix above: a link that looks like every other entry
+    sends the reader to a page in a language they may not read, with no
+    warning. The marker is the whole difference between the two."""
+    index = (_lang_dir(lang) / INDEX).read_text(encoding="utf-8")
+    unmarked = []
+    for line in index.splitlines():
+        if "](../" in line and line.strip().startswith("-"):
+            if not re.search(r"\*\((in inglese|auf Englisch|en inglés|en anglais)\)\*",
+                             line):
+                unmarked.append(line.strip()[:80])
+    assert not unmarked, (
+        f"docs/{lang}/{INDEX} links out to the English tree without saying so:"
+        f"\n  " + "\n  ".join(unmarked))
+
+
+@pytest.mark.parametrize("lang", [lang for lang in LANGUAGES if lang != "en"])
+def test_every_page_a_translated_index_points_at_exists(lang):
+    """CONTROL: a link to ../something.md that is not there is worse than no
+    link — it is a 404 presented as the answer."""
+    index = (_lang_dir(lang) / INDEX).read_text(encoding="utf-8")
+    missing = [target for target in re.findall(r"\]\(\.\./([a-z0-9._-]+\.md)\)",
+                                               index)
+               if not (DOCS / target).exists()]
+    assert not missing, (
+        f"docs/{lang}/{INDEX} links to English pages that do not exist: "
+        + ", ".join(missing))
+
+
+def test_the_english_set_is_what_this_compares_against():
+    """CONTROL for the census: if _english_pages() returned nothing, every
+    language would trivially pass."""
+    pages = _english_pages()
+    assert len(pages) > 15, f"only {len(pages)} English pages found"
+    for expected in ("csr-only-certificates.md", "webhooks.md",
+                     "discovery-inventory.md"):
+        assert expected in pages
+
+
+# ---------------------------------------------------------------------------
+# The architecture diagram must draw the one edge that breaks its own rule
+# ---------------------------------------------------------------------------
+
+def test_the_composition_root_is_the_only_upward_import():
+    """The claim the diagram now makes, checked rather than asserted in prose.
+
+    Every arrow in the high-level diagram points down: web and API call into
+    the managers, the managers into execution and storage. One import goes the
+    other way — `modules/core/factory.py` imports `modules.api` and
+    `modules.web` in order to register them, which is `core/` reaching upward.
+
+    That is what a composition root is for, and the diagram says so. If a
+    SECOND file starts doing it, the diagram has stopped being true and this
+    fails with the file that did it.
+    """
+    import ast
+
+    upward = {}
+    for path in sorted((REPO_ROOT / "modules" / "core").glob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            modules = []
+            if isinstance(node, ast.ImportFrom) and node.module:
+                modules.append("." * node.level + node.module)
+            elif isinstance(node, ast.Import):
+                modules += [alias.name for alias in node.names]
+            for module in modules:
+                if (module.startswith(("modules.api", "modules.web"))
+                        or module.startswith(("..api", "..web"))):
+                    upward.setdefault(path.name, []).append(
+                        f"{module} (line {node.lineno})")
+
+    assert set(upward) == {"factory.py"}, (
+        "modules/core/ imports upward into api/ or web/ from somewhere other "
+        "than the composition root, so the architecture diagram is no longer "
+        f"true: {upward}"
+    )
+
+
+def test_the_diagram_draws_the_composition_root():
+    """A single documented exception is a design; an undocumented one is
+    something the next reader finds by tracing an import and then wonders
+    whether the rest of the diagram is true."""
+    architecture = (DOCS / "architecture.md").read_text(encoding="utf-8")
+    diagram = architecture.split("## High-Level Diagram")[1].split("---")[0]
+    assert "Composition root" in diagram, (
+        "the high-level diagram has lost the composition root, so the only "
+        "upward edge in the system is again the one thing it does not draw"
+    )
+    assert "factory.py" in diagram
+    assert "UPWARD" in diagram or "upward" in diagram
