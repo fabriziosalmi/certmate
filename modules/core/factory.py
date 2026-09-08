@@ -397,13 +397,50 @@ def setup_directories(container: AppContainer, test_config=None):
             )
 
 
+class SecretKeyUnreadableError(RuntimeError):
+    """SECRET_KEY_FILE is set and cannot be used, so the process must stop.
+
+    Reading it failed, or it is empty. Both are configuration errors — the
+    operator named a file as the source of this key, usually a Docker or
+    Kubernetes secret mount — and neither is an invitation to invent a
+    different key.
+
+    Inventing one used to be the behaviour, behind a WARNING, and it has two
+    consequences the warning did not state. Every existing session cookie
+    becomes invalid, so every logged-in user is signed out; and because the key
+    is regenerated on each start, a restart loop signs them out again each
+    time, with nothing in the message connecting the symptom to the unmounted
+    secret. Worse, the operator believes sessions are signed with a key they
+    control — perhaps one shared across replicas — and they are not.
+
+    Refusing to start is what this repository already does for an unreadable
+    settings.json (SettingsUnreadableError) and for an unreadable
+    API_BEARER_TOKEN_FILE. app.py wraps create_app and exits 1, so the operator
+    gets one clear line and a container that stops.
+    """
+
+    def __init__(self, path, cause):
+        self.path = path
+        self.cause = cause
+        super().__init__(
+            f"SECRET_KEY_FILE is set to {path} but cannot be used: {cause}. "
+            f"Refusing to start. Generating a key instead would sign out every "
+            f"logged-in user, would do it again on every restart, and would "
+            f"leave sessions signed by a key you did not choose. Fix the mount "
+            f"or the permissions, or unset SECRET_KEY_FILE to let CertMate "
+            f"manage the key in its data directory."
+        )
+
+
 def _secret_key_from_env_or_generate(data_dir: Path) -> str:
     """Return a Flask secret key.
 
     Resolution order (mutually exclusive):
-    1. SECRET_KEY_FILE — if set, read the key from that file. Any read error
-       or empty result generates a fresh key immediately; SECRET_KEY is never
-       consulted (to avoid encouraging both vars).
+    1. SECRET_KEY_FILE — if set, read the key from that file. A read error or
+       an empty file raises SecretKeyUnreadableError and the process stops:
+       the operator named a file as the source, and failing to read it is a
+       configuration error, not an invitation to invent a different key.
+       SECRET_KEY is never consulted (to avoid encouraging both vars).
     2. SECRET_KEY — only checked when SECRET_KEY_FILE is absent. Insecure
        defaults ('', 'your-secret-key-here', 'change-me', 'secret') are
        treated as unset and fall through to step 3.
@@ -418,12 +455,11 @@ def _secret_key_from_env_or_generate(data_dir: Path) -> str:
     if explicit_key_file:
         try:
             key = Path(explicit_key_file).read_text().strip()
-            if key:
-                return key
-            logger.warning(f"SECRET_KEY_FILE ({explicit_key_file}) is empty; generating a fresh secret key.")
         except Exception as e:
-            logger.warning(f"Could not read SECRET_KEY_FILE ({explicit_key_file}): {e}; generating a fresh secret key.")
-        return secrets.token_hex(32)
+            raise SecretKeyUnreadableError(explicit_key_file, e) from e
+        if not key:
+            raise SecretKeyUnreadableError(explicit_key_file, 'the file is empty')
+        return key
 
     env_key = os.getenv('SECRET_KEY', '')
     if env_key and env_key not in insecure_defaults:

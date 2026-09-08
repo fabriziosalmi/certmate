@@ -1503,7 +1503,7 @@ main "$@"
 | `API_BEARER_TOKEN`      |          | auto-generated | Bearer token for API authentication |
 | `API_BEARER_TOKEN_FILE` |          | -              | Path to a file containing the API bearer token (takes precedence over `API_BEARER_TOKEN`) |
 | `SECRET_KEY`            |          | auto-generated | Flask secret key for sessions       |
-| `SECRET_KEY_FILE`       |          | -              | Path to a file containing the Flask secret key (takes precedence over `SECRET_KEY`) |
+| `SECRET_KEY_FILE`       |          | -              | Path to a file containing the Flask secret key (takes precedence over `SECRET_KEY`). **If set and unreadable or empty, CertMate refuses to start** rather than inventing one: a secret that failed to mount is a configuration error, and a fresh key would sign out every user on every restart |
 | `PORT`             |          | `8000`         | Server port (honoured by the container entrypoint) |
 | `FLASK_ENV`        |          | `production`   | Flask environment. `production` refuses `--debug`  |
 | `CERTMATE_LOG_FILE` |         | -              | Also write logs to this path. Off by default: the container logs to stdout, which is what `docker logs` and log shippers expect. Set it (e.g. `/app/logs/certmate.log`) to keep a file on the mounted volume — it is what the web UI's log stream reads |

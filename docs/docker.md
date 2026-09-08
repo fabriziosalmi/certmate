@@ -101,7 +101,7 @@ docker run -d --name certmate \
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `SECRET_KEY` | No | Flask secret key for sessions (auto-generated if unset) |
-| `SECRET_KEY_FILE` | No | Path to a file containing the Flask secret key (takes precedence over `SECRET_KEY`) |
+| `SECRET_KEY_FILE` | No | Path to a file containing the Flask secret key (takes precedence over `SECRET_KEY`). If set and the file cannot be read or is empty, CertMate refuses to start: a secret that failed to mount is a configuration error, and generating a key instead would sign out every user, on every restart, with sessions signed by a key you did not choose. |
 | `API_BEARER_TOKEN` | No (auto-generated) | API auth token. Auto-generated if unset, but set it before exposing a not-yet-onboarded instance to a network; when set, paste it once on the first-run screen to create the admin. **This value is authoritative:** if it differs from the token already stored, the stored one is replaced at startup and stops working. That is what makes adding or rotating the variable on an existing install take effect — previously enforcement used this value while authentication still checked the old one, and the first-run screen asked for a token it then rejected |
 | `API_BEARER_TOKEN_FILE` | No | Path to a file containing the API bearer token (takes precedence over `API_BEARER_TOKEN`) |
 | `LOG_LEVEL` | No | `INFO` (default), `DEBUG`, `WARNING`, `ERROR` |
