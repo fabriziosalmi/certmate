@@ -81,8 +81,13 @@ def test_the_repair_is_reported_so_it_is_not_silent(manager, caplog):
     with caplog.at_level(logging.WARNING):
         manager.reconcile_served_copies()
 
-    assert any('example.com' in r.message or 'example.com' in str(r.args)
-               for r in caplog.records), 'the repair was not logged'
+    # Assert on the record's arguments rather than searching its rendered
+    # text: the domain is passed as a lazy-formatting argument, so this pins
+    # that the message actually names the domain it repaired instead of
+    # matching a substring that could come from anywhere in the line.
+    assert any('example.com' in (r.args or ()) for r in caplog.records), (
+        'the repair was not logged, or was logged without naming the domain'
+    )
 
 
 def test_a_consistent_domain_is_left_alone(manager):
@@ -151,7 +156,7 @@ def test_a_domain_that_cannot_be_repaired_does_not_stop_the_others(manager,
     real_publish = manager._publish_flat_files
 
     def publish(src_dir, dest_dir):
-        if 'broken' in str(dest_dir):
+        if dest_dir.name == 'broken.example.com':
             raise OSError('read-only file system')
         return real_publish(src_dir, dest_dir)
 
