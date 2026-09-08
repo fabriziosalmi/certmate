@@ -72,6 +72,11 @@ def _readers(name, blobs):
         rf"""\$\{{{name}[}}:]""",
         rf"""\${name}\b""",
         rf"""^\s*(ENV|ARG)\s+{name}\b""",
+        # The name held in a constant and read through it, which is how
+        # file_operations reads CERTMATE_BACKUP_PASSPHRASE. Requires the
+        # assignment form, so prose mentioning the variable does not count as
+        # reading it.
+        rf"""^\s*[A-Z][A-Z0-9_]*\s*=\s*['"]{name}['"]""",
     ]
     hits = []
     for path, blob in blobs.items():
@@ -154,3 +159,63 @@ def test_no_documented_variable_contradicts_the_template():
             f"{name} is read by {_readers(name, blobs)} but is not offered in "
             f".env.example, so nobody copying the template will set it."
         )
+
+
+# --- the same question, asked of the README -------------------------------
+#
+# `.env.template` was deleted for promising ten provider variables that never
+# existed. The README's Quick Start kept its own copy of four of them, in the
+# block headed "Edit `.env` file with your credentials" — so an operator
+# following the most-read file in the repository still filled in
+# AWS_ACCESS_KEY_ID, AZURE_CLIENT_ID, GOOGLE_PROJECT_ID or POWERDNS_API_KEY and
+# reached a UI that showed the provider unconfigured. Every other DNS provider
+# is configured in the web UI or through the API; only CLOUDFLARE_TOKEN
+# bootstraps an account from the environment.
+
+README = REPO_ROOT / "README.md"
+
+
+def _readme_env_block():
+    """The fenced block the Quick Start tells operators to put in `.env`.
+
+    Located by the heading rather than by position: a block that moves should
+    keep being checked, and a heading that is renamed should fail loudly here
+    rather than silently stop checking anything.
+    """
+    text = README.read_text(encoding="utf-8")
+    start = text.index("### 2. Configure Environment")
+    end = text.index("### 3.", start)
+    section = text[start:end]
+    fences = re.findall(r"```[a-z]*\n(.*?)```", section, re.S)
+    assert fences, (
+        "the Quick Start's Configure Environment section has no fenced block; "
+        "this check is no longer looking at anything"
+    )
+    return "\n".join(fences)
+
+
+def _readme_declared():
+    return [
+        (match.group(1), line.strip())
+        for line in _readme_env_block().splitlines()
+        if (match := re.match(r"^\s*#?\s*([A-Z][A-Z0-9_]*)=", line))
+    ]
+
+
+def test_the_quick_start_block_declares_something():
+    assert len(_readme_declared()) >= 3, (
+        "the README's .env block parses to almost nothing, so the check below "
+        "would pass over a file it is not reading"
+    )
+
+
+@pytest.mark.parametrize("name,line", _readme_declared(),
+                         ids=[d[0] for d in _readme_declared()])
+def test_every_variable_the_quick_start_offers_is_read_by_something(name, line):
+    blobs = _blobs()
+    assert _readers(name, blobs), (
+        f"README Quick Start offers `{line}`, which nothing in the application "
+        f"reads. Setting it does nothing, and for a DNS provider it does worse "
+        f"than nothing: the operator believes the provider is configured. "
+        f"Every provider except Cloudflare is configured in the UI or the API."
+    )

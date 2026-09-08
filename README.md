@@ -337,30 +337,21 @@ Edit `.env` file with your credentials:
 # you to paste this same token once to create the initial admin.
 API_BEARER_TOKEN=your_super_secure_api_token_here_change_this
 
-# DNS Provider Configuration (choose one or multiple)
-
-# Option 1: Cloudflare (Recommended for beginners)
+# DNS Provider Configuration
+#
+# Cloudflare is the only provider configured from the environment: this token
+# bootstraps the default Cloudflare account on first run. Route53, Azure,
+# Google Cloud DNS, PowerDNS and the other 25+ providers are configured in the
+# web UI (Settings -> DNS Providers) or through the API — CertMate reads no
+# environment variable for any of them, so setting AWS_ACCESS_KEY_ID or
+# AZURE_CLIENT_ID here does nothing at all.
 CLOUDFLARE_TOKEN=your_cloudflare_api_token_here
 
-# Option 2: AWS Route53
-# AWS_ACCESS_KEY_ID=your_aws_access_key
-# AWS_SECRET_ACCESS_KEY=your_aws_secret_key
-# AWS_DEFAULT_REGION=us-east-1
-
-# Option 3: Azure DNS
-# AZURE_SUBSCRIPTION_ID=your_azure_subscription_id
-# AZURE_RESOURCE_GROUP=your_resource_group
-# AZURE_TENANT_ID=your_tenant_id
-# AZURE_CLIENT_ID=your_client_id
-# AZURE_CLIENT_SECRET=your_client_secret
-
-# Option 4: Google Cloud DNS
-# GOOGLE_PROJECT_ID=your_gcp_project_id
-# GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
-
-# Option 5: PowerDNS
-# POWERDNS_API_URL=https://your-powerdns-server:8081
-# POWERDNS_API_KEY=your_powerdns_api_key
+# Backups. Without a passphrase, automatic backups are written with their
+# secrets masked and CANNOT restore this instance — they are configuration
+# snapshots. With one, every automatic backup is complete and encrypted at
+# rest. Set it before you need it; see Backup and Recovery below.
+# CERTMATE_BACKUP_PASSPHRASE=a_long_random_passphrase
 
 # Optional: Application Settings
 SECRET_KEY=your_flask_secret_key_here
