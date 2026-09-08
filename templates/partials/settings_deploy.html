@@ -331,7 +331,7 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <template x-for="entry in history" :key="entry.timestamp + entry.hook_id">
+                                    <template x-for="entry in history" :key="entry.run_id || (entry.timestamp + entry.hook_id)">
                                         <tr class="border-b border-gray-100 dark:border-gray-700/50 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/30 transition"
                                             role="button"
                                             tabindex="0"
@@ -347,10 +347,22 @@
                                                       :class="entry.event === 'test' ? 'bg-info-surface text-info-fg' : 'bg-surface-2 text-label'"
                                                       x-text="entry.event"></span>
                                             </td>
+                                            {#
+                                                Three outcomes, not two. `interrupted` means CertMate
+                                                was killed while this hook was running: it is neither a
+                                                pass nor an exit code, and rendering it as "Exit err"
+                                                would say the hook ran and failed — the opposite of the
+                                                truth, which is that nobody knows what it did.
+                                            #}
                                             <td class="py-1.5 pr-3">
                                                 <span class="px-1.5 py-0.5 rounded text-[10px] font-medium"
-                                                      :class="entry.success ? 'bg-success-surface text-success-fg' : 'bg-danger-surface text-danger-fg'"
-                                                      x-text="entry.success ? 'OK' : ('Exit ' + (entry.exit_code !== null ? entry.exit_code : 'err'))"></span>
+                                                      :class="entry.status === 'interrupted' ? 'bg-warning-surface text-warning-fg'
+                                                              : (entry.status === 'running' ? 'bg-info-surface text-info-fg'
+                                                              : (entry.success ? 'bg-success-surface text-success-fg' : 'bg-danger-surface text-danger-fg'))"
+                                                      :title="entry.status === 'interrupted' ? (entry.error || 'Interrupted') : ''"
+                                                      x-text="entry.status === 'interrupted' ? 'Interrupted'
+                                                              : (entry.status === 'running' ? 'Running'
+                                                              : (entry.success ? 'OK' : ('Exit ' + (entry.exit_code !== null && entry.exit_code !== undefined ? entry.exit_code : 'err'))))"></span>
                                             </td>
                                             <td class="py-1.5 text-right text-muted" x-text="entry.duration_ms + 'ms'"></td>
                                         </tr>
