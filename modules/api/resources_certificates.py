@@ -272,17 +272,12 @@ def create_certificates_resources(api, models, ctx: ApiContext) -> dict:
                     f"{old_provider} → {new_dns_provider or old_provider}"
                 )
 
-                # 2. Update domain entry in settings
-                def _update_domain_provider(s):
-                    for entry in s.get('domains', []):
-                        if isinstance(entry, dict) and entry.get('domain') == domain:
-                            if new_dns_provider:
-                                entry['dns_provider'] = new_dns_provider
-                            if new_account_id:
-                                entry['dns_account_id'] = new_account_id
-                            break
-
-                ctx.settings.update(_update_domain_provider, "dns_provider_change")
+                # The settings entry used to be written here, after
+                # update_config returned and therefore AFTER the domain lock
+                # was released. A renewal starting in that window read the old
+                # provider from settings while the metadata already said the
+                # new one. Both writes now happen inside the lock, in
+                # CertificateService.update_config.
 
                 response = {
                     'message': f'Certificate config updated for {domain}',

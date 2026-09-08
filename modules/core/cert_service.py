@@ -423,7 +423,44 @@ class CertificateService:
                 raise RuntimeError(
                     f'Failed to update metadata for domain: {domain}')
 
+            # The settings entry is written HERE, inside the same domain lock,
+            # rather than by the caller afterwards.
+            #
+            # A domain's DNS provider is authoritative in two files: this
+            # certificate's metadata.json, which issuance reads, and the
+            # domain's entry in settings.json, which get_domain_dns_provider
+            # reads. They were updated by two separate writes with the lock
+            # released between them, and nothing reconciled them — so a
+            # renewal starting in that window read the OLD provider from
+            # settings while the metadata already said the new one, and
+            # neither file was wrong on its own.
+            #
+            # Lock ordering: this takes the settings lock while holding the
+            # domain lock. Checked before doing it — no settings mutate
+            # callback anywhere acquires a domain lock, so the reverse order
+            # does not exist and this cannot deadlock. Anything that adds one
+            # would have to take the domain lock first.
+            self._settings.update(
+                lambda s: self._write_domain_provider(s, domain, changes),
+                'dns_provider_change')
+
         return metadata, old_dns_provider
+
+    @staticmethod
+    def _write_domain_provider(settings, domain, changes):
+        """Mirror the DNS provider onto the domain's settings entry.
+
+        Only the keys the caller actually sent: an absent one means "leave
+        alone", the same rule the metadata write above follows, so a probe-only
+        edit does not touch the provider.
+        """
+        for entry in settings.get('domains', []):
+            if isinstance(entry, dict) and entry.get('domain') == domain:
+                if changes.get('dns_provider'):
+                    entry['dns_provider'] = changes['dns_provider']
+                if changes.get('account_id'):
+                    entry['dns_account_id'] = changes['account_id']
+                break
 
     def prepare_reissue(self, *, domain, san_domains=None, dns_provider=None,
                         account_id=None, ca_provider=None, challenge_type=None,
