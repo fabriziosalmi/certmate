@@ -1,0 +1,148 @@
+# Which CI jobs gate a merge, and which only report.
+#
+# Branch protection lives in GitHub's settings, where it is invisible to
+# everyone without admin rights and drifts without leaving a trace. An audit
+# found the consequence: the repository ran a Playwright UI suite, a Trivy
+# image scan, a CSS staleness check and an MCP suite on every pull request, and
+# not one of them could block a merge. The work was being done and thrown away.
+#
+# This file is the reviewable copy of that decision. It is not read by GitHub —
+# branch protection still has to be set through the API — but
+# tests/test_required_checks_registry.py fails when a workflow job that runs on
+# a pull request is missing from it, so a new job cannot arrive unclassified,
+# and `advisory` has to carry a reason someone can argue with.
+#
+# To apply this file to the repository (needs admin on the repo):
+#
+#   gh api -X PUT repos/fabriziosalmi/certmate/branches/main/protection/required_status_checks \
+#     -f strict=true \
+#     "$(python3 -c "import yaml,sys;print(' '.join('-f contexts[]='+c['context'] for c in yaml.safe_load(open('.github/required-checks.yml'))['gating']))")"
+#
+# The `context` of each entry is the name GitHub shows in the merge box, which
+# is the job's `name:` when it has one, the job id when it does not, and gets a
+# `(value)` suffix for every matrix dimension.
+
+version: 1
+
+gating:
+  - context: build
+    workflow: docker-multiplatform.yml
+    job: build
+    why: >-
+      The image has to build for both published architectures. Nothing else
+      ships if this is red.
+
+  - context: test (3.12)
+    workflow: ci.yml
+    job: test
+    why: >-
+      The Python suite, minus the UI marker. The per-module coverage floors
+      from #662 live here.
+
+  - context: Analyze python
+    workflow: codeql.yml
+    job: analyze
+    why: Static analysis on the code that issues certificates.
+
+  - context: Analyze javascript
+    workflow: codeql.yml
+    job: analyze
+    why: Static analysis on the frontend that drives it.
+
+  - context: emoji
+    workflow: lint-emoji.yml
+    job: emoji
+    why: House style; cheap, deterministic, and it never has a false positive.
+
+  - context: ui-gate
+    workflow: ui-tests.yml
+    job: ui-gate
+    why: >-
+      The Playwright suite is the only thing that exercises the templates, and
+      two settings tests once rotted for months behind a green board. `ui`
+      itself is deliberately NOT the required context: it is limited to
+      frontend changes, and a required context that never starts leaves a PR
+      pending forever. `ui-gate` always runs and turns "skipped" into a pass.
+
+  - context: security-scan
+    workflow: docker-multiplatform.yml
+    job: security-scan
+    why: >-
+      Fails on a fixable CRITICAL in the published image. This one can go red
+      without the PR changing — Trivy's database moves daily — and that is the
+      point: a fixable CRITICAL in the base image is the maintainer's problem
+      the day it is published, not the day someone notices.
+
+  - context: frontend-css
+    workflow: ci.yml
+    job: frontend-css
+    why: >-
+      Catches a committed CSS bundle that no longer matches its source, and the
+      theme-token regression gate. A stale bundle ships a UI nobody reviewed.
+
+  - context: MCP server
+    workflow: ci.yml
+    job: mcp
+    why: >-
+      The MCP server is a published surface with its own suite. Deterministic,
+      hosted, and there is no reason for it to be advisory.
+
+advisory:
+  - context: storage-live
+    workflow: ci.yml
+    job: storage-live
+    why: >-
+      Boots MinIO and Vault as service containers pulled at run time. A
+      registry rate-limit or an upstream image change fails it with nothing
+      wrong in the PR, so it reports rather than blocks. Read it before
+      merging anything that touches modules/core/storage.
+
+  - context: acme-dns-live
+    workflow: ci.yml
+    job: acme-dns-live
+    why: >-
+      Same shape: acme-dns plus the postgres it needs, both pulled at run time.
+      It exists because acme-dns had never worked in any release (v2.24.1), so
+      a red run here is worth stopping for even though it does not block.
+
+  - context: ui
+    workflow: ui-tests.yml
+    job: ui
+    why: >-
+      The real Playwright suite, reported through `ui-gate`. Not required
+      directly because it does not run on every pull request.
+
+  - context: changes
+    workflow: ui-tests.yml
+    job: changes
+    why: >-
+      Decides whether `ui` has anything to look at. Its failure already fails
+      `ui-gate`, so requiring it too would add nothing.
+
+# Status contexts posted on pull requests by GitHub Apps rather than by a job
+# in this repository. Nothing here can be checked against the workflow files,
+# so the list is maintained by hand — but leaving them out would have repeated
+# the mistake this file exists to fix: two coverage checks report on every pull
+# request and it was not written down anywhere that they do not gate.
+external:
+  - context: codecov/patch
+    source: Codecov
+    why: >-
+      Coverage on the diff. Advisory because coverage is already gated inside
+      `test (3.12)` by scripts/check_coverage_floors.py (#662), which enforces
+      per-module floors rather than one repository-wide percentage. A second,
+      weaker gate on the same property would only add flakiness — Codecov also
+      goes red when its upload is rate-limited.
+
+  - context: codecov/project
+    source: Codecov
+    why: >-
+      Repository-wide coverage. Same reason as codecov/patch: the floors in
+      scripts/check_coverage_floors.py are the gate, and they are stricter.
+
+  - context: CodeQL
+    source: GitHub code scanning
+    why: >-
+      The umbrella check the code-scanning app posts alongside the per-language
+      analyses. `Analyze python` and `Analyze javascript` are the required
+      contexts; requiring the umbrella as well would gate twice on one result.

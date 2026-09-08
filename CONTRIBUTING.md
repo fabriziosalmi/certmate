@@ -106,6 +106,26 @@ Branch protection is on, and admins are not exempt:
 - CI must be green. Auto-merge is disabled repo-wide, so merging is a deliberate
   act by a human.
 
+### Which checks actually block a merge
+
+Not all of them, and the difference is written down in
+[`.github/required-checks.yml`](.github/required-checks.yml): every job that
+runs on a pull request is listed as **gating** (branch protection will not let
+the PR merge without it) or **advisory** (it reports, and the reason it does not
+block is next to it). `tests/test_required_checks_registry.py` fails if a job is
+missing from that file, so a new job cannot arrive unclassified.
+
+Read the advisory ones anyway. `storage-live` and `acme-dns-live` boot real
+service containers and do not gate because a registry hiccup would block
+unrelated work — but acme-dns shipped broken in every release up to v2.24.1
+precisely because nobody was looking.
+
+The UI suite is the one odd shape. `ui` only runs when a PR touches the
+frontend (`scripts/ui_paths_changed.py` decides), so the required context is
+`ui-gate`, which always runs and treats "skipped" as a pass. If you add a
+frontend directory, add it to that script's `PATTERNS` — otherwise changes to it
+silently skip the suite.
+
 ### Touching the issuance pipeline
 
 If your change touches certificate issuance, a DNS provider, or the ACME path,
