@@ -80,6 +80,11 @@ def _skip_if_the_ca_declined(response):
         error = response.json().get('error') or response.text
     except ValueError:
         error = response.text
+    # Printed before the skip decision, always. A skip whose reason is not in
+    # the log is indistinguishable from a pass, and this run produced exactly
+    # that once: "1 skipped" with nothing to say which CA phrase matched.
+    print(f"\n[e2e] CA/CertMate refused ({response.status_code}): "
+          f"{str(error)[:400]}")
     skip_if_the_ca_was_unavailable({'status': 'failed', 'error': error})
 
 

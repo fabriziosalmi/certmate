@@ -2560,8 +2560,14 @@ class CertificateManager:
 
         Everything the ordinary renewal re-derives from metadata — the CA, the
         DNS provider and account, the alias — is passed straight through, so a
-        CSR renewal reaches the CA the same way its issuance did. `replace` is
-        not passed: there is no lineage to replace.
+        CSR renewal reaches the CA the same way its issuance did.
+
+        `replace=True` is passed for one reason: create_certificate refuses a
+        domain that already has a certificate, and a renewal by definition
+        does. It does NOT mean there is a lineage to replace — there is not —
+        so the two flags it adds to the command (`--renew-with-new-domains`,
+        `--force-renewal`) are dropped again in `to_csr_command`. What it does
+        buy is the reissue metadata semantics, which are the right ones here.
         """
         metadata = request['metadata']
         before = self._cert_fingerprint(self.cert_dir / domain / 'cert.pem')
@@ -2577,6 +2583,7 @@ class CertificateManager:
             alias_dns_provider=metadata.get('alias_dns_provider'),
             challenge_type=metadata.get('challenge_type'),
             csr_pem=request['csr_pem'],
+            replace=True,
         )
 
         success = bool(result[0] if isinstance(result, tuple) else result)

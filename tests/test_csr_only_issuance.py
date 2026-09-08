@@ -614,3 +614,42 @@ def test_an_ordinary_storage_certificate_is_still_unknown(tmp_path):
 
     assert info['private_key_state'] == 'unknown', info
     assert info['usable'] is None
+
+
+@pytest.mark.parametrize('flag', ['--renew-with-new-domains', '--force-renewal'])
+def test_the_lineage_flags_are_dropped_too(flag):
+    """A CSR renewal goes through create_certificate with `replace=True`,
+    purely to get past its "already exists" guard — and that adds these. There
+    is no lineage here to renew with new domains and no renewal window to force
+    past: certbot in --csr mode always issues. Dropping them keeps the renewal
+    command byte-identical to the issuance command, which is the one proven
+    against a real CA.
+    """
+    assert flag not in to_csr_command(ORDINARY + [flag], '/c/csr.pem', '/out')
+
+
+def test_dropping_a_valueless_flag_does_not_eat_the_next_argument():
+    """CONTROL: --force-renewal takes no argument. Treating it like `-d` would
+    silently swallow whatever follows — in a real command, the authenticator."""
+    argv = to_csr_command(
+        ['certbot', 'certonly', '--force-renewal', '--authenticator',
+         'dns-cloudflare'], '/c/csr.pem', '/out')
+    assert '--authenticator' in argv
+    assert argv[argv.index('--authenticator') + 1] == 'dns-cloudflare'
+
+
+def test_the_renewal_reissues_over_the_existing_certificate(tmp_path):
+    """create_certificate refuses a domain that already has one, and a renewal
+    by definition does. Without `replace=True` every CSR renewal was a 500 —
+    which is how the real-CA E2E found it, after the unit tests passed."""
+    manager = _renewable(tmp_path)
+    calls = []
+    manager.create_certificate = lambda **kw: (
+        calls.append(kw) or {'success': True})
+
+    manager.renew_certificate('api.example.com')
+
+    assert calls and calls[0].get('replace') is True, (
+        'the CSR renewal does not reissue over the existing certificate, so '
+        'create_certificate will refuse it with FileExistsError'
+    )

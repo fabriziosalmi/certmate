@@ -51,6 +51,14 @@ _DROPPED_FLAGS = {
     '--key-type': 1,
     '--rsa-key-size': 1,
     '--elliptic-curve': 1,
+    # Lineage concepts. A CSR renewal goes through create_certificate with
+    # `replace=True` so it gets past the "already exists" guard, and that adds
+    # these two — but there is no lineage here to renew with new domains, and
+    # no renewal window to force past: certbot in --csr mode always issues.
+    # Dropping them keeps the renewal command byte-identical to the issuance
+    # command, which is the one already proven against a real CA.
+    '--renew-with-new-domains': 0,
+    '--force-renewal': 0,
 }
 
 # What certbot writes in CSR mode. Deliberately not privkey.pem: its absence is
