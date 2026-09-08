@@ -48,7 +48,9 @@ def test_summary_counts_every_kind_of_entry(tmp_path):
 
     summary = mgr.check_renewals()
 
-    assert summary == {
+    counts = {k: v for k, v in summary.items()
+              if k not in ('duration_seconds', 'examined')}
+    assert counts == {
         'checked': 2,           # good.com + fresh.com
         'renewed': 1,           # good.com
         'failed': 0,
@@ -56,6 +58,13 @@ def test_summary_counts_every_kind_of_entry(tmp_path):
         'skipped_invalid': 3,   # empty, dict-without-domain, int
         'skipped_not_due': 0,   # certbot didn't report any "not yet due" no-op
     }
+    # The sweep also reports its own shape now — how long it took and how many
+    # entries it looked at — so an instance that is slowly outgrowing its
+    # schedule is visible before it stops finishing. Excluded above rather than
+    # pinned here: this test is about the counting, and those two are covered
+    # by tests/test_the_renewal_sweep_says_what_it_did.py.
+    assert summary['duration_seconds'] >= 0
+    assert summary['examined'] == 6   # 2 checked + 1 disabled + 3 invalid
     mgr.renew_certificate.assert_called_once_with('good.com')
 
 
