@@ -109,9 +109,16 @@ class DNSManager:
             # Named precisely, because the alternative is an issuance failure
             # at the DNS provider that blames the credential rather than the
             # mount. Never the value: this line goes to the log.
+            #
+            # %r on every interpolated value, not %s. The provider name comes
+            # from the request and the account id and path come from
+            # settings.json, so a newline in any of them would forge a log
+            # line; repr escapes it. It also makes an account id with a space
+            # in it readable, which %s did not.
             logger.error(
-                "DNS provider '%s' account '%s': field '%s' names %r, which %s",
-                provider, used_account_id, exc.field, exc.reference, exc.reason)
+                'DNS provider %r account %r: field %r names %r, which %s',
+                provider, used_account_id, exc.field, exc.reference,
+                exc.reason)
             return None, None
 
     def _locate_account_config(self, provider, account_id=None, settings=None):
