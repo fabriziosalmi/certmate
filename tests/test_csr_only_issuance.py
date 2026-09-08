@@ -562,3 +562,55 @@ def test_a_typed_target_explains_why_it_cannot_serve_a_csr_certificate(tmp_path)
     assert 'shell hook' in results[0]['message'], (
         'the message does not say what to do instead'
     )
+
+
+# ---------------------------------------------------------------------------
+# The storage branch answers the same question
+# ---------------------------------------------------------------------------
+
+def test_a_csr_certificate_read_through_storage_is_still_external(tmp_path):
+    """Found by the real-CA E2E, not by any unit test above.
+
+    `get_certificate_info` asks the storage backend first, and the local
+    backend is a storage backend — so on a real instance that branch runs, not
+    the filesystem one every other test here exercises. It reported 'unknown',
+    which is the honest answer for a secrets backend that deliberately does not
+    fetch keys, and the wrong one when the metadata says there is no key to
+    fetch anywhere.
+    """
+    manager = _manager(tmp_path)
+    manager.settings_manager.load_settings.return_value = {}
+    cert_pem = _self_signed('api.example.com')
+    metadata = {'key_management': 'external', 'dns_provider': 'cloudflare'}
+
+    storage = MagicMock()
+    storage.retrieve_certificate_info.return_value = (
+        {'cert.pem': cert_pem}, metadata)
+    manager.storage_manager = storage
+
+    info = manager.get_certificate_info('api.example.com', use_cache=False)
+
+    assert info['private_key_state'] == 'external', info
+    assert info['needs_renewal'] is False, (
+        f'a CSR-only certificate read through storage is asking to be '
+        f'reissued on every sweep: {info}'
+    )
+
+
+def test_an_ordinary_storage_certificate_is_still_unknown(tmp_path):
+    """CONTROL: the whole point of 'unknown' on this path is that a secrets
+    backend does not pull private keys for a listing view. Answering 'missing'
+    there would mark every storage-backed certificate as needing renewal —
+    which is what #608 explicitly avoided."""
+    manager = _manager(tmp_path)
+    manager.settings_manager.load_settings.return_value = {}
+
+    storage = MagicMock()
+    storage.retrieve_certificate_info.return_value = (
+        {'cert.pem': _self_signed('api.example.com')}, {'dns_provider': 'cf'})
+    manager.storage_manager = storage
+
+    info = manager.get_certificate_info('api.example.com', use_cache=False)
+
+    assert info['private_key_state'] == 'unknown', info
+    assert info['usable'] is None

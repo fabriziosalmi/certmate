@@ -35,7 +35,7 @@ from .csr_issuance import (
     CSR_OUTPUT_DIRNAME, CSRError, csr_domains, csr_fingerprint, read_csr,
     to_csr_command,
 )
-from .domain_paths import reject_unsafe_domain
+from .domain_paths import reject_unsafe_domain, validate_domain_path
 from .utils import (
     DeploymentStatusCache, validate_domain, utc_now, utc_now_iso, validate_key_options,
     repair_certbot_lineage_symlinks,
@@ -689,7 +689,15 @@ class CertificateManager:
         # already checks it, and that was true of every other unit that builds
         # a path from a domain until code moved (#672) — so this one screens
         # its own input too, and `_store_csr` builds three paths from it.
-        _reject_path_escaping_domain(domain)
+        #
+        # `validate_domain_path` rather than the cheaper character check: it
+        # resolves the path and confirms it is still under cert_dir, which is
+        # what actually answers the question once symlinks are involved — and
+        # it is the form CodeQL recognises as a sanitizer, so the finding is
+        # closed rather than argued with.
+        domain_dir, path_error = validate_domain_path(domain, self.cert_dir)
+        if path_error:
+            raise ValueError(path_error)
 
         try:
             csr = read_csr(csr_pem)
@@ -713,7 +721,7 @@ class CertificateManager:
         # the old privkey.pem beside a certificate it cannot serve — the exact
         # unusable pair `_publish_flat_files` exists to prevent, and one that
         # would then be reported as 'mismatched' forever. Refuse instead.
-        existing_key = self.cert_dir / domain / 'privkey.pem'
+        existing_key = domain_dir / 'privkey.pem'
         if existing_key.exists():
             raise RuntimeError(
                 f'Certificate creation failed: {domain} already has a private '
@@ -1432,11 +1440,22 @@ class CertificateManager:
                         # backend for a listing view. Reading the absent key as
                         # a missing key would mark every storage-backed
                         # certificate as needing renewal (#608).
+                        # A CSR-only certificate has no key ANYWHERE, and the
+                        # metadata says so, so this branch can answer 'external'
+                        # rather than the honest-but-useless 'unknown' (#599).
+                        # Found by the real-CA E2E, not by a unit test: every
+                        # unit test exercised the filesystem branch, and the
+                        # local storage backend goes through this one.
+                        if cert_files.get('privkey.pem'):
+                            storage_key_state = 'present'
+                        elif (metadata or {}).get('key_management') == 'external':
+                            storage_key_state = 'external'
+                        else:
+                            storage_key_state = 'unknown'
                         info = self._parse_certificate_info(
                             domain, cert_files['cert.pem'], metadata,
                             settings=cache_settings,
-                            key_state=('present' if cert_files.get('privkey.pem')
-                                       else 'unknown'))
+                            key_state=storage_key_state)
                         if cache_enabled:
                             self._set_cached_certificate_info(domain, info, cache_settings)
                         return info
