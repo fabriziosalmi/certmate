@@ -52,6 +52,23 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{/*
+The claim holding /app/backups. The main claim unless persistence.backups
+.separateClaim is on, in which case backups get a volume of their own so a
+loss of the primary does not take the restore points with it.
+*/}}
+{{- define "certmate.backupPvcName" -}}
+{{- if .Values.persistence.backups.separateClaim }}
+{{- if .Values.persistence.backups.existingClaim }}
+{{- .Values.persistence.backups.existingClaim }}
+{{- else }}
+{{- printf "%s-backups" (include "certmate.fullname" .) }}
+{{- end }}
+{{- else }}
+{{- include "certmate.pvcName" . }}
+{{- end }}
+{{- end }}
+
+{{/*
 Refuse to render a configuration the application cannot survive.
 
 CertMate runs APScheduler inside the web process and gunicorn with a single

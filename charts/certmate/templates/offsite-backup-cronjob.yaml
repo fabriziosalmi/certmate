@@ -1,0 +1,69 @@
+{{- if and .Values.persistence.enabled .Values.persistence.backups.offsite.enabled }}
+{{/*
+Copy the restore points somewhere the cluster's storage failure does not reach.
+
+The README has always said "keep a copy off the host". This turns that
+instruction into something an operator can apply rather than design — but it
+deliberately stops short of choosing a destination: `image` and `command` are
+yours, because where your backups belong is a fact about your infrastructure,
+not about CertMate.
+
+Two things it does decide, because getting them wrong is easy:
+
+* the backup volume is mounted READ-ONLY, so a misconfigured copy command can
+  never damage what it is copying;
+* it runs as the same non-root user as the application, so it can read files
+  the application wrote.
+
+A copy is not a restore point on its own. Unless CERTMATE_BACKUP_PASSPHRASE was
+set when the archive was written, it is a share-safe snapshot with the secrets
+masked and cannot restore the instance — copying it off-site preserves exactly
+that. See the README's Backup and Recovery section.
+*/}}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "certmate.fullname" . }}-offsite-backup
+  labels: {{- include "certmate.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.persistence.backups.offsite.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels: {{- include "certmate.selectorLabels" . | nindent 12 }}
+        spec:
+          restartPolicy: {{ .Values.persistence.backups.offsite.restartPolicy }}
+          {{- with .Values.podSecurityContext }}
+          securityContext: {{- toYaml . | nindent 12 }}
+          {{- end }}
+          containers:
+            - name: offsite-backup
+              image: {{ .Values.persistence.backups.offsite.image | quote }}
+              {{- with .Values.persistence.backups.offsite.command }}
+              args: {{- toYaml . | nindent 16 }}
+              {{- end }}
+              {{- with .Values.persistence.backups.offsite.env }}
+              env: {{- toYaml . | nindent 16 }}
+              {{- end }}
+              {{- with .Values.persistence.backups.offsite.resources }}
+              resources: {{- toYaml . | nindent 16 }}
+              {{- end }}
+              volumeMounts:
+                # Read-only: a copy job must never be able to damage the
+                # archives it exists to preserve.
+                - name: backups
+                  mountPath: /app/backups
+                  readOnly: true
+                  {{- if not .Values.persistence.backups.separateClaim }}
+                  subPath: backups
+                  {{- end }}
+          volumes:
+            - name: backups
+              persistentVolumeClaim:
+                claimName: {{ include "certmate.backupPvcName" . }}
+                readOnly: true
+{{- end }}

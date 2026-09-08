@@ -41,6 +41,38 @@ settings store, the certificate inventory and the tamper-evident audit chain
 all live on disk. Disabling persistence without supplying
 `persistence.existingClaim` fails at template time.
 
+### Where the backups live
+
+By default `/app/backups` is a subPath of the same claim as the certificates,
+the settings store and the audit chain — the things the backups exist to
+recover. **One volume loss therefore destroys the data and its restore points
+together.** That is the default because a second claim is a real cost for a
+small install, and because where backups belong is a fact about your
+infrastructure rather than about CertMate.
+
+Two ways out, in increasing order of how much they actually protect you:
+
+```bash
+# 1. Its own claim. Survives losing the pod and the data volume's contents;
+#    a claim on the same storage class still shares a failure domain.
+helm upgrade certmate ... --set persistence.backups.separateClaim=true
+
+# 2. A claim on different storage that you manage.
+helm upgrade certmate ... \
+  --set persistence.backups.separateClaim=true \
+  --set persistence.backups.existingClaim=nfs-certmate-backups
+
+# 3. Off the cluster entirely: a CronJob copying /app/backups/unified out.
+#    The image and command are yours; the backup volume is mounted read-only
+#    so a misconfigured copy cannot damage what it is preserving.
+#    See persistence.backups.offsite in values.yaml for a worked rclone example.
+```
+
+**None of this makes a backup restorable.** Unless `CERTMATE_BACKUP_PASSPHRASE`
+is set, automatic backups are written with secrets masked and cannot restore
+the instance — copying those off-site preserves exactly that. Set the
+passphrase first; the API reports `can_restore` per archive.
+
 **The volume outlives the release.** The PVC carries
 `helm.sh/resource-policy: keep`, so `helm uninstall` leaves your certificates
 alone. Removing them is a deliberate `kubectl delete pvc`.
@@ -95,8 +127,11 @@ or run a controller that does it for you, such as
 | key | default | note |
 |---|---|---|
 | `image.tag` | chart `appVersion` | pin a digest for production |
-| `persistence.size` | `2Gi` | certificates, inventory, audit chain, backups |
+| `persistence.size` | `2Gi` | certificates, inventory, audit chain, and backups unless moved (below) |
 | `persistence.existingClaim` | `""` | bring your own volume |
+| `persistence.backups.separateClaim` | `false` | give `/app/backups` its own claim |
+| `persistence.backups.existingClaim` | `""` | a backup volume you manage — the one that actually leaves the failure domain |
+| `persistence.backups.offsite.enabled` | `false` | CronJob copying the archives somewhere else; you choose the image and command |
 | `env.behindProxy` | `true` | correct when traffic arrives via Ingress |
 | `env.gunicornTimeout` | `300` | raise for slow DNS providers |
 | `ingress.enabled` | `false` | |

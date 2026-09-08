@@ -2414,18 +2414,32 @@ All notification channels support per-event filtering (created, renewed, expirin
 
 ### Downgrades & Recovery
 
-Downgrading to a version older than the one that wrote `settings.json` is not supported and may result in a broken configuration or loss of accounts. If you see a `DOWNGRADE DETECTED` message in the logs after rolling back, **restore the latest unified backup before using the UI**:
+Downgrading to a version older than the one that wrote `settings.json` is not supported and may result in a broken configuration or loss of accounts. If you see a `DOWNGRADE DETECTED` message in the logs after rolling back, **restore the most recent backup that can actually restore**.
+
+> **Not every backup is a restore point.** Unless `CERTMATE_BACKUP_PASSPHRASE`
+> was set when the backup was taken, automatic backups are written with secrets
+> masked and **cannot restore this instance** — they are configuration
+> snapshots. On an instance that has never had a passphrase set, the newest
+> archive is almost certainly one of those, so picking "the latest" by
+> timestamp picks one that will be refused. Ask the API which ones qualify: it
+> reports `can_restore` per archive, and `restore_blocked_reason` when it is
+> false.
 
 ```bash
-# List available backups inside the container
-docker exec certmate ls -lt /app/backups/unified/
+# Which backups can actually restore, newest first
+curl -s -H "Authorization: Bearer $API_TOKEN" http://localhost:8000/api/backups \
+  | jq -r '.unified[] | "\(.filename)  can_restore=\(.can_restore)  \(.restore_blocked_reason // "")"'
 
-# Restore the most recent one
+# Restore the newest one whose can_restore is true
 curl -H "Authorization: Bearer $API_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"filename": "backup_YYYYMMDD_HHMMSS.zip", "create_backup_before_restore": true}' \
   http://localhost:8000/api/backups/restore/unified
 ```
+
+If nothing reports `can_restore: true`, this instance has no restore point.
+Set `CERTMATE_BACKUP_PASSPHRASE`, take a backup immediately, and keep a copy
+off this node — see [Backup and Recovery](#backup-and-recovery).
 
 If you have lost the admin password and cannot log in, use the emergency reset script (requires container shell access):
 

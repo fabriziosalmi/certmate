@@ -37,16 +37,65 @@ ingress:
   tls: []
 
 persistence:
-  # Certificates, the settings/inventory/audit store, logs and backups all
-  # live on one volume under separate subPaths. One ReadWriteOnce claim is
-  # both simpler and more honest than four: the app is single-instance, so
-  # there is nothing to share.
+  # Certificates, the settings/inventory/audit store and logs live on one
+  # volume under separate subPaths. One ReadWriteOnce claim is both simpler
+  # and more honest than three: the app is single-instance, so there is
+  # nothing to share.
   enabled: true
   existingClaim: ""
   storageClass: ""
   accessMode: ReadWriteOnce
   size: 2Gi
   annotations: {}
+
+  # Backups, by default, live on that same volume — which means one volume
+  # loss destroys the data AND the copies that exist to recover it. That is
+  # the default because a second claim is a real cost for a small install,
+  # and because putting backups somewhere else is a decision about YOUR
+  # infrastructure that this chart cannot make.
+  #
+  # Enable this to give /app/backups its own claim, so the primary volume's
+  # failure does not reach the restore points. A separate claim on the same
+  # storage class still shares a failure domain: point `existingClaim` at a
+  # volume on different storage, or use the CronJob below, if the threat you
+  # care about is losing the storage rather than losing the pod.
+  #
+  # Neither of these is off-site. The archive worth keeping is the one made
+  # with CERTMATE_BACKUP_PASSPHRASE set — without it, automatic backups are
+  # written with secrets masked and cannot restore the instance at all. See
+  # the README's Backup and Recovery section before relying on any of this.
+  backups:
+    separateClaim: false
+    existingClaim: ""
+    storageClass: ""
+    accessMode: ReadWriteOnce
+    size: 1Gi
+    annotations: {}
+
+    # A CronJob that copies /app/backups/unified somewhere the cluster's
+    # storage failure does not reach. Off by default and deliberately not
+    # opinionated about the destination: `image` and `command` are yours.
+    #
+    # The example below is what most people want — rclone to object storage,
+    # with the remote's credentials in a Secret you create. It reads the
+    # backup volume ReadOnlyMany, so it cannot corrupt what it is copying.
+    offsite:
+      enabled: false
+      schedule: "17 3 * * *"
+      image: rclone/rclone:1.71.2
+      # Everything after `--` is passed to the image's entrypoint.
+      command: []
+      #  - copy
+      #  - /app/backups/unified
+      #  - remote:certmate-backups
+      env: []
+      #  - name: RCLONE_CONFIG_REMOTE_TYPE
+      #    value: s3
+      #  - name: RCLONE_CONFIG_REMOTE_ACCESS_KEY_ID
+      #    valueFrom:
+      #      secretKeyRef: {name: certmate-offsite, key: access-key}
+      restartPolicy: OnFailure
+      resources: {}
 
 # Values that belong in a Secret. Leave them empty and CertMate generates what
 # it can on first boot; set them for reproducible deployments.

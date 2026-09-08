@@ -21,3 +21,28 @@ spec:
   storageClassName: {{ .Values.persistence.storageClass }}
   {{- end }}
 {{- end }}
+{{- if and .Values.persistence.enabled .Values.persistence.backups.separateClaim (not .Values.persistence.backups.existingClaim) }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "certmate.backupPvcName" . }}
+  labels: {{- include "certmate.labels" . | nindent 4 }}
+  annotations:
+    # The restore points. Kept when the release goes away for the same reason
+    # as the data volume, and more so: this is what is left if the other one
+    # is gone.
+    helm.sh/resource-policy: keep
+    {{- with .Values.persistence.backups.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  accessModes:
+    - {{ .Values.persistence.backups.accessMode }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.backups.size }}
+  {{- if .Values.persistence.backups.storageClass }}
+  storageClassName: {{ .Values.persistence.backups.storageClass }}
+  {{- end }}
+{{- end }}
