@@ -2,7 +2,14 @@
 {% block title %}CertMate - Notifications{% endblock %}
 {% block content %}
     <div class="max-w-5xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
-        <div class="bg-surface shadow-card rounded-xl overflow-hidden">
+        {# No overflow-hidden. It was clipping the snooze menu: the panel is
+       absolutely positioned inside a row, and an `overflow: hidden` ancestor
+       cuts it off no matter what z-index it carries — measured at 78 of its
+       94 pixels for the last row in the list (#758). The class was there to
+       keep children inside the rounded corners, and no child of this card
+       paints a background: every one is transparent, and the card's own
+       `bg-surface` is clipped by its own border-radius. #}
+        <div class="bg-surface shadow-card rounded-xl">
             <div class="px-6 py-3 border-b border-gray-100 dark:border-white/5">
                 <div class="flex items-center justify-between gap-3">
                     <nav class="flex items-center text-sm min-w-0" aria-label="Breadcrumb">
