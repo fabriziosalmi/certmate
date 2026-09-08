@@ -30,7 +30,9 @@ from pathlib import Path
 from cryptography import x509
 from .shell import ShellExecutor
 from .dns_strategies import DNSStrategyFactory, HTTP01Strategy, acme_webroot_dir, check_certbot_plugin_installed
-from .constants import METADATA_SCHEMA_VERSION, CERTIFICATE_FILES, DEFAULT_RENEWAL_THRESHOLD_DAYS
+from .constants import (METADATA_SCHEMA_VERSION, CERTIFICATE_FILES,
+                        DEFAULT_RENEWAL_THRESHOLD_DAYS,
+                        iter_cert_domain_dirs)
 from .structured_logging import LogContext, new_correlation_id
 from .csr_issuance import (
     CSR_OUTPUT_DIRNAME, CSR_OUTPUT_FILES, CSRError, csr_domains,
@@ -3304,9 +3306,15 @@ class CertificateManager:
 
         if not settings.get('auto_renew', True):
             logger.info("Automatic renewal is globally disabled; skipping renewal check")
+            # `unmanaged` present but zero: the key is part of the summary
+            # shape, and a caller that reads it must not have to know which
+            # early return produced the dict. Nothing is reported here because
+            # renewal was switched off deliberately — naming certificates the
+            # sweep "did not consider" when it considered none would be noise.
             return {'checked': 0, 'renewed': 0, 'failed': 0,
                     'skipped_disabled': 0, 'skipped_invalid': 0,
-                    'skipped_not_due': 0, 'auto_renew_disabled': True}
+                    'skipped_not_due': 0, 'unmanaged': 0,
+                    'auto_renew_disabled': True}
 
         # Migrate settings format if needed
         settings = self.settings_manager.migrate_domains_format(settings)
@@ -3316,7 +3324,12 @@ class CertificateManager:
 
         summary = {'checked': 0, 'renewed': 0, 'failed': 0,
                    'skipped_disabled': 0, 'skipped_invalid': 0,
-                   'skipped_not_due': 0}
+                   'skipped_not_due': 0, 'unmanaged': 0}
+        # Every domain this sweep took a decision about, so the reconciliation
+        # below can name the certificates it never reached. Collected rather
+        # than re-derived from `domains`, because a malformed entry is skipped
+        # here and must not read as "seen".
+        considered = set()
         started = time.time()
         self._report_unfinished_sweep()
         self._mark_sweep_started(len(domains))
@@ -3343,6 +3356,8 @@ class CertificateManager:
                     logger.warning(f"Skipping domain entry with no domain name: {domain_entry!r}")
                     summary['skipped_invalid'] += 1
                     continue
+
+                considered.add(domain)
 
                 # Per-certificate opt-out: skip when auto_renew is explicitly
                 # disabled on this domain entry. The global auto_renew flag is
@@ -3421,6 +3436,28 @@ class CertificateManager:
                 summary['skipped_invalid'],
                 'y' if summary['skipped_invalid'] == 1 else 'ies',
             )
+        # A certificate in CertMate's own store that no settings entry names is
+        # invisible to this loop, which iterates settings and nothing else. It
+        # is NOT invisible to the rest of the application: `digest.py` takes
+        # the union of settings and the certificate directories, and
+        # `get_certificate_info` reads the disk — so the dashboard shows it,
+        # the digest reports it expiring, and the sweep that is supposed to
+        # renew it never mentions it. That disagreement is what made #759 look
+        # like a threshold bug: the log had no line for the domain at all,
+        # because the sweep never reached it.
+        #
+        # It is reported, not adopted. Renewing a certificate the operator
+        # never registered would issue against a CA for a domain CertMate was
+        # not asked to manage, and the sweep is not the place to make that
+        # decision. Saying so out loud is.
+        for orphan in self._certificates_absent_from_settings(considered):
+            summary['unmanaged'] += 1
+            logger.warning(
+                "Certificate %r exists on disk but no settings entry names it, "
+                "so this renewal sweep did not consider it and it will not "
+                "renew. Re-register it with the 'Add Domain' flow or "
+                "POST /api/settings.", orphan)
+
         duration = time.time() - started
         summary['duration_seconds'] = round(duration, 2)
         summary['examined'] = (
@@ -3429,13 +3466,29 @@ class CertificateManager:
         self._mark_sweep_finished(summary, duration)
         logger.info(
             "Renewal check complete in %.1fs: %d checked, %d renewed, "
-            "%d failed, %d disabled, %d invalid, %d not-due",
+            "%d failed, %d disabled, %d invalid, %d not-due, %d unmanaged",
             duration,
             summary['checked'], summary['renewed'], summary['failed'],
             summary['skipped_disabled'], summary['skipped_invalid'],
-            summary['skipped_not_due'],
+            summary['skipped_not_due'], summary['unmanaged'],
         )
         return summary
+
+    def _certificates_absent_from_settings(self, considered):
+        """Certificate directories no settings entry named, sorted.
+
+        Read-only and failure-tolerant: an unreadable certificate directory
+        must not turn a completed renewal sweep into a failed one. Losing the
+        warning is bad; losing the sweep that renews everything else is worse.
+        """
+        try:
+            on_disk = {path.name for path in iter_cert_domain_dirs(self.cert_dir)}
+        except OSError as e:
+            logger.warning(
+                "Could not enumerate certificate directories to check for "
+                "unmanaged certificates: %s", e)
+            return []
+        return sorted(on_disk - set(considered))
 
     # ------------------------------------------------------------------
     # Renewal sweep progress
