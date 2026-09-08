@@ -1494,6 +1494,21 @@ main "$@"
  loop: "{{ services_to_restart | default([]) }}"
 ```
 
+### Request validation
+
+The API validates request bodies against the models published in
+`/api/swagger.json`. A missing required field or a wrong type is refused with
+`400` and a body naming the field, before the request reaches the application.
+
+One consequence worth knowing: **send a field or leave it out — do not send
+`null`.** Omitting an optional field means "use the default"; an explicit
+`null` is a type error (`"None is not of type 'integer'"`), because `null` is
+not an integer.
+
+Values outside a documented `enum` are refused by the application rather than
+by the schema, with a message naming the accepted set — for example
+`key_size must be one of [2048, 3072, 4096], got 1024`.
+
 ## Configuration Guide
 
 ### Environment Variables

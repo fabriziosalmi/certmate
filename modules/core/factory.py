@@ -1512,6 +1512,28 @@ def create_app(test_config=None):
     except Exception as e:
         logger.debug(f"Setup-mode startup check failed: {e}")
 
+    # Enforce the request models the API already publishes.
+    #
+    # Ten endpoints declare a model with @api.expect and put it in the Swagger
+    # document. Nothing validated against it: no validate=True, no
+    # RESTX_VALIDATE — so the published schema was documentation that nothing
+    # checked, and a caller reading it was told about a boundary that did not
+    # exist.
+    #
+    # What this actually adds, measured rather than assumed, is REQUIRED-field
+    # and TYPE checking. It does NOT add enum checking: a key_size of 1024 is
+    # still passed through to the application, which rejects it with a better
+    # message than JSON Schema would ("key_size must be one of [2048, 3072,
+    # 4096], got 1024"). The enums stay in the model because they are true and
+    # they document the API; tests/test_request_models_are_enforced.py pins
+    # them against the validators that do the enforcing, so the document and
+    # the behaviour cannot drift apart.
+    #
+    # One behaviour change worth stating: an explicit null for an optional
+    # typed field is now a 400 ("None is not of type 'integer'") rather than
+    # being ignored. Omitting the field is the way to say "use the default",
+    # and that is what the UI and the clients do.
+    app.config['RESTX_VALIDATE'] = True
     setup_api(container, app)
     register_web_routes(app, container.managers)
     setup_csrf_protection(app)
