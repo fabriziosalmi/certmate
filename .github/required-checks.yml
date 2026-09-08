@@ -118,3 +118,31 @@ advisory:
     why: >-
       Decides whether `ui` has anything to look at. Its failure already fails
       `ui-gate`, so requiring it too would add nothing.
+
+# Status contexts posted on pull requests by GitHub Apps rather than by a job
+# in this repository. Nothing here can be checked against the workflow files,
+# so the list is maintained by hand — but leaving them out would have repeated
+# the mistake this file exists to fix: two coverage checks report on every pull
+# request and it was not written down anywhere that they do not gate.
+external:
+  - context: codecov/patch
+    source: Codecov
+    why: >-
+      Coverage on the diff. Advisory because coverage is already gated inside
+      `test (3.12)` by scripts/check_coverage_floors.py (#662), which enforces
+      per-module floors rather than one repository-wide percentage. A second,
+      weaker gate on the same property would only add flakiness — Codecov also
+      goes red when its upload is rate-limited.
+
+  - context: codecov/project
+    source: Codecov
+    why: >-
+      Repository-wide coverage. Same reason as codecov/patch: the floors in
+      scripts/check_coverage_floors.py are the gate, and they are stricter.
+
+  - context: CodeQL
+    source: GitHub code scanning
+    why: >-
+      The umbrella check the code-scanning app posts alongside the per-language
+      analyses. `Analyze python` and `Analyze javascript` are the required
+      contexts; requiring the umbrella as well would gate twice on one result.

@@ -200,7 +200,7 @@ def test_the_gating_set_never_silently_shrinks(registry):
 def test_every_advisory_job_says_why_it_does_not_gate(registry):
     """Advisory is a decision, not a default. Whoever reads this file next
     should be able to disagree with the reason."""
-    for entry in registry['advisory']:
+    for entry in registry['advisory'] + registry['external']:
         why = (entry.get('why') or '').strip()
         assert len(why) > 40, (
             '%s is advisory with no usable reason: %r'
@@ -208,8 +208,32 @@ def test_every_advisory_job_says_why_it_does_not_gate(registry):
         )
 
 
-def test_no_context_is_declared_twice(entries):
-    seen = [e['context'] for e in entries]
+def test_external_contexts_are_kept_separate_from_workflow_jobs(registry):
+    """Codecov and the code-scanning umbrella report on every pull request and
+    gate nothing, which is exactly the situation this file exists to record —
+    but they come from GitHub Apps, so no workflow file mentions them and the
+    cross-checks above are structurally blind to them. They get their own
+    section rather than being quietly omitted."""
+    for entry in registry['external']:
+        assert entry.get('source'), (
+            '%s does not say which app posts it' % entry['context'])
+        assert 'workflow' not in entry, (
+            '%s names a workflow; if a job in this repository posts it, it '
+            'belongs in gating or advisory where it can be cross-checked'
+            % entry['context'])
+
+    published = {c for wf, job_id, job in pull_request_jobs()
+                 for c in _contexts(job_id, job)}
+    overlap = {e['context'] for e in registry['external']} & published
+    assert not overlap, (
+        'these are listed as external but a workflow job publishes them: '
+        + ', '.join(sorted(overlap))
+    )
+
+
+def test_no_context_is_declared_twice(entries, registry):
+    seen = [e['context'] for e in entries] + \
+           [e['context'] for e in registry['external']]
     assert len(seen) == len(set(seen)), 'duplicate context in %s' % REGISTRY.name
 
 
