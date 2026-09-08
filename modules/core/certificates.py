@@ -1195,11 +1195,12 @@ class CertificateManager:
             # ERROR, not WARNING: this one is a data-custody decision, and it
             # was logged at ERROR before the reason became an exception. The
             # domain stays a log ARGUMENT rather than being interpolated, so a
-            # handler can filter on it.
-            logger.error("Refusing to write metadata for %s: %s", domain, e)
+            # handler can filter on it, and %r rather than %s so a newline in
+            # a domain name cannot forge a second log line.
+            logger.error("Refusing to write metadata for %r: %s", domain, e)
             return False
         except Exception as e:
-            logger.warning("Failed to save metadata for %s: %s", domain, e)
+            logger.warning("Failed to save metadata for %r: %s", domain, e)
             return False
 
     def write_metadata(self, domain: str, metadata: dict) -> None:

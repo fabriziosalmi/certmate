@@ -208,9 +208,11 @@ def test_the_refusal_is_logged_at_error_with_the_domain_as_an_argument(
 
     refusals = [r for r in caplog.records if r.levelno == logging.ERROR]
     assert refusals, 'the refusal was not logged at ERROR'
-    assert 'example.com' in (refusals[0].args or ()), (
-        'the domain is interpolated into the message rather than passed as an '
-        'argument, so a log handler cannot filter on it')
+    # Indexed, not `in`: the tuple's FIRST argument is the domain, and
+    # membership would also pass if it turned up somewhere else in the args.
+    assert refusals[0].args[0] == 'example.com', (
+        'the domain is interpolated into the message rather than passed as the '
+        'first argument, so a log handler cannot filter on it')
 
 
 def test_a_write_failure_is_logged_at_warning_not_error(manager, caplog):
