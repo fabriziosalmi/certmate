@@ -48,9 +48,48 @@ groups:
           summary: "{{ $value }} certificate(s) have expired"
           description: "CertMate reports expired certificates. Automatic renewal has failed for at least one domain."
 
-# NOTE: alerts on renewal/issuance outcomes, ACME errors and rate-limit hits
-# are intentionally omitted: those metrics (certmate_certificate_renewals_total,
-# certmate_acme_errors_total, certmate_acme_rate_limit_hits_total, and the
-# renewal_failed status) are defined by CertMate but not yet recorded at
-# runtime, so an alert on them could never fire. Add them back together with
-# the record_* instrumentation.
+  # These four were omitted for years with a note saying why: the metrics were
+  # defined and never recorded, so an alert on them could never fire. They are
+  # recorded now — renewals and ACME errors since the renewal sweep started
+  # reporting its outcome, issuance and rate-limit hits since the creation path
+  # did the same — so the alerts come back with them.
+  #
+  # `increase(...)` rather than a raw counter: what matters is that failures
+  # are happening NOW, not that any ever happened since the process started.
+  - name: certmate-issuance
+    rules:
+      - alert: CertMateRenewalsFailing
+        expr: sum(increase(certmate_certificate_renewals_total{status="failure"}[6h])) > 0
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $value | printf \"%.0f\" }} certificate renewal(s) failed in the last 6h"
+          description: "A renewal that keeps failing ends in an expired certificate on a schedule nobody is watching. Check the sweep's log lines for the domain and the CA's error."
+
+      - alert: CertMateIssuanceFailing
+        expr: sum(increase(certmate_certificate_requests_total{status="failure"}[1h])) > 3
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $value | printf \"%.0f\" }} certificate issuance attempts failed in the last hour"
+          description: "Repeated issuance failures usually mean a DNS provider credential, a propagation timeout, or a CA problem — and each attempt costs the CA's failed-authorization budget."
+
+      - alert: CertMateACMERateLimited
+        expr: sum(increase(certmate_acme_rate_limit_hits_total[24h])) > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "The certificate authority is rate limiting this instance"
+          description: "{{ $value | printf \"%.0f\" }} rate-limit refusal(s) in 24h. Retrying is what causes this: stop issuing for the affected names until the window passes, or use a different ACME account. Let's Encrypt's duplicate-certificate window is 168h."
+
+      - alert: CertMateACMEErrors
+        expr: sum by (error_type) (increase(certmate_acme_errors_total[1h])) > 5
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $value | printf \"%.0f\" }} ACME errors of type {{ $labels.error_type }} in the last hour"
+          description: "Sustained ACME errors of one kind point at a configuration problem rather than at a transient CA fault."

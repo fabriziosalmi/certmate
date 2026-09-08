@@ -44,22 +44,45 @@ populates** — the certificate inventory gauges, refreshed on every scrape:
 > (settings, cert dir, cache). That wiring ships alongside this bundle; without
 > it the endpoint emits only `application_uptime`.
 
-### Not yet included (needs instrumentation)
+### What is recorded, and the one thing that is not
 
-These metrics are **defined but never recorded at runtime**, so any panel or
-alert on them would read "No data" / never fire. They are deliberately left
-out until the code is instrumented, at which point the operations row and the
-renewal/ACME alerts can be added back:
+Everything the dashboard and the alerts use is recorded at runtime. That was
+not always true — this section used to list eight metrics that were defined and
+never incremented, which is worse than a missing metric: a panel built on one
+shows a flat line, and an alert on one never fires, so both read as "nothing is
+going wrong".
 
-- Operations counters/histograms — `certmate_certificate_requests_total`,
-  `certmate_certificate_renewals_total`, the `*_duration_seconds` histograms,
-  `certmate_acme_errors_total`, `certmate_acme_rate_limit_hits_total`,
-  `certmate_dns_provider_api_calls_total`, `certmate_cache_hits_total` /
-  `_misses_total`: no `record_*` caller exists yet.
-- `certmate_certificates_by_status{status="renewal_failed"}`: the status is
-  never assigned, so it is constant 0.
-- `certmate_certificate_last_renewal_timestamp` /
-  `_next_renewal_timestamp`: derived from the renewal threshold, not real
-  events — would mislead.
-- `certmate_background_job_last_run_timestamp` / `_duration_seconds`:
-  reserved; no caller records background-job runs.
+Recorded on the operations side:
+
+- `certmate_certificate_renewals_total` and
+  `certmate_certificate_renewal_duration_seconds` — by the renewal sweep, on
+  both the success and the failure path.
+- `certmate_certificate_requests_total` and
+  `certmate_certificate_creation_duration_seconds` — by the issuance path,
+  on success, on failure and on the certbot timeout.
+- `certmate_acme_errors_total` — on any failed issuance or renewal, labelled
+  with the exception type.
+- `certmate_acme_rate_limit_hits_total` — when the CA's refusal is a rate
+  limit rather than a fault, which is a different thing to do about it.
+- `certmate_cache_hits_total` / `_misses_total` — at the deployment-status
+  cache lookup itself.
+- `certmate_background_job_last_run_timestamp` / `_duration_seconds` — by the
+  background-job wrapper, on both paths, which is what makes "the sweep has
+  not run in N days" a writable alert.
+- `certmate_renewal_sweep_*` — duration, certificates examined, completion
+  time, and whether the last sweep finished.
+- `certmate_certificate_last_renewal_timestamp` / `_next_renewal_timestamp` —
+  from the real event in the certificate's metadata, not derived from the
+  expiry date.
+
+Still not populated, and left out of the dashboard for that reason:
+
+- `certmate_certificates_by_status{status="renewal_failed"}`: the collector
+  assigns `valid`, `expiring_soon`, `expired` and `missing`, and nothing
+  assigns this one, so it is constant 0.
+
+There is no `certmate_dns_provider_api_calls_total`. It was defined and never
+recorded, and it cannot be recorded from where those calls happen: certbot
+talks to the DNS provider in its own subprocess, and CertMate's own DNS-alias
+hook is a separate short-lived process whose counters die with it. It was
+removed rather than left exported.

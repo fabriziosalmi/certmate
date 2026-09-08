@@ -7,6 +7,7 @@ depend on the Flask application context or global configuration variables.
 """
 import dataclasses
 import json
+import logging
 import os
 import re
 import secrets
@@ -17,6 +18,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 from urllib.parse import urlparse
+
+# stdlib only, like every other import in this file: the module deliberately
+# has no intra-package imports, which is what lets everything else import it
+# without thinking about order.
+logger = logging.getLogger(__name__)
 
 
 def utc_now() -> datetime:
@@ -401,6 +407,42 @@ _CERTBOT_CONFIG_PATH_RE = re.compile(
 _CERTBOT_STDERR_MAX_BYTES = 4096
 
 
+# What a CA says when it refuses because a limit was reached, rather than
+# because anything about the request was wrong. Kept as data, and in one place,
+# because two callers ask the same question for different purposes: the API
+# turns it into a message and a code, and the metrics layer turns it into
+# certmate_acme_rate_limit_hits_total. A second copy of these markers would
+# drift, and the failure mode of the drift is silent — an alert that never
+# fires while the operator is being rate limited.
+#
+# The strings are Boulder's (Let's Encrypt) and the wording other ACME CAs
+# copied from it. Matched case-insensitively against certbot's stderr.
+# Deliberately NOT a bare 'rate limit': a DNS provider's API says that too, and
+# counting a Cloudflare throttle as an ACME rate limit would put the wrong
+# number in front of the operator at the worst moment. The ACME error type is
+# in certbot's output for every one of these, so the first marker is the
+# reliable one and the rest are the human-readable text people search for.
+_ACME_RATE_LIMIT_MARKERS = (
+    'ratelimited',                    # urn:ietf:params:acme:error:rateLimited
+    'too many certificates',
+    'too many failed authorizations',
+    'too many currently pending authorizations',
+    'too many new orders',
+    'too many registrations',
+)
+
+
+def is_acme_rate_limit(reason) -> bool:
+    """Did the CA refuse this because a rate limit was reached?
+
+    Worth distinguishing from every other issuance failure because it is the
+    one an operator cannot fix by retrying — retrying is what causes it — and
+    because the remedy (wait, or use a different account) is unlike any other.
+    """
+    return any(marker in str(reason or '').lower()
+               for marker in _ACME_RATE_LIMIT_MARKERS)
+
+
 def classify_renewal_error(reason: str) -> tuple:
     """Map a renewal failure reason to a (user_message, code) pair.
 
@@ -430,6 +472,15 @@ def classify_renewal_error(reason: str) -> tuple:
             "The DNS provider account this certificate uses is no longer "
             "configured. Re-add it in Settings → DNS, then retry the renewal.",
             'DNS_ACCOUNT_NOT_CONFIGURED',
+        )
+    if is_acme_rate_limit(low):
+        return (
+            "The certificate authority refused this because a rate limit was "
+            "reached, not because anything is wrong with the request. Retrying "
+            "makes it worse: wait for the window to pass, or issue from a "
+            "different ACME account. The server log carries the CA's own text, "
+            "which names the limit and when it resets.",
+            'ACME_RATE_LIMITED',
         )
     return ('Certificate renewal failed', 'RENEWAL_FAILED')
 
@@ -821,6 +872,32 @@ def validate_dns_provider_account(provider: str, account_id: str, account_config
 # CACHE SYSTEM CLASS
 # =============================================
 
+def _record_cache_outcome(hit: bool) -> None:
+    """Tell the metrics collector about one cache lookup. Never raises.
+
+    Imported here rather than at module scope on purpose: utils.py has no
+    intra-package imports at all, which is what lets every other module import
+    it without thinking about order — and modules.core.metrics imports from
+    modules.core.constants, so a top-level import here would put this file into
+    a graph it deliberately stays out of. One local import is cheaper than
+    making it a node in that graph (the same trade `validate_dns_provider_account`
+    makes for secret_refs).
+    """
+    try:
+        from .metrics import metrics_collector
+        if hit:
+            metrics_collector.record_cache_hit()
+        else:
+            metrics_collector.record_cache_miss()
+    except Exception as e:  # pragma: no cover - telemetry is never the failure
+        # DEBUG, and said rather than swallowed: this runs on every lookup, so
+        # a louder level would drown the log the moment it started failing —
+        # but a broad catch whose body is `pass` is the shape that turns a real
+        # failure into a wrong value with nothing attached (#671).
+        logger.debug("Failed to record a cache %s: %s",
+                     'hit' if hit else 'miss', e)
+
+
 @dataclasses.dataclass
 class _CacheEntry:
     """Internal dataclass to represent a single, structured cache entry."""
@@ -842,12 +919,24 @@ class DeploymentStatusCache:
         self._lock = threading.Lock()
 
     def get(self, domain: str) -> Optional[Any]:
-        """Get a cached result for a domain, returning None if expired or not found."""
+        """Get a cached result for a domain, returning None if expired or not found.
+
+        The hit and the miss are counted here because here is where they
+        happen. certmate_cache_hits_total and certmate_cache_misses_total were
+        declared and exported from the first release and nothing ever
+        incremented either, so the hit rate an operator would use to decide
+        whether the cache TTL is doing anything was permanently 0/0.
+
+        Counting outside the lock: the counter is the collector's own concern
+        and must not extend the window during which nothing else can read the
+        cache. `_record_cache_outcome` never raises.
+        """
         with self._lock:
             entry = self._cache.get(domain)
-            if entry and time.time() <= entry.expires_at:
-                return entry.result
-        return None
+            hit = bool(entry and time.time() <= entry.expires_at)
+            result = entry.result if hit else None
+        _record_cache_outcome(hit)
+        return result
 
     def set(self, domain: str, result: Any, ttl: Optional[int] = None) -> None:
         """Cache a result for a domain with a specific or default TTL."""
