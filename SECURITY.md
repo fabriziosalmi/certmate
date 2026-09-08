@@ -319,6 +319,26 @@ hand, a refresh cadence so the lockfiles do not become a reason not to patch,
 and a drift guard tying each lockfile to its requirements file. That is a
 project, not a cleanup, and it is tracked rather than half-started.
 
+**A rebuild is not expected to be bit-identical.** The runtime stage installs
+three OS packages (`bash`, `curl`, `tini`) with an unpinned `apt-get install`,
+so two builds of the same commit, days apart, can carry different versions of
+them. That is deliberate: pinning the three would break the build on every
+base-image bump, and a genuinely reproducible OS layer needs a snapshot mirror,
+which is a project rather than a line. The consequence is recorded here so
+nobody reads a digest mismatch between two builds of one commit as evidence of
+tampering — it is the expected outcome. What the image actually contains is
+answerable from the SBOM that ships with it.
+
+**What the image contains is an allowlist, not a denylist.** The runtime stage
+names what it copies — `app.py`, `modules/`, `templates/`, `static/`,
+`scripts/` and the requirements files — rather than copying the tree and
+subtracting. Until v2.29.0 it did the latter, and the published image carried
+the Helm chart, the client SDK sources, the MCP server, the monitoring assets,
+a demo directory and a licensing PDF. None of it was reachable by the process,
+but a denylist ships whatever nobody remembered to add to it.
+`tests/test_image_ships_only_what_it_runs.py` checks the built image, not the
+Dockerfile.
+
 **If you are threat-modelling against this**, the honest summary is:
 auditability, not integrity. The SBOM tells you what you got; it does not prove
 it is what was intended.

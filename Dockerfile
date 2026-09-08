@@ -146,8 +146,36 @@ RUN apt-get update && \
 COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Copy application code
-COPY . .
+# Copy application code.
+#
+# An allowlist, not `COPY . .` plus a .dockerignore denylist. The denylist
+# worked the way denylists do: the published image carried a 188K licensing
+# PDF, an 856K demo directory, the Helm chart, the client SDK sources, the MCP
+# server, the monitoring dashboards, seven build and test shell scripts, and
+# pytest's own configuration — none of which the runtime reads, all of which
+# are either build-time (already consumed by the builder stage) or separate
+# deliverables published on their own channels. A denylist ships whatever
+# nobody remembered to add to it, and the thing nobody remembers is always the
+# thing that arrived last.
+#
+# What is here is what the running process actually touches:
+#   app.py, modules/, templates/, static/  the application
+#   scripts/                               solidserver_hook.py is executed by
+#                                          the SolidServer DNS strategy
+#                                          (modules/core/dns_strategies.py)
+#   requirements*.txt                      two error paths tell the operator to
+#                                          install one of these into a running
+#                                          container to add a DNS or storage
+#                                          backend
+#
+# tests/test_image_ships_only_what_it_runs.py checks this against the built
+# image rather than against this comment.
+COPY app.py ./
+COPY requirements*.txt ./
+COPY modules/ ./modules/
+COPY templates/ ./templates/
+COPY static/ ./static/
+COPY scripts/ ./scripts/
 
 # Create the runtime-writable directories and make them arbitrary-UID ready.
 #
