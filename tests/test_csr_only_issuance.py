@@ -421,9 +421,9 @@ def test_a_csr_certificate_renews_by_reissuing(tmp_path):
         return {'success': True}
     manager.create_certificate = _create
 
-    ok, message = manager.renew_certificate('api.example.com')
+    result = manager.renew_certificate('api.example.com')
 
-    assert ok, message
+    assert result['success'] is True, result
     assert len(calls) == 1
     assert calls[0]['csr_pem'] == (
         tmp_path / 'api.example.com' / 'csr.pem').read_bytes()
@@ -460,20 +460,24 @@ def test_an_unchanged_certificate_is_not_reported_as_renewed(tmp_path):
     manager = _renewable(tmp_path)
     manager.create_certificate = lambda **kw: {'success': True}
 
-    ok, message = manager.renew_certificate('api.example.com')
+    result = manager.renew_certificate('api.example.com')
 
-    assert ok
-    assert 'did not change' in message
+    assert result['renewed'] is False, result
+    assert 'same certificate' in result['message']
 
 
-def test_a_failed_reissue_is_reported_as_a_failed_renewal(tmp_path):
+def test_a_failed_reissue_raises_the_way_the_route_expects(tmp_path):
+    """create_certificate raises on failure, and the renew route turns a
+    RuntimeError into a 422 with a classified reason. Swallowing it into a
+    return value would turn every CA refusal into a 200."""
     manager = _renewable(tmp_path)
-    manager.create_certificate = lambda **kw: (False, 'the CA said no')
 
-    ok, message = manager.renew_certificate('api.example.com')
+    def _boom(**kwargs):
+        raise RuntimeError('the CA said no')
+    manager.create_certificate = _boom
 
-    assert ok is False
-    assert 'the CA said no' in message
+    with pytest.raises(RuntimeError, match='the CA said no'):
+        manager.renew_certificate('api.example.com')
 
 
 def test_the_renewal_branch_is_taken_before_the_domain_lock(tmp_path):
@@ -489,8 +493,7 @@ def test_the_renewal_branch_is_taken_before_the_domain_lock(tmp_path):
         manager.create_certificate = lambda **kw: {'success': True}
         # The branch runs even though the lock is held by "someone else",
         # which is exactly what proves it is taken before the acquire.
-        ok, _message = manager.renew_certificate('api.example.com')
-        assert ok
+        assert manager.renew_certificate('api.example.com')['success'] is True
     finally:
         held.release()
 
@@ -653,3 +656,94 @@ def test_the_renewal_reissues_over_the_existing_certificate(tmp_path):
         'the CSR renewal does not reissue over the existing certificate, so '
         'create_certificate will refuse it with FileExistsError'
     )
+
+
+def test_the_output_directory_is_empty_when_certbot_runs(tmp_path):
+    """certbot REFUSES to overwrite its own output in --csr mode.
+
+    A second run dies with `FileExistsError: ... csr-out/cert.pem` before it
+    contacts the CA — and every renewal is a second run, so without this the
+    first renewal of every CSR certificate failed. Measured against a real
+    container; no test with a stubbed executor could see it, because the
+    refusal is certbot's.
+
+    So this asserts the precondition instead: whatever certbot is handed, the
+    files it is told to write do not exist yet.
+    """
+    manager = _manager(tmp_path)
+    manager.settings_manager.load_settings.return_value = {
+        'email': 'a@b.com', 'dns_provider': 'cloudflare',
+        'dns_providers': {'cloudflare': {'api_token': 'x' * 40}},
+    }
+    manager.dns_manager.get_dns_provider_account_config.return_value = (
+        {'api_token': 'x' * 40}, 'default')
+
+    domain = 'api.example.com'
+    out = tmp_path / domain / 'csr-out'
+    out.mkdir(parents=True)
+    for name in ('cert.pem', 'chain.pem', 'fullchain.pem'):
+        (out / name).write_bytes(b'from the previous issuance')
+
+    seen = {}
+
+    def _run(cmd, **kwargs):
+        # What certbot would find at the moment it starts.
+        seen['left'] = sorted(p.name for p in out.iterdir())
+        return MagicMock(returncode=1, stdout='', stderr='stopped here')
+    manager.shell_executor.run.side_effect = _run
+    manager.shell_executor.produces_artifacts = False
+
+    with pytest.raises(RuntimeError):
+        manager.create_certificate(
+            domain=domain, email='a@b.com', dns_provider='cloudflare',
+            csr_pem=_csr(common_name=domain, sans=(domain,)), replace=True)
+
+    assert seen.get('left') == [], (
+        f'certbot was started with its output files already in place '
+        f'({seen.get("left")}); it refuses to overwrite them and fails before '
+        f'reaching the CA'
+    )
+
+
+def test_the_csr_renewal_returns_the_shape_the_route_reads(tmp_path):
+    """The test that was missing, and the reason this file needed a real-CA
+    run to find a five-line bug.
+
+    Every test above called `renew_certificate` and asserted the shape I had
+    just written, so they all agreed with each other and with nothing else.
+    The renew route does `result.get('renewed')`, and a tuple there is a 500
+    with "'tuple' object has no attribute 'get'".
+
+    So this asserts against the CONTRACT rather than against the branch:
+    whatever the CSR path returns must answer the same questions the ordinary
+    renewal's return value answers.
+    """
+    import inspect
+
+    from modules.core.certificates import CertificateManager as _CM
+
+    # The keys the route reads, taken from the route rather than restated.
+    route = inspect.getsource(
+        __import__('modules.api.resources_lifecycle',
+                   fromlist=['create_lifecycle_resources']))
+    renew_block = route.split('def post(self, domain):')[1]
+    assert "result.get('renewed'" in renew_block, (
+        'the renew route no longer reads `renewed` off the result — this test '
+        'is checking a contract that has moved'
+    )
+
+    manager = _renewable(tmp_path)
+    manager.create_certificate = lambda **kw: {'success': True}
+    result = manager.renew_certificate('api.example.com')
+
+    assert isinstance(result, dict), (
+        f'the CSR renewal returns {type(result).__name__}, and the route calls '
+        f'.get() on it'
+    )
+    for key in ('success', 'renewed', 'domain', 'message'):
+        assert key in result, f'{key} missing from the CSR renewal result'
+
+    # And the same keys the ordinary path promises, read off its own source.
+    ordinary = inspect.getsource(_CM.renew_certificate)
+    for key in ('success', 'renewed', 'domain', 'message'):
+        assert f"'{key}'" in ordinary

@@ -32,8 +32,8 @@ from .shell import ShellExecutor
 from .dns_strategies import DNSStrategyFactory, HTTP01Strategy, acme_webroot_dir, check_certbot_plugin_installed
 from .constants import CERTIFICATE_FILES, DEFAULT_RENEWAL_THRESHOLD_DAYS
 from .csr_issuance import (
-    CSR_OUTPUT_DIRNAME, CSRError, csr_domains, csr_fingerprint, read_csr,
-    to_csr_command,
+    CSR_OUTPUT_DIRNAME, CSR_OUTPUT_FILES, CSRError, csr_domains,
+    csr_fingerprint, read_csr, to_csr_command,
 )
 from .domain_paths import reject_unsafe_domain, validate_domain_path
 from .utils import (
@@ -2311,6 +2311,20 @@ class CertificateManager:
                     domain, cert_output_dir, csr_pem)
                 csr_output_dir = cert_output_dir / CSR_OUTPUT_DIRNAME
                 csr_output_dir.mkdir(parents=True, exist_ok=True)
+                # certbot REFUSES to overwrite the files it is told to write in
+                # --csr mode: a second run dies with
+                # `FileExistsError: ... csr-out/cert.pem` before it contacts the
+                # CA. Every renewal is a second run, so without this the first
+                # renewal of every CSR certificate fails — measured against a
+                # real container, not reasoned about.
+                #
+                # Clearing before rather than after: this is a staging
+                # directory, and the SERVED copies are the flat ones beside it,
+                # promoted by _publish_flat_files. Emptying it costs nothing if
+                # certbot then fails — the certificate on disk is untouched and
+                # still being served.
+                for stale in CSR_OUTPUT_FILES:
+                    (csr_output_dir / stale).unlink(missing_ok=True)
                 certbot_cmd = to_csr_command(
                     certbot_cmd, csr_path, csr_output_dir)
 
@@ -2586,23 +2600,30 @@ class CertificateManager:
             replace=True,
         )
 
-        success = bool(result[0] if isinstance(result, tuple) else result)
-        if not success:
-            message = (result[1] if isinstance(result, tuple) and len(result) > 1
-                       else 'certificate issuance failed')
-            return False, message
-
+        # The SAME dict shape the ordinary renewal returns. The route reads
+        # `.get('renewed')` off it, so a tuple here — which is what this
+        # returned when the shape was invented rather than copied — is a 500
+        # with "'tuple' object has no attribute 'get'". `create_certificate`
+        # raises on failure, so reaching this line means it succeeded.
+        #
         # Same question the ordinary path asks, answered the same way: the
         # artifact, not the exit code. A CA that returns the SAME certificate
         # for an unchanged CSR — which is exactly what a repeat request inside
         # the CA's own reuse window produces — must not be reported as a
         # renewal, or `renewed_at` would advance while the expiry did not.
         after = self._cert_fingerprint(self.cert_dir / domain / 'cert.pem')
-        if after is not None and after == before:
-            return True, (
-                f'{domain} was reissued from its stored CSR but the '
-                f'certificate did not change; the CA returned the same one.')
-        return True, f'Certificate renewed from the stored CSR for {domain}'
+        renewed = after is None or after != before
+        return {
+            'success': True,
+            'renewed': renewed,
+            'domain': domain,
+            'message': ('Certificate renewed from the stored CSR'
+                        if renewed
+                        else 'Reissued from the stored CSR, but the CA returned '
+                             'the same certificate'),
+            'dns_provider': (result or {}).get('dns_provider')
+            if isinstance(result, dict) else None,
+        }
 
     def renew_certificate(self, domain, force=False):
         """Renew a certificate"""
