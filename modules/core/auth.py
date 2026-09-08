@@ -1446,6 +1446,14 @@ class AuthManager:
                 return err
             request.current_user = user
             return f(*args, **kwargs)
+        # Make the protection inspectable from outside the call. Route
+        # protection is expressed three ways in this codebase — this
+        # decorator, `require_role`, and `require_web_auth` in the web
+        # blueprint — and nothing could enumerate which routes carried one,
+        # so a route added without a check was indistinguishable from the
+        # ones that are public on purpose. See
+        # tests/test_every_route_is_protected_or_listed.py.
+        decorated_function._certmate_protection = 'require_auth'
         return decorated_function
 
     def require_role(self, min_role):
@@ -1508,7 +1516,14 @@ class AuthManager:
                             'code': 'INSUFFICIENT_ROLE'}, 403
 
                 return f(*args, **kwargs)
+            decorated_function._certmate_protection = f'require_role:{min_role}'
             return decorated_function
+        # flask-restx resources declare protection as
+        # `method_decorators = [auth.require_role('viewer')]`, which stores
+        # this factory's product — the decorator itself, never applied here.
+        # Marking it too lets the route enumeration read protection off a
+        # Resource class without instantiating or calling anything.
+        decorator._certmate_protection = f'require_role:{min_role}'
         return decorator
 
     def _log_rbac_denial(self, user, required_role, endpoint):
