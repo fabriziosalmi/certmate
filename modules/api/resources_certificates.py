@@ -10,7 +10,10 @@ import logging
 from flask import current_app, request
 from flask_restx import Resource
 
-from ..core.certificates import DomainOperationInProgress
+from ..core.certificates import (
+    DomainOperationInProgress,
+    MetadataWriteRefused,
+)
 from ..core.inventory_sources import (
     auto_renew_for,
     collect_domain_sources,
@@ -265,6 +268,13 @@ def create_certificates_resources(api, models, ctx: ApiContext) -> dict:
                         domain, changes)
                 except ValueError as e:
                     return {'error': str(e)}, 400
+                except MetadataWriteRefused as e:
+                    # Before RuntimeError, which it subclasses. A guard that
+                    # did its job is not a server error: reporting 500 sends
+                    # an operator looking for a fault in CertMate instead of
+                    # at the version they rolled back from (#757).
+                    return {'error': str(e),
+                            'code': 'METADATA_SCHEMA_DOWNGRADE'}, 409
                 except RuntimeError as e:
                     return {'error': str(e)}, 500
                 logger.info(

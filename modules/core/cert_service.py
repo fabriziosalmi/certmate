@@ -419,9 +419,15 @@ class CertificateService:
                             '(no scheme, path, whitespace, or wildcard)')
                     metadata['deployment_host'] = host
 
-            if not self._certs._save_metadata(domain, metadata):
-                raise RuntimeError(
-                    f'Failed to update metadata for domain: {domain}')
+            # write_metadata, not _save_metadata: this is the one call site
+            # whose outcome reaches a person, and the boolean threw the reason
+            # away. "Failed to update metadata for domain: X" was produced by
+            # a read-only volume and by a deliberate schema-downgrade refusal
+            # alike, naming neither and suggesting nothing (#757). The
+            # exceptions it raises are RuntimeError subclasses, so the route's
+            # existing arm keeps handling them; it just has something to say
+            # now.
+            self._certs.write_metadata(domain, metadata)
 
             # The settings entry is written HERE, inside the same domain lock,
             # rather than by the caller afterwards.
