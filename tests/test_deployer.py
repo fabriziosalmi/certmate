@@ -122,6 +122,14 @@ class TestHookExecution:
             'id': 'h4', 'name': 'Env', 'command': 'env',
             'enabled': True, 'timeout': 10, 'on_events': ['created'],
         }
+        # An ordinary, key-managed certificate — which is what this asserts
+        # about. CERTMATE_KEY_PATH is set only when a key is actually there
+        # (#599: a CSR-only certificate has none, and pointing the variable at
+        # a file that does not exist would be a statement that is not true).
+        certs_dir = tmp_path / 'certs' / 'mysite.com'
+        certs_dir.mkdir(parents=True, exist_ok=True)
+        (certs_dir / 'privkey.pem').write_bytes(b'key')
+
         deploy_manager._run_hook(hook, 'mysite.com', 'renewed')
         # Check shell_executor received env kwarg with our vars
         assert len(shell_executor.commands_executed) == 1

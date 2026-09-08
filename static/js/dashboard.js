@@ -1890,6 +1890,47 @@
         return true;
     }
 
+    function initCsrPanel() {
+        // The panel is collapsed until asked for (#599). Opening it disables
+        // the two things a CSR already decides — the SAN editor and the key
+        // shape — rather than leaving them enabled for the server to refuse.
+        // A refusal after an ACME round trip is a worse way to learn that a
+        // CSR and a SAN list cannot both be sent.
+        var toggle = document.getElementById('csr_toggle');
+        var panel = document.getElementById('csr_panel');
+        var textarea = document.getElementById('cert_csr');
+        var chevron = document.getElementById('csr_chevron');
+        if (!toggle || !panel || !textarea) return;
+
+        function applyMode() {
+            var active = !panel.classList.contains('hidden') && textarea.value.trim() !== '';
+            ['san_entry', 'cert_key_type', 'cert_key_size', 'cert_elliptic_curve']
+                .forEach(function (id) {
+                    var el = document.getElementById(id);
+                    if (!el) return;
+                    el.disabled = active;
+                    el.title = active
+                        ? 'The CSR decides this: it carries its own names and its own key.'
+                        : '';
+                });
+            var editor = document.getElementById('san_editor');
+            if (editor) editor.classList.toggle('opacity-50', active);
+        }
+
+        toggle.addEventListener('click', function () {
+            var open = panel.classList.toggle('hidden') === false;
+            toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+            if (chevron) {
+                chevron.classList.toggle('fa-chevron-up', open);
+                chevron.classList.toggle('fa-chevron-down', !open);
+            }
+            if (open) textarea.focus();
+            applyMode();
+        });
+        textarea.addEventListener('input', applyMode);
+        applyMode();
+    }
+
     function initSanEditor() {
         var editor = document.getElementById('san_editor');
         var entry = document.getElementById('san_entry');
@@ -2383,11 +2424,25 @@
             requestBody.ca_provider = caProvider;
         }
 
+        // A CSR generated on the device that will serve the certificate
+        // (#599). When one is given the key never reaches this instance, and
+        // the CSR already decides the names and the key shape — so neither is
+        // sent. The server refuses a request that specifies both; not sending
+        // them is what keeps that refusal from being something the operator
+        // has to discover.
+        var csrPem = ((document.getElementById('cert_csr') || {}).value || '').trim();
+        if (csrPem && !editingDomain) {
+            requestBody.csr = csrPem;
+            delete requestBody.san_domains;
+        }
+
         // Optional key-shape override. Only sent when the operator picked a
         // non-default value, so an empty selector inherits the global default
         // configured in Settings.
         var certKeyType = (document.getElementById('cert_key_type') || {}).value;
-        if (certKeyType === 'rsa') {
+        if (csrPem && !editingDomain) {
+            // Nothing: the key belongs to the device.
+        } else if (certKeyType === 'rsa') {
             requestBody.key_type = 'rsa';
             requestBody.key_size = parseInt(document.getElementById('cert_key_size').value, 10);
         } else if (certKeyType === 'ecdsa') {
@@ -3120,6 +3175,7 @@
         document.getElementById('domain').addEventListener('input', updateDnsAliasHelp);
         document.getElementById('san_domains').addEventListener('input', updateDnsAliasHelp);
         initSanEditor();
+        initCsrPanel();
         document.getElementById('wildcard-cert').addEventListener('change', updateDnsAliasHelp);
         document.getElementById('dns_alias_domain').addEventListener('input', updateDnsAliasHelp);
         document.getElementById('check_dns_alias_button').addEventListener('click', checkDnsAliasFromForm);
