@@ -1,3 +1,4 @@
+import atexit
 import os
 import secrets
 import sys
@@ -1671,8 +1672,29 @@ def create_app(test_config=None):
     reconcile_served_copies(container)
     check_issuance_readiness(container)
     warn_if_multiple_workers()
+    _drain_event_bus_at_exit(container)
 
     return app, container
+
+
+def _drain_event_bus_at_exit(container: AppContainer):
+    """Give the event bus a bounded drain when the process goes away.
+
+    There is no shutdown hook to hang this on: the image runs gunicorn from a
+    plain command line, so there is no gunicorn config file with on_exit, and
+    app.py's KeyboardInterrupt handler only covers `python app.py`. atexit is
+    what both paths have in common — it runs when a gunicorn worker exits on
+    SIGTERM, and it does not run on SIGKILL, which is the correct behaviour for
+    a drain that must never delay a kill.
+
+    Registered here rather than in EventBus.__init__ so that constructing a bus
+    — which most of the test suite does — does not leave a handler behind
+    holding a reference to it.
+    """
+    bus = container.managers.get('events') if container.managers else None
+    if bus is None:
+        return
+    atexit.register(bus.stop)
 
 
 def check_issuance_readiness(container: AppContainer):
