@@ -31,6 +31,7 @@ from cryptography import x509
 from .shell import ShellExecutor
 from .dns_strategies import DNSStrategyFactory, HTTP01Strategy, acme_webroot_dir, check_certbot_plugin_installed
 from .constants import METADATA_SCHEMA_VERSION, CERTIFICATE_FILES, DEFAULT_RENEWAL_THRESHOLD_DAYS
+from .structured_logging import LogContext, new_correlation_id
 from .csr_issuance import (
     CSR_OUTPUT_DIRNAME, CSR_OUTPUT_FILES, CSRError, csr_domains,
     csr_fingerprint, read_csr, to_csr_command,
@@ -3261,7 +3262,24 @@ class CertificateManager:
         debug-level one), so a typo in settings.json could quietly exclude a
         domain from renewal forever; every skip and failure is now counted
         and logged.
+
+        The sweep runs under one correlation id, which every line it produces
+        carries — including the deploy hooks it triggers, because the event
+        bus hands the id across the thread boundary. Scheduled work had no
+        identifier at all, so a renewal and its deploy were two unrelated sets
+        of log lines and the only way to associate them was the clock, on a
+        run where dozens of certificates renew inside the same minute.
+
+        A wrapper rather than a `with` around the body: the body is long and
+        already deeply nested, and `with` guarantees the release on every exit
+        path — a leaked context would tag every later job on this scheduler
+        thread with a stale sweep id, which is worse than no id at all.
         """
+        with LogContext(request_id=new_correlation_id(),
+                        operation='renewal_sweep'):
+            return self._check_renewals()
+
+    def _check_renewals(self):
         settings = self.settings_manager.load_settings()
 
         if not settings.get('auto_renew', True):
