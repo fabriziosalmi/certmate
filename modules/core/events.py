@@ -5,6 +5,7 @@ Provides real-time updates to connected browser clients.
 
 import json
 import logging
+import os
 import queue
 import time
 import threading
@@ -13,18 +14,105 @@ from typing import Optional, Dict, Any
 logger = logging.getLogger(__name__)
 
 
+# How many listener invocations run at once. A listener can be slow on
+# purpose: DeployManager.on_certificate_event runs deploy hooks, each of which
+# may take up to MAX_TIMEOUT (300s), so one worker would serialise a burst of
+# renewals behind the slowest target. Four is a working default; the ceiling is
+# what matters, not the number.
+DEFAULT_DISPATCH_WORKERS = 4
+
+# Log when the backlog passes this, so "the listeners cannot keep up" is a line
+# in the log rather than something an operator infers from latency.
+BACKLOG_WARN_AT = 50
+
+
 class EventBus:
     """Simple in-process event bus with SSE streaming support."""
 
-    def __init__(self):
+    def __init__(self, workers: Optional[int] = None):
         self._subscribers = []
         self._listeners = []
         self._lock = threading.Lock()
+
+        # Listener dispatch used to be `threading.Thread(...).start()` per
+        # listener per event, with no pool, no queue and no ceiling — so the
+        # process's thread count was a function of event volume rather than of
+        # anything it controlled. A renewal sweep over many domains, each
+        # publishing to several listeners, decided how many threads existed.
+        #
+        # This is a fixed set of daemon workers reading one queue. Three
+        # properties are deliberate:
+        #
+        # * the publisher NEVER blocks. It is a request thread on the issuance
+        #   path and the scheduler on the renewal path; making certificate
+        #   issuance wait behind a deploy hook would trade a thread problem
+        #   for a latency problem on the product's main job.
+        # * nothing is dropped. The SSE path drops the oldest message and then
+        #   the subscriber, which is right for a browser that fell behind and
+        #   wrong for a deploy that has to happen. Certificate events are rare
+        #   and each one matters, so the backlog is unbounded in length and
+        #   bounded in *cost* — a small dict per queued call.
+        # * the backlog is visible. An instance past its capacity says so.
+        #
+        # Workers stay daemon, as the per-event threads were: a
+        # ThreadPoolExecutor's threads are joined at interpreter exit, which
+        # would let a 300-second deploy hook hold up shutdown until the
+        # container runtime SIGKILLs it anyway.
+        self._work = queue.Queue()
+        self._workers = []
+        self._worker_count = self._resolve_worker_count(workers)
+        self._backlog_warned = False
+
+    @staticmethod
+    def _resolve_worker_count(workers) -> int:
+        if workers is None:
+            workers = os.environ.get('CERTMATE_EVENT_WORKERS',
+                                     DEFAULT_DISPATCH_WORKERS)
+        try:
+            return max(1, min(32, int(workers)))
+        except (TypeError, ValueError):
+            return DEFAULT_DISPATCH_WORKERS
+
+    def _ensure_workers(self) -> None:
+        """Start the dispatch workers on first use.
+
+        Lazily, because a bus with no listeners — which is what most of the
+        test suite builds — should cost no threads at all.
+        """
+        if self._workers:
+            return
+        for index in range(self._worker_count):
+            worker = threading.Thread(
+                target=self._dispatch_forever,
+                name=f'certmate-events-{index}',
+                daemon=True,
+            )
+            worker.start()
+            self._workers.append(worker)
+
+    def _dispatch_forever(self) -> None:
+        while True:
+            listener, event, data = self._work.get()
+            try:
+                listener(event, data)
+            except Exception as e:
+                # A listener that raises must not take the worker with it, or
+                # the pool bleeds capacity one bad event at a time until
+                # nothing is dispatched and nothing says why.
+                logger.error(
+                    "Event listener failed for %s: %s", event, e, exc_info=True)
+            finally:
+                self._work.task_done()
 
     def add_listener(self, callback) -> None:
         """Register a callback invoked on every publish(). Signature: callback(event, data)."""
         with self._lock:
             self._listeners.append(callback)
+        self._ensure_workers()
+
+    def pending_dispatches(self) -> int:
+        """How many listener invocations are waiting for a worker."""
+        return self._work.qsize()
 
     def subscribe(self) -> queue.Queue:
         """Create a new subscriber queue."""
@@ -74,18 +162,30 @@ class EventBus:
                 except ValueError:
                     pass
 
-        # Snapshot listeners under lock, then invoke in background threads
+        # Snapshot listeners under lock, then hand them to the worker pool.
+        # Never inline: a listener runs deploy hooks, and running one on the
+        # publisher's thread would put a 300-second timeout on the issuance
+        # request that triggered it.
         with self._lock:
             listeners = list(self._listeners)
+        if not listeners:
+            return
+        self._ensure_workers()
+
+        payload = message.get('data', {})
         for listener in listeners:
-            try:
-                threading.Thread(
-                    target=listener,
-                    args=(event, message.get('data', {})),
-                    daemon=True
-                ).start()
-            except Exception as e:
-                logger.debug(f"Event listener invocation failed: {e}")
+            self._work.put((listener, event, payload))
+
+        backlog = self._work.qsize()
+        if backlog >= BACKLOG_WARN_AT and not self._backlog_warned:
+            self._backlog_warned = True
+            logger.warning(
+                "Event listener backlog is %d with %d worker(s): listeners "
+                "are not keeping up with events. Deploy hooks and cache "
+                "invalidations will lag. Raise CERTMATE_EVENT_WORKERS or find "
+                "the slow listener.", backlog, self._worker_count)
+        elif backlog == 0:
+            self._backlog_warned = False
 
     def stream(self, q: queue.Queue):
         """
