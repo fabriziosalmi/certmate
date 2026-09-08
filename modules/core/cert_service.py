@@ -24,6 +24,21 @@ from .utils import validate_domain, validate_key_options
 
 logger = logging.getLogger(__name__)
 
+# Per-request bounds, because the global MAX_CONTENT_LENGTH is 50 MB and
+# exists for the backup upload. Without these, the ceiling on a certificate
+# request was "however many names fit in fifty megabytes" and "however large a
+# PEM fits in fifty megabytes" — neither of which is a limit anyone chose, and
+# neither of which any endpoint stated.
+#
+# 100 is Let's Encrypt's cap on names per certificate, so a request naming more
+# cannot be satisfied by the CA regardless of what CertMate does with it.
+MAX_SAN_DOMAINS = 100
+
+# A PEM CSR for a 4096-bit key carrying a hundred names is a few kilobytes.
+# 64 KB is generous by more than an order of magnitude and still refuses long
+# before anything reaches the parser.
+MAX_CSR_BYTES = 64 * 1024
+
 
 # Kept as a local alias: this module's call sites read better with the short
 # name, but the implementation now lives once, in the logging module.
@@ -175,6 +190,19 @@ class CertificateService:
             domain_alias = normalized_alias
         if san_domains and not isinstance(san_domains, list):
             raise ValueError('Invalid san_domains format')
+        if san_domains and len(san_domains) > MAX_SAN_DOMAINS:
+            # The global 50 MB body limit exists for the backup upload, and
+            # applied to this endpoint too — so the ceiling on a certificate
+            # request was "however many names fit in fifty megabytes", which
+            # is not a limit anyone chose. Let's Encrypt caps a certificate at
+            # 100 names, so a request naming more cannot be satisfied by the
+            # CA regardless; refusing it here says so, instead of building a
+            # certbot command line with thousands of -d flags and letting the
+            # CA reject it after the DNS challenges have been set up.
+            raise ValueError(
+                f'Too many san_domains: {len(san_domains)}. A certificate can '
+                f'carry at most {MAX_SAN_DOMAINS} names, including the primary '
+                f'domain.')
 
         # A CSR is signed over its own subject and SANs, and carries its own
         # public key. A request that also names SANs or a key shape is asking
@@ -182,6 +210,17 @@ class CertificateService:
         # silently ignored — the certificate would come back different from
         # what the caller asked for, with nothing to say why (#599).
         if csr_pem is not None:
+            if not isinstance(csr_pem, (str, bytes)):
+                raise ValueError('Invalid CSR: expected PEM text')
+            if len(csr_pem) > MAX_CSR_BYTES:
+                # Same reasoning as the SAN bound above: without this, the
+                # limit on a CSR was the global body limit. A PEM CSR for a
+                # 4096-bit key with a hundred names is a few kilobytes; the
+                # bound is generous by two orders of magnitude and still says
+                # no long before anything reaches the parser.
+                raise ValueError(
+                    f'CSR too large: {len(csr_pem)} bytes. A certificate '
+                    f'request PEM is at most {MAX_CSR_BYTES} bytes.')
             if san_domains:
                 raise ValueError(
                     'san_domains cannot be combined with a CSR: the '
