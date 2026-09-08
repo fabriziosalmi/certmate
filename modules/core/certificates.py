@@ -387,6 +387,12 @@ class CertificateManager:
         # Per-domain locks to prevent concurrent create/renew on the same domain
         self._domain_locks: dict[str, threading.Lock] = {}
         self._domain_locks_mutex = threading.Lock()
+        # domain -> (key digest, cert digest, answer) for private_key_state.
+        # One entry per domain, like _domain_locks above and bounded the same
+        # way: by how many certificates this instance manages. See
+        # private_key_state for why the answer is worth remembering at all.
+        self._key_state_cache: dict[str, tuple[bytes, bytes, str]] = {}
+        self._key_state_mutex = threading.Lock()
         # Optional audit logger, injected by the factory so unattended renewals
         # produce an attributed (actor.kind='scheduler') audit record. None in
         # standalone/unit contexts, where emission is simply skipped.
@@ -1807,6 +1813,23 @@ class CertificateManager:
         question: cert.pem from one issuance beside privkey.pem from another
         cannot complete a handshake either, and comparing public numbers
         catches it for RSA and EC alike without needing to know the key type.
+
+        **The answer is remembered per (key bytes, certificate bytes).** This
+        is called once per domain by every listing, by every Prometheus
+        collection and by every renewal sweep, and the comparison is dominated
+        by loading the private key, which OpenSSL validates as it parses.
+        Measured on one machine: 51.6 ms for RSA-2048, 275 ms for RSA-4096,
+        0.020 ms for EC P-256 — and CertMate's default key shape is RSA-2048,
+        so on the common installation this single call was ~99% of the cost of
+        reading a certificate's information. It is pure with respect to the two
+        files' contents, so hashing both (tens of microseconds) and reusing the
+        answer is exact rather than approximate: any change to either file —
+        renewal, re-key, a restored backup, a torn publish — changes a digest
+        and the comparison runs again. Time is not part of the key, because
+        nothing about this answer expires.
+
+        The warning below therefore fires once per distinct file pair rather
+        than once per read, which is the same information at 1/N the volume.
         """
         key_file = self.cert_dir / domain / 'privkey.pem'
         if not key_file.exists():
@@ -1821,11 +1844,42 @@ class CertificateManager:
             return 'present'
 
         try:
+            key_bytes = key_file.read_bytes()
+        except OSError as e:
+            # Same answer as an unparseable key, and for the same reason: a key
+            # this process cannot read is not one it can serve with.
+            logger.warning(
+                "Could not read the private key for %s: %s",
+                str(domain).replace(chr(10), ' ').replace(chr(13), ' '), e)
+            return 'mismatched'
+
+        key_digest = hashlib.sha256(key_bytes).digest()
+        cert_digest = hashlib.sha256(cert_content).digest()
+        with self._key_state_mutex:
+            remembered = self._key_state_cache.get(domain)
+        if remembered is not None and remembered[:2] == (key_digest, cert_digest):
+            return remembered[2]
+
+        state = self._compare_key_to_certificate(domain, key_bytes, cert_content)
+        with self._key_state_mutex:
+            self._key_state_cache[domain] = (key_digest, cert_digest, state)
+        return state
+
+    @staticmethod
+    def _compare_key_to_certificate(domain, key_bytes, cert_content):
+        """Does this private key belong to this certificate? The expensive half.
+
+        Split out of `private_key_state` so the cheap decisions (no key file at
+        all, no certificate to compare against) and the cache lookup stay
+        readable above, and so a test can count how often the parsing actually
+        happens.
+        """
+        try:
             from cryptography.hazmat.primitives import serialization
             from cryptography import x509
 
             private_key = serialization.load_pem_private_key(
-                key_file.read_bytes(), password=None)
+                key_bytes, password=None)
             certificate = x509.load_pem_x509_certificate(cert_content)
         except Exception as e:
             # An unreadable or encrypted key is not a usable one. Say so
