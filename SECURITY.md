@@ -104,6 +104,52 @@ Treat the admin role as highly privileged: grant it only to trusted operators,
 and prefer scoped, non-admin API keys for automation that only needs to create
 or download certificates.
 
+### Keeping credentials out of `settings.json`
+
+DNS provider API tokens and the OIDC client secret are stored in
+`settings.json` as cleartext JSON, in a file written `0600`. The permission is
+correct and is not the interesting part: that file is what gets backed up,
+copied between hosts, mounted into a container and attached to a bug report.
+
+Any of those fields can instead **name** where its value lives, the way
+`API_BEARER_TOKEN_FILE` already does for the bearer token. Beside a field, write
+`<field>_file` with a path or `<field>_env` with a variable name:
+
+```json
+{
+  "dns_providers": {
+    "cloudflare": {
+      "accounts": {
+        "prod": { "api_token_file": "/run/secrets/cloudflare_api_token" }
+      }
+    }
+  },
+  "oidc": { "client_secret_env": "CERTMATE_OIDC_CLIENT_SECRET" }
+}
+```
+
+The value is read at the moment it is used — to run certbot, or to build the
+OIDC client — and is never written back, so a settings save does not turn a
+reference into a stored secret. Listing accounts and rendering the settings page
+do not read it at all: an account counts as configured because the reference is
+present, not because the secret could be read.
+
+Details worth knowing before relying on it:
+
+- A reference **wins over** a value in the same field. Adding `api_token_file`
+  next to an existing `api_token` switches over immediately; the stale literal
+  is ignored rather than silently preferred.
+- `_file` wins over `_env` if both are present.
+- Trailing whitespace is stripped, because `docker secret` and
+  `kubectl create secret --from-file` both produce files ending in a newline.
+- A reference that resolves to nothing is **refused**, not treated as empty. A
+  missing mount fails issuance with a log line naming the field and the path,
+  rather than sending a blank token to the DNS provider.
+
+This does not encrypt anything and is not a substitute for protecting the data
+volume. What it does is let the highest-value secrets live wherever the
+deployment already keeps secrets, instead of in the file that travels.
+
 ## Known dependency constraint
 
 CertMate pins `cryptography==46.0.7` and `pyopenssl==26.0.0`. Every version

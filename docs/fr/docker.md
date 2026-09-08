@@ -106,6 +106,17 @@ docker run -d --name certmate \
 
 Voir le [Guide d'installation](./installation.md#variables-denvironnement) pour la liste complète.
 
+### Garder les jetons DNS hors de `settings.json`
+
+Les jetons des fournisseurs DNS configurés depuis l'interface sont stockés dans
+`settings.json`, c'est-à-dire le fichier qui est sauvegardé, copié et monté.
+Chaque champ d'identifiant peut à la place **indiquer** où se trouve sa valeur :
+`api_token_file` avec un chemin, ou `api_token_env` avec un nom de variable,
+comme le fait déjà `API_BEARER_TOKEN_FILE`. La valeur est lue au moment où
+certbot s'exécute et n'est jamais réécrite. Le `client_secret` OIDC accepte la
+même paire. Voir
+[SECURITY.md](https://github.com/fabriziosalmi/certmate/blob/main/SECURITY.md#keeping-credentials-out-of-settingsjson).
+
 ---
 
 ## Docker Compose

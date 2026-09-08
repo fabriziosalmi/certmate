@@ -108,6 +108,17 @@ docker run -d --name certmate \
 
 Consulta la [Guía de instalación](./installation.md#environment-variables) para ver la lista completa.
 
+### Mantener los tokens DNS fuera de `settings.json`
+
+Los tokens de los proveedores DNS configurados desde la interfaz se guardan en
+`settings.json`, que es el archivo que se respalda, se copia y se monta. En su
+lugar, cualquier campo de credencial puede **indicar** dónde vive su valor:
+`api_token_file` con una ruta, o `api_token_env` con el nombre de una variable,
+igual que ya hace `API_BEARER_TOKEN_FILE`. El valor se lee cuando se ejecuta
+certbot y nunca se vuelve a escribir. El `client_secret` de OIDC acepta el mismo
+par. Consulta
+[SECURITY.md](https://github.com/fabriziosalmi/certmate/blob/main/SECURITY.md#keeping-credentials-out-of-settingsjson).
+
 ---
 
 ## Docker Compose

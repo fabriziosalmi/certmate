@@ -34,6 +34,7 @@ from urllib.parse import urlparse, urlencode
 from flask import session as flask_session
 
 from .auth import validate_username
+from .secret_refs import SecretReferenceError, resolve_field
 from .settings import _strip_masked_values
 from .utils import utc_now
 
@@ -277,13 +278,37 @@ class OIDCManager:
         """
         import hashlib
 
-        secret = cfg.get('client_secret') or ''
+        # OIDCManager, not self: _client_fingerprint is a staticmethod.
+        secret = OIDCManager._client_secret(cfg)
         return (
             cfg.get('issuer_url'),
             cfg.get('client_id'),
             hashlib.sha256(secret.encode()).hexdigest(),
             tuple(cfg.get('scopes') or ()),
         )
+
+    @staticmethod
+    def _client_secret(cfg: dict) -> str:
+        """The client secret, following ``client_secret_file`` / ``_env``.
+
+        Resolved HERE and not in ``_load_config`` on purpose. ``update_config``
+        loads the config, merges a partial payload onto it and writes the
+        result back; if loading resolved the reference, the first settings save
+        after a config edit would persist the secret into ``settings.json`` —
+        the exact file this mechanism exists to keep it out of.
+
+        An unresolvable reference returns '' rather than raising, and the
+        caller then fails the way a blank secret already fails. Raising here
+        would turn a missing mount into a 500 on the login page for every
+        user, including the local admin who needs to get in and fix it.
+        """
+        try:
+            return resolve_field(cfg, 'client_secret') or ''
+        except SecretReferenceError as exc:
+            logger.error(
+                "OIDC client_secret names %r, which %s — SSO will be refused "
+                "until it resolves", exc.reference, exc.reason)
+            return ''
 
     def _build_oauth_client(self, app):
         """Return a cached Authlib client bound to ``app``.
@@ -312,7 +337,7 @@ class OIDCManager:
         oauth.register(
             name='certmate_oidc',
             client_id=cfg['client_id'],
-            client_secret=cfg['client_secret'] or None,
+            client_secret=self._client_secret(cfg) or None,
             server_metadata_url=f"{issuer}/.well-known/openid-configuration",
             client_kwargs={
                 'scope': ' '.join(cfg['scopes']),
