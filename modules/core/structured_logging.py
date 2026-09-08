@@ -315,6 +315,50 @@ class LogContext:
         _log_context.set(current)
 
 
+# A correlation id is written into logs and echoed back in a response header,
+# and on the request path it can come from the caller. Bound in length and
+# restricted to characters that cannot break a log line or a header: an id is
+# an opaque token, and anything that is not one is not worth carrying.
+_SAFE_CORRELATION_ID = re.compile(r'^[A-Za-z0-9._:-]{1,64}$')
+
+
+def new_correlation_id() -> str:
+    """A fresh id for one unit of work.
+
+    Short on purpose: it exists to be grepped out of a log and pasted into
+    another query, not to be globally unique across the internet. Sixteen hex
+    characters is 64 bits, which is far past collision for the number of
+    operations one CertMate instance performs in the time anyone would look
+    at a log.
+    """
+    import uuid
+    return uuid.uuid4().hex[:16]
+
+
+def clean_correlation_id(value) -> Optional[str]:
+    """A caller-supplied id, if it is safe to carry; otherwise None.
+
+    The value reaches a log line and a response header. An unbounded or
+    newline-carrying one would let a caller write its own log entries and
+    split the header — so a rejected id is replaced by a generated one rather
+    than sanitised into something the caller did not send and cannot match.
+    """
+    if not isinstance(value, str):
+        return None
+    value = value.strip()
+    return value if _SAFE_CORRELATION_ID.match(value) else None
+
+
+def current_correlation_id() -> Optional[str]:
+    """The id of the work being done on this thread, if any.
+
+    Reads the same contextvar LogContext writes, so anything that wants to
+    HAND the id to another thread — the event bus does — asks here rather than
+    threading a parameter through every call in between.
+    """
+    return _log_context.get().get('request_id')
+
+
 def set_context(**kwargs):
     """Set context fields for current scope"""
     current = _log_context.get().copy()

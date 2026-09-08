@@ -1274,6 +1274,67 @@ def setup_error_handlers(app):
         }), 500
 
 
+def setup_correlation_ids(app):
+    """Give every request an id, and put it in every log line it produces.
+
+    The structured logger has always had a `request_id` field and a LogContext
+    to fill it. Nothing ever set either: the field was read off `g.request_id`,
+    which no code assigned, and the slow-request watchdog took the raw
+    `X-Request-Id` header — so on the overwhelmingly common case of a caller
+    that sends no such header, every log line carried `request_id: null` and
+    two lines from the same request could not be told from two lines from
+    different ones.
+
+    Three decisions here, none of them obvious:
+
+    * a caller-supplied id is honoured, because the point of the header is to
+      let a caller stitch its logs to ours — but only if it is an opaque token
+      (see clean_correlation_id). An id reaches a log line and a response
+      header, so an unbounded or newline-carrying one would let a caller write
+      its own log entries and split the header. A rejected id is REPLACED by a
+      generated one rather than sanitised: an id the caller did not send and
+      cannot match is worse than an honest new one.
+    * the id is echoed back in `X-Request-Id`, so a caller that sent nothing
+      can still quote it in a bug report.
+    * `g.request_id` is set as well as the log context, because
+      `get_request_context()` already reads it and the slow-request watchdog
+      reports it.
+    """
+    from .structured_logging import (
+        LogContext, clean_correlation_id, new_correlation_id,
+    )
+
+    @app.before_request
+    def _bind_correlation_id():
+        from flask import g, request
+        supplied = clean_correlation_id(request.headers.get('X-Request-Id'))
+        g.request_id = supplied or new_correlation_id()
+        # Entered here and exited in teardown rather than wrapping the view:
+        # the id must be on the log lines of before_request handlers, error
+        # handlers and after_request handlers too, which a decorator around
+        # the view would miss.
+        g._log_context = LogContext(request_id=g.request_id)
+        g._log_context.__enter__()
+
+    @app.after_request
+    def _echo_correlation_id(response):
+        from flask import g
+        request_id = getattr(g, 'request_id', None)
+        if request_id and 'X-Request-Id' not in response.headers:
+            response.headers['X-Request-Id'] = request_id
+        return response
+
+    @app.teardown_request
+    def _release_correlation_id(_exc):
+        from flask import g
+        context = getattr(g, '_log_context', None)
+        if context is not None:
+            try:
+                context.__exit__(None, None, None)
+            except Exception:  # pragma: no cover - defensive
+                logger.debug("Could not release the request log context")
+
+
 def setup_security_headers(app):
     @app.after_request
     def add_security_headers(response):
@@ -1456,6 +1517,7 @@ def create_app(test_config=None):
     setup_csrf_protection(app)
     setup_error_handlers(app)
     setup_security_headers(app)
+    setup_correlation_ids(app)
     setup_rate_limiting(app, container)
     setup_slow_request_logging(app, container)
 

@@ -9,9 +9,20 @@ import os
 import queue
 import time
 import threading
+from contextlib import contextmanager
 from typing import Optional, Dict, Any
 
+from .structured_logging import current_correlation_id
+
 logger = logging.getLogger(__name__)
+
+
+@contextmanager
+def _nothing():
+    """A do-nothing context, for work published outside any correlated unit —
+    a manual publish from a shell, say. Entering LogContext(request_id=None)
+    would set the field to null and hide an id an outer context had set."""
+    yield
 
 
 # How many listener invocations run at once. A listener can be slow on
@@ -91,10 +102,18 @@ class EventBus:
             self._workers.append(worker)
 
     def _dispatch_forever(self) -> None:
+        from .structured_logging import LogContext
         while True:
-            listener, event, data = self._work.get()
+            listener, event, data, correlation_id = self._work.get()
             try:
-                listener(event, data)
+                # contextvars do NOT cross a thread boundary — a worker starts
+                # with an empty context, not a copy of the publisher's — so
+                # the id is carried in the queued item and re-entered here.
+                # Without this a renewal and the deploy it triggered are two
+                # unrelated sets of log lines.
+                with LogContext(request_id=correlation_id) if correlation_id \
+                        else _nothing():
+                    listener(event, data)
             except Exception as e:
                 # A listener that raises must not take the worker with it, or
                 # the pool bleeds capacity one bad event at a time until
@@ -173,8 +192,9 @@ class EventBus:
         self._ensure_workers()
 
         payload = message.get('data', {})
+        correlation_id = current_correlation_id()
         for listener in listeners:
-            self._work.put((listener, event, payload))
+            self._work.put((listener, event, payload, correlation_id))
 
         backlog = self._work.qsize()
         if backlog >= BACKLOG_WARN_AT and not self._backlog_warned:
