@@ -91,6 +91,11 @@ jobs:
         CERTMATE_TEST_EMAIL: ${{ secrets.CERTMATE_TEST_EMAIL }}
         # Belt-and-suspenders: the tests default to staging, pin it here too.
         CERTMATE_E2E_CA_PROVIDER: letsencrypt_staging
+        # This job exists to run the credential-gated tests. Without this they
+        # would skip on a token the runner failed to see, and the job would go
+        # green having issued nothing — the shape of the defect this gate was
+        # built to catch, in the gate itself.
+        CERTMATE_REQUIRE_CREDENTIALED: '1'
       run: |
         python -m pytest -v -m e2e \
           tests/test_health_ready_e2e.py \

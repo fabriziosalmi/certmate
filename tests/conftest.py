@@ -267,11 +267,90 @@ def api(docker_container):
 
 @pytest.fixture(scope="session")
 def cloudflare_token():
-    """Return the Cloudflare API token or skip if not set."""
+    """Return the Cloudflare API token, or skip — loudly, and countably.
+
+    Ten test files hang off this fixture. When the token is absent they all
+    skip, and a skip in a green run is indistinguishable from a pass: the
+    class had been reporting as "skipped" rather than as "never executed",
+    which is how a test can rot for years while the board stays green.
+
+    Two things change that. `CERTMATE_REQUIRE_CREDENTIALED=1` turns the skip
+    into a failure, so a job that exists to run these cannot silently run
+    none of them — the same mechanism `CERTMATE_UI_REQUIRE_BROWSER` already
+    provides for the Playwright suite. And the skip reason carries a marker
+    the terminal summary counts, so every ordinary run ends with a line
+    saying how many tests were not executed and why.
+    """
     token = os.environ.get("CLOUDFLARE_API_TOKEN")
     if not token:
-        pytest.skip("CLOUDFLARE_API_TOKEN not set — skipping real DNS tests")
+        _credential_missing("CLOUDFLARE_API_TOKEN", "real DNS-01 tests")
     return token
+
+
+# Marks a skip caused by an absent third-party credential, so
+# pytest_terminal_summary can count them. Matched as a substring of the skip
+# reason: pytest does not carry structured metadata on a skip.
+CREDENTIAL_SKIP_MARK = "[no-credential]"
+_REQUIRE_CREDENTIALED = os.environ.get("CERTMATE_REQUIRE_CREDENTIALED") == "1"
+
+
+def _credential_missing(variable, what):
+    """Fail when the credential is mandatory, skip countably when it is not."""
+    if _REQUIRE_CREDENTIALED:
+        pytest.fail(
+            f"{variable} is not set, so {what} cannot run. "
+            f"CERTMATE_REQUIRE_CREDENTIALED=1 means this must not be skipped."
+        )
+    pytest.skip(f"{CREDENTIAL_SKIP_MARK} {variable} not set — {what} not run")
+
+
+CREDENTIALED_FIXTURES = frozenset({"cloudflare_token"})
+
+
+def pytest_collection_modifyitems(config, items):
+    """Mark every test that needs a third-party credential, by derivation.
+
+    `-m credentialed` then selects exactly this class. Derived from the
+    fixtures a test requests rather than written on each file: a marker
+    maintained by hand drifts the first time someone adds the fixture and
+    forgets the decorator, and the fixture is what actually gates the test.
+    """
+    for item in items:
+        if CREDENTIALED_FIXTURES & set(getattr(item, "fixturenames", ())):
+            item.add_marker(pytest.mark.credentialed)
+
+
+def pytest_terminal_summary(terminalreporter, exitstatus, config):
+    """End every run by saying what it did not measure.
+
+    pytest's own tail says "N skipped" without saying what N was, and a
+    number with no subject reads as housekeeping. This names the class,
+    counts it, and says how to run it — so the difference between "the suite
+    passed" and "the suite passed the parts it could reach" is on the screen
+    of whoever reads the run.
+    """
+    skipped = terminalreporter.stats.get("skipped", [])
+    missing = [r for r in skipped
+               if CREDENTIAL_SKIP_MARK in str(getattr(r, "longrepr", ""))]
+    if not missing:
+        return
+
+    variables = sorted({
+        word for report in missing
+        for word in str(report.longrepr).split()
+        if word.isupper() and "_" in word
+    })
+    terminalreporter.write_sep("=", "not executed: missing credentials",
+                               yellow=True, bold=True)
+    terminalreporter.write_line(
+        f"{len(missing)} test(s) did not run because "
+        f"{', '.join(variables) or 'a credential'} is unset. They are not "
+        f"passing; they are unmeasured."
+    )
+    terminalreporter.write_line(
+        "Set the credential to run them, or CERTMATE_REQUIRE_CREDENTIALED=1 "
+        "to make their absence a failure (used by the real-certificate gate)."
+    )
 
 
 # ---------------------------------------------------------------------------
