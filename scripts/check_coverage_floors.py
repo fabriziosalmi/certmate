@@ -53,7 +53,11 @@ FLOORS = {
     'modules/api/resources_downloads.py': 75,
     'modules/api/resources_health.py': 70,
     'modules/api/resources_inventory.py': 80,
-    'modules/api/resources_lifecycle.py': 55,
+    # Raised from 55 after covering the exception-to-status arms, which is
+    # where this module's behaviour is: it is the entry point for every
+    # create, renew and reissue, and a 500 where a 422 belongs sends an
+    # operator looking inside CertMate for a problem in their DNS provider.
+    'modules/api/resources_lifecycle.py': 77,
     'modules/api/resources_settings.py': 60,
     'modules/api/resources_storage.py': 70,
     'modules/api/tls_probe.py': 50,
@@ -64,6 +68,9 @@ FLOORS = {
     'modules/web/misc_routes.py': 65,
     'modules/web/oidc_routes.py': 75,
     'modules/web/routes.py': 75,
+    # Still the thinnest module in the project, and the next one to raise.
+    # Left at 50 because nothing here added tests for it: measured at 50.8,
+    # so raising the floor would lock in a number nobody earned.
     'modules/web/settings_routes.py': 50,
     'modules/web/ui_routes.py': 60,
 }
