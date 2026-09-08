@@ -11,6 +11,7 @@ import os
 import subprocess
 import threading
 import time
+import uuid
 from pathlib import Path
 
 from .structured_logging import sanitize_text, JSONFormatter
@@ -26,6 +27,16 @@ logger = logging.getLogger(__name__)
 DEFAULT_TIMEOUT = 30
 MAX_TIMEOUT = 300
 MAX_HISTORY_ENTRIES = 500
+
+# A deploy run's lifecycle in the history file. `running` is written before the
+# command starts, so an interrupted hook leaves a record instead of nothing;
+# `success`/`failure` supersede it. `interrupted` is never written — it is what
+# `get_history` reports for a `running` record no live run owns, which after a
+# restart is every one of them.
+STATUS_RUNNING = 'running'
+STATUS_SUCCESS = 'success'
+STATUS_FAILURE = 'failure'
+STATUS_INTERRUPTED = 'interrupted'
 
 # Redacts sensitive-keyed fields recursively before a deploy result is persisted
 # to the history JSONL — a deploy hook command / target config can carry a
@@ -55,6 +66,13 @@ class DeployManager:
         # the EventBus listener threads and read by the scheduler's drain.
         self._pending_path = Path(data_dir) / 'pending_deploys.json'
         self._pending_lock = threading.Lock()
+        # Run ids of hooks this process has started and not yet finished. A
+        # `running` record in the history belongs to one of two situations,
+        # and only this set tells them apart: the run is still going (its id
+        # is in here), or the process that started it died (it is not, because
+        # this set does not survive a restart). See `_run_hook`.
+        self._in_flight = set()
+        self._in_flight_lock = threading.Lock()
 
     # ------------------------------------------------------------------
     # EventBus listener
@@ -494,10 +512,47 @@ class DeployManager:
             self._record_target(failure, domain, event_type)
             return [failure]
 
-        results = run_targets(targets, domain, cert_pem, key_pem, event_type)
-        for result in results:
-            self._record_target(result, domain, event_type)
-        return results
+        # Typed targets have the same gap shell hooks had: `run_targets`
+        # publishes to every target and only then returns, so a process killed
+        # part-way through leaves nothing in the history and an operator with
+        # no reason to go and look at a cluster that may hold a half-published
+        # certificate. One `running` record covers the batch — per-target
+        # records would need the results matched back to the targets that
+        # produced them, and `run_targets` filters as it goes, so the two lists
+        # are not the same length. The batch is the honest unit: what the
+        # interrupted record says is "publishing to targets was in progress",
+        # which is exactly what is known.
+        batch_id = uuid.uuid4().hex
+        with self._in_flight_lock:
+            self._in_flight.add(batch_id)
+        self._log_history({
+            'run_id': batch_id,
+            'kind': 'target-batch',
+            'status': STATUS_RUNNING,
+            'success': False,
+            'domain': domain,
+            'event': event_type,
+            'targets': len(targets or []),
+            'timestamp': utc_now_iso(),
+        })
+        try:
+            results = run_targets(targets, domain, cert_pem, key_pem, event_type)
+            for result in results:
+                self._record_target(result, domain, event_type)
+            return results
+        finally:
+            with self._in_flight_lock:
+                self._in_flight.discard(batch_id)
+            self._log_history({
+                'run_id': batch_id,
+                'kind': 'target-batch',
+                'status': STATUS_SUCCESS,
+                'success': True,
+                'domain': domain,
+                'event': event_type,
+                'targets': len(targets or []),
+                'timestamp': utc_now_iso(),
+            })
 
     def _record_target(self, result, domain, event_type):
         """Audit + history + failure-event for one typed-target result."""
@@ -588,7 +643,9 @@ class DeployManager:
         })
 
         start = time.time()
+        run_id = uuid.uuid4().hex
         result = {
+            'run_id': run_id,
             'hook_id': hook_id,
             'hook_name': hook_name,
             'domain': domain,
@@ -598,11 +655,29 @@ class DeployManager:
             'stdout': '',
             'stderr': '',
             'success': False,
+            'status': STATUS_RUNNING,
             'duration_ms': 0,
             'timestamp': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
             'error': None,
             'dry_run': dry_run,
         }
+
+        # Record that the hook STARTED, before it runs. The record used to be
+        # written only after the command returned, so a hook interrupted by
+        # process termination — SIGKILL, OOM, the container stopped mid-deploy
+        # — left no history entry, no audit record and no failure event. An
+        # interrupted publish was indistinguishable from one that never began,
+        # which is the worse of the two: the target may hold a half-written
+        # certificate and nothing says to go and look.
+        #
+        # The file is append-only JSONL, so "updating" this record means
+        # appending a second one with the same run_id; `get_history` folds the
+        # pair and keeps the last. A record still at `running` when read, whose
+        # run_id this process does not have in flight, is reported as
+        # `interrupted` — which after a restart is every one of them.
+        with self._in_flight_lock:
+            self._in_flight.add(run_id)
+        self._log_history(result)
 
         try:
             # Defense in depth: re-validate command at execution time
@@ -640,6 +715,9 @@ class DeployManager:
             result['error'] = str(e)
 
         result['duration_ms'] = int((time.time() - start) * 1000)
+        result['status'] = STATUS_SUCCESS if result['success'] else STATUS_FAILURE
+        with self._in_flight_lock:
+            self._in_flight.discard(run_id)
 
         status = 'success' if result['success'] else 'failure'
         self.audit_logger.log_operation(
@@ -743,23 +821,39 @@ class DeployManager:
 
         Uses a bounded deque to avoid loading the entire file when only
         the tail is needed (the common case when domain=None).
+
+        Each run writes two records — `running` before the command and the
+        outcome after — so the pair is folded here by `run_id`, newest wins,
+        and the reader sees one entry per run exactly as before. A `running`
+        record that survives the fold is a run whose outcome was never
+        written; unless this process still has it in flight, that means the
+        process executing it died, and it is reported as `interrupted`.
+
+        Records written before run ids existed have no `run_id` and are passed
+        through untouched: the history file survives upgrades, and a deploy
+        that happened is not less true for predating this.
         """
         try:
             if not self._history_path.exists():
                 return []
 
             # When filtering by domain we must scan the whole file;
-            # otherwise read only the last `limit` lines.
+            # otherwise read only the tail. Two records per run now, so read
+            # twice as many lines to still be able to fill `limit` runs.
             from collections import deque
             if domain:
                 max_lines = None  # scan all
             else:
-                max_lines = limit
+                max_lines = limit * 2
 
             with open(self._history_path, 'r') as f:
                 tail = deque(f, maxlen=max_lines)
 
+            with self._in_flight_lock:
+                in_flight = set(self._in_flight)
+
             entries = []
+            seen_runs = set()
             for raw in reversed(tail):
                 raw = raw.strip()
                 if not raw:
@@ -776,6 +870,27 @@ class DeployManager:
                     continue
                 if domain and entry.get('domain') != domain:
                     continue
+
+                run_id = entry.get('run_id')
+                if run_id:
+                    # Reading newest-first, so the first record seen for a run
+                    # is its latest: the outcome if one was written, otherwise
+                    # the `running` record left behind.
+                    if run_id in seen_runs:
+                        continue
+                    seen_runs.add(run_id)
+                    if entry.get('status') == STATUS_RUNNING:
+                        entry = dict(entry)
+                        entry['status'] = (
+                            STATUS_RUNNING if run_id in in_flight
+                            else STATUS_INTERRUPTED)
+                        if entry['status'] == STATUS_INTERRUPTED:
+                            entry['error'] = (
+                                entry.get('error')
+                                or 'interrupted: CertMate stopped while this '
+                                   'hook was running, so its outcome is '
+                                   'unknown. Check the target.')
+
                 entries.append(entry)
                 if len(entries) >= limit:
                     break
