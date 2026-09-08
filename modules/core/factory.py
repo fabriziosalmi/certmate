@@ -1274,6 +1274,85 @@ def setup_error_handlers(app):
         }), 500
 
 
+def worker_count():
+    """How many gunicorn workers this process is one of, or None.
+
+    A worker cannot ask itself this — each one is a separate process — so it
+    reads the command line of its parent, which is the gunicorn master. That
+    works on Linux, which is what the image runs; anywhere else it answers
+    None and the caller says nothing rather than guessing.
+
+    Returns None as well when the parent is not gunicorn at all, which is the
+    case for `python app.py`, for pytest, and for anything embedding the app.
+    """
+    try:
+        parent = os.getppid()
+        with open(f'/proc/{parent}/cmdline', 'rb') as handle:
+            argv = handle.read().split(b'\0')
+    except (OSError, ValueError):
+        return None
+
+    args = [a.decode('utf-8', 'replace') for a in argv if a]
+    if not any('gunicorn' in a for a in args):
+        return None
+    for index, arg in enumerate(args):
+        if arg in ('-w', '--workers'):
+            # A flag with no value is a command gunicorn would itself reject.
+            # Answer None rather than falling through to the default: a guess
+            # about a command line that cannot run is worse than no answer.
+            if index + 1 >= len(args):
+                return None
+            try:
+                return int(args[index + 1])
+            except ValueError:
+                return None
+        if arg.startswith('--workers='):
+            try:
+                return int(arg.split('=', 1)[1])
+            except ValueError:
+                return None
+    # gunicorn's own default is 1 when nothing says otherwise.
+    return 1
+
+
+def warn_if_multiple_workers():
+    """Say so, loudly, if the single-worker assumption has been violated.
+
+    Two things in CertMate are correct only under one worker, and both fail
+    silently rather than visibly:
+
+    * **APScheduler runs in-process.** Two workers means two schedulers, so
+      every certificate is examined — and renewed — twice, against the CA's
+      rate limits.
+    * **The per-domain lock is a threading.Lock**, so with two workers it is
+      two locks. Two requests for one domain would run certbot concurrently
+      against the same --config-dir and interleave the four-file publish,
+      producing the torn generation `reconcile_served_copies` exists to
+      repair — deliberately rather than by a crash.
+
+    The image ships `--workers 1` and the Helm chart pins one replica and
+    refuses more at template time. Nothing checked the case where someone
+    overrides the command, which is the one way left to reach it.
+    """
+    workers = worker_count()
+    if workers is None or workers <= 1:
+        return workers
+    # get_certmate_logger returns a StructuredLogger, whose methods take
+    # (message, **fields) — not the stdlib's lazy %-args. Passing them raises
+    # TypeError, which inside a startup check would turn a warning about a
+    # misconfiguration into a failure to boot.
+    logger.critical(
+        f"CertMate is running with {workers} gunicorn workers. It is a "
+        "single-worker application: the renewal scheduler runs in-process, "
+        "so every certificate will be examined and renewed once PER WORKER "
+        "against the CA's rate limits, and the per-domain lock that "
+        "serialises issuance is per-process, so two requests for one domain "
+        "can run certbot concurrently and publish a mixed set of files. Run "
+        "with --workers 1 and raise --threads instead.",
+        workers=workers)
+    return workers
+
+
 def setup_correlation_ids(app):
     """Give every request an id, and put it in every log line it produces.
 
@@ -1549,6 +1628,7 @@ def create_app(test_config=None):
     setup_scheduler(container)
     reconcile_served_copies(container)
     check_issuance_readiness(container)
+    warn_if_multiple_workers()
 
     return app, container
 
