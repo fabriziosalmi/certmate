@@ -92,7 +92,11 @@ def test_save_after_corrupt_does_not_clobber_quarantine(tmp_path):
 
     assert meta_path.exists(), "fresh metadata.json must be written"
     fresh = json.loads(meta_path.read_text())
-    assert fresh == {"dns_provider": "route53"}
+    # The schema stamp is added by _save_metadata itself, so it is present in
+    # every written record; what this test is about is the content the caller
+    # asked for, and the quarantine surviving underneath it.
+    assert fresh["dns_provider"] == "route53"
+    assert set(fresh) - {"metadata_schema_version"} == {"dns_provider"}
 
     assert quarantined[0].exists(), "quarantine file must survive the save"
     assert quarantined[0].read_bytes() == original_bytes, (

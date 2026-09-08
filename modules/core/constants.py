@@ -73,6 +73,20 @@ DEFAULT_SESSION_TIMEOUT_HOURS = 8
 # rollback actually produces, and it is silent.
 SETTINGS_SCHEMA_VERSION = 1
 
+# Shape of each certificate's metadata.json, on the same terms as
+# SETTINGS_SCHEMA_VERSION above: bumped only when the shape changes, never with
+# the product version. The file records key custody — private_key_state, the
+# CSR fingerprint, the CA a private-CA certificate cannot renew without — so a
+# downgrade that reads it, understands the fields it knows and writes back the
+# rest as absent is a silent data loss on exactly the record that says which
+# private key belongs to which certificate.
+#
+# Enforced at the WRITE, not at startup: there is one of these files per
+# domain, and refusing to start over one certificate would turn a data-loss
+# risk into an outage. Reading a newer file stays allowed. See
+# CertificateManager._save_metadata.
+METADATA_SCHEMA_VERSION = 1
+
 # Protocols the deployment probe can speak. A domain fact, not an API one: the
 # service validates against it and modules/api/tls_probe drives it (#672 — it
 # lived in the API layer, which core could not reach without importing api and
