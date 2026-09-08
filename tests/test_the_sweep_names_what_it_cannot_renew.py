@@ -28,6 +28,7 @@ background sweep is not where that decision belongs.
 """
 import json
 import logging
+import re
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock
 
@@ -44,6 +45,21 @@ from modules.core.settings import SettingsManager
 pytestmark = [pytest.mark.unit]
 
 LOGGER = 'modules.core.certificates'
+
+
+MARKER = 'exists on disk but no settings entry'
+
+
+def _reported(caplog):
+    """The certificate names the reconciliation warned about, exactly.
+
+    A set of parsed names rather than `'domain' in message`: the substring
+    form passes when the name appears anywhere in the log, including in an
+    unrelated renewal-failure line, so it asserts less than it looks like it
+    does. CodeQL flags it too, and it is right to.
+    """
+    return {re.search(r"Certificate '([^']+)'", record.getMessage()).group(1)
+            for record in caplog.records if MARKER in record.getMessage()}
 
 
 def _leaf(domain, lifespan_days, issued_days_ago):
@@ -154,10 +170,11 @@ def test_the_sweep_now_names_it(instance, caplog):
         summary = instance.check_renewals()
 
     assert summary['unmanaged'] == 1
-    message = '\n'.join(record.getMessage() for record in caplog.records)
-    assert 'orphan.example.com' in message, (
+    assert _reported(caplog) == {'orphan.example.com'}, (
         'the sweep counted an unmanaged certificate without saying which')
-    assert 'Add Domain' in message, (
+    remedy = [record.getMessage() for record in caplog.records
+              if MARKER in record.getMessage()][0]
+    assert 'Add Domain' in remedy, (
         'the warning does not say what to do about it')
 
 
@@ -185,15 +202,12 @@ def test_only_the_unregistered_one_is_named_among_several(instance, caplog):
     with caplog.at_level(logging.WARNING, logger=LOGGER):
         summary = instance.check_renewals()
 
+    # Exactly the orphan, and nothing else. a/b appear elsewhere in this log
+    # because they are genuinely due and the stub executor fails them, which
+    # is the fixture and not the subject — so the comparison is against the
+    # parsed set, not against the whole log.
     assert summary['unmanaged'] == 1
-    # Only the lines the reconciliation emits. a/b appear elsewhere in this
-    # log because they are genuinely due and the stub executor fails them,
-    # which is the fixture, not the subject.
-    named = [record.getMessage() for record in caplog.records
-             if 'exists on disk but no settings entry' in record.getMessage()]
-    assert len(named) == 1
-    assert 'orphan.example.com' in named[0]
-    assert 'a.example.com' not in named[0] and 'b.example.com' not in named[0]
+    assert _reported(caplog) == {'orphan.example.com'}
 
 
 def test_a_certificate_switched_off_on_purpose_is_not_called_unmanaged(instance):
@@ -239,8 +253,7 @@ def test_a_hand_edited_entry_that_is_dropped_at_load_is_now_recovered(instance,
         summary = instance.check_renewals()
 
     assert summary['unmanaged'] == 1
-    assert 'orphan.example.com' in '\n'.join(
-        record.getMessage() for record in caplog.records)
+    assert _reported(caplog) == {'orphan.example.com'}
 
 
 # --- the reconciliation must not become a way to lose the sweep ----------
@@ -264,8 +277,8 @@ def test_an_unreadable_certificate_directory_does_not_fail_the_sweep(
 
     assert summary['checked'] == 1, 'the sweep lost its work to the check'
     assert summary['unmanaged'] == 0
-    assert 'permission denied' in '\n'.join(
-        record.getMessage() for record in caplog.records)
+    assert any('permission denied' in record.getMessage()
+               for record in caplog.records)
 
 
 def test_globally_disabled_renewal_still_returns_the_key(instance):
