@@ -314,6 +314,51 @@ jobs:
           echo "::endgroup::"
         done
 
+    # The step above resolves each combination as ONE pip run, which is the
+    # strict question ("could these coexist"). This one asks the Dockerfile's
+    # question instead: the base variant installs from its lockfile, then each
+    # extras file installs as a SEPARATE pip run constrained by that same lock.
+    #
+    # The two differ in a way that matters. `requirements.txt` constrains 42
+    # packages; `requirements.lock` constrains 118. Constraining extras with
+    # the lock is the only way an extras layer cannot move a transitive out
+    # from under the locked base — but it can also make an advertised
+    # combination unresolvable, and finding that out during a release build is
+    # too late. Every combination was measured to resolve under the lock before
+    # it was adopted; this re-measures it on every run, because "it resolved
+    # when I checked" is a statement about one afternoon.
+    - name: Resolve every combination under the lockfile constraint
+      if: matrix.python-version == '3.12'
+      run: |
+        set -euo pipefail
+        combos=(
+          "requirements-minimal.txt requirements-extended.txt"
+          "requirements.txt requirements-aws.txt"
+          "requirements.txt requirements-gcp.txt"
+          "requirements.txt requirements-azure.txt"
+          "requirements.txt requirements-aws.txt requirements-gcp.txt"
+          "requirements.txt requirements-storage-all.txt"
+          "requirements.txt requirements-azure.txt requirements-storage-all.txt"
+        )
+        for combo in "${combos[@]}"; do
+          set -- $combo
+          base="$1"; shift
+          # The same derivation the Dockerfile makes, so a variant that gains
+          # or loses a lock is covered here without editing this list.
+          constraint="${base%.txt}.lock"
+          [ -f "$constraint" ] || constraint="$base"
+          echo "::group::$base (constraint: $constraint) + $*"
+          for extra in "$@"; do
+            if ! python -m pip install --dry-run --ignore-installed --quiet \
+                 --no-cache-dir -c "$constraint" -r "$extra" >/dev/null; then
+              echo "::error::$extra does not resolve under $constraint. The lock pins a transitive package this extras file needs a different version of — regenerate the lock (scripts/regenerate_lockfiles.sh) or the advertised combination cannot be built."
+              exit 1
+            fi
+            echo "$extra resolves under $constraint"
+          done
+          echo "::endgroup::"
+        done
+
     # The images are published for amd64 AND arm64, and every check above runs
     # on exactly one of them. That is how `infisical-python>=2.3.6` sat in two
     # advertised requirements files: 2.3.6 ships an aarch64 wheel, macOS wheels
