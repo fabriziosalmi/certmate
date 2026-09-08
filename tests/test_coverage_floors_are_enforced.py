@@ -30,11 +30,15 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 CHECKER = REPO_ROOT / 'scripts' / 'check_coverage_floors.py'
 
 
-def _floors():
+def _checker_namespace():
     namespace = {}
     exec(compile(CHECKER.read_text(encoding='utf-8'), str(CHECKER), 'exec'),
          namespace)
-    return namespace['FLOORS']
+    return namespace
+
+
+def _floors():
+    return _checker_namespace()['FLOORS']
 
 
 def _report(overrides=None, drop=None, extra=None):
@@ -115,19 +119,44 @@ def test_every_floor_names_a_file_that_exists(tmp_path):
     )
 
 
-def test_every_http_module_has_a_floor():
+def test_every_watched_module_has_a_floor():
     """The other direction, checked against the tree rather than a report, so a
     new module is caught even before anyone runs coverage."""
     floors = set(_floors())
     on_disk = {
         str(path.relative_to(REPO_ROOT))
-        for directory in ('modules/api', 'modules/web')
+        for directory in ('modules/api', 'modules/web', 'modules/core')
         for path in (REPO_ROOT / directory).glob('*.py')
     }
     assert not (on_disk - floors), (
-        f'these HTTP-layer modules have no coverage floor: '
+        f'these watched modules have no coverage floor: '
         f'{sorted(on_disk - floors)}'
     )
+
+
+def test_the_core_is_watched_too():
+    """THE regression this file gained after the audit.
+
+    The floors existed because one project-wide number cannot protect a layer,
+    and then watched only the HTTP layer — so the argument was not being made
+    for modules/core, which holds the issuance path, the storage backends, the
+    settings store and the audit chain. Measured at the time: storage_backends
+    could lose all 877 of its covered statements and the project figure would
+    land at 76.3%, above the 75% floor, with a green build.
+    """
+    assert 'modules/core/' in _checker_namespace()['WATCHED_PREFIXES']
+
+
+def test_the_core_floors_are_not_all_zero():
+    """CONTROL: adding the prefix with floors of 0 would satisfy the test above
+    while protecting nothing."""
+    core = {name: floor for name, floor in _floors().items()
+            if name.startswith('modules/core/')}
+
+    assert len(core) > 40, 'the core floors are not there'
+    assert min(core.values()) >= 50, (
+        f'these floors are too low to catch a module going dark: '
+        f'{sorted(k for k, v in core.items() if v < 50)}')
 
 
 def test_the_checker_is_wired_into_ci():

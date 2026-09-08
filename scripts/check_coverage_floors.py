@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Per-module coverage floors for the HTTP layer (#662).
+"""Per-module coverage floors for the HTTP layer and the core (#662).
 
 The gated suite already has a project-wide `--cov-fail-under`. One number
 cannot protect a layer: `modules/api/resources_ca.py` sat at 11% — 99 of its
@@ -78,9 +78,83 @@ FLOORS = {
     # so raising the floor would lock in a number nobody earned.
     'modules/web/settings_routes.py': 50,
     'modules/web/ui_routes.py': 60,
+
+    # modules/core/ — the layer this check did not watch.
+    #
+    # The floors above were added because one project-wide number could not
+    # protect a layer: resources_ca.py sat at 11% while the project figure
+    # stayed comfortably above its floor. The same argument applies with more
+    # force one directory over, and it was not being made: modules/core holds
+    # the issuance path, the storage backends, the settings store and the audit
+    # chain, and nothing but the project-wide 75% stood behind any of it.
+    #
+    # What that allowed, measured rather than argued: storage_backends.py has
+    # 1,202 statements of which 877 were covered. Losing every one of them —
+    # a module whose tests are deleted or stop importing, which is exactly the
+    # failure #651 describes — takes the project figure to 76.3%. Above the
+    # floor. Green build, one of the largest modules in the product dark.
+    #
+    # Values are the measured coverage rounded DOWN to a multiple of five, and
+    # down another five where that left less than a point of headroom, so
+    # ordinary churn does not trip the build while a real regression does. They
+    # come from the `unit` tier alone; the gated run also executes e2e and live
+    # tests, so the real numbers are at or above these. Raise them as they
+    # climb; never lower one to make a red build pass.
+    'modules/core/__init__.py': 95,
+    'modules/core/audit.py': 80,
+    'modules/core/audit_chain.py': 85,
+    'modules/core/audit_context.py': 90,
+    'modules/core/audit_prune.py': 80,
+    'modules/core/audit_signing.py': 85,
+    'modules/core/audit_sink.py': 80,
+    'modules/core/audit_verify.py': 75,
+    'modules/core/auth.py': 85,
+    'modules/core/ca_manager.py': 70,
+    'modules/core/cache.py': 60,
+    'modules/core/cert_adopt.py': 95,
+    'modules/core/cert_discovery.py': 95,
+    'modules/core/cert_inventory.py': 95,
+    'modules/core/cert_jobs.py': 90,
+    'modules/core/cert_probe.py': 80,
+    'modules/core/cert_service.py': 90,
+    'modules/core/certificates.py': 85,
+    'modules/core/client_certificates.py': 75,
+    'modules/core/constants.py': 80,
+    'modules/core/crypto_report.py': 95,
+    'modules/core/csr_handler.py': 80,
+    'modules/core/csr_issuance.py': 95,
+    'modules/core/ct_monitor.py': 90,
+    'modules/core/deploy_targets.py': 90,
+    'modules/core/deploy_window.py': 90,
+    'modules/core/deployer.py': 85,
+    'modules/core/digest.py': 85,
+    'modules/core/dns_alias_hook.py': 65,
+    'modules/core/dns_providers.py': 85,
+    'modules/core/dns_strategies.py': 80,
+    'modules/core/dns_zone_discovery.py': 95,
+    'modules/core/domain_paths.py': 85,
+    'modules/core/events.py': 80,
+    'modules/core/factory.py': 80,
+    'modules/core/file_operations.py': 80,
+    'modules/core/inventory_sources.py': 95,
+    'modules/core/inventory_view.py': 95,
+    'modules/core/issuance_readiness.py': 95,
+    'modules/core/metrics.py': 70,
+    'modules/core/notifier.py': 90,
+    'modules/core/ocsp_crl.py': 85,
+    'modules/core/oidc.py': 75,
+    'modules/core/private_ca.py': 80,
+    'modules/core/rate_limit.py': 70,
+    'modules/core/secret_refs.py': 95,
+    'modules/core/settings.py': 80,
+    'modules/core/shell.py': 75,
+    'modules/core/storage_backends.py': 70,
+    'modules/core/structured_logging.py': 70,
+    'modules/core/utils.py': 80,
+    'modules/core/zombie.py': 80,
 }
 
-WATCHED_PREFIXES = ('modules/api/', 'modules/web/')
+WATCHED_PREFIXES = ('modules/api/', 'modules/web/', 'modules/core/')
 
 
 def main(argv: list[str]) -> int:
@@ -123,7 +197,7 @@ def main(argv: list[str]) -> int:
 
     for name in sorted(set(measured) - set(FLOORS)):
         problems.append(
-            f"{name}: is in the HTTP layer with no coverage floor. Add one at "
+            f"{name}: is a watched module with no coverage floor. Add one at "
             f"{int(measured[name] // 5 * 5)}% (its current {measured[name]:.1f}%) "
             f"so it cannot rot unnoticed.")
 
@@ -134,7 +208,7 @@ def main(argv: list[str]) -> int:
         return 1
 
     lowest = min(measured.items(), key=lambda kv: kv[1])
-    print(f"Coverage floors met for {len(measured)} HTTP-layer modules "
+    print(f"Coverage floors met for {len(measured)} watched modules "
           f"(lowest: {lowest[0]} at {lowest[1]:.1f}%).")
     return 0
 
