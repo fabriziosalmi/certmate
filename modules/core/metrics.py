@@ -172,6 +172,38 @@ certificate_renewal_duration = Histogram(
     buckets=[30, 60, 120, 300, 600, 1200, 3600]
 )
 
+# The nightly renewal sweep, as a graph rather than as an inference.
+#
+# The sweep counted what it did and logged the counts, but nothing recorded how
+# long it took and nothing was exported — so an instance whose sweep was taking
+# longer every night, and would eventually stop finishing between runs, looked
+# exactly like one that was fine. These four series make "past capacity" visible
+# before it becomes "certificates stopped renewing".
+#
+# Gauges, not counters: the question is always about the LAST sweep. A counter
+# would answer "how much work since the process started", which nobody asks.
+renewal_sweep_duration = Gauge(
+    'certmate_renewal_sweep_duration_seconds',
+    'How long the last renewal sweep took'
+)
+
+renewal_sweep_examined = Gauge(
+    'certmate_renewal_sweep_certificates_examined',
+    'How many certificates the last renewal sweep looked at'
+)
+
+renewal_sweep_completed_at = Gauge(
+    'certmate_renewal_sweep_completed_timestamp_seconds',
+    'Unix time the last renewal sweep finished. Stops moving when the sweep '
+    'stops finishing, which is the signal a duration alone cannot give'
+)
+
+renewal_sweep_unfinished = Gauge(
+    'certmate_renewal_sweep_unfinished',
+    '1 when a sweep started and did not reach the end (the process died, or '
+    'it was still running when the next one began), else 0'
+)
+
 # ACME/Let's Encrypt metrics
 acme_errors_total = Counter(
     'certmate_acme_errors_total',
@@ -475,6 +507,18 @@ class CertMateMetricsCollector:
             status=status
         ).inc()
     
+    def record_renewal_sweep(self, examined: int, duration: float,
+                             completed_at: float):
+        """Record the shape of a renewal sweep that finished."""
+        renewal_sweep_examined.set(examined)
+        renewal_sweep_duration.set(duration)
+        renewal_sweep_completed_at.set(completed_at)
+        renewal_sweep_unfinished.set(0)
+
+    def record_renewal_sweep_unfinished(self):
+        """A previous sweep started and never reached the end."""
+        renewal_sweep_unfinished.set(1)
+
     def record_certificate_creation_time(self, dns_provider: str, duration: float):
         """Record certificate creation duration."""
         certificate_creation_duration.labels(dns_provider=dns_provider).observe(duration)

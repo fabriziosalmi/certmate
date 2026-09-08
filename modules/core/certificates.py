@@ -3273,13 +3273,17 @@ class CertificateManager:
         # Migrate settings format if needed
         settings = self.settings_manager.migrate_domains_format(settings)
 
-        logger.info("Checking for certificates that need renewal")
+        domains = settings.get('domains', [])
+        logger.info("Checking %d certificate(s) for renewal", len(domains))
 
         summary = {'checked': 0, 'renewed': 0, 'failed': 0,
                    'skipped_disabled': 0, 'skipped_invalid': 0,
                    'skipped_not_due': 0}
+        started = time.time()
+        self._report_unfinished_sweep()
+        self._mark_sweep_started(len(domains))
 
-        for domain_entry in settings.get('domains', []):
+        for domain_entry in domains:
             # Reset per iteration: the outer except reads `domain` to publish
             # certificate_failed, and a leftover value from the previous entry
             # would attribute the failure to the wrong certificate.
@@ -3319,6 +3323,13 @@ class CertificateManager:
                 # per run, so populating _certificate_info_cache would only
                 # add a deepcopy-on-set with no possible read hit.
                 summary['checked'] += 1
+                if summary['checked'] % self.SWEEP_PROGRESS_EVERY == 0:
+                    # Roughly where the sweep is, so a process that dies here
+                    # leaves a record of how far it got. Every tenth, not
+                    # every one: the marker must not cost the same order as
+                    # the work it describes.
+                    self._mark_sweep_progress(
+                        summary['checked'], len(domains), started)
                 cert_info = self.get_certificate_info(domain, settings=settings, use_cache=False)
 
                 if cert_info and cert_info.get('needs_renewal'):
@@ -3372,14 +3383,127 @@ class CertificateManager:
                 summary['skipped_invalid'],
                 'y' if summary['skipped_invalid'] == 1 else 'ies',
             )
+        duration = time.time() - started
+        summary['duration_seconds'] = round(duration, 2)
+        summary['examined'] = (
+            summary['checked'] + summary['skipped_disabled']
+            + summary['skipped_invalid'])
+        self._mark_sweep_finished(summary, duration)
         logger.info(
-            "Renewal check complete: %d checked, %d renewed, %d failed, "
-            "%d disabled, %d invalid, %d not-due",
+            "Renewal check complete in %.1fs: %d checked, %d renewed, "
+            "%d failed, %d disabled, %d invalid, %d not-due",
+            duration,
             summary['checked'], summary['renewed'], summary['failed'],
             summary['skipped_disabled'], summary['skipped_invalid'],
             summary['skipped_not_due'],
         )
         return summary
+
+    # ------------------------------------------------------------------
+    # Renewal sweep progress
+    # ------------------------------------------------------------------
+    #
+    # The sweep counted what it did and logged the counts, and that was the
+    # whole of its self-knowledge: no duration, nothing exported, and no way to
+    # tell "finished, with nothing due" from "died half way through". An
+    # instance whose sweep is taking longer every night — and will eventually
+    # stop finishing between runs — looked exactly like one that was fine,
+    # right up until certificates stopped renewing.
+    #
+    # Two artefacts fix that, and neither needs a capacity number to be chosen
+    # in advance. A small marker file records that a sweep is in progress and
+    # how far it has got, so the NEXT sweep can say the previous one did not
+    # finish and where it stopped. Four gauges make the same thing a graph.
+    #
+    # What this deliberately does not do is resume from where the last one
+    # stopped. Renewal is idempotent and ordered by settings.json, so a rerun
+    # from the start re-examines cheap not-due entries rather than losing work;
+    # reordering the sweep to resume would be a behaviour change for a problem
+    # nobody has reported yet. Recording the stopping point is what makes that
+    # decision possible later, with evidence.
+
+    SWEEP_PROGRESS_EVERY = 10
+
+    def _sweep_marker_path(self) -> Path:
+        return self.cert_dir.parent / 'data' / 'renewal_sweep.json'
+
+    def _report_unfinished_sweep(self) -> None:
+        """Say so if the previous sweep never reached the end.
+
+        Called at the start of a sweep, because that is the first moment
+        anyone is in a position to notice: the process that failed to finish
+        is by definition not around to report it.
+        """
+        marker = self._sweep_marker_path()
+        try:
+            if not marker.exists():
+                return
+            previous = json.loads(marker.read_text(encoding='utf-8'))
+        except (OSError, ValueError):
+            return
+        if not isinstance(previous, dict) or previous.get('finished'):
+            return
+
+        started_at = previous.get('started_at')
+        ago = ('%.0f minutes' % ((time.time() - started_at) / 60)
+               if isinstance(started_at, (int, float)) else 'an unknown time')
+        logger.warning(
+            "The previous renewal sweep did not finish. It started %s ago and "
+            "had examined %s of %s certificate(s). Either the process was "
+            "stopped mid-sweep, or the sweep is taking longer than the "
+            "interval between runs — which ends with certificates not being "
+            "renewed. certmate_renewal_sweep_duration_seconds is the number "
+            "to watch.",
+            ago, previous.get('examined', '?'), previous.get('total', '?'))
+        self._safe_metric(lambda c: c.record_renewal_sweep_unfinished())
+
+    def _mark_sweep_started(self, total: int) -> None:
+        self._write_sweep_marker(
+            {'started_at': time.time(), 'total': total, 'examined': 0,
+             'finished': False})
+
+    def _mark_sweep_progress(self, examined: int, total: int,
+                             started_at: float) -> None:
+        """Update the marker every SWEEP_PROGRESS_EVERY certificates.
+
+        Not on every one: the point is to know roughly where a stopped sweep
+        got to, and a write per certificate would put the marker's cost in the
+        same order as the work it is describing.
+        """
+        self._write_sweep_marker(
+            {'started_at': started_at, 'total': total, 'examined': examined,
+             'finished': False})
+
+    def _mark_sweep_finished(self, summary: dict, duration: float) -> None:
+        completed_at = time.time()
+        self._write_sweep_marker({
+            'started_at': completed_at - duration,
+            'completed_at': completed_at,
+            'total': summary.get('examined', 0),
+            'examined': summary.get('examined', 0),
+            'duration_seconds': round(duration, 2),
+            'finished': True,
+        })
+        self._safe_metric(lambda c: c.record_renewal_sweep(
+            summary.get('examined', 0), duration, completed_at))
+
+    def _write_sweep_marker(self, record: dict) -> None:
+        """Never raises. A telemetry file that cannot be written must not stop
+        certificates from renewing — which is the one thing this is for."""
+        marker = self._sweep_marker_path()
+        try:
+            marker.parent.mkdir(parents=True, exist_ok=True)
+            self._atomic_json_write(marker, record)
+        except Exception as e:
+            logger.debug("Could not write the renewal sweep marker: %s", e)
+
+    @staticmethod
+    def _safe_metric(emit) -> None:
+        try:
+            from .metrics import metrics_collector
+            emit(metrics_collector)
+        except Exception:  # pragma: no cover - defensive
+            logger.debug("Could not record a renewal sweep metric")
 
     def create_certificate_legacy(self, domain, email, cloudflare_token):
         """Legacy function for backward compatibility"""
