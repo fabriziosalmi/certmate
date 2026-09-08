@@ -30,7 +30,7 @@ from pathlib import Path
 from cryptography import x509
 from .shell import ShellExecutor
 from .dns_strategies import DNSStrategyFactory, HTTP01Strategy, acme_webroot_dir, check_certbot_plugin_installed
-from .constants import CERTIFICATE_FILES, DEFAULT_RENEWAL_THRESHOLD_DAYS
+from .constants import METADATA_SCHEMA_VERSION, CERTIFICATE_FILES, DEFAULT_RENEWAL_THRESHOLD_DAYS
 from .csr_issuance import (
     CSR_OUTPUT_DIRNAME, CSR_OUTPUT_FILES, CSRError, csr_domains,
     csr_fingerprint, read_csr, to_csr_command,
@@ -1066,6 +1066,18 @@ class CertificateManager:
             with open(metadata_file, 'r', encoding='utf-8') as f:
                 metadata = json.load(f)
             if isinstance(metadata, dict):
+                version = metadata.get('metadata_schema_version')
+                if isinstance(version, int) and version > METADATA_SCHEMA_VERSION:
+                    # Reading a newer record destroys nothing, and the UI
+                    # should still show the certificate — so this reads and
+                    # warns rather than refusing. The refusal is on the write
+                    # (see _save_metadata), which is where fields are lost.
+                    logger.warning(
+                        "Metadata for %s declares schema v%s and this build "
+                        "understands v%s. Reading it, but this process will "
+                        "refuse to write it back: it would drop the fields it "
+                        "cannot read.", domain, version,
+                        METADATA_SCHEMA_VERSION)
                 return metadata
             # Valid JSON of the wrong shape (a list, a string) is as unusable
             # as a syntax error and was the one corruption that still came
@@ -1114,14 +1126,79 @@ class CertificateManager:
             return {}
 
     def _save_metadata(self, domain: str, metadata: dict) -> bool:
+        """Write a domain's metadata, stamping the schema it was written with.
+
+        The stamp is applied HERE rather than by the seven callers, for the
+        reason `save_settings` stamps `settings_schema_version` itself: a
+        caller that assembles the dict without the field silently strips it,
+        and #669 shipped exactly that defect once already.
+
+        The check before the write is the point. `metadata.json` records key
+        custody — `private_key_state`, the CSR fingerprint, the CA a private-CA
+        certificate cannot renew without — and a downgrade reads a record
+        written by a newer build, understands the fields it knows, and writes
+        it back without the rest. Silently. That is the failure settings.json
+        was versioned to prevent, on a file that had no version.
+
+        Refusing at the WRITE rather than at startup is deliberate.
+        settings.json is one file and refusing to start is proportionate.
+        Metadata is one file per domain, and taking the whole instance down
+        over one certificate would turn a data-loss risk into an outage.
+        Reading stays allowed — reading destroys nothing, and the UI should
+        still show the certificate — so what is refused is exactly the
+        operation that loses fields.
+
+        `CERTMATE_ALLOW_SCHEMA_DOWNGRADE=1` overrides it, the same variable
+        and the same meaning as for settings.json: proceed, and accept that
+        this process may drop fields it does not know about.
+        """
         metadata_file = self._metadata_path(domain)
         try:
-            self._atomic_json_write(metadata_file, metadata)
+            on_disk = self._metadata_schema_on_disk(metadata_file)
+            if (on_disk is not None
+                    and on_disk > METADATA_SCHEMA_VERSION
+                    and os.getenv('CERTMATE_ALLOW_SCHEMA_DOWNGRADE') != '1'):
+                logger.error(
+                    "Refusing to write metadata for %s: the file on disk "
+                    "declares schema v%s and this build understands v%s. An "
+                    "older process writing it would drop the fields it cannot "
+                    "read, and %s records which private key belongs to this "
+                    "certificate. Run the newer version, or set "
+                    "CERTMATE_ALLOW_SCHEMA_DOWNGRADE=1 to overwrite it anyway.",
+                    domain, on_disk, METADATA_SCHEMA_VERSION, metadata_file)
+                return False
+
+            stamped = dict(metadata)
+            stamped['metadata_schema_version'] = METADATA_SCHEMA_VERSION
+            self._atomic_json_write(metadata_file, stamped)
             self._invalidate_certificate_info_cache(domain)
             return True
         except Exception as e:
             logger.warning(f"Failed to save metadata for {domain}: {e}")
             return False
+
+    @staticmethod
+    def _metadata_schema_on_disk(metadata_file: Path):
+        """The schema version the file currently declares, or None.
+
+        Read from disk immediately before writing rather than carried from
+        whatever `_load_metadata` returned: the caller may have assembled its
+        dict minutes ago, across a certbot run, and the question being asked
+        is about the bytes that are about to be replaced.
+
+        A file that is absent, unreadable or not a JSON object answers None —
+        "nothing here declares a schema". Those are handled by the write
+        itself; this is not the place to decide about them.
+        """
+        try:
+            with open(metadata_file, 'r', encoding='utf-8') as handle:
+                on_disk = json.load(handle)
+        except (OSError, ValueError):
+            return None
+        if not isinstance(on_disk, dict):
+            return None
+        version = on_disk.get('metadata_schema_version')
+        return version if isinstance(version, int) else None
 
     def _write_pfx(self, domain: str) -> None:
         """(Re)generate <domain>/cert.pfx from the on-disk PEMs when a PFX
