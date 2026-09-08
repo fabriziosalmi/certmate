@@ -149,6 +149,25 @@ that has to be remembered is a version string that goes stale.
   is wrong. Much of the commentary in this codebase records a bug that was paid
   for once; that is the house style, and it is worth more than a comment
   restating the code.
+- **Put the history in the past tense.** That style has one failure mode: a
+  paragraph describing the defect a line exists to prevent, written in the
+  present, reads as a description of what the code does now. A reader skimming
+  for current behaviour comes away believing the bug is still there.
+
+  ```python
+  # WRONG — reads as the current behaviour
+  # The settings entry is written after the lock is released, so a renewal
+  # can interleave and read the old provider.
+
+  # RIGHT — the tense says which is which
+  # Both writes happen under one lock. Previously the settings entry was
+  # written after the lock was released, so a renewal could interleave and
+  # read the old provider.
+  ```
+
+  Present tense for what the code does; past tense, or a leading
+  `Previously:`, for what it used to do wrongly. Existing comments are not
+  being rewritten for this — it applies to the ones you add.
 - Add tests for new behaviour. For a bug fix, check that your test **fails
   against the old code** — a gate nobody has watched fail is not a gate.
 
