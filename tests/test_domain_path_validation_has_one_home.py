@@ -238,6 +238,16 @@ def test_every_unit_that_builds_a_path_from_a_domain_screens_it():
     for bad in escapes:
         with pytest.raises(ValueError):
             manager._seed_acme_account(bad, manager.cert_dir, 'letsencrypt', None)
+        # _store_csr builds three paths from the domain — the existing-key
+        # probe, the output directory and csr.pem (#599). CodeQL found this one
+        # the moment it was written, which is the argument for the rule.
+        #
+        # ValueError specifically, and the CSR is deliberately garbage: every
+        # OTHER refusal in _store_csr raises RuntimeError, so accepting either
+        # would pass with the screen removed. It did, when this was first
+        # written — the mutation survived until the assertion was narrowed.
+        with pytest.raises(ValueError):
+            manager._store_csr(bad, manager.cert_dir / 'x', b'not a csr')
 
 
 def test_the_seed_still_runs_for_an_ordinary_domain():

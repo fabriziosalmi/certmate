@@ -685,6 +685,12 @@ class CertificateManager:
         anywhere else would let the stored metadata disagree with the
         certificate on disk.
         """
+        # Screened here, not trusted from the caller. `create_certificate`
+        # already checks it, and that was true of every other unit that builds
+        # a path from a domain until code moved (#672) — so this one screens
+        # its own input too, and `_store_csr` builds three paths from it.
+        _reject_path_escaping_domain(domain)
+
         try:
             csr = read_csr(csr_pem)
         except CSRError as e:
