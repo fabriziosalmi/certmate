@@ -35,6 +35,11 @@ from pathlib import Path
 FLOORS = {
     'modules/api/__init__.py': 100,
     'modules/api/client_certificates.py': 60,
+    # 100 because it is 33 statements of pure logic with no I/O and no Flask
+    # dependency beyond one after_request — there is no honest reason for any
+    # of it to be unreached, and the mechanism is meant to be trustworthy on
+    # the day it is first used, which is a day nobody will be testing it.
+    'modules/api/deprecation.py': 100,
     'modules/api/models.py': 100,
     'modules/api/path_validation.py': 80,
     'modules/api/resource_context.py': 100,

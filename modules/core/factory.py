@@ -1085,8 +1085,20 @@ def setup_scheduler(container: AppContainer):
 
 def setup_api(container: AppContainer, app):
     from modules import __version__
+    # `version` here is the release, which is what an OpenAPI document
+    # conventionally carries and what a reader expects to see. It is NOT the
+    # contract version: that is API_CONTRACT_VERSION, sent on every response
+    # as X-CertMate-API-Version and reported by /health, because the release
+    # number moves on every patch whether or not the surface did.
+    from .constants import API_CONTRACT_VERSION
     api = Api(app, version=__version__, title='CertMate API',
-              description='SSL Certificate API', doc='/docs/', prefix='/api')
+              description=(
+                  'SSL Certificate API. The interface contract is version '
+                  f'{API_CONTRACT_VERSION}, reported on every response as '
+                  'X-CertMate-API-Version and by GET /health as '
+                  'api_contract_version; it changes only when this surface '
+                  'does, unlike the release number above.'),
+              doc='/docs/', prefix='/api')
 
     api.authorizations = {
         'Bearer': {'type': 'apiKey', 'in': 'header', 'name': 'Authorization', 'description': 'Bearer token'}
@@ -1351,6 +1363,35 @@ def warn_if_multiple_workers():
         "with --workers 1 and raise --threads instead.",
         workers=workers)
     return workers
+
+
+def setup_api_contract_headers(app):
+    """Tell every caller which interface they are talking to.
+
+    The only version a client could read was the release number — in the
+    Swagger document and in /health — and it moves on every patch whether or
+    not anything a caller depends on moved with it. A client that pinned it
+    would refuse a patch that changed nothing; one that ignored it had nothing
+    else to read.
+
+    `X-CertMate-API-Version` carries API_CONTRACT_VERSION, which moves only
+    when the surface does. Sent as a header rather than only as a field so a
+    client learns it from any response, including the error it is trying to
+    understand, without a second call.
+
+    Deprecation announcements ride along here for the same reason: see
+    modules/api/deprecation.py.
+    """
+    from .constants import API_CONTRACT_VERSION
+    from ..api.deprecation import apply_deprecation_headers
+
+    @app.after_request
+    def _api_version(response):
+        response.headers.setdefault('X-CertMate-API-Version',
+                                    API_CONTRACT_VERSION)
+        return response
+
+    apply_deprecation_headers(app)
 
 
 def setup_correlation_ids(app):
@@ -1619,6 +1660,7 @@ def create_app(test_config=None):
     setup_error_handlers(app)
     setup_security_headers(app)
     setup_correlation_ids(app)
+    setup_api_contract_headers(app)
     setup_rate_limiting(app, container)
     setup_slow_request_logging(app, container)
 
