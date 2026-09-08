@@ -2,14 +2,17 @@
 Unit tests for _secret_key_from_env_or_generate() in factory.py.
 
 Covers the three-step resolution order:
-1. SECRET_KEY_FILE (mutually exclusive with SECRET_KEY)
+1. SECRET_KEY_FILE (mutually exclusive with SECRET_KEY; a read error or an
+   empty file refuses to start rather than generating a key)
 2. SECRET_KEY (skipped when SECRET_KEY_FILE is set)
 3. Persisted generated key in data_dir/.secret_key
 """
 
 import pytest
 
-from modules.core.factory import _secret_key_from_env_or_generate
+from modules.core.factory import (
+    SecretKeyUnreadableError, _secret_key_from_env_or_generate,
+)
 
 pytestmark = [pytest.mark.unit]
 
@@ -36,27 +39,38 @@ def test_file_var_takes_precedence_over_env_var(monkeypatch, tmp_path):
     assert _secret_key_from_env_or_generate(tmp_path) == GOOD_KEY
 
 
-def test_file_read_error_generates_immediately(monkeypatch, tmp_path, caplog):
-    """File read failure must generate a fresh key without consulting SECRET_KEY."""
+def test_file_read_error_refuses_rather_than_consulting_secret_key(monkeypatch,
+                                                                   tmp_path):
+    """A file failure must not fall through to SECRET_KEY.
+
+    This test used to assert that a fresh key was generated. The property it
+    was protecting is the one asserted here — the two variables are mutually
+    exclusive, and a broken file must not be silently answered by a variable
+    the operator forgot was set. Generating was how that was achieved, not
+    what was wanted: it signed out every user, did it again on every restart,
+    and left sessions signed by a key nobody chose. Refusing to start keeps
+    the mutual exclusivity and drops the silent rotation. See
+    tests/test_secret_key_file_failures_fail_closed.py.
+    """
     monkeypatch.setenv("SECRET_KEY_FILE", "/nonexistent/path/secret.txt")
-    monkeypatch.setenv("SECRET_KEY", "Z" * 32)  # must be ignored
-    with caplog.at_level("WARNING"):
-        key = _secret_key_from_env_or_generate(tmp_path)
-    assert key != "Z" * 32, "SECRET_KEY must not be consulted after file failure"
-    assert len(key) > 0
-    assert any("SECRET_KEY_FILE" in rec.message for rec in caplog.records)
+    monkeypatch.setenv("SECRET_KEY", "Z" * 32)  # must never be consulted
+    with pytest.raises(SecretKeyUnreadableError) as caught:
+        _secret_key_from_env_or_generate(tmp_path)
+    assert "Z" * 32 not in str(caught.value)
+    assert "SECRET_KEY_FILE" in str(caught.value)
 
 
-def test_file_empty_generates_immediately(monkeypatch, tmp_path, caplog):
-    """An empty file must generate a fresh key without consulting SECRET_KEY."""
+def test_file_empty_refuses_rather_than_consulting_secret_key(monkeypatch,
+                                                              tmp_path):
+    """Same contract for an empty file: a Kubernetes secret that exists but
+    has not been populated reads as empty, not as missing."""
     key_file = tmp_path / "secret.txt"
     key_file.write_text("   \n")  # whitespace only → strips to empty
     monkeypatch.setenv("SECRET_KEY_FILE", str(key_file))
-    monkeypatch.setenv("SECRET_KEY", "Z" * 32)  # must be ignored
-    with caplog.at_level("WARNING"):
-        key = _secret_key_from_env_or_generate(tmp_path)
-    assert key != "Z" * 32
-    assert any("SECRET_KEY_FILE" in rec.message for rec in caplog.records)
+    monkeypatch.setenv("SECRET_KEY", "Z" * 32)  # must never be consulted
+    with pytest.raises(SecretKeyUnreadableError) as caught:
+        _secret_key_from_env_or_generate(tmp_path)
+    assert "empty" in str(caught.value)
 
 
 def test_file_strips_whitespace(monkeypatch, tmp_path):
