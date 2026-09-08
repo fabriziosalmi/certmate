@@ -1,3 +1,151 @@
+## v2.29.0 (Two things you asked for, and five defects the tests all agreed were fine)
+
+A minor release: two new capabilities and two new API surfaces —
+`GET /api/deploy/pending` and a `csr` field on certificate creation.
+
+### Deploy hooks can wait for a maintenance window
+
+Requested by a user deploying to RDS: *"we don't know exactly when [the renewal
+runs]. This would mean that the deployment-script runs at a random time."*
+
+The diagnosis was right. A certificate renews when it is **due** — the sweep
+fires at 02:00 with an hour of jitter, and only for whatever is inside the
+threshold that night — and the deploy hook then ran immediately. For a hook that
+restarts a database or reloads a load balancer, that is an outage at an hour
+nobody chose.
+
+A `window` separates the two. The certificate still renews whenever it is due;
+the **deploy** is held until the window next opens.
+
+```jsonc
+"window": {
+  "start": "02:00", "end": "04:00",
+  "days": ["sat", "sun"],
+  "timezone": "Europe/Rome"
+}
+```
+
+Absent means immediately, so nothing changes for any hook that does not use it.
+The same field works on typed deploy targets, which is usually where it is
+wanted: a Kubernetes secret rollout is exactly that kind of deploy.
+
+The queue is on disk, so a restart between the renewal and the window does not
+lose the deploy. Two renewals before the window opens produce **one** deploy,
+not two. **Deploy Now** ignores the window — pressing it is choosing that
+moment. A held deploy is invisible everywhere else (the certificate renewed, the
+history is empty, nothing failed), so `GET /api/deploy/pending` lists them with
+the window they are waiting for and its next opening.
+
+A window may cross midnight and belongs to the day it **starts** on, so a
+Friday-night `22:00`-`04:00` window is open at 02:00 on Saturday without you
+having to tick Saturday too. Daylight saving is handled by the zone: on the
+spring-forward day a `02:00`-`04:00` Rome window opens at the local 03:00,
+because 02:00-02:59 does not happen.
+
+### Certificates whose private key never reaches CertMate
+
+Requested by a user with appliances that generate their key on the device and
+cannot export it: *"These devices typically expose the CSR, but never the
+private key."*
+
+Submit the CSR — through the API or the create form — and CertMate obtains the
+certificate and manages the chain, without ever seeing a key.
+
+```bash
+curl -X POST https://certmate.local/api/certificates/create \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d "$(jq -n --arg csr "$(cat device.csr)" \
+        '{domain: "api.example.com", dns_provider: "cloudflare", csr: $csr}')"
+```
+
+These report `private_key_state: "external"` and do **not** ask to be renewed
+for the missing key. That distinction is load-bearing: v2.27.1 made a keyless
+certificate report `needs_renewal`, because that is what a restored share-safe
+backup looks like. Without a separate state a CSR-only certificate would have
+been reissued on every nightly sweep.
+
+Renewal re-submits the **stored CSR**. `certbot renew` can never renew these —
+certbot says so itself when it issues one — so CertMate re-runs issuance with
+the CSR it kept. Rotating the key on the device means submitting a new CSR.
+
+Typed deploy targets cannot serve one: they all publish the key alongside the
+certificate, and they now say exactly that instead of failing with a generic
+error on every renewal. Shell hooks work normally, and `CERTMATE_KEY_PATH` is
+left unset rather than pointed at a file that does not exist.
+
+Full documentation: [docs/csr-only-certificates.md](docs/csr-only-certificates.md).
+
+### Saving deploy hooks deleted every deploy target
+
+Found while building the windows. Settings -> Deploy has no editor for the typed
+deploy targets added in v2.24.0: the page never reads them, so it never sends
+them back, and the save assigned the whole `deploy_hooks` block. Opening that
+screen and pressing Save — **without touching anything** — silently removed
+every configured Kubernetes secret target. No error, no audit entry naming the
+loss, and the next renewal simply stopped publishing to the cluster.
+
+A key the payload does not mention is now left as it was; an explicit value,
+including an empty list, still replaces.
+
+### Two advertised requirements files could not be installed on amd64
+
+`requirements-storage-all.txt` and `requirements-infisical-storage.txt` carried
+`infisical-python>=2.3.6`. That version ships an aarch64 wheel, macOS wheels and
+Windows wheels — and no manylinux x86_64 wheel and no source distribution. It
+installs on the arm64 image and **cannot be installed on the amd64 image at
+all**. Both files are advertised as `EXTRA_REQUIREMENTS` build options.
+
+It was invisible because every dependency check ran on one architecture while
+the images are published for two. CI now resolves each optional requirements
+file *for* both published architectures and fails when they disagree.
+
+### The extras install layer could move a pin the base layer holds
+
+Each `EXTRA_REQUIREMENTS` file was a separate pip resolution that knew nothing
+about what the base layer pinned. Measured: a second-layer
+`pip install "cryptography<46"` silently took 46.0.7 down to 45.0.7, below the
+floor `pyopenssl==26.0.0` requires — an image where `certbot --version` no
+longer answers. It had already happened once here, with an extras file dragging
+certbot off its pin in a build that reported success. Extras now install under
+a constraints file, so pip refuses at build time and names the conflict.
+
+`SECURITY.md` gains a **Supply-chain posture** section recording what is
+guaranteed, what is not (no hash verification), and why hash pinning is not
+attempted incrementally.
+
+### settings.json declares its shape, and a file from the future is refused
+
+There was already a product version on disk and a downgrade *warning*. That
+field moves on every release and cannot answer "is this a shape I understand",
+and it logged and continued — leaving an older process free to write the file
+back without the fields it never knew about.
+
+`settings_schema_version` moves only when the shape does, and a file declaring a
+newer one stops the process rather than degrading. `CERTMATE_ALLOW_SCHEMA_DOWNGRADE=1`
+proceeds anyway for an operator who has read the release notes.
+
+### Under the hood
+
+`create_certificate` went from 590 lines and cyclomatic complexity 115 to 19,
+in seven reviewed steps, each pinned by a golden-master test of the exact
+certbot command. Two defects fell out of it: a propagation-delay formula written
+four times, one of which had drifted, and a broad exception handler that turned
+an introduced `NameError` into a wrong value with nothing logged.
+
+Domain-to-path validation lived in **six** places with three different return
+conventions, and the end-of-string anchor had been corrected in one and left as
+`$` in three — so a name with a trailing newline was accepted at some entry
+points and refused at others. One home now, and every entry point is tested
+against it.
+
+### A note on how the CSR work was verified
+
+The real-CA end-to-end test found **five** defects that all 46 unit tests had
+agreed were fine — including that certbot refuses to overwrite its own output in
+`--csr` mode, which made the *first renewal* of every such certificate fail
+before it ever contacted the CA. Issuance would have looked perfect, then
+silence until expiry. Each now has a test that bites.
+
 ## v2.28.0 (Two silent failures, and two things you can now do without curl)
 
 A minor release: `DELETE /api/inventory/<fingerprint>` is a new endpoint, which
