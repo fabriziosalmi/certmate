@@ -25,6 +25,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from modules.core.cert_service import CertificateService
+from modules.core.certificates import MetadataWriteFailed
 
 pytestmark = [pytest.mark.unit]
 
@@ -54,7 +55,7 @@ class _Certs:
 
         return _held()
 
-    def _save_metadata(self, domain, metadata):
+    def write_metadata(self, domain, metadata):
         self._metadata = dict(metadata)
         return True
 
@@ -175,7 +176,9 @@ def test_a_failed_metadata_write_does_not_touch_settings(parts):
     Settings naming a provider whose metadata says otherwise is the same
     defect, mirrored."""
     service, certs, stored, order = parts
-    certs._save_metadata = lambda domain, metadata: False
+    def _explode(domain, metadata):
+        raise MetadataWriteFailed('could not write /x: Permission denied')
+    certs.write_metadata = _explode
 
     with pytest.raises(RuntimeError):
         service.update_config('example.com', {'dns_provider': 'route53'})

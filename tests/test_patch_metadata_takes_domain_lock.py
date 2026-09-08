@@ -99,7 +99,7 @@ def test_update_config_takes_the_lock_and_reports_contention(tmp_path):
     manager._domain_locks_mutex = threading.Lock()
     manager._domain_lock_timeout = lambda: 0.2
     manager._load_metadata = lambda domain: {}
-    manager._save_metadata = lambda domain, metadata: True
+    manager.write_metadata = lambda domain, metadata: True
 
     service = CertificateService(manager, MagicMock(), MagicMock())
 
@@ -121,7 +121,7 @@ def test_update_config_writes_when_nothing_holds_the_lock(tmp_path):
     manager._domain_locks_mutex = threading.Lock()
     manager._domain_lock_timeout = lambda: 0.2
     manager._load_metadata = lambda domain: {'dns_provider': 'cloudflare'}
-    manager._save_metadata = lambda domain, metadata: written.update(metadata) or True
+    manager.write_metadata = lambda domain, metadata: written.update(metadata) or True
 
     service = CertificateService(manager, MagicMock(), MagicMock())
     metadata, old = service.update_config('example.com',

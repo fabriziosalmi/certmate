@@ -30,6 +30,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from modules.core.certificates import CertificateManager
+from modules.core.certificates import MetadataWriteFailed
 from modules.core.cert_service import CertificateService
 
 pytestmark = [pytest.mark.unit]
@@ -43,7 +44,7 @@ def _service(stored=None, sink=None):
     manager._domain_locks_mutex = threading.Lock()
     manager._domain_lock_timeout = lambda: 0.2
     manager._load_metadata = lambda domain: dict(stored or {})
-    manager._save_metadata = (
+    manager.write_metadata = (
         lambda domain, metadata: (sink.update(metadata) if sink is not None else None) or True)
     return CertificateService(manager, MagicMock(), MagicMock())
 
@@ -154,8 +155,15 @@ def test_a_failed_save_is_an_error_not_a_silent_success():
     manager._domain_locks_mutex = threading.Lock()
     manager._domain_lock_timeout = lambda: 0.2
     manager._load_metadata = lambda domain: {}
-    manager._save_metadata = lambda domain, metadata: False
+    # Raises rather than returning False: a boolean could not say WHY, and a
+    # write refused for a schema downgrade and one refused by a read-only
+    # volume produced the same unactionable message (#757). The match below
+    # now checks the reason survives to the caller, which is the point.
+    def _explode(domain, metadata):
+        raise MetadataWriteFailed(
+            'could not write /x/metadata.json: Permission denied')
+    manager.write_metadata = _explode
 
     service = CertificateService(manager, MagicMock(), MagicMock())
-    with pytest.raises(RuntimeError, match='Failed to update metadata'):
+    with pytest.raises(RuntimeError, match='Permission denied'):
         service.update_config('example.com', {'dns_provider': 'route53'})

@@ -12,6 +12,11 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
+
+from modules.core.certificates import (
+    MetadataWriteFailed,
+    MetadataWriteRefused,
+)
 from flask import Flask
 from flask_restx import Api, Namespace
 
@@ -57,7 +62,7 @@ def _managers(tmp_path, saved):
     certificate_manager = MagicMock()
     certificate_manager.cert_dir = Path(tmp_path)
     # Capture exactly what would be persisted.
-    certificate_manager._save_metadata = MagicMock(
+    certificate_manager.write_metadata = MagicMock(
         side_effect=lambda _d, md: saved.update(md) or True
     )
 
@@ -235,14 +240,39 @@ def test_a_failed_write_becomes_a_500_not_a_200(tmp_path):
     walk away believing the certificate now renews with the new provider.
     """
     managers = _managers(tmp_path, {})
-    managers['certificates']._save_metadata = MagicMock(return_value=False)
+    # Raises, because that is how write_metadata reports a failure now:
+    # the boolean could not carry the reason, which is the defect #757
+    # was about. A double that returned False would report success.
+    managers['certificates'].write_metadata = MagicMock(
+        side_effect=MetadataWriteFailed('could not write /x: Permission denied'))
     app = _build_app(managers)
 
     resp = app.test_client().patch('/api/certificates/example.com',
                                    json={'dns_provider': 'route53'})
 
     assert resp.status_code == 500, resp.get_json()
-    assert 'Failed to update metadata' in resp.get_json()['error']
+    # The reason, not "Failed to update metadata for domain: X". That message
+    # was produced by a read-only volume and by a deliberate schema-downgrade
+    # refusal alike, naming neither (#757); the caller now gets the one the
+    # write actually hit.
+    assert resp.get_json()['error'] == 'could not write /x: Permission denied'
+
+
+def test_a_refused_write_is_a_409_not_a_500(tmp_path):
+    """A guard doing its job is not a server error. Reporting 500 for a
+    deliberate schema-downgrade refusal sends an operator looking for a fault
+    in CertMate instead of at the version they rolled back from (#757)."""
+    managers = _managers(tmp_path, {})
+    managers['certificates'].write_metadata = MagicMock(
+        side_effect=MetadataWriteRefused(
+            'metadata.json declares schema v99 and this build understands v1'))
+    app = _build_app(managers)
+
+    resp = app.test_client().patch('/api/certificates/example.com',
+                                   json={'dns_provider': 'route53'})
+
+    assert resp.status_code == 409, resp.get_json()
+    assert 'v99' in resp.get_json()['error']
 
 
 def test_a_successful_change_updates_the_settings_entry_too(tmp_path):

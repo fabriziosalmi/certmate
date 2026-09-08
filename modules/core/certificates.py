@@ -360,6 +360,19 @@ def _usable(key_state):
     return key_state == 'present'
 
 
+class MetadataWriteRefused(RuntimeError):
+    """The metadata write was refused by design, not by a failure.
+
+    RuntimeError so the existing route arm keeps working unchanged; the API
+    layer narrows it to 409, because a guard doing its job is not a server
+    error and telling an operator "500" sends them looking for one.
+    """
+
+
+class MetadataWriteFailed(RuntimeError):
+    """The metadata write was attempted and could not be completed."""
+
+
 class CertificateManager:
     """Class to handle certificate operations"""
     
@@ -1175,30 +1188,64 @@ class CertificateManager:
         and the same meaning as for settings.json: proceed, and accept that
         this process may drop fields it does not know about.
         """
-        metadata_file = self._metadata_path(domain)
         try:
-            on_disk = self._metadata_schema_on_disk(metadata_file)
-            if (on_disk is not None
-                    and on_disk > METADATA_SCHEMA_VERSION
-                    and os.getenv('CERTMATE_ALLOW_SCHEMA_DOWNGRADE') != '1'):
-                logger.error(
-                    "Refusing to write metadata for %s: the file on disk "
-                    "declares schema v%s and this build understands v%s. An "
-                    "older process writing it would drop the fields it cannot "
-                    "read, and %s records which private key belongs to this "
-                    "certificate. Run the newer version, or set "
-                    "CERTMATE_ALLOW_SCHEMA_DOWNGRADE=1 to overwrite it anyway.",
-                    domain, on_disk, METADATA_SCHEMA_VERSION, metadata_file)
-                return False
-
-            stamped = dict(metadata)
-            stamped['metadata_schema_version'] = METADATA_SCHEMA_VERSION
-            self._atomic_json_write(metadata_file, stamped)
-            self._invalidate_certificate_info_cache(domain)
+            self.write_metadata(domain, metadata)
             return True
-        except Exception as e:
-            logger.warning(f"Failed to save metadata for {domain}: {e}")
+        except MetadataWriteRefused as e:
+            # ERROR, not WARNING: this one is a data-custody decision, and it
+            # was logged at ERROR before the reason became an exception. The
+            # domain stays a log ARGUMENT rather than being interpolated, so a
+            # handler can filter on it.
+            logger.error("Refusing to write metadata for %s: %s", domain, e)
             return False
+        except Exception as e:
+            logger.warning("Failed to save metadata for %s: %s", domain, e)
+            return False
+
+    def write_metadata(self, domain: str, metadata: dict) -> None:
+        """Write the metadata, or raise saying **why** it was not written.
+
+        Same rules as `_save_metadata`, which is now the bool-returning
+        wrapper around this. The split exists because the two kinds of caller
+        want different things and one of them was being denied it:
+
+        - six call sites write metadata as part of issuance or renewal and
+          cannot act on a reason. They keep the boolean, and a failure there
+          must not turn a cosmetic metadata problem into a failed issuance.
+        - one call site — a config edit from the UI or API — reports the
+          outcome to a person. It got the same bare ``False``, and produced
+          "Failed to update metadata for domain: X" for causes as different
+          as a read-only volume and a deliberate refusal to downgrade the
+          schema. The reason existed; it was written to the log and thrown
+          away before it could reach the person who had to act on it (#757).
+        """
+        metadata_file = self._metadata_path(domain)
+
+        on_disk = self._metadata_schema_on_disk(metadata_file)
+        if (on_disk is not None
+                and on_disk > METADATA_SCHEMA_VERSION
+                and os.getenv('CERTMATE_ALLOW_SCHEMA_DOWNGRADE') != '1'):
+            raise MetadataWriteRefused(
+                f"metadata.json for {domain} declares schema v{on_disk} and "
+                f"this build understands v{METADATA_SCHEMA_VERSION}. It was "
+                f"written by a newer version of CertMate; overwriting it here "
+                f"would drop the fields this build cannot read, including the "
+                f"record of which private key belongs to this certificate. "
+                f"Run the newer version, or set "
+                f"CERTMATE_ALLOW_SCHEMA_DOWNGRADE=1 to overwrite it anyway.")
+
+        stamped = dict(metadata)
+        stamped['metadata_schema_version'] = METADATA_SCHEMA_VERSION
+        try:
+            self._atomic_json_write(metadata_file, stamped)
+        except OSError as e:
+            # strerror, not the exception: str(OSError) repeats the path,
+            # which the message already names.
+            raise MetadataWriteFailed(
+                f"could not write {metadata_file}: {e.strerror}. Check that "
+                f"the certificates volume is mounted writable and owned by "
+                f"the user CertMate runs as (uid 1000 in the image).") from e
+        self._invalidate_certificate_info_cache(domain)
 
     @staticmethod
     def _metadata_schema_on_disk(metadata_file: Path):
