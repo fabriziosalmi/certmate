@@ -88,6 +88,21 @@ def test_work_that_starts_within_the_deadline_is_not_reported(caplog):
 
 # --- the naming ----------------------------------------------------------
 
+def _reported_names(caplog):
+    """The undelivered items the warning named, as exact elements.
+
+    Read out of the log record's ARGUMENTS rather than out of the rendered
+    string: `'something' in message` is both weaker than it looks — it passes
+    when the name turns up anywhere at all, including inside another name —
+    and the shape this repository has already agreed to stop writing.
+    """
+    for record in caplog.records:
+        if record.levelno == logging.WARNING and record.args:
+            sample = record.args[1]
+            return set(str(sample).split(', '))
+    return set()
+
+
 def test_the_undelivered_are_named_with_their_domain(caplog):
     bus = EventBus(workers=1)
     started, release = threading.Event(), threading.Event()
@@ -102,11 +117,9 @@ def test_the_undelivered_are_named_with_their_domain(caplog):
     finally:
         release.set()
 
-    message = '\n'.join(record.getMessage() for record in caplog.records)
-    assert 'lost.example.com' in message, (
+    assert _reported_names(caplog) == {'certificate_renewed(lost.example.com)'}, (
         'the log names a count but not which certificate, which is the half '
         'an operator can act on')
-    assert 'certificate_renewed' in message
 
 
 def test_a_payload_without_a_domain_is_still_named(caplog):
@@ -125,7 +138,7 @@ def test_a_payload_without_a_domain_is_still_named(caplog):
     finally:
         release.set()
 
-    assert 'backup_completed' in '\n'.join(r.getMessage() for r in caplog.records)
+    assert _reported_names(caplog) == {'backup_completed(no domain)'}
 
 
 # --- after stopping ------------------------------------------------------
@@ -143,7 +156,11 @@ def test_publishing_after_stop_is_refused_rather_than_queued(caplog):
         bus.publish('certificate_renewed', {'domain': 'late.example.com'})
 
     assert bus.pending_dispatches() == 0
-    assert 'stopping' in '\n'.join(r.getMessage() for r in caplog.records).lower()
+    assert not dispatched
+    refusals = [record for record in caplog.records
+                if record.msg.startswith('Event bus is stopping')]
+    assert len(refusals) == 1, 'the refusal was not reported'
+    assert refusals[0].args == ('certificate_renewed', 1)
 
 
 def test_sse_subscribers_still_receive_after_stop():
