@@ -192,6 +192,8 @@ class TestNotificationsGetMaskedSmtpPassword:
                 return fn
             return deco
         auth_manager.require_role = MagicMock(side_effect=passthrough_role)
+        auth_manager.require_session_role = MagicMock(
+            side_effect=passthrough_role)
 
         managers = {
             'auth': auth_manager,

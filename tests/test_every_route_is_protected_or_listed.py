@@ -5,8 +5,10 @@ Route protection here is expressed three ways, and all three are legitimate:
 * the `require_role` / `require_auth` decorators, and `require_web_auth` for
   HTML pages;
 * an inline check inside the view — `/` reads the session cookie itself so the
-  context processor sees the user, and `/api/events/stream` does it because SSE
-  cannot carry a bearer header;
+  context processor sees the user. `/api/events/stream` used to be the second
+  such route; it now carries `require_session_role('viewer')`, which is that
+  same rule expressed once, so it appears in the protected set rather than in
+  the list below;
 * a redirect to a route that is itself checked — `/audit` redirects to
   `/activity`, `/certificates` to `/`.
 
@@ -79,10 +81,6 @@ PUBLIC_ROUTES = {
         '/login, so that the template context processor sees the user. The '
         'decorator would authenticate but not populate request.current_user '
         'in the same way.',
-    '/api/events/stream':
-        'SSE cannot send an Authorization header, so this validates the '
-        'session cookie inline and returns 401 when the instance is out of '
-        'setup mode.',
 
     # --- redirects to a route that is checked --------------------------
     '/audit':

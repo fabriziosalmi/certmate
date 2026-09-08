@@ -78,6 +78,8 @@ def client_cert_app():
         return deco
     auth_manager = MagicMock()
     auth_manager.require_role = MagicMock(side_effect=require_role_factory)
+    auth_manager.require_session_role = MagicMock(
+        side_effect=require_role_factory)
     cert_manager = MagicMock()
     cert_manager.get_certificate_metadata.return_value = None          # unknown id
     cert_manager.get_certificate_file.return_value = None              # no such file
@@ -148,7 +150,10 @@ def _metrics_body(tmp_path, domain, cert_info):
     from modules.core import metrics as metrics_module
     metrics_module.metrics_collector.last_collection = 0
     app = Flask(__name__)
-    register_misc_routes(app, managers, passthrough, SimpleNamespace(require_role=passthrough))
+    register_misc_routes(
+        app, managers, passthrough,
+        SimpleNamespace(require_role=passthrough,
+                        require_session_role=passthrough))
     body = app.test_client().get('/metrics').get_data(as_text=True)
     metrics_module.metrics_collector.last_collection = 0   # leave it fresh for the next test
     return body

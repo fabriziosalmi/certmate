@@ -43,6 +43,7 @@ def _build_app(managers: dict) -> Flask:
         return deco
 
     auth_manager.require_role = _passthrough
+    auth_manager.require_session_role = _passthrough
     auth_manager.is_local_auth_enabled.return_value = False
     auth_manager.has_any_users.return_value = False
 

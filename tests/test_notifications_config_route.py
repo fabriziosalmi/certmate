@@ -82,6 +82,8 @@ def route_client(tmp_path):
 
     auth_manager = MagicMock()
     auth_manager.require_role = MagicMock(side_effect=_passthrough_role)
+    auth_manager.require_session_role = MagicMock(
+        side_effect=_passthrough_role)
 
     managers = {
         "auth": auth_manager,

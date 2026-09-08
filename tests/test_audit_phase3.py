@@ -233,7 +233,8 @@ def _passthrough(*_a, **_k):
 
 def _app(managers):
     app = Flask(__name__)
-    auth_manager = SimpleNamespace(require_role=_passthrough)
+    auth_manager = SimpleNamespace(require_role=_passthrough,
+                                   require_session_role=_passthrough)
     register_misc_routes(app, managers, _passthrough, auth_manager)
     return app
 
