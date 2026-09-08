@@ -159,7 +159,15 @@ def urlopen(req, timeout=None):
 # they report a failure the operator must not be able to silence by accident.
 # deploy_hook_failed is the one that motivated this: it is not among the five
 # certificate_* events the UI offers, so any filter drops it — see notify().
-_ALWAYS_NOTIFY_EVENTS = frozenset({'deploy_hook_failed'})
+#
+# certificate_deploy_incomplete is here for the same reason and answers a
+# different question. deploy_hook_failed says which target broke, once per
+# target; this says the thing the operator actually needs after a renewal —
+# the certificate was obtained and the systems that serve it may still be
+# presenting the previous one. An operator who silences it has chosen not to
+# be told that a renewal did not reach production.
+_ALWAYS_NOTIFY_EVENTS = frozenset({'deploy_hook_failed',
+                                   'certificate_deploy_incomplete'})
 
 WEBHOOK_METHODS = ('POST', 'PUT', 'PATCH')
 WEBHOOK_AUTH_TYPES = ('none', 'bearer', 'basic', 'header')
