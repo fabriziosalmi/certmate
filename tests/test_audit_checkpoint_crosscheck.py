@@ -156,7 +156,9 @@ def _passthrough(*_a, **_k):
 def _verify_route(audit):
     app = Flask(__name__)
     register_misc_routes(app, {'audit': audit}, _passthrough,
-                         SimpleNamespace(require_role=_passthrough))
+                         SimpleNamespace(
+                             require_role=_passthrough,
+                             require_session_role=_passthrough))
     return app.test_client().get('/api/audit/verify')
 
 

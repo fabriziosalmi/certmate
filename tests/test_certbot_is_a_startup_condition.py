@@ -191,6 +191,7 @@ def _app(managers):
     app.config['VERSION'] = 'test'
     auth = MagicMock()
     auth.require_role = lambda role: (lambda fn: fn)
+    auth.require_session_role = lambda role: (lambda fn: fn)
     auth.is_local_auth_enabled.return_value = False
     auth.has_any_users.return_value = False
     register_misc_routes(app, managers, require_web_auth=None,

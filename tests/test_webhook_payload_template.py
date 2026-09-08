@@ -260,6 +260,8 @@ def _app(notifier):
     app.secret_key = 't'
     auth_manager = MagicMock()
     auth_manager.require_role = MagicMock(side_effect=lambda *a, **k: (lambda f: f))
+    auth_manager.require_session_role = MagicMock(
+        side_effect=lambda *a, **k: (lambda f: f))
     settings_manager = MagicMock()
     managers = {'notifier': notifier, 'settings': settings_manager, 'audit': None}
     register_misc_routes(app, managers, lambda f: f, auth_manager)

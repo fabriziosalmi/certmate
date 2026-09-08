@@ -1456,6 +1456,64 @@ class AuthManager:
         decorated_function._certmate_protection = 'require_auth'
         return decorated_function
 
+    def require_session_role(self, min_role):
+        """Like :meth:`require_role`, but the cookie session is the only
+        accepted credential.
+
+        For surfaces a browser reaches that cannot carry an Authorization
+        header — Server-Sent Events is the whole set today. `EventSource`
+        offers no way to add one, so a bearer token cannot reach these routes
+        no matter how the caller is configured.
+
+        That was already the behaviour, written inline in the route as
+        `if not auth_manager.is_setup_mode(): ...check the cookie...`. Three
+        things were wrong with expressing it there and not here. The route was
+        invisible to any scan of what is protected, so it sat in the public
+        allowlist with "checked inline" as its reason. The check drifted from
+        the decorators' — it never consulted a role, so a `viewer`-only session
+        and an `admin` one were the same to it. And a second such surface would
+        have copied it.
+
+        Setup mode is honoured exactly as the other decorators honour it: with
+        no operator credential configured at all, every caller is admin, and
+        the live stream is no different from the dashboard it feeds.
+        """
+        def decorator(f):
+            @wraps(f)
+            def decorated_function(*args, **kwargs):
+                if self.is_setup_mode():
+                    request.current_user = {'username': 'setup_user',
+                                            'role': 'admin'}
+                    return f(*args, **kwargs)
+
+                session_id = request.cookies.get('certmate_session')
+                user = (self.validate_session(session_id)
+                        if session_id else None)
+                if not user:
+                    # No redirect, even for a browser: an EventSource cannot
+                    # follow one usefully, and a 302 to the login page would
+                    # arrive as an opaque stream error. 401 lets the client
+                    # decide to reconnect after logging in.
+                    return {'error': 'Unauthenticated',
+                            'code': 'SESSION_REQUIRED'}, 401
+
+                if (ROLE_HIERARCHY.get(user.get('role'), -1)
+                        < ROLE_HIERARCHY.get(min_role, 999)):
+                    self._log_rbac_denial(user=user, required_role=min_role,
+                                          endpoint=request.path)
+                    return {'error': f'{min_role} privileges required',
+                            'code': 'INSUFFICIENT_ROLE'}, 403
+
+                request.current_user = user
+                return f(*args, **kwargs)
+
+            decorated_function._certmate_protection = (
+                f'require_session_role:{min_role}')
+            return decorated_function
+
+        decorator._certmate_protection = f'require_session_role:{min_role}'
+        return decorator
+
     def require_role(self, min_role):
         """Decorator factory requiring a minimum role level.
 

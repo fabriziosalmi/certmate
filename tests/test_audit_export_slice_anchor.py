@@ -258,7 +258,9 @@ def test_export_endpoint_slice_verifies(audit, tmp_path):
 
     app = Flask(__name__)
     register_misc_routes(app, {"audit": audit}, _passthrough,
-                         SimpleNamespace(require_role=_passthrough))
+                         SimpleNamespace(
+                             require_role=_passthrough,
+                             require_session_role=_passthrough))
 
     response = app.test_client().get("/api/audit/export?from_seq=4")
 

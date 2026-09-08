@@ -38,6 +38,7 @@ def _app_recording_declared_roles():
         return deco
 
     auth_manager.require_role = _recording_require_role
+    auth_manager.require_session_role = _recording_require_role
     auth_manager.is_local_auth_enabled.return_value = False
     auth_manager.has_any_users.return_value = False
 
@@ -88,6 +89,7 @@ def _metrics_list_declared_role():
         return deco
 
     auth_manager.require_role = _recording_require_role
+    auth_manager.require_session_role = _recording_require_role
 
     class _Managers(dict):
         """Supplies a stub for any manager the closure reaches for, so the

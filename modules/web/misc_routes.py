@@ -348,22 +348,23 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
         return jsonify(body), (200 if ready else 503)
 
     @app.route('/api/events/stream')
+    @auth_manager.require_session_role('viewer')
     def events_stream():
         """SSE: stream certificate lifecycle events to authenticated browsers.
 
-        SSE cannot send custom headers, so this only accepts the cookie session.
-        When local auth is enabled and the request has no valid session, this
-        returns a 401 JSON error and does not expose the event stream.
+        `require_session_role` rather than `require_role`: `EventSource` offers
+        no way to add an Authorization header, so a bearer token cannot reach
+        this route however the caller is configured. A bearer-only deployment
+        therefore has no live stream — and no web UI to feed it to either.
+
+        That was already the behaviour, written inline here. Expressing it as a
+        decorator gives it three things it did not have: the route becomes
+        visible to a scan of what is protected (it had to sit in the public
+        allowlist with "checked inline" as its reason), the check now consults
+        a role like every other one, and a second such surface will not copy
+        the logic.
         """
-        from flask import Response, stream_with_context, request as _req
-        # Once the instance is configured (local auth + user, OR an operator
-        # bearer token) require a valid session. SSE can't carry a bearer
-        # header, so a bearer-only deployment simply has no live stream — the
-        # web UI it feeds is locked for that deployment anyway.
-        if not auth_manager.is_setup_mode():
-            session_id = _req.cookies.get('certmate_session')
-            if not session_id or not auth_manager.validate_session(session_id):
-                return jsonify({'error': 'Unauthenticated'}), 401
+        from flask import Response, stream_with_context
         event_bus = managers.get('events')
         if event_bus is None:
             return jsonify({'error': 'Event bus not available'}), 503
