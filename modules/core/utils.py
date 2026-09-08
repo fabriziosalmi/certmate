@@ -792,9 +792,23 @@ def validate_dns_provider_account(provider: str, account_id: str, account_config
         if not isinstance(account_config, dict):
             return False, f"Account configuration must be a dictionary, but got {type(account_config).__name__}."
         
+        # A field is satisfied by a value OR by a reference to one
+        # (`api_token_file`, `api_token_env` — see modules/core/secret_refs).
+        # Without this, an account that keeps its token in a Docker secret
+        # could not be SAVED: the save path rejected it as missing the very
+        # field it supplies, and the feature would exist only for configs
+        # edited into settings.json by hand.
+        #
+        # Imported here rather than at module scope: utils.py has no
+        # intra-package imports at all, which is what lets every other module
+        # import it without thinking about order. One local import is cheaper
+        # than making it a node in that graph.
+        from .secret_refs import has_value
+
         required_fields = _DNS_PROVIDER_CREDENTIALS[provider]
-        missing_fields = [f for f in required_fields if not str(account_config.get(f) or '').strip()]
-            
+        missing_fields = [f for f in required_fields
+                          if not has_value(account_config, f)]
+
         if missing_fields:
             return False, f"Missing or empty required fields: {', '.join(sorted(missing_fields))}."
         

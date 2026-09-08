@@ -5,6 +5,7 @@ Handles DNS provider configuration, account management, and provider-specific op
 
 import logging
 
+from .secret_refs import SecretReferenceError, has_value, resolve
 from .utils import _DNS_PROVIDER_CREDENTIALS
 
 logger = logging.getLogger(__name__)
@@ -66,6 +67,14 @@ class DNSManager:
         already there. Now checks the provider's OWN required fields
         (_DNS_PROVIDER_CREDENTIALS); for a provider not in that registry, any
         non-empty value counts, so an unknown provider is not silently rejected.
+
+        A field counts as present when it holds a value OR names one — see
+        secret_refs: `api_token_file` and `api_token_env` configure an account
+        just as `api_token` does. The reference is NOT followed here. This
+        question is asked to render a settings page, and reading every secret
+        off disk to decide whether to draw a green tick would both put
+        credentials in memory for a page view and make the page fail on a host
+        where the secret simply is not mounted.
         """
         if not isinstance(acc_config, dict):
             return False
@@ -75,19 +84,46 @@ class DNSManager:
             # enforces (it reports each missing field). A partial account that
             # passed here would resolve, then fail at certbot with a less
             # specific error; consistency keeps "configured" meaning one thing.
-            return all(acc_config.get(field) for field in required)
+            return all(has_value(acc_config, field) for field in required)
         # Unknown provider: treat any non-empty value as "configured" rather
         # than rejecting it (the old allowlist would have).
         return any(v for v in acc_config.values())
 
-    def get_dns_provider_account_config(self, provider, account_id=None, settings=None):
-        """Get DNS provider account configuration
-        
+    def get_dns_provider_account_config(self, provider, account_id=None,
+                                        settings=None):
+        """The account's configuration, with any referenced secret resolved.
+
+        Thin wrapper over the lookup below, so that resolution happens once for
+        every caller instead of at each of the seven call sites. Everything
+        that issues a certificate arrives here; everything that only lists
+        accounts does not, which is what keeps a resolved secret out of the
+        API responses and out of anything that writes settings back.
+        """
+        config, used_account_id = self._locate_account_config(
+            provider, account_id=account_id, settings=settings)
+        if config is None:
+            return None, None
+        try:
+            return resolve(config), used_account_id
+        except SecretReferenceError as exc:
+            # Named precisely, because the alternative is an issuance failure
+            # at the DNS provider that blames the credential rather than the
+            # mount. Never the value: this line goes to the log.
+            logger.error(
+                "DNS provider '%s' account '%s': field '%s' names %r, which %s",
+                provider, used_account_id, exc.field, exc.reference, exc.reason)
+            return None, None
+
+    def _locate_account_config(self, provider, account_id=None, settings=None):
+        """Find the stored account configuration, exactly as written.
+
+        Returns what is in settings, references unresolved — see the wrapper.
+
         Args:
             provider: DNS provider name (e.g., 'cloudflare')
             account_id: Specific account ID (optional, uses default if not provided)
             settings: Settings dict (optional, loads current if not provided)
-            
+
         Returns:
             tuple: (account_config_dict, used_account_id)
         """
@@ -407,7 +443,11 @@ class DNSManager:
 
             required = _DNS_PROVIDER_CREDENTIALS.get(provider, [])
             config = config if isinstance(config, dict) else {}
-            missing = [field for field in required if not config.get(field)]
+            # has_value, so a field supplied as `<field>_file` / `<field>_env`
+            # passes. The reference is not followed: this is a shape check, and
+            # it is reached from a button in the UI.
+            missing = [field for field in required
+                       if not has_value(config, field)]
             if missing:
                 return False, (
                     f"Missing required credential field(s) for {provider}: "
@@ -457,7 +497,11 @@ class DNSManager:
             outcome = {'ok': False}
 
             def _mutate(settings):
-                _, existing_account_id = self.get_dns_provider_account_config(
+                # The lookup, not the resolving wrapper: this only needs to
+                # know the account exists. Choosing a default should not read a
+                # secret off disk, and must not fail because the secret is
+                # mounted somewhere this process cannot see it.
+                _, existing_account_id = self._locate_account_config(
                     provider, account_id, settings
                 )
                 if not existing_account_id:
