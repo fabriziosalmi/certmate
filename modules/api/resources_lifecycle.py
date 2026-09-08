@@ -47,6 +47,7 @@ def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
                 san_domains = data.get('san_domains', [])
                 if not domain:
                     return {
+                        'code': 'DOMAIN_REQUIRED',
                         'error': 'Domain is required',
                         'hint': 'Please provide a valid domain name (e.g., example.com or *.example.com for wildcard)'
                     }, 400
@@ -138,6 +139,7 @@ def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
                 elif 'domain' in error_msg.lower() and 'email' in error_msg.lower():
                     hint = 'Both domain and email are required. Configure email in settings.'
                 return {
+                    'code': 'CERTIFICATE_CREATION_FAILED',
                     'error': error_msg,
                     'hint': hint
                 }, 400
@@ -154,12 +156,14 @@ def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
                 elif 'rate limit' in error_msg.lower():
                     hint = "You've hit the certificate authority's rate limit. Wait before trying again."
                 return {
+                    'code': 'CERTIFICATE_CREATION_FAILED',
                     'error': f'Certificate creation failed: {error_msg}',
                     'hint': hint
                 }, 422
             except Exception as e:
                 logger.error(f"Certificate creation failed: {str(e)}")
                 return {
+                    'code': 'CERTIFICATE_CREATION_ERROR',
                     'error': 'Certificate creation failed unexpectedly',
                     'hint': 'Check application logs for detailed error information.'
                 }, 500
@@ -174,7 +178,7 @@ def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
                 force = bool(payload.get('force', False))
                 _, err = _validate_domain_path(domain, ctx.file_ops.cert_dir)
                 if err:
-                    return {'error': err}, 400
+                    return {'error': err, 'code': 'INVALID_REQUEST'}, 400
                 user = getattr(request, 'current_user', None) or {}
                 audit_ctx = audit_context_from_request()
 
@@ -243,7 +247,7 @@ def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
                 event_bus = current_app.config.get('EVENT_BUS')
                 if event_bus:
                     event_bus.publish('certificate_failed', {'domain': domain, 'error': str(e)})
-                return {'error': 'Certificate renewal failed'}, 500
+                return {'error': 'Certificate renewal failed', 'code': 'CERTIFICATE_RENEWAL_ERROR'}, 500
 
     class CertificateReissue(Resource):
         @api.doc(security='Bearer')
@@ -261,7 +265,7 @@ def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
                 data = api.payload or {}
                 _, err = _validate_domain_path(domain, ctx.file_ops.cert_dir)
                 if err:
-                    return {'error': err}, 400
+                    return {'error': err, 'code': 'INVALID_REQUEST'}, 400
                 user = getattr(request, 'current_user', None) or {}
 
                 kwargs = dict(
@@ -312,7 +316,7 @@ def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
             except DomainOutOfScope as e:
                 return {'error': str(e), 'code': 'DOMAIN_OUT_OF_SCOPE'}, 403
             except ValueError as e:
-                return {'error': str(e)}, 400
+                return {'error': str(e), 'code': 'CERTIFICATE_REISSUE_REJECTED'}, 400
             except DomainOperationInProgress as e:
                 # Domain busy is not a failure; no failure event.
                 return {'error': str(e), 'code': 'DOMAIN_OPERATION_IN_PROGRESS'}, 409
@@ -325,6 +329,7 @@ def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
                 if event_bus:
                     event_bus.publish('certificate_failed', {'domain': domain, 'error': error_msg})
                 return {
+                    'code': 'CERTIFICATE_REISSUE_FAILED',
                     'error': f'Certificate reissue failed: {error_msg}',
                     'hint': hint + ' The previous certificate is still in place.'
                 }, 422
@@ -338,6 +343,7 @@ def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
                 if event_bus:
                     event_bus.publish('certificate_failed', {'domain': domain, 'error': str(e)})
                 return {
+                    'code': 'CERTIFICATE_REISSUE_ERROR',
                     'error': 'Certificate reissue failed unexpectedly',
                     'hint': 'Check application logs. The previous certificate is still in place.'
                 }, 500
@@ -348,10 +354,10 @@ def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
         def get(self, job_id):
             """Poll the status of an async create/renew job."""
             if ctx.cert_executor is None:
-                return {'error': 'Async issuance is not enabled'}, 404
+                return {'error': 'Async issuance is not enabled', 'code': 'ASYNC_ISSUANCE_DISABLED'}, 404
             job = ctx.cert_executor.get(job_id)
             if job is None:
-                return {'error': 'Job not found'}, 404
+                return {'error': 'Job not found', 'code': 'JOB_NOT_FOUND'}, 404
             # The caller must be in scope for the job's domain — a scoped key
             # cannot poll a job for a domain it could not have created.
             scope_err = _check_domain_scope(job.get('domain'), 'job_status')
@@ -375,7 +381,7 @@ def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
             represented by the certificate itself.
             """
             if ctx.cert_executor is None:
-                return {'error': 'Async issuance is not enabled'}, 404
+                return {'error': 'Async issuance is not enabled', 'code': 'ASYNC_ISSUANCE_DISABLED'}, 404
             # Same boundary as polling a single job: a scoped key sees only
             # jobs for domains it could have created itself. Filtered rather
             # than refused, so a scoped key still gets its own in-flight work.
@@ -399,16 +405,17 @@ def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
                 return scope_err
             _, err = _validate_domain_path(domain, ctx.file_ops.cert_dir)
             if err:
-                return {'error': err}, 400
+                return {'error': err, 'code': 'INVALID_REQUEST'}, 400
             try:
                 data = api.payload or {}
                 if 'enabled' not in data:
-                    return {'error': 'Missing "enabled" boolean in request body'}, 400
+                    return {'error': 'Missing "enabled" boolean in request body', 'code': 'AUTO_RENEW_FLAG_REQUIRED'}, 400
                 enabled = bool(data.get('enabled'))
 
                 updated = ctx.certificates.set_auto_renew(domain, enabled)
                 if not updated:
                     return {
+                        'code': 'DOMAIN_NOT_IN_SETTINGS',
                         'error': f'Domain {domain} not found in settings',
                         'hint': 'Only domains tracked in settings can have auto-renew toggled.'
                     }, 404
@@ -437,7 +444,7 @@ def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
                 }, 200
             except Exception as e:
                 logger.error(f"Failed to toggle auto-renew for {domain}: {e}")
-                return {'error': 'Failed to update auto-renew setting'}, 500
+                return {'error': 'Failed to update auto-renew setting', 'code': 'AUTO_RENEW_UPDATE_FAILED'}, 500
 
     return {
         'CreateCertificate': CreateCertificate,

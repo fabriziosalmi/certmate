@@ -87,9 +87,9 @@ def create_download_resources(api, models, ctx: ApiContext,
                     return scope_err
                 cert_dir, err = _validate_domain_path(domain, ctx.file_ops.cert_dir)
                 if err:
-                    return {'error': err}, 400
+                    return {'error': err, 'code': 'INVALID_REQUEST'}, 400
                 if not cert_dir.exists():
-                    return {'error': f'Certificate not found for domain: {domain}'}, 404
+                    return {'error': f'Certificate not found for domain: {domain}', 'code': 'CERTIFICATE_NOT_FOUND'}, 404
 
                 user = getattr(request, 'current_user', None) or {}
                 download_format = request.args.get('format')
@@ -98,7 +98,7 @@ def create_download_resources(api, models, ctx: ApiContext,
                 include_private = str(request.args.get('include_private', '1')).lower() not in ('0', 'false', 'no', 'off')
 
                 if download_format and download_format not in ['json']:
-                    return {'error': 'Invalid format requested.'}, 400
+                    return {'error': 'Invalid format requested.', 'code': 'INVALID_FORMAT'}, 400
 
                 # Optional private-key serialization. Certbot stores PKCS#8
                 # ("BEGIN PRIVATE KEY"); some older stacks need the legacy
@@ -106,9 +106,10 @@ def create_download_resources(api, models, ctx: ApiContext,
                 # rather than duplicating key material on disk (issue #233).
                 key_format = request.args.get('key_format')
                 if key_format is not None and key_format not in ('pkcs1', 'pkcs8'):
-                    return {'error': "Invalid key_format; use 'pkcs1' or 'pkcs8'."}, 400
+                    return {'error': "Invalid key_format; use 'pkcs1' or 'pkcs8'.", 'code': 'INVALID_KEY_FORMAT'}, 400
                 if key_format and download_format != 'json' and requested_file != 'privkey.pem':
                     return {
+                        'code': 'KEY_FORMAT_NOT_APPLICABLE',
                         'error': 'key_format applies to ?file=privkey.pem or ?format=json.'
                     }, 400
 
@@ -136,7 +137,7 @@ def create_download_resources(api, models, ctx: ApiContext,
                     if not _user_has_role(user, 'operator'):
                         return _privkey_denied('format=json')
                     if requested_file:
-                        return {'error': 'format=json cannot be combined with file.'}, 400
+                        return {'error': 'format=json cannot be combined with file.', 'code': 'INCOMPATIBLE_PARAMETERS'}, 400
 
                     required_files = {
                         'cert_pem': 'cert.pem',
@@ -150,7 +151,7 @@ def create_download_resources(api, models, ctx: ApiContext,
                         for response_key, filename in required_files.items():
                             file_path = cert_dir / filename
                             if not file_path.exists():
-                                return {'error': f'Required cert file not found for domain {domain}: {filename}'}, 404
+                                return {'error': f'Required cert file not found for domain {domain}: {filename}', 'code': 'CERT_FILE_NOT_FOUND'}, 404
                             payload[response_key] = file_path.read_text(encoding='utf-8')
 
                         # ?key_format=pkcs1 adds the legacy/traditional form
@@ -180,19 +181,20 @@ def create_download_resources(api, models, ctx: ApiContext,
                                     str(e).replace('\r', ' ').replace('\n', ' '),
                                 )
                                 return {
+                                    'code': 'KEY_CONVERSION_FAILED',
                                     'error': 'Could not convert the private key to PKCS#1 '
                                              '(the key type may not support it).'
                                 }, 422
 
                         return jsonify(payload)
                     except FileNotFoundError:
-                        return {'error': f'Required cert file not found for domain {domain}'}, 404
+                        return {'error': f'Required cert file not found for domain {domain}', 'code': 'CERT_FILE_NOT_FOUND'}, 404
 
                 if requested_file:
                     # Security check: only allow specific certificate files
                     allowed_files = _PUBLIC_DOWNLOAD_FILES | _PRIVATE_KEY_FILES
                     if requested_file not in allowed_files:
-                        return {'error': 'Invalid file requested.'}, 400
+                        return {'error': 'Invalid file requested.', 'code': 'INVALID_FILE'}, 400
 
                     # Private-key files require operator+; public files
                     # remain viewer-accessible.
@@ -213,11 +215,11 @@ def create_download_resources(api, models, ctx: ApiContext,
                                 mimetype='application/x-pem-file'
                             )
                         except FileNotFoundError:
-                            return {'error': f'Required cert files not found for domain {domain}'}, 404
+                            return {'error': f'Required cert files not found for domain {domain}', 'code': 'CERT_FILE_NOT_FOUND'}, 404
 
                     file_path = cert_dir / requested_file
                     if not file_path.exists():
-                        return {'error': f'File {requested_file} not found for domain {domain}'}, 404
+                        return {'error': f'File {requested_file} not found for domain {domain}', 'code': 'CERT_FILE_NOT_FOUND'}, 404
 
                     if requested_file == 'privkey.pem' and key_format == 'pkcs1':
                         # Re-resolve with a constant filename and confirm the
@@ -226,7 +228,7 @@ def create_download_resources(api, models, ctx: ApiContext,
                         # file read off any tainted path component.
                         key_path = os.path.realpath(cert_dir / 'privkey.pem')
                         if not key_path.startswith(os.path.realpath(cert_dir) + os.sep):
-                            return {'error': 'Invalid path'}, 400
+                            return {'error': 'Invalid path', 'code': 'INVALID_PATH'}, 400
                         try:
                             with open(key_path, 'rb') as fh:
                                 pkcs1_pem = _privkey_to_pkcs1(fh.read())
@@ -240,6 +242,7 @@ def create_download_resources(api, models, ctx: ApiContext,
                                 str(e).replace('\r', ' ').replace('\n', ' '),
                             )
                             return {
+                                'code': 'KEY_CONVERSION_FAILED',
                                 'error': 'Could not convert the private key to PKCS#1 '
                                          '(the key type may not support it).'
                             }, 422
@@ -305,7 +308,7 @@ def create_download_resources(api, models, ctx: ApiContext,
 
             except Exception as e:
                 logger.error(f"Error downloading certificate for {domain}: {e}")
-                return {'error': 'Failed to download certificate'}, 500
+                return {'error': 'Failed to download certificate', 'code': 'CERTIFICATE_DOWNLOAD_ERROR'}, 500
 
     class DownloadCertificateFile(Resource):
         # Path-style alias for the query-string form on DownloadCertificate.
@@ -339,6 +342,7 @@ def create_download_resources(api, models, ctx: ApiContext,
             requested_file = self._SHORT_NAME_TO_FILE.get(file_type)
             if requested_file is None:
                 return {
+                    'code': 'INVALID_FILE_TYPE',
                     'error': f'Invalid file type: {file_type}',
                     'hint': f"Allowed: {sorted(self._SHORT_NAME_TO_FILE)}",
                 }, 400
@@ -349,9 +353,9 @@ def create_download_resources(api, models, ctx: ApiContext,
                     return scope_err
                 cert_dir, err = _validate_domain_path(domain, ctx.file_ops.cert_dir)
                 if err:
-                    return {'error': err}, 400
+                    return {'error': err, 'code': 'INVALID_REQUEST'}, 400
                 if not cert_dir.exists():
-                    return {'error': f'Certificate not found for domain: {domain}'}, 404
+                    return {'error': f'Certificate not found for domain: {domain}', 'code': 'CERTIFICATE_NOT_FOUND'}, 404
 
                 user = getattr(request, 'current_user', None) or {}
 
@@ -383,11 +387,11 @@ def create_download_resources(api, models, ctx: ApiContext,
                             mimetype='application/x-pem-file'
                         )
                     except FileNotFoundError:
-                        return {'error': f'Required cert files not found for domain {domain}'}, 404
+                        return {'error': f'Required cert files not found for domain {domain}', 'code': 'CERT_FILE_NOT_FOUND'}, 404
 
                 file_path = cert_dir / requested_file
                 if not file_path.exists():
-                    return {'error': f'File {requested_file} not found for domain {domain}'}, 404
+                    return {'error': f'File {requested_file} not found for domain {domain}', 'code': 'CERT_FILE_NOT_FOUND'}, 404
 
                 return send_file(
                     file_path,
@@ -397,7 +401,7 @@ def create_download_resources(api, models, ctx: ApiContext,
                 )
             except Exception as e:
                 logger.error(f"Error downloading {file_type} for {domain}: {e}")
-                return {'error': 'Failed to download certificate file'}, 500
+                return {'error': 'Failed to download certificate file', 'code': 'CERTIFICATE_DOWNLOAD_ERROR'}, 500
 
     return {
         'DownloadCertificate': DownloadCertificate,
