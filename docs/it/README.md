@@ -22,6 +22,8 @@ Benvenuto nella documentazione di CertMate. Questa cartella contiene guide compl
 - **[Architettura](./architecture.md)** — Progettazione del sistema, componenti, flusso dei dati
 - **[Guida ai test](./testing.md)** — Framework di test, CI/CD, copertura
 - **[Discovery e inventario](../discovery-inventory.md)** — Discovery via probe/CT-log, inventario, adopt, crypto readiness *(in inglese)*
+- **[Certificati da CSR](../csr-only-certificates.md)** — Emissione a partire da una CSR, con la chiave privata che resta sul dispositivo *(in inglese)*
+- **[Webhook generici](../webhooks.md)** — Notifiche HTTP sugli eventi del ciclo di vita: payload, firma, ritentativi *(in inglese)*
 - **[Deploy hook](./deploy-hooks.md)** — Hook post-emissione: configurazione, test, redazione dell'output
 - **[Conformità](./compliance.md)** — Catena di audit, attribuzione delle azioni, postura NIS2/eIDAS
 - **[Sonde di deployment](./probes.md)** — Verificare che il certificato rinnovato sia davvero servito

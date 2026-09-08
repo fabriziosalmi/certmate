@@ -22,6 +22,8 @@ Willkommen in der CertMate-Dokumentation. Dieser Ordner enthält umfassende Anle
 - **[Architektur](./architecture.md)** — Systemdesign, Komponenten, Datenfluss
 - **[Test-Anleitung](./testing.md)** — Test-Framework, CI/CD, Abdeckung
 - **[Discovery & Inventar](../discovery-inventory.md)** — Probe-/CT-Log-Discovery, Inventar, Adopt, Krypto-Readiness *(auf Englisch)*
+- **[CSR-basierte Zertifikate](../csr-only-certificates.md)** — Ausstellung aus einer CSR, der private Schlüssel bleibt auf dem Gerät *(auf Englisch)*
+- **[Generische Webhooks](../webhooks.md)** — HTTP-Benachrichtigungen zu Lebenszyklus-Ereignissen: Payload, Signatur, Wiederholungen *(auf Englisch)*
 - **[Deploy-Hooks](./deploy-hooks.md)** — Hooks nach der Ausstellung: Konfiguration, Test, Redaktion der Ausgabe
 - **[Compliance](./compliance.md)** — Audit-Kette, Akteur-Attribution, NIS2-/eIDAS-Posture
 - **[Deployment-Probes](./probes.md)** — Prüfen, ob ein erneuertes Zertifikat ausgeliefert wird
