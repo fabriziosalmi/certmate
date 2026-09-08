@@ -89,11 +89,19 @@ jobs:
         # Complexity RATCHET, not a standard. The previous line computed every
         # function over --max-complexity=10 and then threw the exit code away
         # with --exit-zero, so all 85 over-threshold functions were measured and
-        # ignored (#652). 559 is the current worst (create_api_resources, the
-        # 3.7k-line closure in modules/api/resources.py); this gate exists so
-        # nothing can get WORSE than the worst thing already here. Lower the
-        # number as the decomposition issues land — never raise it.
-        flake8 . --count --select=C901 --max-complexity=559 --statistics
+        # ignored (#652). This gate exists so nothing can get WORSE than the
+        # worst thing already here.
+        #
+        # A ratchet only ratchets if someone lowers it. This one was set to 559
+        # for create_api_resources, the 3.7k-line closure in
+        # modules/api/resources.py; #667 decomposed that function to 1 and the
+        # number stayed at 559, five times the real worst, permitting anything
+        # a contributor could plausibly write. It is now 115, which is
+        # register_settings_routes in modules/web/settings_routes.py, and
+        # tests/test_complexity_ratchet_is_tight.py fails if the tree gets
+        # simpler than the pin — so lowering it is not something to remember,
+        # it is something the suite asks for.
+        flake8 . --count --select=C901 --max-complexity=115 --statistics
         # Style is reported, never enforced: line length is not a defect class.
         flake8 . --count --exit-zero --max-line-length=127 --statistics
 

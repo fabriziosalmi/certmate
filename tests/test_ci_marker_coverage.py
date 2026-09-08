@@ -125,16 +125,25 @@ def test_every_test_file_declares_a_marker():
 
 
 def _markers_in_use():
-    """Marker names any test file actually applies.
+    """Marker names actually applied to tests.
 
     Read from the sources rather than by shelling out to pytest once per
     marker: that was slower, and it judged a run by grepping stdout for a
     message pytest can also emit on stderr — a check that can miss its own
     signal is not one worth keeping.
+
+    ``conftest.py`` counts as a source. A marker applied there by
+    ``pytest_collection_modifyitems`` is applied to real tests — ``credentialed``
+    is derived from the fixtures a test requests, precisely so it cannot drift
+    the way a hand-written decorator does — and reading only ``test_*.py``
+    would report it as a category nobody is in while ``-m credentialed``
+    selects fifteen tests.
     """
     used = set()
     declared = _declared_markers()
-    for path in _test_files():
+    for path in [*_test_files(), TESTS_DIR / "conftest.py"]:
+        if not path.exists():
+            continue
         src = path.read_text(encoding="utf-8")
         for match in re.finditer(r"pytest\.mark\.(\w+)", src):
             if match.group(1) in declared:
