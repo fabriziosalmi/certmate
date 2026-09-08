@@ -82,10 +82,26 @@ def test_detect_token_file_is_true(monkeypatch, tmp_path):
     assert AuthManager._detect_operator_bearer_token() is True
 
 
-def test_detect_missing_token_file_is_false(monkeypatch, tmp_path):
+def test_detect_missing_token_file_raises_rather_than_reporting_absence(
+        monkeypatch, tmp_path):
+    """This used to assert False, and False was the defect.
+
+    The detector's answer feeds setup_mode_for, where False means "no operator
+    credential exists" — which on a token-file-only deployment opens the
+    instance. A file the operator NAMED and that cannot be read is not an
+    absence of configuration; it is a configuration that cannot be honoured
+    right now, and the two must reach opposite decisions.
+
+    tests/test_bearer_token_file_failures_fail_closed.py carries the rest,
+    including the control that a genuinely unconfigured install still opens.
+    """
+    from modules.core.auth import BearerTokenFileUnreadable
+
     _clear_token_env(monkeypatch)
     monkeypatch.setenv('API_BEARER_TOKEN_FILE', str(tmp_path / 'does-not-exist'))
-    assert AuthManager._detect_operator_bearer_token() is False
+
+    with pytest.raises(BearerTokenFileUnreadable):
+        AuthManager._detect_operator_bearer_token()
 
 
 # --- is_setup_mode ----------------------------------------------------------

@@ -88,6 +88,22 @@ def validate_username(username):
         return None, f'Username cannot exceed {USERNAME_MAX_LENGTH} characters'
     return clean, None
 
+class BearerTokenFileUnreadable(Exception):
+    """API_BEARER_TOKEN_FILE is set and cannot be read.
+
+    Exists so that "the operator configured no bearer token" and "the operator
+    configured one in a file we cannot read right now" stop being the same
+    value. They lead to opposite decisions: the first is a fresh install that
+    must stay open so it can be bootstrapped, the second is a configured
+    instance that must stay closed.
+    """
+
+    def __init__(self, path, cause):
+        self.path = path
+        self.cause = cause
+        super().__init__(f"{path}: {cause}")
+
+
 class AuthManager:
     """Class to handle authentication and authorization"""
     
@@ -1027,8 +1043,12 @@ class AuthManager:
             try:
                 from pathlib import Path
                 token = Path(token_file).read_text().strip()
-            except Exception:
-                return False
+            except Exception as e:
+                # NOT "no token was configured". The operator named this file
+                # as the source of the credential, so failing to read it is a
+                # configuration error, and the two answers must not collapse
+                # into the same False — see BearerTokenFileUnreadable.
+                raise BearerTokenFileUnreadable(token_file, e)
             return bool(token) and validate_api_token(token)[0]
         env_token = os.getenv('API_BEARER_TOKEN')
         if env_token:
@@ -1036,12 +1056,40 @@ class AuthManager:
         return False
 
     def has_operator_bearer_token(self):
-        """Memoised wrapper over _detect_operator_bearer_token (env/file are
-        fixed for the process lifetime)."""
+        """Memoised wrapper over _detect_operator_bearer_token.
+
+        Two things this deliberately does NOT do.
+
+        It does not treat an unreadable API_BEARER_TOKEN_FILE as "no operator
+        token". That answer feeds setup_mode_for, and on a deployment whose
+        only credential is that file it would open the instance: setup mode
+        makes _authenticate_request return an admin identity for a caller with
+        no credential at all. A read failure therefore keeps the instance
+        LOCKED — the operator configured a credential, we simply cannot read
+        it this instant — and is logged at ERROR rather than swallowed.
+
+        And it does not memoise that failure. The docstring here used to say
+        env and file are fixed for the process lifetime; the variable is, the
+        file it names is not. A Kubernetes secret mounted a moment after the
+        container starts, a remount with different ownership, an SELinux
+        relabel — each produces one unreadable read followed by readable ones,
+        and caching the first would fix the wrong answer in place until the
+        next restart. Only a determination that actually read the file (or
+        found no file configured) is cached.
+        """
         cached = getattr(self, '_operator_bearer_token', _UNSET)
-        if cached is _UNSET:
+        if cached is not _UNSET:
+            return cached
+        try:
             cached = self._detect_operator_bearer_token()
-            self._operator_bearer_token = cached
+        except BearerTokenFileUnreadable as e:
+            logger.error(
+                "API_BEARER_TOKEN_FILE is set but could not be read (%s). "
+                "Treating this instance as CONFIGURED so it stays locked; it "
+                "will not accept the bearer token until the file is readable. "
+                "This is deliberately not cached — the next check retries.", e)
+            return True
+        self._operator_bearer_token = cached
         return cached
 
     def _operator_supplied_token(self):
