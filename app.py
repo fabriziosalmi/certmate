@@ -95,4 +95,16 @@ if __name__ == '__main__':
                 # worth one line, because "stopped" printing and "stopped"
                 # happening were previously indistinguishable (#671).
                 print(f"⚠️  Background scheduler did not stop cleanly: {e}")
+        # After the scheduler, not before: stopping it first means no new
+        # renewal can queue a deploy while the bus is draining.
+        event_bus = (container.managers or {}).get('events')
+        if event_bus is not None:
+            try:
+                undelivered = event_bus.stop()
+                print("📨 Event bus drained"
+                      if not undelivered
+                      else f"⚠️  {undelivered} queued dispatch(es) never ran — "
+                           f"see the log for which certificates they were for")
+            except Exception as e:
+                print(f"⚠️  Event bus did not stop cleanly: {e}")
         sys.exit(0)

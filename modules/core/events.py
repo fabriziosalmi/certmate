@@ -36,6 +36,17 @@ DEFAULT_DISPATCH_WORKERS = 4
 # in the log rather than something an operator infers from latency.
 BACKLOG_WARN_AT = 50
 
+# How long stop() waits for the queue to empty before reporting what is left.
+# Small on purpose: this is spent on every shutdown, and the workers are daemon
+# threads precisely so a slow listener cannot hold the process open. Override
+# with CERTMATE_EVENT_DRAIN_SECONDS.
+DEFAULT_DRAIN_SECONDS = 5.0
+
+# How many of the undelivered items to name in the log line. All of them would
+# be unbounded; none of them leaves an operator with a number and no way to act
+# on it.
+UNDELIVERED_SAMPLE = 10
+
 
 class EventBus:
     """Simple in-process event bus with SSE streaming support."""
@@ -73,6 +84,10 @@ class EventBus:
         self._workers = []
         self._worker_count = self._resolve_worker_count(workers)
         self._backlog_warned = False
+        # Set by stop(). A publish after it is refused rather than queued: the
+        # process is going away, and accepting work nobody will run would put
+        # it in the undelivered report of a bus that had already reported.
+        self._stopping = False
 
     @staticmethod
     def _resolve_worker_count(workers) -> int:
@@ -122,6 +137,68 @@ class EventBus:
                     "Event listener failed for %s: %s", event, e, exc_info=True)
             finally:
                 self._work.task_done()
+
+    def stop(self, timeout: Optional[float] = None) -> int:
+        """Stop accepting dispatches and give the queued ones a bounded chance
+        to start. Returns how many never did.
+
+        The workers are daemon threads, deliberately: joining them would let a
+        300-second deploy hook hold shutdown open until the container runtime
+        killed it anyway. The cost of that choice was that a container stopped
+        during or just after a renewal sweep discarded whatever was queued —
+        typically the deploy hook for a certificate that HAD been renewed, so
+        the service kept serving the old one while the dashboard showed a
+        success, and nothing anywhere recorded that it had happened.
+
+        This does not change the daemon decision. It bounds the loss and, more
+        importantly, names it: what could not be started in `timeout` seconds is
+        drained off the queue and logged with its event and its domain, so the
+        line an operator finds after a restart says which certificates to
+        redeploy by hand.
+
+        Waits for the queue to EMPTY, not for the workers to finish: an item
+        that has reached a worker is running, and waiting for a deploy hook is
+        the thing this must not do. Idempotent, and immediate when the queue is
+        already empty, which is the ordinary case.
+        """
+        if timeout is None:
+            timeout = self._drain_timeout()
+        self._stopping = True
+        deadline = time.monotonic() + max(0.0, timeout)
+        while self._work.qsize() and time.monotonic() < deadline:
+            time.sleep(0.02)
+
+        undelivered = []
+        while True:
+            try:
+                listener, event, data, _ = self._work.get_nowait()
+            except queue.Empty:
+                break
+            undelivered.append((event, (data or {}).get('domain')))
+            self._work.task_done()
+
+        if undelivered:
+            sample = ', '.join(
+                f"{event}({domain or 'no domain'})"
+                for event, domain in undelivered[:UNDELIVERED_SAMPLE])
+            logger.warning(
+                "Event bus stopped with %d dispatch(es) never started: %s%s. "
+                "These are listener invocations — deploy hooks and cache "
+                "invalidations — for events that DID happen, so the "
+                "certificate is renewed and its deploy did not run.",
+                len(undelivered), sample,
+                '' if len(undelivered) <= UNDELIVERED_SAMPLE else ', …')
+        else:
+            logger.info("Event bus stopped with an empty queue")
+        return len(undelivered)
+
+    @staticmethod
+    def _drain_timeout() -> float:
+        try:
+            return max(0.0, min(60.0, float(os.environ.get(
+                'CERTMATE_EVENT_DRAIN_SECONDS', DEFAULT_DRAIN_SECONDS))))
+        except (TypeError, ValueError):
+            return DEFAULT_DRAIN_SECONDS
 
     def add_listener(self, callback) -> None:
         """Register a callback invoked on every publish(). Signature: callback(event, data)."""
@@ -188,6 +265,13 @@ class EventBus:
         with self._lock:
             listeners = list(self._listeners)
         if not listeners:
+            return
+        if self._stopping:
+            # SSE subscribers above already got the message; what is refused
+            # here is queueing a listener invocation nobody will run.
+            logger.warning(
+                "Event bus is stopping: %s was not dispatched to %d listener(s)",
+                event, len(listeners))
             return
         self._ensure_workers()
 
