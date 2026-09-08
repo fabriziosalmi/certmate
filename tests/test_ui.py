@@ -236,6 +236,15 @@ class TestSettingsCloudflareFlow:
         browser_page.goto(f"{BASE_URL}/settings")
         browser_page.wait_for_load_state("networkidle")
 
+        # Settings opens on General; the provider picker lives on the DNS tab.
+        # Without this the label resolves in the DOM but is never visible, and
+        # the click below times out after 30 seconds. This test takes
+        # `cloudflare_token`, so it SKIPS wherever that is absent — which is
+        # every CI run — and the rot was therefore only visible in a release
+        # gate, where the token is present.
+        browser_page.click('#settings-tab-dns')
+        browser_page.wait_for_selector('#settings-panel-dns', state='visible')
+
         # Select Cloudflare provider — the input is sr-only; click its wrapping label
         browser_page.click('label:has(input[name="dns_provider"][value="cloudflare"])')
 
@@ -286,26 +295,31 @@ class TestCertCreationFlow:
             "() => { const w = document.getElementById('setupWizard'); if (w) w.remove(); }"
         )
 
-        # v2.5.0 (QW-15) put the create form behind a toggle: the
-        # #createCertFormContainer is `hidden` by default and the
-        # #toggleCreateForm button calls toggleCreateCertForm() to expand it.
-        # Before this fix the test did `#domain.fill(...)` directly against a
-        # hidden input and Playwright timed out with strict-mode violation.
-        toggle_btn = browser_page.locator('#toggleCreateForm')
-        expect(toggle_btn).to_be_visible()
-        toggle_btn.click()
+        # v2.19.4 replaced the #toggleCreateForm button with a drawer opened
+        # from the toolbar. This test kept clicking the old id and had been
+        # failing ever since — invisibly, because it takes `cloudflare_token`
+        # and therefore skips wherever that is absent, which is every CI run.
+        browser_page.click('button[title="New certificate"]')
+        browser_page.wait_for_selector('#createCertFormContainer', state='visible')
 
-        # Now the form is visible and the input is fillable.
+        # The form is open and the input is fillable.
         domain_input = browser_page.locator('#domain')
         expect(domain_input).to_be_visible()
         domain_input.fill(test_domain)
+        assert domain_input.input_value() == test_domain
 
-        # Click create button inside the now-visible form
-        create_btn = browser_page.locator('#createCertForm button[type="submit"], #createCertForm button:has-text("Create")')
-        if create_btn.first.is_visible():
-            create_btn.first.click()
-            # Wait for cert creation (can take 30-120s)
-            browser_page.wait_for_timeout(5000)
+        # Deliberately NOT submitted. This used to click Create and wait five
+        # seconds, asserting nothing about the outcome — so on the one machine
+        # where it ran (a release gate, which is where the token is) it fired a
+        # live issuance for CERTMATE_TEST_DOMAIN against whatever CA the fresh
+        # container defaults to: production Let's Encrypt, on the apex.
+        #
+        # Real issuance is covered where it can be done safely — the real-cert
+        # E2E tests, which pin the CA to staging and use random subdomains.
+        # What this test is for is the form being reachable and usable.
+        create_btn = browser_page.locator(
+            '#createCertForm button[type="submit"]')
+        expect(create_btn.first).to_be_visible()
 
 
 class TestHelpPageUI:
