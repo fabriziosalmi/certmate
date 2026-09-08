@@ -235,6 +235,46 @@ can be closed. Until then they remain open by choice, not by oversight, and
 this section is the record of that choice: an advisory against `cryptography`
 that is not listed here has not been assessed, and should be treated as new.
 
+### How this list is kept complete
+
+Two checks reconcile this section with reality, because a list that claims to
+be complete and is not is worse than no list.
+
+- **`scripts/check_advisories.py`** (scheduled) asks GitHub which Dependabot
+  alerts the repository is carrying — open, or dismissed as `tolerable_risk` —
+  and fails when one of them is not named above. It was written after this
+  section documented one advisory while three more, published against the same
+  pin, sat open and unmentioned through a release.
+- **`scripts/check_resolved_advisories.py`** (on every pull request, inside
+  `security-scan`) asks OSV about the packages that are **actually installed in
+  the image**, captured with `pip freeze` from inside it, and fails the same
+  way.
+
+The second exists because the first cannot see what ships. Dependabot reads the
+manifests, and so does any scanner pointed at the repository; both then resolve
+each transitive constraint to the **lowest version it admits**, which is not
+what `pip install` produces. Measured against v2.29.0 on 2026-09-08:
+
+| package | manifest scan reports | actually in the image |
+|---|---|---|
+| `pyjwt` | 2.9.0 — 7 advisories | **2.13.0 — none** |
+| `requests` | 2.9.2 — 5 | **2.34.2 — none** |
+| `pygments` | 2.9.0 — 2 | **not installed** |
+| `idna` | 3.9.0 — 1 | **3.19 — none** |
+| `filelock` | 3.9.1 — 2 | **3.32.5 — none** |
+| `protobuf` | 4.25.9 — 1 | **7.36.1 — none** |
+
+All eighteen were false positives. `pyjwt` is the one worth naming: it arrives
+transitively through `msal` (Azure DNS), the floor `msal` declares is 2.9.0,
+and an audit reported those seven advisories as shipping in the default image.
+They do not — so no reachability argument is needed for them, and none is
+recorded here. **If you are looking at a manifest-level alert against a package
+that is not in the table above, check the version in the image before assessing
+it.**
+
+Scanning the resolved set gives the answer this section can actually stand
+behind: four advisories, all `cryptography==46.0.7`, all documented above.
+
 ## Supply-chain posture for Python dependencies
 
 This section exists so the absence of hash pinning is a **decision on record**

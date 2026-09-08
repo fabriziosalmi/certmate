@@ -12,11 +12,17 @@
 # a pull request is missing from it, so a new job cannot arrive unclassified,
 # and `advisory` has to carry a reason someone can argue with.
 #
-# To apply this file to the repository (needs admin on the repo):
+# To apply this file to the repository (needs admin on the repo). Run it from
+# the repository root; it was used to set the current protection on
+# 2026-09-08, taking `main` from five required contexts to nine:
 #
-#   gh api -X PUT repos/fabriziosalmi/certmate/branches/main/protection/required_status_checks \
-#     -f strict=true \
-#     "$(python3 -c "import yaml,sys;print(' '.join('-f contexts[]='+c['context'] for c in yaml.safe_load(open('.github/required-checks.yml'))['gating']))")"
+#   python3 -c "import yaml,json;g=yaml.safe_load(open('.github/required-checks.yml'))['gating'];print(json.dumps({'strict':True,'contexts':[c['context'] for c in g]}))" > /tmp/protection.json
+#   gh api -X PATCH repos/fabriziosalmi/certmate/branches/main/protection/required_status_checks --input /tmp/protection.json
+#
+# PATCH is the verb for this sub-resource (PUT belongs to the parent
+# /protection endpoint, which would need the whole protection object), and the
+# JSON body is used because a context with a space in it — `test (3.12)`,
+# `MCP server` — does not survive `-f contexts[]=`.
 #
 # The `context` of each entry is the name GitHub shows in the merge box, which
 # is the job's `name:` when it has one, the job id when it does not, and gets a
@@ -68,10 +74,14 @@ gating:
     workflow: docker-multiplatform.yml
     job: security-scan
     why: >-
-      Fails on a fixable CRITICAL in the published image. This one can go red
-      without the PR changing — Trivy's database moves daily — and that is the
-      point: a fixable CRITICAL in the base image is the maintainer's problem
-      the day it is published, not the day someone notices.
+      Fails on a fixable CRITICAL in the published image, and reconciles the
+      advisories against the image's resolved Python set with SECURITY.md
+      (scripts/check_resolved_advisories.py). Both halves can go red without
+      the PR changing — Trivy's database moves daily and OSV is queried live —
+      and both fail closed on an unreachable database rather than reporting a
+      scan nobody performed. That is the intended trade: an advisory against
+      something that ships is the maintainer's problem the day it is
+      published, not the day someone notices.
 
   - context: frontend-css
     workflow: ci.yml
