@@ -108,13 +108,18 @@ def test_a_failing_read_is_logged_with_the_domain():
         module_logger.removeHandler(handler)
         module_logger.setLevel(previous)
 
-    # Membership in the args tuple, not a substring of its repr: the exact
-    # claim is that the domain was passed as a formatting argument, and the
-    # loose version would also accept it appearing inside some other value.
-    assert any('broken.example.com' in (r.args or ()) for r in records), (
+    # Positional equality, not membership: the claim is that the domain is
+    # the FIRST formatting argument of the message, which is what puts it in
+    # the log line. `in` on the args tuple would also accept it turning up as
+    # the exception's text, and CodeQL cannot tell a tuple from a string, so
+    # it reads that form as an incomplete URL check every time.
+    assert records, (
         'a certificate that could not be read vanished from the listing with '
         'nothing saying which one, or why'
     )
+    assert records[0].args[0] == 'broken.example.com'
+    assert 'nope' in str(records[0].args[1]), 'the cause was not logged'
+
 
 
 def test_every_read_failing_still_returns_a_list_the_caller_can_use():
