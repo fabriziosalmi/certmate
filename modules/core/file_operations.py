@@ -12,7 +12,6 @@ import tempfile
 import zipfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-import fcntl
 import logging
 
 from .utils import utc_now, utc_now_iso, repair_certbot_lineage_symlinks
@@ -293,7 +292,23 @@ class FileOperations:
         self.last_restore_error = None
 
     def safe_file_read(self, file_path, is_json=False, default=None):
-        """Safely read a file with proper error handling and file locking"""
+        """Safely read a file with proper error handling.
+
+        No lock is taken, and there is nothing to take one against. Every
+        writer here goes through `safe_file_write`, which builds the new
+        content in a private temporary file and renames it over the target;
+        POSIX rename is atomic, so a reader's `open` resolves to either the
+        whole old file or the whole new one and never to a half-written one.
+        A reader already holding the old inode goes on reading a complete file
+        that happens to be one version behind, which is the same thing a
+        shared lock would have given it.
+
+        This used to take `LOCK_SH` "for safety". It paired with nothing: the
+        writer's exclusive lock was on its own temporary file, which no other
+        process can name, so no holder of this path's lock ever had to wait
+        and no waiter was ever excluded. Two locks that never meet cost two
+        syscalls and buy a reader's confidence that nothing had been checked.
+        """
         try:
             # Validate file path to prevent path traversal
             file_path = Path(file_path).resolve()
@@ -307,15 +322,10 @@ class FileOperations:
                 return default
                 
             with open(file_path, 'r', encoding='utf-8') as f:
-                # Use file locking for safety
-                fcntl.flock(f.fileno(), fcntl.LOCK_SH)
-                try:
-                    content = f.read()
-                    if is_json:
-                        return json.loads(content) if content.strip() else default
-                    return content
-                finally:
-                    fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+                content = f.read()
+                if is_json:
+                    return json.loads(content) if content.strip() else default
+                return content
                     
         except (json.JSONDecodeError, FileNotFoundError, PermissionError) as e:
             logger.error(f"Error reading file {file_path}: {e}")
@@ -325,7 +335,27 @@ class FileOperations:
             return default
 
     def safe_file_write(self, file_path, data, is_json=True):
-        """Safely write data to a file with proper error handling and atomic operations"""
+        """Write a file atomically: build it beside the target, then rename.
+
+        Where the atomicity comes from, since the answer used to be a comment
+        saying "use file locking for safety" over an exclusive lock on the
+        temporary file this call had just created — a name no other process
+        can open, so the lock excluded nobody and the comment described a
+        guarantee that was not there:
+
+        * **no reader sees a partial file.** The content is written and fsynced
+          into a private temporary file and then renamed over the target.
+          POSIX rename is atomic, so a concurrent reader gets the whole old
+          file or the whole new one;
+        * **mutual exclusion between writers is not from here.** Two callers
+          writing the same path concurrently both succeed and the later rename
+          wins, whole. Nothing is interleaved and nothing is corrupted, but a
+          read-modify-write done as two separate calls can still lose an
+          update — which is why settings mutation goes through
+          `SettingsManager.update`, holding its own lock across the read and
+          the write, rather than through a lock inside this function that
+          could not span both halves of it anyway.
+        """
         # Initialise the cleanup target before any code that could raise. If
         # mkstemp() (below) fails — disk full, parent dir unwritable, sandbox
         # restriction — control jumps straight to one of the except blocks
@@ -351,17 +381,15 @@ class FileOperations:
             temp_file = Path(_tmp_name)
             fd = os.open(str(temp_file), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
             with os.fdopen(fd, 'w', encoding='utf-8') as f:
-                # Use file locking for safety
-                fcntl.flock(f.fileno(), fcntl.LOCK_EX)
-                try:
-                    if is_json:
-                        json.dump(data, f, indent=2, ensure_ascii=False)
-                    else:
-                        f.write(str(data))
-                    f.flush()
-                    os.fsync(f.fileno())
-                finally:
-                    fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+                if is_json:
+                    json.dump(data, f, indent=2, ensure_ascii=False)
+                else:
+                    f.write(str(data))
+                f.flush()
+                # Before the rename, not after: a rename that reaches the
+                # directory ahead of the data would leave the target pointing
+                # at an empty file if the machine lost power in between.
+                os.fsync(f.fileno())
             
             # Atomic move
             temp_file.rename(file_path)
