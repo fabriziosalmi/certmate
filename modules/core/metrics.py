@@ -271,6 +271,25 @@ cache_entries = Gauge(
     'Number of entries in cache'
 )
 
+# Work waiting for a worker. Both queues live in this process and neither was
+# visible from outside it: an operator raising CERTMATE_ISSUANCE_WORKERS or
+# CERTMATE_EVENT_WORKERS was guessing, and a 429 from a full issuance queue
+# had no number behind it that anyone could graph.
+issuance_queue_depth = Gauge(
+    'certmate_issuance_queue_depth',
+    'Async issuance jobs queued or running'
+)
+
+issuance_queue_limit = Gauge(
+    'certmate_issuance_queue_limit',
+    'Configured ceiling on queued or running issuance jobs'
+)
+
+event_dispatch_backlog = Gauge(
+    'certmate_event_dispatch_backlog',
+    'Listener invocations waiting for an event-bus worker'
+)
+
 # =============================================
 # METRICS COLLECTION FUNCTIONS
 # =============================================
@@ -330,6 +349,7 @@ class CertMateMetricsCollector:
                 self._collect_certificate_metrics(app_context)
                 self._collect_dns_provider_metrics(app_context)
                 self._collect_cache_metrics(app_context)
+                self._collect_queue_metrics(app_context)
             
             self.last_collection = time.time()
             logger.debug("Metrics collection completed")
@@ -484,6 +504,25 @@ class CertMateMetricsCollector:
         except Exception as e:
             logger.error(f"Error collecting DNS provider metrics: {e}")
     
+    def _collect_queue_metrics(self, app_context):
+        """Depth of the two in-process work queues.
+
+        Read through the accessors rather than the internals: both objects
+        already published one, and `EventBus.pending_dispatches` had no caller
+        at all — a number computed for nobody.
+        """
+        try:
+            executor = app_context.get('cert_executor')
+            if executor is not None:
+                issuance_queue_depth.set(executor.pending())
+                issuance_queue_limit.set(executor.queue_limit())
+
+            events = app_context.get('events')
+            if events is not None:
+                event_dispatch_backlog.set(events.pending_dispatches())
+        except Exception as e:
+            logger.error(f"Error collecting queue metrics: {e}")
+
     def _collect_cache_metrics(self, app_context):
         """Collect cache-related metrics."""
         try:

@@ -224,6 +224,11 @@ def register_misc_routes(app, managers, require_web_auth, auth_manager):
                         'cert_dir': file_ops.cert_dir,
                         'get_certificate_info': cert_manager.get_certificate_info,
                         'cache': managers.get('cache'),
+                        # The two in-process queues. Without these the gauges
+                        # exist and read zero forever, which is worse than not
+                        # having them.
+                        'cert_executor': managers.get('cert_executor'),
+                        'events': managers.get('events'),
                     }
                 except Exception as ctx_err:
                     logger.warning(

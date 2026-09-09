@@ -1584,6 +1584,7 @@ by the schema, with a message naming the accepted set — for example
 | `CERTMATE_DOMAIN_LOCK_TIMEOUT` | | `5`         | Seconds to wait for a domain's lock before answering 409 "operation in progress". Clamped to 0-60 |
 | `CERTMATE_CERT_INFO_CACHE_TTL` | | `60`        | Seconds a parsed certificate's details stay cached. `0` re-reads from disk on every request. Clamped to 0-3600 |
 | `CERTMATE_ISSUANCE_WORKERS` | | `2`            | Threads serving asynchronous issuance jobs. Clamped to 1-16; each one can be running a certbot subprocess |
+| `CERTMATE_ISSUANCE_QUEUE_LIMIT` | | `20`        | How much unfinished issuance may exist at once, counting queued and running jobs. Clamped to 1-500. Beyond it the async endpoints answer `429 ISSUANCE_QUEUE_FULL` instead of accepting work that will not be reached for hours |
 | `CERTMATE_ISSUANCE_JOB_HISTORY` | | `200`      | How many finished issuance jobs stay queryable via `/api/certificates/jobs`. Clamped to 20-2000 |
 | `CERTMATE_EVENT_WORKERS` |    | `4`            | Threads dispatching event listeners (deploy hooks, cache invalidation). Clamped to 1-32. Nothing is dropped when they are busy; the backlog is logged instead |
 | `CERTMATE_EVENT_DRAIN_SECONDS` |    | `5`            | How long a shutdown waits for queued event dispatches to start before giving up on them. Clamped to 0-60. Whatever is left is logged with its event and domain, so a deploy hook that never ran after a renewal is named rather than lost |
