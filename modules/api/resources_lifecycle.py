@@ -11,6 +11,7 @@ from flask import current_app, request
 from flask_restx import Resource
 
 from ..core.audit_context import audit_context_from_request
+from ..core.cert_jobs import IssuanceQueueFull
 from ..core.cert_service import DomainOutOfScope
 from ..core.certificates import DomainOperationInProgress
 from ..core.utils import classify_renewal_error
@@ -22,6 +23,33 @@ from .resource_context import (
 logger = logging.getLogger(__name__)
 
 
+def _submit(ctx, operation, domain, fn):
+    """Hand the blocking half to the executor, or say no.
+
+    The queue is bounded: two workers with an unbounded queue turned a retry
+    loop into hundreds of 202s for certificates that would not be attempted
+    for hours. A 429 is the honest answer to work this process will not get to.
+
+    At module level rather than inside `create_lifecycle_resources` because
+    mccabe counts a nested function's branches against the function that
+    encloses it, and that closure is one of the thirteen already carrying a
+    complexity budget.
+    """
+    try:
+        job_id = ctx.cert_executor.submit(operation, domain, fn)
+    except IssuanceQueueFull as e:
+        return {
+            'code': 'ISSUANCE_QUEUE_FULL',
+            'error': 'Too much issuance is already in progress',
+            'hint': (f'{e.depth} job(s) queued or running against a limit of '
+                     f'{e.limit}. Retry once some finish, or raise '
+                     f'CERTMATE_ISSUANCE_QUEUE_LIMIT / '
+                     f'CERTMATE_ISSUANCE_WORKERS.'),
+        }, 429
+    return job_accepted(job_id, operation, domain,
+                        f'/api/certificates/jobs/{job_id}'), 202
+
+
 def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
     """Build the lifecycle resources against *ctx*."""
 
@@ -30,10 +58,6 @@ def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
 
     def _wants_async(payload):
         return wants_async(payload)
-
-    def _job_accepted(job_id, operation, domain):
-        return job_accepted(job_id, operation, domain,
-                            f'/api/certificates/jobs/{job_id}')
 
     class CreateCertificate(Resource):
         @api.doc(security='Bearer')
@@ -75,11 +99,8 @@ def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
                         ip_address=request.remote_addr,
                         audit_ctx=audit_ctx,
                     )
-                    job_id = ctx.cert_executor.submit(
-                        'create', domain,
-                        lambda: ctx.cert_service.issue_create(prepared),
-                    )
-                    return _job_accepted(job_id, 'create', domain), 202
+                    return _submit(ctx, 'create', domain,
+                                   lambda: ctx.cert_service.issue_create(prepared))
 
                 result = ctx.cert_service.create(
                     domain=domain,
@@ -187,11 +208,8 @@ def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
                         domain=domain, user=user, ip_address=request.remote_addr,
                         audit_ctx=audit_ctx,
                     )
-                    job_id = ctx.cert_executor.submit(
-                        'renew', domain,
-                        lambda: ctx.cert_service.issue_renew(prepared, force=force),
-                    )
-                    return _job_accepted(job_id, 'renew', domain), 202
+                    return _submit(ctx, 'renew', domain,
+                                   lambda: ctx.cert_service.issue_renew(prepared, force=force))
 
                 result = ctx.cert_service.renew(
                     domain=domain, force=force,
@@ -287,11 +305,8 @@ def create_lifecycle_resources(api, models, ctx: ApiContext) -> dict:
 
                 if _wants_async(data) and ctx.cert_executor is not None:
                     prepared = ctx.cert_service.prepare_reissue(**kwargs)
-                    job_id = ctx.cert_executor.submit(
-                        'reissue', domain,
-                        lambda: ctx.cert_service.issue_reissue(prepared),
-                    )
-                    return _job_accepted(job_id, 'reissue', domain), 202
+                    return _submit(ctx, 'reissue', domain,
+                                   lambda: ctx.cert_service.issue_reissue(prepared))
 
                 result = ctx.cert_service.issue_reissue(
                     ctx.cert_service.prepare_reissue(**kwargs)
