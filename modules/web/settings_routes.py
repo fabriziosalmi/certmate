@@ -4,6 +4,7 @@ import re
 from flask import request, jsonify
 
 from modules.core.constants import iter_cert_domain_dirs
+from modules.core.domain_entries import entry_domain
 
 logger = logging.getLogger(__name__)
 
@@ -57,10 +58,7 @@ def register_settings_routes(app, managers, require_web_auth, auth_manager,
                 raw_domains = masked.get('domains') or []
                 filtered = []
                 for entry in raw_domains:
-                    domain_name = (
-                        entry if isinstance(entry, str)
-                        else (entry.get('domain') if isinstance(entry, dict) else None)
-                    )
+                    domain_name = entry_domain(entry)
                     if domain_name and auth_manager.domain_matches_scope(domain_name, scope):
                         filtered.append(entry)
                 masked['domains'] = filtered

@@ -8,6 +8,7 @@ SSL certificate infrastructure health and status.
 import time
 from datetime import datetime, timezone
 import logging
+from .domain_entries import entry_domain
 
 from .constants import DEFAULT_RENEWAL_THRESHOLD_DAYS, iter_cert_domain_dirs
 
@@ -407,7 +408,7 @@ class CertMateMetricsCollector:
             
             # Add domains from settings
             for domain_config in domains:
-                domain_name = domain_config.get('domain') if isinstance(domain_config, dict) else domain_config
+                domain_name = entry_domain(domain_config)
                 if domain_name:
                     all_domains.add(domain_name)
             

@@ -12,6 +12,7 @@ from pathlib import Path
 
 from modules import __version__ as _CERTMATE_VERSION
 from .constants import SETTINGS_SCHEMA_VERSION, iter_cert_domain_dirs
+from .domain_entries import normalize_domains, normalize_entry
 from .file_operations import FileOperations, _backup_passphrase
 from .utils import (
     generate_secure_token, validate_email, validate_api_token, validate_domain,
@@ -1491,22 +1492,25 @@ class SettingsManager:
                         return False
 
                 # Validate domains
+                # Emit the same shape load_settings returns, so normalising
+                # is a fixed point. This used to write a validated string
+                # entry straight back as a string, which meant the migration
+                # above could be undone by the very next save and the mixed
+                # list could never be retired.
                 if 'domains' in settings:
                     validated_domains = []
                     for domain_entry in settings['domains']:
-                        if isinstance(domain_entry, str):
-                            is_valid, domain_or_error = validate_domain(domain_entry)
-                            if is_valid:
-                                validated_domains.append(domain_or_error)
-                            else:
-                                logger.warning(f"Invalid domain skipped: {domain_or_error}")
-                        elif isinstance(domain_entry, dict) and 'domain' in domain_entry:
-                            is_valid, domain_or_error = validate_domain(domain_entry['domain'])
-                            if is_valid:
-                                domain_entry['domain'] = domain_or_error
-                                validated_domains.append(domain_entry)
-                            else:
-                                logger.warning(f"Invalid domain in object skipped: {domain_or_error}")
+                        entry = normalize_entry(domain_entry)
+                        if entry is None:
+                            logger.warning(
+                                "Skipped a domain entry that named no domain")
+                            continue
+                        is_valid, domain_or_error = validate_domain(entry['domain'])
+                        if not is_valid:
+                            logger.warning(f"Invalid domain skipped: {domain_or_error}")
+                            continue
+                        entry['domain'] = domain_or_error
+                        validated_domains.append(entry)
                     settings['domains'] = validated_domains
 
                 # Ensure required fields exist (but don't fail on missing fields, just warn).
@@ -1564,44 +1568,30 @@ class SettingsManager:
                 return False
 
     def migrate_domains_format(self, settings):
-        """Migrate old domain format (string) to new format (object with dns_provider)"""
-        try:
-            if 'domains' not in settings:
-                return settings
+        """Normalise ``settings['domains']`` in place and return *settings*.
 
-            domains = settings['domains']
-            default_provider = settings.get('dns_provider', 'cloudflare')
-            migrated_domains = []
+        Kept as a method because four call sites and a good deal of the test
+        suite reach for it by name, but it is now exactly the boundary
+        normalisation: string entries become objects and nothing else changes.
 
-            for domain_entry in domains:
-                if isinstance(domain_entry, str):
-                    # Old format: just domain string
-                    migrated_domains.append({
-                        'domain': domain_entry,
-                        'dns_provider': default_provider,
-                        'account_id': 'default'
-                    })
-                elif isinstance(domain_entry, dict):
-                    # New format: already has structure
-                    if 'domain' in domain_entry:
-                        # Ensure required fields exist
-                        if 'dns_provider' not in domain_entry:
-                            domain_entry['dns_provider'] = default_provider
-                        if 'account_id' not in domain_entry:
-                            domain_entry['account_id'] = 'default'
-                        migrated_domains.append(domain_entry)
-                    else:
-                        logger.warning(f"Invalid domain entry format: {domain_entry}")
-                else:
-                    logger.warning(f"Unexpected domain entry type: {type(domain_entry)}")
-
-            settings['domains'] = migrated_domains
+        It used to fill in ``dns_provider`` and ``account_id`` from the global
+        defaults. Two of its callers invoke it INSIDE a settings mutator, so
+        those injected values were persisted — and an entry that named no
+        provider had meant "follow the global setting", while one that names a
+        provider is pinned to it. The observable consequence was that after any
+        such operation, changing the global DNS provider stopped taking effect
+        for every existing domain: they all went on resolving to whatever had
+        been frozen in. Nothing ever read the injected fields.
+        """
+        if not isinstance(settings, dict) or 'domains' not in settings:
             return settings
-
-        except Exception as e:
-            logger.error(f"Error during domain format migration: {e}")
-            return settings
-
+        entries, dropped = normalize_domains(settings['domains'])
+        if dropped:
+            logger.warning(
+                "Ignored %d domain entr%s that named no domain",
+                dropped, 'y' if dropped == 1 else 'ies')
+        settings['domains'] = entries
+        return settings
     def migrate_dns_providers_to_multi_account(self, settings):
         """Migrate old single-account DNS provider configurations to multi-account format"""
         try:
@@ -1758,24 +1748,33 @@ class SettingsManager:
             settings = settings['settings']
             migrated = True
 
-        # Migration 2: Handle domains format transition (string array <-> object array)
+        # Migration 2: every domain entry is an object.
+        #
+        # This used to convert only when EVERY entry was a string, so a list
+        # that held both spellings — which is what any instance that added a
+        # domain after the object format arrived actually has — was left mixed
+        # forever, and seven modules were each written to cope with that.
+        # It now normalises per entry, so the union ends at this boundary.
+        #
+        # It also used to fill in dns_provider and account_id from the global
+        # defaults, which is not a shape change but a MEANING change: a string
+        # entry follows the global provider, and an entry naming a provider is
+        # pinned to it. See modules/core/domain_entries.py. Nothing reads
+        # either field off the entry — the provider is resolved by
+        # get_domain_dns_provider and the account comes from the certificate's
+        # metadata — so the injection is dropped rather than preserved.
         if 'domains' in settings:
-            domains = settings['domains']
-            if domains and all(isinstance(d, str) for d in domains):
-                # Convert simple string array to object array for new multi-account support
-                logger.info("Migrating domains from string array to object array format")
-                default_provider = settings.get('dns_provider', 'cloudflare')
-                default_accounts = settings.get('default_accounts', {})
-                default_account = default_accounts.get(default_provider, 'default')
-
-                new_domains = []
-                for domain in domains:
-                    new_domains.append({
-                        'domain': domain,
-                        'dns_provider': default_provider,
-                        'account_id': default_account
-                    })
-                settings['domains'] = new_domains
+            entries, dropped = normalize_domains(settings['domains'])
+            if entries != settings['domains']:
+                logger.info(
+                    "Normalising %d domain entr%s to the object format",
+                    len(entries), 'y' if len(entries) == 1 else 'ies')
+                settings['domains'] = entries
+                migrated = True
+            if dropped:
+                logger.warning(
+                    "Dropped %d settings domain entr%s that named no domain",
+                    dropped, 'y' if dropped == 1 else 'ies')
                 migrated = True
 
         # Migration 4 (#279): the letsencrypt 'environment' field is retired —

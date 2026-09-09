@@ -28,6 +28,7 @@ Two practical constraints shape the design:
 
 import json
 import logging
+from .domain_entries import entry_domain
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
@@ -145,9 +146,9 @@ def _managed_domains(settings):
     """Non-wildcard managed domain names from settings['domains']."""
     out = []
     for entry in settings.get('domains', []) or []:
-        name = entry.get('domain') if isinstance(entry, dict) else entry
-        if name and not str(name).startswith('*.'):
-            out.append(str(name))
+        name = entry_domain(entry)
+        if name and not name.startswith('*.'):
+            out.append(name)
     return out
 
 

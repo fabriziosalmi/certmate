@@ -216,7 +216,10 @@ def create_api_models(api):
 
     settings_model = api.model('Settings', {
         'cloudflare_token': MaskedString(description='Cloudflare API token (deprecated, use dns_providers)'),
-        'domains': fields.List(fields.Raw, description='List of domains (can be strings or objects)'),
+        'domains': fields.List(fields.Raw, description=(
+            'Managed domains. A request may send either a bare domain string or an '
+            'object carrying the domain plus per-domain overrides; both are accepted '
+            'and stored as objects, so a response always returns the object form.')),
         'email': fields.String(description='Email for Let\'s Encrypt'),
         'auto_renew': fields.Boolean(description='Enable auto-renewal'),
         'api_bearer_token': MaskedString(description='API bearer token for authentication'),

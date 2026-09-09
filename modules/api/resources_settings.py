@@ -17,6 +17,7 @@ from flask_restx import Resource
 import logging
 
 from .resource_context import ApiContext
+from ..core.domain_entries import entry_domain
 
 logger = logging.getLogger(__name__)
 
@@ -56,10 +57,7 @@ def create_settings_resources(api, models, ctx: ApiContext) -> dict:
                     raw_domains = settings.get('domains') or []
                     filtered = []
                     for entry in raw_domains:
-                        domain_name = (
-                            entry if isinstance(entry, str)
-                            else (entry.get('domain') if isinstance(entry, dict) else None)
-                        )
+                        domain_name = entry_domain(entry)
                         if domain_name and ctx.auth.domain_matches_scope(domain_name, scope):
                             filtered.append(entry)
                     settings['domains'] = filtered

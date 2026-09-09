@@ -13,6 +13,7 @@ import zipfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import logging
+from .domain_entries import iter_domains
 
 from .utils import utc_now, utc_now_iso, repair_certbot_lineage_symlinks
 
@@ -501,7 +502,7 @@ class FileOperations:
                 "version": "2.2.0",  # New unified format
                 "type": "unified",
                 "domains": domains,
-                "settings_domains": [d.get('domain') if isinstance(d, dict) else d for d in settings_data.get('domains', [])],
+                "settings_domains": [name for name, _ in iter_domains(settings_data)],
                 "total_domains": len(domains),
                 # Count of PKI/audit files carried under the "data/" prefix
                 # (private CA, client certs, CRL, audit chain) — #409.

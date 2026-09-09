@@ -23,6 +23,7 @@ the reconciliation this issue asks for has something to reconcile.
 from dataclasses import dataclass
 
 from .constants import iter_cert_domain_dirs
+from .domain_entries import iter_domains
 
 
 @dataclass(frozen=True)
@@ -51,18 +52,13 @@ class DomainSources:
 def _settings_domains(settings):
     """Yield ``(domain, auto_renew)`` from the settings list.
 
-    Entries are strings or dicts — both spellings are in the wild and neither
-    is being migrated here — and anything else is skipped rather than raising:
-    one malformed entry must not make the certificate list unreachable.
+    Both spellings of an entry are still readable — load_settings normalises
+    them to the object form, but this reads whatever it is given, including a
+    settings dict assembled in a test or handed over by a restore that has not
+    been through the boundary yet. The decoding itself lives in
+    :mod:`modules.core.domain_entries`.
     """
-    for entry in (settings or {}).get('domains', []) or []:
-        if isinstance(entry, str):
-            if entry:
-                yield entry, True
-        elif isinstance(entry, dict):
-            domain = entry.get('domain')
-            if domain:
-                yield domain, bool(entry.get('auto_renew', True))
+    yield from iter_domains(settings)
 
 
 def collect_domain_sources(settings, cert_dir):

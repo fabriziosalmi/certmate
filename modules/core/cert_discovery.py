@@ -17,6 +17,7 @@ certificate operation. Every endpoint yields a per-endpoint status record.
 """
 
 import logging
+from .domain_entries import entry_domain
 
 from .cert_probe import probe_certificate, STATUS_OK
 
@@ -181,10 +182,9 @@ def _managed_domain_map(settings):
     """
     mapping = {}
     for entry in settings.get('domains', []) or []:
-        name = entry.get('domain') if isinstance(entry, dict) else entry
+        name = entry_domain(entry)
         if not name:
             continue
-        name = str(name)
         if name.startswith('*.'):
             continue
         mapping[name] = name

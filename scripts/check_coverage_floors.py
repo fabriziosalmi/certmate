@@ -129,6 +129,10 @@ FLOORS = {
     'modules/core/deployer.py': 85,
     'modules/core/digest.py': 85,
     'modules/core/dns_alias_hook.py': 65,
+    # The one home for what a settings['domains'] entry is. High on
+    # purpose: it is four small pure functions with no I/O, and every
+    # other module now trusts them to decide what a domain entry means.
+    'modules/core/domain_entries.py': 95,
     'modules/core/dns_providers.py': 85,
     'modules/core/dns_strategies.py': 80,
     'modules/core/dns_zone_discovery.py': 95,

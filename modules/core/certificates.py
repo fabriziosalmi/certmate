@@ -33,6 +33,7 @@ from .dns_strategies import DNSStrategyFactory, HTTP01Strategy, acme_webroot_dir
 from .constants import (METADATA_SCHEMA_VERSION, CERTIFICATE_FILES,
                         DEFAULT_RENEWAL_THRESHOLD_DAYS)
 from .inventory_sources import collect_domain_sources
+from .domain_entries import entry_auto_renew, entry_domain
 from .structured_logging import LogContext, new_correlation_id
 from .csr_issuance import (
     CSR_OUTPUT_DIRNAME, CSR_OUTPUT_FILES, CSRError, csr_domains,
@@ -3497,22 +3498,12 @@ class CertificateManager:
             # would attribute the failure to the wrong certificate.
             domain = None
             try:
-                # Handle both old and new domain formats
-                if isinstance(domain_entry, str):
-                    domain = domain_entry
-                    per_cert_auto_renew = True
-                elif isinstance(domain_entry, dict):
-                    domain = domain_entry.get('domain')
-                    per_cert_auto_renew = domain_entry.get('auto_renew', True)
-                else:
-                    logger.warning(f"Skipping malformed domain entry (not str/dict): {domain_entry!r}")
-                    summary['skipped_invalid'] += 1
-                    continue
-
+                domain = entry_domain(domain_entry)
                 if not domain:
-                    logger.warning(f"Skipping domain entry with no domain name: {domain_entry!r}")
+                    logger.warning(f"Skipping domain entry that names no domain: {domain_entry!r}")
                     summary['skipped_invalid'] += 1
                     continue
+                per_cert_auto_renew = entry_auto_renew(domain_entry)
 
                 considered.add(domain)
 
