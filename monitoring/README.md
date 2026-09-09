@@ -75,11 +75,15 @@ Recorded on the operations side:
   from the real event in the certificate's metadata, not derived from the
   expiry date.
 
-Still not populated, and left out of the dashboard for that reason:
-
-- `certmate_certificates_by_status{status="renewal_failed"}`: the collector
-  assigns `valid`, `expiring_soon`, `expired` and `missing`, and nothing
-  assigns this one, so it is constant 0.
+`certmate_certificates_by_status` had a fifth label, `renewal_failed`, which
+nothing ever assigned: every scrape exported it as 0. It has been removed
+rather than populated, because it is not a state a certificate is *in* — one
+whose renewal failed is still `valid`, `expiring_soon` or `expired`. The
+failure is an event, and it is counted as one by
+`certmate_certificate_renewals_total{status="failure"}`, which the renewal
+sweep increments and which the `CertMateRenewalsFailing` rule alerts on. A
+constant zero is worse than an absent series: an alert written against it can
+never fire, and reads as "no failures ever".
 
 There is no `certmate_dns_provider_api_calls_total`. It was defined and never
 recorded, and it cannot be recorded from where those calls happen: certbot

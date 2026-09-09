@@ -377,12 +377,25 @@ class CertMateMetricsCollector:
             # Collect certificate metrics
             cert_count = 0
             provider_counts = {}
+            # The four states a certificate on disk can be in, and they
+            # partition it: the branch below picks exactly one per domain.
+            #
+            # A fifth, 'renewal_failed', used to be here. Nothing ever assigned
+            # it — every scrape exported
+            # certmate_certificates_by_status{status="renewal_failed"} 0 — and
+            # it could not be assigned, because it is not a state a certificate
+            # is IN. A certificate whose renewal failed is still valid,
+            # expiring_soon or expired; the failure is an event, and it is
+            # already counted as one by
+            # certmate_certificate_renewals_total{status="failure"}, which the
+            # renewal sweep increments and which CertMateRenewalsFailing alerts
+            # on. A constant zero is worse than an absent series: an alert
+            # written against it can never fire, and reads as "no failures".
             status_counts = {
                 'valid': 0,
                 'expiring_soon': 0,
                 'expired': 0,
                 'missing': 0,
-                'renewal_failed': 0
             }
             
             # Check existing certificate directories (filters out FS artifacts
