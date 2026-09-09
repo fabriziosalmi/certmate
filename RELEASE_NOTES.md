@@ -1,3 +1,61 @@
+## v2.32.1 (Changing the global DNS provider takes effect again)
+
+A patch release: one fix, in the data model behind `settings.json`.
+
+### Changing the global DNS provider stopped taking effect
+
+A managed domain is stored either as a bare string or as an object. A string,
+and an object that names no `dns_provider`, both mean *follow the global
+setting*; an object that names one is pinned to it whatever the global says.
+
+The normaliser that converted between those forms filled in `dns_provider` and
+`account_id` from the global defaults — turning the first meaning into the
+second. Two of its callers run it inside a settings mutator (`set_auto_renew`,
+and the renewal sweep re-registering a certificate it adopted), so those
+invented values were written to disk. From then on, changing the global DNS
+provider had no effect on any existing domain: they all went on resolving to
+whatever had been frozen in at that moment.
+
+Measured before the fix, on a two-domain instance, after one unrelated write
+and then setting the global provider to `route53`:
+
+```
+a.example.com resolves to cloudflare
+b.example.com resolves to cloudflare
+```
+
+Nothing ever read the injected fields — the provider is resolved by
+`get_domain_dns_provider`, which already falls back to the global, and the
+account comes from the certificate's own `metadata.json`. So the injection
+bought nothing and cost that. It is gone: normalisation now turns a string into
+`{"domain": ...}` and invents nothing else.
+
+**If your instance already has pinned entries, this release does not unpin
+them.** An entry that names a provider is a per-domain override, and there is
+no way to tell one the old normaliser wrote from one you set deliberately —
+guessing would repeat the original mistake in the other direction. If changing
+the global provider is not reaching a domain, remove `dns_provider` (and
+`account_id`) from that domain's entry in Settings, or from `settings.json`
+directly.
+
+### Two structural problems underneath it
+
+The conversion between the two forms never completed. It ran only when *every*
+entry was a string, so a list holding both — which is what any instance that
+added a domain after the object format has — stayed mixed indefinitely, and
+`save_settings` wrote validated string entries straight back as strings, so
+even a converted list could be un-converted by the next save.
+
+Both boundaries now agree: settings are normalised per entry when read and
+written back in the same shape, so `settings["domains"]` settles on the object
+form and stays there. Requests may still send either spelling; a response now
+always returns the object form, which the API model already described as one of
+the two possibilities.
+
+There is no contract change: nothing was removed, retyped, or made required,
+and no status code changed for an existing condition. `X-CertMate-API-Version`
+stays at 2.1.
+
 ## v2.32.0 (Stop handles nobody called, a lock that excluded nobody, and a queue with no bottom)
 
 A minor release: eleven changes, most of them from the same twenty-category
