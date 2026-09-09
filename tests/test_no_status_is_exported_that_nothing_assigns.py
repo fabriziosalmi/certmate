@@ -35,6 +35,19 @@ pytestmark = [pytest.mark.unit]
 EXPECTED = {'valid', 'expiring_soon', 'expired', 'missing'}
 
 
+def _labelled_samples(body, metric):
+    """The label sets present for one metric name, parsed rather than matched."""
+    import re
+
+    samples = []
+    for line in body.splitlines():
+        if not line.startswith(metric + '{'):
+            continue
+        blob = line[len(metric) + 1:line.rindex('}')]
+        samples.append(dict(re.findall(r'(\w+)="([^"]*)"', blob)))
+    return samples
+
+
 def _exported_statuses():
     """The label values actually present in the registry's output."""
     from prometheus_client import generate_latest
@@ -133,11 +146,15 @@ def test_renewal_failures_are_counted_somewhere_real():
     metrics.metrics_collector.record_certificate_renewal(
         'fails.example.com', 'cloudflare', success=False)
 
-    body = generate_latest().decode('utf-8')
-    assert any('certmate_certificate_renewals_total{' in line
-               and 'status="failure"' in line
-               and 'fails.example.com' in line
-               for line in body.splitlines()), (
+    # The labels are compared as a parsed set rather than searched for in the
+    # line: a substring test against a hostname is what this repository's
+    # CodeQL configuration flags as an incomplete URL check, and it is right
+    # to in general.
+    samples = _labelled_samples(generate_latest().decode('utf-8'),
+                                'certmate_certificate_renewals_total')
+
+    assert {'domain': 'fails.example.com', 'dns_provider': 'cloudflare',
+            'status': 'failure'} in samples, (
         'nothing records a failed renewal, so removing the status label would '
         'lose the information rather than move it')
 
