@@ -5,6 +5,7 @@ email via the existing Notifier SMTP channel.
 """
 
 import logging
+from .domain_entries import entry_domain
 import smtplib
 from datetime import timedelta
 from .utils import utc_now
@@ -38,12 +39,9 @@ class WeeklyDigest:
         all_domains = set()
 
         for entry in domains_from_settings:
-            if isinstance(entry, str):
-                all_domains.add(entry)
-            elif isinstance(entry, dict):
-                d = entry.get('domain')
-                if d:
-                    all_domains.add(d)
+            name = entry_domain(entry)
+            if name:
+                all_domains.add(name)
 
         for p in iter_cert_domain_dirs(cert_dir):
             all_domains.add(p.name)
