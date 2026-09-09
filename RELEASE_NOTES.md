@@ -1,3 +1,185 @@
+## v2.32.0 (Stop handles nobody called, a lock that excluded nobody, and a queue with no bottom)
+
+A minor release: eleven changes, most of them from the same twenty-category
+audit of v2.30.0 that produced v2.31.0, and all of them one shape — a mechanism
+that was published, looked like it worked in review, and did nothing.
+
+### The renewal sweep can take on a certificate that says how it was issued
+
+A certificate present on disk but absent from settings could not be renewed.
+The sweep named it and moved on, because nothing knew which DNS provider,
+account or CA had issued it — so a certificate CertMate had created itself, and
+whose settings entry had been lost to a failed restore or a hand-edited
+`settings.json`, expired while the dashboard listed it.
+
+It now reads that certificate's own `metadata.json`. When the metadata names a
+provider, an account and a CA, and that provider is configured **on this
+instance right now**, the sweep renews it and writes the settings entry back
+after the renewal succeeds — so the next sweep finds it the ordinary way. When
+the metadata cannot answer, or the provider it names is gone, nothing changes:
+the certificate is still named as one the sweep cannot renew, which is the
+honest answer rather than a guess at credentials.
+
+The sweep summary gained `reregistered`, so a run says how many certificates it
+adopted rather than leaving it to be inferred.
+
+### Async issuance refuses work it is not going to reach
+
+`POST /api/certificates/create` with `async: true` accepted everything. The pool
+has two workers, each running a certbot subprocess that takes tens of seconds to
+minutes, and the queue behind them had no limit — so a client in a retry loop,
+or a script walking a domain list, could park hundreds of jobs there and get a
+`202 Accepted` and a job id for each one, for certificates that would not be
+attempted for hours.
+
+`CERTMATE_ISSUANCE_QUEUE_LIMIT` (default **20**, clamped 1-500) bounds how much
+unfinished issuance may exist at once — queued and running together. Past it:
+
+```json
+HTTP 429
+{
+  "code": "ISSUANCE_QUEUE_FULL",
+  "error": "Too much issuance is already in progress",
+  "hint": "20 job(s) queued or running against a limit of 20. Retry once some finish, or raise CERTMATE_ISSUANCE_QUEUE_LIMIT / CERTMATE_ISSUANCE_WORKERS."
+}
+```
+
+Finished jobs do not count towards it, and the depth check and the registration
+happen under one lock, so two requests arriving together cannot both take the
+last slot.
+
+`X-CertMate-API-Version` moves from `2.0` to **`2.1`**. Minor, not major: 429 was
+already reachable on every `/api/` path through the rate limiter, so a client
+that handles 429 needs no change. What is new is a condition, not a type.
+
+Two gauges came with it, because a 429 with nothing to graph leaves an operator
+guessing whether to raise the limit or find what is stuck:
+`certmate_issuance_queue_depth` and `certmate_issuance_queue_limit`, plus
+`certmate_event_dispatch_backlog` for the other queue in the process.
+
+### The four state directories are configurable
+
+`certificates/`, `data/`, `backups/` and `logs/` were derived from the module's
+own location and nothing could move them. That is a good default — it is what
+makes the image and the systemd unit work with no configuration — but it was the
+only answer available, so a deployment wanting certificates on one volume and
+backups on another had to bind-mount over the install tree.
+
+`CERTMATE_CERT_DIR`, `CERTMATE_DATA_DIR`, `CERTMATE_BACKUP_DIR` and
+`CERTMATE_LOGS_DIR` now move them one at a time. **The defaults are unchanged**,
+and the boot-time writability check that turns a bad mount into a clean startup
+error still runs on whatever was resolved.
+
+`create_app(test_config=...)` also reads them. It had accepted a configuration
+that could not affect any of this and reported no error.
+
+### Shutting down actually stops things
+
+`IssuanceExecutor.shutdown()` had no caller anywhere in the tree, and the
+slow-request watchdog's stop event was handed to the container and never set.
+Both read in review like a safety net. What was wired covered half the
+components and one of the two deployment shapes: `python app.py` stopped the
+scheduler and drained the event bus, and under gunicorn — which is how the image
+runs — an atexit hook drained the bus and nothing else.
+
+So a container stopped during an async issuance left the pool's queued jobs
+recorded nowhere. The job registry is in memory and dies with the process: the
+certificate an operator asked for never appeared, and no line anywhere said so.
+
+There is now one ordered shutdown, registered on atexit and called from the
+Ctrl-C path: scheduler, then issuance pool, then watchdog, then event bus —
+producers before consumers, because draining the bus first drains a queue the
+scheduler is still filling. Nothing is joined; what could not be finished is
+named:
+
+```
+Issuance executor stopped with 2 job(s) unfinished: create a.example.com (running),
+create b.example.com (queued). These were not completed and are not retried on
+startup; re-run them if the certificate is still needed.
+```
+
+### A webhook that will never work is not retried three times
+
+The webhook retry left its loop on success and on nothing else. A receiver
+answering 404 — a Slack app removed, a path typo, a token revoked into a 401 —
+was sent three times with 1s + 2s of sleep between the attempts, on every
+notification, for as long as it stayed configured. Under a renewal sweep that is
+once per certificate, on the sweep's own thread.
+
+Two kinds of failure are permanent now: the receiver answered with a 4xx that
+describes the request rather than the moment (408, 425 and 429 excluded, and 5xx
+is what backoff is for), or CertMate refused to send at all — no URL, a
+non-http scheme, an SSRF-guarded target, a channel missing its token, a broken
+payload template. DNS, connection refused, TLS and timeouts still get the full
+backoff.
+
+An HTTP rejection also carries its status now instead of arriving as prose, so
+the delivery log reads `attempts: 1, status: 404` rather than
+`attempts: 3, status: null` — the difference between reading it as a flaky
+receiver and reading it as a webhook to fix.
+
+### The activity page read 827 KiB to show 100 lines
+
+The audit log tail walks backwards in 8 KiB blocks, and its stop condition
+counted blocks against the number of entries **asked for**. An audit line is
+around 170 bytes, so a hundred entries live in two blocks and the loop read a
+hundred and one. Measured on a 3.2 MiB log of 20,000 entries:
+
+| `limit` | before | after |
+|---:|---:|---:|
+| 10 | 90,112 bytes | 8,192 |
+| 100 (the activity page) | 827,392 | 24,576 |
+| 500 (the API maximum) | 3,377,780 — the whole file | 90,112 |
+
+Writing the test for that found a second defect in the same function: the result
+was sliced by lines rather than entries, so a log with noise between the entries
+returned 33 rows for a request of 100, with nothing to say why.
+
+### A credentials file that cannot be written says so
+
+For twelve DNS providers the credentials builder ended `except (KeyError,
+Exception): return None`, with no log line. `None` legitimately means "this
+provider authenticates through the environment", so an `OSError` — a read-only
+config directory, a full disk, a permission the container lost — became "no
+credentials file needed". certbot then ran without `--dns-<provider>-credentials`
+and complained about missing plugin credentials, the operator went looking at
+their DNS account, and the error that actually happened existed in no log, no
+metric and no response. Only the template lookup is caught now.
+
+### A lock that excluded nobody, and a status nothing ever assigned
+
+`safe_file_write` took an exclusive `flock` on the temporary file the same call
+had just created — a name no other process can open — under the comment "Use
+file locking for safety", and released it before the rename that publishes the
+content. It excluded nothing, and it stopped readers of that function from
+asking how concurrent writes are handled. The atomicity was always the rename,
+and both docstrings now say so, including what the lock did not do.
+
+`certmate_certificates_by_status{status="renewal_failed"}` was exported as 0 on
+every scrape of every deployment, because nothing assigned it and nothing could:
+a certificate whose renewal failed is still valid, expiring soon or expired.
+An alert written on it could never fire, which reads as "no renewal has ever
+failed here". It is removed; failures are counted by
+`certmate_certificate_renewals_total{status="failure"}`, which the sweep
+increments and which the shipped `CertMateRenewalsFailing` rule alerts on.
+
+### Two gates that now catch something
+
+The complexity ratchet was a single `--max-complexity=115`. That is the tree's
+real worst, and a test kept it from drifting above what the tree contains — but
+one number for 1,700 functions has to be set by the worst of them, so everything
+below the worst was ungated and a new function at 100 passed. Each function has
+its own ceiling now: a general limit of 40, and the thirteen already above it
+pinned at what they measure. It failed the first change made after it, which is
+what a gate is for.
+
+The list of endpoints the SDK uses was nine literals checked against a running
+container. The SDK calls nineteen, and the ten it did not know about include
+`certificates/{}/deploy`, `settings/dns-providers` and `dns/{}/accounts` — so
+the drift check written to catch a renamed endpoint had stopped covering half
+the client. It is read out of the SDK's own source now and compared against the
+application's route table, verbs included, in the unit tier.
+
 ## v2.31.0 (One error shape, five metrics nobody was writing, and a key that was parsed on every read)
 
 A minor release: nine changes, all of them from a twenty-category audit of
