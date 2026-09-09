@@ -214,10 +214,13 @@ def test_the_application_registers_the_drain_at_exit():
 
     from modules.core import factory
 
-    source = inspect.getsource(factory._drain_event_bus_at_exit)
+    source = inspect.getsource(factory._stop_background_work_at_exit)
     assert 'atexit.register' in source
-    assert '.stop' in source
+
+    stopper = inspect.getsource(factory.stop_background_work)
+    assert 'bus.stop()' in stopper, (
+        'the shutdown path no longer drains the event bus')
 
     entrypoint = inspect.getsource(factory.create_app)
-    assert '_drain_event_bus_at_exit(container)' in entrypoint, (
+    assert '_stop_background_work_at_exit(container)' in entrypoint, (
         'the drain is defined but nothing calls it during app creation')

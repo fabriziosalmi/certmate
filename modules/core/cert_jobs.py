@@ -83,7 +83,16 @@ class IssuanceExecutor:
                 'error_code': None,
             }
             self._evict_locked()
-        self._pool.submit(self._run, job_id, kind, domain, fn)
+        try:
+            self._pool.submit(self._run, job_id, kind, domain, fn)
+        except RuntimeError as e:
+            # The pool is shut down, which now actually happens: nothing will
+            # ever run this job, so it must not be left at 'queued' for a
+            # poller to wait on forever.
+            logger.warning("Issuance job %s for %s rejected: %s", job_id, domain, e)
+            self._set(job_id, status='failed', finished_at=utc_now_iso(),
+                      error='shutting down', error_code='SHUTTING_DOWN')
+            raise
         return job_id
 
     def get(self, job_id):
@@ -176,4 +185,33 @@ class IssuanceExecutor:
         return None
 
     def shutdown(self, wait=False):
-        self._pool.shutdown(wait=wait)
+        """Stop the pool and name the issuance work that never finished.
+
+        Called when the process is going away. Queued jobs that no worker has
+        picked up are cancelled; jobs already running are not — a certbot
+        subprocess cannot be taken back, and waiting for one would hold
+        shutdown open until the container runtime killed it anyway.
+
+        What it does instead is say what was lost, in the same shape as
+        `EventBus.stop`: the registry is in memory and dies with the process,
+        so a job left at 'queued' or 'running' is a certificate an operator
+        asked for and will not get, and the only place that can be recorded is
+        the log line written on the way out.
+
+        Returns the abandoned job records, newest last.
+        """
+        self._pool.shutdown(wait=wait, cancel_futures=True)
+
+        with self._lock:
+            abandoned = [dict(job) for job in self._jobs.values()
+                         if job['status'] not in _TERMINAL]
+
+        if abandoned:
+            logger.warning(
+                "Issuance executor stopped with %d job(s) unfinished: %s. "
+                "These were not completed and are not retried on startup; "
+                "re-run them if the certificate is still needed.",
+                len(abandoned),
+                ', '.join(f"{job['operation']} {job['domain']} ({job['status']})"
+                          for job in abandoned))
+        return abandoned

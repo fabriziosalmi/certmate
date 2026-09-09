@@ -60,6 +60,9 @@ class AppContainer:
         self.backup_dir = None
         self.logs_dir = None
         self.request_watchdog = None
+        # Set by stop_background_work so the atexit handler and app.py's
+        # Ctrl-C path do not both stop everything twice.
+        self.shutdown_complete = False
 
 
 def _env_float(name: str, default: float, min_value: float = 0.0) -> float:
@@ -1743,29 +1746,103 @@ def create_app(test_config=None):
     reconcile_served_copies(container)
     check_issuance_readiness(container)
     warn_if_multiple_workers()
-    _drain_event_bus_at_exit(container)
+    _stop_background_work_at_exit(container)
 
     return app, container
 
 
-def _drain_event_bus_at_exit(container: AppContainer):
-    """Give the event bus a bounded drain when the process goes away.
+def stop_background_work(container: AppContainer) -> dict:
+    """Stop everything this process started in the background, in order.
 
-    There is no shutdown hook to hang this on: the image runs gunicorn from a
-    plain command line, so there is no gunicorn config file with on_exit, and
-    app.py's KeyboardInterrupt handler only covers `python app.py`. atexit is
-    what both paths have in common — it runs when a gunicorn worker exits on
-    SIGTERM, and it does not run on SIGKILL, which is the correct behaviour for
-    a drain that must never delay a kill.
+    Four things run outside a request: the APScheduler that drives renewals,
+    the issuance thread pool behind the async API, the slow-request watchdog,
+    and the event bus that delivers deploy hooks. Three of them published a way
+    to be stopped and only one was ever called — `IssuanceExecutor.shutdown()`
+    had no caller anywhere, and the watchdog's `stop_event` was handed to the
+    container and never set. A stop handle nobody calls is not a safety net; it
+    reads like one in review, which is worse than not having it.
 
-    Registered here rather than in EventBus.__init__ so that constructing a bus
-    — which most of the test suite does — does not leave a handler behind
-    holding a reference to it.
+    Order is the point, not the calls. Producers first, consumers last: the
+    scheduler can queue a renewal, a renewal publishes an event, and an event
+    dispatches a deploy hook — so stopping the bus first would drain a queue
+    that is still being filled. The watchdog goes with them because it only
+    reports on requests, and by here there are none.
+
+    Bounded throughout. Nothing here waits for a certbot subprocess or a deploy
+    hook: the scheduler is asked not to wait, the pool cancels what no worker
+    has started, and the bus drains against a deadline. What could not be
+    finished is named in the log rather than waited for.
+
+    Idempotent: `python app.py` calls this on Ctrl-C and atexit calls it again
+    on the way out, and under gunicorn only atexit does.
     """
-    bus = container.managers.get('events') if container.managers else None
-    if bus is None:
-        return
-    atexit.register(bus.stop)
+    summary = {'scheduler': None, 'issuance': [], 'undelivered': 0}
+    if container.shutdown_complete:
+        return summary
+    container.shutdown_complete = True
+
+    if container.scheduler is not None:
+        if not getattr(container.scheduler, 'running', True):
+            # Never started, or already stopped. Not a fault, and saying so at
+            # WARNING on every clean exit is how a real warning gets ignored.
+            summary['scheduler'] = 'not running'
+        else:
+            try:
+                # wait=False: a renewal sweep runs for minutes, and holding
+                # exit open for it only means the container runtime kills us
+                # instead.
+                container.scheduler.shutdown(wait=False)
+                summary['scheduler'] = 'stopped'
+            except Exception as e:
+                # Refusing to stop. The process is going away and this must
+                # not become a traceback — but it is worth a line, because
+                # "stopped" happening and "stopped" being reported were
+                # previously indistinguishable.
+                summary['scheduler'] = f'not stopped cleanly: {e}'
+                logger.warning(f"Scheduler did not stop cleanly: {e}")
+
+    managers = container.managers or {}
+
+    executor = managers.get('cert_executor')
+    if executor is not None:
+        try:
+            summary['issuance'] = executor.shutdown() or []
+        except Exception as e:
+            logger.warning(f"Issuance executor did not stop cleanly: {e}")
+
+    watchdog = container.request_watchdog or {}
+    stop_event = watchdog.get('stop_event')
+    if stop_event is not None:
+        # It is a daemon thread, so this changes nothing about whether the
+        # process exits. It changes whether the thread is torn down in the
+        # middle of formatting another thread's stack.
+        stop_event.set()
+
+    bus = managers.get('events')
+    if bus is not None:
+        try:
+            summary['undelivered'] = bus.stop() or 0
+        except Exception as e:
+            logger.warning(f"Event bus did not stop cleanly: {e}")
+
+    return summary
+
+
+def _stop_background_work_at_exit(container: AppContainer):
+    """Register the shutdown above on the one hook both entry points have.
+
+    There is no shutdown hook to hang this on otherwise: the image runs
+    gunicorn from a plain command line, so there is no gunicorn config file
+    with on_exit, and app.py's KeyboardInterrupt handler only covers
+    `python app.py`. atexit runs when a gunicorn worker exits on SIGTERM, and
+    does not run on SIGKILL — which is the correct behaviour for work that
+    must never delay a kill.
+
+    Registered here rather than in each component's constructor so that
+    building one in a test does not leave a handler behind holding a reference
+    to it.
+    """
+    atexit.register(stop_background_work, container)
 
 
 def check_issuance_readiness(container: AppContainer):
