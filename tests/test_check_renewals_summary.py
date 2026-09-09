@@ -62,6 +62,10 @@ def test_summary_counts_every_kind_of_entry(tmp_path):
         # A certificate present on disk that no entry names is counted here and
         # named in the log (#759); it used to be skipped in silence.
         'unmanaged': 0,
+        # Same reason: since #792 the sweep renews a disk-only certificate
+        # whose metadata says how it was issued, and writes it back into
+        # settings. Nothing on disk here, so nothing to take on.
+        'reregistered': 0,
     }
     # The sweep also reports its own shape now — how long it took and how many
     # entries it looked at — so an instance that is slowly outgrowing its
