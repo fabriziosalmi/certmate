@@ -86,22 +86,20 @@ jobs:
         # shadows an import), F632 (is-comparison against a literal), E711/E712
         # (== None / == True), E713/E714 (not ... in / not ... is). #428
         flake8 . --count --select=E9,F63,F7,F82,F811,F632,E711,E712,E713,E714,F401,F841,E722 --show-source --statistics
-        # Complexity RATCHET, not a standard. The previous line computed every
-        # function over --max-complexity=10 and then threw the exit code away
-        # with --exit-zero, so all 85 over-threshold functions were measured and
-        # ignored (#652). This gate exists so nothing can get WORSE than the
-        # worst thing already here.
+        # Complexity RATCHET, not a standard. The line before this one
+        # computed every function over --max-complexity=10 and then threw the
+        # exit code away with --exit-zero, so all 85 over-threshold functions
+        # were measured and ignored (#652).
         #
-        # A ratchet only ratchets if someone lowers it. This one was set to 559
-        # for create_api_resources, the 3.7k-line closure in
-        # modules/api/resources.py; #667 decomposed that function to 1 and the
-        # number stayed at 559, five times the real worst, permitting anything
-        # a contributor could plausibly write. It is now 115, which is
-        # register_settings_routes in modules/web/settings_routes.py, and
-        # tests/test_complexity_ratchet_is_tight.py fails if the tree gets
-        # simpler than the pin — so lowering it is not something to remember,
-        # it is something the suite asks for.
-        flake8 . --count --select=C901 --max-complexity=115 --statistics
+        # Its replacement was a single --max-complexity=115: the tree's real
+        # worst, register_settings_routes. One number for 1,700 functions has
+        # to be set by the worst of them, so everything under the worst was
+        # ungated — a new function at 100 passed. The ceiling is now per
+        # function: a general limit of 40, and the thirteen functions already
+        # above it pinned individually at what they measure, so each can only
+        # come down. The script fails on a new offender, on a regression, on an
+        # improvement left unrecorded, and on an entry matching nothing.
+        python scripts/check_complexity_budget.py
         # Style is reported, never enforced: line length is not a defect class.
         flake8 . --count --exit-zero --max-line-length=127 --statistics
 
