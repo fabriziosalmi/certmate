@@ -71,7 +71,11 @@ def test_a_job_still_running_is_named_on_the_way_out(caplog):
 
     assert [job['domain'] for job in abandoned] == ['slow.example.com']
     assert abandoned[0]['status'] == 'running'
-    assert any('slow.example.com' in record.getMessage()
+    # Exact equality on the formatting argument rather than a substring search
+    # over the rendered message: this repository's CodeQL configuration reads
+    # `'a.example.com' in text` as an incomplete URL check, and it is right to
+    # in general.
+    assert any(record.args and record.args[1] == 'create slow.example.com (running)'
                for record in caplog.records), (
         'the abandoned job was returned but never logged, so nothing survives '
         'the process that says which certificate was not issued')
