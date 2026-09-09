@@ -51,10 +51,23 @@ EXPECTED = {
     'modules',           # the application
     'templates',         # rendered by it
     'static',            # served by it
-    'scripts',           # solidserver_hook.py is executed by the SolidServer
-                         # DNS strategy (modules/core/dns_strategies.py)
+    'scripts',           # two files; see EXPECTED_SCRIPTS
     # Runtime-writable trees the Dockerfile creates, not copies.
     'backups', 'certificates', 'data', 'logs',
+}
+
+# The allowlist above names directories, and that is one level too coarse for
+# this one: `COPY scripts/` put all fourteen files in the image, of which the
+# runtime reads two. The other twelve are build- and release-time — release.sh
+# carries the entire release procedure, regenerate_lockfiles.sh, five check_*
+# gates, the theme codemod, the walkthrough recorder — which is the same defect
+# the allowlist was written to fix, surviving one directory further down.
+EXPECTED_SCRIPTS = {
+    # Executed by the SolidServer DNS strategy as a certbot manual hook.
+    'solidserver_hook.py',
+    # The documented in-container recovery: the README gives the docker exec
+    # line and the login page names the file.
+    'reset_admin_password.py',
 }
 
 # Two error paths tell the operator to install one of these into a running
@@ -161,3 +174,32 @@ def test_the_dockerfile_does_not_copy_the_whole_tree():
         if stripped.startswith('COPY') and '--from=' not in stripped:
             assert stripped.split()[1] != '.', (
                 'the runtime stage copies the whole tree again: ' + stripped)
+
+
+@pytest.fixture(scope='module')
+def scripts_dir(docker_container):
+    """What `/app/scripts` holds in the image under test."""
+    from tests.conftest import IMAGE_NAME
+    result = subprocess.run(
+        ['docker', 'run', '--rm', '--entrypoint', 'sh', IMAGE_NAME,
+         '-c', 'ls -A /app/scripts'],
+        capture_output=True, text=True, timeout=120)
+    assert result.returncode == 0, result.stderr
+    return set(result.stdout.split())
+
+
+def test_the_runtime_scripts_are_present(scripts_dir):
+    """CONTROL first: an empty directory would satisfy the check below while
+    breaking SolidServer issuance and the password reset."""
+    assert EXPECTED_SCRIPTS <= scripts_dir, (
+        f'missing from the image: {sorted(EXPECTED_SCRIPTS - scripts_dir)}')
+
+
+def test_no_build_time_script_ships(scripts_dir):
+    """The other direction, one level deeper than the /app check above."""
+    unexpected = sorted(scripts_dir - EXPECTED_SCRIPTS)
+    assert not unexpected, (
+        'these are in /app/scripts and nothing in the runtime reads them:\n  '
+        + '\n  '.join(unexpected)
+        + '\n\nThey are build- or release-time. Copy the runtime ones by name '
+          'rather than copying the directory.')
