@@ -16,6 +16,14 @@ from typing import Optional, Dict, Any
 
 logger = logging.getLogger(__name__)
 
+# What separates the log line's prefix from the JSON entry, in both the form
+# the tail scan counts (bytes) and the form the parse splits on (text). One
+# definition so the counting and the parsing cannot drift: a scan that counted
+# something the parse did not accept would stop the read early and silently
+# return fewer entries than were asked for.
+_ENTRY_MARKER_TEXT = ' - INFO - '
+_ENTRY_MARKER = _ENTRY_MARKER_TEXT.encode('utf-8')
+
 # Rotation defaults for the human-readable audit .log (#443). Same shape as the
 # application log's (#431), and deliberately NOT applied to the hash chain:
 # `certificate_audit.chain.jsonl` is append-only and tamper-evident, and naive
@@ -996,16 +1004,34 @@ class AuditLogger:
 
             # Read only the tail of the file so large audit logs do not block
             # the activity page or other callers that only need recent entries.
+            #
+            # The stop condition counts ENTRIES FOUND, not blocks read. It used
+            # to be `len(blocks) <= limit`, which reads one 8 KiB block per
+            # entry asked for: the activity page's default of 100 read ~827 KiB
+            # to return 100 lines of a few hundred bytes each, and the API's
+            # maximum read ~4 MiB. Two blocks is the ordinary answer now.
+            #
+            # `len(blocks) <= limit` survives as a second condition, so the
+            # worst case — a tail with no entries in it at all, which would
+            # otherwise walk the whole file — stays exactly what it was.
             block_size = 8192
             blocks = []
             remaining = file_size
+            found = 0
 
             with open(self.audit_log_file, 'rb') as f:
-                while remaining > 0 and len(blocks) <= limit:
+                while remaining > 0 and found <= limit and len(blocks) <= limit:
                     read_size = min(block_size, remaining)
                     remaining -= read_size
                     f.seek(remaining)
-                    blocks.append(f.read(read_size))
+                    block = f.read(read_size)
+                    blocks.append(block)
+                    # The same marker the parse below splits on, so this counts
+                    # candidate entries rather than newlines: a traceback or a
+                    # non-INFO line in the tail cannot make the read stop short
+                    # of `limit` entries. A marker straddling a block boundary
+                    # is missed and costs one extra block, never an entry.
+                    found += block.count(_ENTRY_MARKER)
 
             raw_lines = b''.join(reversed(blocks)).splitlines()
 
@@ -1013,18 +1039,23 @@ class AuditLogger:
             if remaining > 0 and raw_lines:
                 raw_lines = raw_lines[1:]
 
+            # Parse first, then take the last `limit` ENTRIES. Slicing the
+            # raw lines instead meant `limit` LINES, so anything in the tail
+            # that is not an entry — a traceback, a non-INFO line — came out
+            # of the caller's allowance: a tail with two noise lines per entry
+            # returned 33 rows for a request of 100, with nothing to say why.
             entries = []
-            for line in raw_lines[-limit:]:
+            for line in raw_lines:
                 try:
                     raw = line.decode('utf-8', errors='replace')
-                    if ' - INFO - ' not in raw:
+                    if _ENTRY_MARKER_TEXT not in raw:
                         continue
-                    json_str = raw.split(' - INFO - ', 1)[1].strip()
+                    json_str = raw.split(_ENTRY_MARKER_TEXT, 1)[1].strip()
                     entries.append(json.loads(json_str))
                 except (UnicodeDecodeError, json.JSONDecodeError, IndexError):
                     continue
 
-            return entries
+            return entries[-limit:]
 
         except Exception as e:
             logger.error(f"Error reading audit logs: {e}")
