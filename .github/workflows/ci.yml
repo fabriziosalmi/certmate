@@ -229,6 +229,15 @@ jobs:
           # passed explicitly: it is what this build was meant to carry, and
           # guessing it is the difference between a missing plugin and an
           # optional one.
+          #
+          # Copied in rather than shipped: the image carries the two scripts
+          # the running process executes, and this is a gate, not a runtime
+          # component. Into /app/scripts, not /tmp, because the script resolves
+          # its requirements file relative to its own parent's parent — from
+          # /tmp it would look for /requirements.txt and refuse. `docker cp`
+          # fails loudly under `set -e` if the file is not where this expects
+          # it, so the check cannot silently stop running.
+          docker cp scripts/check_providers.py "$cid":/app/scripts/check_providers.py
           if ! docker exec "$cid" python /app/scripts/check_providers.py "$req"; then
             echo "::error::$req built an image whose providers cannot all reach certbot"
             docker rm -f "$cid" >/dev/null 2>&1 || true

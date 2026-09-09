@@ -184,13 +184,24 @@ ENV PATH="/opt/venv/bin:$PATH"
 #
 # What is here is what the running process actually touches:
 #   app.py, modules/, templates/, static/  the application
-#   scripts/                               solidserver_hook.py is executed by
+#   two files from scripts/                solidserver_hook.py is executed by
 #                                          the SolidServer DNS strategy
-#                                          (modules/core/dns_strategies.py)
+#                                          (modules/core/dns_strategies.py);
+#                                          reset_admin_password.py is the
+#                                          documented in-container recovery
+#                                          (README, and the login page points
+#                                          at it by name)
 #   requirements*.txt                      two error paths tell the operator to
 #                                          install one of these into a running
 #                                          container to add a DNS or storage
 #                                          backend
+#
+# scripts/ is copied BY NAME, not as a directory. It was `COPY scripts/`, which
+# put the other twelve files in the image: release.sh with the whole release
+# procedure, regenerate_lockfiles.sh, five check_*.py gates, the theme codemod,
+# the walkthrough recorder. All build-time, none read by the running process —
+# which is the same defect the allowlist above was written to fix, surviving one
+# directory further down because the allowlist named a directory.
 #
 # tests/test_image_ships_only_what_it_runs.py checks this against the built
 # image rather than against this comment.
@@ -199,7 +210,7 @@ COPY requirements*.txt requirements*.lock ./
 COPY modules/ ./modules/
 COPY templates/ ./templates/
 COPY static/ ./static/
-COPY scripts/ ./scripts/
+COPY scripts/solidserver_hook.py scripts/reset_admin_password.py ./scripts/
 
 # Create the runtime-writable directories and make them arbitrary-UID ready.
 #
